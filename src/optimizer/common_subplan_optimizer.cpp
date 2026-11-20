@@ -3,6 +3,14 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
+#include "duckdb/optimizer/remove_redundant_order.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -10,10 +18,15 @@
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 
@@ -1832,6 +1845,884 @@ private:
 	vector<arena_ptr<PlanSignature>> signatures;
 	unordered_map<reference<PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality> candidates;
 };
+
+//===--------------------------------------------------------------------===//
+// Aggregates of UNION ALL branches over one input
+//===--------------------------------------------------------------------===//
+// The branches of a UNION ALL are often the same aggregate over the same input, restricted to a different value of
+// one column each:
+//
+//     SELECT 'jan' AS month, sum(x) FROM t WHERE m = 1
+//     UNION ALL
+//     SELECT 'feb' AS month, sum(x) FROM t WHERE m = 2
+//
+// Every branch then reads the input again. As the values differ, a row of the input belongs to at most one branch,
+// and grouping by the column computes all of them at once:
+//
+//     PROJECTION b.month, <the sum, or its value over no rows where the group is missing>
+//       LEFT JOIN b.m = a.m
+//         (VALUES (1, 'jan'), (2, 'feb')) b(m, month)
+//         AGGREGATE sum(x) GROUP BY m                                                   a
+//           t WHERE m IN (1, 2)
+//
+// What is matched are branches PROJECTION - [FILTER] - AGGREGATE whose plans are the same (PlanSignature) up to
+//  - the table filters of one scan below the aggregate, which is reached from it through inner joins, cross products
+//    and filters only, so that its columns are columns of the aggregate's input and each of its rows flows into the
+//    aggregate as it does in its branch. The filters have to differ in the constants of equality comparisons only
+//    (col = constant, on one or more columns), and the constants of two branches have to differ: branches that
+//    repeat the constants of an earlier one are left alone, as their rows are needed twice.
+//  - constants in the select list.
+// The columns that are compared become group columns of the aggregate of the first branch, whose scan is restricted
+// to the constants of all branches. A grouped aggregate returns the rows of every branch then. If the select lists
+// differ in constants, they are joined to the groups from a list of the branches. A branch without groups returns
+// a row also where no row has its constants: the list of the branches is LEFT joined then, and the aggregates of
+// the missing groups are replaced by their values over an empty input, which an aggregate over an empty result
+// computes (as the decorrelation of aggregates does).
+//
+// The rows of the branches come out in a different order. The rewrite is therefore only done where the order of
+// the UNION ALL cannot be observed (below a sort, a hash aggregate, a join, ...), as determined like
+// RemoveRedundantOrder does, or where the branches have no groups: their one row each is put back into the order
+// of the branches by a sort on the position in the list.
+class UnionAggregateMerge {
+	//! The branches are merged if their scans together read at least this many times the rows that the scans of the
+	//! merged plan read
+	static constexpr double MIN_SCAN_REDUCTION = 2;
+	//! Constants of the select list are joined to the groups if the aggregate is estimated to return at most one
+	//! row for this many rows of its input
+	static constexpr double MIN_GROUP_REDUCTION = 16;
+	//! The row groups of the varying scan are checked against the constants of the branches up to this many checks,
+	//! and for a numeric column, where a row group takes one lookup, up to this many row groups (2 billion rows at
+	//! the default row group size). Above them the scan counts as one without statistics
+	static constexpr idx_t MAX_ZONEMAP_CHECKS = 100000;
+	static constexpr idx_t MAX_ZONEMAP_ROW_GROUPS = 16384;
+
+	//! A UNION ALL child of the form PROJECTION - [FILTER] - AGGREGATE
+	struct Branch {
+		explicit Branch(idx_t child_index_p) : child_index(child_index_p) {
+		}
+
+		//! The position among the children of the UNION ALL
+		idx_t child_index;
+		optional_ptr<LogicalProjection> projection;
+		optional_ptr<LogicalAggregate> aggregate;
+		//! The scans below the aggregate whose table filters are not part of the signature
+		vector<reference<unique_ptr<LogicalOperator>>> scans;
+		//! The constants of the select list, by position (the same positions in all branches of a signature)
+		vector<pair<idx_t, Value>> constants;
+		//! The constants that the filters of the varying scan compare its columns with
+		vector<Value> keys;
+	};
+
+	//! The table filters of a scan as conjuncts over the columns of another scan of the same table
+	struct ScanFilters {
+		//! column = constant, by column (index in the column ids of the scan)
+		map<idx_t, Value> equalities;
+		//! Everything else, in the order of the filters
+		vector<unique_ptr<Expression>> others;
+	};
+
+public:
+	explicit UnionAggregateMerge(Optimizer &optimizer_p) : optimizer(optimizer_p) {
+	}
+
+	//! order_discarded: whether no operator above op reads the order of its rows (see RemoveRedundantOrder)
+	void Optimize(unique_ptr<LogicalOperator> &op, bool order_discarded) {
+		switch (op->type) {
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_TOP_N:
+			Optimize(op->children[0], true);
+			return;
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			Optimize(op->children[0], RemoveRedundantOrder::AggregateDiscardsOrder(op->Cast<LogicalAggregate>()));
+			return;
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT: {
+			auto &setop = op->Cast<LogicalSetOperation>();
+			const auto is_union_all = op->type == LogicalOperatorType::LOGICAL_UNION && setop.setop_all;
+			for (auto &child : op->children) {
+				Optimize(child, order_discarded || !is_union_all);
+			}
+			if (is_union_all && HasAggregateBranches(*op)) {
+				// the signatures of the operators below this UNION ALL: an operator has one signature per state
+				UnionAggregateMerge merge(optimizer);
+				merge.state = make_uniq<PlanSignatureCreateState>(optimizer.context);
+				merge.MergeBranches(op, order_discarded);
+			}
+			return;
+		}
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+			for (auto &child : op->children) {
+				Optimize(child, true);
+			}
+			return;
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_UNNEST:
+			Optimize(op->children[0], order_discarded);
+			return;
+		default:
+			for (auto &child : op->children) {
+				Optimize(child, false);
+			}
+			return;
+		}
+	}
+
+private:
+	static bool IsUngrouped(const LogicalAggregate &aggregate) {
+		return aggregate.groups.empty();
+	}
+
+	//! The aggregate of a UNION ALL child of the form PROJECTION - [FILTER] - AGGREGATE
+	static optional_ptr<LogicalOperator> BranchAggregate(LogicalOperator &child) {
+		if (child.type != LogicalOperatorType::LOGICAL_PROJECTION) {
+			return nullptr;
+		}
+		reference<LogicalOperator> below = *child.children[0];
+		if (below.get().type == LogicalOperatorType::LOGICAL_FILTER && !below.get().HasProjectionMap()) {
+			below = *below.get().children[0];
+		}
+		if (below.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			return nullptr;
+		}
+		return below.get();
+	}
+
+	//! Whether two children of the UNION ALL are aggregates, which is found without computing anything: a UNION ALL
+	//! can have thousands of children that are not
+	static bool HasAggregateBranches(LogicalOperator &op) {
+		idx_t count = 0;
+		for (auto &child : op.children) {
+			if (BranchAggregate(*child) && ++count == 2) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//! The signature of the input of an aggregate. The table filters of the scans that are reached through inner
+	//! joins, cross products and filters are left out
+	optional_ptr<PlanSignature> InputSignature(unique_ptr<LogicalOperator> &op, Branch &branch, bool movable) {
+		bool traverse = false;
+		if (movable) {
+			switch (op->type) {
+			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+				traverse = op->Cast<LogicalComparisonJoin>().join_type == JoinType::INNER && !op->HasProjectionMap();
+				break;
+			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+				traverse = true;
+				break;
+			case LogicalOperatorType::LOGICAL_FILTER:
+				traverse = !op->HasProjectionMap();
+				break;
+			default:
+				break;
+			}
+		}
+		vector<reference<PlanSignature>> children;
+		for (auto &child : op->children) {
+			auto signature = InputSignature(child, branch, traverse);
+			if (!signature) {
+				return nullptr;
+			}
+			children.emplace_back(*signature);
+		}
+		auto create = [&]() {
+			signatures.push_back(PlanSignature::Create(*state, *op, std::move(children)));
+			return optional_ptr<PlanSignature>(signatures.back().get());
+		};
+		if (!movable || op->type != LogicalOperatorType::LOGICAL_GET) {
+			return create();
+		}
+		auto &get = op->Cast<LogicalGet>();
+		if (!get.children.empty() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters ||
+		    get.extra_info.sample_options || get.has_pushed_projection || !get.projection_ids.empty()) {
+			return create();
+		}
+		for (auto &entry : get.table_filters) {
+			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
+			if (ExpressionFilter::IsOptionalFilter(filter) || filter.expr->HasParameter()) {
+				return create();
+			}
+		}
+		auto filters = std::move(get.table_filters);
+		get.table_filters = TableFilterSet();
+		auto signature = create();
+		get.table_filters = std::move(filters);
+		branch.scans.emplace_back(op);
+		return signature;
+	}
+
+	//! The signature of a child of the UNION ALL, if it is PROJECTION - [FILTER] - AGGREGATE. The constants of the
+	//! select list are not part of it
+	optional_ptr<PlanSignature> BranchSignature(unique_ptr<LogicalOperator> &child, Branch &branch) {
+		auto branch_aggregate = BranchAggregate(*child);
+		if (!branch_aggregate) {
+			return nullptr;
+		}
+		auto &aggregate = branch_aggregate->Cast<LogicalAggregate>();
+		optional_ptr<LogicalOperator> having;
+		if (child->children[0]->type == LogicalOperatorType::LOGICAL_FILTER) {
+			having = child->children[0].get();
+		}
+		if (aggregate.grouping_sets.size() > 1 || !aggregate.grouping_functions.empty() ||
+		    aggregate.preserve_input_order) {
+			return nullptr;
+		}
+		if (aggregate.grouping_sets.size() == 1 && aggregate.grouping_sets[0].size() != aggregate.groups.size()) {
+			return nullptr;
+		}
+		if (IsUngrouped(aggregate) &&
+		    (having || !RemoveRedundantOrder::AggregateDiscardsOrder(aggregate) || aggregate.expressions.empty())) {
+			// a branch without groups returns a row for an empty input, which a filter above it could remove, and
+			// reads its rows in order if an aggregate asks for that
+			return nullptr;
+		}
+		branch.projection = child->Cast<LogicalProjection>();
+		branch.aggregate = aggregate;
+
+		auto signature = InputSignature(aggregate.children[0], branch, true);
+		if (!signature || branch.scans.empty()) {
+			return nullptr;
+		}
+		signatures.push_back(PlanSignature::Create(*state, aggregate, {*signature}));
+		signature = signatures.back().get();
+		if (signature && having) {
+			signatures.push_back(PlanSignature::Create(*state, *having, {*signature}));
+			signature = signatures.back().get();
+		}
+		if (!signature) {
+			return nullptr;
+		}
+		// constants of the select list are compared by their type only
+		auto &expressions = child->expressions;
+		vector<unique_ptr<Expression>> constants;
+		for (idx_t i = 0; i < expressions.size(); i++) {
+			if (expressions[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+				continue;
+			}
+			branch.constants.emplace_back(i, expressions[i]->Cast<BoundConstantExpression>().GetValue());
+			auto placeholder = make_uniq<BoundConstantExpression>(Value(expressions[i]->GetReturnType()));
+			constants.push_back(std::move(expressions[i]));
+			expressions[i] = std::move(placeholder);
+		}
+		signatures.push_back(PlanSignature::Create(*state, *child, {*signature}));
+		for (idx_t i = 0; i < constants.size(); i++) {
+			expressions[branch.constants[i].first] = std::move(constants[i]);
+		}
+		return signatures.back().get();
+	}
+
+	//! Whether the values of a type that are equal are the same value, so that grouping by a column of the type
+	//! separates what the comparisons with different constants separate
+	static bool IsKeyType(const LogicalType &type) {
+		return !type.IsNested() && type.EqualValuesAreIdentical();
+	}
+
+	//! The table filters of a scan, over the columns of the scan `target` of the same table with the same column ids
+	static bool GetScanFilters(LogicalGet &get, LogicalGet &target, ScanFilters &result) {
+		vector<unique_ptr<Expression>> conjuncts;
+		for (auto &entry : get.table_filters) {
+			const auto index = entry.GetIndex();
+			if (index.GetIndex() >= target.GetColumnIds().size()) {
+				return false;
+			}
+			BoundColumnRefExpression column(target.GetColumnType(target.GetColumnIds()[index.GetIndex()]),
+			                                ColumnBinding(target.table_index, index));
+			conjuncts.push_back(entry.Filter().ToExpression(column));
+		}
+		LogicalFilter::SplitPredicates(conjuncts);
+		for (auto &conjunct : conjuncts) {
+			if (conjunct->GetExpressionType() == ExpressionType::COMPARE_EQUAL &&
+			    BoundComparisonExpression::IsComparison(*conjunct)) {
+				auto &comparison = conjunct->Cast<BoundFunctionExpression>();
+				reference<const Expression> left = BoundComparisonExpression::Left(comparison);
+				reference<const Expression> right = BoundComparisonExpression::Right(comparison);
+				if (left.get().GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+					std::swap(left, right);
+				}
+				if (left.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+				    right.get().GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+					auto &column = left.get().Cast<BoundColumnRefExpression>();
+					auto &constant = right.get().Cast<BoundConstantExpression>().GetValue();
+					const auto column_index = column.Binding().column_index.GetIndex();
+					if (column.Depth() == 0 && column.Binding().table_index == target.table_index &&
+					    !constant.IsNull() && constant.type() == column.GetReturnType() &&
+					    IsKeyType(constant.type()) && IsKeyType(column.GetReturnType()) &&
+					    result.equalities.find(column_index) == result.equalities.end()) {
+						result.equalities.emplace(column_index, constant);
+						continue;
+					}
+				}
+			}
+			result.others.push_back(std::move(conjunct));
+		}
+		return true;
+	}
+
+	//! Chooses the branches of one signature that can be computed by the aggregate of the first of them: `merged`
+	//! holds them, `varying_scan` the scan whose filters differ and `key_columns` its compared columns.
+	bool FindMergeableBranches(vector<Branch> &branches, vector<reference<Branch>> &merged, idx_t &varying_scan,
+	                           vector<idx_t> &key_columns, ScanFilters &primary_filters) {
+		auto &primary = branches[0];
+		// the scan whose table filters differ from those of the first branch: the same one in every branch
+		optional_idx varying;
+		vector<reference<Branch>> candidates;
+		for (idx_t b = 1; b < branches.size(); b++) {
+			auto &branch = branches[b];
+			if (branch.scans.size() != primary.scans.size()) {
+				continue;
+			}
+			optional_idx branch_varying;
+			bool valid = true;
+			for (idx_t i = 0; i < primary.scans.size() && valid; i++) {
+				auto &left = primary.scans[i].get()->Cast<LogicalGet>();
+				auto &right = branch.scans[i].get()->Cast<LogicalGet>();
+				if (left.GetColumnIds() != right.GetColumnIds()) {
+					valid = false;
+				} else if (!left.table_filters.Equals(right.table_filters)) {
+					valid = !branch_varying.IsValid();
+					branch_varying = i;
+				}
+			}
+			if (!valid || !branch_varying.IsValid()) {
+				continue;
+			}
+			if (!varying.IsValid()) {
+				varying = branch_varying;
+			}
+			if (varying.GetIndex() == branch_varying.GetIndex()) {
+				candidates.push_back(branch);
+			}
+		}
+		if (!varying.IsValid()) {
+			return false;
+		}
+		varying_scan = varying.GetIndex();
+		auto &primary_get = primary.scans[varying_scan].get()->Cast<LogicalGet>();
+		if (!GetScanFilters(primary_get, primary_get, primary_filters) || primary_filters.equalities.empty()) {
+			return false;
+		}
+		// the filters of the other branches: the same comparisons, with other constants
+		vector<ScanFilters> candidate_filters;
+		vector<reference<Branch>> comparable;
+		for (auto &candidate : candidates) {
+			ScanFilters filters;
+			auto &get = candidate.get().scans[varying_scan].get()->Cast<LogicalGet>();
+			if (!GetScanFilters(get, primary_get, filters) ||
+			    filters.equalities.size() != primary_filters.equalities.size() ||
+			    filters.others.size() != primary_filters.others.size()) {
+				continue;
+			}
+			bool same = true;
+			for (auto &entry : primary_filters.equalities) {
+				auto other = filters.equalities.find(entry.first);
+				same = same && other != filters.equalities.end() && other->second.type() == entry.second.type();
+			}
+			for (idx_t i = 0; i < filters.others.size() && same; i++) {
+				same = Expression::Equals(*filters.others[i], *primary_filters.others[i]);
+			}
+			if (!same) {
+				continue;
+			}
+			comparable.push_back(candidate);
+			candidate_filters.push_back(std::move(filters));
+		}
+		// the columns whose constants differ
+		for (auto &entry : primary_filters.equalities) {
+			for (auto &filters : candidate_filters) {
+				if (!Value::NotDistinctFrom(filters.equalities.at(entry.first), entry.second)) {
+					key_columns.push_back(entry.first);
+					break;
+				}
+			}
+		}
+		if (key_columns.empty()) {
+			return false;
+		}
+		// the branches with constants that no earlier branch has
+		value_set_t seen;
+		auto add_branch = [&](Branch &branch, ScanFilters &filters) {
+			child_list_t<Value> key;
+			for (auto column : key_columns) {
+				branch.keys.push_back(filters.equalities.at(column));
+				key.emplace_back("k" + to_string(key.size()), branch.keys.back());
+			}
+			if (seen.insert(Value::STRUCT(std::move(key))).second) {
+				merged.push_back(branch);
+			}
+		};
+		add_branch(primary, primary_filters);
+		for (idx_t i = 0; i < comparable.size(); i++) {
+			add_branch(comparable[i], candidate_filters[i]);
+		}
+		return merged.size() >= 2;
+	}
+
+	//! The constants of the select list that differ between the branches (as indexes into Branch::constants)
+	static vector<idx_t> DifferingConstants(const vector<reference<Branch>> &merged) {
+		auto &primary = merged[0].get();
+		vector<idx_t> result;
+		for (idx_t c = 0; c < primary.constants.size(); c++) {
+			for (auto &branch : merged) {
+				if (!Value::NotDistinctFrom(branch.get().constants[c].second, primary.constants[c].second)) {
+					result.push_back(c);
+					break;
+				}
+			}
+		}
+		return result;
+	}
+
+	//! The rows of the row groups that the varying scan reads, as far as the zonemaps tell: in all branches together
+	//! (a row group counts for every branch whose constants it can hold), and in the merged plan (it counts once if
+	//! it can hold the constants of any branch). False if that is not known
+	bool VaryingScanRows(LogicalGet &get, const vector<reference<Branch>> &merged, const vector<idx_t> &key_columns,
+	                     double &branch_rows, double &merged_rows) {
+		auto &context = optimizer.context;
+		auto table = get.GetTable();
+		if (!table || !table->IsDuckTable() || !get.function.get_partition_stats || !get.bind_data) {
+			return false;
+		}
+		vector<StorageIndex> storage_indexes;
+		vector<LogicalType> key_types;
+		for (auto column : key_columns) {
+			StorageIndex storage_index;
+			if (!get.TryGetStorageIndex(get.GetColumnIds()[column], storage_index)) {
+				return false;
+			}
+			storage_indexes.push_back(std::move(storage_index));
+			key_types.push_back(get.GetColumnType(get.GetColumnIds()[column]));
+		}
+		// with one numeric column the constants within the bounds of a row group are found in the sorted constants,
+		// otherwise every branch is checked against every row group
+		const bool sorted_keys =
+		    key_columns.size() == 1 && BaseStatistics::GetStatsType(key_types[0]) == StatisticsType::NUMERIC_STATS;
+		// the limit is checked before any row group is loaded
+		auto &storage = table->Cast<DuckTableEntry>().GetStorage();
+		const auto max_row_groups =
+		    sorted_keys ? MAX_ZONEMAP_ROW_GROUPS : MAX_ZONEMAP_CHECKS / (merged.size() * key_columns.size());
+		if (storage.GetRowGroupCountWithoutLoading(context) > max_row_groups) {
+			return false;
+		}
+		GetPartitionStatsInput input(get.function, get.bind_data.get());
+		auto partitions = get.function.get_partition_stats(context, input);
+		if (partitions.empty() || partitions.size() > max_row_groups) {
+			return false;
+		}
+		vector<Value> keys;
+		if (sorted_keys) {
+			for (auto &branch : merged) {
+				keys.push_back(branch.get().keys[0]);
+			}
+			std::sort(keys.begin(), keys.end(), ValueOperations::LessThan);
+		}
+		// the comparisons of the branches, as the scan checks them against the statistics of a row group
+		vector<vector<unique_ptr<ExpressionFilter>>> filters;
+		for (auto &branch : merged) {
+			vector<unique_ptr<ExpressionFilter>> branch_filters;
+			for (auto &key : branch.get().keys) {
+				branch_filters.push_back(ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, key));
+			}
+			filters.push_back(std::move(branch_filters));
+		}
+		branch_rows = 0;
+		merged_rows = 0;
+		vector<unique_ptr<BaseStatistics>> statistics(key_columns.size());
+		for (auto &partition : partitions) {
+			idx_t readers = merged.size();
+			if (partition.partition_row_group) {
+				for (idx_t k = 0; k < key_columns.size(); k++) {
+					statistics[k] = partition.partition_row_group->GetColumnStatistics(storage_indexes[k]);
+					if (statistics[k] && !statistics[k]->GetType().EqualsIncludingCollation(key_types[k])) {
+						statistics[k].reset();
+					}
+				}
+				readers = 0;
+				if (sorted_keys && statistics[0] && NumericStats::HasMinMax(*statistics[0])) {
+					// a comparison with a constant outside of the bounds skips the row group
+					auto first = std::lower_bound(keys.begin(), keys.end(), NumericStats::Min(*statistics[0]),
+					                              ValueOperations::LessThan);
+					auto last = std::upper_bound(keys.begin(), keys.end(), NumericStats::Max(*statistics[0]),
+					                             ValueOperations::LessThan);
+					readers = first < last ? NumericCast<idx_t>(last - first) : 0;
+					branch_rows += double(readers) * double(partition.count);
+					merged_rows += readers > 0 ? double(partition.count) : 0;
+					continue;
+				}
+				for (auto &branch_filters : filters) {
+					bool skipped = false;
+					for (idx_t k = 0; k < key_columns.size() && !skipped; k++) {
+						if (!statistics[k]) {
+							continue;
+						}
+						auto pruning =
+						    ExpressionFilter::CheckExpressionStatistics(context, *branch_filters[k]->expr, *statistics[k]);
+						skipped = pruning == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+						          pruning == FilterPropagateResult::FILTER_FALSE_OR_NULL;
+					}
+					readers += skipped ? 0 : 1;
+				}
+			}
+			branch_rows += double(readers) * double(partition.count);
+			merged_rows += readers > 0 ? double(partition.count) : 0;
+		}
+		return true;
+	}
+
+	static void OtherScanRows(LogicalOperator &op, const LogicalGet &varying, ClientContext &context, double &rows) {
+		if (op.type == LogicalOperatorType::LOGICAL_GET && &op != &varying) {
+			rows += double(op.EstimateCardinality(context));
+		}
+		for (auto &child : op.children) {
+			OtherScanRows(*child, varying, context, rows);
+		}
+	}
+
+	//! Whether one aggregate over one pass is expected to be faster than the branches. What it saves are the scans:
+	//! every branch reads the tables below it again, except for the row groups of the varying scan that its
+	//! constants rule out. Where the rows of the table are clustered by the compared column, the branches read
+	//! disjoint parts of it, as much together as the merged plan, which has nothing to gain then and aggregates into
+	//! more groups. So the rows that the scans of all branches read have to be a multiple of what the merged plan
+	//! reads. Without statistics of the row groups, the branches are assumed to read disjoint parts.
+	bool IsProfitable(const vector<reference<Branch>> &merged, idx_t varying_scan, const vector<idx_t> &key_columns) {
+		auto &context = optimizer.context;
+		auto &primary = merged[0].get();
+		auto &aggregate = *primary.aggregate;
+		auto &get = primary.scans[varying_scan].get()->Cast<LogicalGet>();
+
+		double other_rows = 0;
+		OtherScanRows(aggregate, get, context, other_rows);
+		double branch_rows;
+		double merged_rows;
+		if (!VaryingScanRows(get, merged, key_columns, branch_rows, merged_rows)) {
+			branch_rows = merged_rows = double(get.EstimateCardinality(context));
+		}
+		const auto branch_count = double(merged.size());
+		if (branch_count * other_rows + branch_rows < MIN_SCAN_REDUCTION * (other_rows + merged_rows)) {
+			return false;
+		}
+		if (IsUngrouped(aggregate) || DifferingConstants(merged).empty()) {
+			return true;
+		}
+		// the constants of the select list are joined to the groups: every row of the result is probed, where the
+		// branches attach a constant. This is only little work if the aggregate reduces its input to few groups
+		RelationStatsExtractor extractor(context);
+		auto input_stats = extractor.Extract(*aggregate.children[0]);
+		if (!input_stats) {
+			return false;
+		}
+		auto input_rows = double(input_stats->cardinality);
+		auto aggregate_stats = extractor.Extract(aggregate);
+		if (!aggregate_stats) {
+			return false;
+		}
+		return double(aggregate_stats->cardinality) * MIN_GROUP_REDUCTION <= input_rows;
+	}
+
+	//! Restricts the varying scan of the first branch to the constants of all branches
+	void RestrictScan(unique_ptr<LogicalOperator> &scan, const vector<reference<Branch>> &merged,
+	                  const vector<idx_t> &key_columns, ScanFilters &primary_filters) {
+		auto &get = scan->Cast<LogicalGet>();
+		auto key_column = [&](idx_t column) {
+			return make_uniq<BoundColumnRefExpression>(get.GetColumnType(get.GetColumnIds()[column]),
+			                                           ColumnBinding(get.table_index, ProjectionIndex(column)));
+		};
+		vector<unique_ptr<Expression>> expressions = std::move(primary_filters.others);
+		for (auto &entry : primary_filters.equalities) {
+			if (std::find(key_columns.begin(), key_columns.end(), entry.first) != key_columns.end()) {
+				continue;
+			}
+			expressions.push_back(BoundComparisonExpression::Create(
+			    ExpressionType::COMPARE_EQUAL, key_column(entry.first), make_uniq<BoundConstantExpression>(entry.second)));
+		}
+		if (key_columns.size() == 1) {
+			vector<Value> values;
+			for (auto &branch : merged) {
+				values.push_back(branch.get().keys[0]);
+			}
+			expressions.push_back(ExpressionFilter::CreateInExpression(key_column(key_columns[0]), std::move(values)));
+		} else {
+			// the values of every column by themselves, which a scan can check, and their combinations
+			for (idx_t k = 0; k < key_columns.size(); k++) {
+				value_set_t seen;
+				vector<Value> values;
+				for (auto &branch : merged) {
+					if (seen.insert(branch.get().keys[k]).second) {
+						values.push_back(branch.get().keys[k]);
+					}
+				}
+				expressions.push_back(
+				    ExpressionFilter::CreateInExpression(key_column(key_columns[k]), std::move(values)));
+			}
+			vector<unique_ptr<Expression>> disjuncts;
+			for (auto &branch : merged) {
+				vector<unique_ptr<Expression>> conjuncts;
+				for (idx_t k = 0; k < key_columns.size(); k++) {
+					conjuncts.push_back(
+					    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, key_column(key_columns[k]),
+					                                      make_uniq<BoundConstantExpression>(branch.get().keys[k])));
+				}
+				disjuncts.push_back(
+				    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(conjuncts)));
+			}
+			expressions.push_back(
+			    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(disjuncts)));
+		}
+		get.table_filters.ClearFilters();
+		auto filter = make_uniq<LogicalFilter>();
+		filter->expressions = std::move(expressions);
+		filter->children.push_back(std::move(scan));
+		FilterPushdown pushdown(optimizer);
+		scan = pushdown.Rewrite(std::move(filter));
+	}
+
+	//! Replaces the references to the aggregates of a branch without groups: where its group is missing, an
+	//! aggregate has the value that it has over an empty input
+	static void ReplaceMissingAggregates(unique_ptr<Expression> &expr, TableIndex aggregate_index,
+	                                     TableIndex empty_index, const ColumnBinding &marker,
+	                                     const LogicalType &marker_type) {
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &column = expr->Cast<BoundColumnRefExpression>();
+			if (column.Binding().table_index != aggregate_index) {
+				return;
+			}
+			auto is_missing = make_uniq<BoundOperatorExpression>(
+			    ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN,
+			    make_uniq<BoundColumnRefExpression>(marker_type, marker));
+			auto empty = make_uniq<BoundColumnRefExpression>(
+			    column.GetReturnType(), ColumnBinding(empty_index, column.Binding().column_index));
+			auto alias = expr->GetAlias();
+			auto result = make_uniq<BoundCaseExpression>(std::move(is_missing), std::move(empty), std::move(expr));
+			result->SetAlias(alias);
+			expr = std::move(result);
+			return;
+		}
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			ReplaceMissingAggregates(child, aggregate_index, empty_index, marker, marker_type);
+		});
+	}
+
+	//! Makes the aggregate of the first branch compute all of the branches
+	void Merge(const vector<reference<Branch>> &merged, idx_t varying_scan, const vector<idx_t> &key_columns,
+	           ScanFilters &primary_filters, bool order_discarded) {
+		auto &binder = optimizer.binder;
+		auto &primary = merged[0].get();
+		auto &projection = *primary.projection;
+		auto &aggregate = *primary.aggregate;
+		auto &get = primary.scans[varying_scan].get()->Cast<LogicalGet>();
+		const auto ungrouped = IsUngrouped(aggregate);
+
+		// an aggregate over no rows, for the values of the aggregates of a missing group
+		unique_ptr<LogicalOperator> empty_aggregate;
+		TableIndex empty_index;
+		if (ungrouped) {
+			auto &input = *aggregate.children[0];
+			input.ResolveOperatorTypes();
+			auto input_bindings = input.GetColumnBindings();
+			auto empty_bindings =
+			    LogicalOperator::GenerateColumnBindings(binder.GenerateTableIndex(), input_bindings.size());
+			vector<unique_ptr<Expression>> aggregates;
+			for (auto &expr : aggregate.expressions) {
+				aggregates.push_back(expr->Copy());
+			}
+			empty_index = binder.GenerateTableIndex();
+			empty_aggregate =
+			    make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), empty_index, std::move(aggregates));
+			ColumnBindingReplacer replacer;
+			replacer.AddReplacements(input_bindings, empty_bindings);
+			replacer.VisitOperatorBindings(*empty_aggregate);
+			empty_aggregate->children.push_back(make_uniq<LogicalEmptyResult>(input.types, empty_bindings));
+		}
+
+		// group by the compared columns
+		vector<LogicalType> key_types;
+		vector<ColumnBinding> key_bindings;
+		for (auto column : key_columns) {
+			key_types.push_back(get.GetColumnType(get.GetColumnIds()[column]));
+			auto group = make_uniq<BoundColumnRefExpression>(key_types.back(),
+			                                                 ColumnBinding(get.table_index, ProjectionIndex(column)));
+			auto group_index = ColumnBinding::PushExpression(aggregate.groups, std::move(group));
+			for (auto &set : aggregate.grouping_sets) {
+				set.insert(group_index);
+			}
+			if (!aggregate.group_stats.empty()) {
+				aggregate.group_stats.push_back(nullptr);
+			}
+			key_bindings.emplace_back(aggregate.group_index, group_index);
+		}
+		RestrictScan(primary.scans[varying_scan].get(), merged, key_columns, primary_filters);
+
+		// the constants of the select list that differ
+		auto constants = DifferingConstants(merged);
+		const bool restore_order = ungrouped && !order_discarded;
+		if (!ungrouped && constants.empty()) {
+			return;
+		}
+		// the list of the branches: their keys, constants and position
+		vector<LogicalType> list_types = key_types;
+		for (auto c : constants) {
+			list_types.push_back(primary.constants[c].second.type());
+		}
+		if (restore_order) {
+			list_types.push_back(LogicalType::BIGINT);
+		}
+		vector<vector<unique_ptr<Expression>>> rows;
+		for (idx_t b = 0; b < merged.size(); b++) {
+			auto &branch = merged[b].get();
+			vector<unique_ptr<Expression>> row;
+			for (auto &key : branch.keys) {
+				row.push_back(make_uniq<BoundConstantExpression>(key));
+			}
+			for (auto c : constants) {
+				row.push_back(make_uniq<BoundConstantExpression>(branch.constants[c].second));
+			}
+			if (restore_order) {
+				row.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(b))));
+			}
+			rows.push_back(std::move(row));
+		}
+		const auto list_index = binder.GenerateTableIndex();
+		unique_ptr<LogicalOperator> list =
+		    make_uniq<LogicalExpressionGet>(list_index, list_types, std::move(rows));
+		list->children.push_back(make_uniq<LogicalDummyScan>(binder.GenerateTableIndex()));
+
+		auto join = make_uniq<LogicalComparisonJoin>(ungrouped ? JoinType::LEFT : JoinType::INNER);
+		for (idx_t k = 0; k < key_columns.size(); k++) {
+			auto list_key =
+			    make_uniq<BoundColumnRefExpression>(key_types[k], ColumnBinding(list_index, ProjectionIndex(k)));
+			auto group_key = make_uniq<BoundColumnRefExpression>(key_types[k], key_bindings[k]);
+			join->conditions.emplace_back(std::move(list_key), std::move(group_key), ExpressionType::COMPARE_EQUAL);
+		}
+		if (ungrouped) {
+			list = LogicalCrossProduct::Create(std::move(list), std::move(empty_aggregate));
+		}
+		join->children.push_back(std::move(list));
+		join->children.push_back(std::move(projection.children[0]));
+		projection.children[0] = std::move(join);
+
+		for (idx_t c = 0; c < constants.size(); c++) {
+			auto &expr = projection.expressions[primary.constants[constants[c]].first];
+			auto alias = expr->GetAlias();
+			expr = make_uniq<BoundColumnRefExpression>(
+			    list_types[key_types.size() + c], ColumnBinding(list_index, ProjectionIndex(key_types.size() + c)));
+			expr->SetAlias(alias);
+		}
+		if (ungrouped) {
+			for (auto &expr : projection.expressions) {
+				ReplaceMissingAggregates(expr, aggregate.aggregate_index, empty_index, key_bindings[0], key_types[0]);
+			}
+		}
+		if (restore_order) {
+			// the one row of every branch, in the order of the branches
+			auto position = ColumnBinding(list_index, ProjectionIndex(list_types.size() - 1));
+			auto order_node = BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+			                                   make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, position));
+			vector<BoundOrderByNode> orders;
+			orders.push_back(std::move(order_node));
+			auto order = make_uniq<LogicalOrder>(std::move(orders));
+			order->children.push_back(std::move(projection.children[0]));
+			projection.children[0] = std::move(order);
+		}
+	}
+
+	void MergeBranches(unique_ptr<LogicalOperator> &op, bool order_discarded) {
+		auto &setop = op->Cast<LogicalSetOperation>();
+		if (op->children.size() < 2) {
+			return;
+		}
+		// the children by signature, in the order of the first child of each
+		unordered_map<reference<PlanSignature>, idx_t, PlanSignatureHash, PlanSignatureEquality> signature_groups;
+		vector<vector<Branch>> groups;
+		for (idx_t i = 0; i < op->children.size(); i++) {
+			Branch branch(i);
+			auto signature = BranchSignature(op->children[i], branch);
+			if (!signature) {
+				continue;
+			}
+			auto entry = signature_groups.emplace(*signature, groups.size());
+			if (entry.second) {
+				groups.emplace_back();
+			}
+			groups[entry.first->second].push_back(std::move(branch));
+		}
+		unordered_set<idx_t> removed;
+		for (auto &branches : groups) {
+			if (branches.size() < 2) {
+				continue;
+			}
+			const auto ungrouped = IsUngrouped(*branches[0].aggregate);
+			if (!ungrouped && !order_discarded) {
+				continue;
+			}
+			if (ungrouped && !order_discarded && branches.size() != op->children.size()) {
+				// the sort that restores the order of the branches cannot keep the place of other children
+				continue;
+			}
+			vector<reference<Branch>> merged;
+			idx_t varying_scan;
+			vector<idx_t> key_columns;
+			ScanFilters primary_filters;
+			if (!FindMergeableBranches(branches, merged, varying_scan, key_columns, primary_filters)) {
+				continue;
+			}
+			if (ungrouped && !order_discarded && merged.size() != op->children.size()) {
+				continue;
+			}
+			if (!IsProfitable(merged, varying_scan, key_columns)) {
+				continue;
+			}
+			Merge(merged, varying_scan, key_columns, primary_filters, order_discarded);
+			for (idx_t b = 1; b < merged.size(); b++) {
+				removed.insert(merged[b].get().child_index);
+			}
+		}
+		if (removed.empty()) {
+			return;
+		}
+		vector<unique_ptr<LogicalOperator>> children;
+		for (idx_t i = 0; i < op->children.size(); i++) {
+			if (removed.find(i) == removed.end()) {
+				children.push_back(std::move(op->children[i]));
+			}
+		}
+		if (children.size() > 1) {
+			op->children = std::move(children);
+			return;
+		}
+		// one branch is left: it takes the place of the UNION ALL
+		auto &child = children[0];
+		child->ResolveOperatorTypes();
+		auto bindings = child->GetColumnBindings();
+		vector<unique_ptr<Expression>> expressions;
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[i], bindings[i]));
+		}
+		auto projection = make_uniq<LogicalProjection>(setop.table_index, std::move(expressions));
+		projection->children.push_back(std::move(child));
+		op = std::move(projection);
+	}
+
+private:
+	Optimizer &optimizer;
+	unique_ptr<PlanSignatureCreateState> state;
+	//! The signatures reference each other
+	vector<arena_ptr<PlanSignature>> signatures;
+};
+
+UnionAggregateMerger::UnionAggregateMerger(Optimizer &optimizer_p) : optimizer(optimizer_p) {
+}
+
+unique_ptr<LogicalOperator> UnionAggregateMerger::Optimize(unique_ptr<LogicalOperator> op) {
+	UnionAggregateMerge merge(optimizer);
+	// the order of the query result is observable
+	merge.Optimize(op, false);
+	return op;
+}
 
 //===--------------------------------------------------------------------===//
 // CommonSubplanOptimizer

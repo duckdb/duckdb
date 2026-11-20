@@ -7,11 +7,7 @@
 
 namespace duckdb {
 
-namespace {
-
-//! A hash aggregate sinks in parallel, so the input order never reaches its aggregates; an ungrouped aggregate sinks in
-//! order when one of its aggregates reads the rows in order
-bool AggregateDiscardsOrder(const LogicalAggregate &aggr) {
+bool RemoveRedundantOrder::AggregateDiscardsOrder(const LogicalAggregate &aggr) {
 	if (aggr.preserve_input_order) {
 		// DISTINCT ON keeps the first row of every group in input order
 		return false;
@@ -31,6 +27,8 @@ bool AggregateDiscardsOrder(const LogicalAggregate &aggr) {
 	}
 	return true;
 }
+
+namespace {
 
 //! UNION ALL concatenates its inputs in order; the hash-based set operations do not
 bool SetOperationDiscardsOrder(const LogicalSetOperation &setop) {
