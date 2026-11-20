@@ -32,12 +32,9 @@ public:
 	//! operator (LIMIT, window, set operation, ...) ends it
 	bool ignores_duplicates = false;
 
-	//! Found in this pipeline: a pushed-down filter condition (e.g. in a table scan operator)
-	bool has_filter = false;
-
 public:
-	//! The state a pipeline below starts with: what is inherited from the operators above, nothing that was found.
-	//! Whether the pipeline below ignores duplicates is decided by the operator that starts it
+	//! The state a pipeline below starts with: the references of the operators above. Whether the pipeline below
+	//! ignores duplicates is decided by the operator that starts it
 	PipelineInfo CreateChild() {
 		auto result = PipelineInfo();
 		result.ref_table_ids = ref_table_ids;
@@ -83,8 +80,9 @@ public:
 	// 3. the join cannot change how often an outer row occurs in a way that is visible. There are two separate proofs:
 	//    a) the operators above ignore duplicates (PipelineInfo::ignores_duplicates): the join only repeats outer rows
 	//    b) every outer row matches at most one inner row: the inner side is distinct on the columns its equality
-	//       conditions compare (Distinctness: a DISTINCT / GROUP BY, a PRIMARY KEY). This holds whatever is above the
-	//       join. A SINGLE join is only removed by this proof: it raises an error on a second match.
+	//       conditions compare (Distinctness: a DISTINCT / GROUP BY, a PRIMARY KEY, also below filters and as the
+	//       result of an aggregate that was split into aggregates over a materialized CTE). This holds whatever is
+	//       above the join. A SINGLE join is only removed by this proof: it raises an error on a second match.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Whether Optimize removed a join
 	bool RemovedJoin() const;
@@ -109,7 +107,7 @@ private:
 	void OptimizeJoin(unique_ptr<LogicalOperator> &op);
 	void OptimizeJoinChild(LogicalOperator &join, idx_t child_idx, JoinElimination &child);
 	//! Replaces the join `op` by its outer side when it can; returns whether it did
-	bool TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElimination &left_child, JoinElimination &right_child);
+	bool TryEliminateJoin(unique_ptr<LogicalOperator> &op);
 
 	PipelineInfo pipe_info;
 	//! Shared by the optimizers of all pipelines of one plan
