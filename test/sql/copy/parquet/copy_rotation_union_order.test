@@ -1,0 +1,43 @@
+# name: test/sql/copy/parquet/copy_rotation_union_order.test
+# description: A sequential order-preserving COPY, with and without file rotation, writes the leftover rows of each UNION ALL child before the next child's rows
+# group: [parquet]
+
+require parquet
+
+# one thread: the copy sinks the children one after another instead of using batch indexes
+statement ok
+SET threads=1;
+
+# each child leaves rows that do not fill a row group: 4596 = 2 * 2048 + 500 and 5896 = 2 * 2048 + 1800
+statement ok
+COPY (
+	(SELECT i AS k FROM range(0, 4596) r(i) ORDER BY k) UNION ALL
+	(SELECT i AS k FROM range(4596, 10492) r(i) ORDER BY k) UNION ALL
+	(SELECT i AS k FROM range(10492, 15088) r(i) ORDER BY k)
+) TO '{TEST_DIR}/rotation_union_order' (FORMAT parquet, PRESERVE_ORDER, FILE_SIZE_BYTES '1GB', ROW_GROUP_SIZE 2048);
+
+query II
+SELECT count(*), count(DISTINCT k) FROM '{TEST_DIR}/rotation_union_order/*.parquet'
+----
+15088	15088
+
+query I
+SELECT count(*) FROM (
+	SELECT k, lag(k) OVER (PARTITION BY filename ORDER BY file_row_number) AS previous
+	FROM read_parquet('{TEST_DIR}/rotation_union_order/*.parquet', filename = true, file_row_number = true))
+WHERE k < previous
+----
+0
+
+# the same holds without rotation
+statement ok
+COPY (
+	(SELECT i AS k FROM range(0, 4596) r(i) ORDER BY k) UNION ALL
+	(SELECT i AS k FROM range(4596, 10492) r(i) ORDER BY k) UNION ALL
+	(SELECT i AS k FROM range(10492, 15088) r(i) ORDER BY k)
+) TO '{TEST_DIR}/union_order.parquet' (FORMAT parquet, PRESERVE_ORDER, ROW_GROUP_SIZE 2048);
+
+query II
+SELECT count(*), bool_and(k = file_row_number) FROM read_parquet('{TEST_DIR}/union_order.parquet', file_row_number = true)
+----
+15088	true
