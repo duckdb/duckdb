@@ -57,6 +57,12 @@
       "paths": [
         "test/optimizer/remove_redundant_order_keys_side_effects.test"
       ]
+    },
+    {
+      "reason": "The ORDER BY expressions are cast to VARIANT and compared by the VARIANT comparator, so the sort does not reach the sort key encoder under test",
+      "paths": [
+        "test/sql/order/sort_key_invalid_utf8.test"
+      ]
     }
   ]
 }

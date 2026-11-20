@@ -23,6 +23,17 @@
 namespace duckdb {
 
 namespace {
+//! Thrown when a VARCHAR value contains the byte FF: it is not valid UTF-8 and encodes to the string delimiter
+[[noreturn]] void ThrowSortKeyEncodeError() {
+	throw DataCorruptionException("Failed to create sort key: a VARCHAR value contains the byte FF, which is not valid "
+	                              "UTF-8");
+}
+
+//! Thrown when a sort key is not the encoding of the columns it is decoded into
+[[noreturn]] void ThrowSortKeyDecodeError() {
+	throw DataCorruptionException("Failed to decode sort key: the key does not match the encoding of its columns");
+}
+
 struct SortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
 	bool all_constant = false;
@@ -215,7 +226,9 @@ struct SortKeyConstantOperator {
 
 	template <bool FLIP_BYTES>
 	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
-		D_ASSERT(input_size >= sizeof(T));
+		if (DUCKDB_UNLIKELY(input_size < sizeof(T))) {
+			ThrowSortKeyDecodeError();
+		}
 		if (FLIP_BYTES) {
 			// descending order - so flip bytes
 			data_t flipped_bytes[sizeof(T)];
@@ -239,17 +252,25 @@ struct SortKeyVarcharOperator {
 
 	//! Strings are encoded by incrementing every byte, so that no byte collides with the delimiter.
 	//! That is a pure per-byte mapping, so we can apply it word-at-a-time.
+	//! Valid UTF-8 never contains the byte FF, the only byte that increments to the delimiter.
 	template <bool FLIP_BYTES>
 	static idx_t Encode(data_ptr_t result, TYPE input) {
 		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		idx_t pos = 0;
+		uint64_t delimiter_bytes = 0;
 		for (; pos + SwarWord::SIZE <= input_size; pos += SwarWord::SIZE) {
 			auto encoded = SortKeyWord::IncrementBytes(Load<uint64_t>(input_data + pos));
+			delimiter_bytes |= SwarWord::ZeroBytes(encoded);
 			Store<uint64_t>(SortKeyWord::FlipWord<FLIP_BYTES>(encoded), result + pos);
 		}
 		for (; pos < input_size; pos++) {
-			result[pos] = SortKeyWord::FlipByte<FLIP_BYTES>(static_cast<data_t>(input_data[pos] + 1));
+			auto encoded = static_cast<data_t>(input_data[pos] + 1);
+			delimiter_bytes |= static_cast<uint64_t>(encoded == SortKeyVectorData::STRING_DELIMITER);
+			result[pos] = SortKeyWord::FlipByte<FLIP_BYTES>(encoded);
+		}
+		if (DUCKDB_UNLIKELY(delimiter_bytes != 0)) {
+			ThrowSortKeyEncodeError();
 		}
 		result[input_size] = SortKeyWord::FlipByte<FLIP_BYTES>(SortKeyVectorData::STRING_DELIMITER);
 		return input_size + 1;
@@ -265,7 +286,10 @@ struct SortKeyVarcharOperator {
 		idx_t pos;
 		for (pos = 0; pos < input_size && input[pos] != string_delimiter; pos++) {
 		}
-		D_ASSERT(pos < input_size);
+		if (DUCKDB_UNLIKELY(pos >= input_size)) {
+			// no delimiter in the remainder of the key
+			ThrowSortKeyDecodeError();
+		}
 		idx_t str_len = pos;
 		// now allocate the string data and fill it with the decoded data
 		result_value = StringVector::EmptyString(result, str_len);
@@ -386,10 +410,12 @@ struct SortKeyBlobOperator {
 			if (input[pos] == escape_character) {
 				// escape character - skip the next byte
 				pos++;
-				D_ASSERT(pos < input_size);
 			}
 		}
-		D_ASSERT(pos < input_size);
+		if (DUCKDB_UNLIKELY(pos >= input_size)) {
+			// no delimiter in the remainder of the key
+			ThrowSortKeyDecodeError();
+		}
 		// now allocate the blob data and fill it with the decoded data
 		result_value = StringVector::EmptyString(result, blob_len);
 		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
@@ -937,7 +963,7 @@ static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_k
 			const auto sliced_data = full_key_data + offset;
 			const auto sliced_size = expected_size - offset;
 			auto sliced_key = string_t(sliced_data, UnsafeNumericCast<uint32_t>(sliced_size));
-			offset += CreateSortKeyHelpers::DecodeSortKey(sliced_key, decoded_columns[c], r, modifiers[c]);
+			offset += CreateSortKeyHelpers::DecodeSortKeyPrefix(sliced_key, decoded_columns[c], r, modifiers[c]);
 		}
 		D_ASSERT(offset <= expected_size);
 
@@ -1171,16 +1197,35 @@ struct DecodeSortKeyData {
 
 	inline void RequireRemaining(idx_t required, const char *context) const {
 		(void)context;
-		D_ASSERT(position <= size);
-		D_ASSERT(required <= size - position);
+		if (DUCKDB_UNLIKELY(position > size || required > size - position)) {
+			ThrowSortKeyDecodeError();
+		}
 	}
 
 	inline data_t ReadByte(const char *context) {
 		RequireRemaining(1, context);
-		if (position >= size) {
-			return 0;
-		}
 		return data[position++];
+	}
+
+	//! Reads the validity byte of a value - returns true if the value is NULL
+	inline bool ReadIsNull(const DecodeSortKeyVectorData &vector_data, const char *context) {
+		const auto validity_byte = ReadByte(context);
+		if (validity_byte == vector_data.valid_byte) {
+			return false;
+		}
+		if (DUCKDB_UNLIKELY(validity_byte != vector_data.null_byte)) {
+			ThrowSortKeyDecodeError();
+		}
+		return true;
+	}
+
+	//! Verifies that the key has been decoded entirely - only the zero padding of an inlined key can be left
+	inline void VerifyFullyDecoded() const {
+		for (idx_t pos = position; pos < size; pos++) {
+			if (DUCKDB_UNLIKELY(data[pos] != 0)) {
+				ThrowSortKeyDecodeError();
+			}
+		}
 	}
 };
 
@@ -1205,12 +1250,10 @@ void TemplatedDecodeSortKeyInternal(DecodeSortKeyData decode_data_arr[], DecodeS
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	const auto result_data = is_const ? ConstantVector::GetData<typename OP::TYPE>(result)
 	                                  : FlatVector::GetDataMutable<typename OP::TYPE>(result);
-	const auto null_byte = vector_data.null_byte;
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
-		auto validity_byte = decode_data.ReadByte("reading validity byte");
-		if (validity_byte == null_byte) {
+		if (decode_data.ReadIsNull(vector_data, "reading validity byte")) {
 			// NULL value
 			result_validity.SetInvalid(result_idx);
 			continue;
@@ -1219,7 +1262,6 @@ void TemplatedDecodeSortKeyInternal(DecodeSortKeyData decode_data_arr[], DecodeS
 		idx_t increment = OP::template Decode<FLIP_BYTES>(decode_data.data + decode_data.position, remaining, result,
 		                                                  result_data[result_idx]);
 		decode_data.position += increment;
-		D_ASSERT(decode_data.position <= decode_data.size);
 	}
 }
 
@@ -1241,8 +1283,7 @@ void DecodeSortKeyStruct(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVecto
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.ReadByte("reading struct validity byte");
-		if (validity_byte == vector_data.null_byte) {
+		if (decode_data.ReadIsNull(vector_data, "reading struct validity byte")) {
 			// entire struct is NULL
 			// note that we still deserialize the children
 			result_validity.SetInvalid(result_idx);
@@ -1267,8 +1308,7 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.ReadByte("reading list validity byte");
-		if (validity_byte == vector_data.null_byte) {
+		if (decode_data.ReadIsNull(vector_data, "reading list validity byte")) {
 			// entire list is NULL
 			result_validity.SetInvalid(result_idx);
 			continue;
@@ -1315,8 +1355,7 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
 		// check if the top-level is valid or not
-		auto validity_byte = decode_data.ReadByte("reading array validity byte");
-		if (validity_byte == vector_data.null_byte) {
+		if (decode_data.ReadIsNull(vector_data, "reading array validity byte")) {
 			// entire array is NULL
 			// note that we still read the child elements
 			result_validity.SetInvalid(result_idx);
@@ -1444,13 +1483,21 @@ bool CreateSortKeyHelpers::IsNullSortKey(const_data_ptr_t data, OrderByNullType 
 	return data[0] == null_byte;
 }
 
-idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
-                                          OrderModifiers modifiers) {
+idx_t CreateSortKeyHelpers::DecodeSortKeyPrefix(string_t sort_key, Vector &result, idx_t result_idx,
+                                                OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
 	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
 
 	return decode_data.position;
+}
+
+void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
+                                         OrderModifiers modifiers) {
+	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
+	DecodeSortKeyData decode_data(sort_key);
+	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
+	decode_data.VerifyFullyDecoded();
 }
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
@@ -1462,6 +1509,7 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, i
 		DecodeSortKeyVectorData vector_data(vec.GetType(), modifiers[c]);
 		DecodeSortKeyRecursive(&decode_data, vector_data, vec, result_idx, 1);
 	}
+	decode_data.VerifyFullyDecoded();
 }
 
 static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -1524,6 +1572,12 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 		DecodeSortKeyRecursive(decode_data.data(), decode_state.columns[c], child_vector, 0, count);
 	}
+	if (!bind_data.all_constant) {
+		// keys with variable-size columns have to be consumed by their columns
+		for (idx_t i = 0; i < count; i++) {
+			decode_data[i].VerifyFullyDecoded();
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1535,6 +1589,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	sort_key_function.GetSignature().GetParameter(0).SetName("key1");
 	sort_key_function.GetSignature().AddArgs("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	sort_key_function.SetFallible();
 	sort_key_function.GetProperties().SetProperty(CreateSortKeyHelpers::NON_NULL_RESULT_PROPERTY, Value::BOOLEAN(true));
 	sort_key_function.SetInitStateCallback(InitCreateSortKeyState);
 	return sort_key_function;

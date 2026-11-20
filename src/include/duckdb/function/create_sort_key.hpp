@@ -64,9 +64,13 @@ struct CreateSortKeyHelpers {
 	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);
 	static bool IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order);
-	static idx_t DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
+	//! Decodes a complete sort key into a single column
+	static void DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
+	//! Decodes a complete sort key into the columns of a chunk
 	static void DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
 	                          const vector<OrderModifiers> &modifiers);
+	//! Decodes the leading column of a sort key and returns the number of bytes it occupies
+	static idx_t DecodeSortKeyPrefix(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
 	static void CreateSortKeyWithValidity(const Vector &input, Vector &result, const OrderModifiers &modifiers);
 	static void CreateSortKeyWithValidity(const Vector &input, Vector &result, const OrderModifiers &modifiers,
 	                                      idx_t count);

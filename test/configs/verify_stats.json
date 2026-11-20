@@ -8,6 +8,12 @@
       "paths": [
         "test/sql/aggregate/aggregate_state_export/ordered_export_state_layout.test"
       ]
+    },
+    {
+      "reason": "Statistics verification constructs Values from the scanned strings and rejects the intentionally invalid UTF-8 before the nested aggregates reach the sort key encoder under test",
+      "paths": [
+        "test/sql/order/sort_key_invalid_utf8.test"
+      ]
     }
   ]
 }
