@@ -1240,9 +1240,10 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
+		// look the function up where it is created: in the system catalog, under its whole schema path
+		auto schema_path = info.GetQualifiedName().SchemaPath();
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this,
-		    QualifiedName(Identifier::InvalidCatalog(), info.GetQualifiedName().Schema(), info.GetFunctionName()),
+		    *this, QualifiedName::FromCatalogSchema(Identifier::SystemCatalog(), schema_path, info.GetFunctionName()),
 		    OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
