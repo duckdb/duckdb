@@ -1999,21 +1999,35 @@ private:
 		return aggregate.groups.empty();
 	}
 
-	//! Whether an expression of the operator or of an operator below it can throw
-	static bool CanThrow(LogicalOperator &op) {
-		bool can_throw = false;
+	//! Whether an expression of the operator or of an operator below it, the table filters of scans included, can
+	//! throw or is volatile. (Expression::CanThrow / IsVolatile look into the bodies of lambdas.)
+	//!
+	//! The one rule for what a merged branch may contain at and below its aggregate: nothing of that kind. The merged
+	//! plan evaluates the expressions of a branch for rows that the branch never evaluates them for: the scan returns
+	//! the rows of all branches, and its other filters see them in any order relative to the comparison with the
+	//! constants; a branch that the statistics show to be empty with its constant (k = 21 AND k * k < 10, or a HAVING
+	//! that no group passes) is not computed at all on its own; an aggregate without groups keeps an aggregate that
+	//! nothing reads where the merged one drops it; and what does not depend on the compared columns is evaluated
+	//! once instead of once per branch. An error, or a call of a volatile function, could so appear or disappear.
+	//! The comparisons with the constants themselves cannot throw.
+	static bool CanThrowOrIsVolatile(LogicalOperator &op) {
+		bool result = false;
 		LogicalOperatorVisitor::EnumerateExpressions(
-		    op, [&](unique_ptr<Expression> *expr) { can_throw = can_throw || (*expr)->CanThrow(); });
+		    op, [&](unique_ptr<Expression> *expr) { result = result || (*expr)->CanThrow() || (*expr)->IsVolatile(); });
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			for (auto &entry : op.Cast<LogicalGet>().table_filters) {
 				auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
-				can_throw = can_throw || filter.expr->CanThrow();
+				result = result || filter.expr->CanThrow() || filter.expr->IsVolatile();
+			}
+			for (auto &filter : op.Cast<LogicalGet>().table_filters.GetMultiColumnFilters()) {
+				auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "UnionAggregateMerge");
+				result = result || expression_filter.expr->CanThrow() || expression_filter.expr->IsVolatile();
 			}
 		}
 		for (auto &child : op.children) {
-			can_throw = can_throw || CanThrow(*child);
+			result = result || CanThrowOrIsVolatile(*child);
 		}
-		return can_throw;
+		return result;
 	}
 
 	//! The aggregate of a UNION ALL child of the form PROJECTION - [FILTER] - AGGREGATE
@@ -2089,7 +2103,7 @@ private:
 		for (auto &entry : get.table_filters) {
 			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
 			if (ExpressionFilter::IsOptionalFilter(filter) || filter.expr->HasParameter() ||
-			    filter.expr->IsVolatile() || ExpressionBarrier::Contains(*filter.expr)) {
+			    ExpressionBarrier::Contains(*filter.expr)) {
 				return create();
 			}
 		}
@@ -2124,10 +2138,7 @@ private:
 			// a branch without groups returns a row for an empty input, which a filter above it could remove
 			return nullptr;
 		}
-		if (having && CanThrow(*having)) {
-			// with the constant of its branch the statistics can show that a HAVING removes every group
-			// (x = 21 .. HAVING min(x) < 10): the branch is then not computed at all, and an expression in it that
-			// fails for its rows does not fail. The merged aggregate computes the groups before the HAVING removes them
+		if (CanThrowOrIsVolatile(*child->children[0])) {
 			return nullptr;
 		}
 		for (auto &expr : aggregate.expressions) {
@@ -2135,11 +2146,6 @@ private:
 			if (!bound.GetOrderBys() &&
 			    bound.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
 				// the merged plan reads the rows in another order, which first(x) or list(x) show
-				return nullptr;
-			}
-			if (IsUngrouped(aggregate) && expr->CanThrow()) {
-				// an aggregate without groups keeps one of its aggregates if none is read (count(*) over the
-				// branches), which then fails where the merged aggregate, with its groups, drops them all
 				return nullptr;
 			}
 		}
@@ -2192,46 +2198,57 @@ private:
 	//! merged plan, any other one comes from the list of the branches. The serialized form holds the type with its
 	//! modifiers and the value as it is stored
 	static bool IdenticalValues(const Value &left, const Value &right) {
-		if (left.type() != right.type() || left.IsNull() != right.IsNull()) {
-			return false;
-		}
-		MemoryStream left_stream;
-		MemoryStream right_stream;
-		BinarySerializer::Serialize(left, left_stream);
-		BinarySerializer::Serialize(right, right_stream);
-		return left_stream.GetPosition() == right_stream.GetPosition() &&
-		       memcmp(left_stream.GetData(), right_stream.GetData(), left_stream.GetPosition()) == 0;
+		return left.type() == right.type() && left.IsNull() == right.IsNull() &&
+		       SerializedValue(left) == SerializedValue(right);
 	}
 
-	//! Whether two expressions are equal and their constants identical
+	//! The serialized form of a value: its type with all modifiers and the value as it is stored
+	static string SerializedValue(const Value &value) {
+		MemoryStream stream;
+		BinarySerializer::Serialize(value, stream);
+		return string(const_char_ptr_cast(stream.GetData()), stream.GetPosition());
+	}
+
+	static void ClearNames(Expression &expr) {
+		expr.SetAlias(Identifier());
+		expr.SetQueryLocation(optional_idx());
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ClearNames(child); });
+	}
+
+	//! Whether two expressions of different branches are the same expression: their serialized forms are the same
+	//! bytes, as for the operators of the branches (PlanSignature). That covers everything an expression consists
+	//! of - constants as they are stored, the types of casts with their modifiers and collations, the bind data of
+	//! functions, the bodies of lambdas - where Expression::Equals compares constants by SQL equality and a walk
+	//! over the children does not reach all of them. Aliases and positions in the query text are left out as far as
+	//! the walk reaches (not inside lambda bodies: two lambdas that are written twice count as different). An
+	//! expression that cannot be serialized is identical to none.
 	static bool IdenticalExpressions(const Expression &left, const Expression &right) {
-		if (!Expression::Equals(left, right)) {
+		try {
+			auto left_copy = left.Copy();
+			auto right_copy = right.Copy();
+			ClearNames(*left_copy);
+			ClearNames(*right_copy);
+			MemoryStream left_stream;
+			MemoryStream right_stream;
+			BinarySerializer::Serialize(*left_copy, left_stream);
+			BinarySerializer::Serialize(*right_copy, right_stream);
+			return left_stream.GetPosition() == right_stream.GetPosition() &&
+			       memcmp(left_stream.GetData(), right_stream.GetData(), left_stream.GetPosition()) == 0;
+		} catch (std::exception &) {
 			return false;
 		}
-		vector<reference<const BoundConstantExpression>> left_constants;
-		vector<reference<const BoundConstantExpression>> right_constants;
-		ExpressionIterator::VisitExpression<BoundConstantExpression>(
-		    left, [&](const BoundConstantExpression &constant) { left_constants.push_back(constant); });
-		ExpressionIterator::VisitExpression<BoundConstantExpression>(
-		    right, [&](const BoundConstantExpression &constant) { right_constants.push_back(constant); });
-		if (left_constants.size() != right_constants.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < left_constants.size(); i++) {
-			if (!IdenticalValues(left_constants[i].get().GetValue(), right_constants[i].get().GetValue())) {
-				return false;
-			}
-		}
-		return true;
 	}
 
-	//! Whether two scans of the same columns have the same table filters, with identical constants
+	//! Whether two scans of the same columns have the same table filters
 	static bool IdenticalTableFilters(LogicalGet &left, LogicalGet &right) {
-		if (!left.table_filters.Equals(right.table_filters)) {
+		if (left.table_filters.FilterCount() != right.table_filters.FilterCount()) {
 			return false;
 		}
 		auto right_entry = right.table_filters.begin();
 		for (auto &entry : left.table_filters) {
+			if (entry.GetIndex() != (*right_entry).GetIndex()) {
+				return false;
+			}
 			auto &left_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
 			auto &right_filter = ExpressionFilter::GetExpressionFilter((*right_entry).Filter(), "UnionAggregateMerge");
 			if (!IdenticalExpressions(*left_filter.expr, *right_filter.expr)) {
@@ -2360,7 +2377,7 @@ private:
 		// the columns whose constants differ
 		for (auto &entry : primary_filters.equalities) {
 			for (auto &equalities : candidate_equalities) {
-				if (!Value::NotDistinctFrom(equalities.at(entry.first), entry.second)) {
+				if (!IdenticalValues(equalities.at(entry.first), entry.second)) {
 					key_columns.push_back(entry.first);
 					break;
 				}
@@ -2370,14 +2387,15 @@ private:
 			return false;
 		}
 		// the branches with constants that no earlier branch has
-		value_set_t seen;
+		unordered_set<string> seen;
 		auto add_branch = [&](Branch &branch, const map<idx_t, Value> &equalities) {
-			child_list_t<Value> key;
+			string key;
 			for (auto column : key_columns) {
 				branch.keys.push_back(equalities.at(column));
-				key.emplace_back("k" + to_string(key.size()), branch.keys.back());
+				auto serialized = SerializedValue(branch.keys.back());
+				key += to_string(serialized.size()) + ":" + serialized;
 			}
-			if (seen.insert(Value::STRUCT(std::move(key))).second) {
+			if (seen.insert(std::move(key)).second) {
 				merged.push_back(branch);
 			}
 		};
@@ -2639,10 +2657,10 @@ private:
 		} else {
 			// the values of every column by themselves, which a scan can check, and their combinations
 			for (idx_t k = 0; k < key_columns.size(); k++) {
-				value_set_t seen;
+				unordered_set<string> seen;
 				vector<Value> values;
 				for (auto &branch : merged) {
-					if (seen.insert(branch.get().keys[k]).second) {
+					if (seen.insert(SerializedValue(branch.get().keys[k])).second) {
 						values.push_back(branch.get().keys[k]);
 					}
 				}

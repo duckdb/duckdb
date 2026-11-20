@@ -548,7 +548,7 @@ SELECT store, count(*) FROM nothing WHERE month = 1 GROUP BY store UNION ALL SEL
 ----
 
 
-# expressions that can fail are evaluated for the same rows
+# branches with an expression that can fail at or below the aggregate are kept
 
 query II
 SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;

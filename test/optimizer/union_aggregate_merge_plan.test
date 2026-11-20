@@ -282,12 +282,12 @@ physical_plan	<!REGEX>:.*Union.*
 
 # an empty table
 
-# expressions that can fail are evaluated for the same rows
+# branches with an expression that can fail at or below the aggregate are kept
 
 query II
 EXPLAIN SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
 ----
-physical_plan	<!REGEX>:.*Union.*
+physical_plan	<REGEX>:.*Union.*
 
 # constants among the groups
 
@@ -411,6 +411,31 @@ query III
 SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 21 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 14 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 1 GROUP BY store, amount HAVING min(amount) < 10 ORDER BY ALL;
 ----
 1	1	2000
+
+# filters that differ in a constant inside a lambda body are different filters
+query II
+EXPLAIN SELECT month, count(*) FROM sales WHERE month = 1 AND list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '0'::DOUBLE))[1] GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '-0'::DOUBLE))[1] GROUP BY month ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# nothing at or below the aggregate of a merged branch may be able to fail: the scan of the merged plan returns the rows
+# of all branches, and here the statistics show that the first branch is empty (amount = 21 AND amount * amount < 10),
+# so that on its own it never evaluates the cast that fails for its rows
+query II
+EXPLAIN SELECT amount, count(*) FROM sales WHERE amount = 21 AND (amount * 100)::TINYINT >= 0 AND amount * amount < 10 GROUP BY amount UNION ALL SELECT amount, count(*) FROM sales WHERE amount = 1 AND (amount * 100)::TINYINT >= 0 AND amount * amount < 10 GROUP BY amount ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+SELECT amount, count(*) FROM sales WHERE amount = 21 AND (amount * 100)::TINYINT >= 0 AND amount * amount < 10 GROUP BY amount UNION ALL SELECT amount, count(*) FROM sales WHERE amount = 1 AND (amount * 100)::TINYINT >= 0 AND amount * amount < 10 GROUP BY amount ORDER BY ALL;
+----
+1	20
+
+# that also holds for the arguments of the aggregates (a multiplication can overflow)
+query II
+EXPLAIN SELECT store, sum(amount * 2) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount * 2) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
 
 # on several threads the branches over a small table run next to each other, which one pipeline over its one row
 # group cannot make up for: they are kept. The row groups of big have work for four threads

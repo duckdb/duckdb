@@ -125,6 +125,29 @@ SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS la
 -0.0	1	12750
 0.0	0	10000
 
+# the constant can sit in the body of a lambda, in a CASE or in a scalar subquery of a filter: the filters differ
+
+query II
+SELECT month, count(*) FROM sales WHERE month = 1 AND list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '0'::DOUBLE))[1] GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '-0'::DOUBLE))[1] GROUP BY month ORDER BY ALL;
+----
+2	250
+
+query II
+SELECT month, count(*) FROM sales WHERE month = 1 AND len(list_filter([amount::DOUBLE + 1, 1.0], lambda x: signbit(x * '0'::DOUBLE))) > 0 GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND len(list_filter([amount::DOUBLE + 1, 1.0], lambda x: signbit(x * '-0'::DOUBLE))) > 0 GROUP BY month ORDER BY ALL;
+----
+2	250
+
+query II
+SELECT month, count(*) FROM sales WHERE month = 1 AND signbit(CASE WHEN amount IS NULL THEN 1.0 ELSE (amount::DOUBLE + 1) * '0'::DOUBLE END) GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND signbit(CASE WHEN amount IS NULL THEN 1.0 ELSE (amount::DOUBLE + 1) * '-0'::DOUBLE END) GROUP BY month ORDER BY ALL;
+----
+2	250
+
+query II
+SELECT month, count(*) FILTER (WHERE list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '0'::DOUBLE))[1]) FROM sales WHERE month = 1 GROUP BY month UNION ALL SELECT month, count(*) FILTER (WHERE list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '-0'::DOUBLE))[1]) FROM sales WHERE month = 2 GROUP BY month ORDER BY ALL;
+----
+1	0
+2	250
+
 endloop
 
 endloop
