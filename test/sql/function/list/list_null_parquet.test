@@ -1,5 +1,6 @@
 # name: test/sql/function/list/list_null_parquet.test
 # group: [list]
+
 require parquet
 
 # A fully-NULL list read back from Parquet must not be rejected by the list element-NULL
