@@ -38,7 +38,7 @@ TEST_CASE("Runtime filter ordering respects transitive and sibling dependencies"
 TEST_CASE("Sibling coordination uses build input cardinality", "[runtime_filter_schedule]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	Executor executor(*con.context);
+	Executor executor(*con.context, false);
 	PipelineBuildState state;
 	for (idx_t estimate : {999999, 1000000, 1000001}) {
 		CAPTURE(estimate);
@@ -84,7 +84,7 @@ TEST_CASE("Sibling coordination uses build input cardinality", "[runtime_filter_
 TEST_CASE("Small runtime filter builds bound input work", "[runtime_filter_schedule]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	Executor executor(*con.context);
+	Executor executor(*con.context, false);
 	PipelineBuildState state;
 	PhysicalPlan plan(Allocator::Get(*con.context));
 	auto &probe = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, 1000000);
