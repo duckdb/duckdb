@@ -189,10 +189,7 @@ public:
 	                                                          const BaseStatistics &child_stats,
 	                                                          optional_ptr<ClientContext> context = nullptr);
 	//! Replace the execution function and clear the statistics callback
-	void SetFunction(cast_function_t new_function) {
-		function = new_function;
-		statistics = nullptr;
-	}
+	DUCKDB_API void SetFunction(cast_function_t new_function);
 
 private:
 	cast_function_t function;
@@ -200,6 +197,10 @@ private:
 	unique_ptr<BoundCastData> cast_data;
 	cast_statistics_t statistics = nullptr;
 	FunctionStability stability = FunctionStability::CONSISTENT;
+	//! Whether the function is the fallback for types without a cast (DefaultCasts::TryVectorNullCast).
+	//! Recorded where the function is set: a loadable extension links its own copy of that function, so the address
+	//! of a cast that the database bound does not compare equal to it there.
+	bool is_null_cast = false;
 };
 
 struct BindCastInput {
