@@ -97,9 +97,6 @@ void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &del
 	if (!pos_column.IsValid()) {
 		throw InvalidInputException("Delete file %s must have a \"pos\" column", file.path);
 	}
-	if (!deleted_rows.empty() && snapshot_column.IsValid()) {
-		throw InvalidInputException("Delete file %s with snapshot ids cannot be combined with deleted_rows", file.path);
-	}
 	vector<pair<idx_t, idx_t>> entries;
 	while (true) {
 		auto chunk = result->Fetch();
