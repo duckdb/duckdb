@@ -549,6 +549,10 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &fu
 	case PhysicalType::DOUBLE:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(function);
 		break;
+	case PhysicalType::INTERVAL:
+		// sort keys do not normalize intervals, so compare them as interval_t
+		SpecializeMinMaxNFunction<MinMaxFixedValue<interval_t>, COMPARATOR>(function);
+		break;
 	default:
 		SpecializeMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(function);
 		break;

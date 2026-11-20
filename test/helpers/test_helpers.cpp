@@ -775,18 +775,6 @@ bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
-string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
-		return result.GetError();
-	}
-	string error;
-	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
-		return error;
-	}
-	return "";
-}
-
 string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
 	string error;
 	if (!compare_result(csv, collection, collection.Types(), header, error)) {
