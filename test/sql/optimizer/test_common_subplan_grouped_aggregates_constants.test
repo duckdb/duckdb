@@ -1,0 +1,25 @@
+# name: test/sql/optimizer/test_common_subplan_grouped_aggregates_constants.test
+# description: Grouped aggregates over the same input with labels that are equal but not the same INTERVAL
+# group: [optimizer]
+
+# --verify-vector sequence_operator turns consecutive rows that are not distinct into one constant vector, so the
+# two labels below come out as the first of them, on main and without common subplans too; there is no narrower
+# switch than the one for all vector verification
+require no_vector_verification
+
+statement ok
+CREATE TABLE grouped_input AS
+SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE (i % 5)::INTEGER END AS k,
+       CASE WHEN i % 11 = 0 THEN NULL ELSE (i % 3)::INTEGER END AS g,
+       i::INTEGER AS a, (i * 10)::DECIMAL(12,2) AS b, (i % 4)::DOUBLE AS d, 'v' || (i % 2) AS s
+FROM range(40) t(i);
+
+# INTERVAL 30 DAY and INTERVAL 1 MONTH compare equal: every branch keeps its own label.
+query ITI
+SELECT k, [INTERVAL 30 DAY] AS label, count(*) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+UNION ALL
+SELECT k, [INTERVAL 1 MONTH] AS label, min(a) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+ORDER BY k, m;
+----
+0	[1 month]	5
+0	[30 days]	6
