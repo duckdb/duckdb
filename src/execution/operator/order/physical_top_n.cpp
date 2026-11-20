@@ -117,6 +117,7 @@ public:
 	DataChunk heap_data;
 	DataChunk payload_chunk;
 	DataChunk sort_keys;
+	CreateSortKeyState sort_key_state;
 	StringHeap sort_key_heap;
 
 	SelectionVector matching_sel;
@@ -404,7 +405,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 	// construct the sort key from the sort chunk
 	sort_keys.Reset();
 	auto &sort_keys_vec = sort_keys.data[0];
-	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
+	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec, sort_key_state);
 
 	if (heap_size <= SMALL_HEAP_THRESHOLD) {
 		AddSmallHeap(input, sort_keys_vec);

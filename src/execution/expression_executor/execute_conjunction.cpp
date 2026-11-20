@@ -1,4 +1,5 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -15,6 +16,15 @@ struct ConjunctionState : public ExpressionState {
 		adaptive_filter->SetLogger(GetContext().GetLoggerPtr());
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
+	SelectionVector true_selection;
+	SelectionVector false_selection;
+
+	SelectionVector &GetSelection(SelectionVector &selection, idx_t count) {
+		if (selection.Capacity() < count) {
+			selection.Initialize(NextPowerOfTwo(count));
+		}
+		return selection;
+	}
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
@@ -91,12 +101,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		idx_t current_count = count;
 		idx_t false_count = 0;
 
-		unique_ptr<SelectionVector> temp_true, temp_false;
+		optional_ptr<SelectionVector> temp_true, temp_false;
 		if (false_sel) {
-			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_false = state.GetSelection(state.false_selection, count);
 		}
 		if (!true_sel) {
-			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_true = state.GetSelection(state.true_selection, count);
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
@@ -132,12 +142,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		idx_t current_count = count;
 		idx_t result_count = 0;
 
-		unique_ptr<SelectionVector> temp_true, temp_false;
+		optional_ptr<SelectionVector> temp_true, temp_false;
 		if (true_sel) {
-			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_true = state.GetSelection(state.true_selection, count);
 		}
 		if (!false_sel) {
-			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_false = state.GetSelection(state.false_selection, count);
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {

@@ -23,7 +23,6 @@ class ClientContext;
 struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
-class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
 	}
@@ -93,15 +92,8 @@ public:
 	DUCKDB_API unique_ptr<ParsedExpression> ParseSingleExpression(const string &expression);
 	//! Parses a single SELECT statement into its node
 	DUCKDB_API unique_ptr<QueryNode> ParseSelectNode(const string &query);
-	//! Parses a list of GROUP BY expressions
-	GroupByNode ParseGroupByList(const string &group_by);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
 	vector<OrderByNode> ParseOrderList(const string &select_list);
-	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
-	void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
-	                     vector<unique_ptr<ParsedExpression>> &expressions);
-	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)
-	vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	ColumnList ParseColumnList(const string &column_list);
 	ColumnDefinition ParseColumnDefinition(const string &column_definition);

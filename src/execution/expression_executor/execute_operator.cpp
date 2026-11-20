@@ -8,9 +8,30 @@
 
 namespace duckdb {
 
+struct CoalesceState : public ExpressionState {
+	CoalesceState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	}
+
+	void Prepare(idx_t count) {
+		intermediate_chunk.Reset();
+		for (auto &selection : selections) {
+			if (selection.Capacity() < count) {
+				selection.Initialize(NextPowerOfTwo(count));
+			}
+		}
+	}
+
+	SelectionVector selections[4];
+};
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_uniq<ExpressionState>(expr, root);
+	unique_ptr<ExpressionState> result;
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
+		result = make_uniq<CoalesceState>(expr, root);
+	} else {
+		result = make_uniq<ExpressionState>(expr, root);
+	}
 	const auto save_inside_try = root.inside_try;
 	const auto expression_type = expr.GetExpressionType();
 	if (expression_type == ExpressionType::OPERATOR_TRY || expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
@@ -211,16 +232,18 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			result.Reference(intermediate);
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
-		SelectionVector sel_a(count);
-		SelectionVector sel_b(count);
-		SelectionVector slice_sel(count);
-		SelectionVector result_sel(count);
+		auto &coalesce = state->Cast<CoalesceState>();
+		coalesce.Prepare(count);
+		auto &sel_a = coalesce.selections[0];
+		auto &sel_b = coalesce.selections[1];
+		auto &slice_sel = coalesce.selections[2];
+		auto &result_sel = coalesce.selections[3];
 		SelectionVector *next_sel = &sel_a;
 		const SelectionVector *current_sel = sel;
 		idx_t remaining_count = count;
 		idx_t next_count;
 		for (idx_t child = 0; child < expr.GetChildren().size(); child++) {
-			Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
+			auto &vector_to_check = coalesce.intermediate_chunk.data[child];
 			Execute(*expr.GetChildren()[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
