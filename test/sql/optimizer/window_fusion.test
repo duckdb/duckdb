@@ -8,6 +8,7 @@ SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 statement ok
 SET explain_output = 'physical_only';
 
+# Streaming Windows should use fusion
 query II
 explain
 SELECT id
@@ -66,3 +67,48 @@ QUALIFY row_number() OVER () <= 1;
 ----
 physical_plan	<REGEX>:.*FILTER.*STREAMING_WINDOW.*Limit.*
 
+# Single Partitions should use fusion
+statement ok
+SET disabled_optimizers='top_n_window_elimination';
+
+query II
+explain
+SELECT id
+FROM range(100) tbl(id)
+QUALIFY row_number() OVER(ORDER BY id DESC) = 1
+----
+physical_plan	<REGEX>:.*FILTER.*WINDOW.*Limit.*
+
+query I
+SELECT id
+FROM range(100) tbl(id)
+QUALIFY row_number() OVER(ORDER BY id DESC) = 1
+----
+99
+
+# Single partitions with relatively high N should use truncation successfully
+query II
+explain
+WITH q AS (
+	SELECT id
+	FROM range(10000) tbl(id)
+	QUALIFY row_number() OVER(ORDER BY id DESC) < 700
+)
+SELECT min(id), max(id), count(*)
+FROM q
+----
+physical_plan	<REGEX>:.*FILTER.*WINDOW.*Limit.*
+
+query III
+WITH q AS (
+	SELECT id
+	FROM range(100000) tbl(id)
+	QUALIFY row_number() OVER(ORDER BY id DESC) < 6000
+)
+SELECT min(id), max(id), count(*)
+FROM q
+----
+94001	99999	5999
+
+statement ok
+RESET disabled_optimizers;

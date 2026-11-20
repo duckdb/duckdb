@@ -234,7 +234,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
-	const auto limit = CanOptimize(*op);
+	const auto limit = CanOptimize(*op, context);
 	if (!limit.IsValid()) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
@@ -544,7 +544,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
-optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
+optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientContext &client) {
 	const optional_idx cant_optimize;
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return cant_optimize;
@@ -650,11 +650,7 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (child.get().type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return cant_optimize;
 	}
-	const auto &window = child.get().Cast<LogicalWindow>();
-	//	Give up if window fusion has already taking this.
-	if (window.partition_limit.IsValid()) {
-		return cant_optimize;
-	}
+	auto &window = child.get().Cast<LogicalWindow>();
 	if (window.window_index != filter_col_idx) {
 		return cant_optimize;
 	}
@@ -682,11 +678,34 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window_expr.OrderBy().size() != 1) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].type != OrderType::DESCENDING &&
-	    window_expr.OrderBy()[0].type != OrderType::ASCENDING) {
+
+	const auto &order = window_expr.OrderBy()[0];
+	if (order.type != OrderType::DESCENDING && order.type != OrderType::ASCENDING) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].null_order != OrderByNullType::NULLS_LAST) {
+	if (order.null_order != OrderByNullType::NULLS_LAST) {
+		return cant_optimize;
+	}
+
+	// 	Window fusion works better than TopN for certain cases
+
+	//	Fusion is better for non-numeric keys
+	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
+		return cant_optimize;
+	}
+
+	//	Fusion is better for large ranges
+	if (can_optimize.GetIndex() > 5000) {
+		return cant_optimize;
+	}
+
+	//	TopN is better for k == 1
+	if (can_optimize.GetIndex() == 1) {
+		return can_optimize;
+	}
+
+	//	TopN is better for small cardinalities
+	if (op.EstimateCardinality(client) > 400000) {
 		return cant_optimize;
 	}
 

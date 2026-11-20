@@ -3,7 +3,6 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -1735,6 +1734,51 @@ void ColumnDataCollection::Swap(ColumnDataCollection &other) {
 	std::swap(copy_functions, other.copy_functions);
 	std::swap(finished_append, other.finished_append);
 	std::swap(partition_index, other.partition_index);
+}
+
+void ColumnDataCollection::Truncate(idx_t new_count) {
+	if (Count() <= new_count) {
+		return;
+	}
+
+	//	Run through the segments until we have too many rows
+	idx_t segment_index = 0;
+	idx_t segment_rows = 0;
+	for (; segment_index < segments.size(); ++segment_index) {
+		auto &segment = segments[segment_index];
+		if (segment_rows + segment->count <= new_count) {
+			segment_rows += segment->count;
+			if (segment_rows <= new_count) {
+				continue;
+			}
+			segments.resize(segment_index + 1);
+			count = new_count;
+			break;
+		}
+
+		// Replace the last partial segment with a truncated copy.
+		auto truncated = std::move(segment);
+		segments.resize(segment_index);
+		this->count = segment_rows;
+
+		ColumnDataScanState scan;
+		DataChunk chunk;
+		InitializeScan(scan);
+		InitializeScanChunk(scan, chunk);
+
+		ColumnDataAppendState append;
+		InitializeAppend(append);
+		idx_t chunk_index = 0;
+		while (segment_rows < new_count) {
+			scan.current_chunk_state.properties = scan.properties;
+			truncated->ReadChunk(chunk_index++, scan.current_chunk_state, chunk, scan.column_ids);
+			idx_t append_count = MinValue(chunk.size(), new_count - segment_rows);
+			chunk.SetChildCardinality(append_count);
+			Append(append, chunk);
+			segment_rows += append_count;
+		}
+		break;
+	}
 }
 
 //===--------------------------------------------------------------------===//
