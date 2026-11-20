@@ -2253,7 +2253,7 @@ private:
 			return false;
 		}
 		// the filters of the other branches: the same comparisons, with other constants
-		vector<ScanFilters> candidate_filters;
+		vector<map<idx_t, Value>> candidate_equalities;
 		vector<reference<Branch>> comparable;
 		for (auto &candidate : candidates) {
 			ScanFilters filters;
@@ -2275,12 +2275,12 @@ private:
 				continue;
 			}
 			comparable.push_back(candidate);
-			candidate_filters.push_back(std::move(filters));
+			candidate_equalities.push_back(std::move(filters.equalities));
 		}
 		// the columns whose constants differ
 		for (auto &entry : primary_filters.equalities) {
-			for (auto &filters : candidate_filters) {
-				if (!Value::NotDistinctFrom(filters.equalities.at(entry.first), entry.second)) {
+			for (auto &equalities : candidate_equalities) {
+				if (!Value::NotDistinctFrom(equalities.at(entry.first), entry.second)) {
 					key_columns.push_back(entry.first);
 					break;
 				}
@@ -2291,19 +2291,19 @@ private:
 		}
 		// the branches with constants that no earlier branch has
 		value_set_t seen;
-		auto add_branch = [&](Branch &branch, ScanFilters &filters) {
+		auto add_branch = [&](Branch &branch, const map<idx_t, Value> &equalities) {
 			child_list_t<Value> key;
 			for (auto column : key_columns) {
-				branch.keys.push_back(filters.equalities.at(column));
+				branch.keys.push_back(equalities.at(column));
 				key.emplace_back("k" + to_string(key.size()), branch.keys.back());
 			}
 			if (seen.insert(Value::STRUCT(std::move(key))).second) {
 				merged.push_back(branch);
 			}
 		};
-		add_branch(primary, primary_filters);
+		add_branch(primary, primary_filters.equalities);
 		for (idx_t i = 0; i < comparable.size(); i++) {
-			add_branch(comparable[i], candidate_filters[i]);
+			add_branch(comparable[i], candidate_equalities[i]);
 		}
 		return merged.size() >= 2;
 	}
