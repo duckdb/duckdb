@@ -9,6 +9,11 @@ require skip_reload
 
 require allow_unsigned_extensions
 
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
 
@@ -24,10 +29,16 @@ INSERT INTO t VALUES (1);
 # ordering 1: the index commits while the replacing transaction holds an older snapshot.
 # The replacement is an alter that changes a member, its commit must fail against the newly created index.
 statement ok con1
+USE memory;
+
+statement ok con1
 BEGIN;
 
 statement ok con1
 SELECT delta();
+
+statement ok con2
+USE memory;
 
 statement ok con2
 CREATE UNIQUE INDEX ix ON t((i + delta()));
