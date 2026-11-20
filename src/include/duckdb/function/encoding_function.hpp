@@ -48,7 +48,7 @@ struct EncodingFunction {
 	//! The type returned by the streaming overload
 	DUCKDB_API static LogicalType StreamResultType();
 	//! Creates the scalar functions for an encoding that is decoded by the given function
-	DUCKDB_API static ScalarFunctionSet Create(const string &encoding_name, decode_t decode, encode_t encode,
+	DUCKDB_API static ScalarFunctionSet Create(const string &encoding_name, decode_t decode, const encode_t &encode,
 	                                           idx_t minimum_input_window, idx_t max_output_bytes);
 	//! Finds the functions of an encoding, autoloading the encodings extension if needed. Returns null if not found.
 	DUCKDB_API static optional_ptr<ScalarFunctionCatalogEntry> Find(ClientContext &context,

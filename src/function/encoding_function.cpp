@@ -30,7 +30,7 @@ LogicalType EncodingFunction::StreamResultType() {
 	return LogicalType::STRUCT(std::move(children));
 }
 
-ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, encode_t encode,
+ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, const encode_t &encode,
                                            idx_t minimum_input_window, idx_t max_output_bytes) {
 	D_ASSERT(decode && minimum_input_window > 0 && max_output_bytes > 0);
 	const Identifier name(FunctionName(encoding_name));
@@ -111,7 +111,8 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 			                          }
 		                          });
 		encode_all.SetFallible();
-		encode_all.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY, Value::BIGINT(minimum_input_window));
+		encode_all.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY,
+		                                       Value::BIGINT(NumericCast<int64_t>(minimum_input_window)));
 		set.AddFunction(std::move(encode_all));
 	}
 	return set;
