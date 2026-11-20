@@ -24,6 +24,8 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 BANNER_SIZE = 52
 RETRIES = 2
 PROFILE_RUNS = 5
+# Overlapping cost samples whose medians differ by more than this are still compared.
+MEDIAN_TOLERANCE = 0.02
 
 
 def run_command(command, **kwargs):
@@ -246,11 +248,14 @@ def median_cost(costs):
     return result
 
 
-def costs_overlap(old_costs, new_costs):
+def within_run_variation(old_costs, new_costs):
     for old_values, new_values in zip(
         zip(*(cost_components(cost) for cost in old_costs)), zip(*(cost_components(cost) for cost in new_costs))
     ):
         if max(old_values) < min(new_values) or max(new_values) < min(old_values):
+            return False
+        old_median, new_median = statistics.median_low(old_values), statistics.median_low(new_values)
+        if abs(old_median - new_median) > MEDIAN_TOLERANCE * max(old_median, new_median):
             return False
     return True
 
@@ -264,7 +269,7 @@ def query_plan_costs(old, new, dbname, query):
     for _ in range(PROFILE_RUNS - 1):
         old_costs.append(query_plan_cost(old, dbname, query))
         new_costs.append(query_plan_cost(new, dbname, query))
-    if costs_overlap(old_costs, new_costs):
+    if within_run_variation(old_costs, new_costs):
         # The difference is within the run-to-run variation of both binaries.
         return old_costs[0], old_costs[0]
     return median_cost(old_costs), median_cost(new_costs)

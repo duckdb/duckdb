@@ -89,6 +89,10 @@ class TestPlanCostComparison(unittest.TestCase):
         self.assertEqual(old, new)
         old, new = profile([100, 104, 98, 101, 103], [150, 151, 149, 150, 152])
         self.assertEqual((old.probe_side, new.probe_side), (101, 150))
+        varying = [1652908, 1626111, 1629118, 1679707, 1626186]
+        old, new = profile(varying, [int(probe * 1.03) for probe in varying])
+        self.assertEqual((old.probe_side, new.probe_side), (1629118, 1677991))
+        self.assertTrue(old.needs_timing(new) or new > old)
 
     def test_runner_confirms_hot_regression_on_shared_database(self):
         old, new = PlanCost(), PlanCost()
