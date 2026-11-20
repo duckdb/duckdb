@@ -34,6 +34,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
+      tolerate_extra_columns(state_machine.options.ignore_extra_columns.IsSetByUser()
+                                 ? state_machine.options.ignore_extra_columns.GetValue()
+                                 : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -172,7 +175,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
 	if (cur_col_id >= number_of_columns) {
-		if (state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (!tolerate_extra_columns) {
 			bool error = true;
 			if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 				// we make an exception if the first over-value is null
@@ -261,7 +264,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	const bool policy_quoted = quoted || was_quoted;
 	if (cur_col_id >= number_of_columns) {
-		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (tolerate_extra_columns) {
 			used_unstrictness = true;
 			return;
 		}
@@ -595,7 +598,7 @@ void StringValueResult::AddUnterminatedQuoteNull() {
 	escaped = false;
 	was_quoted = false;
 	if (cur_col_id >= number_of_columns) {
-		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (tolerate_extra_columns) {
 			used_unstrictness = true;
 		}
 		return;
@@ -630,8 +633,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
-		if (result.cur_col_id >= result.number_of_columns &&
-		    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 			result.used_unstrictness = true;
 			return;
 		}
@@ -1782,8 +1784,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			removed_extra_delimiter_bytes = true;
 			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
@@ -1818,8 +1819,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;

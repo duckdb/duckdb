@@ -204,6 +204,8 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
+	//! Fields beyond the last column are ignored rather than an error, following strict_mode when not set
+	const bool tolerate_extra_columns;
 
 	const idx_t extra_delimiter_bytes = 0;
 

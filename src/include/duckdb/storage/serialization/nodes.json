@@ -1271,6 +1271,22 @@
         "property": "options.dialect_options.state_machine_options.embedded_quote",
         "type": "CSVOption<CSVEmbeddedQuote>",
         "default": "CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA)"
+      },
+      {
+        "id": 150,
+        "version": "v2.1.0",
+        "name": "mixed_line_breaks",
+        "property": "options.dialect_options.state_machine_options.mixed_line_breaks",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 151,
+        "version": "v2.1.0",
+        "name": "ignore_extra_columns",
+        "property": "options.ignore_extra_columns",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       }
     ],
     "constructor": [

@@ -204,6 +204,17 @@ private:
 		}
 	}
 
+	std::string FormatValueInternal(const CSVEmbeddedQuote &val) const {
+		switch (val) {
+		case CSVEmbeddedQuote::DATA:
+			return "data";
+		case CSVEmbeddedQuote::TOGGLE:
+			return "toggle";
+		default:
+			throw InternalException("Invalid CSV Embedded Quote Detected.");
+		}
+	}
+
 	std::string FormatValueInternal(const CSVDialect &val) const {
 		switch (val) {
 		case CSVDialect::STANDARD:
