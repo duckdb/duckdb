@@ -3413,6 +3413,7 @@ IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetIndexBindStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IndexBindState::PENDING), "PENDING" },
 		{ static_cast<uint32_t>(IndexBindState::UNBOUND), "UNBOUND" },
 		{ static_cast<uint32_t>(IndexBindState::BINDING), "BINDING" },
 		{ static_cast<uint32_t>(IndexBindState::BOUND), "BOUND" },
@@ -3423,12 +3424,12 @@ const StringUtil::EnumStringLiteral *GetIndexBindStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value) {
-	return StringUtil::EnumToString(GetIndexBindStateValues(), 4, "IndexBindState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetIndexBindStateValues(), 5, "IndexBindState", static_cast<uint32_t>(value));
 }
 
 template<>
 IndexBindState EnumUtil::FromString<IndexBindState>(const char *value) {
-	return static_cast<IndexBindState>(StringUtil::StringToEnum(GetIndexBindStateValues(), 4, "IndexBindState", value));
+	return static_cast<IndexBindState>(StringUtil::StringToEnum(GetIndexBindStateValues(), 5, "IndexBindState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexCheckpointModeValues() {

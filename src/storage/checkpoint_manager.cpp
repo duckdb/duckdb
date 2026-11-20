@@ -225,6 +225,24 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 	return entries;
 }
 
+#ifdef DEBUG
+//! The tables write the data of the index catalog entries that they find through the dependency manager, and the
+//! reader looks that data up by name: verify that the tables find every index catalog entry of the checkpoint.
+static void VerifyTableIndexes(const catalog_entry_vector_t &catalog_entries, CatalogTransaction transaction) {
+	idx_t index_entry_count = 0;
+	idx_t table_index_count = 0;
+	for (auto &entry : catalog_entries) {
+		if (entry.get().type == CatalogType::INDEX_ENTRY) {
+			index_entry_count++;
+		} else if (entry.get().type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry.get().Cast<DuckTableEntry>();
+			table_index_count += table.GetIndexes(transaction).size() - table.GetConstraintIndexes().size();
+		}
+	}
+	D_ASSERT(index_entry_count == table_index_count);
+}
+#endif
+
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
@@ -279,6 +297,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &dependency_manager = *catalog.GetDependencyManager();
 	catalog_entries = GetCatalogEntries(schemas, options.visibility_bound);
 	dependency_manager.ReorderEntries(catalog_entries, options.visibility_bound);
+#ifdef DEBUG
+	VerifyTableIndexes(catalog_entries,
+	                   CatalogTransaction(db.GetDatabase(), MAX_TRANSACTION_ID, options.visibility_bound));
+#endif
 
 	// write the actual data into the database
 
@@ -694,7 +716,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_storage_info),
 	                                             TableIOManager::Get(data_table), data_table.db);
-	table_info->GetIndexes().AddIndex(std::move(unbound_index), index.oid, ConstraintCheckMode::DEFAULT);
+	table_info->GetIndexes().AddIndex(index.GetIndexEntry(), std::move(unbound_index));
 }
 
 //===--------------------------------------------------------------------===//

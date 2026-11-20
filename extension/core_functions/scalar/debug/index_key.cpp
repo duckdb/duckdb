@@ -230,7 +230,13 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 	auto index_oid = path.constraint_type == IndexConstraintType::NONE
 	                     ? FindUserIndexOid(context, table_entry, path.index_name, qualified_table)
 	                     : FindConstraintIndexOid(table_entry, path, qualified_table);
-	const auto index_entry = data_table_info.GetIndexes().FindEntry(index_oid);
+	shared_ptr<IndexEntry> index_entry;
+	for (auto &entry : duck_table->GetIndexes(table_entry.schema.GetCatalogTransaction(context))) {
+		if (entry->GetIndexOid() == index_oid) {
+			index_entry = entry;
+			break;
+		}
+	}
 	if (!index_entry) {
 		throw CatalogException("index_key: no index found in storage for index oid %llu on table %s", index_oid,
 		                       qualified_table);

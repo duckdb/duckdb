@@ -3,11 +3,17 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 
-IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p) : info(std::move(info_p)) {
+IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, shared_ptr<IndexEntry> index_p)
+    : info(std::move(info_p)), index(std::move(index_p)) {
+}
+
+IndexDataTableInfo::~IndexDataTableInfo() {
+	index->Retire();
 }
 
 void DuckIndexEntry::Rollback(CatalogEntry &prev_entry) {
@@ -15,13 +21,7 @@ void DuckIndexEntry::Rollback(CatalogEntry &prev_entry) {
 		// an altered copy, e.g. by COMMENT ON INDEX, keeps the index of the entry it replaces
 		return;
 	}
-	if (!info) {
-		return;
-	}
-	if (!info->info) {
-		return;
-	}
-	info->info->GetIndexes().RemoveIndex(oid);
+	GetDataTableInfo().GetIndexes().RemoveIndex(*info->index);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -29,7 +29,8 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
     : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
-	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo());
+	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(),
+	                                           make_shared_ptr<IndexEntry>(oid, ConstraintCheckMode::DEFAULT));
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -59,9 +60,13 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 	return *info->info;
 }
 
+shared_ptr<IndexEntry> DuckIndexEntry::GetIndexEntry() const {
+	return info->index;
+}
+
 void DuckIndexEntry::CommitDrop(CommitDropState &drop_state) {
 	D_ASSERT(info);
-	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), oid);
+	drop_state.RemoveIndex(info);
 }
 
 } // namespace duckdb

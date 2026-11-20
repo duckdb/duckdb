@@ -14,13 +14,19 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p, const ConstraintCheckMode check_mode_p)
-    : index_oid(index_oid_p), owned_index(std::move(index_p)), check_mode(check_mode_p) {
-	if (owned_index->IsBound()) {
-		bind_state = IndexBindState::BOUND;
-	} else {
-		bind_state = IndexBindState::UNBOUND;
+IndexEntry::IndexEntry(idx_t index_oid_p, const ConstraintCheckMode check_mode_p)
+    : bind_state(IndexBindState::PENDING), index_oid(index_oid_p), check_mode(check_mode_p) {
+	D_ASSERT(index_oid != DConstants::INVALID_INDEX);
+}
+
+void IndexEntry::InstallIndex(unique_ptr<Index> index) {
+	D_ASSERT(index);
+	auto entry_lock = lock.GetExclusiveLock();
+	if (bind_state != IndexBindState::PENDING) {
+		throw InternalException("Cannot install the physical index of an index entry that is not pending");
 	}
+	owned_index = std::move(index);
+	bind_state = owned_index->IsBound() ? IndexBindState::BOUND : IndexBindState::UNBOUND;
 }
 
 void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
@@ -350,9 +356,11 @@ bool IndexEntry::HasBufferedReplays() const {
 
 void IndexEntry::Retire() {
 	auto entry_lock = lock.GetExclusiveLock();
-	deltas.Reset();
-	owned_index->ResetStorage();
-	owned_index.reset();
+	if (owned_index) {
+		deltas.Reset();
+		owned_index->ResetStorage();
+		owned_index.reset();
+	}
 	bind_state = IndexBindState::RETIRED;
 }
 
@@ -512,7 +520,9 @@ idx_t IndexEntry::GetInMemorySize() const {
 
 IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
-	D_ASSERT(owned_index);
+	if (!owned_index) {
+		throw InternalException("Cannot checkpoint an index entry without physical index");
+	}
 
 	auto storage_version = index_writer.GetStorageVersion();
 	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
@@ -546,7 +556,9 @@ void IndexEntry::InstallShadowInternal(unique_ptr<BoundIndex> shadow_index) {
 IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
-	D_ASSERT(owned_index->IsBound());
+	if (!owned_index || !owned_index->IsBound()) {
+		throw InternalException("Cannot write an index to the WAL that is not bound");
+	}
 	return owned_index->Cast<BoundIndex>().SerializeToWAL(version);
 }
 

@@ -70,21 +70,19 @@ public:
 	//! double-referenced.
 	vector<block_id_t> row_group_blocks;
 
+	//! A physical index that its index entry gets once the transaction is replayed.
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid,
-		                ConstraintCheckMode check_mode)
-		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
-		      check_mode(check_mode) {
+		ReplayIndexInfo(TableIndexList &index_list, shared_ptr<IndexEntry> index_entry, unique_ptr<Index> index,
+		                idx_t table_oid)
+		    : index_list(index_list), index_entry(std::move(index_entry)), index(std::move(index)),
+		      table_oid(table_oid) {
 		}
 
 		reference<TableIndexList> index_list;
+		shared_ptr<IndexEntry> index_entry;
 		unique_ptr<Index> index;
 		//! The oid of the table, used to uniquely identify the table (even after a rename).
 		idx_t table_oid;
-		//! The oid of the index, used to match a DROP INDEX in the same replayed transaction.
-		idx_t index_oid;
-		//! The check mode of the constraint enforced by the index.
-		ConstraintCheckMode check_mode;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -668,7 +666,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.index_oid, info.check_mode);
+					info.index_list.get().AddIndex(std::move(info.index_entry), std::move(info.index));
 				}
 				state.replay_index_infos.clear();
 
@@ -1058,11 +1056,12 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	auto index_oid = DatabaseManager::Get(context).NextOid();
-	unique_info.SetBackingIndexOid(index_oid);
+	unique_info.SetBackingIndexOid(DatabaseManager::Get(context).NextOid());
 	catalog.Alter(context, alter_info);
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid,
-	                                      unique_info.check_mode);
+
+	auto &altered_table = catalog.GetEntry<TableCatalogEntry>(context, table_name).Cast<DuckTableEntry>();
+	state.replay_index_infos.emplace_back(table_index_list, altered_table.GetAddedConstraintIndex(table),
+	                                      std::move(index_instance), table.oid);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1307,14 +1306,14 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto &io_manager = TableIOManager::Get(storage);
 
 	// Create the index in the catalog.
-	auto index_entry = table.schema.CreateIndex(context, info, table);
+	auto &catalog_entry = table.schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
 
 	// add the index to the storage
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
-	                                      ConstraintCheckMode::DEFAULT);
+	state.replay_index_infos.emplace_back(table_index_list, catalog_entry.GetIndexEntry(), std::move(unbound_index),
+	                                      table.oid);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -1330,7 +1329,7 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	auto &index_entry = catalog.GetEntry<IndexCatalogEntry>(context, info.GetQualifiedName());
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&index_entry](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.index_oid == index_entry.oid;
+		                                              return replay_info.index_entry->GetIndexOid() == index_entry.oid;
 	                                              }),
 	                               state.replay_index_infos.end());
 

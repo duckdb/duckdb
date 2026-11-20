@@ -43,6 +43,12 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
+vector<shared_ptr<IndexEntry>> TableDataWriter::GetIndexes() {
+	// The indexes of the constraints come first, in constraint order: the reader assigns them by position.
+	CatalogTransaction transaction(GetDatabase(), MAX_TRANSACTION_ID, GetCheckpointOptions().visibility_bound);
+	return table.GetIndexes(transaction);
+}
+
 void TableDataWriter::AddPendingPublication(unique_ptr<PendingPublication> publication) {
 	throw InternalException("This table writer does not support deferred publication");
 }

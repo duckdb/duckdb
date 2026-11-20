@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class CommitDropState;
+class IndexEntry;
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
@@ -23,9 +24,11 @@ struct CreateTriggerInfo;
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
+	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info);
+	//! Create a new version of a table: it takes over the triggers and the constraint indexes of its parent.
+	//! A constraint that the parent does not have gets a pending index entry (see GetAddedConstraintIndex).
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr,
-	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
+	               const DuckTableEntry &parent, shared_ptr<DataTable> storage);
 
 public:
 	const ColumnList &GetColumns() const override;
@@ -52,8 +55,19 @@ public:
 	void CommitAlter(string &column_name, CommitDropState &drop_state);
 	void CommitDrop(CommitDropState &drop_state);
 
-	//! Returns the backing index OIDs of UNIQUE constraints that are not in prev_table.
-	vector<idx_t> GetAddedUniqueIndexOids(const DuckTableEntry &prev_table) const;
+	//! Returns the constraint indexes of this table that prev_table does not have.
+	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
+	//! Returns the index of the one constraint that ALTER TABLE added to prev_table.
+	shared_ptr<IndexEntry> GetAddedConstraintIndex(const DuckTableEntry &prev_table) const;
+	//! Returns the indexes that back the constraints of this table, in constraint order.
+	const vector<shared_ptr<IndexEntry>> &GetConstraintIndexes() const;
+	//! Returns the indexes of this table as the transaction sees them: the indexes of the constraints, in constraint
+	//! order, followed by the indexes of the index catalog entries on this table that the transaction sees.
+	//! The table can maintain more indexes than these, e.g. of uncommitted transactions.
+	//! An index that a later transaction dropped stays usable for this transaction, but is no longer maintained.
+	//! An index of a not yet loaded extension is unbound, and an index that this transaction is still building is
+	//! pending (see IndexEntry::GetBindState).
+	vector<shared_ptr<IndexEntry>> GetIndexes(CatalogTransaction transaction) const;
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
@@ -113,6 +127,8 @@ protected:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The indexes that back the constraints, in constraint order
+	vector<shared_ptr<IndexEntry>> constraint_indexes;
 	//! The catalog set holding triggers for this table
 	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table

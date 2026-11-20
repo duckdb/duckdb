@@ -29,8 +29,9 @@ class TableIndexList;
 class TableIndexWriter;
 struct IndexStorageInfo;
 
-//! IndexBindState transitions index binding phases and marks entries whose physical index has been destroyed.
-enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND, RETIRED };
+//! IndexBindState transitions index binding phases, and marks entries that do not have their physical index yet
+//! (PENDING) and entries whose physical index has been destroyed (RETIRED).
+enum class IndexBindState : uint8_t { PENDING, UNBOUND, BINDING, BOUND, RETIRED };
 
 using IndexRebuildAppend = std::function<void(DataChunk &chunk, Vector &row_ids)>;
 using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, const IndexRebuildAppend &append)>;
@@ -114,7 +115,11 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Creates a pending entry: the catalog holds it from here on, and it gets its physical index once that is built
+	//! or loaded (see TableIndexList::AddIndex).
+	IndexEntry(idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Sets the physical index of a pending entry.
+	void InstallIndex(unique_ptr<Index> index);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -139,7 +144,8 @@ public:
 	string GetIndexType() const;
 	//! Returns whether an unbound index has buffered WAL operations.
 	bool HasBufferedReplays() const;
-	//! Destroys the physical index.
+	//! Destroys the physical index, if any. The physical index of a dropped index is destroyed when its catalog entry
+	//! is cleaned up: until then, the transactions that still see the catalog entry can use it.
 	void Retire();
 	//! Binds the unbound physical index without replacing it (nullptr for skipped mismatched keys).
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types,
@@ -232,7 +238,7 @@ IndexReadHandle<TARGET>::IndexReadHandle(shared_ptr<IndexEntry> entry_p, unique_
     : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 	D_ASSERT(IsValid());
 	if (!entry->owned_index) {
-		throw InternalException("Cannot acquire a handle to a retired index entry");
+		throw InternalException("Cannot acquire a handle to an index entry without physical index");
 	}
 	GetEntry().owned_index->template Cast<TARGET>();
 }
@@ -268,7 +274,7 @@ IndexWriteHandle<TARGET>::IndexWriteHandle(shared_ptr<IndexEntry> entry_p, uniqu
     : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 	D_ASSERT(IsValid());
 	if (!entry->owned_index) {
-		throw InternalException("Cannot acquire a handle to a retired index entry");
+		throw InternalException("Cannot acquire a handle to an index entry without physical index");
 	}
 	GetMutableEntry().owned_index->template Cast<TARGET>();
 }

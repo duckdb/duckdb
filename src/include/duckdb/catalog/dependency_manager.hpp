@@ -92,6 +92,9 @@ public:
 	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
+	//! Returns the entries of the given type that depend on the object, as the transaction sees them.
+	//! Throws an internal error if one of them cannot be found.
+	catalog_entry_vector_t GetDependents(CatalogTransaction transaction, const CatalogEntry &object, CatalogType type);
 
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
 	void ReorderEntries(catalog_entry_vector_t &entries, VisibilityBound bound);
