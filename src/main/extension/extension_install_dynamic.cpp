@@ -77,6 +77,12 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(static_cast<char *>(in_buffer) +
 	                                                               (file_size - ParsedExtensionMetaData::FOOTER_SIZE));
 
+	// ABI recognition is mandatory. Compatibility overrides must
+	// never allow extensions with an unknown ABI.
+	if (parsed_metadata.abi_type == ExtensionABIType::UNKNOWN) {
+		throw IOException("Failed to install '%s': %s", extension_name, parsed_metadata.GetInvalidMetadataError());
+	}
+
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty() && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(db)) {
