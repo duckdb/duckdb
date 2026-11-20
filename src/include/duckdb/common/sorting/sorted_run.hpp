@@ -19,6 +19,7 @@ class BufferManager;
 class DataChunk;
 class TupleDataCollection;
 class TupleDataLayout;
+class TemporaryMemoryState;
 
 class SortedRunScanState {
 public:
@@ -71,6 +72,8 @@ private:
 public:
 	ClientContext &context;
 	const Sort &sort;
+	//! Reservation for a materialized result, owned independently of the sort's sink state.
+	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 
 	//! Key and payload collections (and associated append states)
 	unique_ptr<TupleDataCollection> key_data;

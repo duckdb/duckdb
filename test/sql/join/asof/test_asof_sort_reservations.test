@@ -1,0 +1,54 @@
+# name: test/sql/join/asof/test_asof_sort_reservations.test
+# description: Chains of small ASOF sorts alongside a hash join under a memory limit
+# group: [asof]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET memory_limit='128MiB';
+
+statement ok
+SET asof_loop_join_threshold=0;
+
+statement ok
+CREATE TABLE small_times AS
+SELECT (i * 977) % 2000 AS t, {'s': repeat('x', 32), 'v': [i, NULL]} AS payload
+FROM range(2000) r(i);
+
+statement ok
+CREATE TABLE facts AS SELECT i, i % 2000 AS t FROM range(100000) r(i);
+
+statement ok
+CREATE VIEW joined_times AS
+SELECT t.t, (
+    a.t = t.t AND b.t = t.t AND c.t = t.t AND d.t = t.t AND
+    e.t = t.t AND g.t = t.t AND h.t = t.t AND j.t = t.t AND
+    k.t = t.t AND l.t = t.t AND m.t = t.t AND n.t = t.t AND
+    a.payload = n.payload AND b.payload = m.payload) AS valid
+FROM small_times t
+ASOF LEFT JOIN small_times a ON t.t >= a.t
+ASOF LEFT JOIN small_times b ON t.t >= b.t
+ASOF LEFT JOIN small_times c ON t.t >= c.t
+ASOF LEFT JOIN small_times d ON t.t >= d.t
+ASOF LEFT JOIN small_times e ON t.t >= e.t
+ASOF LEFT JOIN small_times g ON t.t >= g.t
+ASOF LEFT JOIN small_times h ON t.t >= h.t
+ASOF LEFT JOIN small_times j ON t.t >= j.t
+ASOF LEFT JOIN small_times k ON t.t >= k.t
+ASOF LEFT JOIN small_times l ON t.t >= l.t
+ASOF LEFT JOIN small_times m ON t.t >= m.t
+ASOF LEFT JOIN small_times n ON t.t >= n.t;
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+query III
+SELECT count(*), sum(f.i), bool_and(coalesce(t.valid, false))
+FROM joined_times t JOIN facts f ON t.t = f.t;
+----
+100000	4999950000	true
+
+endloop
