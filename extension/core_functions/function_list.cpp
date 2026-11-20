@@ -413,6 +413,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(VarSampFun),
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(VarianceFun),
 	DUCKDB_AGGREGATE_FUNCTION(VariantGroupObjectFun),
+	DUCKDB_AGGREGATE_FUNCTION(VariantGroupStructureFun),
 	DUCKDB_SCALAR_FUNCTION(VectorTypeFun),
 	DUCKDB_SCALAR_FUNCTION(VersionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),

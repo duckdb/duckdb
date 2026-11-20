@@ -6,5 +6,13 @@
     "example": "variant_group_object(key, value)",
     "categories": ["variant"],
     "type": "aggregate_function"
+  },
+  {
+    "name": "variant_group_structure",
+    "parameters": "value",
+    "description": "Returns the combined structure of all `value`s in the aggregation. Defaults to `VARIANT` where the structures are incompatible.",
+    "example": "variant_group_structure(v)",
+    "categories": ["variant"],
+    "type": "aggregate_function"
   }
 ]

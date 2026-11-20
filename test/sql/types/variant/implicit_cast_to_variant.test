@@ -1,0 +1,47 @@
+# name: test/sql/types/variant/implicit_cast_to_variant.test
+# description: Test implicit casts to VARIANT
+# group: [variant]
+
+query IIIII
+SELECT variant_typeof(42), variant_typeof('duck'), variant_typeof(DATE '2020-01-01'), variant_typeof([1, 2, 3]), variant_typeof({'a': 42});
+----
+INT32	VARCHAR	DATE	ARRAY(3)	OBJECT(a)
+
+# a VARIANT[] is cast to a VARIANT
+query I
+SELECT variant_typeof([1::VARIANT, 'duck'::VARIANT]);
+----
+ARRAY(2)
+
+query I
+SELECT variant_keys({'a': [1, 2, 3], 'b': {'c': 1, 'd': 2}}, 'b');
+----
+[c, d]
+
+query I
+SELECT variant_contains({'a': 42, 'b': 'duck'}, {'a': 42});
+----
+true
+
+statement ok
+CREATE TABLE tbl AS SELECT 42 i, 'duck' s, [1, 2] l, {'a': 1} st;
+
+query IIII
+SELECT variant_typeof(i), variant_typeof(s), variant_typeof(l), variant_typeof(st) FROM tbl;
+----
+INT32	VARCHAR	ARRAY(2)	OBJECT(a)
+
+# VARIANT is the least preferred target of an implicit cast
+statement ok
+CREATE MACRO pick(x VARIANT) AS 'variant', (x DOUBLE) AS 'double', (x VARCHAR) AS 'varchar', (x INTEGER[]) AS 'list';
+
+query IIIII
+SELECT pick(42), pick('duck'), pick([1, 2]), pick(DATE '2020-01-01'), pick({'a': 42});
+----
+double	varchar	list	variant	variant
+
+# TYPE has no VARIANT representation
+statement error
+SELECT variant_typeof(make_type('INTEGER'));
+----
+<REGEX>:.*No function matches.*variant_typeof.*
