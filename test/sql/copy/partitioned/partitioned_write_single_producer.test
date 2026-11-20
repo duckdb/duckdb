@@ -1,0 +1,130 @@
+# name: test/sql/copy/partitioned/partitioned_write_single_producer.test
+# description: a partitioned COPY fed by one thread flushes on every thread and writes the same rows
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=8;
+
+# range() is read by one thread, so one producer sinks every row. A flush gets a thread per row group of its rows, so
+# the other threads help it
+
+# integer keys, one flush at the end
+statement ok
+COPY (SELECT i % 7 AS p, i AS v FROM range(0, 300000) t(i))
+TO '{TEST_DIR}/single_int' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(v) FROM read_parquet('{TEST_DIR}/single_int/**/*.parquet', hive_partitioning = true)
+GROUP BY p ORDER BY p
+----
+0	42858	6428678571
+1	42857	6428421429
+2	42857	6428464286
+3	42857	6428507143
+4	42857	6428550000
+5	42857	6428592857
+6	42857	6428635714
+
+# flushes while the producer is still sinking
+statement ok
+SET partitioned_write_flush_threshold=32768;
+
+statement ok
+COPY (SELECT i % 7 AS p, i AS v FROM range(0, 1000000) t(i))
+TO '{TEST_DIR}/single_int_flushes' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(v) FROM read_parquet('{TEST_DIR}/single_int_flushes/**/*.parquet', hive_partitioning = true)
+GROUP BY p ORDER BY p
+----
+0	142858	71428928571
+1	142857	71428071429
+2	142857	71428214286
+3	142857	71428357143
+4	142857	71428500000
+5	142857	71428642857
+6	142857	71428785714
+
+statement ok
+RESET partitioned_write_flush_threshold;
+
+# string keys are sorted into partitions, which the helpers prepare too
+statement ok
+COPY (SELECT 'k' || (i % 7)::VARCHAR AS p, i AS v FROM range(0, 300000) t(i))
+TO '{TEST_DIR}/single_sorted' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(v) FROM read_parquet('{TEST_DIR}/single_sorted/**/*.parquet', hive_partitioning = true)
+GROUP BY p ORDER BY p
+----
+k0	42858	6428678571
+k1	42857	6428421429
+k2	42857	6428464286
+k3	42857	6428507143
+k4	42857	6428550000
+k5	42857	6428592857
+k6	42857	6428635714
+
+# with a low flush threshold every flush writes files, so the helpers prepare and write batches concurrently
+statement ok
+SET partitioned_write_flush_threshold=32768;
+
+# ORDER_BY: every file of a partition is still written in order
+statement ok
+COPY (SELECT i % 7 AS p, (1000000 - i) AS v FROM range(0, 1000000) t(i))
+TO '{TEST_DIR}/single_ordered' (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v ASC));
+
+query I
+SELECT count(*) FILTER (WHERE NOT ordered) FROM (
+	SELECT filename, list(v ORDER BY file_row_number) = list_sort(list(v ORDER BY file_row_number)) AS ordered
+	FROM read_parquet('{TEST_DIR}/single_ordered/**/*.parquet', filename = true, file_row_number = true)
+	GROUP BY filename)
+----
+0
+
+query II
+SELECT count(*), sum(v) FROM read_parquet('{TEST_DIR}/single_ordered/**/*.parquet')
+----
+1000000	500000500000
+
+# files rotated by size
+statement ok
+COPY (SELECT i % 7 AS p, i AS v FROM range(0, 1000000) t(i))
+TO '{TEST_DIR}/single_rotated' (FORMAT PARQUET, PARTITION_BY (p), FILE_SIZE_BYTES '64kb', ROW_GROUP_SIZE 2048);
+
+query II
+SELECT count(*), sum(v) FROM read_parquet('{TEST_DIR}/single_rotated/**/*.parquet')
+----
+1000000	499999500000
+
+query I
+SELECT count(DISTINCT filename) > 7 FROM read_parquet('{TEST_DIR}/single_rotated/**/*.parquet', filename = true)
+----
+true
+
+# a task that fails fails the COPY with its error, whichever thread runs it: a helper preparing a batch of p=5, or the
+# producer. The flushes start while the producer sinks, so the error ends the COPY while the producer is still sinking
+loop i 0 20
+
+statement error
+COPY (SELECT i % 7 AS p, i AS v FROM range(0, 1000000) t(i))
+TO '{TEST_DIR}/single_error_${i}' (FORMAT PARQUET, PARTITION_BY (p),
+PARTITION_PATH 'p=' || CASE WHEN p = 5 THEN NULL ELSE p::VARCHAR END);
+----
+PARTITION_PATH evaluated to NULL for partition p=5
+
+endloop
+
+# an error in the query feeding the COPY ends it while the helpers flush. Under ASan this checks that no helper
+# outlives the COPY's state
+loop i 0 20
+
+statement error
+COPY (SELECT i % 7 AS p, CASE WHEN i = 950000 THEN error('producer failed') ELSE i END AS v FROM range(0, 1000000) t(i))
+TO '{TEST_DIR}/single_producer_error_${i}' (FORMAT PARQUET, PARTITION_BY (p));
+----
+producer failed
+
+endloop
