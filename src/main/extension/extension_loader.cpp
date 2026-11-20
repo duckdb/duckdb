@@ -155,21 +155,25 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	function.extension_name = extension_name;
 	auto name = function.GetQualifiedName().Name();
 	auto schema = function.GetQualifiedName().Schema();
+	// only a registration in the extension's default schema is placed by the loader: an explicit other schema is
+	// the caller's choice, which the catalog accepts or rejects
 	const bool default_schema = schema == DEFAULT_SCHEMA || schema == loader_info.extension_schema;
-	bool to_main = function.functions.IsLanguage();
-	if (to_main && loader_info.extension_schema != DEFAULT_SCHEMA) {
+	bool to_main = false;
+	if (default_schema && function.functions.IsLanguage()) {
 		// overloads this extension registered before the declaration are in its own schema, where member calls never
 		// select them
-		auto earlier = TryGetScalarFunction(db, loader_info.extension_schema, name);
-		if (earlier && earlier->extension_name == extension_name) {
-			throw InvalidInputException("Extension %s registered overloads of %s before declaring it a function "
-			                            "language: declare the language %s before registering its overloads",
-			                            extension_name, name, name);
+		if (loader_info.extension_schema != DEFAULT_SCHEMA) {
+			auto earlier = TryGetScalarFunction(db, loader_info.extension_schema, name);
+			if (earlier && earlier->extension_name == extension_name) {
+				throw InvalidInputException("Extension %s registered overloads of %s before declaring it a function "
+				                            "language: declare the language %s before registering its overloads",
+				                            extension_name, name, name);
+			}
 		}
-	}
-	if (!to_main && default_schema) {
-		// an overload added without the declaration merges into the language this extension declared, instead of
-		// shadowing it. Another extension's function of that name stays in that extension's schema
+		to_main = true;
+	} else if (default_schema) {
+		// an overload added without the declaration joins the language this extension declared instead of shadowing
+		// it. Another extension's function of that name stays in that extension's schema
 		auto language = TryGetScalarFunction(db, Identifier::DefaultSchema(), name);
 		to_main = language && language->functions.IsLanguage() && language->extension_name == extension_name;
 	}
@@ -336,7 +340,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 	for (auto &function : functions.functions) {
 		scalar_function.functions.AddFunction(std::move(function));
 	}
-	scalar_function.functions.MergeLanguageDeclaration(functions);
+	scalar_function.functions.MergeLanguageDeclaration(scalar_function.functions, functions);
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT

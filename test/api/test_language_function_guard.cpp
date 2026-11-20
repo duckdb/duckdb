@@ -420,8 +420,7 @@ TEST_CASE("Registering overloads through the client context keeps the language d
 	REQUIRE(CHECK_COLUMN(result, 0, {"before"}));
 	REQUIRE_FAIL(con.Query("CREATE FUNCTION ctx_rejected() LANGUAGE ctxlang AS 'invalid'"));
 
-	// a declared language registers in the main schema, where member calls look it up. The whole qualification
-	// counts: a schema named main nested in another schema is not the system catalog's main schema
+	// a declared language registered for another schema is rejected: member calls only look in the main schema
 	ScalarFunction schema_function("ctx_schema_lang", vector<LogicalType> {LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               NoDirectCall, nullptr, nullptr, nullptr, LogicalType::ANY);
 	ScalarFunctionSet schema_set {Identifier("ctx_schema_lang")};
@@ -430,12 +429,12 @@ TEST_CASE("Registering overloads through the client context keeps the language d
 	CreateScalarFunctionInfo schema_info(std::move(schema_set));
 	schema_info.SetQualifiedName(QualifiedName(Identifier(), Identifier("pg_catalog"), Identifier("ctx_schema_lang")));
 	REQUIRE_THROWS_WITH(con.context->RegisterFunction(schema_info),
-	                    Catch::Matchers::Contains("function language must be registered in the main schema"));
-
-	schema_info.SetQualifiedName(QualifiedName::FromPath(
-	    {Identifier("system"), Identifier("s"), Identifier("main"), Identifier("ctx_schema_lang")}));
-	REQUIRE_THROWS_WITH(con.context->RegisterFunction(schema_info),
-	                    Catch::Matchers::Contains("function language must be registered in the main schema"));
+	                    Catch::Matchers::Contains("must be registered in the main schema of the system catalog"));
+	// ... and accepted in the main schema
+	schema_info.SetQualifiedName(
+	    QualifiedName(Identifier("system"), Identifier::DefaultSchema(), Identifier("ctx_schema_lang")));
+	con.context->RegisterFunction(schema_info);
+	REQUIRE_NO_FAIL(con.Query("CREATE FUNCTION ctx_schema_fun() LANGUAGE ctx_schema_lang AS 'body'"));
 
 	// an undeclared set added to a language inherits its declaration: the check runs on the merged set, and the
 	// existing function is looked up under the whole path, so the nested schema does not find system.main's language
@@ -465,10 +464,50 @@ TEST_CASE("Registering overloads through the client context keeps the language d
 	REQUIRE(inherit_main_info.functions.IsLanguage());
 	result = con.Query("SELECT ctx_fun()");
 	REQUIRE(CHECK_COLUMN(result, 0, {"before"}));
+}
 
-	// the top-level main schema of the system catalog is where it belongs
-	schema_info.SetQualifiedName(
-	    QualifiedName(Identifier("system"), Identifier::DefaultSchema(), Identifier("ctx_schema_lang")));
-	con.context->RegisterFunction(schema_info);
-	REQUIRE_NO_FAIL(con.Query("CREATE FUNCTION ctx_schema_fun() LANGUAGE ctx_schema_lang AS 'body'"));
+TEST_CASE("The catalog keeps a function language in the main schema on every registration path", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// Catalog::CreateFunction directly, as the C API V2 registration does, applies the rules the client context used
+	// to apply on its own: a declared language for a schema named main nested in another schema is rejected, and one
+	// for system.main is created there
+	auto &system_catalog = Catalog::GetSystemCatalog(*db.instance);
+	auto data = CatalogTransaction::GetSystemTransaction(*db.instance);
+	CreateSchemaInfo outer_schema;
+	outer_schema.SetQualifiedName(QualifiedName::FromPath({Identifier("system"), Identifier("x"), Identifier()}));
+	outer_schema.internal = true;
+	system_catalog.CreateSchema(data, outer_schema);
+	CreateSchemaInfo nested_schema;
+	nested_schema.SetQualifiedName(
+	    QualifiedName::FromPath({Identifier("system"), Identifier("x"), Identifier::DefaultSchema(), Identifier()}));
+	nested_schema.internal = true;
+	system_catalog.CreateSchema(data, nested_schema);
+
+	ScalarFunction function("nestedlang", vector<LogicalType> {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                        DirectCallUnsupported, nullptr, nullptr, nullptr, LogicalType::ANY);
+	function.SetCallReplaceCallback(ConstantCallReplace);
+	ScalarFunctionSet set {Identifier("nestedlang")};
+	set.AddFunction(std::move(function));
+	set.DeclareLanguage();
+	CreateScalarFunctionInfo info(std::move(set));
+	info.SetQualifiedName(
+	    QualifiedName::FromPath({Identifier("system"), Identifier("x"), Identifier("main"), Identifier("nestedlang")}));
+	REQUIRE_THROWS_WITH(system_catalog.CreateFunction(data, info),
+	                    Catch::Matchers::Contains("must be registered in the main schema of the system catalog"));
+	info.SetQualifiedName(QualifiedName(Identifier("system"), Identifier::DefaultSchema(), Identifier("nestedlang")));
+	system_catalog.CreateFunction(data, info);
+	auto schemas = con.Query("SELECT schema_name FROM duckdb_functions() WHERE function_name = 'nestedlang'");
+	REQUIRE(CHECK_COLUMN(schemas, 0, {"main"}));
+	REQUIRE_NO_FAIL(con.Query("CREATE FUNCTION nested_member() LANGUAGE nestedlang AS 'body'"));
+	auto result = con.Query("SELECT nested_member()");
+	REQUIRE(CHECK_COLUMN(result, 0, {"body"}));
+
+	// an overload registered for the main schema without the declaration joins the language and keeps it
+	CreateScalarFunctionInfo overload(ScalarFunction("nestedlang", vector<LogicalType> {LogicalType::INTEGER},
+	                                                 LogicalType::VARCHAR, DirectCallUnsupported));
+	overload.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	system_catalog.CreateFunction(data, overload);
+	REQUIRE(overload.functions.IsLanguage());
+	REQUIRE_NO_FAIL(con.Query("CREATE FUNCTION nested_member_two() LANGUAGE nestedlang AS 'two'"));
 }

@@ -66,13 +66,13 @@ public:
 	scalar_function_create_validate_t GetCreateValidateCallback() const {
 		return create_validate;
 	}
-	//! Merge the language declaration of a set whose overloads are merged with this one: the result is a language if
-	//! either set is, and the other set's validator wins if it has one and takes precedence, or this set has none
-	void MergeLanguageDeclaration(const ScalarFunctionSet &other, bool other_takes_precedence = true) {
-		is_language = is_language || other.is_language;
-		if (other.create_validate && (other_takes_precedence || !create_validate)) {
-			create_validate = other.create_validate;
-		}
+	//! Set the language declaration of a set combining the overloads of an existing and an incoming set. This is the
+	//! one merge rule of every registration path: the result is a language if either set is, and the incoming set's
+	//! validator replaces the existing one, which stays when the incoming set has none
+	void MergeLanguageDeclaration(const ScalarFunctionSet &existing, const ScalarFunctionSet &incoming) {
+		auto validate = incoming.create_validate ? incoming.create_validate : existing.create_validate;
+		is_language = existing.is_language || incoming.is_language;
+		create_validate = validate;
 	}
 
 private:
