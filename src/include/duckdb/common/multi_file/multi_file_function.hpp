@@ -888,10 +888,10 @@ public:
 				                                    context, file_idx, *result);
 				result->files_opened++;
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
-					//! File can be skipped entirely, close it and move on
+					//! File can be skipped entirely, close it - the scan moves past skipped files when it reaches them,
+					//! the readers before this one still have to be scanned
 					reader_data->file_state = MultiFileFileState::SKIPPED;
 					reader_data->reader = nullptr;
-					result->file_index++;
 				}
 			}
 		}
