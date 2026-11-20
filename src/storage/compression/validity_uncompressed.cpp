@@ -3,6 +3,8 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/compression_segment_reader.hpp"
+#include "duckdb/common/bit_utils.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -201,6 +203,62 @@ idx_t ValidityFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+bool ValidityUncompressed::TryApplyDictionaryValidity(Vector &vector, unsafe_array_ptr<const validity_t> validity) {
+	DictionaryVector::VerifyDictionary(vector);
+	const auto &child = DictionaryVector::Child(vector);
+	const auto count = vector.size();
+	if (child.GetVectorType() != VectorType::FLAT_VECTOR || child.size() == 0 ||
+	    FlatVector::Validity(child).RowIsValid(child.size() - 1)) {
+		return false;
+	}
+	const auto entry_count = ValidityMask::EntryCount(count);
+	D_ASSERT(entry_count <= validity.size());
+	const auto full_entry_count = count / ValidityMask::BITS_PER_VALUE;
+	const auto tail_count = count % ValidityMask::BITS_PER_VALUE;
+	const auto tail_invalid =
+	    tail_count ? ~validity[full_entry_count] & ValidityMask::EntryWithValidBits(tail_count) : 0;
+	idx_t first_invalid = 0;
+	while (first_invalid < full_entry_count && ValidityMask::AllValid(validity[first_invalid])) {
+		first_invalid++;
+	}
+	if (first_invalid == full_entry_count && !tail_invalid) {
+		return true;
+	}
+	auto &buffer = vector.BufferMutable().Cast<DictionaryBuffer>();
+	auto &selection = buffer.GetSelVector();
+	if (vector.GetBufferRef().use_count() != 1 || !selection.sel_data() || selection.sel_data().use_count() != 1) {
+		return false;
+	}
+	const auto null_index = child.size() - 1;
+	unsafe_array_ptr<sel_t> target(selection.data(), count);
+	auto apply_invalid = [&](idx_t entry_idx, validity_t invalid) {
+		const auto start = entry_idx * ValidityMask::BITS_PER_VALUE;
+		while (invalid) {
+			target[start + CountZeros<validity_t>::Trailing(invalid)] = null_index;
+			invalid &= invalid - 1;
+		}
+	};
+	for (idx_t entry_idx = first_invalid; entry_idx < full_entry_count; entry_idx++) {
+		apply_invalid(entry_idx, ~validity[entry_idx]);
+	}
+	apply_invalid(full_entry_count, tail_invalid);
+	return true;
+}
+
+//! Apply row validity without expanding dictionaries that reserve a trailing NULL entry.
+void ValidityUncompressed::ApplyDictionaryValidity(Vector &vector, const ValidityMask &validity) {
+	DictionaryVector::VerifyDictionary(vector);
+	if (validity.CannotHaveNull()) {
+		return;
+	}
+	const auto count = vector.size();
+	if (!TryApplyDictionaryValidity(
+	        vector, unsafe_array_ptr<const validity_t>(validity.GetData(), ValidityMask::EntryCount(count)))) {
+		vector.Flatten();
+		FlatVector::ValidityMutable(vector).Combine(validity, count);
+	}
+}
+
 struct ValidityScanState : public SegmentScanState {
 	explicit ValidityScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)),
@@ -502,6 +560,22 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 	}
 	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
 
+	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
+		auto input_data = ValidityScanData(scan_state.reader, start, scan_count);
+		const auto input_start = start % ValidityMask::BITS_PER_VALUE;
+		if (input_start == 0 && ValidityUncompressed::TryApplyDictionaryValidity(result, input_data)) {
+			return;
+		}
+		ValidityMask mask(scan_count);
+		if (input_start == 0) {
+			ValidityUncompressed::AlignedScan(input_data, 0, mask, scan_count);
+		} else {
+			ValidityUncompressed::UnalignedScan(input_data, input_start + scan_count, input_start, mask, 0, scan_count);
+		}
+		ValidityUncompressed::ApplyDictionaryValidity(result, mask);
+		return;
+	}
 	result.Flatten();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
@@ -529,13 +603,17 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 	D_ASSERT(sel_count <= vector_count);
 
 	if (result_offset == 0) {
-		result.Flatten();
+		if (result.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			result.Flatten();
+		}
 	}
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto input_data = ValidityScanData(scan_state.reader, start, vector_count);
 	auto input_start = start % ValidityMask::BITS_PER_VALUE;
-	auto &result_mask = FlatVector::ValidityMutable(result);
+	const auto is_dictionary = result.GetVectorType() == VectorType::DICTIONARY_VECTOR;
+	ValidityMask dictionary_mask(sel_count);
+	auto &result_mask = is_dictionary ? dictionary_mask : FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto selected_index = sel.get_index(i);
 		D_ASSERT(selected_index < vector_count);
@@ -544,6 +622,10 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 		if (!ValidityMask::RowIsValid(entry, source_idx % ValidityMask::BITS_PER_VALUE)) {
 			result_mask.SetInvalid(result_offset + i);
 		}
+	}
+	if (is_dictionary) {
+		D_ASSERT(result_offset == 0);
+		ValidityUncompressed::ApplyDictionaryValidity(result, dictionary_mask);
 	}
 }
 

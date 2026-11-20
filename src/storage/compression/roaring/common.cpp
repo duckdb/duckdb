@@ -251,6 +251,13 @@ void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, i
 	ExtractValidityMaskToData(mask, result, result_offset, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &scan_state = state.scan_state->Cast<RoaringScanState>();
+		ValidityMask mask(scan_count);
+		scan_state.ScanPartial(state.GetPositionInSegment(), mask, 0, scan_count);
+		ValidityUncompressed::ApplyDictionaryValidity(result, mask);
+		return;
+	}
 	result.Flatten();
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }

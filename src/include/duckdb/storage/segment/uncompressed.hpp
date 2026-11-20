@@ -30,6 +30,10 @@ struct FixedSizeUncompressed {
 struct ValidityUncompressed {
 public:
 	static CompressionFunction GetFunction(PhysicalType data_type);
+	//! Redirect NULL rows in an exclusively owned dictionary selection; otherwise return false.
+	static bool TryApplyDictionaryValidity(Vector &vector, unsafe_array_ptr<const validity_t> validity);
+	//! Apply row validity, flattening when the dictionary selection cannot be changed in place.
+	static void ApplyDictionaryValidity(Vector &vector, const ValidityMask &validity);
 	static void AlignedScan(unsafe_array_ptr<const validity_t> input, idx_t input_start, ValidityMask &result_mask,
 	                        idx_t scan_count);
 

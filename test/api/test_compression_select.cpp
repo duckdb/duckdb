@@ -150,6 +150,7 @@ TEST_CASE("RLE filtering advances past a partially selected batch", "[storage][c
 		}
 	}
 	state.offset_in_column = 10;
+	result.Initialize();
 	segment->Scan(state, 10, result, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 	auto values = result.Values<int32_t>();
 	for (idx_t row = 0; row < 10; row++) {
