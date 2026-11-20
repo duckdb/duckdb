@@ -111,9 +111,6 @@ public:
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
-	//! Create a LIST Value from a vector of strings (list of file paths)
-	static Value CreateValueFromFileList(const vector<string> &files);
-
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	//! Which of the multi-file options to declare on a function. A function that reads exactly one file per call
 	//! takes only "allow_empty"; the others describe how several files are combined
