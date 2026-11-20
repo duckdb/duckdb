@@ -90,7 +90,7 @@ hugeint_t Hugeint::Abs(hugeint_t n) {
 // Divide
 //===--------------------------------------------------------------------===//
 
-hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
+hugeint_t Hugeint::DivModPositiveFallback(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
 	D_ASSERT(lhs.upper >= 0);
 	// DivMod code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
@@ -104,16 +104,20 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 	uint8_t highest_bit_set = HugeintHighestBit(lhs);
 	// now iterate over the amount of bits that are set in the LHS
 	for (uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current result and remainder by 1
+		// left-shift the current result and remainder by 1; for a divisor of 2^63 or more the
+		// remainder can reach 2^64, so keep the bit shifted out of it
 		div_result = HugeintLeftShift(div_result, 1);
+		const bool remainder_carry = (remainder >> 63) != 0;
 		remainder <<= 1;
 		// we get the value of the bit at position X, where position 0 is the least-significant bit
 		if (HugeintIsBitSet(lhs, x - 1)) {
 			// increment the remainder
 			remainder++;
 		}
-		if (remainder >= rhs) {
+		if (remainder_carry || remainder >= rhs) {
 			// the remainder has passed the division multiplier: add one to the divide result
+			// (with a carry the remainder is 2^64 + remainder > rhs, and the subtraction wraps to
+			// the right value)
 			remainder -= rhs;
 			div_result.lower++;
 			if (div_result.lower == 0) {
@@ -123,6 +127,21 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 		}
 	}
 	return div_result;
+}
+
+hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
+	D_ASSERT(lhs.upper >= 0);
+#if DUCKDB_HAS_INT128_DIVISION
+	// Native division (only __udivti3: the remainder is computed by multiplication); a zero
+	// divisor keeps the fallback's result.
+	if (rhs != 0) {
+		const auto left = (static_cast<__uint128_t>(static_cast<uint64_t>(lhs.upper)) << 64) | lhs.lower;
+		const auto q = left / rhs;
+		remainder = static_cast<uint64_t>(left - q * rhs);
+		return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(q >> 64)), static_cast<uint64_t>(q));
+	}
+#endif
+	return DivModPositiveFallback(lhs, rhs, remainder);
 }
 
 string Hugeint::ToString(hugeint_t input) {
@@ -161,7 +180,7 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 		return false;
 	}
 
-#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+#if DUCKDB_HAS_INT128
 	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
 	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
 	__uint128_t result_i128;
