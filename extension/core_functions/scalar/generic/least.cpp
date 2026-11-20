@@ -178,6 +178,7 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	auto &expr = input.expr;
 	auto &return_type = expr.GetReturnType();
 	// TIMETZ min/max stats follow the physical bit order, which differs from the logical order
+	// INTERVAL needs no exception: its stats are normalized the same way as interval_t comparisons
 	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
 	    return_type.InternalType() == PhysicalType::BOOL || return_type.id() == LogicalTypeId::TIME_TZ) {
 		return nullptr;
