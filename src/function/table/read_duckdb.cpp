@@ -12,6 +12,11 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -84,6 +89,8 @@ struct AttachedDatabaseWrapper {
 	optional_ptr<TableCatalogEntry> table_entry;
 };
 
+struct DuckDBReadLocalState;
+
 class DuckDBReader : public BaseFileReader {
 public:
 	DuckDBReader(ClientContext &context, OpenFileInfo file, const DuckDBFileReaderOptions &options);
@@ -107,6 +114,15 @@ public:
 	TableCatalogEntry &GetTableEntry();
 
 private:
+	//! The filters the table scan evaluates - those on the columns that are read as the file stores them
+	optional_ptr<TableFilterSet> GetScanFilters();
+	//! Prepares the conversions of expression_map and the filters that apply to their results
+	void InitializeConvertedColumns(ClientContext &context, DuckDBReadLocalState &lstate);
+	//! Scans the table into the chunk of the file, converts the columns of expression_map and applies their filters
+	void ScanConvertedColumns(ClientContext &context, TableFunctionInput &input, DuckDBReadLocalState &lstate,
+	                          DataChunk &chunk);
+
+private:
 	ClientContext &context;
 	shared_ptr<AttachedDatabaseWrapper> db_wrapper;
 	TableFunction scan_function;
@@ -115,6 +131,8 @@ private:
 	atomic<bool> finished;
 	//! The column indexes to scan - the row id is scanned if no columns are projected
 	vector<ColumnIndex> scan_column_indexes;
+	//! The subset of the filters that is pushed into the table scan - only set when some columns are converted
+	unique_ptr<TableFilterSet> scan_filters;
 	idx_t column_count;
 	Identifier schema_name;
 	Identifier table_name;
@@ -122,11 +140,31 @@ private:
 
 struct DuckDBReadGlobalState : GlobalTableFunctionState {};
 
+//! A scan column the multi-file scan wants converted before its filters apply (see BaseFileReader::expression_map)
+struct DuckDBConvertedColumn {
+	//! The position of the scan column the conversion produces
+	idx_t position;
+	unique_ptr<Expression> expression;
+	unique_ptr<ExpressionExecutor> executor;
+	//! The columns of the file the expression reads - the scan columns starting at position
+	unique_ptr<DataChunk> input;
+};
+
 struct DuckDBReadLocalState : LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
 	shared_ptr<AttachedDatabaseWrapper> attached_database;
 	//! The chunk to scan into when no columns are projected (we then scan the row ids)
 	DataChunk row_id_chunk;
+	//! The columns of the current file that are converted after the table scan
+	vector<DuckDBConvertedColumn> converted_columns;
+	//! For each scan column, whether it is one of the converted columns
+	vector<bool> converted_position;
+	//! The filters on the converted columns, as the position of the scan column and the filter state
+	vector<pair<idx_t, unique_ptr<TableFilterState>>> converted_filters;
+	//! What the table scan produces, in the types of the file, when some columns are converted afterwards
+	DataChunk file_chunk;
+	//! Whether the previous scan into file_chunk was blocked
+	bool resuming_blocked_scan = false;
 };
 
 string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const {
@@ -306,20 +344,129 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 			// the table scan requires at least one column - scan the row id if no columns are projected
 			scan_column_indexes.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 		}
+		if (filters && !expression_map.empty()) {
+			// a filter on a converted column is written against the converted values, not against those of the file -
+			// it is applied after the conversion, the table scan only evaluates the filters on the other columns
+			scan_filters = filters->Copy();
+			for (auto &entry : expression_map) {
+				if (scan_filters->HasFilter(entry.first)) {
+					scan_filters->RemoveFilterByColumnIndex(entry.first);
+				}
+			}
+		}
 		// initialize the scan over this table
-		TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), filters.get());
+		TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), GetScanFilters());
 		global_state = scan_function.init_global(context, input);
 	}
 	AssignSharedPointer(lstate.attached_database, db_wrapper);
 	// initialize the local scan
 	ThreadContext thread(context);
 	ExecutionContext exec_context(context, thread, nullptr);
-	TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), filters.get());
+	TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), GetScanFilters());
 	lstate.local_state = scan_function.init_local(exec_context, input, global_state.get());
+	InitializeConvertedColumns(context, lstate);
 	if (column_indexes.empty() && lstate.row_id_chunk.ColumnCount() == 0) {
 		lstate.row_id_chunk.Initialize(context, {LogicalType::ROW_TYPE});
 	}
 	return true;
+}
+
+optional_ptr<TableFilterSet> DuckDBReader::GetScanFilters() {
+	if (!scan_filters) {
+		return filters.get();
+	}
+	return scan_filters->HasFilters() ? scan_filters.get() : nullptr;
+}
+
+void DuckDBReader::InitializeConvertedColumns(ClientContext &context, DuckDBReadLocalState &lstate) {
+	lstate.converted_columns.clear();
+	lstate.converted_position.clear();
+	lstate.converted_filters.clear();
+	lstate.file_chunk.Destroy();
+	lstate.resuming_blocked_scan = false;
+	for (auto &entry : expression_map) {
+		DuckDBConvertedColumn converted;
+		converted.position = entry.first.GetIndex();
+		converted.expression = entry.second.expression->Copy();
+		converted.executor = make_uniq<ExpressionExecutor>(context, *converted.expression);
+		// the expression refers to the scan columns starting at its position, which the table scan produces as stored
+		vector<LogicalType> input_types(entry.second.column_indexes.size());
+		ExpressionIterator::VisitExpression<BoundReferenceExpression>(
+		    *converted.expression,
+		    [&](const BoundReferenceExpression &ref) { input_types[ref.Index()] = ref.GetReturnType(); });
+		if (converted.position + input_types.size() > scan_column_indexes.size()) {
+			throw InternalException("Converted column %llu of read_duckdb is out of range", converted.position);
+		}
+		converted.input = make_uniq<DataChunk>();
+		converted.input->InitializeEmpty(input_types);
+		lstate.converted_position.resize(scan_column_indexes.size(), false);
+		lstate.converted_position[converted.position] = true;
+		lstate.converted_columns.push_back(std::move(converted));
+	}
+	if (lstate.converted_columns.empty() || !filters) {
+		return;
+	}
+	for (auto &entry : *filters) {
+		if (expression_map.find(entry.GetIndex()) != expression_map.end()) {
+			lstate.converted_filters.emplace_back(entry.GetIndex().GetIndex(),
+			                                      TableFilterState::Initialize(context, entry.Filter()));
+		}
+	}
+}
+
+void DuckDBReader::ScanConvertedColumns(ClientContext &context, TableFunctionInput &input, DuckDBReadLocalState &lstate,
+                                        DataChunk &chunk) {
+	auto &file_chunk = lstate.file_chunk;
+	if (file_chunk.ColumnCount() == 0) {
+		// the table scan produces the columns the expressions read in the types of the file
+		auto file_types = chunk.GetTypes();
+		for (auto &converted : lstate.converted_columns) {
+			for (idx_t i = 0; i < converted.input->ColumnCount(); i++) {
+				file_types[converted.position + i] = converted.input->data[i].GetType();
+			}
+		}
+		file_chunk.Initialize(context, file_types);
+	}
+	if (!lstate.resuming_blocked_scan) {
+		file_chunk.Reset();
+	}
+	scan_function.function(context, input, file_chunk);
+	lstate.resuming_blocked_scan = input.async_result.GetResultType() == AsyncResultType::BLOCKED;
+	const auto count = file_chunk.size();
+	if (lstate.resuming_blocked_scan || count == 0) {
+		return;
+	}
+	for (auto &converted : lstate.converted_columns) {
+		auto &converted_input = *converted.input;
+		for (idx_t i = 0; i < converted_input.ColumnCount(); i++) {
+			converted_input.data[i].Reference(file_chunk.data[converted.position + i]);
+		}
+		converted_input.SetChildCardinality(count);
+		converted.executor->ExecuteExpression(converted_input, chunk.data[converted.position]);
+	}
+	// the other columns are produced as stored
+	for (idx_t i = 0; i < file_chunk.ColumnCount(); i++) {
+		if (!lstate.converted_position[i]) {
+			chunk.data[i].Reference(file_chunk.data[i]);
+		}
+	}
+	chunk.SetChildCardinality(count);
+
+	// apply the filters on the converted columns
+	idx_t remaining = count;
+	SelectionVector selection;
+	selection.Initialize(nullptr);
+	for (auto &filter : lstate.converted_filters) {
+		if (remaining == 0) {
+			break;
+		}
+		ColumnSegment::FilterSelection(selection, chunk.data[filter.first], *filter.second, count, remaining);
+	}
+	if (remaining == 0) {
+		chunk.Reset();
+	} else if (remaining != count) {
+		chunk.Slice(selection, remaining);
+	}
 }
 
 AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
@@ -337,6 +484,8 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 			lstate.row_id_chunk.Reset();
 			scan_function.function(context, input, lstate.row_id_chunk);
 			chunk.SetChildCardinality(lstate.row_id_chunk.size());
+		} else if (!lstate.converted_columns.empty()) {
+			ScanConvertedColumns(context, input, lstate, chunk);
 		} else {
 			scan_function.function(context, input, chunk);
 		}
@@ -344,7 +493,10 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 		if (input.async_result.GetResultType() == AsyncResultType::BLOCKED) {
 			return std::move(input.async_result);
 		}
-		auto source_result = AsyncResult::GetSourceResultType(input.async_result.GetResultType(), chunk.size());
+		// the filters on converted columns can reject every row the table scan produced - the scan ends when the table
+		// scan produces nothing
+		auto scan_count = lstate.converted_columns.empty() ? chunk.size() : lstate.file_chunk.size();
+		auto source_result = AsyncResult::GetSourceResultType(input.async_result.GetResultType(), scan_count);
 		if (source_result == SourceResultType::FINISHED) {
 			finished = true;
 		}

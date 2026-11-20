@@ -21,7 +21,8 @@
 				"test/parquet/test_parquet_schema_incompatible_nested_types.test",
 				"test/parquet/parquet_schema_renamed_struct_filter.test",
 				"test/sql/copy/parquet/parquet_schema_pushdown_extract_nested_default.test",
-				"test/sql/copy/parquet/parquet_schema_default_only_struct.test"
+				"test/sql/copy/parquet/parquet_schema_default_only_struct.test",
+				"test/sql/storage/read_duckdb/read_duckdb_schema_filter.test"
 			]
 		},
 		{
