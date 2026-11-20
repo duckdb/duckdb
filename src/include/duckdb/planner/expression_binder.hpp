@@ -249,6 +249,8 @@ public:
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
+	//! Replace the parameters of a macro body with the arguments the binding carries
+	void SubstituteMacroParameters(unique_ptr<ParsedExpression> &expr, DummyBinding &binding);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 

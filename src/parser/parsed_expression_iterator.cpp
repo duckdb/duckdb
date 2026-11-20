@@ -94,6 +94,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		if (j_ref.condition) {
 			expr_callback(j_ref.condition);
 		}
+		for (auto &column : j_ref.duplicate_eliminated_columns) {
+			expr_callback(column);
+		}
+		if (j_ref.ranking_expression) {
+			expr_callback(j_ref.ranking_expression);
+		}
 		break;
 	}
 	case TableReferenceType::PIVOT: {
@@ -101,6 +107,19 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
 		for (auto &aggr : p_ref.aggregates) {
 			expr_callback(aggr);
+		}
+		for (auto &pivot : p_ref.pivots) {
+			for (auto &expr : pivot.pivot_expressions) {
+				expr_callback(expr);
+			}
+			for (auto &entry : pivot.entries) {
+				if (entry.expr) {
+					expr_callback(entry.expr);
+				}
+			}
+			if (pivot.subquery) {
+				EnumerateQueryNodeChildren(*pivot.subquery, expr_callback, ref_callback);
+			}
 		}
 		break;
 	}
@@ -132,7 +151,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 			expr_callback(mr_ref.config->pattern);
 		}
 		if (mr_ref.input) {
-			ref_callback(*mr_ref.input);
+			EnumerateTableRefChildren(*mr_ref.input, expr_callback, ref_callback);
 		}
 		break;
 	}
@@ -143,7 +162,13 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
-	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::BASE_TABLE: {
+		auto &base_ref = ref.Cast<BaseTableRef>();
+		if (base_ref.at_clause && base_ref.at_clause->ExpressionMutable()) {
+			expr_callback(base_ref.at_clause->ExpressionMutable());
+		}
+		break;
+	}
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::COLUMN_DATA:
 	case TableReferenceType::DELIM_GET:
