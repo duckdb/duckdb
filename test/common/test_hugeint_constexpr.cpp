@@ -51,6 +51,10 @@ constexpr DivisionCase divisions[] = {
     {maximum, maximum, 1, 0},
     {minimum, 0, 0, minimum},
     {limb, 3, hugeint_t(0, 6148914691236517205ULL), 1},
+    {maximum, hugeint_t(3, 5), hugeint_t(0, 3074457345618258602ULL), hugeint_t(1, 3074457345618258605ULL)},
+    {minimum, hugeint_t(3, 5), hugeint_t(-1, 15372286728091293014ULL), hugeint_t(-2, 15372286728091293010ULL)},
+    {maximum, -hugeint_t(3, 5), hugeint_t(-1, 15372286728091293014ULL), hugeint_t(1, 3074457345618258605ULL)},
+    {minimum, -hugeint_t(3, 5), hugeint_t(0, 3074457345618258602ULL), hugeint_t(-2, 15372286728091293010ULL)},
 };
 
 constexpr bool CheckDivisions() {
@@ -187,11 +191,12 @@ TEST_CASE("Unsigned 128-bit division agrees with long division", "[hugeint]") {
 					REQUIRE(runtime_remainder == remainder);
 
 					if (rhs_upper == 0) {
+						const uint64_t high = lhs_upper % rhs_lower;
+						const auto expected = Uint128DivMod(high, lhs_lower, 0, rhs_lower);
 						uint64_t limb_remainder;
-						REQUIRE(Uint128DivRem64Portable(lhs_upper % rhs_lower, lhs_lower, rhs_lower, limb_remainder) ==
-						        Uint128DivMod(lhs_upper % rhs_lower, lhs_lower, 0, rhs_lower).quotient_lower);
-						REQUIRE(limb_remainder ==
-						        Uint128DivMod(lhs_upper % rhs_lower, lhs_lower, 0, rhs_lower).remainder_lower);
+						REQUIRE(Uint128DivRem64Portable(high, lhs_lower, rhs_lower, limb_remainder) ==
+						        expected.quotient_lower);
+						REQUIRE(limb_remainder == expected.remainder_lower);
 					}
 				}
 			}
