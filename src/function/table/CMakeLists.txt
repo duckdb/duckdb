@@ -21,6 +21,7 @@ add_library_unity(
   system_functions.cpp
   summary.cpp
   table_scan.cpp
+  triangle_count.cpp
   unnest.cpp)
 
 set(ALL_OBJECT_FILES
