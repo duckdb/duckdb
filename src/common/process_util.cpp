@@ -1,7 +1,6 @@
 #include "duckdb/common/process_util.hpp"
 
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 
@@ -26,6 +25,7 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #include <climits>
 #include <cstring>
 #include <libgen.h>
+#include <fstream>
 #elif defined(__APPLE__)
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
@@ -76,9 +76,24 @@ string FormatProcessDescription(const string &process_name, const string &proces
 
 } // namespace
 
+#if defined(__linux__)
+namespace {
+
+string ReadFirstLine(const string &path) {
+	std::ifstream file(path);
+	string line;
+	if (!file || !std::getline(file, line)) {
+		throw IOException("Could not read \"%s\"", path);
+	}
+	return line;
+}
+
+} // namespace
+#endif
+
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(int64_t pid) {
 	string process_name, process_owner;
 	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
 #ifdef PROC_PIDT_SHORTBSDINFO
@@ -104,12 +119,11 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #elif defined(__linux__)
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(int64_t pid) {
 	string process_name, process_owner;
 
 	try {
-		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine(QueryContext());
+		auto cmdline = ReadFirstLine(StringUtil::Format("/proc/%d/cmdline", pid));
 		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
@@ -128,8 +142,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 	// try to find out who created that process
 	try {
-		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
+		auto uid = std::stoi(ReadFirstLine(StringUtil::Format("/proc/%d/loginuid", pid)));
 		auto pw = getpwuid(uid);
 		if (pw) {
 			process_owner = pw->pw_name;
@@ -143,7 +156,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #elif defined(_WIN32)
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(int64_t pid) {
 	auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
 	if (!process) {
 		return string();
@@ -161,7 +174,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #else
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(int64_t pid) {
 	return string();
 }
 

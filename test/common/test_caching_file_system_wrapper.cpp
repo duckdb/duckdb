@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "bound_file_system.hpp"
 #include "caching_test_utils.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "test_helpers.hpp"
@@ -740,8 +741,7 @@ TEST_CASE("Uncached read buffer reuse preserves pins and exact read ranges",
 	auto con = make_uniq<Connection>(db);
 	auto &manager = BufferManager::GetBufferManager(*con->context);
 	TrackingFileSystem file_system;
-	BoundFileSystem cfs_bound(file_system, nullptr);
-	CachingFileSystem cfs(cfs_bound, *db.instance);
+	CachingFileSystem cfs(file_system, nullptr, *db.instance);
 	const idx_t size = 270 * 1024;
 	string content(size, 'a');
 	content += string(size, 'b');
@@ -787,8 +787,7 @@ TEST_CASE("Concurrent uncached reads keep their buffers until the last consumer"
 	DuckDB db;
 	Connection con(db);
 	LocalFileSystem file_system;
-	BoundFileSystem cfs_bound(file_system, nullptr);
-	CachingFileSystem cfs(cfs_bound, *db.instance);
+	CachingFileSystem cfs(file_system, nullptr, *db.instance);
 	const idx_t size = 270 * 1024;
 	string content;
 	for (idx_t i = 0; i < 8; i++) {
@@ -841,8 +840,7 @@ TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_b
 		read_count = 2;
 	}
 	LocalFileSystem file_system;
-	BoundFileSystem cfs_bound(file_system, nullptr);
-	CachingFileSystem cfs(cfs_bound, *db.instance);
+	CachingFileSystem cfs(file_system, nullptr, *db.instance);
 	const idx_t size = 2 * 1024 * 1024 + 1;
 	string content(size, 'x');
 	TestFileGuard test_file("uncached_read_pressure.bin", content);
@@ -878,8 +876,7 @@ TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[cac
 	auto &manager = BufferManager::GetBufferManager(*con.context);
 	manager.SetMemoryLimit(memory_limit);
 	LocalFileSystem file_system;
-	BoundFileSystem cfs_bound(file_system, nullptr);
-	CachingFileSystem cfs(cfs_bound, *db.instance);
+	CachingFileSystem cfs(file_system, nullptr, *db.instance);
 	string content(size, 'x');
 	TestFileGuard test_file("uncached_read_rounding.bin", content);
 	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -905,9 +902,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	}
 	TestFileGuard test_file("test_multi_block.bin", content);
 
-	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
-
-	CachingFileSystem cfs(cfs_bound, db_instance);
+	CachingFileSystem cfs(*tracking_fs, nullptr, db_instance);
 	OpenFileInfo file_info(test_file.GetPath());
 	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
@@ -991,9 +986,7 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 	const string content = "Hello, this is test content for EOF behavior.";
 	TestFileGuard test_file("test_eof_behavior.bin", content);
 
-	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
-
-	CachingFileSystem cfs(cfs_bound, db_instance);
+	CachingFileSystem cfs(*tracking_fs, nullptr, db_instance);
 	OpenFileInfo file_info(test_file.GetPath());
 	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
@@ -1039,9 +1032,7 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	string content(FILE_SIZE, 'X');
 	TestFileGuard test_file("test_skip_open.bin", content);
 
-	BoundFileSystem cfs_bound(*counting_fs, nullptr);
-
-	CachingFileSystem cfs(cfs_bound, db_instance);
+	CachingFileSystem cfs(*counting_fs, nullptr, db_instance);
 
 	auto make_file_info = [&]() {
 		OpenFileInfo info(test_file.GetPath());
@@ -1099,8 +1090,7 @@ TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NO
 	REQUIRE(caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS,
 	                                  nullptr) == nullptr);
 
-	BoundFileSystem cfs_bound(local_fs, nullptr);
-	CachingFileSystem cfs(cfs_bound, db_instance);
+	CachingFileSystem cfs(local_fs, nullptr, db_instance);
 	REQUIRE(cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS) == nullptr);
 }
 
@@ -1108,8 +1098,7 @@ TEST_CASE("Cached file removed after caching with FILE_FLAGS_NULL_IF_NOT_EXISTS"
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	LocalFileSystem local_fs;
-	BoundFileSystem cfs_bound(local_fs, nullptr);
-	CachingFileSystem cfs(cfs_bound, db_instance);
+	CachingFileSystem cfs(local_fs, nullptr, db_instance);
 
 	const string content = "Content that gets cached and then removed from disk.";
 	TestFileGuard test_file("test_caching_removed_file.bin", content);

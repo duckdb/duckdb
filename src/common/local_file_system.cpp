@@ -338,8 +338,7 @@ static void TryAcquireFileLock(BaseFileSystem &fs, int fd, const string &path, F
 		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
 			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			BoundFileSystem bound_fs(fs, nullptr);
-			auto process = ProcessUtil::GetProcessDescription(bound_fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fl.l_pid);
 			if (!process.empty()) {
 				extended_error = "Conflicting lock is held in " + process;
 			}
@@ -2242,9 +2241,10 @@ struct ExpandDirectory {
 	}
 };
 
-static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files,
+static void CrawlDirectoryLevel(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+                                optional_ptr<vector<OpenFileInfo>> files,
                                 std::priority_queue<ExpandDirectory> &directories, idx_t split_index) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
+	auto callback = [&](OpenFileInfo &info) {
 		info.path = fs.JoinPath(path, info.path);
 		if (IsSymbolicLink(info.path)) {
 			return;
@@ -2255,12 +2255,13 @@ static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr
 		} else if (files) {
 			files->push_back(std::move(info));
 		}
-	});
+	};
+	fs.ListFiles(path, callback, opener);
 }
 
-static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<OpenFileInfo> &result) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
+static void GlobFilesInternal(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+                              const string &glob, bool match_directory, vector<OpenFileInfo> &result) {
+	auto callback = [&](OpenFileInfo &info) {
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
 			return;
@@ -2269,7 +2270,8 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 			info.path = fs.JoinPath(path, info.path);
 			result.push_back(std::move(info));
 		}
-	});
+	};
+	fs.ListFiles(path, callback, opener);
 }
 
 struct LocalGlobResult : public LazyMultiFileList {
@@ -2364,7 +2366,6 @@ bool LocalGlobResult::ExpandNextPath() const {
 	if (finished) {
 		return false;
 	}
-	BoundFileSystem bound_fs(fs, nullptr);
 	if (expand_directories.empty()) {
 		if (expanded_files.empty()) {
 			// no result found that matches the glob
@@ -2413,23 +2414,23 @@ bool LocalGlobResult::ExpandNextPath() const {
 			if (is_last_component) {
 				// the crawl is the last component - we are looking for files in this directory
 				// any directories we encounter are added to the expand directories
-				CrawlDirectoryLevel(bound_fs, current_path, expanded_files, expand_directories, split_index);
+				CrawlDirectoryLevel(fs, opener, current_path, expanded_files, expand_directories, split_index);
 			} else {
 				// not the last crawl
 				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
 				expand_directories.emplace(current_path, split_index + 1);
 				// now crawl the contents of this directory - but don't add any files we find
-				CrawlDirectoryLevel(bound_fs, current_path, nullptr, expand_directories, split_index);
+				CrawlDirectoryLevel(fs, opener, current_path, nullptr, expand_directories, split_index);
 			}
 		} else {
 			// glob this directory according to the next component
 			if (is_last_component) {
 				// last component - match files and place them in the result
-				GlobFilesInternal(bound_fs, current_path, next_component, false, expanded_files);
+				GlobFilesInternal(fs, opener, current_path, next_component, false, expanded_files);
 			} else {
 				// not the last component - match directories and add to expansion list
 				vector<OpenFileInfo> child_directories;
-				GlobFilesInternal(bound_fs, current_path, next_component, true, child_directories);
+				GlobFilesInternal(fs, opener, current_path, next_component, true, child_directories);
 				for (auto &file : child_directories) {
 					expand_directories.emplace(std::move(file.path), split_index + 1);
 				}

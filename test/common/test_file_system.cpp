@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "bound_file_system.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/file_buffer.hpp"

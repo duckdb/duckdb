@@ -141,7 +141,6 @@ private:
 	CachingFileHandle *GetCachingHandleIfPossible(FileHandle &handle);
 
 	BaseFileSystem &underlying_file_system;
-	BoundFileSystem bound_file_system;
 	CachingFileSystem caching_file_system;
 	CachingMode caching_mode;
 };

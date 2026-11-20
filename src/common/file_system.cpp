@@ -18,10 +18,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags fl
 }
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags) {
-	VerifyCanAccessFile(file.path);
-	if (IsDuckDBExtensionName(file.path)) {
-		VerifyCanAccessExtension(file.path, flags);
-	}
+	VerifyCanOpenFile(GetFileSystem(), GetOpener(), file.path, flags);
 	return GetFileSystem().OpenFile(file, flags, GetOpener());
 }
 
@@ -183,8 +180,15 @@ string FileSystem::ExpandPath(const string &path) {
 	return FileSystem::ExpandPath(path, GetOpener());
 }
 
-void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) {
-	auto opener = GetOpener();
+void FileSystem::VerifyCanOpenFile(BaseFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+                                   const FileOpenFlags &flags) {
+	VerifyCanAccessFileInternal(opener, path, FileType::FILE_TYPE_REGULAR);
+	if (IsDuckDBExtensionName(fs, opener, path)) {
+		VerifyCanAccessExtension(path, flags);
+	}
+}
+
+void FileSystem::VerifyCanAccessFileInternal(optional_ptr<FileOpener> opener, const string &path, FileType type) {
 	if (!opener) {
 		return;
 	}
@@ -200,11 +204,11 @@ void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) 
 }
 
 void FileSystem::VerifyCanAccessFile(const string &path) {
-	VerifyCanAccessFileInternal(path, FileType::FILE_TYPE_REGULAR);
+	VerifyCanAccessFileInternal(GetOpener(), path, FileType::FILE_TYPE_REGULAR);
 }
 
 void FileSystem::VerifyCanAccessDirectory(const string &path) {
-	VerifyCanAccessFileInternal(path, FileType::FILE_TYPE_DIR);
+	VerifyCanAccessFileInternal(GetOpener(), path, FileType::FILE_TYPE_DIR);
 }
 
 } // namespace duckdb
