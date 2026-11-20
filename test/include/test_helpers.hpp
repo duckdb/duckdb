@@ -186,13 +186,6 @@ void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const strin
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
 
-#define COMPARE_CSV(result, csv, header)                                                                               \
-	{                                                                                                                  \
-		auto res = compare_csv(*result, csv, header);                                                                  \
-		if (!res.empty())                                                                                              \
-			FAIL(res);                                                                                                 \
-	}
-
 #define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
 	{                                                                                                                  \
 		auto res = compare_csv_collection(collection, csv, header);                                                    \

@@ -6,11 +6,14 @@ require quack
 
 require httpfs
 
+# Let the OS choose a port so concurrent test processes cannot share the listener.
 statement ok
-CALL quack_serve(token='test_token');
+SET VARIABLE server_uri = (SELECT concat('''', listen_uri, '''') FROM quack_serve('quack:localhost:0', token='test_token'));
+
+set variable server_uri <variable:server_uri>
 
 statement ok
-ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+ATTACH {server_uri} AS qk (TOKEN 'test_token');
 
 statement ok
 CREATE TABLE tbl(i INTEGER, j INTEGER);

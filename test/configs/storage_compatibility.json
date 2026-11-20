@@ -66,6 +66,7 @@
       "reason": "Time (NS) not supported (new type).",
       "paths": [
         "test/sql/copy/parquet/bloom_filter_fallback_types.test",
+        "test/sql/copy/parquet/bloom_filter_fallback_types.test_slow",
         "test/sql/aggregate/aggregates/summarize_nanosecond_types.test",
         "test/sql/optimizer/expression/test_time_ns_cast_comparison.test",
         "test/optimizer/comparison_simplification_equality_casts.test",

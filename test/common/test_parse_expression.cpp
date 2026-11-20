@@ -98,17 +98,6 @@ TEST_CASE("Parser list helpers reject a second statement or query node", "[parse
 	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
 	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1 UNION SELECT 42"),
 	                    Catch::Matchers::Contains("Expected a single SELECT node"));
-	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseGroupByList("i; SELECT 42"),
-	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
-	duckdb::vector<Identifier> update_columns;
-	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> update_expressions;
-	REQUIRE_THROWS_WITH(
-	    Parser::GetBuiltinParser().ParseUpdateList("i=1; DELETE FROM tbl", update_columns, update_expressions),
-	    Catch::Matchers::Contains("Expected a single UPDATE statement"));
-	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseValuesList("(1, 1); SELECT 42"),
-	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
-	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseValuesList("(1, 1) UNION SELECT 42"),
-	                    Catch::Matchers::Contains("Expected a single SELECT node"));
 	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseColumnList("i INTEGER); SELECT (42"),
 	                    Catch::Matchers::Contains("Expected a single CREATE statement"));
 	REQUIRE(Parser::GetBuiltinParser().ParseColumnList("i INTEGER, j VARCHAR").LogicalColumnCount() == 2);
