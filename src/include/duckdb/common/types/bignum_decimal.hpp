@@ -40,17 +40,16 @@ struct DecimalHelper<bignum_t> {
 		BignumArithmeticState state;
 	};
 
-	//! Arithmetic buffers reused across rescaled values
+	//! Scratch reused across rescaled values.
 	struct RescaleState {
 		explicit RescaleState(optional_ptr<ClientContext> context = nullptr) : arithmetic(context) {
 		}
 
+		//! Invalidates scratch values; call before constructing the next input in heap.
+		void Reset() {
+			heap.GetAllocator().Reset();
+		}
 		const string &GetPowerOfTen(idx_t exponent);
-		//! The result borrows the input or this heap until the next rescale. The input must not borrow this heap:
-		//! rescaling resets the heap before reading the input.
-		bignum_t Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale);
-		bool TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width, uint32_t target_scale,
-		                bignum_t &result);
 
 		StringHeap heap;
 		BignumArithmeticState arithmetic;
@@ -109,6 +108,12 @@ struct DecimalHelper<bignum_t> {
 	//! rescaled value
 	DUCKDB_API static string Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
 	                                 optional_ptr<ClientContext> context = nullptr);
+	//! The result borrows from value or state; consume it before resetting state or releasing value.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+	                                   uint32_t target_scale);
+	//! Fixed-width inputs use integer arithmetic before encoding the result as a BIGNUM.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, hugeint_t value, uint32_t source_scale,
+	                                   uint32_t target_scale);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width, the
 	//! result is the BIGNUM blob of the rescaled value
 	DUCKDB_API static bool TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,

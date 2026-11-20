@@ -319,7 +319,7 @@ jobs:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"
+        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt --track-runtime 5"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
@@ -689,12 +689,6 @@ jobs:
         key: ${{ matrix.config.ccache_key }}
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Write changed tests file
-      shell: bash
-      env:
-        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
-      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
-
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
@@ -705,11 +699,10 @@ jobs:
         FORCE_WARN_UNUSED: 1
         LTO: ${{ matrix.config.lto }}
         LTO_JOBS: ${{ matrix.config.lto_jobs }}
-        SMOKE_RUNNER: build/release/test/run
         EXTRA_CMAKE_VARIABLES: ${{ matrix.config.extra_cmake_variables }}
       with:
         build: python3 scripts/ci/retry.py -- make release
-        test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
+        test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.ci_fast_tests && 'build/release/test/run --track-runtime 5 --test-flags="--thread-stack-size 131072"' || 'true' }}
         bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}

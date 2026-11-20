@@ -1039,7 +1039,7 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 				auto &table_filter_state = *filter.filter_state;
 
 				const auto scan_idx = filter.scan_column_index;
-				const auto column_idx = filter.table_column_index;
+				const auto &column_idx = filter.table_column_index;
 
 				auto &result_vector = result.data[scan_idx];
 				if (approved_tuple_count == 0) {

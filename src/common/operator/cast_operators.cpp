@@ -3478,8 +3478,10 @@ static bool TryCastIntegerToBignumDecimal(SRC input, bignum_t &result, Vector &r
 	WideDecimalCastState fallback(DefaultCasts::WideDecimalCastContext(parameters));
 	auto &state = parameters.local_state ? parameters.local_state->Cast<WideDecimalCastState>() : fallback;
 	IntegerToBignumBlob(input, state.unscaled_blob);
-	bignum_t rescaled;
-	if (!state.GetRescaleState().TryRescale(bignum_t(string_t(state.unscaled_blob)), 0, width, scale, rescaled)) {
+	auto &rescale_state = state.GetRescaleState();
+	rescale_state.Reset();
+	auto rescaled = DecimalHelper<bignum_t>::Rescale(rescale_state, bignum_t(string_t(state.unscaled_blob)), 0, scale);
+	if (!DecimalHelper<bignum_t>::FitsWidth(rescaled, width)) {
 		string error = StringUtil::Format("Could not cast value %s to DECIMAL(%d,%d)",
 		                                  ConvertToString::Operation(input), width, scale);
 		HandleCastError::AssignError(error, parameters);

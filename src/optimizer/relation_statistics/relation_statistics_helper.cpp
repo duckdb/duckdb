@@ -337,6 +337,59 @@ SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinCa
 	return {RoundSemiAntiCardinality(preserved_cardinality, selectivity), true};
 }
 
+optional<TupleDomainRestrictionEstimate>
+RelationStatisticsHelper::EstimateTupleDomainRestriction(LogicalComparisonJoin &restriction, const RelationStats &input,
+                                                         const RelationStats &keys, RelationStatsExtractor &extractor) {
+	D_ASSERT(restriction.join_type == JoinType::SEMI && restriction.conditions.size() > 1);
+	if (input.cardinality == 0 || keys.cardinality == 0) {
+		return TupleDomainRestrictionEstimate {0, 0};
+	}
+	if (!(input.row_retention > 0 && input.row_retention <= 1 && keys.row_retention > 0 && keys.row_retention <= 1)) {
+		return {};
+	}
+	vector<idx_t> input_columns;
+	vector<idx_t> key_columns;
+	vector<DistinctCount> total_domains;
+	double marginal_fraction = 1;
+	for (auto &condition : restriction.conditions) {
+		D_ASSERT(condition.IsComparison());
+		auto input_index = input.FindColumn(condition.GetLHS().Cast<BoundColumnRefExpression>().Binding());
+		auto key_index = keys.FindColumn(condition.GetRHS().Cast<BoundColumnRefExpression>().Binding());
+		if (!input_index.IsValid() || !key_index.IsValid()) {
+			return {};
+		}
+		auto &input_column = input.columns[input_index.GetIndex()];
+		auto &key_column = keys.columns[key_index.GetIndex()];
+		auto total = SelectTotalDomain({input_column.total_domain, key_column.total_domain});
+		if (!total || total->source == DistinctCountSource::CARDINALITY || total->distinct_count == 0) {
+			return {};
+		}
+		auto supported = key_column.GetSupportedSemiAntiDomainSize();
+		if (supported.IsValid()) {
+			marginal_fraction = MinValue(marginal_fraction, static_cast<double>(supported.GetIndex()) /
+			                                                    static_cast<double>(total->distinct_count));
+		}
+		input_columns.push_back(input_index.GetIndex());
+		key_columns.push_back(key_index.GetIndex());
+		total_domains.push_back(*total);
+	}
+	auto input_groups = EstimateGroupCardinality(*restriction.children[0], input, std::move(input_columns), extractor);
+	auto key_groups = EstimateGroupCardinality(*restriction.children[1], keys, std::move(key_columns), extractor);
+	// The total tuple domain predates filters; only current tuple counts are capped by current rows.
+	auto source_rows = MaxValue(static_cast<double>(input.cardinality) / input.row_retention,
+	                            static_cast<double>(keys.cardinality) / keys.row_retention);
+	auto total_groups = EstimateDistinctCardinality(total_domains, CardinalityFromDouble(source_rows));
+	if (total_groups == 0) {
+		return {};
+	}
+	auto fraction = MinValue(marginal_fraction, static_cast<double>(key_groups) / static_cast<double>(total_groups));
+	auto rows = MinValue(static_cast<double>(input.cardinality),
+	                     MaxValue(1.0, round(static_cast<double>(input.cardinality) * fraction)));
+	// Full marginal domains need not cover every tuple, e.g. a diagonal against a Cartesian input.
+	auto groups = MinValue(rows, static_cast<double>(MinValue(input_groups, key_groups)));
+	return TupleDomainRestrictionEstimate {rows, groups};
+}
+
 static bool TryMapProjectionGroups(LogicalOperator &op, vector<idx_t> &groups) {
 	auto child_bindings = op.children[0]->GetColumnBindings();
 	vector<idx_t> mapped;

@@ -15,16 +15,13 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
-#include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -33,18 +30,9 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include <thread>
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -275,25 +263,6 @@ void PhysicalHashJoin::MapResidualBuildColumns(const vector<LogicalType> &lhs_in
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-JoinFilterGlobalState::~JoinFilterGlobalState() {
-}
-
-JoinFilterLocalState::~JoinFilterLocalState() {
-}
-
-unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context,
-                                                                         const PhysicalOperator &op) const {
-	// clear any previously set filters
-	// we can have previous filters for this operator in case of e.g. recursive CTEs
-	for (auto &info : probe_info) {
-		info.dynamic_filters->ClearFilters(op);
-	}
-	auto result = make_uniq<JoinFilterGlobalState>();
-	result->global_aggregate_state =
-	    make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
-	return result;
-}
-
 //! Check for producers that can change a build column's dictionary between chunks.
 static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 	switch (op.type) {
@@ -374,75 +343,6 @@ struct LayoutGate {
 
 static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads);
 
-//! Building the bloom filter is costly on the build side to make probing faster,
-//! so only use it if there are less build tuples than probing tuples
-static constexpr double BUILD_TO_PROBE_RATIO_THRESHOLD = 1.0;
-//! If we have a build side without a filter, only build the bloom filter if the ratio/size is small enough
-static constexpr double NON_FILTERING_RATIO_THRESHOLD = 0.1;
-static constexpr idx_t NON_FILTERING_BUILD_SIDE_THRESHOLD = 4194304;
-//! Max build/probe ratio at which a multi-key join builds per-key-column filters
-static constexpr double MULTI_KEY_RATIO_THRESHOLD = 0.05;
-//! A join is expected to stay in memory while its estimated build side is below this share of the memory budget
-static constexpr idx_t LIKELY_IN_MEMORY_BUILD_MEMORY_FRACTION = 4;
-//! Bound replicated prefix-range filter state independently of the radix partitions
-static constexpr idx_t MAX_PREFIX_RANGE_BUILD_MEMORY = 16ULL * 1024ULL * 1024ULL;
-
-static idx_t GetJoinRuntimeFilterMemoryBudget(ClientContext &context) {
-	static constexpr idx_t MAX_MEMORY_FRACTION = 64;
-	return BufferManager::GetBufferManager(context).GetMaxMemory() / MAX_MEMORY_FRACTION;
-}
-
-//! Whether the build side is expected to exceed the memory budget and spill
-static bool JoinIsLikelyExternal(ClientContext &context, const PhysicalHashJoin &op) {
-	if (Settings::Get<DebugForceExternalSetting>(context)) {
-		return true;
-	}
-	idx_t row_width = sizeof(data_ptr_t) + sizeof(hash_t); // per-row pointer table and hash overhead
-	for (auto &type : op.children[1].get().GetTypes()) {
-		row_width += GetTypeIdSize(type.InternalType());
-	}
-	const auto build_size = op.children[1].get().estimated_cardinality * row_width;
-	const auto memory_budget = BufferManager::GetBufferManager(context).GetMaxMemory();
-	return build_size > memory_budget / LIKELY_IN_MEMORY_BUILD_MEMORY_FRACTION;
-}
-
-static bool IsEqualityComparison(ExpressionType cmp) {
-	return cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-}
-
-//! Whether to accumulate bloom filters during Sink. Only an external join needs that: its finalize only ever
-//! materializes some partitions, so a filter built there would be incomplete, while every row passes through
-//! Sink. An in-memory join builds its filters during finalize instead, where the actual build count and the
-//! competing filter choices are known. The estimate-based checks mirror CanUseBloomFilter, which decides
-//! publication once the actual build count is known.
-static bool ShouldBuildBloomFilterInSink(ClientContext &context, const PhysicalHashJoin &op) {
-	if (!op.filter_pushdown || op.filter_pushdown->probe_info.empty()) {
-		return false;
-	}
-	idx_t equality_count = 0;
-	for (auto &cond : op.conditions) {
-		if (IsEqualityComparison(cond.GetComparisonType())) {
-			equality_count++;
-		}
-	}
-	if (equality_count == 0) {
-		return false;
-	}
-	const auto build_estimate = static_cast<double>(op.children[1].get().estimated_cardinality);
-	const auto probe_estimate = static_cast<double>(op.children[0].get().estimated_cardinality);
-	if (build_estimate > BUILD_TO_PROBE_RATIO_THRESHOLD * probe_estimate) {
-		return false;
-	}
-	if (equality_count > 1 && build_estimate > MULTI_KEY_RATIO_THRESHOLD * probe_estimate) {
-		return false;
-	}
-	if (!op.filter_pushdown->build_side_has_filter && build_estimate > NON_FILTERING_RATIO_THRESHOLD * probe_estimate &&
-	    build_estimate > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
-		return false;
-	}
-	return JoinIsLikelyExternal(context, op);
-}
-
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
@@ -478,47 +378,7 @@ public:
 		if (op.filter_pushdown && !op.filter_pushdown->probe_info.empty()) {
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
-		InitializeBloomFilter(std::move(recycled_filter));
-	}
-
-	//! Creates the bloom filter that every thread-local hash table inserts into during Sink.
-	//! A filter recycled from the previous recursive iteration is reused unless it was published.
-	void InitializeBloomFilter(shared_ptr<BloomFilter> recycled_filter = nullptr) {
-		// a published filter is shared with probe-side scans and immutable, so it cannot be reused
-		if (recycled_filter && recycled_filter->IsPublished()) {
-			recycled_filter.reset();
-		}
-		if (!ShouldBuildBloomFilterInSink(context, op)) {
-			hash_table->SetBloomFilters({});
-			// an in-memory join builds its filter during finalize, which can still reuse the allocation;
-			// an iteration without a filter must not clear a slot that finalize has not consumed yet
-			if (recycled_filter) {
-				hash_table->SetRecycledBloomFilter(std::move(recycled_filter));
-			}
-			return;
-		}
-		const auto build_estimate = MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1);
-		if (!hash_table->HasSingleEqualityKey()) {
-			// the hash table hashes all keys together, so each pushed key column gets a filter of its own
-			vector<idx_t> key_idxs;
-			for (auto &info : op.filter_pushdown->probe_info) {
-				for (auto &column : info.columns) {
-					const auto key_idx = op.filter_pushdown->join_condition[column.join_filter_idx];
-					if (IsEqualityComparison(op.conditions[key_idx].GetComparisonType()) &&
-					    column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-					    std::find(key_idxs.begin(), key_idxs.end(), key_idx) == key_idxs.end()) {
-						key_idxs.push_back(key_idx);
-					}
-				}
-			}
-			hash_table->InitializeBloomFilters(key_idxs, build_estimate, GetJoinRuntimeFilterMemoryBudget(context));
-			return;
-		}
-		if (!recycled_filter) {
-			recycled_filter = make_shared_ptr<BloomFilter>();
-		}
-		recycled_filter->Initialize(context, build_estimate);
-		hash_table->SetBloomFilter(0, std::move(recycled_filter));
+		JoinFilterPushdownInfo::InitializeBloomFilters(context, op, *hash_table, std::move(recycled_filter));
 	}
 
 	~HashJoinGlobalSinkState() override {
@@ -624,12 +484,6 @@ public:
 	//! Per payload column: whether a projection on the build side computes it (see BuildColumnIsComputed)
 	vector<bool> computed_build_columns;
 };
-
-unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
-	auto result = make_uniq<JoinFilterLocalState>();
-	result->local_aggregate_state = make_uniq<LocalUngroupedAggregateState>(*gstate.global_aggregate_state);
-	return result;
-}
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
@@ -880,17 +734,6 @@ bool PhysicalHashJoin::CanPreserveBuildForRecursiveReuse() const {
 	return state.preserve_build_for_reuse && !state.external;
 }
 
-void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
-	// if we are pushing any filters into a probe-side, compute the min/max over the columns that we are pushing
-	for (idx_t pushdown_idx = 0; pushdown_idx < join_condition.size(); pushdown_idx++) {
-		auto join_condition_idx = join_condition[pushdown_idx];
-		for (idx_t i = 0; i < 2; i++) {
-			idx_t aggr_idx = pushdown_idx * 2 + i;
-			lstate.local_aggregate_state->Sink(chunk, join_condition_idx, aggr_idx, chunk.size());
-		}
-	}
-}
-
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
@@ -923,10 +766,6 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
-}
-
-void JoinFilterPushdownInfo::Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const {
-	gstate.global_aggregate_state->Combine(*lstate.local_aggregate_state);
 }
 
 SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
@@ -1103,8 +942,6 @@ static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, const Joi
 	}
 	sink.hash_table->Finalize(chunk_range.begin, chunk_range.end, parallel, prefix_range_states, prefix_range_parallel);
 }
-
-static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate);
 
 //! Event-owned ranges, consumed near their preferred CPU group before stealing.
 class JoinBuildQueue {
@@ -1317,7 +1154,7 @@ public:
 		return finalize_tasks;
 	}
 
-	void ExecuteDirectly() {
+	void ExecuteDirectly(Event &event) {
 		auto &ht = *sink.hash_table;
 		InitializePrefixRangeLanes(ht, 1);
 		optional_ptr<PrefixRangeBuildLane> lane;
@@ -1326,7 +1163,7 @@ public:
 			lane->task_count = 1;
 		}
 		ExecuteHashJoinFinalizeTask(sink, {0, ht.GetDataCollection().ChunkCount()}, false, lane);
-		FinishTasks();
+		FinishTasks(event);
 	}
 
 	void Schedule() override {
@@ -1334,13 +1171,13 @@ public:
 	}
 
 	void FinishEvent() override {
-		FinishTasks();
+		FinishTasks(*this);
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
 
 private:
-	void FinishTasks() {
+	void FinishTasks(Event &event) {
 		for (auto &lane : prefix_range_lanes) {
 			sink.hash_table->MergePrefixRangeBuildState(lane->states);
 		}
@@ -1362,13 +1199,8 @@ private:
 			memory.SetRemainingSizeAndUpdateReservation(sink.context.GetContext(), retained_size);
 		}
 
-		if (sink.global_filter_state) {
-			// a finalize-built bloom filter is complete once the tasks are done; a sink-built one is
-			// already sealed and this is a no-op
-			sink.hash_table->SealBloomFilters();
-			PublishDeferredRuntimeFilters(sink.context, *sink.hash_table, *sink.global_filter_state);
-		}
-		sink.hash_table->finalized = true;
+		JoinFilterPushdownInfo::FinalizeRuntimeFilters(*pipeline, event, sink.op, *sink.hash_table,
+		                                               sink.global_filter_state, sink.num_threads);
 	}
 
 	void InitializePrefixRangeLanes(JoinHashTable &ht, idx_t task_count) {
@@ -1377,9 +1209,10 @@ private:
 		}
 		const auto state_size = ht.GetPrefixRangeBuildStateSize();
 		D_ASSERT(state_size > 0);
-		const auto memory_budget = GetJoinRuntimeFilterMemoryBudget(sink.context);
-		const auto build_budget = ht.HasSingleEqualityKey() ? MAX_PREFIX_RANGE_BUILD_MEMORY
-		                                                    : MinValue(MAX_PREFIX_RANGE_BUILD_MEMORY, memory_budget);
+		const auto memory_budget = JoinFilterPushdownInfo::GetMemoryBudget(sink.context);
+		const auto build_budget = ht.HasSingleEqualityKey()
+		                              ? JoinFilterPushdownInfo::MAX_PREFIX_RANGE_BUILD_MEMORY
+		                              : MinValue(JoinFilterPushdownInfo::MAX_PREFIX_RANGE_BUILD_MEMORY, memory_budget);
 		const auto lanes_within_budget = MaxValue<idx_t>(build_budget / state_size, 1);
 		const auto lane_count = MinValue<idx_t>(task_count, lanes_within_budget);
 		prefix_range_lanes.reserve(lane_count);
@@ -1403,7 +1236,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 	if (FinalizeSingleThreaded(*this)) {
 		new_init_event->ExecuteDirectly();
 		auto new_finalize_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
-		new_finalize_event->ExecuteDirectly();
+		new_finalize_event->ExecuteDirectly(event);
 		return;
 	}
 	event.InsertEvent(new_init_event);
@@ -1541,673 +1374,6 @@ public:
 };
 
 //! The IN filter threshold limits the number of distinct values of a key column, not the number of build rows.
-//! A build side with more rows than the threshold can still have few distinct values in one of its key columns, e.g.
-//! the partition key of a multi-column join. Counting them requires a scan of the key column, so only build sides up
-//! to this many rows are scanned.
-static constexpr idx_t IN_FILTER_MAX_BUILD_SCAN_COUNT = 65536;
-
-static idx_t InFilterMaxBuildScanCount(idx_t dynamic_or_filter_threshold) {
-	return MaxValue<idx_t>(dynamic_or_filter_threshold, IN_FILTER_MAX_BUILD_SCAN_COUNT);
-}
-
-bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                            const ExpressionType &cmp) const {
-	auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
-	if (dynamic_or_filter_threshold <= 1) {
-		return false;
-	}
-	return ht && ht->Count() > 1 && ht->Count() <= InFilterMaxBuildScanCount(dynamic_or_filter_threshold) &&
-	       (cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-}
-
-bool JoinFilterPushdownInfo::CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
-                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
-                                               optional_ptr<JoinHashTable> ht) const {
-	if (!ht) {
-		return false;
-	}
-
-	// bf is only supported for equality conditions
-	if (cmp != ExpressionType::COMPARE_EQUAL && cmp != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		return false;
-	}
-
-	auto build_count = ht->Count();
-	if (build_count == 0) {
-		build_count = ht->GetSinkCollection().Count();
-	}
-	auto probe_cardinality = op.children[0].get().estimated_cardinality;
-	if (build_side_has_filter) {
-		probe_cardinality = MaxValue(info.estimated_scan_cardinality, probe_cardinality);
-	}
-	const double build_to_probe_ratio = static_cast<double>(build_count) / static_cast<double>(probe_cardinality);
-	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
-		return false;
-	}
-
-	// if we have a build side without a filter, only build the bloom filter if the ratio/size is small enough
-	if (!build_side_has_filter && build_to_probe_ratio > NON_FILTERING_RATIO_THRESHOLD &&
-	    build_count > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
-		return false;
-	}
-
-	// per-key filters only pay off when the build side is much smaller than the probe side
-	if (!ht->HasSingleEqualityKey() && build_to_probe_ratio > MULTI_KEY_RATIO_THRESHOLD) {
-		return false;
-	}
-
-	return true;
-}
-
-static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(unique_ptr<Expression> child_expr,
-                                                                              const LogicalType &column_type,
-                                                                              SelectivityOptionalFilterType type);
-
-struct RuntimeFilterInput {
-	unique_ptr<Expression> expression;
-	bool preserves_cast_errors;
-};
-
-static RuntimeFilterInput CreateRuntimeFilterInputExpression(ClientContext &context,
-                                                             const JoinFilterPushdownColumn &column,
-                                                             const LogicalType &runtime_type) {
-	bool preserves_cast_errors = false;
-	auto expression = RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, column, preserves_cast_errors);
-	D_ASSERT(expression->GetReturnType() == RuntimeFilterCastUtil::GetRuntimeFilterInputType(column, runtime_type));
-	return {std::move(expression), preserves_cast_errors};
-}
-
-static unique_ptr<Expression> RetainRuntimeFilterNulls(unique_ptr<Expression> filter_expr,
-                                                       unique_ptr<Expression> null_check_input) {
-	if (!null_check_input) {
-		return filter_expr;
-	}
-	// Retain NULL join keys and inputs whose original cast can fail.
-	auto null_check =
-	    ExpressionFilter::CreateNullCheckExpression(std::move(null_check_input), ExpressionType::OPERATOR_IS_NULL);
-	return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(null_check),
-	                                             std::move(filter_expr));
-}
-
-void JoinFilterPushdownInfo::DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
-                                                const JoinFilterPushdownFilter &info,
-                                                const JoinFilterPushdownColumn &column, ProjectionIndex filter_col_idx,
-                                                idx_t key_idx, JoinFilterGlobalState &gstate) const {
-	gstate.deferred_runtime_filters.push_back({type, &op, info.dynamic_filters, column, filter_col_idx, key_idx});
-}
-
-bool JoinFilterPushdownInfo::TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
-                                                          JoinHashTable &ht, const PhysicalOperator &op,
-                                                          const JoinFilterPushdownColumn &column,
-                                                          ProjectionIndex filter_col_idx, idx_t key_idx,
-                                                          const Value &min_val, const Value &max_val, idx_t max_bits,
-                                                          JoinFilterGlobalState &gstate) const {
-	if (!ht.GetPrefixRangeFilter(key_idx)) {
-		const auto key_type = ht.conditions[key_idx].GetLHS().GetReturnType();
-		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
-		prefix_filter->Initialize(context, ht.Count(), min_val, max_val, max_bits);
-		ht.SetPrefixRangeFilter(key_idx, std::move(prefix_filter));
-		ht.SetBuildPrefixRangeFilter();
-	}
-
-	DeferRuntimeFilter(DeferredRuntimeFilterType::PREFIX_RANGE, op, info, column, filter_col_idx, key_idx, gstate);
-	return true;
-}
-
-unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
-	// finalize the min/max aggregates
-	vector<LogicalType> min_max_types;
-	for (auto &aggr_expr : min_max_aggregates) {
-		min_max_types.push_back(aggr_expr->GetReturnType());
-	}
-	auto final_min_max = make_uniq<DataChunk>();
-	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
-
-	gstate.global_aggregate_state->Finalize(*final_min_max);
-	return final_min_max;
-}
-
-static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(unique_ptr<Expression> child_expr,
-                                                                              const LogicalType &column_type,
-                                                                              SelectivityOptionalFilterType type) {
-	float selectivity_threshold;
-	idx_t n_vectors_to_check;
-	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
-	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
-	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
-}
-
-static SelectivityOptionalFilterType GetSelectivityOptionalFilterType(DeferredRuntimeFilterType type) {
-	switch (type) {
-	case DeferredRuntimeFilterType::BLOOM_FILTER:
-		return SelectivityOptionalFilterType::BF;
-	case DeferredRuntimeFilterType::PREFIX_RANGE:
-		return SelectivityOptionalFilterType::PRF;
-	default:
-		throw InternalException("Unknown deferred runtime filter type");
-	}
-}
-
-static const char *GetRuntimeFilterTypeName(DeferredRuntimeFilterType type) {
-	switch (type) {
-	case DeferredRuntimeFilterType::BLOOM_FILTER:
-		return "BLOOM_FILTER";
-	case DeferredRuntimeFilterType::PREFIX_RANGE:
-		return "PREFIX_RANGE";
-	default:
-		throw InternalException("Unknown deferred runtime filter type");
-	}
-}
-
-static const char *GetRuntimeFilterReconstructionModeName(JoinFilterPushdownMode mode) {
-	switch (mode) {
-	case JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION:
-		return "RECONSTRUCT_EXPRESSION";
-	case JoinFilterPushdownMode::STORAGE_ONLY:
-		return "STORAGE_ONLY";
-	default:
-		throw InternalException("Unknown join filter pushdown mode");
-	}
-}
-
-static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &context, JoinHashTable &ht,
-                                                            const DeferredRuntimeFilterPushdown &deferred,
-                                                            float selectivity_threshold, idx_t n_vectors_to_check) {
-	const auto key_idx = deferred.key_idx;
-	const auto key_name = ht.conditions[key_idx].GetRHS().ToString();
-	const auto key_type = ht.conditions[key_idx].GetLHS().GetReturnType();
-	auto filter_input_type = RuntimeFilterCastUtil::GetRuntimeFilterInputType(deferred.column, key_type);
-	auto input = CreateRuntimeFilterInputExpression(context, deferred.column, key_type);
-	const auto filters_null_values = !input.preserves_cast_errors && !ht.NullValuesAreEqual(key_idx);
-	vector<unique_ptr<Expression>> children;
-	children.push_back(std::move(input.expression));
-
-	unique_ptr<Expression> filter_expr;
-	switch (deferred.type) {
-	case DeferredRuntimeFilterType::BLOOM_FILTER: {
-		// a filter that is not sealed does not describe the complete build side - publishing it would drop
-		// rows - and a filter that saturated is not worth the hashing it costs the scan
-		if (!ht.HasPublishableBloomFilter(key_idx)) {
-			return nullptr;
-		}
-		auto bloom_filter = ht.GetBloomFilter(key_idx);
-		// the filter escapes to probe-side scans here, so a later recursive iteration must not reuse it
-		bloom_filter->MarkPublished();
-		filter_expr = make_uniq<BoundFunctionExpression>(
-		    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
-		    make_uniq<BloomFilterFunctionData>(std::move(bloom_filter), filters_null_values, key_name, key_type,
-		                                       selectivity_threshold, n_vectors_to_check));
-		break;
-	}
-	case DeferredRuntimeFilterType::PREFIX_RANGE: {
-		auto prefix_range_filter = ht.GetPrefixRangeFilter(key_idx);
-		D_ASSERT(prefix_range_filter && prefix_range_filter->IsInitialized());
-		if (!prefix_range_filter || !prefix_range_filter->IsInitialized()) {
-			return nullptr;
-		}
-		prefix_range_filter->MarkPublished();
-		filter_expr = make_uniq<BoundFunctionExpression>(
-		    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(filter_input_type)), std::move(children),
-		    make_uniq<PrefixRangeFunctionData>(prefix_range_filter, filters_null_values, key_name, key_type,
-		                                       selectivity_threshold, n_vectors_to_check));
-		break;
-	}
-	default:
-		throw InternalException("Unknown deferred runtime filter type");
-	}
-	return filter_expr;
-}
-
-static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate) {
-	if (gstate.deferred_runtime_filters.empty()) {
-		return;
-	}
-	for (auto &deferred : gstate.deferred_runtime_filters) {
-		D_ASSERT(deferred.op);
-		if (!deferred.op || !deferred.dynamic_filters) {
-			continue;
-		}
-		const auto filter_type = GetSelectivityOptionalFilterType(deferred.type);
-		float selectivity_threshold;
-		idx_t n_vectors_to_check;
-		GetThresholdAndVectorsToCheck(filter_type, selectivity_threshold, n_vectors_to_check);
-		auto filter_expr =
-		    CreateRuntimeFilterExpression(context, ht, deferred, selectivity_threshold, n_vectors_to_check);
-		if (!filter_expr) {
-			continue;
-		}
-		deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
-		                                     CreateSelectivityOptionalExpressionFilter(
-		                                         std::move(filter_expr), deferred.column.storage_type, filter_type));
-		DUCKDB_LOG(context, PhysicalOperatorLogType, *deferred.op, "PhysicalHashJoin", "PublishRuntimeFilter",
-		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
-		            {"storage_type", deferred.column.storage_type.ToString()},
-		            {"reconstruction_mode", GetRuntimeFilterReconstructionModeName(deferred.column.mode)},
-		            {"uses_try_cast", to_string(RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(deferred.column))}});
-	}
-	gstate.deferred_runtime_filters.clear();
-}
-
-static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
-                                      const ProjectionIndex &filter_col_idx, unique_ptr<Expression> filter_expr,
-                                      const LogicalType &column_type, bool selectivity_optional) {
-	if (!filter_expr) {
-		return;
-	}
-	if (selectivity_optional) {
-		info.dynamic_filters->PushFilter(
-		    op, filter_col_idx,
-		    CreateSelectivityOptionalExpressionFilter(std::move(filter_expr), column_type,
-		                                              SelectivityOptionalFilterType::MIN_MAX));
-	} else {
-		info.dynamic_filters->PushFilter(
-		    op, filter_col_idx,
-		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(filter_expr), column_type)));
-	}
-}
-
-static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type,
-                                                               unique_ptr<Expression> input, const Value &constant,
-                                                               const LogicalType &comparison_logical_type) {
-	auto constant_value = constant.DefaultTryCastAs(comparison_logical_type);
-	if (!constant_value) {
-		return nullptr;
-	}
-	return BoundComparisonExpression::Create(comparison_type, std::move(input),
-	                                         make_uniq<BoundConstantExpression>(std::move(*constant_value)));
-}
-
-static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
-                                                               const LogicalType &column_type) {
-	auto column = make_uniq<BoundReferenceExpression>(column_type, 0ULL);
-	return CreateComparisonExpressionFilter(comparison_type, std::move(column), constant, column_type);
-}
-
-static unique_ptr<Expression> CreateJoinFilterComparisonExpression(
-    ClientContext &context, const JoinFilterPushdownColumn &column, ExpressionType comparison_type,
-    const Value &constant, const LogicalType &comparison_logical_type, bool reconstruct_expression, bool retain_nulls) {
-	if (!reconstruct_expression) {
-		D_ASSERT(!retain_nulls);
-		return CreateComparisonExpressionFilter(comparison_type, constant, comparison_logical_type);
-	}
-	auto input = CreateRuntimeFilterInputExpression(context, column, comparison_logical_type);
-	auto input_type = input.expression->GetReturnType();
-	unique_ptr<Expression> null_check_input;
-	if (input.preserves_cast_errors || retain_nulls) {
-		null_check_input = input.expression->Copy();
-	}
-	auto filter_expr =
-	    CreateComparisonExpressionFilter(comparison_type, std::move(input.expression), constant, input_type);
-	if (!filter_expr) {
-		return nullptr;
-	}
-	return RetainRuntimeFilterNulls(std::move(filter_expr), std::move(null_check_input));
-}
-
-static bool CollectInFilterValues(ClientContext &context, Vector &build_vector, const LogicalType &filter_input_type,
-                                  idx_t threshold, bool retain_nulls, vector<Value> &in_list) {
-	GroupedAggregateHashTable distinct_keys(context, Allocator::Get(context), {filter_input_type});
-	DataChunk keys;
-	keys.Initialize(context, {filter_input_type});
-	Vector input(build_vector.GetType());
-	Vector addresses(LogicalType::POINTER);
-	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
-	CastFunctionSet cast_functions;
-	auto cast_input = GetCastFunctionInput::Default();
-	for (idx_t offset = 0; offset < build_vector.size(); offset += STANDARD_VECTOR_SIZE) {
-		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, build_vector.size() - offset);
-		keys.Reset();
-		input.Slice(build_vector, offset, offset + count);
-		if (build_vector.GetType() == filter_input_type) {
-			keys.data[0].Reference(input);
-		} else {
-			string error;
-			if (!VectorOperations::TryCast(cast_functions, cast_input, input, keys.data[0], count, &error)) {
-				return false;
-			}
-		}
-		keys.CheckCardinality(count);
-		const auto new_count = distinct_keys.FindOrCreateGroups(keys, addresses, new_groups);
-		for (idx_t i = 0; i < new_count; i++) {
-			auto value = keys.data[0].GetValue(new_groups.get_index(i));
-			if (value.IsNull()) {
-				if (retain_nulls) {
-					continue;
-				}
-				return false;
-			}
-			in_list.push_back(std::move(value));
-			if (in_list.size() > threshold) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
-bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
-                                          const JoinFilterPushdownColumn &column, JoinHashTable &ht,
-                                          const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
-                                          InFilterMode mode) const {
-	// Generate an IN filter by scanning the build-side key column.
-	auto build_idx = join_condition[filter_idx];
-	const auto &runtime_type = ht.conditions[build_idx].GetLHS().GetReturnType();
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
-	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
-	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
-	if (key_count == 0 || key_count != ht.Count()) {
-		return false;
-	}
-
-	const auto retain_nulls = ht.conditions[build_idx].GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	const auto reconstruct_expression =
-	    retain_nulls || RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
-	auto filter_input_type = column.storage_type;
-	unique_ptr<Expression> filter_input;
-	unique_ptr<Expression> null_check_input;
-	if (reconstruct_expression) {
-		auto input = CreateRuntimeFilterInputExpression(context, column, runtime_type);
-		filter_input_type = input.expression->GetReturnType();
-		if (input.preserves_cast_errors || retain_nulls) {
-			null_check_input = input.expression->Copy();
-		}
-		filter_input = std::move(input.expression);
-	} else {
-		filter_input = make_uniq<BoundReferenceExpression>(column.storage_type, static_cast<idx_t>(0));
-	}
-
-	const auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
-	vector<Value> in_list;
-	if (!CollectInFilterValues(context, build_vector, filter_input_type, dynamic_or_filter_threshold, retain_nulls,
-	                           in_list)) {
-		return false;
-	}
-
-	// An IN filter is only useful when the values are not dense.
-	if (in_list.empty() || FilterCombiner::IsDenseRange(in_list)) {
-		return false;
-	}
-
-	auto in_expr = ExpressionFilter::CreateInExpression(std::move(filter_input), std::move(in_list));
-	in_expr = RetainRuntimeFilterNulls(std::move(in_expr), std::move(null_check_input));
-	if (mode == InFilterMode::ADAPTIVE_ROW_FILTERING && column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-	    ExpressionFilterExecutor::TryCreate(*in_expr)) {
-		auto filter = CreateSelectivityOptionalExpressionFilter(std::move(in_expr), column.storage_type,
-		                                                        SelectivityOptionalFilterType::IN_FILTER);
-		info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
-		return true;
-	}
-	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
-	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
-	return true;
-}
-
-static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
-                                       ClientContext &context, const JoinFilterPushdownColumn &column,
-                                       ProjectionIndex filter_col_idx, ExpressionType cmp, const Value &min_val,
-                                       const Value &max_val, const LogicalType &condition_type,
-                                       bool reconstruct_expression, bool selectivity_optional) {
-	auto filter_column_type = reconstruct_expression ? column.storage_type : condition_type;
-	const auto retain_nulls = cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	switch (cmp) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		CreateDynamicMinMaxFilter(
-		    op, info, filter_col_idx,
-		    CreateJoinFilterComparisonExpression(context, column, ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val,
-		                                         condition_type, reconstruct_expression, retain_nulls),
-		    filter_column_type, selectivity_optional);
-		break;
-	}
-	default:
-		break;
-	}
-	switch (cmp) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		CreateDynamicMinMaxFilter(
-		    op, info, filter_col_idx,
-		    CreateJoinFilterComparisonExpression(context, column, ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val,
-		                                         condition_type, reconstruct_expression, retain_nulls),
-		    filter_column_type, selectivity_optional);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-static idx_t BloomFilterBitBudget(idx_t ht_count) {
-	return BloomFilter::GetNumberOfSectors(ht_count) * 64;
-}
-
-struct JoinFilterPushdownCandidate {
-	const JoinFilterPushdownFilter &info;
-	const JoinFilterPushdownColumn &column;
-	Value min_val;
-	Value max_val;
-	bool reconstruct_expression;
-	bool can_emit_runtime_filter;
-};
-
-struct JoinFilterPushdownInfo::FilterFinalizer {
-	const JoinFilterPushdownInfo &pushdown;
-	ClientContext &context;
-	const PhysicalComparisonJoin &op;
-	DataChunk &final_min_max;
-	optional_ptr<JoinHashTable> ht;
-	optional_ptr<JoinFilterGlobalState> gstate;
-	bool allow_bloom_filters;
-	bool allow_prefix_range_filters;
-
-public:
-	vector<JoinFilterPushdownCandidate> PrepareCandidates() const;
-	//! A zero bit budget disables runtime filters when the per-key share is too small.
-	idx_t SetRuntimeFilterBudget(const vector<JoinFilterPushdownCandidate> &candidates);
-	void FinalizeCandidate(const JoinFilterPushdownCandidate &candidate, idx_t prefix_range_bit_budget);
-};
-
-vector<JoinFilterPushdownCandidate> JoinFilterPushdownInfo::FilterFinalizer::PrepareCandidates() const {
-	vector<JoinFilterPushdownCandidate> candidates;
-	// Prepare each destination once before dividing the budget among distinct keys.
-	for (auto &info : pushdown.probe_info) {
-		for (auto &pushdown_column : info.columns) {
-			auto filter_idx = pushdown_column.join_filter_idx;
-			D_ASSERT(filter_idx != DConstants::INVALID_INDEX);
-			D_ASSERT(filter_idx < pushdown.join_condition.size());
-			const auto key_idx = pushdown.join_condition[filter_idx];
-			const auto cmp = op.conditions[key_idx].GetComparisonType();
-			auto min_idx = filter_idx * 2;
-			auto max_idx = min_idx + 1;
-
-			auto min_val_before_cast = final_min_max.data[min_idx].GetValue(0);
-			auto max_val_before_cast = final_min_max.data[max_idx].GetValue(0);
-
-			auto min_val = min_val_before_cast;
-			auto max_val = max_val_before_cast;
-			const bool retain_nulls = cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-			const bool reconstruct_filter_expression =
-			    retain_nulls || RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(
-			                        pushdown_column, min_val_before_cast.type());
-
-			// Cast to storage type, skip if fails
-			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
-				auto cast_min = min_val.DefaultTryCastAs(pushdown_column.storage_type);
-				auto cast_max = max_val.DefaultTryCastAs(pushdown_column.storage_type);
-				if (!cast_min || !cast_max) {
-					continue;
-				}
-				min_val = std::move(*cast_min);
-				max_val = std::move(*cast_max);
-			}
-
-			if (min_val.IsNull() || max_val.IsNull()) {
-				// min/max is NULL
-				// this can happen in case all values in the RHS column are NULL, but they are still pushed into the
-				// hash table e.g. because they are part of a RIGHT join
-				continue;
-			}
-
-			auto condition_type = min_val.type();
-			auto runtime_filter_input_type =
-			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
-			const bool can_emit_runtime_filter =
-			    ht && gstate && (allow_bloom_filters || allow_prefix_range_filters) &&
-			    pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-			    runtime_filter_input_type == ht->conditions[key_idx].GetLHS().GetReturnType() &&
-			    !Value::NotDistinctFrom(min_val, max_val) && pushdown.CanUseBloomFilter(info, context, op, cmp, ht);
-			candidates.push_back({info, pushdown_column, std::move(min_val), std::move(max_val),
-			                      reconstruct_filter_expression, can_emit_runtime_filter});
-		}
-	}
-	return candidates;
-}
-
-idx_t JoinFilterPushdownInfo::FilterFinalizer::SetRuntimeFilterBudget(
-    const vector<JoinFilterPushdownCandidate> &candidates) {
-	if (!ht || ht->HasSingleEqualityKey()) {
-		return NumericLimits<idx_t>::Maximum();
-	}
-
-	vector<bool> runtime_filter_keys(op.conditions.size(), false);
-	idx_t runtime_filter_count = 0;
-	for (auto &candidate : candidates) {
-		const auto key_idx = pushdown.join_condition[candidate.column.join_filter_idx];
-		if (candidate.can_emit_runtime_filter && !runtime_filter_keys[key_idx]) {
-			runtime_filter_keys[key_idx] = true;
-			runtime_filter_count++;
-		}
-	}
-	const auto budget_share = MaxValue<idx_t>(runtime_filter_count, 1);
-	const auto memory_budget = GetJoinRuntimeFilterMemoryBudget(context);
-	ht->SetBloomFilterBudget(memory_budget / budget_share);
-	// Leave room for at least one complete build lane as well as the published bitmaps.
-	const auto prefix_range_budget = MinValue(memory_budget, MAX_PREFIX_RANGE_BUILD_MEMORY);
-	const auto column_budget = prefix_range_budget / budget_share;
-	return column_budget >= 128 ? ((column_budget - 64) / 8) * 64 : 0;
-}
-
-void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilterPushdownCandidate &candidate,
-                                                                idx_t prefix_range_bit_budget) {
-	auto &info = candidate.info;
-	auto &pushdown_column = candidate.column;
-	const auto filter_idx = pushdown_column.join_filter_idx;
-	const auto key_idx = pushdown.join_condition[filter_idx];
-	const auto cmp = op.conditions[key_idx].GetComparisonType();
-	auto &filter_col_idx = pushdown_column.probe_column_index.column_index;
-	auto &min_val = candidate.min_val;
-	auto &max_val = candidate.max_val;
-	const auto &condition_type = min_val.type();
-	const bool retain_nulls = cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	const auto reconstruct_filter_expression = candidate.reconstruct_expression;
-	const auto can_emit_runtime_filters = prefix_range_bit_budget > 0 && candidate.can_emit_runtime_filter;
-	if (Value::NotDistinctFrom(min_val, max_val)) {
-		// A single build value produces one comparison, including for non-equality joins.
-		auto filter_expr = CreateJoinFilterComparisonExpression(context, pushdown_column, cmp, min_val, condition_type,
-		                                                        reconstruct_filter_expression, retain_nulls);
-		if (filter_expr) {
-			info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(filter_expr)));
-		}
-		return;
-	}
-	if (cmp != ExpressionType::COMPARE_EQUAL && !retain_nulls) {
-		// Non-equality comparisons need a half-open range.
-		CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val, max_val,
-		                           condition_type, reconstruct_filter_expression, true);
-		return;
-	}
-
-	auto min_val_before_cast = final_min_max.data[filter_idx * 2].GetValue(0);
-	auto max_val_before_cast = final_min_max.data[filter_idx * 2 + 1].GetValue(0);
-	uhugeint_t span;
-	const auto can_compute_span = PrefixRangeFilter::TryComputeSpan(min_val_before_cast, max_val_before_cast, span);
-	const auto can_emit_prf = allow_prefix_range_filters && can_emit_runtime_filters &&
-	                          PrefixRangeFilter::SupportedType(ht->conditions[key_idx].GetLHS().GetReturnType()) &&
-	                          can_compute_span;
-
-	static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
-	const auto exact_prf_bits = MinValue<idx_t>(SMALL_EXACT_PRF_BITS, prefix_range_bit_budget);
-	bool registered_prf =
-	    can_emit_prf && span < exact_prf_bits &&
-	    pushdown.TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx, key_idx,
-	                                          min_val_before_cast, max_val_before_cast, exact_prf_bits, *gstate);
-
-	if (can_emit_prf && !registered_prf) {
-		auto build_count = ht->Count();
-		if (build_count == 0) {
-			build_count = ht->GetSinkCollection().Count();
-		}
-		const auto bloom_filter_bits = MinValue(BloomFilterBitBudget(build_count), prefix_range_bit_budget);
-		registered_prf =
-		    span <= bloom_filter_bits &&
-		    pushdown.TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx, key_idx,
-		                                          min_val_before_cast, max_val_before_cast, bloom_filter_bits, *gstate);
-	}
-	const auto can_use_bloom = !registered_prf && allow_bloom_filters && can_emit_runtime_filters &&
-	                           (ht->HasPublishableBloomFilter(key_idx) || allow_prefix_range_filters);
-	bool pushed_in_filter = false;
-	if (pushdown.CanUseInFilter(context, ht, cmp)) {
-		// String prefixes can leave false positives that a small IN filter removes.
-		const auto prefer_prf =
-		    registered_prf && ht->conditions[key_idx].GetLHS().GetReturnType().InternalType() != PhysicalType::VARCHAR;
-		const auto mode =
-		    prefer_prf || can_use_bloom ? InFilterMode::PRUNING_ONLY : InFilterMode::ADAPTIVE_ROW_FILTERING;
-		pushed_in_filter =
-		    pushdown.PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx, mode);
-	}
-	// Keep multi-key min/max filters for their complementary statistics pruning.
-	if (registered_prf && ht->HasSingleEqualityKey()) {
-		return;
-	}
-
-	if (!pushed_in_filter) {
-		CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val, max_val,
-		                           condition_type, reconstruct_filter_expression, true);
-	}
-	if (can_use_bloom) {
-		if (ht->HasPublishableBloomFilter(key_idx)) {
-			// A complete filter was accumulated during Sink (external joins build it there).
-			pushdown.DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
-			                            filter_col_idx, key_idx, *gstate);
-		} else if (allow_prefix_range_filters) {
-			// Build during finalize only when it materializes the whole build side; external finalize does not.
-			ht->SetBuildBloomFilter(key_idx);
-			pushdown.DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
-			                            filter_col_idx, key_idx, *gstate);
-		}
-	}
-}
-
-unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
-                                                              unique_ptr<DataChunk> final_min_max,
-                                                              optional_ptr<JoinHashTable> ht, bool allow_bloom_filters,
-                                                              bool allow_prefix_range_filters,
-                                                              optional_ptr<JoinFilterGlobalState> gstate) const {
-	if (probe_info.empty()) {
-		return final_min_max;
-	}
-
-	FilterFinalizer finalizer {
-	    *this, context, op, *final_min_max, ht, gstate, allow_bloom_filters, allow_prefix_range_filters};
-	auto candidates = finalizer.PrepareCandidates();
-	const auto prefix_range_bit_budget = finalizer.SetRuntimeFilterBudget(candidates);
-	for (auto &candidate : candidates) {
-		finalizer.FinalizeCandidate(candidate, prefix_range_bit_budget);
-	}
-	return final_min_max;
-}
-
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinFilterGlobalState &gstate,
-                                                       const PhysicalComparisonJoin &op,
-                                                       optional_ptr<JoinHashTable> ht) const {
-	auto final_min_max = FinalizeMinMax(gstate);
-	return FinalizeFilters(context, op, std::move(final_min_max), ht, true, true, &gstate);
-}
-
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();

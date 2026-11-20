@@ -688,7 +688,7 @@ public:
 
 private:
 	template <class T, class... ARGS>
-	void InitializeContainer(optional<T> &state, ARGS &&... args) {
+	void InitializeContainer(optional<T> &state, ARGS &&...args) {
 		current_container = nullptr;
 		current_container = &state.emplace(std::forward<ARGS>(args)...);
 	}

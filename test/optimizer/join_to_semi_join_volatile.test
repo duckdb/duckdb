@@ -83,11 +83,11 @@ explain select * from b where exists (select 1 from a, p where a.y > p.lo and a.
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*Join Type: SEMI.*
 
-# a volatile filter on the other side of an IN: the right side is read as a set, the left side is untouched
+# The volatile filter keeps the outer MARK join; its right side is still read as a set.
 query II
 explain select * from b where nextval('seq') > 0 and b.x in (select a.x from a, p where a.y > p.lo);
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*Join Type: SEMI.*
+physical_plan	<REGEX>:.*Join Type: MARK.*Join Type: SEMI.*
 
 # a materialized CTE whose definition is volatile: as the relation the predicates read
 query II
@@ -323,11 +323,11 @@ select * from b where nextval('seq') > 0 and b.x in (select a.x from a, p where 
 7	0
 7	0
 
-# the sequence was advanced as often as without the optimizer
+# The MARK join preserves all ten probe rows for the volatile filter.
 query I
 select nextval('seq');
 ----
-7
+11
 
 # a materialized CTE whose definition is volatile: as the relation the predicates read
 statement ok
