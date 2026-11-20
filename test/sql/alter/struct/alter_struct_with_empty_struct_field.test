@@ -2,7 +2,7 @@
 # description: Altering the fields of a struct keeps its empty struct fields and their NULLs, also in stored expressions
 # group: [struct]
 
-load {TEST_DIR}/alter_struct_with_empty_struct_field.db
+load {TEST_DIR}/alter_struct_with_empty_struct_field.db readwrite v2.0.0
 
 statement ok
 CREATE TABLE tbl AS
