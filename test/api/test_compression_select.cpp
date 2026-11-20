@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
@@ -11,11 +13,85 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/dict_fsst/decompression.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 using namespace duckdb;
+
+TEST_CASE("Sparse DICT_FSST filtering retains strings from an already decoded dictionary",
+          "[storage][compression][dict_fsst]") {
+	if (STANDARD_VECTOR_SIZE < 128) {
+		return;
+	}
+	auto path = TestCreatePath("dict_fsst_filter_ownership.db");
+	DeleteDatabase(path);
+	DuckDB db(path);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET force_compression='dict_fsst'"));
+	const string suffix = "/special requests packages regular accounts";
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings AS SELECT 'key=' || lpad((i // 2)::VARCHAR, 6, '0') || "
+	                          "repeat('" +
+	                          suffix + "', 4) AS v FROM range(16387) t(i)"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+	con.BeginTransaction();
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(*con.context, QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "strings"))
+	        .Cast<DuckTableEntry>();
+	auto &column = table.GetStorage().GetRowGroupCollection()->GetRowGroup(0)->GetRawColumnData(0);
+	auto node = column.GetSegmentTree().GetRootSegment();
+	REQUIRE(node);
+	auto &segment = node->GetNode();
+	const idx_t vector_count = STANDARD_VECTOR_SIZE;
+	REQUIRE(segment.count >= vector_count + 1);
+	Vector result(LogicalType::VARCHAR);
+	SelectionVector selection(vector_count);
+	idx_t selected_count = 0;
+	for (idx_t row = 1; row < vector_count; row += 128) {
+		selection.set_index(selected_count++, row);
+	}
+	const auto input_count = selected_count;
+	{
+		ColumnScanState state(nullptr);
+		state.current = node;
+		state.offset_in_column = node->GetRowStart();
+		segment.InitializeScan(state);
+		auto &scan = state.scan_state->Cast<dict_fsst::CompressedStringScanState>();
+		REQUIRE(scan.layout.mode == dict_fsst::DictFSSTMode::DICT_FSST);
+		REQUIRE(scan.layout.dict_count >= 512);
+		REQUIRE(idx_t(scan.layout.dict_count) * 8 >= segment.count);
+		// A partial scan can prepare the dictionary without preparing a filter cache.
+		{
+			Vector prefix(LogicalType::VARCHAR);
+			segment.Scan(state, 1, prefix, 0, ScanVectorType::SCAN_FLAT_VECTOR);
+		}
+		REQUIRE(scan.dictionary);
+		REQUIRE_FALSE(scan.filter_cache);
+		state.offset_in_column++;
+		auto filter =
+		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value("key="));
+		auto filter_state = TableFilterState::Initialize(*con.context, *filter);
+		segment.Filter(state, vector_count, result, selection, selected_count, *filter, *filter_state);
+		REQUIRE(selected_count == input_count);
+		// Check ownership before freeing the scan state, so a failure never reads dangling strings.
+		auto &dictionary_heap = scan.dictionary->data.GetBufferRef()->GetAuxiliaryData();
+		REQUIRE(dictionary_heap);
+		REQUIRE((scan.dictionary.use_count() > 1 || dictionary_heap.use_count() > 1));
+	}
+	for (idx_t i = 0; i < selected_count; i++) {
+		const auto row = 1 + i * 128;
+		REQUIRE(selection.get_index(i) == row);
+		const auto key = std::to_string((row + 1) / 2);
+		const auto expected = "key=" + string(6 - key.size(), '0') + key + suffix + suffix + suffix + suffix;
+		REQUIRE(result.GetValue(row) == Value(expected));
+	}
+	con.Commit();
+}
 
 static unique_ptr<ColumnSegment> MakeRLETestSegment(DuckDB &db, const CompressionFunction &function,
                                                     const vector<uint16_t> &counts, idx_t row_count) {
