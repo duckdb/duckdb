@@ -2,6 +2,10 @@
 #include "test_helpers.hpp"
 
 #include "duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
@@ -2514,5 +2518,148 @@ TEST_CASE("Standalone joins retain projected and repeated output bindings", "[op
 	BinarySerializer::Serialize(join, after);
 	REQUIRE(before.GetPosition() == after.GetPosition());
 	REQUIRE(memcmp(before.GetData(), after.GetData(), before.GetPosition()) == 0);
+	connection.Rollback();
+}
+
+static unique_ptr<BoundAggregateExpression> BindDomainAggregate(ClientContext &context, const char *name,
+                                                                unique_ptr<Expression> argument) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
+	auto function = entry.functions.GetFunctionByArguments(context, {argument->GetReturnType()});
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(argument));
+	return FunctionBinder(context).BindAggregateFunction(function, std::move(children));
+}
+
+TEST_CASE("Singleton groups preserve the input current domain for first",
+          "[optimizer][relation_statistics][selected_value_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE t(id INTEGER PRIMARY KEY, x INTEGER)"));
+	connection.BeginTransaction();
+	auto input = PlanStatisticsQuery(connection, "SELECT id, x FROM t");
+	auto bindings = input->GetColumnBindings();
+	auto stats = CreateStats(bindings, {64, 8}, 64);
+
+	// Both aggregates select x from the same singleton groups. FILTER makes only
+	// the second aggregate take the weaker selection rule.
+	auto first = BindDomainAggregate(*connection.context, "first",
+	                                 make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[1]));
+	auto filtered = first->Copy();
+	filtered->Cast<BoundAggregateExpression>().GetFilterMutable() =
+	    make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(std::move(first));
+	expressions.push_back(std::move(filtered));
+	LogicalAggregate aggregate(TableIndex(20), TableIndex(30), std::move(expressions));
+	aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[0]));
+	aggregate.children.push_back(std::move(input));
+
+	auto result = RelationStatisticsHelper::ExtractAggregationStats(aggregate, stats, *connection.context);
+	REQUIRE(result);
+	REQUIRE(result->columns.size() == 3);
+	REQUIRE(result->columns[1].current_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(result->columns[1].current_domain.distinct_count == 8);
+	REQUIRE(result->columns[2].total_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(result->columns[2].current_domain.source == DistinctCountSource::CARDINALITY);
+	connection.Rollback();
+}
+
+TEST_CASE("Selected aggregates preserve source domains without structural evidence",
+          "[optimizer][relation_statistics][selected_value_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto group = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto value = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (auto type : vector<LogicalType> {LogicalType::INTEGER, LogicalType::DECIMAL(12, 2), LogicalType::VARCHAR,
+	                                      LogicalType::STRUCT({{"key", LogicalType::BIGINT}})}) {
+		for (auto name : {"first", "last", "any_value", "arbitrary"}) {
+			INFO(name << " " << type.ToString());
+			auto expression =
+			    BindDomainAggregate(*connection.context, name, make_uniq<BoundColumnRefExpression>(type, value));
+			// Exercise the actual bound implementation after copying and rebinding,
+			// including the DECIMAL specialization and the arbitrary alias.
+			auto copy = expression->Copy();
+			MemoryStream stream;
+			BinarySerializer::Serialize(*copy, stream);
+			stream.Rewind();
+			bound_parameter_map_t parameters;
+			auto restored = BinaryDeserializer::Deserialize<Expression>(stream, *connection.context, parameters);
+			vector<unique_ptr<Expression>> expressions;
+			expressions.push_back(std::move(copy));
+			expressions.push_back(std::move(restored));
+			LogicalAggregate aggregate(TableIndex(20), TableIndex(30), std::move(expressions));
+			aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, group));
+			auto child = CreateStats({group, value}, {10, 100}, 100);
+			child.columns[1].total_domain = DistinctCount(1000, DistinctCountSource::HLL);
+			child.columns[1].semi_anti_join_domain_evidence.MarkUnique();
+			child.columns[1].semi_anti_join_domain_evidence.TightenDomainBound(100);
+			auto result = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child, *connection.context);
+			REQUIRE(result);
+			REQUIRE(result->columns.size() == 3);
+			for (idx_t i = 1; i < result->columns.size(); i++) {
+				const auto &selected = result->columns[i];
+				REQUIRE(selected.total_domain.distinct_count == 1000);
+				REQUIRE(selected.total_domain.source == DistinctCountSource::HLL);
+				REQUIRE(selected.current_domain.distinct_count == MinValue<idx_t>(100, result->cardinality));
+				REQUIRE(selected.current_domain.source == DistinctCountSource::CARDINALITY);
+				REQUIRE_FALSE(selected.GetSupportedSemiAntiDomainSize().IsValid());
+			}
+		}
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Selected aggregate domain propagation falls back without a proven source",
+          "[optimizer][relation_statistics][selected_value_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto value = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	for (const auto &mode : {"plain", "sum", "constant", "cast", "state", "replaced", "missing", "filter",
+	                         "type_mismatch", "collation_mismatch"}) {
+		INFO(mode);
+		auto type = string(mode) == "collation_mismatch" ? LogicalType::VARCHAR : LogicalType::INTEGER;
+		unique_ptr<Expression> argument = make_uniq<BoundColumnRefExpression>(type, value);
+		if (string(mode) == "constant") {
+			argument = make_uniq<BoundConstantExpression>(Value::INTEGER(3));
+		} else if (string(mode) == "cast") {
+			argument =
+			    BoundCastExpression::AddCastToType(*connection.context, std::move(argument), LogicalType::BIGINT);
+		}
+		auto expression =
+		    BindDomainAggregate(*connection.context, string(mode) == "sum" ? "sum" : "first", std::move(argument));
+		if (string(mode) == "type_mismatch") {
+			expression->SetReturnType(LogicalType::BIGINT);
+		} else if (string(mode) == "collation_mismatch") {
+			expression->SetReturnType(LogicalType::VARCHAR_COLLATION("nocase"));
+		} else if (string(mode) == "state") {
+			expression->StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
+		} else if (string(mode) == "replaced") {
+			// Keep the name and original catalog definition of first, but execute min.
+			auto replacement = BindDomainAggregate(*connection.context, "min", expression->GetChildren()[0]->Copy());
+			auto &function = expression->FunctionMutable();
+			auto definition = function.GetDefinition();
+			function.ReplaceImplementation(replacement->Function());
+			function.SetName("first");
+			REQUIRE(function.GetDefinition() == definition);
+		} else if (string(mode) == "filter") {
+			expression->GetFilterMutable() = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		}
+		vector<unique_ptr<Expression>> expressions;
+		expressions.push_back(std::move(expression));
+		LogicalAggregate aggregate(TableIndex(20), TableIndex(30), std::move(expressions));
+		auto child = string(mode) == "missing" ? CreateStats({}, {}, 100) : CreateStats({value}, {40}, 100);
+		auto result = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child, *connection.context);
+		REQUIRE(result);
+		REQUIRE(result->cardinality == 1);
+		const bool selected = string(mode) == "plain" || string(mode) == "filter";
+		REQUIRE(result->columns[0].total_domain.distinct_count == (selected ? 40 : 1));
+		REQUIRE(result->columns[0].total_domain.source ==
+		        (selected ? DistinctCountSource::EXACT : DistinctCountSource::CARDINALITY));
+		REQUIRE(result->columns[0].current_domain.source == DistinctCountSource::CARDINALITY);
+	}
 	connection.Rollback();
 }
