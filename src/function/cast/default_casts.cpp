@@ -33,17 +33,26 @@ CastStatisticsInput::CastStatisticsInput(BoundCastInfo &bound_cast_p, const Logi
 
 void CastStatisticsInput::SetFunction(cast_function_t new_function) {
 	bound_cast.function = new_function;
+	bound_cast.is_null_cast = new_function == DefaultCasts::TryVectorNullCast;
 }
 
 BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastData> cast_data_p,
                              init_cast_local_state_t init_local_state_p)
-    : function(function_p), init_local_state(init_local_state_p), cast_data(std::move(cast_data_p)) {
+    : function(function_p), init_local_state(init_local_state_p), cast_data(std::move(cast_data_p)),
+      is_null_cast(function_p == DefaultCasts::TryVectorNullCast) {
+}
+
+void BoundCastInfo::SetFunction(cast_function_t new_function) {
+	function = new_function;
+	statistics = nullptr;
+	is_null_cast = new_function == DefaultCasts::TryVectorNullCast;
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {
 	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
 	result.statistics = statistics;
 	result.stability = stability;
+	result.is_null_cast = is_null_cast;
 	return result;
 }
 
@@ -102,7 +111,7 @@ bool BoundCastInfo::IsNopCast() const {
 }
 
 bool BoundCastInfo::IsNullCast() const {
-	return function == DefaultCasts::TryVectorNullCast;
+	return is_null_cast;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

@@ -1,0 +1,354 @@
+# name: test/sql/multi_file/multi_file_schema_nested_children.test
+# description: A schema that declares the children of a list or map is applied the same way by readers that do not describe those children
+# group: [multi_file]
+
+require json
+
+require parquet
+
+# the same rows as a JSON file, a DuckDB database and a Parquet file. Only the Parquet reader describes the
+# children of its lists and maps
+statement ok
+CREATE TABLE src AS
+SELECT * FROM (VALUES
+	(1::BIGINT, [1, 2]::BIGINT[], [[1, 2], [], NULL]::BIGINT[][], [{'a': 1::BIGINT, 'b': 'x'}, NULL],
+	 {'l': [5]::BIGINT[], 'ls': [{'a': 1::BIGINT, 'b': 'x'}]}, MAP {'k': 10::BIGINT},
+	 [[[1, 2], []], [], NULL]::BIGINT[][][], MAP {'o': MAP {'i': 1::BIGINT}, 'p': MAP {}}, [MAP {'k': 1::BIGINT}, NULL]),
+	(2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+	(3, [], [], [], {'l': [], 'ls': []}, MAP {}, [], MAP {}, []),
+	(4, [NULL], [NULL], [{'a': NULL, 'b': NULL}], {'l': NULL, 'ls': NULL}, MAP {'k': NULL}, [NULL], MAP {'o': NULL}, [MAP {}])
+) t(id, l, ll, ls, s, m, lll, mm, lm);
+
+statement ok
+COPY src TO '{TEMP_DIR}/nested_children.json';
+
+statement ok
+COPY src TO '{TEMP_DIR}/nested_children.parquet';
+
+statement ok
+ATTACH '{TEMP_DIR}/nested_children.db' AS file_db;
+
+statement ok
+CREATE TABLE file_db.tbl AS FROM src;
+
+statement ok
+DETACH file_db;
+
+# the declared children are those of the file: a root list, a list in a list, a list and a list of structs in a
+# struct, a map
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'l': {name: 'l', type: 'BIGINT[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT', default_value: 7, children: NULL}}},
+	'll': {name: 'll', type: 'VARCHAR[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'VARCHAR[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'VARCHAR', default_value: NULL, children: NULL}}}}},
+	's': {name: 's', type: 'STRUCT(l BIGINT[], ls STRUCT(a BIGINT, b VARCHAR)[])', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'BIGINT[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+				'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}}},
+	'm': {name: 'm', type: 'MAP(VARCHAR, VARCHAR)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'VARCHAR', default_value: NULL, children: NULL}}}
+};
+
+# the schema is passed in a variable, so that the three readers get the same one
+statement ok
+CREATE MACRO from_json() AS TABLE
+SELECT * FROM read_json('{TEMP_DIR}/nested_children.json', schema = getvariable('nested_schema'), columns = {
+	id: 'BIGINT', l: 'BIGINT[]', ll: 'BIGINT[][]', ls: 'STRUCT(a BIGINT, b VARCHAR)[]',
+	s: 'STRUCT(l BIGINT[], ls STRUCT(a BIGINT, b VARCHAR)[])', m: 'MAP(VARCHAR, BIGINT)',
+	lll: 'BIGINT[][][]', mm: 'MAP(VARCHAR, MAP(VARCHAR, BIGINT))', lm: 'MAP(VARCHAR, BIGINT)[]'});
+
+statement ok
+CREATE MACRO from_duckdb() AS TABLE
+SELECT * FROM read_duckdb('{TEMP_DIR}/nested_children.db', schema = getvariable('nested_schema'));
+
+statement ok
+CREATE MACRO from_parquet() AS TABLE
+SELECT * FROM read_parquet('{TEMP_DIR}/nested_children.parquet', schema = getvariable('nested_schema'));
+
+# every query returns the JSON, the DuckDB and the Parquet result next to each other
+
+query IIII
+SELECT id, j.l, d.l, p.l FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	[1, 2]	[1, 2]	[1, 2]
+2	NULL	NULL	NULL
+3	[]	[]	[]
+4	[NULL]	[NULL]	[NULL]
+
+query IIII
+SELECT id, j.ll, d.ll, p.ll FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	[[1, 2], [], NULL]	[[1, 2], [], NULL]	[[1, 2], [], NULL]
+2	NULL	NULL	NULL
+3	[]	[]	[]
+4	[NULL]	[NULL]	[NULL]
+
+query IIII
+SELECT id, j.s, d.s, p.s FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	{'l': [5], 'ls': [{'a': 1, 'b': x}]}	{'l': [5], 'ls': [{'a': 1, 'b': x}]}	{'l': [5], 'ls': [{'a': 1, 'b': x}]}
+2	NULL	NULL	NULL
+3	{'l': [], 'ls': []}	{'l': [], 'ls': []}	{'l': [], 'ls': []}
+4	{'l': NULL, 'ls': NULL}	{'l': NULL, 'ls': NULL}	{'l': NULL, 'ls': NULL}
+
+query IIII
+SELECT id, j.m, d.m, p.m FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	{k=10}	{k=10}	{k=10}
+2	NULL	NULL	NULL
+3	{}	{}	{}
+4	{k=NULL}	{k=NULL}	{k=NULL}
+
+# an extract and a filter on a list
+query IIIIIII
+SELECT id, j.s.l, d.s.l, p.s.l, j.s.ls[1].a, d.s.ls[1].a, p.s.ls[1].a
+FROM (SELECT id, s FROM from_json() WHERE l = [1, 2] OR len(s.l) = 0) j
+JOIN (SELECT id, s FROM from_duckdb() WHERE l = [1, 2] OR len(s.l) = 0) d USING (id)
+JOIN (SELECT id, s FROM from_parquet() WHERE l = [1, 2] OR len(s.l) = 0) p USING (id) ORDER BY id;
+----
+1	[5]	[5]	[5]	1	1	1
+3	[]	[]	[]	NULL	NULL	NULL
+
+# a filter on the mapped list alone. read_duckdb and read_parquet evaluate it in the scan, read_json above it
+query IIII
+SELECT id, j.l, d.l, p.l
+FROM (SELECT id, l FROM from_json() WHERE l = [1, 2]) j
+JOIN (SELECT id, l FROM from_duckdb() WHERE l = [1, 2]) d USING (id)
+JOIN (SELECT id, l FROM from_parquet() WHERE l = [1, 2]) p USING (id);
+----
+1	[1, 2]	[1, 2]	[1, 2]
+
+query II
+EXPLAIN SELECT id FROM from_duckdb() WHERE l = [1, 2];
+----
+physical_plan	<REGEX>:.*READ_DUCKDB.*Filters: l = \[1, 2\].*
+
+query II
+EXPLAIN SELECT id FROM from_parquet() WHERE l = [1, 2];
+----
+physical_plan	<REGEX>:.*READ_PARQUET.*Filters: l = \[1, 2\].*
+
+# three levels of lists, a map in a map, a map in a list
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'lll': {name: 'lll', type: 'BIGINT[][][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: MAP {
+				'list': {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}},
+	'mm': {name: 'mm', type: 'MAP(VARCHAR, MAP(VARCHAR, VARCHAR))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'MAP(VARCHAR, VARCHAR)', default_value: NULL, children: MAP {
+			'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+			'value': {name: 'value', type: 'VARCHAR', default_value: NULL, children: NULL}}}}},
+	'lm': {name: 'lm', type: 'MAP(VARCHAR, BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'MAP(VARCHAR, BIGINT)', default_value: NULL, children: MAP {
+			'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+			'zz': {name: 'value', type: 'BIGINT', default_value: 3, children: NULL}}}}}
+};
+
+query IIII
+SELECT id, j.lll, d.lll, p.lll FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	[[[1, 2], []], [], NULL]	[[[1, 2], []], [], NULL]	[[[1, 2], []], [], NULL]
+2	NULL	NULL	NULL
+3	[]	[]	[]
+4	[NULL]	[NULL]	[NULL]
+
+query IIIIIII
+SELECT id, j.mm, d.mm, p.mm, j.lm, d.lm, p.lm FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	{o={i=1}, p={}}	{o={i=1}, p={}}	{o={i=1}, p={}}	[{k=3}, NULL]	[{k=3}, NULL]	[{k=3}, NULL]
+2	NULL	NULL	NULL	NULL	NULL	NULL
+3	{}	{}	{}	[]	[]	[]
+4	{o=NULL}	{o=NULL}	{o=NULL}	[{}]	[{}]	[{}]
+
+# the fields of a struct element are mapped by their keys, with their defaults: a and b crossed, a field that
+# is not in the file
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a VARCHAR, b BIGINT, c BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a VARCHAR, b BIGINT, c BIGINT)', default_value: NULL, children: MAP {
+			'b': {name: 'a', type: 'VARCHAR', default_value: NULL, children: NULL},
+			'a': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL},
+			'zz': {name: 'c', type: 'BIGINT', default_value: 7, children: NULL}}}}}
+};
+
+query IIII
+SELECT id, j.ls, d.ls, p.ls FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	[{'a': x, 'b': 1, 'c': 7}, NULL]	[{'a': x, 'b': 1, 'c': 7}, NULL]	[{'a': x, 'b': 1, 'c': 7}, NULL]
+2	NULL	NULL	NULL
+3	[]	[]	[]
+4	[{'a': NULL, 'b': NULL, 'c': 7}]	[{'a': NULL, 'b': NULL, 'c': 7}]	[{'a': NULL, 'b': NULL, 'c': 7}]
+
+# every field renamed, in a list in a struct, and the value of a map from a default
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	's': {name: 's', type: 'STRUCT(ls STRUCT(ra BIGINT, rb VARCHAR)[])', default_value: NULL, children: MAP {
+		'ls': {name: 'ls', type: 'STRUCT(ra BIGINT, rb VARCHAR)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(ra BIGINT, rb VARCHAR)', default_value: NULL, children: MAP {
+				'a': {name: 'ra', type: 'BIGINT', default_value: NULL, children: NULL},
+				'b': {name: 'rb', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}}},
+	'm': {name: 'm', type: 'MAP(VARCHAR, BIGINT)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'zz': {name: 'value', type: 'BIGINT', default_value: 3, children: NULL}}}
+};
+
+query IIIIIII
+SELECT id, j.s, d.s, p.s, j.m, d.m, p.m FROM from_json() j JOIN from_duckdb() d USING (id) JOIN from_parquet() p USING (id) ORDER BY id;
+----
+1	{'ls': [{'ra': 1, 'rb': x}]}	{'ls': [{'ra': 1, 'rb': x}]}	{'ls': [{'ra': 1, 'rb': x}]}	{k=3}	{k=3}	{k=3}
+2	NULL	NULL	NULL	NULL	NULL	NULL
+3	{'ls': []}	{'ls': []}	{'ls': []}	{}	{}	{}
+4	{'ls': NULL}	{'ls': NULL}	{'ls': NULL}	{k=3}	{k=3}	{k=3}
+
+# an element of another shape is a binder error for every reader
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'l': {name: 'l', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+statement error
+SELECT l FROM from_json();
+----
+<REGEX>:Binder Error:.*Can't change source type \(BIGINT\) to target type \(STRUCT\(a BIGINT\)\).*
+
+statement error
+SELECT l FROM from_duckdb();
+----
+<REGEX>:Binder Error:.*Can't change source type \(BIGINT\) to target type \(STRUCT\(a BIGINT\)\).*
+
+statement error
+SELECT l FROM from_parquet();
+----
+<REGEX>:Binder Error:.*Can't change source type \(BIGINT\) to target type \(STRUCT\(a BIGINT\)\).*
+
+# several JSON files whose lists have elements of different types, and one without the list
+statement ok
+COPY (SELECT 1 AS id, [1, 2] AS l) TO '{TEMP_DIR}/nested_children_1.json';
+
+statement ok
+COPY (SELECT 2 AS id, ['a'] AS l) TO '{TEMP_DIR}/nested_children_2.json';
+
+statement ok
+COPY (SELECT 3 AS id) TO '{TEMP_DIR}/nested_children_3.json';
+
+query II
+SELECT id, l FROM read_json(['{TEMP_DIR}/nested_children_1.json', '{TEMP_DIR}/nested_children_2.json', '{TEMP_DIR}/nested_children_3.json'], schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'l': {name: 'l', type: 'VARCHAR[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'VARCHAR', default_value: 'x', children: NULL}}}
+}) ORDER BY id;
+----
+1	[1, 2]
+2	[a]
+3	NULL
+
+# a JSON list of NULLs is NULL-typed: the elements stay NULL, the default is for an element the file does not have
+statement ok
+COPY (SELECT 1 AS id, [NULL, NULL] AS l UNION ALL SELECT 2, NULL) TO '{TEMP_DIR}/nested_children_null.json';
+
+query II
+SELECT id, l FROM read_json('{TEMP_DIR}/nested_children_null.json', schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'l': {name: 'l', type: 'BIGINT[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT', default_value: 7, children: NULL}}}
+}) ORDER BY id;
+----
+1	[NULL, NULL]
+2	NULL
+
+# a JSON list of empty objects is read as a list of maps, which is not the declared list of structs
+statement ok
+COPY (SELECT 1 AS id, [{}, {}] AS l) TO '{TEMP_DIR}/nested_children_empty.json';
+
+statement error
+SELECT id, l FROM read_json('{TEMP_DIR}/nested_children_empty.json', schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'l': {name: 'l', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: 7, children: NULL}}}}}
+});
+----
+<REGEX>:Binder Error:.*Failed to map file-column of type 'MAP\(VARCHAR, JSON\)' to result-column of type 'STRUCT\(a BIGINT\)'.*
+
+# JSON objects that are read as a map: empty objects, and objects with many keys under map_inference_threshold
+statement ok
+COPY (SELECT 1 AS id, {'k1': 1, 'k2': 2, 'k3': 3} AS m, {} AS e UNION ALL SELECT 2, {'k4': 4, 'k5': 5, 'k6': 6}, {})
+TO '{TEMP_DIR}/nested_children_objects.json';
+
+query III
+SELECT id, m, e FROM read_json('{TEMP_DIR}/nested_children_objects.json', map_inference_threshold = 2, schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'm': {name: 'm', type: 'MAP(VARCHAR, VARCHAR)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'VARCHAR', default_value: NULL, children: NULL}}},
+	'e': {name: 'e', type: 'MAP(VARCHAR, BIGINT)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'BIGINT', default_value: NULL, children: NULL}}}
+}) ORDER BY id;
+----
+1	{k1=1, k2=2, k3=3, k4=NULL, k5=NULL, k6=NULL}	{}
+2	{k1=NULL, k2=NULL, k3=NULL, k4=4, k5=5, k6=6}	{}
+
+# several JSON files whose struct elements have different fields
+statement ok
+COPY (SELECT 1 AS id, [{'a': 1}] AS ls) TO '{TEMP_DIR}/nested_children_fields_1.json';
+
+statement ok
+COPY (SELECT 2 AS id, [{'b': 'y'}] AS ls) TO '{TEMP_DIR}/nested_children_fields_2.json';
+
+statement ok
+COPY (SELECT 3 AS id, [{'b': 'z', 'a': 3, 'c': true}] AS ls) TO '{TEMP_DIR}/nested_children_fields_3.json';
+
+query II
+SELECT id, ls FROM read_json(['{TEMP_DIR}/nested_children_fields_1.json', '{TEMP_DIR}/nested_children_fields_2.json', '{TEMP_DIR}/nested_children_fields_3.json'], schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: 7, children: NULL},
+			'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}
+}) ORDER BY id;
+----
+1	[{'a': 1, 'b': NULL}]
+2	[{'a': 7, 'b': y}]
+3	[{'a': 3, 'b': z}]
+
+# a schema keyed by field ids: a JSON file has no field ids, so no column is found and each takes its default
+query II
+SELECT id, l FROM read_json('{TEMP_DIR}/nested_children.json', columns = {id: 'BIGINT', l: 'BIGINT[]'}, schema = MAP {
+	1: {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	2: {name: 'l', type: 'BIGINT[]', default_value: NULL, children: MAP {
+		3: {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}}
+});
+----
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# protection: without declared children the list is cast as a whole
+query II
+SELECT id, s FROM read_json('{TEMP_DIR}/nested_children.json', columns = {id: 'BIGINT', s: 'STRUCT(l BIGINT[])'}, schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	's': {name: 's', type: 'STRUCT(l VARCHAR[], x BIGINT)', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'VARCHAR[]', default_value: NULL, children: NULL},
+		'x': {name: 'x', type: 'BIGINT', default_value: 9, children: NULL}}}
+}) ORDER BY id;
+----
+1	{'l': [5], 'x': 9}
+2	NULL
+3	{'l': [], 'x': 9}
+4	{'l': NULL, 'x': 9}

@@ -1,0 +1,189 @@
+# name: test/sql/multi_file/multi_file_schema_text_placement.test
+# description: A list that is cast because its element is text: extracts, unnest, filters, depth, UNION and ARRAY as the declared type
+# group: [multi_file]
+
+require json
+
+require parquet
+
+statement ok
+ATTACH '{TEMP_DIR}/text_placement.db' AS file_db;
+
+statement ok
+CREATE TABLE file_db.tbl AS SELECT
+	{'l': ['{"a": 1, "b": 2}', '{"a": 3, "b": 4}']::JSON[], 'k': 5::BIGINT} AS sj,
+	{'p': 1::BIGINT, 'q': [{'l': ['{"a": 1}'::JSON], 'k': 5::BIGINT}]} AS ss,
+	[1, NULL]::BIGINT[] AS li,
+	['x'::BLOB] AS lb;
+
+statement ok
+DETACH file_db;
+
+# sj.l is cast, the struct around it is mapped: k is renamed and x takes its default
+statement ok
+SET VARIABLE text_schema = MAP {
+	'sj': {name: 'sj', type: 'STRUCT(l STRUCT(a BIGINT, b BIGINT)[], rk BIGINT, x BIGINT)', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+				'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+		'k': {name: 'rk', type: 'BIGINT', default_value: NULL, children: NULL},
+		'missing': {name: 'x', type: 'BIGINT', default_value: 7, children: NULL}}}
+};
+
+# an extract of the cast list, of a field of its element, and of the fields beside it
+query I
+SELECT sj.l FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = getvariable('text_schema'));
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]
+
+query IIII
+SELECT sj.l[2].b, len(sj.l), sj.rk, sj.x FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = getvariable('text_schema'));
+----
+4	2	5	7
+
+query I
+SELECT unnest(sj.l) FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = getvariable('text_schema'));
+----
+{'a': 1, 'b': 2}
+{'a': 3, 'b': 4}
+
+query II
+SELECT unnest(sj.l, recursive := true) FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = getvariable('text_schema'));
+----
+1	2
+3	4
+
+# a cast list in a renamed struct, in a list, in a struct: every level above the cast list is mapped
+query I
+SELECT ss FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = MAP {
+	'ss': {name: 'ss', type: 'STRUCT(rp BIGINT, q STRUCT(rl STRUCT(a BIGINT)[], rk BIGINT, d BIGINT)[])', default_value: NULL, children: MAP {
+		'p': {name: 'rp', type: 'BIGINT', default_value: NULL, children: NULL},
+		'q': {name: 'q', type: 'STRUCT(rl STRUCT(a BIGINT)[], rk BIGINT, d BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(rl STRUCT(a BIGINT)[], rk BIGINT, d BIGINT)', default_value: NULL, children: MAP {
+				'l': {name: 'rl', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: MAP {
+					'list': {name: 'element', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+						'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+				'k': {name: 'rk', type: 'BIGINT', default_value: NULL, children: NULL},
+				'zz': {name: 'd', type: 'BIGINT', default_value: 7, children: NULL}}}}}}}
+});
+----
+{'rp': 1, 'q': [{'rl': [{'a': 1}], 'rk': 5, 'd': 7}]}
+
+# a filter on the cast list of a JSON file, which read_json evaluates above the scan
+statement ok
+COPY (SELECT i AS id, [{'a': i, 'b': 'x'}] AS ls FROM range(1, 4) t(i)) TO '{TEMP_DIR}/text_placement.json';
+
+statement ok
+SET VARIABLE text_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}
+};
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/text_placement.json', columns = {id: 'BIGINT', ls: 'JSON[]'}, schema = getvariable('text_schema'))
+WHERE ls[1].a >= 2 ORDER BY id;
+----
+2	[{'a': 2, 'b': x}]
+3	[{'a': 3, 'b': x}]
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/text_placement.json', columns = {id: 'BIGINT', ls: 'JSON[]'}, schema = getvariable('text_schema'))
+WHERE ls = [{'a': 3, 'b': 'x'}];
+----
+3	[{'a': 3, 'b': x}]
+
+# the existence of a cast to the declared type decides, also for an element that is not text: a BIGINT or BLOB
+# element has a cast to a UNION with a member of its type, and the list is cast as it is without declared children
+query II
+SELECT li, lb FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = MAP {
+	'li': {name: 'li', type: 'UNION(v BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'UNION(v BIGINT)', default_value: NULL, children: NULL}}},
+	'lb': {name: 'lb', type: 'UNION(v BLOB)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'UNION(v BLOB)', default_value: NULL, children: NULL}}}
+});
+----
+[1, NULL]	[x]
+
+query II
+SELECT li, lb FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = MAP {
+	'li': {name: 'li', type: 'UNION(v BIGINT)[]', default_value: NULL, children: NULL},
+	'lb': {name: 'lb', type: 'UNION(v BLOB)[]', default_value: NULL, children: NULL}
+});
+----
+[1, NULL]	[x]
+
+# a cast that exists and fails for the values is the Conversion Error of a schema without declared children
+statement error
+SELECT li FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = MAP {
+	'li': {name: 'li', type: 'UNION(v DATE)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'UNION(v DATE)', default_value: NULL, children: NULL}}}
+});
+----
+<REGEX>:Conversion Error:.*failed to cast column "li" from type BIGINT\[\] to UNION\(v DATE\)\[\].*
+
+statement error
+SELECT li FROM read_duckdb('{TEMP_DIR}/text_placement.db', schema = MAP {
+	'li': {name: 'li', type: 'UNION(v DATE)[]', default_value: NULL, children: NULL}
+});
+----
+<REGEX>:Conversion Error:.*failed to cast column "li" from type BIGINT\[\] to UNION\(v DATE\)\[\].*
+
+# a text list whose declared element holds an ARRAY: the list is cast
+statement ok
+COPY (SELECT [[{'a': [1, 2]}]] AS l) TO '{TEMP_DIR}/text_placement_array.json';
+
+query I
+SELECT l FROM read_json('{TEMP_DIR}/text_placement_array.json', columns = {l: 'JSON[]'}, schema = MAP {
+	'l': {name: 'l', type: 'STRUCT(a BIGINT[2])[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT[2])[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT[2])', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT[2]', default_value: NULL, children: NULL}}}}}}}
+});
+----
+[[{'a': [1, 2]}]]
+
+query I
+SELECT l FROM read_json('{TEMP_DIR}/text_placement_array.json', columns = {l: 'JSON[][]'}, schema = MAP {
+	'l': {name: 'l', type: 'STRUCT(a BIGINT[2])[][]', default_value: NULL, children: NULL}
+});
+----
+[[{'a': [1, 2]}]]
+
+# the cast list is below a list that is mapped. remap_struct indexes the whole declared type before it reads the
+# mapping and does not know the children of an ARRAY
+statement error
+SELECT l FROM read_json('{TEMP_DIR}/text_placement_array.json', columns = {l: 'JSON[][]'}, schema = MAP {
+	'l': {name: 'l', type: 'STRUCT(a BIGINT[2])[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT[2])[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT[2])', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT[2]', default_value: NULL, children: NULL}}}}}}}
+});
+----
+<REGEX>:Binder Error:.*Can't remap type BIGINT\[2\].*
+
+# a Parquet file with a text field in a struct: the struct is mapped field by field, and remap_struct does not turn
+# text into a struct. A pushed down extract of the field alone is in parquet_schema_text_field_extract.test
+statement ok
+COPY (SELECT {'c': '{"x": 9}'::JSON, 'b': 1} AS s) TO '{TEMP_DIR}/text_placement.parquet';
+
+statement ok
+SET VARIABLE text_schema = MAP {
+	's': {name: 's', type: 'STRUCT(c STRUCT(x BIGINT), b INTEGER)', default_value: NULL, children: MAP {
+		'c': {name: 'c', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+			'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'b': {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}
+};
+
+statement error
+SELECT s FROM read_parquet('{TEMP_DIR}/text_placement.parquet', schema = getvariable('text_schema'));
+----
+<REGEX>:Binder Error:.*Can't change source type \(JSON\) to target type \(STRUCT\(x BIGINT\)\).*
+
+statement error
+SELECT s.c.x FROM read_parquet('{TEMP_DIR}/text_placement.parquet', schema = getvariable('text_schema'));
+----
+<REGEX>:Binder Error:.*Can't change source type \(JSON\) to target type \(STRUCT\(x BIGINT\)\).*
