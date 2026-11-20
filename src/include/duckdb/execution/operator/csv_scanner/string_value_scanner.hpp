@@ -206,6 +206,10 @@ public:
 	const bool ignore_errors;
 	//! Fields beyond the last column are ignored rather than an error, following strict_mode when not set
 	const bool tolerate_extra_columns;
+	//! A quote that does not close its value is data rather than an error, following strict_mode when not set
+	const bool allow_unescaped_quotes;
+	//! A quote that is never closed reads as a value rather than an error, following strict_mode when not set
+	const bool allow_unterminated_quotes;
 
 	const idx_t extra_delimiter_bytes = 0;
 
@@ -446,7 +450,7 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool drop_unescaped_quotes,
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset

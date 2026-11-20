@@ -430,6 +430,10 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		dialect_options.state_machine_options.mixed_line_breaks.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "ignore_extra_columns") {
 		ignore_extra_columns.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "allow_unescaped_quotes") {
+		dialect_options.state_machine_options.allow_unescaped_quotes.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "allow_unterminated_quotes") {
+		allow_unterminated_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -753,6 +757,16 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		    !state_machine_options.mixed_line_breaks.GetValue() && !state_machine_options.strict_mode.GetValue()) {
 			throw BinderException("MIXED_LINE_BREAKS = false is only supported with STRICT_MODE = true, as unstrict "
 			                      "reading recovers rows over any line break");
+		}
+		if (state_machine_options.allow_unescaped_quotes.IsSetByUser() &&
+		    !state_machine_options.allow_unescaped_quotes.GetValue() && !state_machine_options.strict_mode.GetValue()) {
+			throw BinderException("ALLOW_UNESCAPED_QUOTES = false is only supported with STRICT_MODE = true, as "
+			                      "unstrict reading recovers such rows");
+		}
+		if (allow_unterminated_quotes.IsSetByUser() && !allow_unterminated_quotes.GetValue() &&
+		    !state_machine_options.strict_mode.GetValue()) {
+			throw BinderException("ALLOW_UNTERMINATED_QUOTES = false is only supported with STRICT_MODE = true, as "
+			                      "unstrict reading recovers such rows");
 		}
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.

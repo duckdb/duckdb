@@ -149,6 +149,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	const bool mixed_line_breaks = state_machine_options.mixed_line_breaks.IsSetByUser()
 	                                   ? state_machine_options.mixed_line_breaks.GetValue()
 	                                   : !state_machine_options.strict_mode.GetValue();
+	// when not set, a quote that does not close its value is data exactly when strict_mode is off
+	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.IsSetByUser()
+	                                        ? state_machine_options.allow_unescaped_quotes.GetValue()
+	                                        : !state_machine_options.strict_mode.GetValue();
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[state_machine_options];
@@ -163,11 +167,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-			if (state_machine_options.strict_mode.GetValue()) {
-				// If we have an unquoted state, following rfc 4180, our base state is invalid
+			if (!allow_unescaped_quotes) {
+				// content after a closing quote is invalid, following rfc 4180
 				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			} else {
-				// This will allow us to accept unescaped quotes
 				InitializeTransitionArray(transition_array, cur_state, CSVState::UNQUOTED);
 			}
 			break;

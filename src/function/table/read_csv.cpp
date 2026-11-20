@@ -111,6 +111,8 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("doubled_quotes", LogicalType::BOOLEAN)
 		    .Add("mixed_line_breaks", LogicalType::BOOLEAN)
 		    .Add("ignore_extra_columns", LogicalType::BOOLEAN)
+		    .Add("allow_unescaped_quotes", LogicalType::BOOLEAN)
+		    .Add("allow_unterminated_quotes", LogicalType::BOOLEAN)
 		    .Add("thousands", LogicalType::VARCHAR)
 		    .Add("files_to_sniff", LogicalType::BIGINT);
 	});

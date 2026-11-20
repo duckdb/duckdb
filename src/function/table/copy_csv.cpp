@@ -229,6 +229,8 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["doubled_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["mixed_line_breaks"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["ignore_extra_columns"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_unescaped_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_unterminated_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 }
 
 //===--------------------------------------------------------------------===//

@@ -133,6 +133,8 @@ struct CSVReaderOptions {
 	CSVOption<CSVDialect> dialect = CSVDialect::STANDARD;
 	//! Fields beyond the last column are ignored rather than an error, following strict_mode when not set
 	CSVOption<bool> ignore_extra_columns = false;
+	//! A quote that is never closed reads as a value rather than an error, following strict_mode when not set
+	CSVOption<bool> allow_unterminated_quotes = false;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;
 

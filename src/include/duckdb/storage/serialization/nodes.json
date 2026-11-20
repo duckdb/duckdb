@@ -1287,6 +1287,22 @@
         "property": "options.ignore_extra_columns",
         "type": "CSVOption<bool>",
         "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 152,
+        "version": "v2.1.0",
+        "name": "allow_unescaped_quotes",
+        "property": "options.dialect_options.state_machine_options.allow_unescaped_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 153,
+        "version": "v2.1.0",
+        "name": "allow_unterminated_quotes",
+        "property": "options.allow_unterminated_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       }
     ],
     "constructor": [

@@ -126,6 +126,39 @@ SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b'
 ----
 <REGEX>:.*Expected Number of Columns.*
 
+# allow_unescaped_quotes reads content after a closing quote as in unstrict parsing, also in strict mode
+statement ok
+COPY (SELECT '1,"a"x,2' AS line) TO '{TEST_DIR}/rule_unescaped.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false, allow_unescaped_quotes=true);
+----
+1	a	2
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false);
+----
+<REGEX>:.*(invalid state|unterminated quote).*
+
+# allow_unterminated_quotes reads a quote that never closes as a value, also in strict mode
+statement ok
+COPY (SELECT '1,"abc' AS line) TO '{TEST_DIR}/rule_unterminated.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, allow_unterminated_quotes=true, parallel=false);
+----
+1	abc
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, strict_mode=false, allow_unterminated_quotes=false, parallel=false);
+----
+ALLOW_UNTERMINATED_QUOTES = false is only supported with STRICT_MODE = true
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', strict_mode=false, allow_unescaped_quotes=false);
+----
+ALLOW_UNESCAPED_QUOTES = false is only supported with STRICT_MODE = true
+
 # COPY FROM reads the rule options, the writer refuses them
 statement ok
 CREATE TABLE rule_rows (a VARCHAR, b VARCHAR, c VARCHAR);

@@ -21,10 +21,12 @@ struct CSVStateMachineOptions {
 	                       CSVOption<CSVQuoteMode> quote_mode_p = CSVQuoteMode::STANDARD,
 	                       CSVOption<bool> doubled_quotes_p = false,
 	                       CSVOption<CSVEmbeddedQuote> embedded_quote_p = CSVEmbeddedQuote::DATA,
-	                       CSVOption<bool> mixed_line_breaks_p = false)
+	                       CSVOption<bool> mixed_line_breaks_p = false,
+	                       CSVOption<bool> allow_unescaped_quotes_p = false)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
 	      strict_mode(strict_mode_p), escape_mode(escape_mode_p), quote_mode(quote_mode_p),
-	      doubled_quotes(doubled_quotes_p), embedded_quote(embedded_quote_p), mixed_line_breaks(mixed_line_breaks_p) {};
+	      doubled_quotes(doubled_quotes_p), embedded_quote(embedded_quote_p), mixed_line_breaks(mixed_line_breaks_p),
+	      allow_unescaped_quotes(allow_unescaped_quotes_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
@@ -46,6 +48,8 @@ struct CSVStateMachineOptions {
 	CSVOption<bool> doubled_quotes = false;
 	//! Any line break ends a record whatever the file's line break is, following strict_mode when not set
 	CSVOption<bool> mixed_line_breaks = false;
+	//! A quote that does not close its value is data rather than an error, following strict_mode when not set
+	CSVOption<bool> allow_unescaped_quotes = false;
 	//! What a quote in the middle of a field means
 	CSVOption<CSVEmbeddedQuote> embedded_quote = CSVEmbeddedQuote::DATA;
 
@@ -54,7 +58,7 @@ struct CSVStateMachineOptions {
 		       new_line == other.new_line && comment == other.comment && strict_mode == other.strict_mode &&
 		       escape_mode == other.escape_mode && quote_mode == other.quote_mode &&
 		       doubled_quotes == other.doubled_quotes && embedded_quote == other.embedded_quote &&
-		       mixed_line_breaks == other.mixed_line_breaks;
+		       mixed_line_breaks == other.mixed_line_breaks && allow_unescaped_quotes == other.allow_unescaped_quotes;
 	}
 };
 } // namespace duckdb
