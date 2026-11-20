@@ -27,7 +27,9 @@
 				"test/sql/multi_file/multi_file_schema_nested_children.test",
 				"test/sql/multi_file/multi_file_schema_nested_children_text.test",
 				"test/sql/multi_file/multi_file_schema_text_map_component.test",
+				"test/sql/multi_file/multi_file_schema_text_placement.test",
 				"test/sql/multi_file/multi_file_schema_text_map_counterpart.test",
+				"test/sql/copy/parquet/parquet_schema_text_field_extract.test",
 				"test/sql/copy/parquet/parquet_schema_list_child_types.test"
 			]
 		},

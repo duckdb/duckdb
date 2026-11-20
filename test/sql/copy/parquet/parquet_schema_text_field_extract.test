@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/parquet_schema_text_field_extract.test
+# description: A text field of a struct that a schema declares as a struct is cast when a pushed down extract reads the field alone
+# group: [parquet]
+
+require json
+
+require parquet
+
+statement ok
+COPY (SELECT {'c': '{"x": 9}'::JSON, 'b': 1} AS s UNION ALL SELECT {'c': NULL, 'b': 2}) TO '{TEMP_DIR}/text_field_extract.parquet';
+
+statement ok
+SET VARIABLE text_schema = MAP {
+	's': {name: 's', type: 'STRUCT(c STRUCT(x BIGINT), b INTEGER)', default_value: NULL, children: MAP {
+		'c': {name: 'c', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+			'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'b': {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}
+};
+
+# the optimizer pushes the extract of the field into the scan, which reads the field as a column of its own and
+# casts it. Through the mapped struct the field is a binder error, see multi_file_schema_text_placement.test
+query I
+SELECT s.c FROM read_parquet('{TEMP_DIR}/text_field_extract.parquet', schema = getvariable('text_schema')) ORDER BY ALL;
+----
+{'x': 9}
+NULL
+
+query II
+SELECT s.c, s.b FROM read_parquet('{TEMP_DIR}/text_field_extract.parquet', schema = getvariable('text_schema')) ORDER BY ALL;
+----
+{'x': 9}	1
+NULL	2

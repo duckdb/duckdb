@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Reads a struct field through an extract that only the optimizer pushes into the scan.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_schema_text_field_extract.test"
+      ]
+    },
+    {
       "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
       "paths": [
         "test/optimizer/mark_join_simplifier.test",
