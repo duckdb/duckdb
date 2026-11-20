@@ -281,7 +281,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query II
-FROM read_csv('{DATA_DIR}/csv/error.csv', store_rejects=1, strict_mode=True);
+FROM read_csv('{DATA_DIR}/csv/error.csv', store_rejects=1);
 ----
 true	false
 

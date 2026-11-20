@@ -183,10 +183,6 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
-void CSVReaderOptions::SetRFC4180(bool input) {
-	this->dialect_options.state_machine_options.strict_mode.Set(input);
-}
-
 string CSVReaderOptions::GetEscapeMode() const {
 	return dialect_options.state_machine_options.escape_mode.FormatValue();
 }
@@ -520,8 +516,6 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 
 	} else if (loption == "compression") {
 		SetCompression(ParseString(value, loption));
-	} else if (loption == "strict_mode") {
-		SetRFC4180(ParseBoolean(context, value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -547,7 +541,6 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
-	auto &strict_mode = dialect_options.state_machine_options.strict_mode;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -567,8 +560,6 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// comment
 	error += FormatOptionLine("comment", comment);
-	// strict_mode
-	error += FormatOptionLine("strict_mode", strict_mode);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -660,21 +651,6 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		}
 		if (state_machine_options.embedded_quote == CSVEmbeddedQuote::TOGGLE && (quote == '\0' || quote == escape)) {
 			throw BinderException("EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character");
-		}
-		if (state_machine_options.mixed_line_breaks.IsSetByUser() &&
-		    !state_machine_options.mixed_line_breaks.GetValue() && !state_machine_options.strict_mode.GetValue()) {
-			throw BinderException("MIXED_LINE_BREAKS = false is only supported with STRICT_MODE = true, as unstrict "
-			                      "reading recovers rows over any line break");
-		}
-		if (state_machine_options.allow_unescaped_quotes.IsSetByUser() &&
-		    !state_machine_options.allow_unescaped_quotes.GetValue() && !state_machine_options.strict_mode.GetValue()) {
-			throw BinderException("ALLOW_UNESCAPED_QUOTES = false is only supported with STRICT_MODE = true, as "
-			                      "unstrict reading recovers such rows");
-		}
-		if (allow_unterminated_quotes.IsSetByUser() && !allow_unterminated_quotes.GetValue() &&
-		    !state_machine_options.strict_mode.GetValue()) {
-			throw BinderException("ALLOW_UNTERMINATED_QUOTES = false is only supported with STRICT_MODE = true, as "
-			                      "unstrict reading recovers such rows");
 		}
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.

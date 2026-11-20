@@ -725,13 +725,13 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "comment", options.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "rows_until_header", options.dialect_options.rows_until_header);
 	serializer.WritePropertyWithDefault<string>(139, "encoding", options.encoding);
-	serializer.WriteProperty<CSVOption<bool>>(140, "strict_mode", options.dialect_options.state_machine_options.strict_mode);
+	/* [Deleted] (CSVOption<bool>) "strict_mode" */
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", options.GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", options.multi_file_reader);
 	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", options.buffer_size_option);
 	serializer.WritePropertyWithDefault<idx_t>(144, "rejects_line_size_limit", options.rejects_line_size_limit, 10000);
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
-		serializer.WritePropertyWithDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
+		serializer.WritePropertyWithDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED_ONLY));
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
 		serializer.WritePropertyWithDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
@@ -797,7 +797,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	auto options_dialect_options_state_machine_options_comment = deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "comment", CSVOption<char>('\0'));
 	auto options_dialect_options_rows_until_header = deserializer.ReadPropertyWithDefault<idx_t>(138, "rows_until_header");
 	auto options_encoding = deserializer.ReadPropertyWithDefault<string>(139, "encoding");
-	auto options_dialect_options_state_machine_options_strict_mode = deserializer.ReadProperty<CSVOption<bool>>(140, "strict_mode");
+	deserializer.ReadDeletedProperty<CSVOption<bool>>(140, "strict_mode");
 	auto options_multi_byte_delimiter = deserializer.ReadProperty<CSVOption<string>>(141, "multi_byte_delimiter");
 	SerializedCSVReaderOptions result(options_dialect_options_state_machine_options_delimiter, options_multi_byte_delimiter);
 	result.options.ignore_errors = options_ignore_errors;
@@ -836,11 +836,10 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	result.options.dialect_options.state_machine_options.comment = options_dialect_options_state_machine_options_comment;
 	result.options.dialect_options.rows_until_header = options_dialect_options_rows_until_header;
 	result.options.encoding = std::move(options_encoding);
-	result.options.dialect_options.state_machine_options.strict_mode = options_dialect_options_state_machine_options_strict_mode;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.options.multi_file_reader);
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.options.buffer_size_option);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED_ONLY));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", result.options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", result.options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));

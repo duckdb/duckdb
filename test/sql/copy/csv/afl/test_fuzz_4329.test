@@ -3,6 +3,6 @@
 # group: [afl]
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/afl/4329/case_1.csv', escape='\', buffer_size=42, skip=42, strict_mode=false);
+FROM read_csv('{DATA_DIR}/csv/afl/4329/case_1.csv', escape='\', buffer_size=42, skip=42, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
 ----
 Maximum line size of 42 bytes exceeded

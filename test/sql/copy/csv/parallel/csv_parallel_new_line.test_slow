@@ -41,10 +41,9 @@ select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_r.csv', buf
 statement error
 select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i})
 ----
-* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query IIII
-select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i}, strict_mode = False)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -77,10 +76,10 @@ endloop
 statement error
 select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv')
 ----
-Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 query IIII
-select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', strict_mode=false)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 1	6370	371	p1
 10	214	465	p2

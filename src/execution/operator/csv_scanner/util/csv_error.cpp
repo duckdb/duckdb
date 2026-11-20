@@ -383,18 +383,12 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
 	std::ostringstream how_to_fix_it;
-	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
-		how_to_fix_it << "Possible fixes:" << '\n';
-		if (!options.dialect_options.state_machine_options.mixed_line_breaks.IsSetByUser()) {
-			how_to_fix_it << "* Accept any line break as a record boundary (mixed_line_breaks=true)" << '\n';
-		}
-		if (!options.dialect_options.state_machine_options.allow_unescaped_quotes.IsSetByUser()) {
-			how_to_fix_it << "* Accept quotes that do not close their value as data (allow_unescaped_quotes=true)"
-			              << '\n';
-		}
-		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
-		                 "comply with the CSV standard."
-		              << '\n';
+	how_to_fix_it << "Possible fixes:" << '\n';
+	if (!options.dialect_options.state_machine_options.mixed_line_breaks.IsSetByUser()) {
+		how_to_fix_it << "* Accept any line break as a record boundary (mixed_line_breaks=true)" << '\n';
+	}
+	if (!options.dialect_options.state_machine_options.allow_unescaped_quotes.IsSetByUser()) {
+		how_to_fix_it << "* Accept quotes that do not close their value as data (allow_unescaped_quotes=true)" << '\n';
 	}
 	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
 	                options, how_to_fix_it.str(), current_path);
@@ -426,11 +420,6 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
-	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
-		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
-		         "the CSV standard."
-		      << '\n';
-	}
 	// header
 	if (!options.dialect_options.header.IsSetByUser()) {
 		error << "* Set header (header = true) if your CSV has a header, or (header = false) if it doesn't" << '\n';
@@ -476,13 +465,6 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	error << "Encoding: " << options.encoding << '\n';
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
-	// 3.0 Inform the user about the strict_mode
-	// 3.1 Inform the reader of the dialect
-	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
-		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
-		         "the CSV standard."
-		      << '\n';
-	}
 	if (options.columns_set) {
 		// If columns are set, suggest to either unset it or validate that it matches the schema
 		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
@@ -558,13 +540,8 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
-	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
-		if (!options.allow_unterminated_quotes.IsSetByUser()) {
-			how_to_fix_it << "* Read a quote that is never closed as a value (allow_unterminated_quotes=true)" << '\n';
-		}
-		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
-		                 "comply with the CSV standard."
-		              << '\n';
+	if (!options.allow_unterminated_quotes.IsSetByUser()) {
+		how_to_fix_it << "* Read a quote that is never closed as a value (allow_unterminated_quotes=true)" << '\n';
 	}
 	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
 	how_to_fix_it << "* Set quote to empty or to a different value (e.g., quote=\'\')" << '\n';
@@ -579,13 +556,8 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	// We don't have a fix for this
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
-	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
-		if (actual_columns >= options.dialect_options.num_cols && !options.ignore_extra_columns.IsSetByUser()) {
-			how_to_fix_it << "* Ignore the fields beyond the last column (ignore_extra_columns=true)" << '\n';
-		}
-		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
-		                 "comply with the CSV standard."
-		              << '\n';
+	if (actual_columns >= options.dialect_options.num_cols && !options.ignore_extra_columns.IsSetByUser()) {
+		how_to_fix_it << "* Ignore the fields beyond the last column (ignore_extra_columns=true)" << '\n';
 	}
 	if (!options.null_padding) {
 		how_to_fix_it << "* Enable null padding (null_padding=true) to replace missing values with NULL" << '\n';

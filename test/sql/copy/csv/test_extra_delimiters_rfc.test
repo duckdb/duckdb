@@ -3,7 +3,7 @@
 # group: [csv]
 
 query III
-FROM read_csv('{DATA_DIR}/csv/extra_delimiters.csv', strict_mode = false, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}, auto_detect = false, delim = ',', header = true)
+FROM read_csv('{DATA_DIR}/csv/extra_delimiters.csv', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}, auto_detect = false, delim = ',', header = true)
 ----
 1	2	3
 1	2	3

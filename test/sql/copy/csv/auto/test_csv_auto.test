@@ -17,7 +17,7 @@ FROM read_csv('{DATA_DIR}/csv/repromarket.csv',
    skip=0,
    null_padding=true,
    ignore_errors=true,
-   strict_mode=false
+   escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 );
 ----
 nemanja.krpovic@gmail.com	krlleta
@@ -53,7 +53,7 @@ select columns FROM sniff_csv('{DATA_DIR}/csv/auto/mock_duckdb_test_data.csv', i
 
 query IIIII
 FROM read_csv('{DATA_DIR}/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true,
-   strict_mode=true)
+   )
 ----
 1	James	30	M	AL
 2	Jill	32	F	CO
@@ -65,7 +65,7 @@ FROM read_csv('{DATA_DIR}/csv/auto/mock_duckdb_test_data.csv', ignore_errors = t
 
 statement error
 select * from read_csv_auto('{DATA_DIR}/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'},
-   strict_mode=true)
+   )
 ----
 Expected Number of Columns: 1 Found: 2
 

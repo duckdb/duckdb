@@ -145,14 +145,8 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 }
 
 void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_options) {
-	// when not set, any line break ends a record exactly when strict_mode is off
-	const bool mixed_line_breaks = state_machine_options.mixed_line_breaks.IsSetByUser()
-	                                   ? state_machine_options.mixed_line_breaks.GetValue()
-	                                   : !state_machine_options.strict_mode.GetValue();
-	// when not set, a quote that does not close its value is data exactly when strict_mode is off
-	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.IsSetByUser()
-	                                        ? state_machine_options.allow_unescaped_quotes.GetValue()
-	                                        : !state_machine_options.strict_mode.GetValue();
+	const bool mixed_line_breaks = state_machine_options.mixed_line_breaks.GetValue();
+	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.GetValue();
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[state_machine_options];
@@ -206,11 +200,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	const bool multi_byte_delimiter = delimiter_value.size() > 1;
 
-	// when not set the escape mode follows strict_mode, which allows escaping outside quoted values when off
-	const auto escape_mode =
-	    state_machine_options.escape_mode.IsSetByUser()
-	        ? state_machine_options.escape_mode.GetValue()
-	        : (state_machine_options.strict_mode.GetValue() ? CSVEscapeMode::QUOTED_ONLY : CSVEscapeMode::ALL);
+	const auto escape_mode = state_machine_options.escape_mode.GetValue();
 	const bool enable_unquoted_escape = escape_mode != CSVEscapeMode::QUOTED_ONLY &&
 	                                    state_machine_options.quote != state_machine_options.escape &&
 	                                    state_machine_options.escape != '\0';
@@ -752,13 +742,15 @@ CSVStateMachineCache::CSVStateMachineCache() {
 	for (auto quote_escape : default_quote_escape) {
 		for (const auto &delimiter : default_delimiter) {
 			for (const auto &comment : default_comment) {
-				for (const bool strict_mode : {true, false}) {
+				for (const auto escape_mode : {CSVEscapeMode::QUOTED_ONLY, CSVEscapeMode::ALL}) {
+					// the lenient reading allows unescaped quotes and any line break, the strict one neither
+					const bool lenient = escape_mode == CSVEscapeMode::ALL;
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_N,
-					        strict_mode});
+					        escape_mode, CSVQuoteMode::STANDARD, false, CSVEmbeddedQuote::DATA, lenient, lenient});
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_R,
-					        strict_mode});
+					        escape_mode, CSVQuoteMode::STANDARD, false, CSVEmbeddedQuote::DATA, lenient, lenient});
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::CARRY_ON,
-					        strict_mode});
+					        escape_mode, CSVQuoteMode::STANDARD, false, CSVEmbeddedQuote::DATA, lenient, lenient});
 				}
 			}
 		}

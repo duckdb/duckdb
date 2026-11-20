@@ -59,12 +59,12 @@ TRUNCATE human_eval_tsv;
 statement ok
 INSERT INTO human_eval_csv
 SELECT replace(COLUMNS(*), E'\r\n', E'\n')
-FROM read_csv('data/csv/unquoted_escape/human_eval.csv', quote = '', escape = '\', sep = ',', header = false, strict_mode = false);
+FROM read_csv('data/csv/unquoted_escape/human_eval.csv', quote = '', escape = '\', sep = ',', header = false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
 
 statement ok
 INSERT INTO human_eval_tsv
 SELECT replace(COLUMNS(*), E'\r\n', E'\n')
-FROM read_csv('data/csv/unquoted_escape/human_eval.tsv', quote = '', escape = '\', sep = '\t', header = false, strict_mode = false);
+FROM read_csv('data/csv/unquoted_escape/human_eval.tsv', quote = '', escape = '\', sep = '\t', header = false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
 
 # Verify that the three copies are the same
 query II

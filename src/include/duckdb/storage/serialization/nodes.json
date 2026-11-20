@@ -1203,8 +1203,8 @@
       {
         "id": 140,
         "name": "strict_mode",
-        "property": "options.dialect_options.state_machine_options.strict_mode",
-        "type": "CSVOption<bool>"
+        "type": "CSVOption<bool>",
+        "status": "deleted"
       },
       {
         "id": 141,
@@ -1238,7 +1238,7 @@
         "name": "escape_mode",
         "property": "options.dialect_options.state_machine_options.escape_mode",
         "type": "CSVOption<CSVEscapeMode>",
-        "default": "CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL)"
+        "default": "CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED_ONLY)"
       },
       {
         "id": 146,

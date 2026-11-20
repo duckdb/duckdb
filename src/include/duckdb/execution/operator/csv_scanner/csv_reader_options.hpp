@@ -129,9 +129,9 @@ struct CSVReaderOptions {
 
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
-	//! Fields beyond the last column are ignored rather than an error, following strict_mode when not set
+	//! Fields beyond the last column are ignored rather than an error
 	CSVOption<bool> ignore_extra_columns = false;
-	//! A quote that is never closed reads as a value rather than an error, following strict_mode when not set
+	//! A quote that is never closed reads as a value rather than an error
 	CSVOption<bool> allow_unterminated_quotes = false;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;
@@ -174,8 +174,6 @@ struct CSVReaderOptions {
 	bool IgnoreErrors() const;
 
 	void SetNewline(const string &input);
-
-	void SetRFC4180(bool rfc4180);
 
 	string GetEscapeMode() const;
 	void SetEscapeMode(const string &escape_mode);

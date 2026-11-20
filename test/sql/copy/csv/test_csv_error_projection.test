@@ -19,12 +19,12 @@ SELECT count(b) FROM read_csv('data/csv/invalid_utf8_projected.csv', sample_size
 
 # the extra value 'x' is not the NULL string 'xyz'
 statement error
-SELECT * FROM read_csv('data/csv/extra_value_null_prefix.csv', columns={'a':'INT','b':'INT'}, strict_mode=true, nullstr='xyz', header=false, auto_detect=false, delim=',')
+SELECT * FROM read_csv('data/csv/extra_value_null_prefix.csv', columns={'a':'INT','b':'INT'}, nullstr='xyz', header=false, auto_detect=false, delim=',')
 ----
 Expected Number of Columns: 2 Found: 3
 
 query II
-SELECT * FROM read_csv('data/csv/extra_value_null_prefix.csv', columns={'a':'INT','b':'INT'}, strict_mode=true, nullstr='x', header=false, auto_detect=false, delim=',')
+SELECT * FROM read_csv('data/csv/extra_value_null_prefix.csv', columns={'a':'INT','b':'INT'}, nullstr='x', header=false, auto_detect=false, delim=',')
 ----
 1	2
 3	4

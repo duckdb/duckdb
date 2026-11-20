@@ -34,16 +34,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      tolerate_extra_columns(state_machine.options.ignore_extra_columns.IsSetByUser()
-                                 ? state_machine.options.ignore_extra_columns.GetValue()
-                                 : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
-      allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.IsSetByUser()
-                                 ? state_machine.state_machine_options.allow_unescaped_quotes.GetValue()
-                                 : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
-      allow_unterminated_quotes(
-          state_machine.options.allow_unterminated_quotes.IsSetByUser()
-              ? state_machine.options.allow_unterminated_quotes.GetValue()
-              : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
+      tolerate_extra_columns(state_machine.options.ignore_extra_columns.GetValue()),
+      allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.GetValue()),
+      allow_unterminated_quotes(state_machine.options.allow_unterminated_quotes.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -300,9 +293,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 
 	if (((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
-		// Check for the occurrence of escaped null string like \N only if strict_mode is disabled
-		const bool check_unquoted_escaped_null = state_machine.state_machine_options.strict_mode.GetValue() == false &&
-		                                         escaped && !policy_quoted && size == 1;
+		// an escaped null string like \N applies when the escape works outside quoted values
+		const bool check_unquoted_escaped_null =
+		    state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::ALL && escaped &&
+		    !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
@@ -1753,8 +1747,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 		j++;
 	}
 	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-	    states.IsQuotedCurrent() && !result.allow_unterminated_quotes) {
-		// the file ended inside a quoted value, recorded before the value itself is added
+	    states.IsQuotedCurrent() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+		// the file ended inside a quoted value, recorded before the value itself is added, while line records
+		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
 	bool skip_value = false;
@@ -1967,8 +1962,8 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
 		lines_read++;
-	} else if (states.IsQuotedCurrent() && !result.allow_unterminated_quotes) {
-		// Unterminated quote
+	} else if (states.IsQuotedCurrent() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+		// Unterminated quote, while line records read the field left open as NULL instead
 		LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 		result.current_line_position.begin = result.current_line_position.end;
 		result.current_line_position.end = current_line_start;
@@ -2170,9 +2165,15 @@ void StringValueScanner::SetStart() {
 		// We need to initialize our strict state machine
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
-		// To set the state machine to be strict we ensure that strict_mode is set to true
-		if (!state_options.strict_mode.IsSetByUser()) {
-			state_options.strict_mode = true;
+		// the boundary search uses the strict reading rules unless set otherwise
+		if (!state_options.escape_mode.IsSetByUser()) {
+			state_options.escape_mode = CSVEscapeMode::QUOTED_ONLY;
+		}
+		if (!state_options.mixed_line_breaks.IsSetByUser()) {
+			state_options.mixed_line_breaks = false;
+		}
+		if (!state_options.allow_unescaped_quotes.IsSetByUser()) {
+			state_options.allow_unescaped_quotes = false;
 		}
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
@@ -2287,7 +2288,8 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 	const bool found_error =
 	    result.current_errors.HasErrorType(UNTERMINATED_QUOTES) || result.current_errors.HasErrorType(INVALID_STATE);
 	if (states.IsQuotedCurrent() && !found_error) {
-		if (result.allow_unterminated_quotes) {
+		if (result.allow_unterminated_quotes || result.RecordEndsInsideQuotes()) {
+			// line records read the field left open at the end of the file as NULL instead
 			used_unstrictness = true;
 		} else if (cur_buffer_handle) {
 			// a row still open in a quoted state after its buffer has unterminated quotes; once the file has ended,

@@ -7,7 +7,7 @@
 foreach parallel true false
 
 query II
-SELECT count(*), sum(a) FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel}, strict_mode=true, store_rejects=true);
+SELECT count(*), sum(a) FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel}, store_rejects=true);
 ----
 2047	2047
 
@@ -24,12 +24,12 @@ statement ok
 DROP TABLE reject_scans;
 
 statement error
-SELECT * FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel}, strict_mode=true);
+SELECT * FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel});
 ----
 Value with unterminated quote found.
 
 query II
-SELECT count(*), sum(a) FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel}, strict_mode=false, ignore_errors=true);
+SELECT count(*), sum(a) FROM read_csv('data/csv/unterminated_quote_cast_error_eof.csv', auto_detect=false, header=false, columns={'a': 'INTEGER'}, buffer_size=4096, parallel={parallel}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true);
 ----
 2047	2047
 

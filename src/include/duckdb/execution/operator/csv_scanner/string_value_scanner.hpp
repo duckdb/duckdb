@@ -204,11 +204,11 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
-	//! Fields beyond the last column are ignored rather than an error, following strict_mode when not set
+	//! Fields beyond the last column are ignored rather than an error
 	const bool tolerate_extra_columns;
-	//! A quote that does not close its value is data rather than an error, following strict_mode when not set
+	//! A quote that does not close its value is data rather than an error
 	const bool allow_unescaped_quotes;
-	//! A quote that is never closed reads as a value rather than an error, following strict_mode when not set
+	//! A quote that is never closed reads as a value rather than an error
 	const bool allow_unterminated_quotes;
 
 	const idx_t extra_delimiter_bytes = 0;

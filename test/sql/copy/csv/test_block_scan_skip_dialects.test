@@ -82,7 +82,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim=
 
 # file pipe2, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -98,7 +98,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim='||'
 
 # file pipe2, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q||q	x	8
@@ -246,7 +246,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim
 
 # file delim3, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim='|-|', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim='|-|', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -262,7 +262,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim='|-
 
 # file delim3, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim='|-|', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_delim3.csv', delim='|-|', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q|-|q	x	8
@@ -395,7 +395,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=','
 
 # file cr, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -410,7 +410,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=',', qu
 
 # file cr, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q,q	x	8
@@ -587,7 +587,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim='
 
 # file crlf, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -602,7 +602,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim=',', 
 
 # file crlf, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q,q	x	8
@@ -740,7 +740,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', deli
 
 # file comment, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', delim=',', quote='"', escape='"', comment='#', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', delim=',', quote='"', escape='"', comment='#', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -757,7 +757,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', delim=',
 
 # file comment, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', delim=',', quote='"', escape='"', comment='#', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment.csv', delim=',', quote='"', escape='"', comment='#', header=false, new_line='\n', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q,q	x	8
@@ -909,7 +909,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.c
 
 # file comment_pipe2_cr, lenient, selecting a, d
 query II
-SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.csv', delim='||', quote='"', escape='"', comment='#', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.csv', delim='||', quote='"', escape='"', comment='#', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	7
 2	8
@@ -927,7 +927,7 @@ SELECT a, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.csv',
 
 # file comment_pipe2_cr, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.csv', delim='||', quote='"', escape='"', comment='#', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, strict_mode=false, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_skip_comment_pipe2_cr.csv', delim='||', quote='"', escape='"', comment='#', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q||q	x	8
