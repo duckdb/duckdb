@@ -1,0 +1,124 @@
+# name: test/sql/profiling/test_failed_query_nested_pipelines.test
+# description: Pipelines that are not run by a task of their own still report their metrics when the query fails
+# group: [profiling]
+
+require json
+
+statement ok
+SET threads = 1;
+
+# the pipeline of a recursive CTE reports the rows of the iteration that failed
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/failed_recursive_cte_profile.json';
+
+statement error
+WITH RECURSIVE r(i) AS (
+	SELECT i FROM range(100000) t(i)
+	UNION ALL
+	SELECT CASE WHEN i = 150000 THEN error('boom') ELSE i + 100000 END FROM r WHERE i < 200000
+)
+SELECT count(*) FROM r;
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+# more than the first iteration, but not the first iteration twice
+query I
+SELECT (j.value->>'intermediate_rows')::BIGINT BETWEEN 100001 AND 199999
+FROM read_text('{TEST_DIR}/failed_recursive_cte_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'RECURSIVE_CTE_SCAN';
+----
+true
+
+# a pipeline that a CTE feeds directly reports the rows it consumed
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side';
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/failed_cte_exchange_profile.json';
+
+statement error
+WITH c AS MATERIALIZED (SELECT CASE WHEN i = 500000 THEN error('boom') ELSE i END AS i FROM range(1000000) t(i))
+SELECT count(*) FROM range(10) l(i) JOIN (SELECT i FROM c WHERE i % 2 = 0) c2 ON l.i = c2.i;
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+RESET disabled_optimizers;
+
+# the even rows before the error, at most
+query I
+SELECT (j.value->>'intermediate_rows')::BIGINT BETWEEN 1 AND 250000
+FROM read_text('{TEST_DIR}/failed_cte_exchange_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'CTE_SCAN';
+----
+true
+
+# with several threads, the tasks that are cancelled when one fails keep the rows they scanned
+statement ok
+CREATE TABLE t AS SELECT i FROM range(4000000) r(i);
+
+statement ok
+SET threads = 4;
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/failed_parallel_scan_profile.json';
+
+statement error
+SELECT sum(CASE WHEN i = 3000000 THEN error('boom') ELSE i END) FROM t;
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+# how far the scan got depends on the order the threads claim row groups in; rows_scanned and intermediate_rows are
+# counted separately, so they only agree if no row is counted twice
+query III
+SELECT (j.value->>'rows_scanned')::BIGINT > 0,
+       (j.value->>'rows_scanned')::BIGINT = (j.value->>'intermediate_rows')::BIGINT,
+       (j.value->>'row_groups_scanned')::BIGINT <= (j.value->>'total_row_groups_to_scan')::BIGINT
+FROM read_text('{TEST_DIR}/failed_parallel_scan_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'TABLE_SCAN';
+----
+true	true	true
+
+# a scan that finishes reports each row once
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/parallel_scan_profile.json';
+
+statement ok
+SELECT sum(i) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT (j.value->>'rows_scanned')::BIGINT, (j.value->>'intermediate_rows')::BIGINT
+FROM read_text('{TEST_DIR}/parallel_scan_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'TABLE_SCAN';
+----
+4000000	4000000
+
+# without profiling, a query that fails keeps failing the same way
+statement error
+SELECT sum(CASE WHEN i = 3000000 THEN error('boom') ELSE i END) FROM t;
+----
+boom

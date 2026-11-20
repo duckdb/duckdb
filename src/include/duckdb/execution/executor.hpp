@@ -94,6 +94,16 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
+	//! Create a pipeline executor and track it, so its metrics are kept if it does not finish
+	shared_ptr<PipelineExecutor> CreatePipelineExecutor(Pipeline &pipeline,
+	                                                    optional_idx reserved_batch_index = optional_idx());
+	//! Keep the executor of a task that ends without finishing until its metrics are flushed
+	void AddUnfinishedPipelineExecutor(shared_ptr<PipelineExecutor> pipeline_executor);
+	//! Whether pipeline executors are tracked so their metrics survive a failure; only when profiling is enabled
+	bool TracksPipelineExecutors() const {
+		return track_pipeline_executors;
+	}
+
 	//! Reschedules a task that was blocked
 	void RescheduleTask(shared_ptr<Task> &task);
 
@@ -175,6 +185,8 @@ private:
 	QueryResultState IdleState();
 	//! Cancel all tasks and throw the recorded error
 	void FailExecution();
+	//! Flush the metrics of the pipeline executors that did not finish; only called once no task runs
+	void FlushUnfinishedPipelineExecutors();
 	//! Advance to the next executor, or record and return FINISHED
 	QueryResultState FinishExecution();
 
@@ -236,5 +248,15 @@ private:
 
 	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;
+
+	//! Whether pipeline executors are tracked, set when the query starts: only when profiling is enabled
+	bool track_pipeline_executors = false;
+	mutex pipeline_executors_lock;
+	//! The pipeline executors created for this query; expired entries are pruned as executors are added
+	vector<weak_ptr<PipelineExecutor>> pipeline_executors;
+	//! The size at which the pipeline executors are pruned next
+	idx_t pipeline_executors_prune_size = 0;
+	//! The executors of tasks that ended without finishing their pipeline
+	vector<shared_ptr<PipelineExecutor>> unfinished_pipeline_executors;
 };
 } // namespace duckdb

@@ -1,0 +1,57 @@
+# name: test/sql/profiling/test_failed_query_scan_metrics.test
+# description: A scan whose pipeline fails before it finishes still reports the rows it scanned
+# group: [profiling]
+
+require json
+
+statement ok
+SET threads = 1;
+
+# the operators of the pipeline that failed report the rows they processed before the error
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/failed_pipeline_profile.json';
+
+statement error
+SELECT sum(x) FROM (SELECT CASE WHEN i = 500000 THEN error('boom') ELSE i END AS x FROM range(1000000) t(i));
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT (j.value->>'intermediate_rows')::BIGINT BETWEEN 500001 AND 999999
+FROM read_text('{TEST_DIR}/failed_pipeline_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'TABLE_SCAN';
+----
+true
+
+# a table scan reports the rows and row groups it scanned
+statement ok
+CREATE TABLE t AS SELECT i FROM range(1000000) r(i);
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/failed_scan_profile.json';
+
+statement error
+SELECT sum(CASE WHEN i = 500000 THEN error('boom') ELSE i END) FROM t;
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT (j.value->>'rows_scanned')::BIGINT BETWEEN 500000 AND 999999,
+       (j.value->>'rows_scanned')::BIGINT = (j.value->>'intermediate_rows')::BIGINT,
+       (j.value->>'row_groups_scanned')::BIGINT BETWEEN 1 AND (j.value->>'total_row_groups_to_scan')::BIGINT
+FROM read_text('{TEST_DIR}/failed_scan_profile.json') f, json_tree(f.content) j
+WHERE j.value->>'type' = 'TABLE_SCAN';
+----
+true	true	true
