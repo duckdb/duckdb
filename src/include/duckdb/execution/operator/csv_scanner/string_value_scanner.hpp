@@ -210,6 +210,10 @@ public:
 	const bool allow_unescaped_quotes;
 	//! A quote that is never closed reads as a value rather than an error, following strict_mode when not set
 	const bool allow_unterminated_quotes;
+	//! Whether a line break ends the record even inside quotes, under quote_mode 'lines'
+	const bool quote_mode_lines;
+	//! Whether fields follow the embedded quote text rules, under embedded_quote 'toggle'
+	const bool embedded_quote_toggle;
 
 	const idx_t extra_delimiter_bytes = 0;
 
@@ -295,6 +299,7 @@ public:
 		return result.projecting_columns && result.cur_col_id < result.number_of_columns &&
 		       !result.projected_columns[result.cur_col_id];
 	}
+	//! Called by the block scan only, which reads the standard dialect, see BlockScanEligible
 	static inline void SkipValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool AddRowWithoutValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool TracksAscii(const StringValueResult &result) {

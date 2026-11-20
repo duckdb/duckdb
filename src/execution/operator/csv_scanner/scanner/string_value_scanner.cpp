@@ -44,6 +44,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
           state_machine.options.allow_unterminated_quotes.IsSetByUser()
               ? state_machine.options.allow_unterminated_quotes.GetValue()
               : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
+      quote_mode_lines(state_machine.state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES),
+      embedded_quote_toggle(state_machine.state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -710,8 +712,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
-	result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
-	                                   result.HandleMultiDelimiter(buffer_pos));
+	if (result.embedded_quote_toggle) {
+		result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+		                                   result.HandleMultiDelimiter(buffer_pos));
+	}
 	if (result.quoted) {
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
@@ -721,20 +725,21 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
 	}
-	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
-	                              result.HandleMultiDelimiter(buffer_pos));
+	if (result.embedded_quote_toggle) {
+		result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+		                              result.HandleMultiDelimiter(buffer_pos));
+	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
 void StringValueResult::SkipValueInternal() {
 	D_ASSERT(CanSkipValue(*this));
-	if (quoted && !unquoted && !RecordEndsInsideQuotes()) {
+	if (quoted && !unquoted) {
 		current_errors.Insert(UNTERMINATED_QUOTES, cur_col_id, chunk_col_id, last_position);
 	}
 	cur_col_id++;
 	quoted = false;
 	escaped = false;
-	was_quoted = false;
 }
 
 void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -742,8 +747,6 @@ void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_
 		return;
 	}
 	result.SkipValueInternal();
-	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
-	                              result.HandleMultiDelimiter(buffer_pos));
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
@@ -1033,12 +1036,14 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.RecordEndsInsideQuotes()) {
+		if (result.quote_mode_lines && result.RecordEndsInsideQuotes()) {
 			// the line break ended the record inside an open quote
 			result.AddUnterminatedQuoteNull();
 		} else if (result.quoted) {
-			result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
-			                                   buffer_pos - result.last_position.buffer_pos);
+			if (result.embedded_quote_toggle) {
+				result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+				                                   buffer_pos - result.last_position.buffer_pos);
+			}
 			if (result.quoted) {
 				AddQuotedValue(result, buffer_pos);
 			} else {

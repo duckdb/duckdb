@@ -17,6 +17,12 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 	const auto quote = static_cast<uint8_t>(options.quote.GetValue());
 	const auto escape = static_cast<uint8_t>(options.escape.GetValue());
 	const auto comment = static_cast<uint8_t>(options.comment.GetValue());
+	// the block scan reads the standard dialect, so its skipped value hooks do no dialect bookkeeping
+	if (options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE ||
+	    options.quote_mode.GetValue() != CSVQuoteMode::STANDARD || options.doubled_quotes.GetValue() ||
+	    options.embedded_quote.GetValue() != CSVEmbeddedQuote::DATA) {
+		return false;
+	}
 	if (delimiter.empty() || delimiter.size() > 4 || (escape != '\0' && escape != quote)) {
 		return false;
 	}
