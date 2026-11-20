@@ -1,0 +1,51 @@
+# name: test/sql/types/struct/struct_extract_pushdown_cast_filter.test
+# description: A cast pushed into the scan with struct_extract must only run on rows that pass the filter
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE s AS
+SELECT 1 AS id, {'x': '7'} AS s
+UNION ALL SELECT 2, {'x': 'abc'}
+UNION ALL SELECT 3, {'x': NULL}
+UNION ALL SELECT 4, NULL;
+
+query I
+SELECT s.x::INTEGER FROM s WHERE id = 1;
+----
+7
+
+query II
+SELECT id, s.x::INTEGER FROM s WHERE id <> 2 ORDER BY id;
+----
+1	7
+3	NULL
+4	NULL
+
+statement error
+SELECT s.x::INTEGER FROM s WHERE id = 2;
+----
+Conversion Error
+
+statement error
+SELECT s.x::INTEGER FROM s;
+----
+Conversion Error
+
+# nested struct, the cast is pushed down two levels
+statement ok
+CREATE TABLE n AS
+SELECT 1 AS id, {'a': {'x': '7'}} AS s
+UNION ALL SELECT 2, {'a': {'x': 'abc'}};
+
+query I
+SELECT s.a.x::INTEGER FROM n WHERE id = 1;
+----
+7
+
+statement error
+SELECT s.a.x::INTEGER FROM n WHERE id = 2;
+----
+Conversion Error

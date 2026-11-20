@@ -222,6 +222,39 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 	return scan_count;
 }
 
+void StructColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                              SelectionVector &sel, idx_t sel_count) {
+	if (!state.storage_index.IsPushdownExtract()) {
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	// a pushed-down struct_extract scans exactly one child, straight into the result
+	auto struct_children = GetStructChildren(state);
+	D_ASSERT(struct_children.size() == 1);
+	auto &child = struct_children[0];
+	D_ASSERT(child.should_scan);
+	if (!state.expression_state) {
+		child.col.Select(transaction, vector_index, child.state, result, sel, sel_count);
+		return;
+	}
+	// a cast was pushed down onto the extracted child
+	// scan the full vector, but only cast the rows that survived the filter
+	// otherwise a row the filter removed can still raise a conversion error
+	auto &expression_state = *state.expression_state;
+	D_ASSERT(state.context.Valid());
+	auto &executor = expression_state.executor;
+	auto &target = expression_state.target;
+	auto &input = expression_state.input;
+
+	target.Reset();
+	input.Reset();
+	auto target_count = GetVectorCount(vector_index);
+	auto scan_count = child.col.Scan(transaction, vector_index, child.state, input.data[0], target_count);
+	FlatVector::SetSize(input.data[0], scan_count);
+	executor.ExecuteExpression(input, target.data[0], sel, sel_count);
+	result.Reference(target.data[0]);
+}
+
 void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
 	validity->Skip(state.child_states[0], count);
 
