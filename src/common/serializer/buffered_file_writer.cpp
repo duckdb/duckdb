@@ -15,7 +15,12 @@ BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, con
                                        QueryContext context_p)
     : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
       total_written(0), context(context_p) {
-	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
+#ifdef _WIN32
+	auto lock_type = open_flags.DisableLogging() ? FileLockType::READ_LOCK : FileLockType::WRITE_LOCK;
+#else
+	auto lock_type = FileLockType::WRITE_LOCK;
+#endif
+	handle = fs.OpenFile(path, open_flags | lock_type);
 }
 
 idx_t BufferedFileWriter::GetFileSize() {

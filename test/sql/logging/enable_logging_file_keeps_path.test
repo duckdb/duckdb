@@ -2,8 +2,6 @@
 # description: enable_logging keeps the path of file log storage after a failed switch, a late prepared call and an uppercase storage name
 # group: [logging]
 
-require notwindows
-
 require skip_reload
 
 load {TEMP_DIR}/enable_logging_file_keeps_path.db
