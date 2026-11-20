@@ -14,16 +14,19 @@
 namespace duckdb {
 class AttachedDatabase;
 class DatabaseInstance;
+class CheckpointedTableSize;
 struct CheckpointOptions;
 class TableIOManager;
 class RowGroupCollection;
 
 struct DataTableInfo {
 	friend class DataTable;
+	friend class SingleFileCheckpointWriter;
 
 public:
 	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, vector<Identifier> schema_path,
 	              Identifier table);
+	~DataTableInfo();
 
 	//! Bind unknown indexes throwing an exception if binding fails.
 	//! Only binds the specified index type, or all if no type is specified. With skip_mismatched_keys, an index
@@ -76,6 +79,8 @@ private:
 	optional_idx last_seen_checkpoint;
 	//! The amount of row groups the checkpoint is processing
 	optional_idx checkpoint_row_group_count;
+	//! Replaced under the database checkpoint lock; shared by ALTER versions of the table.
+	unique_ptr<CheckpointedTableSize> checkpointed_size;
 };
 
 } // namespace duckdb

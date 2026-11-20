@@ -14,6 +14,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/checkpoint/checkpointed_table_size.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -137,6 +138,10 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 
 		// now start writing the row group pointers to disk
 		table_data_writer.Write<uint64_t>(row_group_pointers.size());
+		MetaBlockPointer row_groups_pointer;
+		if (!row_group_pointers.empty()) {
+			row_groups_pointer = table_data_writer.GetMetaBlockPointer();
+		}
 		total_rows = 0;
 		next_row_id = 0;
 		for (auto &row_group_pointer : row_group_pointers) {
@@ -154,6 +159,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		}
 		table_data_writer.SetWrittenPointers(nullptr);
 		collection.FinalizeCheckpoint(pointer, written_pointers);
+		checkpoint_manager.pending_table_sizes.emplace_back(
+		    table.GetStorage().GetDataTableInfo(),
+		    make_uniq<CheckpointedTableSize>(row_groups_pointer, row_group_pointers.size(), collection.GetTypes()));
 	} else {
 		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
 		pointer = existing_pointer;

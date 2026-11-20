@@ -23,6 +23,8 @@ class CatalogEntry;
 struct CatalogTransaction;
 class ClientContext;
 class ColumnSegment;
+class CheckpointedTableSize;
+struct DataTableInfo;
 class DatabaseInstance;
 class Deserializer;
 class DuckTransaction;
@@ -189,6 +191,8 @@ private:
 	unordered_map<block_id_t, idx_t> verify_block_usage_count;
 	//! Owns prepared state in publication order.
 	vector<unique_ptr<PendingPublication>> pending_publications;
+	//! Install the new directory pointers only after the checkpoint has committed.
+	vector<pair<shared_ptr<DataTableInfo>, unique_ptr<CheckpointedTableSize>>> pending_table_sizes;
 };
 
 } // namespace duckdb

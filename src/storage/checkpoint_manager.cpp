@@ -29,6 +29,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/checkpoint/checkpointed_table_size.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/pending_publication.hpp"
@@ -413,6 +414,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		index_list.MergeCheckpointDeltas(options.checkpoint_id);
 	}
 	active_checkpoint.Commit();
+	for (auto &entry : pending_table_sizes) {
+		entry.first->checkpointed_size = std::move(entry.second);
+	}
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {

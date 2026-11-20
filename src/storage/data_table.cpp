@@ -27,6 +27,7 @@
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/checkpoint/checkpointed_table_size.hpp"
 #include "duckdb/storage/checkpoint/pending_publication.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -51,6 +52,8 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
       table(std::move(table)) {
 	D_ASSERT(!this->schema_path.empty());
 }
+
+DataTableInfo::~DataTableInfo() = default;
 
 void DataTableInfo::BindIndexes(ClientContext &context, const optional<string> &index_type, bool skip_mismatched_keys) {
 	indexes.Bind(context, *this, index_type, skip_mismatched_keys);
@@ -81,6 +84,10 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	auto types = GetTypes();
 	auto &io_manager = TableIOManager::Get(*this);
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
+	if (data) {
+		info->checkpointed_size =
+		    make_uniq<CheckpointedTableSize>(data->block_pointer, data->row_group_count, std::move(types));
+	}
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 		row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
@@ -493,6 +500,18 @@ TableStorageInfo DataTable::GetStorageInfo() const {
 	result.cardinality = GetTotalRows();
 	result.index_info = info->indexes.GetStorageInfo();
 	return result;
+}
+
+optional_idx DataTable::GetEstimatedDataSize(ClientContext &context, idx_t sample_row_groups) {
+	if (info->IsTemporary() || db.GetStorageManager().InMemory()) {
+		return optional_idx();
+	}
+	// Keep checkpoint metadata alive and avoid observing a partially written checkpoint.
+	auto checkpoint_lock = DuckTransaction::Get(context, db).GetCheckpointLockForStatement();
+	if (!info->checkpointed_size || version == DataTableVersion::DROPPED) {
+		return optional_idx();
+	}
+	return info->checkpointed_size->Estimate(context, *info, sample_row_groups);
 }
 
 //===--------------------------------------------------------------------===//

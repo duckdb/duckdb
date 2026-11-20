@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_storage_checkpoint
   OBJECT
+  checkpointed_table_size.cpp
   row_group_writer.cpp
   table_data_writer.cpp
   table_index_writer.cpp
