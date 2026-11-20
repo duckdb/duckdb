@@ -34,7 +34,7 @@ struct ControlBlock {
 	void AddReference() noexcept {
 		auto previous = references.fetch_add(1, std::memory_order_relaxed);
 		// Leave ample headroom for concurrent increments before terminating.
-		if (previous == 0 || previous >= std::numeric_limits<uint64_t>::max() / 2) {
+		if (previous == 0 || previous >= (std::numeric_limits<uint64_t>::max)() / 2) {
 			std::terminate();
 		}
 	}
