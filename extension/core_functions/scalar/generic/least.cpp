@@ -258,10 +258,19 @@ void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vec
 	// NULL arguments are skipped, and on equal keys the first argument wins
 	auto &winners = lstate.winners;
 	auto winner_keys = FlatVector::ScatterWriter<string_t>(lstate.winner_keys);
-	for (idx_t i = 0; i < count; i++) {
-		winners[i] = DConstants::INVALID_INDEX;
+	{
+		auto validity = args.data[0].Validity();
+		auto keys = lstate.collation_keys.data[0].Values<string_t>();
+		for (idx_t i = 0; i < count; i++) {
+			if (!validity.IsValid(i)) {
+				winners[i] = DConstants::INVALID_INDEX;
+				continue;
+			}
+			winners[i] = 0;
+			winner_keys[i] = keys[i].GetValue();
+		}
 	}
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		auto validity = args.data[col_idx].Validity();
 		auto keys = lstate.collation_keys.data[col_idx].Values<string_t>();
 		for (idx_t i = 0; i < count; i++) {
