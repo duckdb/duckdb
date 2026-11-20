@@ -1565,7 +1565,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 
 	if (sink.external) {
-		state->spill_chunk.InitializeEmpty(sink.probe_types);
+		state->spill_chunk.Initialize(allocator, sink.probe_types, vector<bool>(sink.probe_types.size(), false));
 		sink.InitializeProbeSpill();
 	}
 
