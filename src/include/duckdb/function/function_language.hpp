@@ -23,6 +23,11 @@ class ParsedExpression;
 class ScalarFunctionCatalogEntry;
 struct ScalarFunctionInfo;
 
+//! A function language is a ScalarFunctionSet declared with ScalarFunctionSet::DeclareLanguage(). Its overloads can
+//! carry a call_replace callback that returns the SQL a member call is replaced with, and the set can carry a
+//! create_validate callback that checks the members of a CREATE. Register the declared set before any other overload
+//! of the language: see DeclareLanguage for the registration rules the catalog applies
+
 //! One argument of a call to a language member, in parameter declaration order. Core binds an untyped argument on
 //! its own only when it is read, so an argument the callback does not read costs nothing
 struct LanguageCallArgument {
@@ -70,7 +75,9 @@ public:
 	                               const vector<CatalogSearchEntry> &search_path);
 
 	ClientContext &context;
-	//! The extra info of the language function's selected overload
+	//! The extra info of the language function's selected overload. This is how a callback reaches its own state:
+	//! call_replace takes no user data, so a binding stores it, for example a C callback and its data, in the
+	//! overload's function info
 	optional_ptr<ScalarFunctionInfo> function_info;
 	//! The called function, catalog-qualified
 	const QualifiedName &function_name;
