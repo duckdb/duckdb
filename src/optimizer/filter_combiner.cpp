@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
@@ -127,6 +128,22 @@ FilterResult FilterCombiner::AddConjuncts(unique_ptr<Expression> expr) {
 	return FilterResult::SUCCESS;
 }
 
+//! Whether the expression contains a cast that can throw. Other fallible functions, such as right(), keep
+//! their current mirroring behavior.
+static bool ContainsThrowingCast(const Expression &expr) {
+	if (BoundCastExpression::IsCast(expr) && expr.CanThrow()) {
+		return true;
+	}
+	// ExpressionIterator does not traverse lambda bodies, so check the body explicitly
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		return ContainsThrowingCast(*expr.Cast<BoundLambdaExpression>().LambdaExpr());
+	}
+	bool contains_throwing_cast = false;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { contains_throwing_cast |= ContainsThrowingCast(child); });
+	return contains_throwing_cast;
+}
+
 void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
                                                const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	if (filter.IsVolatile()) {
@@ -154,7 +171,12 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 			if (item.get().Equals(col)) {
 				continue;
 			}
-			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
+			auto equivalent_filter = ExpressionIterator::ReplaceExpression(filter, col, item.get());
+			// the copy would evaluate a throwing cast on rows the original filter never sees
+			if (ContainsThrowingCast(*equivalent_filter)) {
+				continue;
+			}
+			callback(std::move(equivalent_filter));
 		}
 	}
 }
