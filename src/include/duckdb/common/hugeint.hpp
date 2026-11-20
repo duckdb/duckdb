@@ -245,8 +245,7 @@ constexpr uint32_t Uint64LeadingZeros(uint64_t value) {
 
 //! Divides high * 2^64 + low by a divisor larger than high, so that the quotient fits 64 bits; sets the remainder.
 //! Two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division.
-//! Takes no D_ASSERT: in assertion builds that macro is an unconditional function call, which would make this
-//! function unusable in a constant expression.
+// no D_ASSERT: must stay usable in constant expressions
 constexpr uint64_t Uint128DivRem64Portable(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
 	constexpr uint64_t HALF_BASE = static_cast<uint64_t>(1) << 32;
 	constexpr uint64_t HALF_MASK = HALF_BASE - 1;
@@ -287,9 +286,7 @@ constexpr uint64_t Uint128DivRem64Portable(uint64_t high, uint64_t low, uint64_t
 }
 
 //! Unsigned 128-bit division by a divisor of at least 2^64, so that the quotient fits 64 bits (Hacker's Delight
-//! divDouble): a 128-by-64-bit division of the halved dividend by the normalized top bits of the divisor estimates
-//! the quotient, which is then off by at most one. The runtime 128-bit division of some compilers (e.g. compiler-rt)
-//! takes a bit-at-a-time loop for these divisors instead.
+//! divDouble): the quotient is estimated from the normalized top bits of the divisor and corrected by at most one.
 constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
                                                         uint64_t rhs_lower) {
 	const uint32_t shift = Uint64LeadingZeros(rhs_upper);
