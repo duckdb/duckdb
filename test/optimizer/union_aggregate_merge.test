@@ -1,0 +1,640 @@
+# name: test/optimizer/union_aggregate_merge.test
+# description: UNION ALL branches that aggregate the same input under different constants return the same rows as one aggregate
+# group: [optimizer]
+
+# Every query runs with the rule disabled and enabled, at one thread (where it merges also the branches over
+# small tables) and at the default; the expected rows are those of the unoptimized plan.
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE sales AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (2000 + i % 3)::INTEGER AS year, (i % 5)::INTEGER AS store, CASE WHEN i % 10 = 0 THEN NULL ELSE i % 100 END::BIGINT AS amount, 'c' || (i % 4) AS category, DATE '2024-01-01' + (i % 6)::INTEGER AS day, (i % 3)::DOUBLE AS ratio, CASE i % 2 WHEN 0 THEN 'a' ELSE 'A' END COLLATE NOCASE AS code FROM range(3000) r(i) WHERE i * 7 % 12 + 1 <> 4;
+
+statement ok
+CREATE TABLE dates AS SELECT i::INTEGER AS date_id, (2000 + i // 12)::INTEGER AS year, (i % 12 + 1)::INTEGER AS month FROM range(36) r(i);
+
+statement ok
+CREATE TABLE facts AS SELECT (i % 36)::INTEGER AS date_id, (i % 5)::INTEGER AS store, (i % 50)::BIGINT AS amount FROM range(4000) r(i) WHERE i % 36 <> 7;
+
+statement ok
+CREATE TABLE nothing(month INTEGER, store INTEGER, amount BIGINT);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE big AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (i % 5)::INTEGER AS store, i::BIGINT AS amount, (i // 100000)::INTEGER AS batch FROM range(1200000) r(i);
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads};
+
+foreach disabled 'union_aggregate_merge' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+# branches without groups: one row per branch in the order of the branches, also for a month without rows (4) and a month out of range (13)
+
+query III
+SELECT 'jan' AS name, sum(amount), count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'apr', sum(amount), count(*) FROM sales WHERE month = 4 UNION ALL SELECT 'feb', sum(amount), count(*) FROM sales WHERE month = 2;
+----
+jan	10000	250
+apr	NULL	0
+feb	12750	250
+
+query III
+SELECT 'jan' AS name, sum(amount), count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'none', sum(amount), count(*) FROM sales WHERE month = 13 UNION ALL SELECT 'feb', sum(amount), count(*) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM sales WHERE month = 3;
+----
+jan	10000	250
+none	NULL	0
+feb	12750	250
+mar	10000	250
+
+query IIIIIII
+SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 4 UNION ALL SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 5 UNION ALL SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 6;
+----
+NULL	0	0	NULL	NULL	NULL	0
+10000	250	200	4	96	50.0	5
+12750	250	250	3	99	51.0	5
+
+# aggregates whose value over no rows is not NULL, inside expressions
+
+query IIII
+SELECT month_name, c + 1, coalesce(s, -1), l FROM (SELECT 'apr' AS month_name, count(*) AS c, sum(amount) AS s, count_if(amount > 5) AS l FROM sales WHERE month = 4 UNION ALL SELECT 'may', count(*), sum(amount), count_if(amount > 5) FROM sales WHERE month = 5 UNION ALL SELECT 'jun', count(*), sum(amount), count_if(amount > 5) FROM sales WHERE month = 6) ORDER BY ALL;
+----
+apr	1	-1	NULL
+jun	251	12750	240
+may	251	10000	190
+
+query IIIIII
+SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 7;
+----
+true	true	NULL	0	true	NULL
+false	false	true	5	false	1
+
+# FILTER, DISTINCT and ORDER BY in the aggregates
+
+query IIIII
+SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 1 GROUP BY month UNION ALL SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 2 GROUP BY month UNION ALL SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 4 GROUP BY month ORDER BY ALL;
+----
+1	7200	1	96	1000
+2	7450	1	99	1275
+
+# grouped branches below a sort: other group columns, the compared column as a group, a constant per branch
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 4 GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	NULL
+1	2550
+1	2800
+2	2350
+2	2600
+3	2150
+3	2400
+4	2200
+4	2950
+
+query IIIII
+SELECT month, store, category, sum(amount), count(*) FROM sales WHERE month = 1 GROUP BY ALL UNION ALL SELECT month, store, category, sum(amount), count(*) FROM sales WHERE month = 2 GROUP BY ALL ORDER BY ALL;
+----
+1	0	c0	NULL	50
+1	1	c0	2800	50
+1	2	c0	2600	50
+1	3	c0	2400	50
+1	4	c0	2200	50
+2	0	c3	2750	50
+2	1	c3	2550	50
+2	2	c3	2350	50
+2	3	c3	2150	50
+2	4	c3	2950	50
+
+query III
+SELECT 'first' AS half, store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 'second', store, sum(amount) FROM sales WHERE month = 7 GROUP BY store UNION ALL SELECT NULL, store, sum(amount) FROM sales WHERE month = 8 GROUP BY store ORDER BY ALL;
+----
+first	0	NULL
+first	1	2800
+first	2	2600
+first	3	2400
+first	4	2200
+second	0	NULL
+second	1	2300
+second	2	2100
+second	3	2900
+second	4	2700
+NULL	0	2250
+NULL	1	2050
+NULL	2	2850
+NULL	3	2650
+NULL	4	2450
+
+query IIII
+SELECT 1 AS half, 'x', store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 2, 'x', store, sum(amount) FROM sales WHERE month = 7 GROUP BY store ORDER BY ALL;
+----
+1	x	0	NULL
+1	x	1	2800
+1	x	2	2600
+1	x	3	2400
+1	x	4	2200
+2	x	0	NULL
+2	x	1	2300
+2	x	2	2100
+2	x	3	2900
+2	x	4	2700
+
+# HAVING
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store HAVING sum(amount) > 2400 UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store HAVING sum(amount) > 2400 ORDER BY ALL;
+----
+0	2750
+1	2550
+1	2800
+2	2600
+4	2950
+
+query I
+SELECT sum(amount) FROM sales WHERE month = 1 HAVING count(*) > 5000 UNION ALL SELECT sum(amount) FROM sales WHERE month = 2 HAVING count(*) > 5000;
+----
+
+
+# two compared columns, on a table that is joined
+
+query III
+SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2000 AND d.month = 1 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2000 AND d.month = 8 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2001 AND d.month = 1 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2002 AND d.month = 12 GROUP BY d.year, f.store ORDER BY ALL;
+----
+2000	0	440
+2000	1	618
+2000	2	464
+2000	3	606
+2000	4	548
+2001	0	420
+2001	1	562
+2001	2	516
+2001	3	636
+2001	4	528
+2002	0	595
+2002	1	442
+2002	2	584
+2002	3	526
+2002	4	618
+
+query III
+SELECT 'a', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2000 AND d.month = 1 UNION ALL SELECT 'b', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2000 AND d.month = 8 UNION ALL SELECT 'c', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2001 AND d.month = 8;
+----
+a	2676	112
+b	NULL	0
+c	2789	111
+
+# a predicate that all branches share stays
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 AND year = 2001 AND amount > 10 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 AND year = 2001 AND amount > 10 GROUP BY store ORDER BY ALL;
+----
+0	2750
+1	2550
+2	2280
+3	2120
+4	2950
+
+# keys of other types
+
+query II
+SELECT category, count(*) FROM sales WHERE category = 'c1' GROUP BY category UNION ALL SELECT category, count(*) FROM sales WHERE category = 'c3' GROUP BY category UNION ALL SELECT category, count(*) FROM sales WHERE category = 'C1' GROUP BY category ORDER BY ALL;
+----
+c1	500
+c3	750
+
+query II
+SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day ORDER BY ALL;
+----
+2024-01-02	500
+2024-01-05	500
+
+# the same constant twice: the rows of that branch are needed twice
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	NULL
+0	NULL
+1	2550
+1	2800
+1	2800
+2	2350
+2	2600
+2	2600
+3	2150
+3	2400
+3	2400
+4	2200
+4	2200
+4	2950
+
+query II
+SELECT 'a', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'b', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'c', count(*) FROM sales WHERE month = 2;
+----
+a	250
+b	250
+c	250
+
+# not merged: overlapping or other predicates, a branch with an extra predicate, different aggregates
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month IN (1, 2) GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month IN (2, 3) GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	2750
+1	4850
+1	5350
+2	4450
+2	4950
+3	4550
+3	5050
+4	5150
+4	5650
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month < 3 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month < 6 GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	2750
+1	5350
+1	10450
+2	4950
+2	9650
+3	4550
+3	9850
+4	5150
+4	10050
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 AND year = 2001 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	NULL
+0	NULL
+1	2300
+1	2550
+1	2800
+2	2100
+2	2350
+2	2600
+3	2150
+3	2400
+3	2900
+4	2200
+4	2700
+4	2950
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, max(amount) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+0	95
+0	NULL
+1	91
+1	2800
+2	87
+2	2600
+3	83
+3	2400
+4	99
+4	2200
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT year, sum(amount) FROM sales WHERE month = 2 GROUP BY year ORDER BY ALL;
+----
+0	NULL
+1	2800
+2	2600
+3	2400
+4	2200
+2001	12750
+
+# NULL: a comparison with NULL has no rows, IS NULL is not a comparison with a constant
+
+query II
+SELECT count(*), sum(amount) FROM sales WHERE amount = NULL UNION ALL SELECT count(*), sum(amount) FROM sales WHERE amount = 5 UNION ALL SELECT count(*), sum(amount) FROM sales WHERE amount = 6;
+----
+0	NULL
+20	100
+30	180
+
+query II
+SELECT count(*), sum(store) FROM sales WHERE amount IS NULL UNION ALL SELECT count(*), sum(store) FROM sales WHERE amount = 5 UNION ALL SELECT count(*), sum(store) FROM sales WHERE amount = 6;
+----
+300	0
+20	0
+30	30
+
+# values that are equal without being the same: DOUBLE and collated VARCHAR keys are not merged
+
+query I
+SELECT count(*) FROM sales WHERE ratio = 0.0 UNION ALL SELECT count(*) FROM sales WHERE ratio = -0.0 UNION ALL SELECT count(*) FROM sales WHERE ratio = 1.0;
+----
+750
+750
+1000
+
+query I
+SELECT count(*) FROM sales WHERE code = 'a' UNION ALL SELECT count(*) FROM sales WHERE code = 'A' UNION ALL SELECT count(*) FROM sales WHERE code = 'b';
+----
+2750
+2750
+0
+
+# the order of a UNION ALL of grouped branches can be observed without a sort above it
+
+query I rowsort
+SELECT count(*) FROM (SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store LIMIT 7);
+----
+7
+
+# branches without groups below a LIMIT: the first branches
+
+query II
+SELECT 'jan' AS name, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', sum(amount) FROM sales WHERE month = 3 LIMIT 2;
+----
+jan	10000
+feb	12750
+
+# aggregates that read their rows in order are only merged where a hash aggregate computes them already
+
+query II
+SELECT first(amount), list(store)[1:3] FROM sales WHERE month = 1 UNION ALL SELECT first(amount), list(store)[1:3] FROM sales WHERE month = 2;
+----
+NULL	[0, 2, 4]
+7	[2, 4, 1]
+
+# branches that need casts to the types of the UNION
+
+query II
+SELECT 1 AS half, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 2.5, sum(amount) FROM sales WHERE month = 7 UNION ALL SELECT 3, sum(amount) FROM sales WHERE month = 8;
+----
+1.0	10000
+2.5	10000
+3.0	12250
+
+query II
+SELECT 'x' AS half, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 2, sum(amount) FROM sales WHERE month = 7;
+----
+x	10000
+2	10000
+
+# part of a larger set operation
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT -1, 0 UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+-1	0
+0	2750
+0	NULL
+0	NULL
+1	2300
+1	2550
+1	2800
+2	2100
+2	2350
+2	2600
+3	2150
+3	2400
+3	2900
+4	2200
+4	2700
+4	2950
+
+query II
+SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+0	2750
+0	NULL
+1	2300
+1	2550
+1	2800
+2	2100
+2	2350
+2	2600
+3	2150
+3	2400
+3	2900
+4	2200
+4	2700
+4	2950
+
+query II
+(SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store) EXCEPT ALL (SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store) ORDER BY ALL;
+----
+1	2800
+2	2600
+3	2400
+4	2200
+
+query II
+SELECT 'jan', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'x', -1 UNION ALL SELECT 'feb', count(*) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', count(*) FROM sales WHERE month = 3;
+----
+jan	250
+x	-1
+feb	250
+mar	250
+
+# two groups of branches in one UNION ALL
+
+query III
+SELECT 's', store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 'f', store, sum(amount) FROM facts WHERE date_id = 1 GROUP BY store UNION ALL SELECT 's', store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT 'f', store, sum(amount) FROM facts WHERE date_id = 2 GROUP BY store ORDER BY ALL;
+----
+f	0	450
+f	0	570
+f	1	463
+f	1	592
+f	2	486
+f	2	641
+f	3	486
+f	3	664
+f	4	508
+f	4	628
+s	0	2750
+s	0	NULL
+s	1	2550
+s	1	2800
+s	2	2350
+s	2	2600
+s	3	2150
+s	3	2400
+s	4	2200
+s	4	2950
+
+# below an aggregate, a join, a DISTINCT; in a CTE that is read twice; in a correlated subquery; in a recursive CTE
+
+query II rowsort
+SELECT count(*), sum(s) FROM (SELECT store, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store);
+----
+10	22750
+
+query III
+SELECT u.store, u.s, d.year FROM (SELECT store, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store) u JOIN dates d ON u.store = d.date_id ORDER BY ALL;
+----
+0	2750	2000
+0	NULL	2000
+1	2550	2000
+1	2800	2000
+2	2350	2000
+2	2600	2000
+3	2150	2000
+3	2400	2000
+4	2200	2000
+4	2950	2000
+
+query IIII
+WITH u AS (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2) SELECT * FROM u a JOIN u b ON a.s <> b.s ORDER BY ALL;
+----
+feb	12750	jan	10000
+jan	10000	feb	12750
+
+query IIII
+WITH u AS MATERIALIZED (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2) SELECT * FROM u a JOIN u b ON a.s <> b.s ORDER BY ALL;
+----
+feb	12750	jan	10000
+jan	10000	feb	12750
+
+query II
+SELECT d.date_id, (SELECT sum(c) FROM (SELECT count(*) AS c FROM sales WHERE month = 1 AND store = d.date_id UNION ALL SELECT count(*) FROM sales WHERE month = 2 AND store = d.date_id)) FROM dates d WHERE d.date_id < 7 ORDER BY ALL;
+----
+0	100
+1	100
+2	100
+3	100
+4	100
+5	0
+6	0
+
+query III
+SELECT d.date_id, l.* FROM dates d, LATERAL (SELECT store, count(*) AS c FROM sales WHERE month = 1 AND store = d.date_id GROUP BY store UNION ALL SELECT store, count(*) FROM sales WHERE month = 2 AND store = d.date_id GROUP BY store) l WHERE d.date_id < 3 ORDER BY ALL;
+----
+0	0	50
+0	0	50
+1	1	50
+1	1	50
+2	2	50
+2	2	50
+
+query II
+WITH RECURSIVE r(i, c) AS (SELECT 1, 0::BIGINT UNION ALL SELECT i + 1, (SELECT sum(c) FROM (SELECT count(*) AS c FROM sales WHERE month = 1 UNION ALL SELECT count(*) FROM sales WHERE month = 2)) FROM r WHERE i < 3) SELECT * FROM r ORDER BY ALL;
+----
+1	0
+2	500
+3	500
+
+query II
+WITH RECURSIVE r(month, c) AS (SELECT 1, count(*) FROM sales WHERE month = 1 UNION ALL SELECT r.month + 1, (SELECT count(*) FROM sales WHERE sales.month = r.month + 1) FROM r WHERE r.month < 4) SELECT * FROM r ORDER BY ALL;
+----
+1	250
+2	250
+3	250
+4	0
+
+# an empty table
+
+query III
+SELECT 'a', count(*), sum(amount) FROM nothing WHERE month = 1 UNION ALL SELECT 'b', count(*), sum(amount) FROM nothing WHERE month = 2;
+----
+a	0	NULL
+b	0	NULL
+
+query II
+SELECT store, count(*) FROM nothing WHERE month = 1 GROUP BY store UNION ALL SELECT store, count(*) FROM nothing WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+
+
+# expressions that can fail are evaluated for the same rows
+
+query II
+SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+0	170
+0	NULL
+1	150
+1	230
+2	210
+2	580
+3	-410
+3	410
+4	-910
+4	120
+
+# constants among the groups
+
+query III
+SELECT 'jan' AS name, store, sum(amount) FROM sales WHERE month = 1 GROUP BY 1, 2 UNION ALL SELECT 'feb' AS name, store, sum(amount) FROM sales WHERE month = 2 GROUP BY 1, 2 UNION ALL SELECT 'apr' AS name, store, sum(amount) FROM sales WHERE month = 4 GROUP BY 1, 2 ORDER BY ALL;
+----
+feb	0	2750
+feb	1	2550
+feb	2	2350
+feb	3	2150
+feb	4	2950
+jan	0	NULL
+jan	1	2800
+jan	2	2600
+jan	3	2400
+jan	4	2200
+
+query III
+SELECT 'jan' AS name, 1 AS n, sum(amount) FROM sales WHERE month = 1 GROUP BY 1, 2 UNION ALL SELECT 'apr' AS name, 4, sum(amount) FROM sales WHERE month = 4 GROUP BY 1, 2 UNION ALL SELECT 'feb' AS name, 1, sum(amount) FROM sales WHERE month = 2 GROUP BY 1, 2 ORDER BY ALL;
+----
+feb	1	12750
+jan	1	10000
+
+query III
+SELECT 'jan' AS name, upper('x' || 'jan') AS up, sum(amount) FROM sales WHERE month = 1 GROUP BY 'jan' HAVING 'jan' <> 'feb' UNION ALL SELECT 'feb' AS name, upper('x' || 'feb'), sum(amount) FROM sales WHERE month = 2 GROUP BY 'feb' HAVING 'feb' <> 'feb' UNION ALL SELECT 'mar' AS name, upper('x' || 'mar'), sum(amount) FROM sales WHERE month = 3 GROUP BY 'mar' HAVING 'mar' <> 'feb' ORDER BY ALL;
+----
+jan	XJAN	10000
+mar	XMAR	10000
+
+query II
+SELECT name || '!', s FROM (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY name UNION ALL SELECT 'feb' AS name, sum(amount) FROM sales WHERE month = 2 GROUP BY name) ORDER BY ALL;
+----
+feb!	12750
+jan!	10000
+
+# a table with row groups for several threads, unordered in month and clustered by batch
+
+query III
+SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM big WHERE month = 3;
+----
+jan	59999400000	100000
+feb	60000100000	100000
+mar	59999600000	100000
+
+query III
+SELECT month, store, sum(amount) FROM big WHERE month = 1 GROUP BY ALL UNION ALL SELECT month, store, sum(amount) FROM big WHERE month = 2 GROUP BY ALL UNION ALL SELECT month, store, sum(amount) FROM big WHERE month = 13 GROUP BY ALL ORDER BY ALL;
+----
+1	0	11999400000
+1	1	12000120000
+1	2	11999640000
+1	3	12000360000
+1	4	11999880000
+2	0	12000500000
+2	1	12000020000
+2	2	11999540000
+2	3	12000260000
+2	4	11999780000
+
+query III
+SELECT 'a' AS name, sum(amount), count(*) FROM big WHERE batch = 1 UNION ALL SELECT 'b', sum(amount), count(*) FROM big WHERE batch = 5 UNION ALL SELECT 'c', sum(amount), count(*) FROM big WHERE batch = 9;
+----
+a	14999950000	100000
+b	54999950000	100000
+c	94999950000	100000
+
+query II rowsort
+SELECT count(*), sum(c) FROM (SELECT 'jan' AS name, amount, count(*) AS c FROM big WHERE month = 1 GROUP BY amount UNION ALL SELECT 'feb', amount, count(*) FROM big WHERE month = 2 GROUP BY amount);
+----
+200000	200000
+
+endloop
+
+endloop

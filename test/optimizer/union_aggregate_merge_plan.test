@@ -1,0 +1,373 @@
+# name: test/optimizer/union_aggregate_merge_plan.test
+# description: Which UNION ALL branches that aggregate the same input are computed by one aggregate
+# group: [optimizer]
+
+statement ok
+CREATE TABLE sales AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (2000 + i % 3)::INTEGER AS year, (i % 5)::INTEGER AS store, CASE WHEN i % 10 = 0 THEN NULL ELSE i % 100 END::BIGINT AS amount, 'c' || (i % 4) AS category, DATE '2024-01-01' + (i % 6)::INTEGER AS day, (i % 3)::DOUBLE AS ratio, CASE i % 2 WHEN 0 THEN 'a' ELSE 'A' END COLLATE NOCASE AS code FROM range(3000) r(i) WHERE i * 7 % 12 + 1 <> 4;
+
+statement ok
+CREATE TABLE dates AS SELECT i::INTEGER AS date_id, (2000 + i // 12)::INTEGER AS year, (i % 12 + 1)::INTEGER AS month FROM range(36) r(i);
+
+statement ok
+CREATE TABLE facts AS SELECT (i % 36)::INTEGER AS date_id, (i % 5)::INTEGER AS store, (i % 50)::BIGINT AS amount FROM range(4000) r(i) WHERE i % 36 <> 7;
+
+statement ok
+CREATE TABLE nothing(month INTEGER, store INTEGER, amount BIGINT);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE big AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (i % 5)::INTEGER AS store, i::BIGINT AS amount, (i // 100000)::INTEGER AS batch FROM range(1200000) r(i);
+
+statement ok
+SET explain_output = 'physical_only';
+
+# at one thread the branches have nothing to run next to each other: the merged plan only has to read less
+statement ok
+SET threads = 1;
+
+# branches without groups: one row per branch in the order of the branches, also for a month without rows (4) and a month out of range (13)
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'apr', sum(amount), count(*) FROM sales WHERE month = 4 UNION ALL SELECT 'feb', sum(amount), count(*) FROM sales WHERE month = 2;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'none', sum(amount), count(*) FROM sales WHERE month = 13 UNION ALL SELECT 'feb', sum(amount), count(*) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM sales WHERE month = 3;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 4 UNION ALL SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 5 UNION ALL SELECT sum(amount), count(*), count(amount), min(amount), max(amount), avg(amount), count(DISTINCT store) FROM sales WHERE month = 6;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# aggregates whose value over no rows is not NULL, inside expressions
+
+query II
+EXPLAIN SELECT month_name, c + 1, coalesce(s, -1), l FROM (SELECT 'apr' AS month_name, count(*) AS c, sum(amount) AS s, count_if(amount > 5) AS l FROM sales WHERE month = 4 UNION ALL SELECT 'may', count(*), sum(amount), count_if(amount > 5) FROM sales WHERE month = 5 UNION ALL SELECT 'jun', count(*), sum(amount), count_if(amount > 5) FROM sales WHERE month = 6) ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 7;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# FILTER, DISTINCT and ORDER BY in the aggregates
+
+query II
+EXPLAIN SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 1 GROUP BY month UNION ALL SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 2 GROUP BY month UNION ALL SELECT month, sum(amount) FILTER (WHERE store > 1), count(DISTINCT category), first(amount ORDER BY amount DESC, store), sum(DISTINCT amount) FROM sales WHERE month = 4 GROUP BY month ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# grouped branches below a sort: other group columns, the compared column as a group, a constant per branch
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 4 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT month, store, category, sum(amount), count(*) FROM sales WHERE month = 1 GROUP BY ALL UNION ALL SELECT month, store, category, sum(amount), count(*) FROM sales WHERE month = 2 GROUP BY ALL ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'first' AS half, store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 'second', store, sum(amount) FROM sales WHERE month = 7 GROUP BY store UNION ALL SELECT NULL, store, sum(amount) FROM sales WHERE month = 8 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 1 AS half, 'x', store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 2, 'x', store, sum(amount) FROM sales WHERE month = 7 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# HAVING
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store HAVING sum(amount) > 2400 UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store HAVING sum(amount) > 2400 ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT sum(amount) FROM sales WHERE month = 1 HAVING count(*) > 5000 UNION ALL SELECT sum(amount) FROM sales WHERE month = 2 HAVING count(*) > 5000;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# two compared columns, on a table that is joined
+
+query II
+EXPLAIN SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2000 AND d.month = 1 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2000 AND d.month = 8 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2001 AND d.month = 1 GROUP BY d.year, f.store UNION ALL SELECT d.year, f.store, sum(f.amount) FROM facts f, dates d WHERE f.date_id = d.date_id AND d.year = 2002 AND d.month = 12 GROUP BY d.year, f.store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'a', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2000 AND d.month = 1 UNION ALL SELECT 'b', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2000 AND d.month = 8 UNION ALL SELECT 'c', sum(f.amount), count(*) FROM facts f JOIN dates d ON f.date_id = d.date_id WHERE d.year = 2001 AND d.month = 8;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# a predicate that all branches share stays
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 AND year = 2001 AND amount > 10 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 AND year = 2001 AND amount > 10 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# keys of other types
+
+query II
+EXPLAIN SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# the same constant twice: the rows of that branch are needed twice
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'a', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'b', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'c', count(*) FROM sales WHERE month = 2;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# not merged: overlapping or other predicates, a branch with an extra predicate, different aggregates
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month IN (1, 2) GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month IN (2, 3) GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month < 3 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month < 6 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 AND year = 2001 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, max(amount) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT year, sum(amount) FROM sales WHERE month = 2 GROUP BY year ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# NULL: a comparison with NULL has no rows, IS NULL is not a comparison with a constant
+
+query II
+EXPLAIN SELECT count(*), sum(amount) FROM sales WHERE amount = NULL UNION ALL SELECT count(*), sum(amount) FROM sales WHERE amount = 5 UNION ALL SELECT count(*), sum(amount) FROM sales WHERE amount = 6;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT count(*), sum(store) FROM sales WHERE amount IS NULL UNION ALL SELECT count(*), sum(store) FROM sales WHERE amount = 5 UNION ALL SELECT count(*), sum(store) FROM sales WHERE amount = 6;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# values that are equal without being the same: DOUBLE and collated VARCHAR keys are not merged
+
+query II
+EXPLAIN SELECT count(*) FROM sales WHERE ratio = 0.0 UNION ALL SELECT count(*) FROM sales WHERE ratio = -0.0 UNION ALL SELECT count(*) FROM sales WHERE ratio = 1.0;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT count(*) FROM sales WHERE code = 'a' UNION ALL SELECT count(*) FROM sales WHERE code = 'A' UNION ALL SELECT count(*) FROM sales WHERE code = 'b';
+----
+physical_plan	<REGEX>:.*Union.*
+
+# the order of a UNION ALL of grouped branches can be observed without a sort above it
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store LIMIT 7);
+----
+physical_plan	<REGEX>:.*Union.*
+
+# branches without groups below a LIMIT: the first branches
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', sum(amount) FROM sales WHERE month = 3 LIMIT 2;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# aggregates that read their rows in order are only merged where a hash aggregate computes them already
+
+query II
+EXPLAIN SELECT first(amount), list(store)[1:3] FROM sales WHERE month = 1 UNION ALL SELECT first(amount), list(store)[1:3] FROM sales WHERE month = 2;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# branches that need casts to the types of the UNION
+
+query II
+EXPLAIN SELECT 1 AS half, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 2.5, sum(amount) FROM sales WHERE month = 7 UNION ALL SELECT 3, sum(amount) FROM sales WHERE month = 8;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'x' AS half, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT 2, sum(amount) FROM sales WHERE month = 7;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# part of a larger set operation
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT -1, 0 UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION SELECT store, sum(amount) FROM sales WHERE month = 3 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'jan', count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'x', -1 UNION ALL SELECT 'feb', count(*) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', count(*) FROM sales WHERE month = 3;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# two groups of branches in one UNION ALL
+
+query II
+EXPLAIN SELECT 's', store, sum(amount) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT 'f', store, sum(amount) FROM facts WHERE date_id = 1 GROUP BY store UNION ALL SELECT 's', store, sum(amount) FROM sales WHERE month = 2 GROUP BY store UNION ALL SELECT 'f', store, sum(amount) FROM facts WHERE date_id = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# below an aggregate, a join, a DISTINCT; in a CTE that is read twice; in a correlated subquery; in a recursive CTE
+
+query II
+EXPLAIN SELECT count(*), sum(s) FROM (SELECT store, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store);
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT u.store, u.s, d.year FROM (SELECT store, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM sales WHERE month = 2 GROUP BY store) u JOIN dates d ON u.store = d.date_id ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN WITH u AS (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2) SELECT * FROM u a JOIN u b ON a.s <> b.s ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN WITH u AS MATERIALIZED (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount) FROM sales WHERE month = 2) SELECT * FROM u a JOIN u b ON a.s <> b.s ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT d.date_id, (SELECT sum(c) FROM (SELECT count(*) AS c FROM sales WHERE month = 1 AND store = d.date_id UNION ALL SELECT count(*) FROM sales WHERE month = 2 AND store = d.date_id)) FROM dates d WHERE d.date_id < 7 ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT d.date_id, l.* FROM dates d, LATERAL (SELECT store, count(*) AS c FROM sales WHERE month = 1 AND store = d.date_id GROUP BY store UNION ALL SELECT store, count(*) FROM sales WHERE month = 2 AND store = d.date_id GROUP BY store) l WHERE d.date_id < 3 ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN WITH RECURSIVE r(i, c) AS (SELECT 1, 0::BIGINT UNION ALL SELECT i + 1, (SELECT sum(c) FROM (SELECT count(*) AS c FROM sales WHERE month = 1 UNION ALL SELECT count(*) FROM sales WHERE month = 2)) FROM r WHERE i < 3) SELECT * FROM r ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# an empty table
+
+# expressions that can fail are evaluated for the same rows
+
+query II
+EXPLAIN SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(100 // (amount - 5)) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# constants among the groups
+
+query II
+EXPLAIN SELECT 'jan' AS name, store, sum(amount) FROM sales WHERE month = 1 GROUP BY 1, 2 UNION ALL SELECT 'feb' AS name, store, sum(amount) FROM sales WHERE month = 2 GROUP BY 1, 2 UNION ALL SELECT 'apr' AS name, store, sum(amount) FROM sales WHERE month = 4 GROUP BY 1, 2 ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'jan' AS name, 1 AS n, sum(amount) FROM sales WHERE month = 1 GROUP BY 1, 2 UNION ALL SELECT 'apr' AS name, 4, sum(amount) FROM sales WHERE month = 4 GROUP BY 1, 2 UNION ALL SELECT 'feb' AS name, 1, sum(amount) FROM sales WHERE month = 2 GROUP BY 1, 2 ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'jan' AS name, upper('x' || 'jan') AS up, sum(amount) FROM sales WHERE month = 1 GROUP BY 'jan' HAVING 'jan' <> 'feb' UNION ALL SELECT 'feb' AS name, upper('x' || 'feb'), sum(amount) FROM sales WHERE month = 2 GROUP BY 'feb' HAVING 'feb' <> 'feb' UNION ALL SELECT 'mar' AS name, upper('x' || 'mar'), sum(amount) FROM sales WHERE month = 3 GROUP BY 'mar' HAVING 'mar' <> 'feb' ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT name || '!', s FROM (SELECT 'jan' AS name, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY name UNION ALL SELECT 'feb' AS name, sum(amount) FROM sales WHERE month = 2 GROUP BY name) ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# a table with row groups for several threads, unordered in month and clustered by batch
+
+# the rows of big are clustered by batch: every branch reads its own row groups, and one pass has nothing to save
+query II
+EXPLAIN SELECT 'a' AS name, sum(amount), count(*) FROM big WHERE batch = 1 UNION ALL SELECT 'b', sum(amount), count(*) FROM big WHERE batch = 5 UNION ALL SELECT 'c', sum(amount), count(*) FROM big WHERE batch = 9;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# they are not clustered by month
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM big WHERE month = 3;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# a constant per branch next to many groups: the list of the branches would be joined to every row of the result
+query II
+EXPLAIN SELECT 'jan' AS name, amount, count(*) AS c FROM big WHERE month = 1 GROUP BY amount UNION ALL SELECT 'feb', amount, count(*) FROM big WHERE month = 2 GROUP BY amount ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+# without the constant the groups are what the branches return
+query II
+EXPLAIN SELECT amount, count(*) AS c FROM big WHERE month = 1 GROUP BY amount UNION ALL SELECT amount, count(*) FROM big WHERE month = 2 GROUP BY amount ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# the scan is restricted to the constants of all branches, which it checks against its row groups
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'jun', sum(amount), count(*) FROM big WHERE month = 6;
+----
+physical_plan	<REGEX>:.*Filters:.*month IN \(1, 2, 6\).*
+
+# on several threads the branches over a small table run next to each other, which one pipeline over its one row
+# group cannot make up for: they are kept. The row groups of big have work for four threads
+statement ok
+SET threads = 4;
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM sales WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM sales WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM sales WHERE month = 3;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM big WHERE month = 3;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, sum(amount) FROM big WHERE month = 1 GROUP BY store UNION ALL SELECT store, sum(amount) FROM big WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+# the rule can be disabled
+statement ok
+SET disabled_optimizers = 'union_aggregate_merge';
+
+query II
+EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'mar', sum(amount), count(*) FROM big WHERE month = 3;
+----
+physical_plan	<REGEX>:.*Union.*
