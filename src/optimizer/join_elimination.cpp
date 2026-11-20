@@ -147,7 +147,7 @@ void JoinElimination::OptimizeJoin(unique_ptr<LogicalOperator> &op) {
 		OptimizeJoinChild(join, 0, *left_child);
 		OptimizeJoinChild(join, 1, *right_child);
 		removed_joins += left_child->removed_joins + right_child->removed_joins;
-		if (!TryEliminateJoin(op, *left_child, *right_child)) {
+		if (!TryEliminateJoin(op)) {
 			return;
 		}
 		removed_joins++;
@@ -201,10 +201,6 @@ void JoinElimination::OptimizeOperator(unique_ptr<LogicalOperator> &op_ptr, bool
 		break;
 	}
 
-	if (op.type == LogicalOperatorType::LOGICAL_GET && op.Cast<LogicalGet>().table_filters.HasFilters()) {
-		pipe_info.has_filter = true;
-	}
-
 	if (op.children.size() == 1) {
 		OptimizeChild(op, 0, *this, true);
 		return;
@@ -227,8 +223,7 @@ bool JoinElimination::RemovedJoin() const {
 	return removed_joins > 0;
 }
 
-bool JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElimination &left_child,
-                                       JoinElimination &right_child) {
+bool JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	idx_t inner_idx = 1;
 	idx_t outer_idx = 0;
@@ -243,7 +238,6 @@ bool JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElim
 	default:
 		return false;
 	}
-	auto &inner_child = inner_idx == 0 ? left_child : right_child;
 	auto &outer_projection_map = outer_idx == 0 ? join.left_projection_map : join.right_projection_map;
 	if (join.filter_pushdown) {
 		return false;
@@ -268,9 +262,10 @@ bool JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElim
 		// its outer rows, whatever the inner side holds (a SINGLE join raises an error on a second match, so it is
 		// left to the proof below)
 		is_removable = true;
-	} else if (!inner_child.pipe_info.has_filter) {
+	} else {
 		// b) the inner side is distinct on the columns its equality conditions compare: every outer row finds at
-		// most one match, so the join returns exactly its outer rows. The other conditions only filter the matches.
+		// most one match, so the join returns exactly its outer rows. The other conditions only filter the matches,
+		// and so does a filter on the inner side, pushed into a scan or not: it only removes inner rows.
 		// The plan below this join is not rewritten any more, so the unique sets are inferred on a stable plan
 		column_binding_set_t inner_keys;
 		Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS);
