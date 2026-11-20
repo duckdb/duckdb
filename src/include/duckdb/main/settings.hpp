@@ -2658,6 +2658,20 @@ struct ReadAheadDepthSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ReadAheadOpenWindowSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "read_ahead_open_window";
+	static constexpr const char *Description =
+	    "The number of files a scan opens ahead of reading them. 0 = automatic: twice the async threads for remote "
+	    "files, and for local files at most eight times the threads.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct RedactHttpLogsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "redact_http_logs";

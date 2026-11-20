@@ -169,14 +169,16 @@ class ScanReadAhead {
 public:
 	ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
 	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor, bool prefetch_enabled = true,
-	              idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	              idx_t shard_count = 1, idx_t scan_concurrency = 0, bool remote_files = false);
 	~ScanReadAhead();
 
 	//! Create a driver with a fixed scheduling policy; prefetch also requires async threads and read_ahead_depth.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
 	//! Without prefetch, ordered scans need no driver; affinity scans retain their fixed assignment window.
+	//! remote_files lets the scan open files as far ahead as the async pool allows, to hide per-file latency.
 	static unique_ptr<ScanReadAhead> Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch = true,
-	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0,
+	                                        bool remote_files = false);
 	bool PrefetchEnabled() const {
 		return prefetch_enabled;
 	}

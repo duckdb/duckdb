@@ -261,6 +261,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ProfilingRendererSettingsSetting),
     DUCKDB_SETTING_CALLBACK(ProgressBarTimeSetting),
     DUCKDB_SETTING_CALLBACK(ReadAheadDepthSetting),
+    DUCKDB_SETTING(ReadAheadOpenWindowSetting),
     DUCKDB_SETTING(RedactHttpLogsSetting),
     DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarAggregateMergeThresholdSetting),
@@ -773,7 +774,8 @@ static idx_t AsyncThreadsForThreads(idx_t threads) {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
-	return MinValue<idx_t>(4 * threads, 256);
+	// remote reads wait on latency rather than CPU, so small machines still need enough I/O threads
+	return MinValue<idx_t>(MaxValue<idx_t>(4 * threads, DBConfig::MINIMUM_ASYNC_THREADS), 256);
 #endif
 }
 
