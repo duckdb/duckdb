@@ -1,0 +1,108 @@
+# name: test/sql/function/language_function/language_function_wide_decimal.test
+# description: Language members store wide DECIMAL parameter, RETURNS and default types wherever a macro does
+# group: [language_function]
+
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+# in-memory: the storage gate runs for persistent members, and a language member has no stored expression
+statement ok
+USE memory;
+
+statement ok
+CREATE MACRO m_param(x DECIMAL(50,2)) AS x;
+
+statement ok
+CREATE FUNCTION f_param(x DECIMAL(50,2)) LANGUAGE testlang AS 'arg:0';
+
+statement ok
+CREATE MACRO m_ret(x) RETURNS DECIMAL(50,2) AS x;
+
+statement ok
+CREATE FUNCTION f_ret(x) RETURNS DECIMAL(50,2) LANGUAGE testlang AS 'arg:0';
+
+statement ok
+CREATE MACRO m_default(x, y := 1.5::DECIMAL(50,2)) AS y;
+
+statement ok
+CREATE FUNCTION f_default(x, y := 1.5::DECIMAL(50,2)) LANGUAGE testlang AS 'arg:1';
+
+query IIIIII
+SELECT m_param(1.25), f_param(1.25), m_ret(2.5), f_ret(2.5), m_default(0), f_default(0);
+----
+1.25	1.25	2.50	2.50	1.50	1.50
+
+query II
+SELECT typeof(f_param(1.25)), typeof(f_default(0));
+----
+DECIMAL(50,2)	DECIMAL(50,2)
+
+# a database before wide decimals: the macro is refused by the decimal gate, the language member already by the
+# language storage gate, which requires the version wide decimals were added in
+statement ok
+ATTACH '{TEST_DIR}/language_function_wide_decimal_old.db' AS old (STORAGE_VERSION 'v2.0.0');
+
+statement error
+CREATE MACRO old.m(x DECIMAL(39,0)) AS x
+----
+DECIMAL columns wider than 38 digits are not supported in storage versions prior to v2.1.0
+
+statement error
+CREATE FUNCTION old.f(x DECIMAL(39,0)) LANGUAGE testlang AS 'arg:0'
+----
+only supported for storage versions v2.1.0 and higher
+
+statement error
+CREATE FUNCTION old.f(x) RETURNS DECIMAL(39,0) LANGUAGE testlang AS 'arg:0'
+----
+only supported for storage versions v2.1.0 and higher
+
+statement error
+CREATE FUNCTION old.f(x, y := 1::DECIMAL(39,0)) LANGUAGE testlang AS 'arg:1'
+----
+only supported for storage versions v2.1.0 and higher
+
+# temporary members are not gated, like temporary macros
+statement ok
+USE old;
+
+statement ok
+CREATE TEMPORARY MACRO m_temp(x DECIMAL(39,0)) AS x;
+
+statement ok
+CREATE TEMPORARY FUNCTION f_temp(x DECIMAL(39,0)) LANGUAGE testlang AS 'arg:0';
+
+query II
+SELECT m_temp(7), f_temp(7);
+----
+7	7
+
+statement ok
+USE memory;
+
+statement ok
+DETACH old;
+
+# a database that stores wide decimals keeps the language member's types across a restart
+statement ok
+ATTACH '{TEST_DIR}/language_function_wide_decimal_new.db' AS new (STORAGE_VERSION 'v2.1.0');
+
+statement ok
+CREATE FUNCTION new.f(x DECIMAL(50,2), y := 1.5::DECIMAL(50,2)) RETURNS DECIMAL(50,2) LANGUAGE testlang AS 'arg:1';
+
+statement ok
+DETACH new;
+
+statement ok
+ATTACH '{TEST_DIR}/language_function_wide_decimal_new.db' AS new;
+
+query II
+SELECT new.f(1), typeof(new.f(1));
+----
+1.50	DECIMAL(50,2)

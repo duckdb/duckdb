@@ -1,0 +1,313 @@
+# name: test/sql/function/language_function/language_function_replace.test
+# description: A language member's replacement binds like the identical macro body
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+# the plain macro is the baseline: every sql: member must return the same rows as its identical macro
+statement ok
+CREATE TABLE t(i INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 'a'), (2, 'b'), (2, 'b'), (NULL, NULL), (3, NULL);
+
+statement ok
+CREATE TABLE u(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO u VALUES (1, 10), (2, 20), (2, 21), (NULL, 30);
+
+statement ok
+CREATE MACRO m_add(x, y) AS x + y;
+
+statement ok
+CREATE FUNCTION l_add(x, y) LANGUAGE testlang AS 'sql:x + y';
+
+query II rowsort
+SELECT l_add(i, 1), m_add(i, 1) FROM t;
+----
+2	2
+3	3
+3	3
+4	4
+NULL	NULL
+
+# a correlated scalar subquery in the body, over duplicates and NULL keys
+statement ok
+CREATE MACRO m_lookup(x) AS (SELECT max(v) FROM u WHERE k = x);
+
+statement ok
+CREATE FUNCTION l_lookup(x) LANGUAGE testlang AS 'sql:(SELECT max(v) FROM u WHERE k = x)';
+
+query III rowsort
+SELECT i, l_lookup(i), m_lookup(i) FROM t;
+----
+1	10	10
+2	21	21
+2	21	21
+3	NULL	NULL
+NULL	NULL	NULL
+
+query I
+SELECT count(*) FROM (SELECT i, l_lookup(i) FROM t EXCEPT ALL SELECT i, m_lookup(i) FROM t);
+----
+0
+
+# EXISTS and a correlated argument at depth
+statement ok
+CREATE MACRO m_exists(x) AS EXISTS (SELECT 1 FROM u WHERE k = x);
+
+statement ok
+CREATE FUNCTION l_exists(x) LANGUAGE testlang AS 'sql:EXISTS (SELECT 1 FROM u WHERE k = x)';
+
+query III rowsort
+SELECT i, l_exists(i), m_exists(i) FROM t;
+----
+1	true	true
+2	true	true
+2	true	true
+3	false	false
+NULL	false	false
+
+query II rowsort
+SELECT i, (SELECT l_add(t.i, v) FROM u WHERE k = t.i ORDER BY v LIMIT 1) FROM t;
+----
+1	11
+2	22
+2	22
+3	NULL
+NULL	NULL
+
+query I
+SELECT count(*) FROM (
+	SELECT i, (SELECT l_lookup(t.i + 0) FROM u LIMIT 1) FROM t
+	EXCEPT ALL
+	SELECT i, (SELECT m_lookup(t.i + 0) FROM u LIMIT 1) FROM t);
+----
+0
+
+# LATERAL
+query III rowsort
+SELECT t.i, x.a, x.b FROM t, LATERAL (SELECT l_lookup(t.i) AS a, m_lookup(t.i) AS b) x;
+----
+1	10	10
+2	21	21
+2	21	21
+3	NULL	NULL
+NULL	NULL	NULL
+
+# a recursive CTE in the body
+statement ok
+CREATE MACRO m_tri(n) AS (WITH RECURSIVE r(j, acc) AS (SELECT 0, 0 UNION ALL SELECT j + 1, acc + j + 1 FROM r WHERE j < n) SELECT max(acc) FROM r);
+
+statement ok
+CREATE FUNCTION l_tri(n) LANGUAGE testlang AS 'sql:(WITH RECURSIVE r(j, acc) AS (SELECT 0, 0 UNION ALL SELECT j + 1, acc + j + 1 FROM r WHERE j < n) SELECT max(acc) FROM r)';
+
+query III rowsort
+SELECT i, l_tri(i), m_tri(i) FROM t;
+----
+1	1	1
+2	3	3
+2	3	3
+3	6	6
+NULL	0	0
+
+# aggregates as arguments, used and unused by the replacement
+statement ok
+CREATE MACRO m_twice(x) AS x * 2;
+
+statement ok
+CREATE FUNCTION l_twice(x) LANGUAGE testlang AS 'sql:x * 2';
+
+query II
+SELECT l_twice(sum(i)), m_twice(sum(i)) FROM t;
+----
+16	16
+
+query III rowsort
+SELECT s, l_twice(count(*)), m_twice(count(*)) FROM t GROUP BY s;
+----
+NULL	4	4
+a	2	2
+b	4	4
+
+statement ok
+CREATE MACRO m_ignore(x) AS 1;
+
+statement ok
+CREATE FUNCTION l_ignore(x) LANGUAGE testlang AS 'sql:1';
+
+# an unused aggregate argument does not turn the query into an aggregate, like the macro
+query II
+SELECT count(*), sum(c) FROM (SELECT l_ignore(sum(i)) AS c FROM t);
+----
+5	5
+
+query II
+SELECT count(*), sum(c) FROM (SELECT m_ignore(sum(i)) AS c FROM t);
+----
+5	5
+
+# ... and an unused argument that does not bind does not error, like the macro
+query II
+SELECT l_ignore(no_such_column), m_ignore(no_such_column);
+----
+1	1
+
+# an argument the replacement drops is not bound on its own, so it cannot pull an unused CTE into the plan
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+WITH c AS MATERIALIZED (SELECT error('boom')::INTEGER AS x) SELECT m_ignore((SELECT x FROM c));
+----
+1
+
+query I
+WITH c AS MATERIALIZED (SELECT error('boom')::INTEGER AS x) SELECT l_ignore((SELECT x FROM c));
+----
+1
+
+statement ok
+PRAGMA enable_optimizer;
+
+# a correlated call plans like the macro: the same decorrelated join, no trace of the language
+query II
+EXPLAIN SELECT m_lookup(i) FROM t;
+----
+physical_plan	<REGEX>:.*Hash Join.*Perfect Hash Group By.*
+
+query II
+EXPLAIN SELECT l_lookup(i) FROM t;
+----
+physical_plan	<REGEX>:.*Hash Join.*Perfect Hash Group By.*
+
+query II
+EXPLAIN SELECT l_lookup(i) FROM t;
+----
+physical_plan	<!REGEX>:.*testlang.*
+
+# hygiene: a body column spelled like a parameter is the parameter, as in a macro body. A macro rejects the
+# ambiguous qualified spelling at CREATE, a language body is only bound at the call
+statement error
+CREATE MACRO m_hyg(k) AS (SELECT count(*) FROM u WHERE u.k = k);
+----
+<REGEX>:.*Conflicting column names for column k.*
+
+statement ok
+CREATE MACRO m_hyg(p) AS (SELECT count(*) FROM u WHERE u.k = p);
+
+statement ok
+CREATE FUNCTION l_hyg(k) LANGUAGE testlang AS 'sql:(SELECT count(*) FROM u WHERE u.k = k)';
+
+query III rowsort
+SELECT i, l_hyg(i), m_hyg(i) FROM t;
+----
+1	1	1
+2	2	2
+2	2	2
+3	0	0
+NULL	0	0
+
+# renamed parameters keep the body's column clear of the substitution
+statement ok
+CREATE FUNCTION l_renamed(k) LANGUAGE testlang AS 'names:p0|(SELECT count(*) FROM u WHERE k = p0)';
+
+query II rowsort
+SELECT i, l_renamed(i) FROM t;
+----
+1	1
+2	2
+2	2
+3	0
+NULL	0
+
+# a caller column spelled like a body column binds where the argument stands
+query II rowsort
+SELECT k, l_add(k, v) FROM u;
+----
+1	11
+2	22
+2	23
+NULL	NULL
+
+# default expansion: testinterp declares itself a language without a callback, every call runs the interpreter
+statement ok
+CREATE FUNCTION interp(a, b := 'dflt') LANGUAGE testinterp AS 'body';
+
+query T
+SELECT interp(1);
+----
+body(1, dflt)
+
+# the interpreter renders NULL arguments: constant and row-wise NULLs agree
+query TT
+SELECT interp(NULL::INTEGER), interp(NULL::INTEGER, NULL::VARCHAR);
+----
+body(NULL, dflt)	body(NULL, NULL)
+
+query T rowsort
+SELECT interp(i, s) FROM t;
+----
+body(1, a)
+body(2, b)
+body(2, b)
+body(3, NULL)
+body(NULL, NULL)
+
+query II
+EXPLAIN SELECT interp(i) FROM t;
+----
+physical_plan	<REGEX>:.*testinterp.*
+
+# the interpreter is volatile: two calls with equal arguments differ
+statement ok
+CREATE FUNCTION interp_counter() LANGUAGE testinterp AS 'counter';
+
+query I
+SELECT interp_counter() = interp_counter();
+----
+false
+
+# a callback that sets no replacement gets the same expansion
+statement ok
+CREATE FUNCTION l_decline(x) LANGUAGE testlang AS 'decline';
+
+query T
+SELECT l_decline(5);
+----
+decline(5)
+
+# a direct call of the language function never invokes its callback
+query T
+SELECT testlang('arg:0', 5);
+----
+arg:0(5)
+
+# a function that is not declared as a language is rejected at CREATE
+statement error
+CREATE FUNCTION not_lang(x) LANGUAGE lower AS 'x';
+----
+<REGEX>:.*Function "lower" is not a function language.*
+
+# protection: plain macros and table macros are unchanged
+statement ok
+CREATE MACRO tm(x) AS TABLE SELECT x AS c;
+
+query I
+SELECT * FROM tm(3);
+----
+3

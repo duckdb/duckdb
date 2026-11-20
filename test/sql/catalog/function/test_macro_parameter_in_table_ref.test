@@ -1,0 +1,53 @@
+# name: test/sql/catalog/function/test_macro_parameter_in_table_ref.test
+# description: Macro parameters are substituted in the expressions of NEAREST joins, PIVOT and MATCH_RECOGNIZE inputs
+# group: [function]
+
+# temporary macros, since NEAREST BY cannot be written to storage versions before v2.0.0
+
+# a NEAREST ranking expression
+statement ok
+CREATE TEMP MACRO m_nearest(x) AS (SELECT t.v FROM (VALUES (0)) q(z) JOIN (VALUES (1), (10)) t(v) NEAREST 1 BY DISTANCE abs(t.v - x));
+
+query II
+SELECT m_nearest(9), m_nearest(2);
+----
+10	1
+
+statement ok
+CREATE TEMP MACRO tm_nearest(x) AS TABLE SELECT t.v FROM (VALUES (0)) q(z) JOIN (VALUES (1), (10)) t(v) NEAREST 1 BY DISTANCE abs(t.v - x);
+
+query I
+FROM tm_nearest(9);
+----
+10
+
+# a PIVOT ON expression
+statement ok
+CREATE TEMP MACRO m_pivot(x) AS (SELECT * FROM (PIVOT (SELECT 1 AS k, 2 AS v) ON (k + x) IN (3) USING sum(v)));
+
+query I
+SELECT m_pivot(2);
+----
+2
+
+query I
+SELECT m_pivot(5);
+----
+NULL
+
+# the input of a MATCH_RECOGNIZE
+statement ok
+CREATE TEMP MACRO m_mr(x) AS (SELECT max(c) FROM (SELECT unnest(range(x)) AS v) MATCH_RECOGNIZE(ORDER BY v MEASURES count(*) AS c PATTERN (A+) DEFINE A AS true));
+
+query II
+SELECT m_mr(3), m_mr(5);
+----
+3	5
+
+statement ok
+CREATE TEMP MACRO tm_mr(x) AS TABLE SELECT c FROM (SELECT unnest(range(x)) AS v) MATCH_RECOGNIZE(ORDER BY v MEASURES count(*) AS c PATTERN (A+) DEFINE A AS true);
+
+query I
+FROM tm_mr(4);
+----
+4

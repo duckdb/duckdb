@@ -1,0 +1,94 @@
+# name: test/sql/function/language_function/language_function_replace_overloads.test
+# description: Selecting among the overloads of a language function by the member call's argument types
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE t(i BIGINT, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 'a'), (2, 'b');
+
+# testpair has the overloads (VARCHAR, BIGINT) and (VARCHAR, VARCHAR), each with its own callback
+statement ok
+CREATE FUNCTION pair(x) LANGUAGE testpair AS 'src';
+
+query TT
+SELECT pair(1), pair('x');
+----
+bigint overload	varchar overload
+
+query TT
+SELECT pair(i), pair(s) FROM t LIMIT 1;
+----
+bigint overload	varchar overload
+
+# an argument without a type before binding (an aggregate, a window, a lambda, an argument that does not bind on its
+# own) matches every overload: when that leaves a tie, the call is a binder error, not an unresolved parameter
+statement error
+SELECT pair(sum(i)) FROM t;
+----
+<REGEX>:.*Binder Error: Function "pair": cannot select an overload of language "testpair".*argument 1 has no type before it is bound.*
+
+statement error
+SELECT pair(row_number() OVER ()) FROM t;
+----
+<REGEX>:.*Binder Error: Function "pair": cannot select an overload of language "testpair".*
+
+statement error
+SELECT pair(x -> x);
+----
+<REGEX>:.*Binder Error: Function "pair": cannot select an overload of language "testpair".*
+
+statement error
+SELECT pair(no_such_column);
+----
+<REGEX>:.*Binder Error: Function "pair": cannot select an overload of language "testpair".*
+
+# ... and a declared parameter type selects the overload. The replacement drops the argument, so the query is not
+# an aggregate, like the identical macro
+statement ok
+CREATE FUNCTION pair_typed(x BIGINT) LANGUAGE testpair AS 'src';
+
+statement ok
+CREATE MACRO pair_macro(x BIGINT) AS 'bigint overload';
+
+query TT
+SELECT pair_typed(sum(i)), pair_macro(sum(i)) FROM t;
+----
+bigint overload	bigint overload
+bigint overload	bigint overload
+
+# an argument no overload accepts is the no-match error of the language function
+statement error
+SELECT pair([1]);
+----
+<REGEX>:.*Function "pair": .*testpair.*
+
+# an unresolved prepared parameter still defers to EXECUTE
+statement ok
+PREPARE p_pair AS SELECT pair(?);
+
+query T
+EXECUTE p_pair(1);
+----
+bigint overload
+
+query T
+EXECUTE p_pair('x');
+----
+varchar overload

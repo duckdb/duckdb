@@ -1,0 +1,54 @@
+# name: test/sql/function/language_function/language_function_nested_schema.test
+# description: Language members in nested schemas: create, overload add, call, and member drop
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE FUNCTION s1.s2.nf() LANGUAGE testlang AS 'zero';
+
+# a second member is an overload add of the nested entry
+statement ok
+CREATE FUNCTION s1.s2.nf(x) LANGUAGE testlang AS 'arg:0';
+
+query TI
+SELECT s1.s2.nf(), s1.s2.nf(7);
+----
+zero	7
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'nf';
+----
+2
+
+statement ok
+DROP FUNCTION s1.s2.nf(ANY);
+
+query T
+SELECT s1.s2.nf();
+----
+zero
+
+statement error
+SELECT s1.s2.nf(7);
+----
+<REGEX>:.*does not support the supplied arguments.*

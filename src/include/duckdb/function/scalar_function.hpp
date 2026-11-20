@@ -198,6 +198,14 @@ typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &
 //! Legacy serialize function for expressions that were converted into functions
 typedef unique_ptr<Expression> (*function_legacy_serialize_t)(FunctionToStringInput &input);
 
+class ScalarFunctionCallReplaceInput;
+class ScalarFunctionCreateValidateInput;
+
+//! Replace a call of a function language member with an expression (see function_language.hpp)
+typedef void (*scalar_function_call_replace_t)(ScalarFunctionCallReplaceInput &input);
+//! Validate the members of a function language definition at CREATE (see function_language.hpp)
+typedef void (*scalar_function_create_validate_t)(ScalarFunctionCreateValidateInput &input);
+
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
@@ -232,6 +240,9 @@ public:
 
 	//! The filter prune function (if any)
 	propagate_filter_t filter_prune = nullptr;
+
+	//! Replaces calls of function language members, when the function set is a language (if any)
+	scalar_function_call_replace_t call_replace = nullptr;
 
 	bool operator==(const ScalarFunctionCallbacks &rhs) const;
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
@@ -337,6 +348,10 @@ public: // Callbacks
 	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
 	auto SetUnbindCallback(scalar_function_unbind_t callback) -> void { callbacks.unbind = callback; }
 	auto GetUnbindCallback() const -> scalar_function_unbind_t { return callbacks.unbind; }
+
+	auto HasCallReplaceCallback() const -> bool { return callbacks.call_replace != nullptr; }
+	auto SetCallReplaceCallback(scalar_function_call_replace_t callback) -> void { callbacks.call_replace = callback; }
+	auto GetCallReplaceCallback() const -> scalar_function_call_replace_t { return callbacks.call_replace; }
 
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
 	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
