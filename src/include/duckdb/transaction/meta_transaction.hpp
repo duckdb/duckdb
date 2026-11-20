@@ -64,7 +64,7 @@ public:
 	void RemoveTransaction(AttachedDatabase &db);
 
 	ErrorData Commit(ClientContext &context);
-	void Rollback();
+	void Rollback(ClientContext &context);
 	// Finalize the transaction after a COMMIT of ROLLBACK.
 	void Finalize(ClientContext &context);
 
