@@ -2021,19 +2021,19 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			auto &filter = *filter_entry;
 
 			auto prune_result = CheckRowGroupFilterStatistics(context, state, column_reader, filter);
-			// check the bloom filter if present
-			auto bloom_source = TryGetBloomFilterSource(column_reader);
+			// check the bloom filter if present and the statistics do not already decide the row group
+			auto bloom_source = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE
+			                        ? TryGetBloomFilterSource(column_reader)
+			                        : nullptr;
 			if (bloom_source) {
 				optional_ptr<ColumnReader> bloom_reader = bloom_source;
 				optional_ptr<const TableFilter> bloom_filter = &filter;
 				unique_ptr<TableFilter> leaf_filter;
-				auto check_bloom_filter = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE;
 				if (bloom_source->Type().IsNested()) {
 					if (!TryGetBloomFilterLeaf(*bloom_source, filter, bloom_reader, leaf_filter)) {
 						bloom_reader = nullptr;
 					} else {
 						bloom_filter = leaf_filter.get();
-						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}
 				if (bloom_reader && parquet_options.RepairsInvalidUTF8() &&
@@ -2045,14 +2045,14 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				auto hash_strategy = bloom_reader ? ParquetStatisticsUtils::GetBloomFilterHashStrategy(
 				                                        bloom_reader->Schema(), interval_bloom_filter_version)
 				                                  : nullopt;
-				if (check_bloom_filter && bloom_reader && bloom_filter &&
+				if (bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
 				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy) {
 					auto &bloom_meta_data = group.columns[bloom_reader->ColumnIndex()].meta_data;
 					if (bloom_meta_data.__isset.bloom_filter_offset && bloom_meta_data.bloom_filter_offset > 0 &&
 					    ParquetStatisticsUtils::HasBloomFilterConstants(*bloom_filter, *hash_strategy)) {
 						TryAttachBloomFilterReadHead(context, state, column_reader, filter,
-						                             bloom_source->Type().IsNested(), bloom_reader->ColumnIndex());
+						                             bloom_reader->ColumnIndex());
 					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
@@ -2130,7 +2130,7 @@ struct ParquetReader::BloomFilterReadPlan {
 
 ParquetReader::BloomFilterReadPlan
 ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport, ColumnReader &column_reader,
-                                    const TableFilter &filter, bool nested_filter, idx_t column_chunk_idx) {
+                                    const TableFilter &filter, idx_t column_chunk_idx) {
 	struct BloomFilterRange {
 		idx_t offset;
 		idx_t length;
@@ -2151,8 +2151,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 			continue;
 		}
 		auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
-		if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
-		                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		if (prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			continue;
 		}
 		const auto offset = NumericCast<idx_t>(meta_data.bloom_filter_offset);
@@ -2224,7 +2223,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 
 bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
                                                  ColumnReader &column_reader, const TableFilter &filter,
-                                                 bool nested_filter, idx_t column_chunk_idx) {
+                                                 idx_t column_chunk_idx) {
 	if (!state.prefetch_mode || parquet_options.encryption_config) {
 		return false;
 	}
@@ -2242,8 +2241,7 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 		lock_guard<mutex> guard(bloom_filter_read_heads_lock);
 		auto entry = bloom_filter_read_heads.find(column_chunk_idx);
 		if (entry == bloom_filter_read_heads.end()) {
-			auto plan =
-			    PlanBloomFilterReads(context, transport, column_reader, filter, nested_filter, column_chunk_idx);
+			auto plan = PlanBloomFilterReads(context, transport, column_reader, filter, column_chunk_idx);
 			fetch_heads = std::move(plan.fetch_heads);
 			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(plan.row_group_heads)).first;
 		}
