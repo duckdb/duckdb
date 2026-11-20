@@ -2211,8 +2211,8 @@ private:
 	}
 
 	static idx_t CountReferences(const LogicalOperator &op, TableIndex cte_index) {
-		idx_t count = op.type == LogicalOperatorType::LOGICAL_CTE_REF &&
-		              op.Cast<LogicalCTERef>().cte_index == cte_index;
+		idx_t count =
+		    op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index;
 		for (auto &child : op.children) {
 			count += CountReferences(*child, cte_index);
 		}
