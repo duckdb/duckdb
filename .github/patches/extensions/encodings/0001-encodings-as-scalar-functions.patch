@@ -1,0 +1,246 @@
+diff --git a/src/encodings_extension.cpp b/src/encodings_extension.cpp
+index 9bbbeb5..cb7333f 100644
+--- a/src/encodings_extension.cpp
++++ b/src/encodings_extension.cpp
+@@ -2,6 +2,9 @@
+ #include "duckdb.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/common/string_util.hpp"
++#include "duckdb/catalog/catalog.hpp"
++#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
++#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+ #include "duckdb/function/encoding_function.hpp"
+ #include "duckdb/function/table_function.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+@@ -57,12 +60,26 @@ static unique_ptr<FunctionData> DuckDBEncodingsBind(ClientContext &context, Tabl
+ 
+ static unique_ptr<GlobalTableFunctionState> DuckDBEncodingsInit(ClientContext &context, TableFunctionInitInput &input) {
+ 	auto result = make_uniq<DuckDBEncodingsData>();
+-	auto &config = DBConfig::GetConfig(context);
+-	for (auto &function_ref : config.GetLoadedEncodedFunctions()) {
+-		auto &function = function_ref.get();
+-		result->entries.push_back(
+-		    {function.GetName(), function.GetLookupBytes(), function.GetBytesPerIteration(), function.map_size});
+-	}
++	// UTF-8 is read directly by the CSV reader, all other encodings are scalar functions in system.encodings
++	result->entries.push_back({"utf-8", 1, 1, 0});
++	auto &schema = Catalog::GetSystemCatalog(context).GetSchema(context, Identifier(EncodingFunction::SCHEMA));
++	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
++		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
++			return;
++		}
++		auto &functions = entry.Cast<ScalarFunctionCatalogEntry>().functions;
++		auto name = entry.name.GetIdentifierName();
++		idx_t window = 0;
++		if (functions.Size() > 0) {
++			auto property =
++			    functions.GetFunctionByOffset(0)->GetProperties().GetProperty(EncodingFunction::MINIMUM_INPUT_WINDOW_PROPERTY);
++			if (property) {
++				window = property->GetValue<idx_t>();
++			}
++		}
++		auto registered = duckdb_encodings::GetRegisteredEncoding(StringUtil::Lower(name));
++		result->entries.push_back({name, window, registered.max_output_bytes, registered.map_size});
++	});
+ 	std::sort(result->entries.begin(), result->entries.end(),
+ 	          [](const EncodingInformation &a, const EncodingInformation &b) { return a.name < b.name; });
+ 	return std::move(result);
+@@ -84,8 +101,7 @@ static void DuckDBEncodingsFunction(ClientContext &context, TableFunctionInput &
+ }
+ 
+ static void LoadInternal(ExtensionLoader &loader) {
+-	auto &config = loader.GetDatabaseInstance().config;
+-	duckdb_encodings::RegistrationEncodedFunctions::RegisterFunctions(config);
++	duckdb_encodings::RegistrationEncodedFunctions::RegisterFunctions(duckdb_encodings::DBConfig(loader));
+ 
+ 	loader.RegisterFunction(
+ 	    TableFunction("duckdb_encodings", {}, DuckDBEncodingsFunction, DuckDBEncodingsBind, DuckDBEncodingsInit));
+diff --git a/src/generated_encoded_functions.cpp b/src/generated_encoded_functions.cpp
+index 4e30ee9..71b18a0 100644
+--- a/src/generated_encoded_functions.cpp
++++ b/src/generated_encoded_functions.cpp
+@@ -1,6 +1,6 @@
+ #include "generated_encoded_function.hpp"
+ 
+-#include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
++#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+ 
+ #include <algorithm>
+ #include <mutex>
+@@ -51,22 +51,20 @@ static const EncodingIndex &GetIndex(const EncodingFunction &encoding_function)
+ 	return *index;
+ }
+ 
+-void GeneratedEncodedFunction::Decode(CSVEncoderBuffer &encoded_buffer, char *target_buffer,
+-                                      idx_t &target_buffer_current_position, const idx_t target_buffer_size,
+-                                      char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+-                                      EncodingFunction *encoding_function) {
+-	const auto &index = GetIndex(*encoding_function);
+-	const auto map = encoding_function->conversion_map;
+-	const auto encoded_buffer_ptr = encoded_buffer.Ptr();
+-	const idx_t lookup_bytes = encoding_function->GetLookupBytes();
+-	const idx_t encoded_buffer_size = encoded_buffer.actual_encoded_buffer_size;
+-	while (encoded_buffer.cur_pos < encoded_buffer_size) {
+-		const idx_t available = encoded_buffer_size - encoded_buffer.cur_pos;
+-		if (available < lookup_bytes && !encoded_buffer.last_buffer) {
++void GeneratedEncodedFunction::Decode(const EncodingFunction &encoding, const char *input, idx_t input_size,
++                                      bool is_last, char *output, idx_t &consumed, idx_t &written) {
++	const auto &index = GetIndex(encoding);
++	const auto map = encoding.conversion_map;
++	const idx_t lookup_bytes = encoding.lookup_bytes;
++	idx_t pos = 0;
++	idx_t out = 0;
++	while (pos < input_size) {
++		const idx_t available = input_size - pos;
++		if (available < lookup_bytes && !is_last) {
+ 			// Not enough bytes to check; the remaining bytes are carried over to the next buffer by the caller
+-			return;
++			break;
+ 		}
+-		const char *current = &encoded_buffer_ptr[encoded_buffer.cur_pos];
++		const char *current = input + pos;
+ 		const auto first = static_cast<uint8_t>(*current);
+ 		// Prefer the longest matching byte sequence
+ 		const map_entry_encoding *match = nullptr;
+@@ -87,29 +85,46 @@ void GeneratedEncodedFunction::Decode(CSVEncoderBuffer &encoded_buffer, char *ta
+ 		}
+ 		if (!match) {
+ 			// No mapping for this byte: pass it through unchanged
+-			encoded_buffer.cur_pos++;
+-			if (target_buffer_current_position == target_buffer_size) {
+-				// The target buffer is full: hand the byte to the next chunk instead of writing past the end
+-				remaining_bytes_buffer[0] = *current;
+-				remaining_bytes_size = 1;
+-				return;
+-			}
+-			target_buffer[target_buffer_current_position++] = *current;
++			output[out++] = *current;
++			pos++;
+ 			continue;
+ 		}
+-		encoded_buffer.cur_pos += match_len;
+-		for (idx_t byte_pos = 0; byte_pos < match->value_len; ++byte_pos) {
+-			if (target_buffer_current_position == target_buffer_size) {
+-				// The target buffer is full: store the rest of this character for the next chunk
+-				remaining_bytes_size = match->value_len - byte_pos;
+-				for (idx_t remaining_pos = 0; remaining_pos < remaining_bytes_size; ++remaining_pos) {
+-					remaining_bytes_buffer[remaining_pos] = static_cast<char>(match->value[byte_pos + remaining_pos]);
+-				}
+-				return;
+-			}
+-			target_buffer[target_buffer_current_position++] = match->value[byte_pos];
+-		}
++		std::memcpy(output + out, match->value, match->value_len);
++		out += match->value_len;
++		pos += match_len;
+ 	}
++	consumed = pos;
++	written = out;
++}
++
++static std::mutex &RegisteredLock() {
++	static std::mutex lock;
++	return lock;
++}
++
++static std::unordered_map<string, RegisteredEncoding> &Registered() {
++	static std::unordered_map<string, RegisteredEncoding> registered;
++	return registered;
++}
++
++RegisteredEncoding GetRegisteredEncoding(const string &lowercase_name) {
++	std::lock_guard<std::mutex> guard(RegisteredLock());
++	auto entry = Registered().find(lowercase_name);
++	return entry == Registered().end() ? RegisteredEncoding() : entry->second;
++}
++
++void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
++	auto table = make_shared_ptr<EncodingFunction>(function);
++	duckdb::decode_t decode = [table](const char *input, idx_t input_size, bool is_last, char *output,
++	                                  idx_t &consumed, idx_t &written) {
++		table->decode(*table, input, input_size, is_last, output, consumed, written);
++	};
++	CreateScalarFunctionInfo info(duckdb::EncodingFunction::Create(function.name, decode, function.lookup_bytes,
++	                                                               function.max_output_bytes));
++	duckdb::EncodingFunction::SetSchema(info);
++	loader.RegisterFunction(std::move(info));
++	std::lock_guard<std::mutex> guard(RegisteredLock());
++	Registered()[StringUtil::Lower(function.name)] = {function.max_output_bytes, function.map_size};
+ }
+ 
+ bool GeneratedEncodedFunction::KeyLess(const char *a, size_t a_len, const char *b, size_t b_len) {
+diff --git a/src/include/generated_encoded_function.hpp b/src/include/generated_encoded_function.hpp
+index f6f60bf..d43cfb4 100644
+--- a/src/include/generated_encoded_function.hpp
++++ b/src/include/generated_encoded_function.hpp
+@@ -11,15 +11,67 @@
+ 
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/function/encoding_function.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ 
+ namespace duckdb {
+ namespace duckdb_encodings {
+ 
++//! Encoding Map Entry Struct used for byte replacement
++typedef struct {
++	size_t key_len;
++	const char *key;
++	size_t value_len;
++	const char *value;
++} map_entry_encoding;
++
++//! A conversion table encoding. This shadows duckdb::EncodingFunction for the generated code, which describes its
++//! encodings with it. Registering one creates the scalar functions in the system.encodings schema.
++class EncodingFunction {
++public:
++	//! Decodes with the conversion table of the encoding, see duckdb::decode_t
++	typedef void (*decode_table_t)(const EncodingFunction &encoding, const char *input, idx_t input_size, bool is_last,
++	                               char *output, idx_t &consumed, idx_t &written);
++
++	EncodingFunction(const string &name, decode_table_t decode, idx_t max_bytes_per_byte, idx_t lookup_bytes,
++	                 const map_entry_encoding *map, idx_t map_size)
++	    : conversion_map(map), map_size(map_size), name(name), decode(decode), max_output_bytes(max_bytes_per_byte),
++	      lookup_bytes(lookup_bytes) {
++	}
++
++	const map_entry_encoding *conversion_map;
++	idx_t map_size;
++	string name;
++	decode_table_t decode;
++	//! The maximum number of UTF-8 bytes produced for one input byte
++	idx_t max_output_bytes;
++	//! The maximum number of input bytes that make up a single character
++	idx_t lookup_bytes;
++};
++
++//! Where the generated code registers its encodings. This shadows duckdb::DBConfig for the generated code.
++class DBConfig {
++public:
++	explicit DBConfig(ExtensionLoader &loader) : loader(loader) {
++	}
++
++	void RegisterEncodeFunction(const EncodingFunction &function) const;
++
++private:
++	ExtensionLoader &loader;
++};
++
++//! What the extension knows about a registered encoding, beyond what its scalar functions say
++struct RegisteredEncoding {
++	idx_t max_output_bytes = 0;
++	idx_t map_size = 0;
++};
++//! The conversion table encoding with the given lowercase name (zeros if there is none)
++RegisteredEncoding GetRegisteredEncoding(const string &lowercase_name);
++
+ class GeneratedEncodedFunction {
+ public:
+-	static void Decode(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+-	                   const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+-	                   EncodingFunction *encoding_function);
++	static void Decode(const EncodingFunction &encoding, const char *input, idx_t input_size, bool is_last,
++	                   char *output, idx_t &consumed, idx_t &written);
+ 
+ 	static bool KeyLess(const char *a, size_t a_len, const char *b, size_t b_len);
+ 

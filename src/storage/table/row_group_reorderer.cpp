@@ -204,6 +204,25 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, const End &end, const OrderB
 	return {new_row_offset, pruned_row_group_count, 0};
 }
 
+//! Whether the first row_offset rows of a NULLS FIRST order contain every row that can be NULL
+bool OffsetContainsAllNulls(vector<PartitionStatistics> &stats, const StorageIndex &storage_index,
+                            const idx_t row_offset) {
+	idx_t maybe_null_rows = 0;
+	for (auto &partition_stats : stats) {
+		if (!partition_stats.partition_row_group) {
+			return false;
+		}
+		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
+		if (!column_stats || column_stats->CanHaveNull()) {
+			maybe_null_rows += partition_stats.count;
+		}
+		if (maybe_null_rows > row_offset) {
+			return false;
+		}
+	}
+	return true;
+}
+
 } // namespace
 
 RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options_p, TransactionData transaction_p)
@@ -266,12 +285,16 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 	throw InternalException("Unsupported OrderByColumnType");
 }
 
-OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by,
-                                                             const OrderByColumnType column_type,
-                                                             const OrderType order_type,
-                                                             const OrderByNullType null_order,
-                                                             const StorageIndex &storage_index, const idx_t row_offset,
-                                                             vector<PartitionStatistics> &stats) {
+OffsetPruningResult
+RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by, const OrderByColumnType column_type,
+                                         const OrderType order_type, const OrderByNullType null_order,
+                                         const StorageIndex &storage_index, const idx_t row_offset,
+                                         vector<PartitionStatistics> &stats, const bool has_secondary_order) {
+	if (has_secondary_order && null_order == OrderByNullType::NULLS_FIRST &&
+	    !OffsetContainsAllNulls(stats, storage_index, row_offset)) {
+		// A secondary order sorts the NULLs of all row groups, so we cannot skip only a part of them
+		return {row_offset, 0, 0};
+	}
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
 	idx_t new_row_offset = row_offset;
 	idx_t leading_null_group_offset = 0;

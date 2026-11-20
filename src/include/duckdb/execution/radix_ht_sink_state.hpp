@@ -143,6 +143,8 @@ public:
 	const RadixPartitionedHashTable &radix_ht;
 	//! The spill metadata of the aggregate layout, set if the states can spill
 	unique_ptr<AggregateStateSpillPlan> spill_plan;
+	//! debug_force_external: also export every arena-backed state that has a spill plan
+	const bool force_external;
 	//! Config for partitioning
 	RadixHTConfig config;
 

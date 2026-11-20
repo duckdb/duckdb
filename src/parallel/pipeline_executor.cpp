@@ -71,7 +71,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline
-			FinishProcessing();
+			FinishProcessing(NumericCast<int32_t>(i + 1));
 		}
 	}
 	InitializeChunk(final_chunk);
@@ -81,6 +81,7 @@ void PipelineExecutor::Reset() {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
 	// Reset execution flags
+	exhausted_source = false;
 	exhausted_pipeline = false;
 	finalized = false;
 	started_flushing = false;
@@ -142,7 +143,7 @@ void PipelineExecutor::Reset() {
 		}
 
 		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
-			FinishProcessing();
+			FinishProcessing(NumericCast<int32_t>(i + 1));
 		}
 	}
 
@@ -539,6 +540,7 @@ bool PipelineExecutor::IsFinishedProcessing() const {
 
 void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
+	exhausted_pipeline = true;
 	in_process_operators = stack<idx_t>();
 
 	pipeline.PreventBlocking();
