@@ -214,6 +214,10 @@ bool StorageManager::HasBufferedIndexReplays() const {
 	return buffered_index_replays;
 }
 
+void StorageManager::MarkInexactStatistics() {
+	inexact_statistics = true;
+}
+
 idx_t StorageManager::GetWALEntriesCount() const {
 	return wal_entries_count;
 }
@@ -1126,7 +1130,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	// We only need to checkpoint if there is anything in the WAL.
 	auto wal_size = GetWALSize();
 	auto should_checkpoint = wal_size > 0 || Settings::Get<DebugForceCheckpointSetting>(config) ||
-	                         options.action == CheckpointAction::ALWAYS_CHECKPOINT;
+	                         options.action == CheckpointAction::ALWAYS_CHECKPOINT || inexact_statistics;
 	// Shared by the index binds before the checkpoint and by the checkpoint transaction.
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<ClientContext> checkpoint_context;
@@ -1148,7 +1152,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 				timer = profiler->StartTimer<MetricStorageCheckpointLatency>();
 			}
 
-			// Write the checkpoint.
+			// Write the checkpoint; columns whose statistics stay widened mark them again.
+			inexact_statistics = false;
 			auto checkpointer = CreateCheckpointWriter(context, options, checkpoint_context);
 			checkpointer->CreateCheckpoint();
 			timer.EndTimer();

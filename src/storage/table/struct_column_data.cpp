@@ -318,17 +318,20 @@ void StructColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry 
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
 	auto stats = BaseStatistics::CreateEmpty(type);
+	bool has_updates = false;
 	auto validity_stats = validity->GetUpdateStatistics();
 	if (validity_stats) {
 		stats.Merge(*validity_stats);
+		has_updates = true;
 	}
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
 			StructStats::SetChildStats(stats, i, std::move(child_stats));
+			has_updates = true;
 		}
 	}
-	return stats.ToUnique();
+	return has_updates ? stats.ToUnique() : nullptr;
 }
 
 void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
@@ -504,6 +507,18 @@ bool StructColumnData::HasAnyChanges() const {
 	}
 	for (auto &child_col : sub_columns) {
 		if (child_col->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool StructColumnData::HasInexactStatistics() const {
+	if (ColumnData::HasInexactStatistics() || validity->HasInexactStatistics()) {
+		return true;
+	}
+	for (auto &sub_column : sub_columns) {
+		if (sub_column->HasInexactStatistics()) {
 			return true;
 		}
 	}

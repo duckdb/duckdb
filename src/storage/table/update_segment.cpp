@@ -20,9 +20,20 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType type);
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
+static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data), stats(column_data.type) {
-	auto physical_type = column_data.type.InternalType();
+UpdateSegment::UpdateSegment(ColumnData &column_data)
+    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
+      newest_uncheckpointed_update_commit(0), stats(column_data.type) {
+	auto physical_type = type.InternalType();
+
+	// the WAL writer describes the updated column through the segment
+	reference<const ColumnData> current_column = column_data;
+	while (current_column.get().HasParent()) {
+		nested_column_path.push_back(current_column.get().column_index);
+		current_column = current_column.get().Parent();
+	}
+	std::reverse(nested_column_path.begin(), nested_column_path.end());
 
 	this->type_size = GetTypeIdSize(physical_type);
 
@@ -35,6 +46,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data)
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 	this->get_effective_updates = GetEffectiveUpdatesFunction(physical_type);
+	this->store_base_values_function = GetStoreBaseValuesFunction(physical_type);
 }
 
 UpdateSegment::~UpdateSegment() {
@@ -44,7 +56,7 @@ UpdateSegment::~UpdateSegment() {
 // Update Info Helpers
 //===--------------------------------------------------------------------===//
 Value UpdateInfo::GetValue(idx_t index) {
-	auto &type = segment->column_data.type;
+	auto &type = segment->GetType();
 
 	auto tuple_data = GetValues();
 	switch (type.id()) {
@@ -62,7 +74,7 @@ void UpdateInfo::Print() {
 }
 
 string UpdateInfo::ToString() {
-	auto &type = segment->column_data.type;
+	auto &type = segment->GetType();
 	string result = "Update Info [" + type.ToString() + ", Count: " + to_string(N) +
 	                ", Transaction Id: " + to_string(version_number.load()) + "]\n";
 	auto tuples = GetTuples();
@@ -461,7 +473,7 @@ void UpdateSegment::CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vecto
 	// allocate everything up front, so nothing is modified if this fails
 	// the first block of the arena is twice its initial capacity: it fits all strings until the next compaction
 	auto capacity = MaxValue<idx_t>(2 * live_size + MINIMUM_STRING_HEAP_COMPACTION_SIZE, live_size + new_size);
-	auto new_heap = make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()), capacity / 2);
+	auto new_heap = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator(), capacity / 2);
 	auto target = live_size == 0 ? nullptr : new_heap->allocator.Allocate(live_size);
 	ForEachUpdateString(root_info, chain, [&](string_t &str) {
 		if (str.IsInlined()) {
@@ -562,9 +574,30 @@ static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t
 	}
 }
 
-static void FetchCommittedRangeValidity(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
-	auto &result_mask = FlatVector::ValidityMutable(result);
-	MergeUpdateInfoRangeValidity(info, start, end, result_offset, result_mask);
+//! Applies updates to the tuples [start, end) of a vector, written to the result from result_offset on
+struct UpdateRangeValidityResult {
+	UpdateRangeValidityResult(Vector &result, idx_t start, idx_t end, idx_t result_offset)
+	    : mask(FlatVector::ValidityMutable(result)), start(start), end(end), result_offset(result_offset) {
+	}
+	void Set(idx_t idx, bool value) {
+		if (idx >= start && idx < end) {
+			mask.Set(result_offset + idx - start, value);
+		}
+	}
+	void Apply(UpdateInfo &info) {
+		MergeUpdateInfoRangeValidity(info, start, end, result_offset, mask);
+	}
+
+	ValidityMask &mask;
+	idx_t start;
+	idx_t end;
+	idx_t result_offset;
+};
+
+static void FetchCommittedRangeValidity(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
+                                        idx_t result_offset, Vector &result) {
+	UpdateRangeValidityResult range_result(result, start, end, result_offset);
+	FetchUpdatesInternal<bool>(view, info, range_result);
 }
 
 template <class T>
@@ -584,10 +617,30 @@ static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, id
 }
 
 template <class T>
-static void TemplatedFetchCommittedRange(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-                                         Vector &result) {
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data);
+struct UpdateRangeDataResult {
+	UpdateRangeDataResult(Vector &result, idx_t start, idx_t end, idx_t result_offset)
+	    : data(FlatVector::GetDataMutable<T>(result)), start(start), end(end), result_offset(result_offset) {
+	}
+	void Set(idx_t idx, T value) {
+		if (idx >= start && idx < end) {
+			data[result_offset + idx - start] = value;
+		}
+	}
+	void Apply(UpdateInfo &info) {
+		MergeUpdateInfoRange<T>(info, start, end, result_offset, data);
+	}
+
+	T *data;
+	idx_t start;
+	idx_t end;
+	idx_t result_offset;
+};
+
+template <class T>
+static void TemplatedFetchCommittedRange(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
+                                         idx_t result_offset, Vector &result) {
+	UpdateRangeDataResult<T> range_result(result, start, end, result_offset);
+	FetchUpdatesInternal<T>(view, info, range_result);
 }
 
 static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type) {
@@ -628,21 +681,19 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 	}
 }
 
-void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
+void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result) {
 	D_ASSERT(count > 0);
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto lock_handle = lock.GetSharedLock();
 	if (!root) {
 		return;
 	}
-	D_ASSERT(start_row <= column_data.count);
-	D_ASSERT(start_row + count <= column_data.count);
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
-	auto lock_handle = lock.GetSharedLock();
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
@@ -655,7 +706,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 		D_ASSERT(start_in_vector < end_in_vector);
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
-		fetch_committed_range(UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
+		fetch_committed_range(view, UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
 		AddStringHeapReference(*lock_handle, vector_idx, result);
 	}
 }
@@ -772,24 +823,21 @@ static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType ty
 
 void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel,
                               idx_t fetch_count, Vector &result, idx_t result_offset) {
-	if (fetch_count == 0 || !root) {
+	if (fetch_count == 0) {
 		return;
 	}
 
 	auto lock_handle = lock.GetSharedLock();
+	if (!root) {
+		return;
+	}
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
-		if (offset > column_data.count) {
-			throw InternalException("UpdateSegment::FetchRows out of range");
-		}
 		const idx_t vector_index = offset / STANDARD_VECTOR_SIZE;
 		const idx_t vector_offset = vector_index * STANDARD_VECTOR_SIZE;
 		idx_t vector_count = 1;
 		while (idx + vector_count < fetch_count) {
 			const idx_t next_offset = offsets[sel.get_index(idx + vector_count)];
-			if (next_offset > column_data.count) {
-				throw InternalException("UpdateSegment::FetchRows out of range");
-			}
 			if (next_offset / STANDARD_VECTOR_SIZE != vector_index) {
 				break;
 			}
@@ -919,6 +967,12 @@ void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo
 void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
+	if (!info.HasPrev() && info.HasNext()) {
+		// a checkpoint replaced this update info by a copy with its base values: clean up the copy
+		auto copy_pin = info.next.Pin();
+		CleanupUpdateInternal(*lock_handle, UpdateInfo::Get(copy_pin));
+		return;
+	}
 	CleanupUpdateInternal(*lock_handle, info);
 }
 
@@ -1237,12 +1291,21 @@ static UpdateSegment::save_undo_function_t GetSaveUndoFunction(PhysicalType type
 // Update statistics
 //===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
+	auto read_lock = lock.GetSharedLock();
+	if (!root) {
+		return nullptr;
+	}
 	lock_guard<mutex> stats_guard(stats_lock);
 	return stats.statistics.ToUnique();
 }
 
-idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
-                               idx_t count, SelectionVector &sel) {
+void UpdateSegment::MergeStatistics(const BaseStatistics &other) {
+	lock_guard<mutex> stats_guard(stats_lock);
+	stats.statistics.Merge(other);
+}
+
+void UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
+                              idx_t count) {
 	auto &mask = update.validity;
 	auto &validity = stats.statistics;
 	if (mask.CanHaveNull() && !validity.CanHaveNull()) {
@@ -1257,13 +1320,11 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	if (!validity.CanHaveNoNull() && !mask.CheckAllInvalid(count)) {
 		validity.SetHasNoNullFast();
 	}
-	sel.Initialize(nullptr);
-	return count;
 }
 
 template <class T>
-idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
-                                       idx_t count, SelectionVector &sel) {
+void TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
+                                      idx_t count) {
 	auto update_data = update.GetData<T>(update);
 	auto &mask = update.validity;
 
@@ -1273,32 +1334,25 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 			auto idx = update.sel->get_index(i);
 			stats.statistics.UpdateNumericStats<T>(update_data[idx]);
 		}
-		sel.Initialize(nullptr);
-		return count;
-	} else {
-		idx_t not_null_count = 0;
-		sel.Initialize(STANDARD_VECTOR_SIZE);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = update.sel->get_index(i);
-			if (mask.RowIsValid(idx)) {
-				stats.statistics.SetHasNoNullFast();
-				sel.set_index(not_null_count++, i);
-				stats.statistics.UpdateNumericStats<T>(update_data[idx]);
-			} else {
-				stats.statistics.SetHasNullFast();
-			}
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = update.sel->get_index(i);
+		if (mask.RowIsValid(idx)) {
+			stats.statistics.SetHasNoNullFast();
+			stats.statistics.UpdateNumericStats<T>(update_data[idx]);
+		} else {
+			stats.statistics.SetHasNullFast();
 		}
-		return not_null_count;
 	}
 }
 
-idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update, idx_t count,
-                             SelectionVector &sel) {
+void UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
+                            idx_t count) {
 	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
 
 	StatsWriter<string_t> stats_writer(stats.statistics.GetType());
-	idx_t not_null_count = 0;
 	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
@@ -1306,27 +1360,19 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 			auto &str = update_data[idx];
 			stats_writer.Update(str);
 		}
-		sel.Initialize(nullptr);
-		not_null_count = count;
 	} else {
-		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
 				stats.statistics.SetHasNoNullFast();
-				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
 				stats_writer.Update(str);
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
 		}
-		if (not_null_count == count) {
-			sel.Initialize(nullptr);
-		}
 	}
 	stats_writer.Merge(stats.statistics);
-	return not_null_count;
 }
 
 UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type) {
@@ -1406,9 +1452,13 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, idx_t count, Sel
 	for (idx_t i = 0; i < count; i++) {
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
-		// NULL values in the updates should have been filtered out before
-		D_ASSERT(update.validity.RowIsValid(update_idx));
-		if (original_validity.RowIsValid(sel_idx) && data[update_idx] == original_data[sel_idx]) {
+		if (!update.validity.RowIsValid(update_idx)) {
+			// a row updated to NULL keeps its current value: a rewrite drops the values below NULLs
+			if (!original_validity.RowIsValid(sel_idx)) {
+				// already NULL: there is no value to keep
+				continue;
+			}
+		} else if (original_validity.RowIsValid(sel_idx) && data[update_idx] == original_data[sel_idx]) {
 			// data is equivalent - skip
 			continue;
 		}
@@ -1453,6 +1503,85 @@ UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType 
 		return TemplatedGetEffectiveUpdates<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Keep current values
+//===--------------------------------------------------------------------===//
+template <class T>
+static T GetUpdateNullPadding() {
+	return T();
+}
+
+template <>
+string_t GetUpdateNullPadding() {
+	return string_t(uint32_t(0));
+}
+
+//! A row updated to NULL keeps its current value: a rewrite drops the values below NULLs
+template <class T>
+static void TemplatedKeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
+                                       const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
+	auto update_data = FlatVector::GetDataMutable<T>(update);
+	auto &update_validity = FlatVector::Validity(update);
+	auto base_values = FlatVector::GetData<T>(base_data);
+	auto &base_validity = FlatVector::Validity(base_data);
+	idx_t root_idx = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		if (update_validity.RowIsValid(idx)) {
+			continue;
+		}
+		auto id = UnsafeNumericCast<sel_t>(UnsafeNumericCast<idx_t>(ids[idx]) - vector_offset);
+		if (root_info) {
+			auto root_tuples = root_info->GetTuples();
+			while (root_idx < root_info->N && root_tuples[root_idx] < id) {
+				root_idx++;
+			}
+			if (root_idx < root_info->N && root_tuples[root_idx] == id) {
+				update_data[idx] = root_info->GetData<T>()[root_idx];
+				continue;
+			}
+		}
+		update_data[idx] = base_validity.RowIsValid(idx) ? base_values[idx] : GetUpdateNullPadding<T>();
+	}
+}
+
+static void KeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
+                              const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
+	switch (update.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedKeepCurrentValues<int8_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::INT16:
+		return TemplatedKeepCurrentValues<int16_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::INT32:
+		return TemplatedKeepCurrentValues<int32_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::INT64:
+		return TemplatedKeepCurrentValues<int64_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::UINT8:
+		return TemplatedKeepCurrentValues<uint8_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::UINT16:
+		return TemplatedKeepCurrentValues<uint16_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::UINT32:
+		return TemplatedKeepCurrentValues<uint32_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::UINT64:
+		return TemplatedKeepCurrentValues<uint64_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::INT128:
+		return TemplatedKeepCurrentValues<hugeint_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::UINT128:
+		return TemplatedKeepCurrentValues<uhugeint_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::FLOAT:
+		return TemplatedKeepCurrentValues<float>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::DOUBLE:
+		return TemplatedKeepCurrentValues<double>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::INTERVAL:
+		return TemplatedKeepCurrentValues<interval_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	case PhysicalType::VARCHAR:
+		return TemplatedKeepCurrentValues<string_t>(root_info, update, ids, count, sel, base_data, vector_offset);
+	default:
+		throw NotImplementedException("Unimplemented type for update segment");
 	}
 }
 
@@ -1507,7 +1636,7 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	// create the versions for this segment, if there are none yet
 	if (!root) {
-		root = make_uniq<UpdateNode>(column_data.block_manager.buffer_manager);
+		root = make_uniq<UpdateNode>(buffer_manager);
 	}
 	if (vector_idx < root->info.size()) {
 		return;
@@ -1564,13 +1693,10 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 
 	// the statistics of this update join those of the segment only once it cannot fail anymore, as RowGroup::Update
 	// publishes them after the next update of the column, which must not see the values of a failed update
+	SegmentStatistics update_stats(type);
+	statistics_update_function(this, update_stats, update_format, count);
+	// rows updated to NULL take part too: they keep their current value
 	SelectionVector sel;
-	SegmentStatistics update_stats(column_data.type);
-	count = statistics_update_function(this, update_stats, update_format, count, sel);
-	if (count == 0) {
-		MergeStatistics(update_stats);
-		return;
-	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
 	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
@@ -1593,9 +1719,22 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		D_ASSERT(base_data.GetVectorType() == VectorType::FLAT_VECTOR);
 		count = get_effective_updates(update_format, count, sel, base_data);
 		if (count == 0) {
-			MergeStatistics(update_stats);
+			MergeStatistics(update_stats.statistics);
 			return;
 		}
+	}
+	if (type.InternalType() != PhysicalType::BIT && !update_format.validity.CannotHaveNull()) {
+		update_p.Flatten();
+		optional_ptr<UpdateInfo> root_info;
+		UndoBufferReference root_pin;
+		if (root && vector_index < root->info.size() && root->info[vector_index].IsSet()) {
+			root_pin = root->info[vector_index].Pin();
+			root_info = &UpdateInfo::Get(root_pin);
+			// the kept values can point into the string heap of the vector, which a compaction below replaces
+			AddStringHeapReference(*write_lock, vector_index, update_p);
+		}
+		KeepCurrentValues(root_info, update_p, ids, count, sel, base_data, vector_offset);
+		update_p.ToUnifiedFormat(update_format);
 	}
 	InitializeUpdateInfo(vector_index);
 
@@ -1639,8 +1778,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		auto &heap_entry = root->string_heaps[vector_index];
 		if (!heap_entry) {
 			// the first block of the arena is twice its initial capacity: it fits exactly these strings
-			heap_entry =
-			    make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()), (new_size + 1) / 2);
+			heap_entry = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator(), (new_size + 1) / 2);
 			heap_entry->compacted_size = new_size;
 		} else {
 			CompactStringHeapIfNeeded(root_info, vector_index, new_size);
@@ -1741,15 +1879,11 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	// write the new values into the root
 	merge_update_function(root_info, update_format, ids, count, sel, vector_offset);
 	root_info.Verify();
-	MergeStatistics(update_stats);
-}
-
-void UpdateSegment::MergeStatistics(const SegmentStatistics &update_stats) {
-	lock_guard<mutex> stats_guard(stats_lock);
-	stats.statistics.Merge(update_stats.statistics);
+	MergeStatistics(update_stats.statistics);
 }
 
 bool UpdateSegment::HasUpdates() const {
+	auto read_lock = lock.GetSharedLock();
 	return root.get() != nullptr;
 }
 
@@ -1786,6 +1920,245 @@ bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 		}
 	}
 	return false;
+}
+
+//===--------------------------------------------------------------------===//
+// Store base values
+//===--------------------------------------------------------------------===//
+//! Copies the update info, with the base value for every tuple that has no stored value
+template <class T, class GET_BASE>
+static void CopyWithBaseValues(UpdateInfo &source, UpdateInfo &target, GET_BASE &&get_base) {
+	auto source_tuples = source.GetTuples();
+	auto source_data = source.GetData<T>();
+	auto source_mask = source.GetValueMask();
+	auto target_tuples = target.GetTuples();
+	auto target_data = target.GetData<T>();
+	ValidityAppender mask_appender(target.GetValueMask().GetData());
+	idx_t value_idx = 0;
+	for (idx_t i = 0; i < source.N; i++) {
+		target_tuples[i] = source_tuples[i];
+		target_data[i] = source_mask.RowIsValid(i) ? source_data[value_idx++] : get_base(source_tuples[i]);
+		mask_appender.Append(true);
+	}
+	mask_appender.Finalize();
+	target.N = source.N;
+}
+
+template <class T>
+static T CopyBaseValue(optional_ptr<UpdateStringHeap> heap, T value) {
+	return value;
+}
+
+template <>
+string_t CopyBaseValue(optional_ptr<UpdateStringHeap> heap, string_t value) {
+	// the string lives in the blocks of the column that the rewrite replaces
+	return heap->AddString(value);
+}
+
+static void StoreBaseValidity(UpdateInfo &source, Vector &base_data, optional_ptr<UpdateStringHeap> heap,
+                              UpdateInfo &target) {
+	auto &base_validity = FlatVector::Validity(base_data);
+	CopyWithBaseValues<bool>(source, target, [&](sel_t tuple) { return base_validity.RowIsValid(tuple); });
+}
+
+template <class T>
+static void TemplatedStoreBaseValues(UpdateInfo &source, Vector &base_data, optional_ptr<UpdateStringHeap> heap,
+                                     UpdateInfo &target) {
+	auto base_values = FlatVector::GetData<T>(base_data);
+	auto &base_validity = FlatVector::Validity(base_data);
+	CopyWithBaseValues<T>(source, target, [&](sel_t tuple) {
+		return base_validity.RowIsValid(tuple) ? CopyBaseValue<T>(heap, base_values[tuple]) : GetUpdateNullPadding<T>();
+	});
+}
+
+static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BIT:
+		return StoreBaseValidity;
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedStoreBaseValues<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedStoreBaseValues<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedStoreBaseValues<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedStoreBaseValues<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedStoreBaseValues<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedStoreBaseValues<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedStoreBaseValues<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedStoreBaseValues<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedStoreBaseValues<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedStoreBaseValues<uhugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedStoreBaseValues<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedStoreBaseValues<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedStoreBaseValues<interval_t>;
+	case PhysicalType::VARCHAR:
+		return TemplatedStoreBaseValues<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for update segment");
+	}
+}
+
+//! Whether a committed update takes old values from base data that a rewrite as of the bound replaces
+static bool ReadsReplacedBase(UpdateInfo &info, VisibilityBound visibility_bound) {
+	return info.version_number.load() < visibility_bound && !info.GetValueMask().CheckAllValid(info.N);
+}
+
+vector<idx_t> UpdateSegment::GetVectorsReadingBase(VisibilityBound visibility_bound) {
+	vector<idx_t> result;
+	auto read_lock = lock.GetSharedLock();
+	if (!root) {
+		return result;
+	}
+	for (idx_t vector_idx = 0; vector_idx < root->info.size(); vector_idx++) {
+		auto entry = GetUpdateNode(*read_lock, vector_idx);
+		if (!entry.IsSet()) {
+			continue;
+		}
+		auto root_pin = entry.Pin();
+		auto next = UpdateInfo::Get(root_pin).next;
+		while (next.IsSet()) {
+			auto pin = next.Pin();
+			auto &info = UpdateInfo::Get(pin);
+			if (ReadsReplacedBase(info, visibility_bound)) {
+				result.push_back(vector_idx);
+				break;
+			}
+			next = info.next;
+		}
+	}
+	return result;
+}
+
+void UpdateSegment::StoreBaseValues(VisibilityBound visibility_bound, idx_t vector_index, Vector &base_data) {
+	auto write_lock = lock.GetExclusiveLock();
+	auto entry = GetUpdateNode(*write_lock, vector_index);
+	if (!entry.IsSet()) {
+		return;
+	}
+	optional_ptr<UpdateStringHeap> string_heap;
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		if (root->string_heaps.size() <= vector_index) {
+			root->string_heaps.resize(vector_index + 1);
+		}
+		auto &heap_entry = root->string_heaps[vector_index];
+		if (!heap_entry) {
+			heap_entry = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator());
+		}
+		string_heap = heap_entry.get();
+	}
+	auto root_pin = entry.Pin();
+	auto next = UpdateInfo::Get(root_pin).next;
+	while (next.IsSet()) {
+		auto pin = next.Pin();
+		auto &info = UpdateInfo::Get(pin);
+		next = info.next;
+		if (!ReadsReplacedBase(info, visibility_bound)) {
+			continue;
+		}
+		// the copy lives in the segment: the undo buffer of the transaction only has room for the original
+		auto handle = root->allocator.Allocate(UpdateInfo::GetAllocSize(type_size, info.N, info.N));
+		auto &copy = UpdateInfo::Get(handle);
+		UpdateInfo::Initialize(copy, *info.table, info.version_number.load(), info.row_group_start, info.N, info.N);
+		copy.segment = this;
+		copy.vector_index = info.vector_index;
+		copy.column_index = info.column_index;
+		store_base_values_function(info, base_data, string_heap, copy);
+		copy.Verify();
+
+		// replace the original in the chain - pin both neighbours before modifying either, as Pin can throw
+		auto copy_pointer = handle.GetBufferPointer();
+		copy.prev = info.prev;
+		copy.next = info.next;
+		auto prev_pin = copy.prev.Pin();
+		UndoBufferReference next_pin;
+		if (copy.next.IsSet()) {
+			next_pin = copy.next.Pin();
+		}
+		UpdateInfo::Get(prev_pin).next = copy_pointer;
+		if (next_pin.IsSet()) {
+			UpdateInfo::Get(next_pin).prev = copy_pointer;
+		}
+		// the cleanup of the transaction follows the original to the copy
+		info.N = 0;
+		info.prev = UndoBufferPointer();
+		info.next = copy_pointer;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Checkpoint interaction
+//===--------------------------------------------------------------------===//
+bool UpdateSegment::HasUnserializedChanges() const {
+	return newest_uncheckpointed_update_commit.load() != 0;
+}
+
+void UpdateSegment::MarkCommitted(transaction_t commit_id) {
+	// commits are serialized under the transaction lock, so commit ids only grow
+	newest_uncheckpointed_update_commit = commit_id;
+}
+
+void UpdateSegment::MarkCheckpointed(VisibilityBound visibility_bound) {
+	auto current = newest_uncheckpointed_update_commit.load();
+	if (current != 0 && current < visibility_bound) {
+		// a commit at or above the bound that races with this call keeps its id
+		newest_uncheckpointed_update_commit.compare_exchange_strong(current, 0);
+	}
+}
+
+void ColumnUpdates::ClearIfLastHolder(const unique_lock<mutex> &guard, idx_t holders) {
+	D_ASSERT(guard.owns_lock() && guard.mutex() == &lock);
+	if (holders != 1 || !newest_column || !segment) {
+		return;
+	}
+	segment->ClearIfUnused();
+}
+
+bool UpdateSegment::IsUnused(StorageLockKey &lock_key) const {
+	if (HasUnserializedChanges()) {
+		return false;
+	}
+	if (!root) {
+		return true;
+	}
+	for (idx_t vector_idx = 0; vector_idx < root->info.size(); vector_idx++) {
+		auto entry = GetUpdateNode(lock_key, vector_idx);
+		if (!entry.IsSet()) {
+			continue;
+		}
+		auto pin = entry.Pin();
+		if (UpdateInfo::Get(pin).HasNext()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UpdateSegment::CanBeCleared() const {
+	auto read_lock = lock.GetSharedLock();
+	return IsUnused(*read_lock);
+}
+
+void UpdateSegment::ClearIfUnused() {
+	// checked under the same lock that the clear holds, so no update can slip in between
+	auto write_lock = lock.GetExclusiveLock();
+	if (!IsUnused(*write_lock)) {
+		return;
+	}
+	// results that scans filled from the string heaps keep them alive for as long as they need them
+	root.reset();
+	lock_guard<mutex> stats_guard(stats_lock);
+	stats.statistics = BaseStatistics::CreateEmpty(type);
 }
 
 } // namespace duckdb
