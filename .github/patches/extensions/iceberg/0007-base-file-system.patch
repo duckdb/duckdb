@@ -1,0 +1,112 @@
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
+index 4034fda70..40365ab39 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
+@@ -817,9 +817,11 @@ IcebergTableMetadata IcebergTable::CreateMetadataFromLog(ClientContext &context,
+ 		    GetTableKey(), Timestamp::ToString(timestamp));
+ 	}
+ 
+-	auto fs = make_shared_ptr<CachingFileSystemWrapper>(FileSystem::GetFileSystem(context), *context.db);
++	auto &context_fs = FileSystem::GetFileSystem(context);
++	auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(context_fs.GetFileSystem(), *context.db);
++	BoundFileSystem fs(*caching_fs, context_fs.GetOpener());
+ 	auto &path = log[log_item_index.GetIndex()].metadata_file;
+-	auto parsed_metadata = IcebergTableMetadata::Parse(path, *fs, "");
++	auto parsed_metadata = IcebergTableMetadata::Parse(path, fs, "");
+ 
+ 	return IcebergTableMetadata::FromTableMetadata(parsed_metadata);
+ }
+@@ -915,9 +917,10 @@ void IcebergTable::InitializeFromCatalogResponse(ClientContext &context,
+ 		unique_ptr<const rest_api_objects::TableMetadata> file_metadata;
+ 		try {
+ 			auto &fs = FileSystem::GetFileSystem(context);
+-			auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs, *context.db);
++			auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs.GetFileSystem(), *context.db);
++			BoundFileSystem bound_caching_fs(*caching_fs, fs.GetOpener());
+ 			file_metadata = make_uniq<const rest_api_objects::TableMetadata>(
+-			    IcebergTableMetadata::Parse(metadata_location, *caching_fs, "none"));
++			    IcebergTableMetadata::Parse(metadata_location, bound_caching_fs, "none"));
+ 		} catch (std::exception &ex) {
+ 			DUCKDB_LOG(context, IcebergLogType,
+ 			           "Could not load table metadata from metadata-location '%s': %s - falling back to the "
+diff --git a/src/common/iceberg_utils.cpp b/src/common/iceberg_utils.cpp
+index ef19ac564..ead165dcf 100644
+--- a/src/common/iceberg_utils.cpp
++++ b/src/common/iceberg_utils.cpp
+@@ -256,9 +256,11 @@ IcebergResolvedMetadata IcebergUtils::ResolveTableMetadata(ClientContext &contex
+ 
+ 	auto table_location = GetStorageLocation(context, input);
+ 	auto &fs = FileSystem::GetFileSystem(context);
+-	auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs, *context.db);
++	auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs.GetFileSystem(), *context.db);
++	BoundFileSystem bound_caching_fs(*caching_fs, fs.GetOpener());
+ 	auto metadata_path = IcebergTableMetadata::GetMetaDataPath(context, table_location, fs, options);
+-	auto table_metadata = IcebergTableMetadata::Parse(metadata_path, *caching_fs, options.metadata_compression_codec);
++	auto table_metadata =
++	    IcebergTableMetadata::Parse(metadata_path, bound_caching_fs, options.metadata_compression_codec);
+ 	return IcebergResolvedMetadata(std::move(table_location), IcebergTableMetadata::FromTableMetadata(table_metadata));
+ }
+ 
+diff --git a/test/native_catalog/test_native_catalog.cpp b/test/native_catalog/test_native_catalog.cpp
+index 6bdcf77aa..c99ec5760 100644
+--- a/test/native_catalog/test_native_catalog.cpp
++++ b/test/native_catalog/test_native_catalog.cpp
+@@ -10,7 +10,7 @@ using iceberg_test::Json;
+ 
+ namespace {
+ 
+-FileSystem &TestLocalFileSystem() {
++BaseFileSystem &TestLocalFileSystem() {
+ 	static LocalFileSystem fs;
+ 	return fs;
+ }
+@@ -22,7 +22,7 @@ string TestRoot() {
+ }
+ 
+ //! Fail at the filesystem boundary after one metadata file has already been completed.
+-class FailingFileSystem : public FileSystem {
++class FailingFileSystem : public BaseFileSystem {
+ public:
+ 	FailingFileSystem() : local(make_uniq<LocalFileSystem>()) {
+ 	}
+@@ -30,7 +30,7 @@ public:
+ 		return "NativeCatalogFailingFileSystem";
+ 	}
+ 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+-	                                optional_ptr<FileOpener> opener = nullptr) override {
++	                                optional_ptr<FileOpener> opener) override {
+ 		if (flags.OpenForWriting() && StringUtil::EndsWith(path, ".metadata.json")) {
+ 			metadata_writes++;
+ 			if (fail_at && metadata_writes == fail_at) {
+@@ -39,18 +39,18 @@ public:
+ 		}
+ 		return local->OpenFile(path, flags, opener);
+ 	}
+-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override {
++	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override {
+ 		local->CreateDirectoriesRecursive(path, opener);
+ 	}
+ 	void RemoveOwnedRoot(const string &root) {
+-		local->RemoveDirectory(root);
++		local->RemoveDirectory(root, nullptr);
+ 	}
+ 
+ 	idx_t metadata_writes = 0;
+ 	idx_t fail_at = 0;
+ 
+ private:
+-	unique_ptr<FileSystem> local;
++	unique_ptr<LocalFileSystem> local;
+ };
+ 
+ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+@@ -67,7 +67,8 @@ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+ TEST_CASE("Native catalog publishes no table when the second metadata write fails", "[iceberg_native]") {
+ 	FailingFileSystem fs;
+ 	auto root = TestRoot();
+-	iceberg_test::Catalog catalog(fs, root);
++	BoundFileSystem bound_fs(fs, nullptr);
++	iceberg_test::Catalog catalog(bound_fs, root);
+ 	REQUIRE(catalog.Request("POST", "/v1/namespaces", R"({"namespace":["atomic"]})")->status == HTTPStatusCode::OK_200);
+ 	for (auto name : {"a", "b"}) {
+ 		auto body =
