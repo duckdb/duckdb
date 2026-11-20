@@ -23,7 +23,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx);
+	HashedSortGroup(Sort &sort, idx_t group_idx);
 
 	const idx_t group_idx;
 	atomic<idx_t> count;
@@ -42,9 +42,8 @@ public:
 	ColumnDataAppendState direct_append_state;
 };
 
-HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
+HashedSortGroup::HashedSortGroup(Sort &sort, idx_t group_idx)
     : group_idx(group_idx), count(0), sort(sort), tasks_completed(0) {
-	sort_global = sort.GetGlobalSinkState(client);
 }
 
 //===--------------------------------------------------------------------===//
@@ -293,7 +292,7 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 
 		auto &group_data = groups[group_idx];
 		if (group_data->Count()) {
-			hash_group = make_uniq<HashedSortGroup>(client, *hashed_sort.sort, group_idx);
+			hash_group = make_uniq<HashedSortGroup>(*hashed_sort.sort, group_idx);
 		}
 	}
 
@@ -337,6 +336,12 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 		auto &hash_group = gsink.hash_groups[hash_bin];
 		if (!hash_group) {
 			continue;
+		}
+
+		// The partition is complete: register the group's sort now, reserving its size if below the default minimum
+		if (!gsink.CanBypassSort(hash_bin)) {
+			hash_group->sort_global = sort->GetGlobalSinkState(client);
+			sort->SetExpectedSize(client, *hash_group->sort_global, partition.SizeInBytes());
 		}
 
 		// Prepare to scan into the sort
@@ -564,6 +569,7 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 	TupleDataLocalScanState local_scan;
 	partition.InitializeScan(local_scan);
 
+	D_ASSERT(hash_group.sort_global);
 	auto sort_local = sort->GetLocalSinkState(context);
 	OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
 	idx_t combined = 0;
