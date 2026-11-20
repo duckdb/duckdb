@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -90,6 +91,15 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	}
 }
 
+bool StatisticsPropagator::HasNoValidValue(optional_ptr<const BaseStatistics> stats) {
+	// statistics that hold neither NULL nor non-NULL values describe an empty input, which is left alone
+	return stats && stats->CanHaveNull() && !stats->CanHaveNoNull();
+}
+
+bool StatisticsPropagator::IsRemovable(const Expression &expr) {
+	return !expr.CanThrow() && !expr.IsVolatile() && !ExpressionBarrier::Contains(expr);
+}
+
 FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
                                                                 const BaseStatistics &rstats,
                                                                 ExpressionType comparison) {
@@ -116,6 +126,17 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 		}
 		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null);
+	}
+
+	if (lstats.GetStatsType() == StatisticsType::BIGNUM_STATS &&
+	    rstats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+		if (lstats.GetType() != rstats.GetType() || !BignumStats::HasMinMax(lstats) ||
+		    !BignumStats::HasMinMax(rstats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
+		return PropagateValueComparison(BignumStats::Min(lstats), BignumStats::Max(lstats), BignumStats::Min(rstats),
+		                                BignumStats::Max(rstats), comparison, has_null);
 	}
 
 	switch (lstats.GetType().InternalType()) {
@@ -189,6 +210,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFuncti
 	                                             ComparisonContext::SCALAR);
 	if (comparison != expr.GetExpressionType()) {
 		BoundComparisonExpression::SetType(expr, comparison);
+	}
+	if (comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
+	    comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+	    (HasNoValidValue(left_stats.get()) || HasNoValidValue(right_stats.get())) && IsRemovable(*left) &&
+	    IsRemovable(*right)) {
+		// an operand that holds only NULLs: the comparison is NULL for every row
+		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
+		return PropagateExpression(expr_ptr);
 	}
 	if (!left_stats || !right_stats) {
 		return nullptr;

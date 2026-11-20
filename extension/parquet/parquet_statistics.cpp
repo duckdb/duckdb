@@ -1,5 +1,7 @@
 #include "parquet_statistics.hpp"
 
+#include "duckdb/common/bignum.hpp"
+
 #include <cmath>
 #include <memory>
 #include <utility>
@@ -13,6 +15,7 @@
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -87,6 +90,27 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::CreateNumericStats(const Logi
 	}
 	NumericStats::SetMin(stats, min);
 	NumericStats::SetMax(stats, max);
+	return stats.ToUnique();
+}
+
+//! Decimals wider than 38 digits are BIGNUM blobs with min/max bounds, which are cut when the values are long
+static unique_ptr<BaseStatistics> CreateWideDecimalStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
+                                                         const duckdb_parquet::Statistics &parquet_stats) {
+	auto stats = BignumStats::CreateUnknown(type);
+	Value min;
+	Value max;
+	if (parquet_stats.__isset.min_value) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
+	} else if (parquet_stats.__isset.min) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
+	}
+	if (parquet_stats.__isset.max_value) {
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value);
+	} else if (parquet_stats.__isset.max) {
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max);
+	}
+	BignumStats::SetMin(stats, min);
+	BignumStats::SetMax(stats, max);
 	return stats.ToUnique();
 }
 
@@ -234,6 +258,15 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
+			case PhysicalType::VARCHAR: {
+				// wide decimal stored as a BIGNUM blob
+				auto blob = ParquetDecimalUtils::ReadWideDecimalValue(stats_data, stats.size());
+				bignum_t value {string_t(blob)};
+				if (!DecimalHelper<bignum_t>::FitsWidth(value, width)) {
+					return Value();
+				}
+				return Value::DECIMAL(value, width, scale);
+			}
 			default:
 				throw InvalidInputException("Unsupported internal type for decimal");
 			}
@@ -373,6 +406,12 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
@@ -522,8 +561,12 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformParquetStatistics(
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::UUID:
+		return CreateNumericStats(type, schema, parquet_stats);
+	case LogicalTypeId::DECIMAL:
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			return CreateWideDecimalStats(type, schema, parquet_stats);
+		}
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -577,19 +620,32 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformParquetStatistics(
 		}
 		return string_stats.ToUnique();
 	}
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::GEOMETRY: {
 		if (!column_chunk) {
 			break;
 		}
+		const bool is_geography = type.id() == LogicalTypeId::GEOGRAPHY;
 		auto geo_stats = GeometryStats::CreateUnknown(type);
 		if (column_chunk->meta_data.__isset.geospatial_statistics) {
 			if (column_chunk->meta_data.geospatial_statistics.__isset.bbox) {
 				auto &bbox = column_chunk->meta_data.geospatial_statistics.bbox;
 				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
 
-				// xmin > xmax is allowed if the geometry crosses the antimeridian,
-				// but we don't handle this right now
-				if (bbox.xmin <= bbox.xmax) {
+				// For GEOGRAPHY the bbox is assumed to be a *coverage* bound: it bounds the geodesic edges
+				// and polygon interiors, not just the coordinate values (which is what we write ourselves,
+				// and what other spherical engines write - even though the Parquet spec's definition is
+				// coordinate-based). A file whose writer stored coordinate-only boxes for line/polygon
+				// geography data may prune incorrectly under this assumption.
+				//
+				// xmin > xmax means the bounding box wraps across the antimeridian. This is only valid for
+				// GEOGRAPHY (whose extent math is antimeridian-aware); for GEOMETRY we ignore such a box.
+				// The geodetic arc math requires X within [-180, 180], so a file-provided GEOGRAPHY bbox
+				// outside that range (or NaN) is ignored rather than trusted.
+				const bool valid_x = is_geography ? bbox.xmin >= -180.0 && bbox.xmin <= 180.0 && bbox.xmax >= -180.0 &&
+				                                        bbox.xmax <= 180.0
+				                                  : bbox.xmin <= bbox.xmax;
+				if (valid_x) {
 					stats_bbox.x_min = bbox.xmin;
 					stats_bbox.x_max = bbox.xmax;
 				}
@@ -714,6 +770,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);
@@ -820,13 +878,28 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	bool child_has_constant = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child, hash_strategy);
-		}
-	});
-	return child_has_constant;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_child_has_constant = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (!any_child_has_constant) {
+				any_child_has_constant = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return any_child_has_constant;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_have_constants = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (all_children_have_constants) {
+				all_children_have_constants = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return all_children_have_constants;
+	}
+	default:
+		return false;
+	}
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter, ParquetBloomFilterHashStrategy hash_strategy) {

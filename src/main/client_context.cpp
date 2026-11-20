@@ -26,7 +26,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/relation.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -38,7 +37,6 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
-#include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
@@ -157,17 +155,34 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #endif
 }
 
-ClientContext::~ClientContext() {
-	if (Exception::UncaughtException()) {
+void ClientContext::RollbackActiveTransaction() {
+	if (!transaction.HasActiveTransaction()) {
 		return;
 	}
-	// destroy the client context and rollback if there is an active transaction
-	// but only if we are not destroying this client context as part of an exception stack unwind
+	// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
 	try {
-		Destroy();
-	} catch (...) {
-		// a destructor cannot throw, and locking the context allocates
+		transaction.Rollback(nullptr);
+	} catch (std::exception &ex) {
+		// building the error message allocates
+		try {
+			ErrorData data(ex);
+			DUCKDB_LOG_ERROR(*this, "ClientContext::RollbackActiveTransaction()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
+	} catch (...) { // NOLINT
 	}
+}
+
+ClientContext::~ClientContext() {
+	// no clean-up while unwinding an exception stack, but the transaction must not outlive the connection
+	if (!Exception::UncaughtException()) {
+		try {
+			Destroy();
+		} catch (...) {
+			// a destructor cannot throw, and ending the active query allocates
+		}
+	}
+	RollbackActiveTransaction();
 }
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
@@ -218,18 +233,11 @@ static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
 }
 
 void ClientContext::Destroy() {
-	auto lock = LockContext();
-	if (transaction.HasActiveTransaction()) {
-		transaction.ResetActiveQuery();
-		if (!transaction.IsAutoCommit()) {
-			// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
-			try {
-				transaction.Rollback(nullptr);
-			} catch (...) { // NOLINT
-			}
-		}
-	}
-	CleanupInternal(*lock);
+	// the destructor runs this when the heap may be exhausted: lock on the stack, so the tasks of an active query are
+	// still drained before their executor goes away
+	ClientContextLock lock(context_lock);
+	transaction.ResetActiveQuery();
+	CleanupInternal(lock);
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
@@ -449,7 +457,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 			    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
-		meta_transaction.ModifyDatabase(*entry, it.second.modifications);
+		meta_transaction.ModifyDatabase(*this, *entry, it.second.modifications);
 	}
 }
 
@@ -1273,7 +1281,7 @@ void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info)
 				if (ValidChecker::IsInvalidated(*attached)) {
 					continue;
 				}
-				transaction.ActiveTransaction().GetTransaction(*attached);
+				transaction.ActiveTransaction().GetTransaction(*this, *attached);
 			}
 		}
 		break;
@@ -1413,26 +1421,6 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	Append(std::move(stmt));
 }
 
-void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
-	// bind the expressions
-	auto binder = Binder::CreateBinder(*this);
-	auto result = relation.Bind(*binder);
-	D_ASSERT(result.names.size() == result.types.size());
-
-	result_columns.reserve(result_columns.size() + result.names.size());
-	for (idx_t i = 0; i < result.names.size(); i++) {
-		result_columns.emplace_back(result.names[i], result.types[i]);
-	}
-}
-
-void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
-#ifdef DEBUG
-	D_ASSERT(!relation.GetAlias().empty());
-	D_ASSERT(!relation.ToString().empty());
-#endif
-	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
-}
-
 unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
 	auto lock = LockContext();
 
@@ -1455,77 +1443,6 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 		result = binder->GetTableNames();
 	});
 	return result;
-}
-
-unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, const shared_ptr<Relation> &relation,
-                                                      const QueryParameters &query_parameters) {
-	if (auto refusal = InitialCleanup<QueryResult>(lock)) {
-		return refusal;
-	}
-
-#ifdef DEBUG
-	// run the ToString method of any relation we run, mostly to ensure it doesn't crash
-	relation->ToString();
-	relation->GetAlias();
-#endif
-
-	auto relation_stmt = make_uniq<RelationStatement>(relation);
-	return SubmitInternal(lock, std::move(relation_stmt), query_parameters);
-}
-
-unique_ptr<QueryResult> ClientContext::Submit(const shared_ptr<Relation> &relation,
-                                              const QueryParameters &query_parameters) {
-	auto lock = LockContext();
-	return SubmitInternal(*lock, relation, query_parameters);
-}
-
-unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
-	auto lock = LockContext();
-	auto &expected_columns = relation->Columns();
-	if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
-		return refusal;
-	}
-
-	auto relation_stmt = make_uniq<RelationStatement>(relation);
-	QueryParameters parameters;
-	auto result = SubmitInternal(*lock, std::move(relation_stmt), parameters, true, Retention::RETAINED_AT_SUBMISSION);
-	if (result->HasError()) {
-		return result;
-	}
-	result = CompleteInternal(*lock, std::move(result));
-	if (result->HasError()) {
-		return result;
-	}
-	// verify that the result types and result names of the query match the expected result types/names
-	if (result->GetTypes().size() == expected_columns.size()) {
-		bool mismatch = false;
-		for (idx_t i = 0; i < result->GetTypes().size(); i++) {
-			if (result->GetTypes()[i] != expected_columns[i].Type() ||
-			    result->ColumnName(i) != expected_columns[i].Name()) {
-				mismatch = true;
-				break;
-			}
-		}
-		if (!mismatch) {
-			// all is as expected: return the result
-			return result;
-		}
-	}
-	// result mismatch
-	string err_str = "Result mismatch in query!\nExpected the following columns: [";
-	for (idx_t i = 0; i < expected_columns.size(); i++) {
-		if (i > 0) {
-			err_str += ", ";
-		}
-		err_str += expected_columns[i].Name() + " " + expected_columns[i].Type().ToString();
-	}
-	err_str += "]\nBut result contained the following: ";
-	for (idx_t i = 0; i < result->GetTypes().size(); i++) {
-		err_str += i == 0 ? "[" : ", ";
-		err_str += result->ColumnName(i) + " " + result->GetTypes()[i].ToString();
-	}
-	err_str += "]";
-	return ErrorResult<QueryResult>(ErrorData(err_str));
 }
 
 SettingLookupResult ClientContext::TryGetCurrentSetting(const Identifier &key, Value &result) const {

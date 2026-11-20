@@ -53,26 +53,30 @@ static bool IsIdentityType(const LogicalType &type, bool is_oid) {
 	return type.id() == (is_oid ? LogicalTypeId::BIGINT : LogicalTypeId::VARCHAR);
 }
 
+// whether `name` is the identity column called `column`; a null `column` means the function has no such column
+static bool MatchesIdentityColumn(const Identifier &name, const LogicalType &type, const char *column, bool is_oid) {
+	return column && name == column && IsIdentityType(type, is_oid);
+}
+
 unique_ptr<FunctionData> SystemCatalogScanner::CreateBindData(const vector<Identifier> &names,
                                                               const vector<LogicalType> &return_types,
-                                                              const char *entry_name_column,
-                                                              const char *entry_oid_column) {
+                                                              const SystemCatalogIdentityColumns &columns) {
 	D_ASSERT(names.size() == return_types.size());
 	auto result = make_uniq<SystemCatalogScannerData>();
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
 		auto &type = return_types[i];
-		if (name == "database_name" && IsIdentityType(type, false)) {
+		if (MatchesIdentityColumn(name, type, columns.database_name, false)) {
 			result->database_name_idx = i;
-		} else if (name == "database_oid" && IsIdentityType(type, true)) {
+		} else if (MatchesIdentityColumn(name, type, columns.database_oid, true)) {
 			result->database_oid_idx = i;
-		} else if (name == "schema_name" && IsIdentityType(type, false)) {
+		} else if (MatchesIdentityColumn(name, type, columns.schema_name, false)) {
 			result->schema_name_idx = i;
-		} else if (name == "schema_oid" && IsIdentityType(type, true)) {
+		} else if (MatchesIdentityColumn(name, type, columns.schema_oid, true)) {
 			result->schema_oid_idx = i;
-		} else if (entry_name_column && name == entry_name_column && IsIdentityType(type, false)) {
+		} else if (MatchesIdentityColumn(name, type, columns.entry_name, false)) {
 			result->entry_name_idx = i;
-		} else if (entry_oid_column && name == entry_oid_column && IsIdentityType(type, true)) {
+		} else if (MatchesIdentityColumn(name, type, columns.entry_oid, true)) {
 			result->entry_oid_idx = i;
 		}
 	}

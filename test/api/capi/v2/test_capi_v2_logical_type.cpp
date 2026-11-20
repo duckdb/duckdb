@@ -21,7 +21,7 @@ namespace test_capi_v2 {
 
 // The type name is a qualified name; every case here names an unqualified type, so it is wrapped in a one-part name.
 inline DUCKDB_V2_ERROR LTCreateTypeFromName(duckdb_v2_factory_handle factory, std::string_view name,
-                                            const char **param_names, const idx_t *param_names_lengths,
+                                            const char *const *param_names, const idx_t *param_names_lengths,
                                             const duckdb_v2_value_handle *param_values, idx_t param_count,
                                             duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_qname_handle qname = nullptr;
@@ -1067,17 +1067,17 @@ TEST_CASE("V2: parameterless kinds report zero params", "[capi_v2][logical_type]
 	duckdb_v2_logical_type_destroy(&geom);
 }
 
-TEST_CASE("V2: DECIMAL params are width and scale as UTINYINT", "[capi_v2][logical_type][param]") {
+TEST_CASE("V2: DECIMAL params are width and scale as UINTEGER", "[capi_v2][logical_type][param]") {
 	EnvFixture fx;
 	auto t = MakeType(fx.factory, "decimal", nullptr, {MakeInt32Value(fx.factory, 18), MakeInt32Value(fx.factory, 3)});
 	REQUIRE(V2ParamCount(t) == 2);
 	REQUIRE(V2ParamU8(t, 0) == 18);
 	REQUIRE(V2ParamU8(t, 1) == 3);
-	// The param values are UTINYINT typed.
+	// The param values are UINTEGER typed, wide decimals reach widths beyond a byte.
 	auto v = V2GetParam(t, 0, nullptr);
 	duckdb_v2_logical_type_handle vt = nullptr;
 	duckdb_v2_value_get_logical_type(v, &vt, nullptr);
-	REQUIRE(V2TypeIdOf(vt) == DUCKDB_V2_LOGICAL_TYPE_ID_UTINYINT);
+	REQUIRE(V2TypeIdOf(vt) == DUCKDB_V2_LOGICAL_TYPE_ID_UINTEGER);
 	duckdb_v2_logical_type_destroy(&vt);
 	duckdb_v2_value_destroy(&v);
 	duckdb_v2_logical_type_destroy(&t);

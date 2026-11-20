@@ -22,9 +22,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PIECEWISE_MERGE_JOIN;
 
 public:
-	PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-	                           PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-	                           idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+	                           PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+	                           JoinType join_type, idx_t estimated_cardinality,
+	                           unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 
 	vector<LogicalType> join_key_types;
 	vector<BoundOrderByNode> lhs_orders;
@@ -78,6 +79,8 @@ public:
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	// find the build rows a probe chunk matches (RIGHT SEMI); the source phase emits them
+	void ResolveRightSemiJoin(ExecutionContext &context, DataChunk &input, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                      OperatorState &state) const;

@@ -25,6 +25,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class DecimalWidthLimit;
 class ParsedExpression;
 class CoordinateReferenceSystem;
 
@@ -246,6 +247,7 @@ enum class LogicalTypeId : uint8_t {
 	UUID = 54,
 
 	GEOMETRY = 60,
+	GEOGRAPHY = 61,
 
 	STRUCT = 100,
 	LIST = 101,
@@ -482,6 +484,16 @@ struct LogicalType {
 	//! Variant of ForceMaxLogicalType for call-sites that have no ClientContext available; uses only the built-in
 	//! CastRules (no extension-registered casts).
 	DUCKDB_API static LogicalType DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
+	//! Variants that bind the width of a combined DECIMAL within the limit instead of the max_decimal_width setting:
+	//! the binder passes its limit, which is fixed while the keys of an index are bound
+	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left,
+	                                             const LogicalType &right, const DecimalWidthLimit &decimal_width_limit);
+	DUCKDB_API static bool TryGetMaxLogicalType(ClientContext &context, const LogicalType &left,
+	                                            const LogicalType &right, LogicalType &result,
+	                                            const DecimalWidthLimit &decimal_width_limit);
+	DUCKDB_API static LogicalType ForceMaxLogicalType(ClientContext &context, const LogicalType &left,
+	                                                  const LogicalType &right,
+	                                                  const DecimalWidthLimit &decimal_width_limit);
 	//! Normalize a type - removing literals
 	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 	//! Nested type children with Parquet style names
@@ -500,9 +512,16 @@ struct LogicalType {
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
 	DUCKDB_API bool IsTemplated() const;
+	//! True, if a vector can hold the type: it has a physical type and child types, as do its children
+	DUCKDB_API bool HasPhysicalType() const;
 
 	//! True, if this type supports in-place updates.
 	bool SupportsRegularUpdate() const;
+	//! Whether two values of this type that compare equal are the same value, so that a function of them agrees and
+	//! either can stand for both. Not for types whose equal values can differ: FLOAT / DOUBLE (0.0 and -0.0),
+	//! INTERVAL (1 month and 30 days), a VARCHAR with a collation, VARIANT (an integer stored at two widths), nor
+	//! for a nested type over one of them. Types this is not known for count as such, too.
+	DUCKDB_API bool EqualValuesAreIdentical() const;
 
 private:
 	//! Takes over a reference to "type_info"
@@ -578,6 +597,9 @@ public:
 	DUCKDB_API static LogicalType GEOMETRY();                                          // NOLINT
 	DUCKDB_API static LogicalType GEOMETRY(const string &crs);
 	DUCKDB_API static LogicalType GEOMETRY(const CoordinateReferenceSystem &crs);
+	DUCKDB_API static LogicalType GEOGRAPHY();                                           // NOLINT
+	DUCKDB_API static LogicalType GEOGRAPHY(const string &crs);
+	DUCKDB_API static LogicalType GEOGRAPHY(const CoordinateReferenceSystem &crs);
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);                         // NOLINT
@@ -608,6 +630,7 @@ public:
 struct DecimalType {
 	DUCKDB_API static uint32_t GetWidth(const LogicalType &type);
 	DUCKDB_API static uint32_t GetScale(const LogicalType &type);
+	//! The widest DECIMAL: widths above Decimal::MAX_WIDTH_INT128 are stored as BIGNUM blobs and reach the uint32_t range
 	DUCKDB_API static uint32_t MaxWidth();
 };
 
@@ -711,7 +734,9 @@ DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
-DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientContext &context);
+//! Parses and binds a type from its SQL text, binding decimals within the limit, if one is given
+DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientContext &context,
+                                                   optional_ptr<const DecimalWidthLimit> decimal_width_limit = nullptr);
 
 //! The PhysicalType used by the row identifiers column
 extern const PhysicalType ROW_TYPE;

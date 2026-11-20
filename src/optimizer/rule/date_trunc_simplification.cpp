@@ -39,13 +39,47 @@ DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rew
 	root = std::move(op);
 }
 
-static bool TruncatesYearsTowardsZero(const BoundConstantExpression &date_part) {
-	DatePartSpecifier part;
-	if (!TryGetDatePartSpecifier(StringValue::Get(date_part.GetValue()), part)) {
-		return true;
-	}
+static bool TruncatesYearsTowardsZero(DatePartSpecifier part) {
 	return part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
 	       part == DatePartSpecifier::MILLENNIUM;
+}
+
+static bool TruncatesToDays(DatePartSpecifier part) {
+	switch (part) {
+	case DatePartSpecifier::MILLENNIUM:
+	case DatePartSpecifier::CENTURY:
+	case DatePartSpecifier::DECADE:
+	case DatePartSpecifier::YEAR:
+	case DatePartSpecifier::QUARTER:
+	case DatePartSpecifier::MONTH:
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+	case DatePartSpecifier::ISOYEAR:
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool TruncatesInSessionTimeZone(LogicalTypeId type) {
+	return type == LogicalTypeId::TIMESTAMP_TZ || type == LogicalTypeId::TIMESTAMP_TZ_NS;
+}
+
+static bool TruncatesToSecondOrFiner(DatePartSpecifier part) {
+	switch (part) {
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+	case DatePartSpecifier::MILLISECONDS:
+	case DatePartSpecifier::MICROSECONDS:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static bool IsAfterFirstYear(const Value &value) {
@@ -68,6 +102,10 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	auto &right = BoundComparisonExpression::RightMutable(expr);
 
 	auto &date_part = bindings[2].get().Cast<BoundConstantExpression>();
+	DatePartSpecifier part;
+	if (date_part.GetValue().IsNull() || !TryGetDatePartSpecifier(StringValue::Get(date_part.GetValue()), part)) {
+		return nullptr;
+	}
 	// We must have only a column on the LHS.
 	if (bindings[3].get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
@@ -103,9 +141,20 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		return nullptr;
 	}
 
+	// Bounds finer than a day lose their time when cast to DATE, so keep the comparison.
+	if (column_part.GetReturnType().id() == LogicalTypeId::DATE && !TruncatesToDays(part)) {
+		return nullptr;
+	}
+
+	// Truncating a time zone aware timestamp to a minute or longer can cross a UTC offset change, so keep the
+	// comparison.
+	if (TruncatesInSessionTimeZone(column_part.GetReturnType().id()) && !TruncatesToSecondOrFiner(part)) {
+		return nullptr;
+	}
+
 	// Truncating to decades, centuries or millennia does not round years before the common era towards the past
 	// (e.g. 150 BC truncates to 100 BC), so the rewrite below is only valid for constants after that
-	if (TruncatesYearsTowardsZero(date_part) && !IsAfterFirstYear(rhs.GetValue())) {
+	if (TruncatesYearsTowardsZero(part) && !IsAfterFirstYear(rhs.GetValue())) {
 		return nullptr;
 	}
 
@@ -139,8 +188,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		{
 			// First check if we can just return `column IS NULL`.
 			if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM && rhs.GetValue().IsNull()) {
-				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-				op->GetChildrenMutable().push_back(column_part.Copy());
+				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN,
+				                                             column_part.Copy());
 				return std::move(op);
 			} else {
 				if (!is_truncated) {
@@ -172,9 +221,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
 					                                                  std::move(lt));
 
-					auto isnotnull =
-					    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-					isnotnull->GetChildrenMutable().push_back(column_part.Copy());
+					auto isnotnull = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
+					                                                    LogicalType::BOOLEAN, column_part.Copy());
 
 					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comp),
 					                                             std::move(isnotnull));
@@ -211,9 +259,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		{
 			if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM && rhs.GetValue().IsNull()) {
 				// Return 'column IS NOT NULL'.
-				auto op =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				op->GetChildrenMutable().push_back(column_part.Copy());
+				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN,
+				                                             column_part.Copy());
 				return std::move(op);
 			} else {
 				if (!is_truncated) {
@@ -245,9 +292,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
 					                                                  std::move(lt));
 
-					auto isnull =
-					    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-					isnull->GetChildrenMutable().push_back(column_part.Copy());
+					auto isnull = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL,
+					                                                 LogicalType::BOOLEAN, column_part.Copy());
 
 					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(comp),
 					                                             std::move(isnull));
@@ -395,7 +441,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return trunc;
+			return nullptr;
 		}
 
 		return make_uniq<BoundConstantExpression>(result);
@@ -449,7 +495,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return trunc;
+			return nullptr;
 		}
 
 		return make_uniq<BoundConstantExpression>(result);

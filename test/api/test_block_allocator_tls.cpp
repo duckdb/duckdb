@@ -6,8 +6,12 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/table/native_scan_job.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 #include <chrono>
@@ -108,10 +112,11 @@ public:
 		return allocator.IsInitialized();
 	}
 	static data_ptr_t AllocateHuge(const BlockAllocator &allocator, idx_t size) {
-		return allocator.AllocateHugeData(size);
+		optional_idx home;
+		return allocator.AllocateHugeData(size, home);
 	}
 	static void FreeHuge(const BlockAllocator &allocator, data_ptr_t pointer, idx_t size) {
-		allocator.FreeHugeData(pointer, size);
+		allocator.FreeHugeData(pointer, size, optional_idx());
 	}
 
 private:
@@ -133,7 +138,9 @@ TEST_CASE("BlockAllocator initializes only for eligible allocations and falls ba
 	Allocator fallback;
 	BlockAllocator allocator(fallback, BLOCK_SIZE, pool_size);
 	CHECK(allocator.IsEnabled());
+	CHECK_FALSE(allocator.GetAllocationShard(nullptr).IsValid());
 	auto small = allocator.AllocateData(1024);
+	CHECK_FALSE(allocator.GetAllocationShard(small).IsValid());
 	small = allocator.ReallocateData(small, 1024, 2048);
 	allocator.FreeData(small, 2048);
 	auto huge = BlockAllocatorTestHelper::AllocateHuge(allocator, 2 * BLOCK_SIZE);
@@ -163,6 +170,12 @@ TEST_CASE("BlockAllocator initializes only for eligible allocations and falls ba
 	}
 	CHECK(BlockAllocatorTestHelper::IsInitialized(allocator) == available);
 	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, block) == available);
+	auto home = allocator.GetAllocationShard(block);
+	CHECK(home.IsValid() == available);
+	if (available) {
+		CHECK(home.GetIndex() < allocator.GetPoolShardCount());
+		CHECK(allocator.GetAllocationShard(block + BLOCK_SIZE - 1) == home);
+	}
 	auto second = allocator.AllocateData(BLOCK_SIZE);
 	auto third = allocator.AllocateData(BLOCK_SIZE);
 	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, second) == available);
@@ -170,6 +183,9 @@ TEST_CASE("BlockAllocator initializes only for eligible allocations and falls ba
 	      (available && BlockAllocatorTestHelper::UsableBlocks(allocator) >= 3));
 	auto overflow = allocator.AllocateData(BLOCK_SIZE);
 	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, overflow));
+	CHECK_FALSE(allocator.GetAllocationShard(overflow).IsValid());
+	allocator.SetEnabled(false);
+	CHECK(allocator.GetAllocationShard(block) == home);
 	allocator.FreeData(overflow, BLOCK_SIZE);
 	allocator.FreeData(third, BLOCK_SIZE);
 	allocator.FreeData(second, BLOCK_SIZE);
@@ -395,8 +411,8 @@ TEST_CASE("BlockAllocator toggles allocation permission without changing pool ow
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.SetOptionByName("enable_block_allocator", Value::BOOLEAN(false));
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, 2 * BLOCK_SIZE);
 	DuckDB db(nullptr, &config);
@@ -591,8 +607,8 @@ TEST_CASE("Allocation cache can reuse arena storage without container destructio
 	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
 #endif
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BufferManager::GetBufferManager(*db.instance).GetBufferAllocator();
@@ -970,8 +986,8 @@ TEST_CASE("BlockAllocator bounds fallback pressure using available footprint sta
 
 TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][huge_route]") {
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	DuckDB first_db(nullptr, &config);
 	DuckDB second_db(nullptr, &config);
 	Connection connection(first_db);
@@ -983,11 +999,16 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	constexpr idx_t SIZE = 512 * 1024;
 	HugeAllocation empty;
 	CHECK_FALSE(empty.IsSet());
+	CHECK_FALSE(empty.GetAllocationShard().IsValid());
 	CHECK(empty.GetSize() == 0);
 	empty.Reset();
 	{
 		auto first = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
 		auto second = second_manager.GetBufferAllocator().AllocateHuge(2 * SIZE);
+		const auto first_home = first.GetAllocationShard();
+		const auto second_home = second.GetAllocationShard();
+		REQUIRE(first_home.IsValid());
+		REQUIRE(second_home.IsValid());
 		CHECK(first_manager.GetUsedMemory() == first_memory + SIZE);
 		CHECK(second_manager.GetUsedMemory() == second_memory + 2 * SIZE);
 		first.get()[0] = 42;
@@ -995,13 +1016,25 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 		HugeAllocation moved(std::move(first));
 		CHECK_FALSE(first.IsSet());
 		CHECK(first.GetSize() == 0);
+		CHECK_FALSE(first.GetAllocationShard().IsValid());
+		CHECK(moved.GetAllocationShard() == first_home);
 		second = std::move(moved);
 		CHECK(second.GetSize() == SIZE);
+		CHECK(second.GetAllocationShard() == first_home);
+		CHECK(moved.GetAllocationShard() == second_home);
+		// Swap distinct valid/invalid descriptors as well as two live allocations.
+		empty = std::move(second);
+		CHECK(empty.GetAllocationShard() == first_home);
+		CHECK_FALSE(second.GetAllocationShard().IsValid());
+		second = std::move(empty);
+		CHECK(second.GetAllocationShard() == first_home);
+		CHECK_FALSE(empty.GetAllocationShard().IsValid());
 		CHECK(second.get()[0] == 42);
 		CHECK(second.get()[SIZE - 1] == 84);
 		second.Reset();
 		CHECK_FALSE(second.IsSet());
 		CHECK(second.GetSize() == 0);
+		CHECK_FALSE(second.GetAllocationShard().IsValid());
 		second.Reset();
 		CHECK(first_manager.GetUsedMemory() == first_memory);
 		// Move assignment swaps ownership; moved still owns the second manager's allocation.
@@ -1009,11 +1042,47 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	}
 	CHECK(second_manager.GetUsedMemory() == second_memory);
 #ifndef DUCKDB_NO_THREADS
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	auto cpus = affinity.CPUs();
+	const bool pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#else
+	const bool pinned = false;
+#endif
 	auto cross_thread = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
-	std::thread receiver([owned = std::move(cross_thread)]() mutable { owned.Reset(); });
+	const auto home = cross_thread.GetAllocationShard();
+	const auto pointer = cross_thread.get();
+	optional_idx other_cpu;
+#if defined(__linux__)
+	const auto shard_count = BlockAllocator::Get(*first_db.instance).GetFallbackShardCount();
+	for (auto cpu : cpus) {
+		if (home.IsValid() && (idx_t(cpu) / 4) % shard_count != home.GetIndex()) {
+			other_cpu = idx_t(cpu);
+			break;
+		}
+	}
+#endif
+	bool receiver_pinned = false;
+	std::thread receiver([&, owned = std::move(cross_thread)]() mutable {
+#if defined(__linux__)
+		AllocationCacheTestAffinity receiver_affinity;
+		if (other_cpu.IsValid()) {
+			receiver_pinned = receiver_affinity.Pin(NumericCast<int>(other_cpu.GetIndex()));
+		}
+#endif
+		owned.Reset();
+	});
 	receiver.join();
 	CHECK_FALSE(cross_thread.IsSet());
 	CHECK(first_manager.GetUsedMemory() == first_memory);
+	auto reused = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
+	if (pinned) {
+		if (other_cpu.IsValid()) {
+			CHECK(receiver_pinned);
+		}
+		CHECK(reused.get() == pointer);
+		CHECK(reused.GetAllocationShard() == home);
+	}
 #endif
 }
 
@@ -1024,8 +1093,8 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	auto &control = fallback.GetPrivateData()->Cast<AllocationCacheTestData>();
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	Connection connection(db);
@@ -1035,7 +1104,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 
 	SECTION("Ordinary reallocation") {
 		control.fail_allocate = true;
-		REQUIRE_THROWS_AS(allocator.Allocate(SIZE), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(allocator.Allocate(SIZE), Catch::Matchers::Contains("Failed to allocate block"));
 		REQUIRE(manager.GetUsedMemory() == initial_memory);
 		control.fail_allocate = false;
 		auto owned = allocator.Allocate(SIZE);
@@ -1045,7 +1114,8 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 		pointer[SIZE - 1] = 84;
 		control.fail_reallocate = true;
 		for (auto new_size : {SIZE / 2, SIZE * 2}) {
-			REQUIRE_THROWS_AS(owner.ReallocateData(pointer, SIZE, new_size), OutOfMemoryException);
+			REQUIRE_THROWS_WITH(owner.ReallocateData(pointer, SIZE, new_size),
+			                    Catch::Matchers::Contains("Failed to re-allocate block"));
 			REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
 			REQUIRE(owned.get() == pointer);
 			REQUIRE(owned.GetAllocator().get() == &owner);
@@ -1082,30 +1152,36 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 	}
 	SECTION("Huge replacement") {
 		control.fail_allocate = true;
-		REQUIRE_THROWS_AS(allocator.AllocateHuge(SIZE), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(allocator.AllocateHuge(SIZE), Catch::Matchers::Contains("Failed to allocate block"));
 		REQUIRE(manager.GetUsedMemory() == initial_memory);
 		REQUIRE(live_bytes.load() == 0);
 		control.fail_allocate = false;
 		auto owned = allocator.AllocateHuge(SIZE);
 		auto pointer = owned.get();
+		const auto home = owned.GetAllocationShard();
+		REQUIRE(home.IsValid());
 		pointer[0] = 42;
 		pointer[SIZE - 1] = 84;
 		control.fail_allocate = true;
 		for (auto new_size : {SIZE / 2, SIZE * 2}) {
-			REQUIRE_THROWS_AS(owned = allocator.AllocateHuge(new_size), OutOfMemoryException);
+			REQUIRE_THROWS_WITH(owned = allocator.AllocateHuge(new_size),
+			                    Catch::Matchers::Contains("Failed to allocate block"));
 			REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
 			REQUIRE(live_bytes.load() == SIZE);
 			REQUIRE(owned.GetSize() == SIZE);
 			REQUIRE(owned.get() == pointer);
+			REQUIRE(owned.GetAllocationShard() == home);
 			REQUIRE(pointer[0] == 42);
 			REQUIRE(pointer[SIZE - 1] == 84);
 		}
 		control.fail_allocate = false;
 		REQUIRE_NO_FAIL(connection.Query("SET memory_limit='12MiB'"));
-		REQUIRE_THROWS_AS(owned = allocator.AllocateHuge(2 * SIZE), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(owned = allocator.AllocateHuge(2 * SIZE),
+		                    Catch::Matchers::Contains("failed to allocate data"));
 		REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
 		REQUIRE(live_bytes.load() == SIZE);
 		REQUIRE(owned.get() == pointer);
+		REQUIRE(owned.GetAllocationShard() == home);
 		REQUIRE(pointer[0] == 42);
 		REQUIRE_NO_FAIL(connection.Query("RESET memory_limit"));
 		owned = allocator.AllocateHuge(2 * SIZE);
@@ -1129,8 +1205,8 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	constexpr idx_t BLOCK_SIZE = 65536;
 	Allocator fallback;
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE);
 	DuckDB db(nullptr, &config);
@@ -1172,12 +1248,18 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	auto huge = buffer_allocator.AllocateHuge(CACHE_SIZE);
 	if (pinned) {
 		CHECK(huge.get() == cached);
+		CHECK_FALSE(huge.GetAllocationShard().IsValid());
 		CHECK(huge.get()[0] == 42);
 	}
 	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + CACHE_SIZE;
 	CHECK(allocator.GetCachedMemory() == retained);
 	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
-	huge.Reset();
+	HugeAllocation moved_unknown(std::move(huge));
+	CHECK_FALSE(huge.GetAllocationShard().IsValid());
+	if (moved_unknown.get() == cached) {
+		CHECK_FALSE(moved_unknown.GetAllocationShard().IsValid());
+	}
+	moved_unknown.Reset();
 	CHECK(allocator.GetCachedMemory() == retained + CACHE_SIZE);
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
 	auto ordinary = buffer_allocator.AllocateData(CACHE_SIZE);
@@ -1772,15 +1854,15 @@ private:
 } // namespace
 
 TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active size classes",
-          "[api][allocation_cache]") {
+          "[api][allocation_cache][.]") {
 	constexpr idx_t SIZE = 512 * 1024;
 	constexpr idx_t COUNT = 40;
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
@@ -1845,8 +1927,8 @@ TEST_CASE("BlockAllocator coalesces idle requests and yields between bounded asy
 	constexpr idx_t POOL_SIZE = BLOCK_SIZE * POOL_BLOCKS;
 	Allocator fallback;
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
 	DuckDB db(nullptr, &config);
@@ -1958,8 +2040,8 @@ TEST_CASE("BlockAllocator coalesces idle requests and yields between bounded asy
 
 TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and shutdown", "[api][block_allocator]") {
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
@@ -1998,18 +2080,18 @@ TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and
 	CHECK_NOTHROW(db.reset());
 }
 
-TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator][.]") {
 	DBConfig config;
-	config.options.maximum_threads = 2;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(2));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
 	SECTION("A regular worker performs synchronous idle maintenance") {
 	}
 	SECTION("An async worker performs bounded idle maintenance") {
-		config.options.maximum_threads = 1;
-		config.options.async_threads = 1;
+		Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+		Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 	}
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
@@ -2047,11 +2129,11 @@ TEST_CASE("BlockAllocator preserves failed discards without spinning and can ret
 	constexpr idx_t POOL_SIZE = BLOCK_SIZE * POOL_BLOCKS;
 	Allocator fallback;
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.options.enable_block_allocator = true;
 #ifndef DUCKDB_NO_THREADS
-	config.options.async_threads = 1;
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 #endif
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
 	DuckDB db(nullptr, &config);
@@ -2140,8 +2222,8 @@ TEST_CASE("BlockAllocator preserves failed discards without spinning and can ret
 
 TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][block_allocator]") {
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   4 * DEFAULT_BLOCK_ALLOC_SIZE);
@@ -2203,7 +2285,8 @@ TEST_CASE("BlockAllocator destruction is safe before thread exit and during allo
 }
 #endif
 
-TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes", "[api][allocation_cache]") {
+TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes",
+          "[api][allocation_cache][.]") {
 	if (sizeof(void *) != 8) {
 		return;
 	}
@@ -2314,7 +2397,7 @@ TEST_CASE("BlockAllocator prefers local touched backing after mixed frees",
 	CHECK(allocator.GetCachedMemory() == 0);
 }
 
-TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality]") {
+TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality][.]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t POOL_BLOCKS = 257;
 	constexpr idx_t OLD_SIZE = 512 * 1024;
@@ -2450,6 +2533,7 @@ TEST_CASE("BlockAllocator guard slots separate writable shard mappings", "[api][
 	const auto stride = (slots + requested_shards - 1) / requested_shards;
 	const auto shards = (slots + stride - 1) / stride;
 	const idx_t expected_guards = stride > 1 && block_size >= 65536 ? shards - 1 : 0;
+	CHECK(allocator.GetPoolShardCount() == shards);
 	CHECK(BlockAllocatorTestHelper::GuardBlocks(allocator) == expected_guards);
 	REQUIRE(BlockAllocatorTestHelper::UsableBlocks(allocator) == slots - expected_guards);
 	vector<data_ptr_t> blocks;
@@ -2485,6 +2569,13 @@ TEST_CASE("BlockAllocator guard slots separate writable shard mappings", "[api][
 		auto pointer = BlockAllocatorTestHelper::Slot(allocator, i);
 		const bool guard = i / stride < expected_guards && (i + 1) % stride == 0;
 		CHECK(allocated.count(pointer) == (guard ? 0 : 1));
+		for (auto offset : {idx_t(0), block_size - 1}) {
+			auto home = allocator.GetAllocationShard(pointer + offset);
+			REQUIRE(home.IsValid() == !guard);
+			if (!guard) {
+				CHECK(home.GetIndex() == i / stride);
+			}
+		}
 		const auto address = reinterpret_cast<uintptr_t>(pointer);
 #if defined(__linux__)
 		bool found = false;
@@ -2555,5 +2646,74 @@ TEST_CASE("BlockAllocator guard slots separate writable shard mappings", "[api][
 	for (auto pointer : blocks) {
 		allocator.FreeData(pointer, block_size);
 	}
+}
+
+TEST_CASE("Native scan affinity routes jobs by distinct loaded pool blocks", "[api][block_allocator][storage]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Allocator fallback;
+	const idx_t block_size = 65536;
+	auto allocator = BlockAllocatorTestHelper::CreateWithShards(fallback, block_size, 16 * block_size, 2);
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &block_manager = buffer_manager.GetTemporaryBlockManager();
+	vector<vector<shared_ptr<BlockHandle>>> shards(2);
+	shared_ptr<BlockHandle> outside_pool;
+	block_id_t next_id = MAXIMUM_BLOCK;
+	const auto pool_blocks = BlockAllocatorTestHelper::UsableBlocks(allocator);
+	for (idx_t i = 0; i <= pool_blocks; i++) {
+		auto buffer = make_uniq<FileBuffer>(allocator, FileBufferType::BLOCK, block_size - 8, 8);
+		auto shard = allocator.GetAllocationShard(buffer->InternalBuffer());
+		TempBufferPoolReservation reservation(MemoryTag::BASE_TABLE, buffer_manager.GetBufferPool(), block_size);
+		auto block = make_shared_ptr<BlockHandle>(block_manager, next_id++, MemoryTag::BASE_TABLE, std::move(buffer),
+		                                          DestroyBufferUpon::BLOCK, block_size, std::move(reservation));
+		if (i < pool_blocks) {
+			REQUIRE(shard.IsValid());
+			REQUIRE(shard.GetIndex() < shards.size());
+			shards[shard.GetIndex()].push_back(std::move(block));
+		} else {
+			REQUIRE_FALSE(shard.IsValid());
+			outside_pool = std::move(block);
+		}
+	}
+	REQUIRE(shards[0].size() >= 2);
+	REQUIRE(shards[1].size() >= 2);
+	auto unloaded = make_shared_ptr<BlockHandle>(block_manager, next_id++, MemoryTag::BASE_TABLE);
+	PrefetchState unknown;
+	unknown.blocks = {unloaded, outside_pool};
+	REQUIRE_FALSE(unknown.GetCachedShard(allocator).IsValid());
+	PrefetchState cached;
+	cached.blocks = {shards[0][0], shards[0][0], shards[0][0], shards[1][0], shards[1][1], unloaded, outside_pool};
+	REQUIRE(cached.GetCachedShard(allocator) == optional_idx(1));
+
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
+	idx_t produced = 0;
+	auto produce = [&](vector<unique_ptr<AsyncTask>> &) -> unique_ptr<ScanReadAheadJob> {
+		if (produced == 3) {
+			return nullptr;
+		}
+		auto job = make_uniq<NativeScanJob>(allocator);
+		job->batch_index = produced++;
+		if (job->batch_index == 0) {
+			job->blocks.blocks = unknown.blocks;
+		} else if (job->batch_index == 1) {
+			job->blocks.blocks = {shards[0][0]};
+		} else {
+			job->blocks.blocks = cached.blocks;
+		}
+		return std::move(job);
+	};
+	TableFunctionInput input(nullptr, nullptr, nullptr);
+	unique_ptr<ScanReadAheadJob> job;
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 1) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 2);
+	REQUIRE(static_cast<NativeScanJob &>(*job).blocks.blocks.empty());
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 1);
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 0);
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::EXHAUSTED);
 }
 #endif

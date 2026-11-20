@@ -24,8 +24,8 @@ namespace {
 
 //! Throw if reading 'size' bytes starting at 'ptr' would read past the end of the value buffer
 void CheckBinaryRead(const_data_ptr_t ptr, idx_t size, const_data_ptr_t end) {
-	if (ptr + size > end) {
-		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity", size);
+	if (ptr > end || size > NumericCast<idx_t>(end - ptr)) {
+		throw DataCorruptionException("Corrupted VARIANT 'value' buffer, read of %llu bytes is out of bounds", size);
 	}
 }
 
@@ -62,6 +62,8 @@ struct BinaryObjectReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The field ids and offsets of 'count' fields must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, (count * field_id_size) + (NumericCast<idx_t>(count + 1) * field_offset_size), end);
 		field_ids = data;
 		field_offsets = data + (count * field_id_size);
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
@@ -108,6 +110,8 @@ struct BinaryArrayReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The offsets of 'count' elements must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, NumericCast<idx_t>(count + 1) * field_offset_size, end);
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
@@ -561,6 +565,10 @@ string_t ParquetVariantNode::GetString() const {
 	return string_t(string_data, size);
 }
 
+string_t ParquetVariantNode::GetWideDecimal() const {
+	throw InternalException("Parquet VARIANT decimals have at most 38 digits");
+}
+
 VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	if (kind == Kind::SHREDDED) {
 		uint32_t width;
@@ -572,9 +580,9 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
 	uint8_t scale = LoadChecked<uint8_t>(payload, binary_end);
-	if (scale > Decimal::MAX_WIDTH_DECIMAL) {
+	if (scale > Decimal::MAX_WIDTH_INT128) {
 		throw IOException("Corrupted VARIANT 'value' buffer, decimal scale %d exceeds the maximum of %d", scale,
-		                  Decimal::MAX_WIDTH_DECIMAL);
+		                  Decimal::MAX_WIDTH_INT128);
 	}
 	auto value_data = payload + sizeof(uint8_t);
 	uint32_t width;
@@ -591,12 +599,12 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 		hugeint_t value;
 		value.lower = Load<uint64_t>(value_data);
 		value.upper = Load<int64_t>(value_data + sizeof(uint64_t));
-		auto &limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		auto &limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
 		if (value >= limit || value <= -limit) {
 			throw IOException("Corrupted VARIANT 'value' buffer, DECIMAL16 value exceeds the maximum width of %d",
-			                  Decimal::MAX_WIDTH_DECIMAL);
+			                  Decimal::MAX_WIDTH_INT128);
 		}
-		width = Decimal::MAX_WIDTH_DECIMAL;
+		width = Decimal::MAX_WIDTH_INT128;
 		break;
 	}
 	}

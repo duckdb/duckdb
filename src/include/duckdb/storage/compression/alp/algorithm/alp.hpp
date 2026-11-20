@@ -399,15 +399,10 @@ struct AlpDecompression {
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
 		// Bit Unpacking
-		uint64_t for_decoded[AlpConstants::ALP_VECTOR_SIZE] = {0};
-		if (bit_width > 0) {
-			BitpackingPrimitives::UnPackBuffer<uint64_t>(data_ptr_cast(for_decoded), for_encoded, count, bit_width);
-		}
-
-		// unFOR
-		for (idx_t i = 0; i < count; i++) {
-			for_decoded[i] += frame_of_reference;
-		}
+		uint64_t for_decoded[AlpConstants::ALP_VECTOR_SIZE];
+		BitpackingPrimitives::UnPackBufferWithFrame<uint64_t>(data_ptr_cast(for_decoded), for_encoded,
+		                                                      BitpackingPrimitives::RoundUpToAlgorithmGroupSize(count),
+		                                                      bit_width, frame_of_reference);
 
 		// Decoding
 		for (idx_t i = 0; i < count; i++) {

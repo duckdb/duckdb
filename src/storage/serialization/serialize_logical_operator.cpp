@@ -893,6 +893,8 @@ void LogicalSetOperation::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
 	serializer.WritePropertyWithDefault<bool>(202, "setop_all", setop_all, true);
 	serializer.WritePropertyWithDefault<bool>(203, "allow_out_of_order", allow_out_of_order, true);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(204, "comparison_types", comparison_types);
+	serializer.WritePropertyWithDefault<idx_t>(205, "correlated_column_count", correlated_column_count, 0);
 }
 
 unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deserializer) {
@@ -901,6 +903,8 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deser
 	auto setop_all = deserializer.ReadPropertyWithExplicitDefault<bool>(202, "setop_all", true);
 	auto allow_out_of_order = deserializer.ReadPropertyWithExplicitDefault<bool>(203, "allow_out_of_order", true);
 	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>(), setop_all, allow_out_of_order));
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(204, "comparison_types", result->comparison_types);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(205, "correlated_column_count", result->correlated_column_count, 0);
 	return std::move(result);
 }
 
@@ -976,12 +980,15 @@ void LogicalWindow::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<TableIndex>(200, "window_index", window_index);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
+	serializer.WritePropertyWithDefault<optional_idx>(202, "partition_limit", partition_limit, optional_idx());
 }
 
 unique_ptr<LogicalOperator> LogicalWindow::Deserialize(Deserializer &deserializer) {
 	auto window_index = deserializer.ReadPropertyWithDefault<TableIndex>(200, "window_index");
-	auto result = duckdb::unique_ptr<LogicalWindow>(new LogicalWindow(window_index));
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", result->expressions);
+	auto expressions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions");
+	auto partition_limit = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(202, "partition_limit", optional_idx());
+	auto result = duckdb::unique_ptr<LogicalWindow>(new LogicalWindow(window_index, partition_limit));
+	result->expressions = std::move(expressions);
 	return std::move(result);
 }
 

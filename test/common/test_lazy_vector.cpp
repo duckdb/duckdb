@@ -312,7 +312,8 @@ TEST_CASE("Nested payloads remain lazy through empty reads and recover from allo
 		chunk.Reset();
 		REQUIRE(allocations.allocations == initial_allocations);
 		allocations.fail = true;
-		REQUIRE_THROWS_AS(column.Append(value, VectorAppendMode::ALLOW_RESIZE), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(column.Append(value, VectorAppendMode::ALLOW_RESIZE),
+		                    Catch::Contains("lazy vector test allocation failure"));
 		chunk.Reset();
 		allocations.fail = false;
 		column.Append(value, VectorAppendMode::ALLOW_RESIZE);
@@ -437,7 +438,7 @@ TEST_CASE("Nested reset buffers support list mutations and preserve grown capaci
 	}
 	SECTION("Failed allocation remains resettable and can be retried") {
 		allocations.fail = true;
-		REQUIRE_THROWS_AS(ListVector::Reserve(lists, 6), OutOfMemoryException);
+		REQUIRE_THROWS_WITH(ListVector::Reserve(lists, 6), Catch::Contains("lazy vector test allocation failure"));
 		chunk.Reset();
 		allocations.fail = false;
 		ListVector::Reserve(lists, 6);
@@ -499,7 +500,7 @@ TEST_CASE("Nested C API outputs allocate before raw pointer access", "[lazy_vect
 	DataChunk chunk;
 	chunk.Initialize(allocator, {LogicalType::LIST(structure)}, 2);
 	allocations.fail = true;
-	REQUIRE_THROWS_AS(PrepareCAPIVector(chunk.data[0]), OutOfMemoryException);
+	REQUIRE_THROWS_WITH(PrepareCAPIVector(chunk.data[0]), Catch::Contains("lazy vector test allocation failure"));
 	allocations.fail = false;
 	PrepareCAPIVector(chunk.data[0]);
 	REQUIRE(allocations.allocations == 3);
@@ -618,7 +619,8 @@ TEST_CASE("Lazy scalar buffers handle failed allocation and capacity growth", "[
 	DataChunk chunk;
 	chunk.Initialize(allocator, {LogicalType::BIGINT}, 16);
 	allocations.fail = true;
-	REQUIRE_THROWS_AS(FlatVector::Writer<int64_t>(chunk.data[0], 1), OutOfMemoryException);
+	REQUIRE_THROWS_WITH(FlatVector::Writer<int64_t>(chunk.data[0], 1),
+	                    Catch::Contains("lazy vector test allocation failure"));
 	REQUIRE(chunk.size() == 0);
 	REQUIRE(FlatVector::GetData(chunk.data[0]) == nullptr);
 	chunk.Reset();

@@ -1143,6 +1143,17 @@ const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t 
 	throw NotImplementedException("Enum value: unrecognized enum value \"%d\" for enum \"%s\"", enum_value, enum_name);
 }
 
+string StringUtil::TruncateUTF8TOByteLength(const char *data, idx_t length, idx_t max_bytes) {
+	if (length <= max_bytes) {
+		return string(data, length);
+	}
+	idx_t end = max_bytes;
+	while (end > 0 && ((static_cast<unsigned char>(data[end]) & 0xC0) == 0x80)) {
+		end--;
+	}
+	return string(data, end) + "...";
+}
+
 const uint8_t StringUtil::ASCII_TO_UPPER_MAP[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,

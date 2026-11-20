@@ -2,6 +2,7 @@
 #include "test_reporter.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -11,6 +12,12 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -95,24 +102,48 @@ duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> 
 	                                              client_properties);
 }
 
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary) {
+	// construct the `SELECT * FROM <table_ref>` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(table_ref);
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	// construct the `CREATE [OR REPLACE] [TEMP] VIEW <name> AS` statement using the select statement
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
+	info->temporary = temporary;
+	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
+	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto statement = make_uniq<CreateStatement>();
+	statement->info = std::move(info);
+	// Execute the CREATE VIEW
+	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+}
+
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 	return NO_FAIL(*result);
 }
 
+FileSystem &TestLocalFileSystem() {
+	static LocalFileSystem fs;
+	return fs;
+}
+
 void TestDeleteDirectory(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	try {
-		if (fs->DirectoryExists(path)) {
-			fs->RemoveDirectory(path);
+		if (fs.DirectoryExists(path)) {
+			fs.RemoveDirectory(path);
 		}
 	} catch (...) {
 	}
 }
 
 void TestDeleteFile(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	try {
-		fs->TryRemoveFile(path);
+		fs.TryRemoveFile(path);
 	} catch (...) {
 	}
 }
@@ -135,13 +166,13 @@ void DeleteDatabase(string path) {
 }
 
 void TestCreateDirectory(string path) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->CreateDirectory(path);
+	auto &fs = TestLocalFileSystem();
+	fs.CreateDirectory(path);
 }
 
 string TestJoinPath(string path1, string path2) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	return fs->JoinPath(path1, path2);
+	auto &fs = TestLocalFileSystem();
+	return fs.JoinPath(path1, path2);
 }
 
 string TestMakeAbsolute(const string &path, const string &anchor) {
@@ -485,8 +516,8 @@ static bool DestroyFires(TempDirDestroy disposition, bool success) {
 
 // mkdir-p the local tree's $ROOT/[RUN_ID], recording what it created so destroy reclaims only that.
 static void PrepareLocalTree() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	RecordAndCreateLevels(*fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
+	auto &fs = TestLocalFileSystem();
+	RecordAndCreateLevels(fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
 }
 
 static bool PrepareTempDirInternal(string &error) {
@@ -506,8 +537,8 @@ static bool PrepareTempDirInternal(string &error) {
 	// would materialize $ROOT behind PrepareLocalTree's back, RecordAndCreateLevels would read it as
 	// pre-existing, and it would never be reclaimed. Unconditional -- some code errors if
 	// home_directory is set but absent.
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	RecordAndCreateLevels(*fs, GetTempDirHome(), home_created_levels);
+	auto &fs = TestLocalFileSystem();
+	RecordAndCreateLevels(fs, GetTempDirHome(), home_created_levels);
 	return true;
 }
 
@@ -527,13 +558,13 @@ void DestroyTempDir(bool success) {
 	if (!DestroyFires(temp_dir_destroy, success)) {
 		return;
 	}
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	// HOME first: it sits under $ROOT, so leaving it would fail the emptiness check in the ancestor
 	// walk below and strand a root this run owns. Reclaimed on the same created/adopted rule --
 	// co-located batches share one HOME path, and an adopted one may be another batch's live sandbox.
-	ReclaimTestDirectoryLevels(*fs, GetTempDirHome(), home_created_levels);
+	ReclaimTestDirectoryLevels(fs, GetTempDirHome(), home_created_levels);
 	// The root subsumes any leftover per-test dirs; ancestors go only up to a pre-existing $ROOT.
-	ReclaimTestDirectoryLevels(*fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
+	ReclaimTestDirectoryLevels(fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
 }
 
 // Fired at test end with THIS test's pass/fail. Only the $TEST_ID level is in scope -- $RUN_ID/$ROOT
@@ -550,8 +581,8 @@ void DestroyTestTempDir(bool success) {
 		active_tests.erase(it);
 	}
 	if (!entry.leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		ReclaimTestDirectoryLevels(*fs, entry.leaf, entry.created_levels);
+		auto &fs = TestLocalFileSystem();
+		ReclaimTestDirectoryLevels(fs, entry.leaf, entry.created_levels);
 	}
 }
 
@@ -571,9 +602,9 @@ static string MaterializeLocalTestPath() {
 	}
 	ActiveTestTempDir active;
 	active.leaf = path;
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (!fs->DirectoryExists(path)) {
-		RecordAndCreateLevels(*fs, path, active.created_levels);
+	auto &fs = TestLocalFileSystem();
+	if (!fs.DirectoryExists(path)) {
+		RecordAndCreateLevels(fs, path, active.created_levels);
 	}
 	active_tests[test_id] = std::move(active);
 	return path;
@@ -626,16 +657,16 @@ void ClearTestDirectory() {
 	if (!DeleteTestPath()) {
 		return;
 	}
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	auto test_dir = TestDirectoryPath();
 	// try to clear any files we created in the test directory
-	fs->ListFiles(test_dir, [&](const string &file, bool is_dir) {
-		auto full_path = fs->JoinPath(test_dir, file);
+	fs.ListFiles(test_dir, [&](const string &file, bool is_dir) {
+		auto full_path = fs.JoinPath(test_dir, file);
 		try {
 			if (is_dir) {
-				fs->RemoveDirectory(full_path);
+				fs.RemoveDirectory(full_path);
 			} else {
-				fs->RemoveFile(full_path);
+				fs.RemoveFile(full_path);
 			}
 		} catch (...) {
 			// skip
@@ -675,12 +706,12 @@ unique_ptr<DBConfig> GetTestConfig() {
 	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
-		result->options.storage_compatibility = StorageCompatibility::FromString(storage_version);
+		result->SetOptionByName("storage_compatibility_version", storage_version);
 	}
 
 	auto max_threads = test_config.GetMaxThreads();
 	if (max_threads.IsValid()) {
-		result->options.maximum_threads = max_threads.GetIndex();
+		Settings::Set<ThreadsSetting>(*result, SetScope::GLOBAL, Value::BIGINT(max_threads.GetIndex()));
 	}
 
 	auto block_alloc_size = test_config.GetBlockAllocSize();
@@ -742,18 +773,6 @@ bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Valu
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	return CHECK_COLUMN(*result, column_number, values);
-}
-
-string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
-		return result.GetError();
-	}
-	string error;
-	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
-		return error;
-	}
-	return "";
 }
 
 string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {

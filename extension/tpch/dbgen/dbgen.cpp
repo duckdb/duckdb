@@ -43,6 +43,8 @@ enum class TPCHAppendMode : uint8_t { APPENDER, OPTIMISTIC };
 struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
+	//! The context of the optimistic append (set in InitializeOptimistic)
+	optional_ptr<ClientContext> optimistic_context;
 	optional_ptr<OptimisticWriteCollection> optimistic_collection;
 	optional_ptr<DuckTableEntry> table_entry;
 	PhysicalIndex optimistic_collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
@@ -82,9 +84,10 @@ struct tpch_append_information {
 	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table,
 	                          OptimisticWritePartialManagers partial_manager_type) {
 		table_entry = table;
-		optimistic_writer = make_uniq<OptimisticDataWriter>(context, table.GetStorage());
-		auto collection =
-		    optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes(), partial_manager_type);
+		optimistic_context = context;
+		optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
+		auto collection = optimistic_writer->CreateCollection(context.GetContext(), table.GetStorage(), table.GetTypes(),
+		                                                      partial_manager_type);
 		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		// the transaction id keeps the rows invisible to other transactions until the commit
@@ -116,7 +119,7 @@ struct tpch_append_information {
 			auto &row_collection = *optimistic_collection->collection;
 			auto flushed_row_group_idx = row_collection.Append(chunk, append_state);
 			if (flushed_row_group_idx.IsValid()) {
-				optimistic_writer->WriteNewRowGroup(*optimistic_collection, flushed_row_group_idx.GetIndex());
+				optimistic_writer->WriteNewRowGroup(optimistic_context->GetContext(), *optimistic_collection, flushed_row_group_idx.GetIndex());
 			}
 		}
 		chunk.Reset();
@@ -154,10 +157,10 @@ struct tpch_append_information {
 			storage.FinalizeLocalAppend(local_append_state);
 			ResetOptimisticCollection(context);
 		} else {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
+			optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
 			storage.LocalMerge(context, table, *optimistic_collection);
 			auto &storage_writer = storage.GetOptimisticWriter(context);
-			storage_writer.Merge(*optimistic_writer);
+			storage_writer.Merge(context.GetContext(), *optimistic_writer);
 			ResetOptimisticCollection(context);
 		}
 		optimistic_writer.reset();
@@ -193,8 +196,8 @@ struct tpch_append_information {
 		auto &storage = table_entry->GetStorage();
 		auto &row_collection = *optimistic_collection->collection;
 		if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
-			optimistic_writer->FinalFlush();
+			optimistic_writer->WriteUnflushedRowGroups(optimistic_context->GetContext(), *optimistic_collection);
+			optimistic_writer->FinalFlush(optimistic_context->GetContext());
 		}
 	}
 };
@@ -826,10 +829,10 @@ static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string
 }
 
 template <class T>
-static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
+static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const vector<Identifier> &schema,
                             string suffix) {
 	auto table_name = string(T::Name) + suffix;
-	auto qualified_name = QualifiedName(catalog_name, schema, Identifier(table_name));
+	auto qualified_name = QualifiedName::FromCatalogSchema(catalog_name, schema, Identifier(table_name));
 
 	auto info = make_uniq<CreateTableInfo>();
 	info->SetQualifiedName(qualified_name);
@@ -847,7 +850,7 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	ValidateTPCHTableSchema<T>(table, table_name);
 }
 
-void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
+void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const vector<Identifier> &schema,
                                     string suffix) {
 	CreateTPCHTable<RegionInfo>(context, catalog, schema, suffix);
 	CreateTPCHTable<NationInfo>(context, catalog, schema, suffix);
@@ -885,14 +888,15 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 }
 
 struct TPCHDBgenParameters {
-	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const Identifier &schema, const string &suffix) {
+	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const vector<Identifier> &schema,
+	                    const string &suffix) {
 		tables.resize(REGION + 1);
 		for (size_t i = PART; i <= REGION; i++) {
 			auto tname = get_table_name(i);
 			if (!tname.empty()) {
 				string full_tname = string(tname) + string(suffix);
 				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(
-				    context, QualifiedName(catalog.GetName(), schema, Identifier(full_tname)));
+				    context, QualifiedName::FromCatalogSchema(catalog.GetName(), schema, Identifier(full_tname)));
 				tables[i] = &tbl_catalog;
 			}
 		}
@@ -1136,7 +1140,7 @@ DBGenGenerator::~DBGenGenerator() {
 class TPCHDBGenGenerator : public DBGenGenerator {
 public:
 	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
-	                   const Identifier &schema, string suffix, int children, int current_step)
+	                   const vector<Identifier> &schema, string suffix, int children, int current_step)
 	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
 		// NaN compares false against every scale factor check, and reaches an out-of-range cast below
 		if (Value::IsNan(flt_scale)) {
@@ -1494,12 +1498,13 @@ private:
 };
 
 unique_ptr<DBGenGenerator> CreateDBGenGenerator(ClientContext &context, double sf, const Identifier &catalog,
-                                                const Identifier &schema, string suffix, int children, int step) {
+                                                const vector<Identifier> &schema, string suffix, int children,
+                                                int step) {
 	return make_uniq<TPCHDBGenGenerator>(context, sf, catalog, schema, std::move(suffix), children, step);
 }
 
 void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const Identifier &catalog_name,
-                                const Identifier &schema, string suffix, int children, int current_step) {
+                                const vector<Identifier> &schema, string suffix, int children, int current_step) {
 	auto generator =
 	    CreateDBGenGenerator(context, flt_scale, catalog_name, schema, std::move(suffix), children, current_step);
 	while (!generator->GenerateNext()) {

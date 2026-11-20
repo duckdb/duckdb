@@ -97,6 +97,8 @@ struct CountFunctionBase {
 	static AggregateFunction GetFunction();
 };
 
+bool IsFirstLastOrAnyValue(const BoundAggregateFunction &function);
+
 struct FirstFunctionGetter {
 	static AggregateFunction GetFunction(const LogicalType &type);
 };
