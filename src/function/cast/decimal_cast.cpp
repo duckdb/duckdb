@@ -1,5 +1,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/function/cast/wide_decimal_cast.hpp"
 
 #include "duckdb/common/vector_operations/general_cast.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
@@ -10,20 +11,8 @@
 
 namespace duckdb {
 
-struct BignumDecimalCastState : public WideDecimalCastState {
-	explicit BignumDecimalCastState(optional_ptr<ClientContext> context)
-	    : WideDecimalCastState(context), rescale(context) {
-	}
-
-	DecimalHelper<bignum_t>::RescaleState rescale;
-};
-
 static unique_ptr<FunctionLocalState> InitWideDecimalCastState(CastLocalStateParameters &parameters) {
 	return make_uniq<WideDecimalCastState>(parameters.context);
-}
-
-static unique_ptr<FunctionLocalState> InitBignumDecimalCastState(CastLocalStateParameters &parameters) {
-	return make_uniq<BignumDecimalCastState>(parameters.context);
 }
 
 static bool IsWideDecimal(const LogicalType &type) {
@@ -32,11 +21,7 @@ static bool IsWideDecimal(const LogicalType &type) {
 
 BoundCastInfo DefaultCasts::WideDecimalCast(BoundCastInfo info, const LogicalType &source, const LogicalType &target) {
 	if (!info.HasInitLocalState() && (IsWideDecimal(source) || IsWideDecimal(target))) {
-		if (source.id() == LogicalTypeId::DECIMAL && target.id() == LogicalTypeId::DECIMAL) {
-			info.SetInitLocalState(InitBignumDecimalCastState);
-		} else {
-			info.SetInitLocalState(InitWideDecimalCastState);
-		}
+		info.SetInitLocalState(InitWideDecimalCastState);
 	}
 	return info;
 }
@@ -218,7 +203,9 @@ struct BignumDecimalScaleInput {
 	                        uint32_t source_scale_p, uint32_t target_width_p, uint32_t target_scale_p)
 	    : result(result_p), vector_cast_data(result, parameters), source_width(source_width_p),
 	      source_scale(source_scale_p), target_width(target_width_p), target_scale(target_scale_p),
-	      rescale_state(parameters.local_state->Cast<BignumDecimalCastState>().rescale) {
+	      fallback(DefaultCasts::WideDecimalCastContext(parameters)),
+	      rescale_state((parameters.local_state ? parameters.local_state->Cast<WideDecimalCastState>() : fallback)
+	                        .GetRescaleState()) {
 		const auto source_integer_digits = source_width - source_scale;
 		const auto target_integer_digits = target_width - target_scale;
 		// Scaling down can round into an extra integer digit.
@@ -233,6 +220,7 @@ struct BignumDecimalScaleInput {
 	uint32_t target_width;
 	uint32_t target_scale;
 	bool check_width;
+	WideDecimalCastState fallback;
 	DecimalHelper<bignum_t>::RescaleState &rescale_state;
 };
 

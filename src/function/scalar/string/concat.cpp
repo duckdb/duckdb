@@ -38,10 +38,20 @@ unique_ptr<FunctionData> ConcatFunctionData::Copy() const {
 	return make_uniq<ConcatFunctionData>(return_type, is_operator);
 }
 
+struct ConcatLocalState : public FunctionLocalState {
+	vector<idx_t> lengths;
+};
+
+unique_ptr<FunctionLocalState> InitConcatState(ExpressionState &, const BoundFunctionExpression &,
+                                               optional_ptr<const FunctionData>) {
+	return make_uniq<ConcatLocalState>();
+}
+
 void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
-	vector<idx_t> result_lengths(args.size(), 0);
+	auto &result_lengths = ExecuteFunctionState::GetFunctionState(state)->Cast<ConcatLocalState>().lengths;
+	result_lengths.assign(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		const auto &input = args.data[col_idx];
 		D_ASSERT(input.GetType().InternalType() == PhysicalType::VARCHAR);
@@ -363,6 +373,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	fun.GetSignature().AddArgs("args", LogicalType::LIST(LogicalType::ANY));
 	fun.SetResolveTypesCallback(ConcatFunctionResolveTypes);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetInitStateCallback(InitConcatState);
 	return fun;
 }
 
@@ -380,6 +391,7 @@ ScalarFunction ConcatFun::GetFunction() {
 	concat.GetSignature().AddArgs("args", LogicalType::ANY);
 	concat.SetResolveTypesCallback(ConcatFunctionResolveTypes);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	concat.SetInitStateCallback(InitConcatState);
 	return concat;
 }
 
