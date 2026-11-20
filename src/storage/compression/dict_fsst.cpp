@@ -154,7 +154,7 @@ void DictFSSTCompressionStorage::StringScan(ColumnSegment &segment, ColumnScanSt
 static bool PreferSparseDictionary(const ColumnSegment &segment, const CompressedStringScanState &scan_state,
                                    idx_t vector_count, idx_t sel_count) {
 	return scan_state.layout.mode == DictFSSTMode::DICT_FSST && scan_state.layout.dict_count >= 512 &&
-	       scan_state.layout.dict_count * 8 >= segment.count.load() && sel_count <= vector_count / 64;
+	       idx_t(scan_state.layout.dict_count) * 8 >= segment.count.load() && sel_count <= vector_count / 64;
 }
 
 void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,

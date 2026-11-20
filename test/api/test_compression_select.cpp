@@ -64,7 +64,7 @@ TEST_CASE("Sparse DICT_FSST filtering retains strings from an already decoded di
 		auto &scan = state.scan_state->Cast<dict_fsst::CompressedStringScanState>();
 		REQUIRE(scan.layout.mode == dict_fsst::DictFSSTMode::DICT_FSST);
 		REQUIRE(scan.layout.dict_count >= 512);
-		REQUIRE(scan.layout.dict_count * 8 >= segment.count);
+		REQUIRE(idx_t(scan.layout.dict_count) * 8 >= segment.count);
 		// A partial scan can prepare the dictionary without preparing a filter cache.
 		{
 			Vector prefix(LogicalType::VARCHAR);
