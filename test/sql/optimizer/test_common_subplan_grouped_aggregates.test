@@ -390,3 +390,36 @@ ORDER BY ALL;
 3	516.00
 4	548.00
 NULL	NULL
+
+# Constants that are equal but not the same value (0.0 and -0.0) keep their own aggregate and their own label.
+query IRR
+SELECT x.k, x.m, y.m
+FROM (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '0'::DOUBLE END) m FROM grouped_input GROUP BY k) x
+JOIN (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '-0'::DOUBLE END) m FROM grouped_input GROUP BY k) y ON x.k = y.k
+ORDER BY ALL;
+----
+0	0.0	-0.0
+1	0.0	-0.0
+2	0.0	-0.0
+3	0.0	-0.0
+4	0.0	-0.0
+
+query IRI
+SELECT k, '0'::FLOAT AS label, count(*) AS m FROM grouped_input WHERE k < 2 GROUP BY k
+UNION ALL
+SELECT k, '-0'::FLOAT AS label, min(a) AS m FROM grouped_input WHERE k < 2 GROUP BY k
+ORDER BY k, m;
+----
+0	-0.0	5
+0	0.0	6
+1	-0.0	1
+1	0.0	7
+
+query ITI
+SELECT k, [INTERVAL 30 DAY] AS label, count(*) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+UNION ALL
+SELECT k, [INTERVAL 1 MONTH] AS label, min(a) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+ORDER BY k, m;
+----
+0	[1 month]	5
+0	[30 days]	6

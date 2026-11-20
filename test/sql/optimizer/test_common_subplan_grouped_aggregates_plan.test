@@ -155,3 +155,12 @@ FROM (SELECT k, sum(a) total FROM grouped_plan GROUP BY k) x
 JOIN (SELECT k, max((a - 1000)::UTINYINT) largest FROM grouped_plan GROUP BY k) y ON x.k = y.k;
 ----
 logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# An aggregate over a constant that is equal to another value (0.0 and -0.0) is only matched as a whole.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT x.k, x.m, y.m
+FROM (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '0'::DOUBLE END) m FROM grouped_plan GROUP BY k) x
+JOIN (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '-0'::DOUBLE END) m FROM grouped_plan GROUP BY k) y ON x.k = y.k;
+----
+logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*

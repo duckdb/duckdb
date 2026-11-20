@@ -109,6 +109,80 @@ static bool CanShareSubplanExpression(const Expression &expr) {
 	return !unsafe;
 }
 
+//! Types of which two values are equal exactly when they are the same value. Left out: types with values that
+//! compare equal but are not the same (FLOAT and DOUBLE: 0.0 and -0.0; INTERVAL, TIME WITH TIME ZONE), collated
+//! strings and nested types.
+static bool EqualityIsIdentity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::ENUM:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return StringType::GetCollation(type).empty();
+	default:
+		return false;
+	}
+}
+
+//! Whether every constant of the expression has a type whose equality is identity: expressions that differ only in
+//! such constants are different expressions for Expression::Equals too
+static bool HasOnlyIdentityConstants(const Expression &expr) {
+	bool result = true;
+	ExpressionIterator::VisitExpression<BoundConstantExpression>(expr, [&](const BoundConstantExpression &constant) {
+		result = result && EqualityIsIdentity(constant.GetReturnType());
+	});
+	return result;
+}
+
+//! The same for the projections of a plan, whose expressions are matched with Expression::Equals as well
+static bool ProjectionsHaveOnlyIdentityConstants(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		for (auto &expression : op.expressions) {
+			if (!HasOnlyIdentityConstants(*expression)) {
+				return false;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (!ProjectionsHaveOnlyIdentityConstants(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool ContainsGroupedAggregate(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY && !op.Cast<LogicalAggregate>().groups.empty()) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsGroupedAggregate(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool HasFixedSizeState(const LogicalType &type, const AggregateStateField &field) {
 	switch (field.kind) {
 	case AggregateFieldKind::PRIMITIVE:
@@ -1262,6 +1336,13 @@ private:
 	bool CanExpandExpressionOutputs(const LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
+			// A projection over grouped aggregates, which now match although they compute different things, only
+			// matches as a whole when it has a constant that Expression::Equals does not tell from an equal one
+			for (const auto &expression : op.expressions) {
+				if (!HasOnlyIdentityConstants(*expression) && ContainsGroupedAggregate(*op.children[0])) {
+					return false;
+				}
+			}
 			break;
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 			auto &aggregate = op.Cast<LogicalAggregate>();
@@ -1274,6 +1355,15 @@ private:
 				if (!CanCombineAggregateState(expression->Cast<BoundAggregateExpression>())) {
 					return false;
 				}
+				// Aggregates are matched with Expression::Equals, for which 0.0 and -0.0 are the same constant, and
+				// equal aggregates of one node are computed once: grouped aggregates over such constants only
+				// match as a whole, by their serialized form
+				if (!aggregate.groups.empty() && !HasOnlyIdentityConstants(*expression)) {
+					return false;
+				}
+			}
+			if (!aggregate.groups.empty() && !ProjectionsHaveOnlyIdentityConstants(*op.children[0])) {
+				return false;
 			}
 			break;
 		}
@@ -1890,41 +1980,6 @@ private:
 			if (cte.table_index >= first_generated_cte) {
 				shared_subplans.emplace(cte.table_index, cte);
 			}
-		}
-	}
-
-	//! Types of which two values are equal exactly when they are the same value, so that a group equals itself and no
-	//! other group whether the aggregate or a join condition compares them. Left out: types whose comparison
-	//! normalizes (FLOAT and DOUBLE, INTERVAL, TIME WITH TIME ZONE), collated strings and nested types.
-	static bool EqualityIsIdentity(const LogicalType &type) {
-		switch (type.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::HUGEINT:
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-		case LogicalTypeId::UHUGEINT:
-		case LogicalTypeId::DECIMAL:
-		case LogicalTypeId::DATE:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::UUID:
-		case LogicalTypeId::BLOB:
-		case LogicalTypeId::ENUM:
-			return true;
-		case LogicalTypeId::VARCHAR:
-			return StringType::GetCollation(type).empty();
-		default:
-			return false;
 		}
 	}
 
