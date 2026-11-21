@@ -68,6 +68,7 @@ add_library_unity(
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp
+  variant_comparison_rewriter.cpp
   window_fusion.cpp
   window_join_pushdown.cpp
   window_self_join.cpp
