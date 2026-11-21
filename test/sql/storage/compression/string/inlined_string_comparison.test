@@ -2,7 +2,7 @@
 # description: Compare compressed string columns against short (inlined) and long constants
 # group: [string]
 
-load {TEST_DIR}/inlined_string_comparison.db
+load {TEST_DIR}/inlined_string_comparison.db readwrite v2.0.0
 
 statement ok
 SET force_compression='dict_fsst'
