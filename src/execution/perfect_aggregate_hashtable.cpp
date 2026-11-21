@@ -1,5 +1,12 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/function/aggregate_state_serialization.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/execution/aggregate_state_spilling.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
+
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
@@ -324,7 +331,7 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 	}
 }
 
-void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
+idx_t PerfectAggregateHashTable::ScanGroups(idx_t &scan_position, DataChunk &result, idx_t max_groups) {
 	auto data_pointers = FlatVector::GetDataMutable<data_ptr_t>(addresses);
 	uint32_t group_values[STANDARD_VECTOR_SIZE];
 
@@ -336,7 +343,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 			data_pointers[entry_count] = data + tuple_size * scan_position;
 			group_values[entry_count] = NumericCast<uint32_t>(scan_position);
 			entry_count++;
-			if (entry_count == STANDARD_VECTOR_SIZE) {
+			if (entry_count == max_groups) {
 				scan_position++;
 				break;
 			}
@@ -344,13 +351,167 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	if (entry_count == 0) {
 		// no entries found
-		return;
+		return 0;
 	}
 	// first reconstruct the groups from the group index
 	idx_t shift = total_required_bits;
 	for (idx_t i = 0; i < grouping_columns; i++) {
 		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
+	}
+	FlatVector::SetSize(addresses, entry_count);
+	return entry_count;
+}
+
+idx_t PerfectAggregateHashTable::ArenaAllocationSize() const {
+	auto size = aggregate_allocator->AllocationSize();
+	for (auto &arena : stored_allocators) {
+		size += arena->AllocationSize();
+	}
+	return size;
+}
+
+bool PerfectAggregateHashTable::SingleGroupExceeds(const AggregateStateSpillPlan &plan, idx_t available,
+                                                   idx_t list_width, idx_t input_rows) {
+	D_ASSERT(list_width && input_rows >= measured_rows);
+	// Each new input row can add at most one element to each LIST in a group.
+	const auto upper_bound = largest_measured_list + (input_rows - measured_rows);
+	if (upper_bound <= DConstants::MAX_VECTOR_SIZE &&
+	    VectorBuffer::GetReserveSize(upper_bound) <= available / list_width) {
+		return false;
+	}
+	idx_t largest = 0;
+	if (ListResultExceeds(plan, available, 1, &largest)) {
+		return true;
+	}
+	measured_rows = input_rows;
+	largest_measured_list = largest;
+	return false;
+}
+
+bool PerfectAggregateHashTable::ListResultExceeds(const AggregateStateSpillPlan &plan, idx_t available,
+                                                  idx_t max_groups, optional_ptr<idx_t> largest_list) const {
+	for (idx_t start = 0; start < total_groups;) {
+		idx_t end = start;
+		idx_t count = 0;
+		while (end < total_groups && count < max_groups) {
+			count += group_is_set[end++];
+		}
+		idx_t remaining = available;
+		idx_t offset = 0;
+		for (idx_t i = 0; i < plan.state_layouts.size(); i++) {
+			auto &state = plan.state_layouts[i];
+			auto &aggr = layout_ptr->GetAggregates()[i];
+			const auto field_offset = offset + state.field.field_offset;
+			offset += aggr.payload_size;
+			const auto width = plan.FixedListElementWidth(i, aggr);
+			if (!width) {
+				continue;
+			}
+			idx_t elements = 0;
+			for (idx_t slot = start; slot < end; slot++) {
+				if (!group_is_set[slot]) {
+					continue;
+				}
+				const auto list = Load<LinkedList>(data + tuple_size * slot + field_offset);
+				if (largest_list) {
+					*largest_list = MaxValue(*largest_list, list.total_capacity);
+				}
+				elements += list.total_capacity;
+				if (elements > DConstants::MAX_VECTOR_SIZE) {
+					return true;
+				}
+			}
+			if (elements) {
+				const auto capacity = VectorBuffer::GetReserveSize(elements);
+				if (capacity > remaining / width) {
+					return true;
+				}
+				remaining -= capacity * width;
+			}
+		}
+		start = end;
+	}
+	return false;
+}
+
+void PerfectAggregateHashTable::MoveToRadix(ClientContext &context, const vector<LogicalType> &group_types,
+                                            GroupedAggregateHashTable &target) {
+	D_ASSERT(HasSingleArena() && target.Count() == 0);
+	auto arena = target.GetAggregateAllocator();
+	aggregate_allocator->Move(*arena);
+	RowOperationsState state(*arena);
+	DataChunk groups;
+	groups.Initialize(Allocator::Get(context), group_types);
+	Vector targets(LogicalType::POINTER);
+	idx_t position = 0;
+	while (ScanGroups(position, groups)) {
+		target.FindOrCreateGroups(groups, targets);
+		VectorOperations::AddInPlace(targets, NumericCast<int64_t>(target.GetLayout().GetAggrOffset()));
+		RowOperations::CombineStates(state, *layout_ptr, addresses, targets);
+		groups.Reset();
+	}
+}
+
+void PerfectAggregateHashTable::Export(ClientContext &context, const vector<LogicalType> &group_types,
+                                       const AggregateStateSpillPlan &plan,
+                                       vector<unique_ptr<ColumnDataCollection>> &exported, idx_t radix_bits) {
+	auto &allocator = Allocator::Get(context);
+	ArenaAllocator scratch(allocator);
+	DataChunk groups, batch, slice;
+	groups.Initialize(allocator, group_types);
+	batch.Initialize(allocator, plan.exported_types);
+	slice.Initialize(allocator, plan.exported_types);
+	auto &aggregates = layout_ptr->GetAggregates();
+	auto max_groups = idx_t(STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (!TypeIsConstantSize(plan.state_layouts[i].type.InternalType()) &&
+		    !plan.FixedListElementWidth(i, aggregates[i])) {
+			max_groups = 1;
+			break;
+		}
+	}
+	// Bound variable state materialization to a block; a single large group is indivisible.
+	const auto block_size = BufferManager::GetBufferManager(context).GetBlockAllocSize();
+	while (max_groups > 1 && ListResultExceeds(plan, block_size, max_groups)) {
+		max_groups /= 2;
+	}
+	Vector state_addresses(LogicalType::POINTER);
+	SelectionVector selection(STANDARD_VECTOR_SIZE);
+	idx_t position = 0;
+	while (ScanGroups(position, groups, max_groups)) {
+		batch.Reset();
+		for (idx_t col = 0; col < groups.ColumnCount(); col++) {
+			batch.data[col].Reference(groups.data[col]);
+		}
+		groups.Hash(batch.data[groups.ColumnCount()]);
+		auto pointers = addresses.Values<data_ptr_t>();
+		idx_t offset = 0;
+		for (idx_t col = 0; col < aggregates.size(); col++) {
+			auto &aggregate = aggregates[col];
+			{
+				auto writer = FlatVector::Writer<data_ptr_t>(state_addresses, groups.size());
+				for (auto entry : pointers) {
+					writer.WriteValue(entry.GetValue() + offset);
+				}
+			}
+			auto &result = batch.data[groups.ColumnCount() + 1 + col];
+			AggregateStateSerialization::SerializeStates(aggregate.function, aggregate.GetFunctionData(),
+			                                             plan.state_layouts[col], state_addresses, groups.size(),
+			                                             result, scratch, 0);
+			offset += aggregate.payload_size;
+		}
+		batch.SetChildCardinality(groups.size());
+		AggregateStateSpilling::AppendToPartitions(context, batch, groups.ColumnCount(), radix_bits, exported, slice,
+		                                           selection);
+		groups.Reset();
+		scratch.Reset();
+	}
+}
+
+void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result, idx_t max_groups) {
+	if (!ScanGroups(scan_position, result, max_groups)) {
+		return;
 	}
 	// then construct the payloads
 	if (!scan_row_state) {

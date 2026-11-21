@@ -1,6 +1,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/execution/radix_ht_sink_state.hpp"
 #include "duckdb/execution/radix_ht_adaptivity.hpp"
+#include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -666,13 +667,13 @@ bool MemoryPressure(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstat
 	return spillable_size > lstate.size_after_abandon + growth_limit / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR;
 }
 
-void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht,
+void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstate, idx_t aggregate_allocator_size,
                            idx_t total_size) {
 	// Include the headroom required by the arena's export threshold.
-	const auto required_size = gstate.spill_plan
-	                               ? MaxValue(total_size, ht.GetAggregateAllocator()->AllocationSize() *
-	                                                          RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR)
-	                               : total_size;
+	const auto required_size =
+	    gstate.spill_plan
+	        ? MaxValue(total_size, aggregate_allocator_size * RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR)
+	        : total_size;
 	if (required_size <= gstate.GetThreadLimit() || gstate.external) {
 		return;
 	}
@@ -681,7 +682,6 @@ void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstat
 		return;
 	}
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
-	const auto aggregate_allocator_size = ht.GetAggregateAllocator()->AllocationSize();
 	// Account for tuple metadata and the headroom deducted by GetThreadLimit.
 	const auto minimum_reservation =
 	    (gstate.minimum_reservation + gstate.number_of_threads * gstate.block_alloc_size) / 8 * 10;
@@ -698,7 +698,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	auto &config = gstate.config;
 	auto &ht = *lstate.ht;
 	const auto total_size = ht.GetSizeInBytes();
-	UpdateSinkReservation(context, gstate, ht, total_size);
+	UpdateSinkReservation(context, gstate, ht.GetAggregateAllocator()->AllocationSize(), total_size);
 
 	if (gstate.SpillableSize(ht) > SpillableLimit(gstate, ht)) {
 		if (gstate.config.SetRadixBitsToExternal()) {
@@ -749,10 +749,10 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	ht.Repartition();
 }
 
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
-                                     DataChunk &payload_input, const unsafe_vector<idx_t> &filter) const {
-	auto &gstate = input.global_state.Cast<RadixHTGlobalSinkState>();
-	auto &lstate = input.local_state.Cast<RadixHTLocalSinkState>();
+GroupedAggregateHashTable &RadixPartitionedHashTable::GetLocalTable(ExecutionContext &context, GlobalSinkState &global,
+                                                                    LocalSinkState &local) const {
+	auto &gstate = global.Cast<RadixHTGlobalSinkState>();
+	auto &lstate = local.Cast<RadixHTLocalSinkState>();
 	if (!lstate.ht) {
 		lstate.local_sink_capacity = gstate.config.sink_capacity;
 		lstate.ht = CreateHT(context.client, lstate.local_sink_capacity, gstate.config.GetRadixBits());
@@ -764,11 +764,55 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		gstate.active_threads++;
 		lstate.registered = true;
 	}
+	return *lstate.ht;
+}
+
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, PerfectAggregateHashTable &dense,
+                                     GlobalSinkState &global, LocalSinkState &local, idx_t available) const {
+	auto &gstate = global.Cast<RadixHTGlobalSinkState>();
+	auto &lstate = local.Cast<RadixHTLocalSinkState>();
+	D_ASSERT(gstate.spill_plan && !lstate.ht);
+	// A native transfer keeps its arena live through repartitioning, which can pin both sets of row blocks.
+	const auto working_set = gstate.CalculateMinimumReservation(gstate.config.GetRadixBits());
+	if (dense.HasSingleArena() && working_set <= available / 2 &&
+	    dense.Capacity() <= GroupedAggregateHashTable::ResizeThreshold(gstate.config.sink_capacity)) {
+		auto &ht = GetLocalTable(context, global, local);
+		dense.MoveToRadix(context.client, group_types, ht);
+		return;
+	}
+	idx_t bits;
+	const auto bytes = dense.ArenaAllocationSize();
+	{
+		const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+		// The dense arena is released after export. Request space without raising the native sink's minimum.
+		auto &memory = *gstate.temporary_memory_state;
+		if (bytes > memory.GetRemainingSize()) {
+			memory.SetRemainingSizeAndUpdateReservation(context.client.GetContext(), bytes);
+		}
+		bits = gstate.config.GetRadixBits();
+		if (gstate.spill_phase != SpillPhase::NATIVE_COMBINE_STARTED) {
+			gstate.spill_phase = SpillPhase::EXPORTED_ONLY;
+			const auto target = gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR;
+			while ((bytes >> bits) > target &&
+			       bits + RadixHTConfig::REPARTITION_RADIX_BITS <= RadixHTConfig::MAXIMUM_FINAL_SINK_RADIX_BITS) {
+				bits += RadixHTConfig::REPARTITION_RADIX_BITS;
+			}
+		}
+	}
+	lstate.abandoned_exported_data.resize(RadixPartitioning::NumberOfPartitions(bits));
+	dense.Export(context.client, group_types, *gstate.spill_plan, lstate.abandoned_exported_data, bits);
+	gstate.any_abandoned = true;
+}
+
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+                                     DataChunk &payload_input, const unsafe_vector<idx_t> &filter) const {
+	auto &gstate = input.global_state.Cast<RadixHTGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<RadixHTLocalSinkState>();
+	auto &ht = GetLocalTable(context, gstate, lstate);
 
 	auto &group_chunk = lstate.group_chunk;
 	PopulateGroupChunk(group_chunk, chunk);
 
-	auto &ht = *lstate.ht;
 	if (gstate.external && !lstate.spilling) {
 		lstate.PrepareForSpill(gstate);
 	}
@@ -776,7 +820,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 	// Row width and aggregate state size can increase without filling the pointer table.
 	const auto total_size = ht.GetSizeInBytes();
-	UpdateSinkReservation(context.client, gstate, ht, total_size);
+	UpdateSinkReservation(context.client, gstate, ht.GetAggregateAllocator()->AllocationSize(), total_size);
 	const auto memory_pressure = MemoryPressure(gstate, lstate, ht, total_size);
 	if (!memory_pressure &&
 	    ht.Count() + STANDARD_VECTOR_SIZE < GroupedAggregateHashTable::ResizeThreshold(lstate.local_sink_capacity)) {
@@ -840,7 +884,10 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalSinkState>();
 	if (!lstate.ht) {
-		return;
+		if (lstate.abandoned_exported_data.empty()) {
+			return;
+		}
+		GetLocalTable(context, gstate, lstate);
 	}
 
 	// Set any_combined, then check one last time whether we need to repartition

@@ -35,6 +35,11 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
+	bool ParallelSource() const override {
+		return true;
+	}
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 	void SourceFinished(ClientContext &context, GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -51,6 +56,9 @@ public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          OperatorSinkFinalizeInput &input) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
