@@ -452,12 +452,12 @@ struct SortKeyChunk {
 // Get Sort Key Length
 //===--------------------------------------------------------------------===//
 struct SortKeyLengthInfo {
-	explicit SortKeyLengthInfo(idx_t size) : constant_length(0) {
-		variable_lengths.resize(size, 0);
+	SortKeyLengthInfo(unsafe_vector<idx_t> &lengths, idx_t size) : constant_length(0), variable_lengths(lengths) {
+		variable_lengths.assign(size, 0);
 	}
 
 	idx_t constant_length;
-	unsafe_vector<idx_t> variable_lengths;
+	unsafe_vector<idx_t> &variable_lengths;
 };
 
 static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result);
@@ -867,24 +867,25 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 
 void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
                            const vector<OrderModifiers> &modifiers, const bool &all_constant, Vector &result,
-                           idx_t row_count) {
+                           idx_t row_count, CreateSortKeyState &state) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
 	// we do all of this in a vectorized manner
-	SortKeyLengthInfo key_lengths(row_count);
+	SortKeyLengthInfo key_lengths(state.lengths, row_count);
 	for (auto &vector_data : sort_key_data) {
 		GetSortKeyLength(*vector_data, key_lengths);
 	}
 	// allocate the empty sort keys
-	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[row_count]);
-	PrepareSortData(result, row_count, key_lengths, data_pointers.get(), all_constant);
+	auto &data_pointers = state.data_pointers;
+	data_pointers.resize(row_count);
+	PrepareSortData(result, row_count, key_lengths, data_pointers.data(), all_constant);
 
-	unsafe_vector<idx_t> offsets;
-	offsets.resize(row_count, 0);
+	auto &offsets = state.offsets;
+	offsets.assign(row_count, 0);
 	// now construct the sort keys
 	for (idx_t c = 0; c < sort_key_data.size(); c++) {
-		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.get());
+		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.data());
 		ConstructSortKey(*sort_key_data[c], info);
 	}
 	FinalizeSortData(result, row_count, key_lengths, offsets);
@@ -956,30 +957,38 @@ static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_k
 } // namespace
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
+	CreateSortKeyState state;
 	// prepare the sort key data
 	const auto input_count = input.size();
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
+	CreateSortKeyState state;
+	CreateSortKey(input, modifiers, result, state);
+}
+
+void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result,
+                                         CreateSortKeyState &state) {
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	D_ASSERT(modifiers.size() == input.ColumnCount());
 	for (idx_t r = 0; r < modifiers.size(); r++) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
 	}
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size(), state);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, idx_t input_count, OrderModifiers order_modifier,
                                          Vector &result) {
+	CreateSortKeyState state;
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
-	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
 
 void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
@@ -1013,6 +1022,11 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector
 	}
 }
 
+static unique_ptr<FunctionLocalState> InitCreateSortKeyState(ExpressionState &, const BoundFunctionExpression &,
+                                                             optional_ptr<const FunctionData>) {
+	return make_uniq<CreateSortKeyState>();
+}
+
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
@@ -1021,7 +1035,8 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
-	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
+	auto &key_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CreateSortKeyState>();
+	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size(), key_state);
 #ifdef DEBUG
 	AssertSortKeyRoundTrip(sort_key_data, bind_data.modifiers, result, args.size());
 #endif
@@ -1168,6 +1183,17 @@ struct DecodeSortKeyData {
 		return data[position++];
 	}
 };
+
+struct DecodeSortKeyState : FunctionLocalState {
+	vector<DecodeSortKeyData> rows;
+	vector<int64_t> swapped;
+	vector<DecodeSortKeyVectorData> columns;
+};
+
+static unique_ptr<FunctionLocalState> InitDecodeSortKeyState(ExpressionState &, const BoundFunctionExpression &,
+                                                             optional_ptr<const FunctionData>) {
+	return make_uniq<DecodeSortKeyState>();
+}
 
 void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_offset, idx_t count);
@@ -1450,8 +1476,10 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
-	vector<DecodeSortKeyData> decode_data(count);
-	vector<int64_t> bswapped_ints(count);
+	auto &decode_state = ExecuteFunctionState::GetFunctionState(state)->Cast<DecodeSortKeyState>();
+	auto &decode_data = decode_state.rows;
+	auto &bswapped_ints = decode_state.swapped;
+	decode_data.resize(count);
 	if (sort_key_vec.GetType() == LogicalType::BLOB) {
 		const auto sort_keys = UnifiedVectorFormat::GetData<string_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
@@ -1468,6 +1496,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 	} else {
 		D_ASSERT(sort_key_vec.GetType() == LogicalType::BIGINT);
+		bswapped_ints.resize(count);
 		const auto sort_keys = UnifiedVectorFormat::GetData<int64_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
@@ -1490,8 +1519,10 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
 		auto &child_vector = child_vectors[c];
-		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
-		DecodeSortKeyRecursive(decode_data.data(), sort_key_data, child_vector, 0, count);
+		if (c == decode_state.columns.size()) {
+			decode_state.columns.emplace_back(child_vector.GetType(), bind_data.modifiers[c]);
+		}
+		DecodeSortKeyRecursive(decode_data.data(), decode_state.columns[c], child_vector, 0, count);
 	}
 }
 
@@ -1505,6 +1536,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	sort_key_function.GetSignature().AddArgs("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	sort_key_function.GetProperties().SetProperty(CreateSortKeyHelpers::NON_NULL_RESULT_PROPERTY, Value::BOOLEAN(true));
+	sort_key_function.SetInitStateCallback(InitCreateSortKeyState);
 	return sort_key_function;
 }
 
@@ -1523,6 +1555,7 @@ unique_ptr<Expression> DecodeSortKeyFun::Bind(unique_ptr<Expression> sort_key, c
 	bind_data->all_constant = all_constant;
 	ScalarFunction definition("decode_sort_key", {sort_key->GetReturnType()}, LogicalType::STRUCT(std::move(columns)),
 	                          DecodeSortKeyFunction);
+	definition.SetInitStateCallback(InitDecodeSortKeyState);
 	BoundScalarFunction function(definition);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(sort_key));
@@ -1535,6 +1568,7 @@ ScalarFunction DecodeSortKeyFun::GetFunction() {
 	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
 	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
 	sort_key_function.GetSignature().AddArgs("args", LogicalType::VARCHAR);
+	sort_key_function.SetInitStateCallback(InitDecodeSortKeyState);
 	return sort_key_function;
 }
 

@@ -1014,7 +1014,7 @@ public:
 		idx_t pass = 0;
 		JoinBuildRange range;
 		while (queue.Next(start, pass, range)) {
-			sink.context.InterruptCheck();
+			sink.context.FastInterruptCheck();
 			ExecuteHashJoinTableInitTask(sink, range.begin, range.end);
 		}
 		event->FinishTask();
@@ -1091,7 +1091,7 @@ public:
 		idx_t pass = 0;
 		JoinBuildRange range;
 		while (queue.Next(start, pass, range)) {
-			sink.context.InterruptCheck();
+			sink.context.FastInterruptCheck();
 			ExecuteHashJoinFinalizeTask(sink, range, parallel, prefix_range_lane);
 		}
 		event->FinishTask();
@@ -1565,7 +1565,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 
 	if (sink.external) {
-		state->spill_chunk.InitializeEmpty(sink.probe_types);
+		state->spill_chunk.Initialize(allocator, sink.probe_types, vector<bool>(sink.probe_types.size(), false));
 		sink.InitializeProbeSpill();
 	}
 

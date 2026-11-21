@@ -543,11 +543,18 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &fu
 	case PhysicalType::INT64:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<int64_t>, COMPARATOR>(function);
 		break;
+	case PhysicalType::INT128:
+		SpecializeMinMaxNFunction<MinMaxFixedValue<hugeint_t>, COMPARATOR>(function);
+		break;
 	case PhysicalType::FLOAT:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<float>, COMPARATOR>(function);
 		break;
 	case PhysicalType::DOUBLE:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(function);
+		break;
+	case PhysicalType::INTERVAL:
+		// sort keys do not normalize intervals, so compare them as interval_t
+		SpecializeMinMaxNFunction<MinMaxFixedValue<interval_t>, COMPARATOR>(function);
 		break;
 	default:
 		SpecializeMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(function);

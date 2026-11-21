@@ -9,3 +9,23 @@ query II
 SELECT greatest('x'::t, 'z'::t), 'x'::t > 'z'::t;
 ----
 x	1
+
+statement ok
+CREATE TABLE enum_tbl AS SELECT * FROM (VALUES ('z'::t, 'x'::t), ('y'::t, NULL), (NULL, 'y'::t), ('x'::t, 'z'::t)) v(a, b);
+
+query II
+SELECT least(a, b, 'y'::t), greatest(a, b, 'y'::t) FROM enum_tbl;
+----
+z	x
+y	y
+y	y
+z	x
+
+# enum with more than 256 values uses a wider physical type
+statement ok
+CREATE TYPE big_enum AS ENUM (SELECT 'v' || (299 - i)::VARCHAR FROM range(300) t(i));
+
+query II
+SELECT least('v0'::big_enum, 'v299'::big_enum, NULL), greatest('v0'::big_enum, 'v299'::big_enum, 'v150'::big_enum);
+----
+v299	v0

@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/statistics/distinct_on_stats_propagation.test
-# description: Aggregate domains require exact grouping keys and single-value identity
+# description: Domain statistics for singleton groups and value-selecting aggregates
 # group: [statistics]
 
 # Exact plan estimates depend on sampled distinct counts.
@@ -153,18 +153,18 @@ JOIN (SELECT first(x) AS k FROM unique_list_values_right GROUP BY id) r ON l.k =
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
-# An aggregate filter can remove values even when every group has one row.
+# min(x) only forwards its domain through the singleton rule. A FILTER blocks that rule.
 query II
 EXPLAIN SELECT count(*)
-FROM (SELECT first(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values GROUP BY id) l
-JOIN (SELECT first(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values_right GROUP BY id) r ON l.k = r.k;
+FROM (SELECT min(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values GROUP BY id) l
+JOIN (SELECT min(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values_right GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
 
 query I
 SELECT count(*)
-FROM (SELECT first(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values GROUP BY id) l
-JOIN (SELECT first(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values_right GROUP BY id) r ON l.k = r.k;
+FROM (SELECT min(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values GROUP BY id) l
+JOIN (SELECT min(x) FILTER (WHERE id % 2 = 0) AS k FROM unique_list_values_right GROUP BY id) r ON l.k = r.k;
 ----
 16
 
@@ -262,7 +262,7 @@ JOIN (SELECT arg_min(x, p) AS k FROM unique_list_values_right GROUP BY id) r ON 
 ----
 0
 
-# An identical CTAS input has no certified key and retains the fallback.
+# A CTAS input has no certified key, but first(x) still selects from the input domain.
 statement ok
 CREATE TABLE unconstrained_values AS SELECT * FROM unique_list_values;
 
@@ -277,7 +277,7 @@ EXPLAIN SELECT count(*)
 FROM (SELECT first(x) AS k FROM unconstrained_values GROUP BY id) l
 JOIN (SELECT first(x) AS k FROM unconstrained_values_right GROUP BY id) r ON l.k = r.k;
 ----
-logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
 query I
 SELECT count(*)
@@ -310,8 +310,8 @@ ANALYZE;
 
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM nonnull_unique GROUP BY id) l
-JOIN (SELECT first(x) AS k FROM nonnull_unique GROUP BY id) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM nonnull_unique GROUP BY id) l
+JOIN (SELECT min(x) AS k FROM nonnull_unique GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
 
@@ -333,46 +333,46 @@ JOIN (SELECT first(x ORDER BY x) AS k FROM nullable_unique GROUP BY id) r ON l.k
 # A composite key must be completely covered by the grouping expressions.
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM composite_unique GROUP BY a, b) l
-JOIN (SELECT first(x) AS k FROM composite_unique GROUP BY a, b) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM composite_unique GROUP BY a, b) l
+JOIN (SELECT min(x) AS k FROM composite_unique GROUP BY a, b) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
 
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM composite_unique GROUP BY a) l
-JOIN (SELECT first(x) AS k FROM composite_unique GROUP BY a) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM composite_unique GROUP BY a) l
+JOIN (SELECT min(x) AS k FROM composite_unique GROUP BY a) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "2".*
 
 # Casting a key to BOOLEAN can merge distinct key values.
 query II
 EXPLAIN SELECT count(*)
-FROM (SELECT first(x) AS k FROM unique_list_values GROUP BY CAST(id AS BOOLEAN)) l
-JOIN (SELECT first(x) AS k FROM unique_list_values_right GROUP BY CAST(id AS BOOLEAN)) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM unique_list_values GROUP BY CAST(id AS BOOLEAN)) l
+JOIN (SELECT min(x) AS k FROM unique_list_values_right GROUP BY CAST(id AS BOOLEAN)) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~4 rows.*
 
 # TRY_CAST can turn distinct key values into NULL and cannot certify uniqueness.
 query II
 EXPLAIN SELECT count(*)
-FROM (SELECT first(x) AS k FROM unique_list_values GROUP BY TRY_CAST(id AS TINYINT)) l
-JOIN (SELECT first(x) AS k FROM unique_list_values_right GROUP BY TRY_CAST(id AS TINYINT)) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM unique_list_values GROUP BY TRY_CAST(id AS TINYINT)) l
+JOIN (SELECT min(x) AS k FROM unique_list_values_right GROUP BY TRY_CAST(id AS TINYINT)) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~4 rows.*
 
 # Joins can multiply a key's rows and must invalidate the singleton proof.
 query II
 EXPLAIN SELECT count(*)
-FROM (SELECT first(v.x) AS k FROM unique_list_values v CROSS JOIN range(2) t(i) GROUP BY v.id) l
-JOIN (SELECT first(v.x) AS k FROM unique_list_values_right v CROSS JOIN range(2) t(i) GROUP BY v.id) r ON l.k = r.k;
+FROM (SELECT min(v.x) AS k FROM unique_list_values v CROSS JOIN range(2) t(i) GROUP BY v.id) l
+JOIN (SELECT min(v.x) AS k FROM unique_list_values_right v CROSS JOIN range(2) t(i) GROUP BY v.id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
 
 query I
 SELECT count(*)
-FROM (SELECT first(v.x) AS k FROM unique_list_values v CROSS JOIN range(2) t(i) GROUP BY v.id) l
-JOIN (SELECT first(v.x) AS k FROM unique_list_values_right v CROSS JOIN range(2) t(i) GROUP BY v.id) r ON l.k = r.k;
+FROM (SELECT min(v.x) AS k FROM unique_list_values v CROSS JOIN range(2) t(i) GROUP BY v.id) l
+JOIN (SELECT min(v.x) AS k FROM unique_list_values_right v CROSS JOIN range(2) t(i) GROUP BY v.id) r ON l.k = r.k;
 ----
 32
 
@@ -438,45 +438,45 @@ query II
 EXPLAIN (FORMAT JSON)
 WITH lhs AS MATERIALIZED (SELECT id, id % 2 AS k FROM ids_left),
      rhs AS MATERIALIZED (SELECT id % 2 AS k FROM ids_right)
-SELECT count(*) FROM (SELECT first(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON s.k = r.k;
+SELECT count(*) FROM (SELECT min(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON s.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "8".*
 
 query I
 WITH lhs AS MATERIALIZED (SELECT id, id % 2 AS k FROM ids_left),
      rhs AS MATERIALIZED (SELECT id % 2 AS k FROM ids_right)
-SELECT count(*) FROM (SELECT first(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON s.k = r.k;
+SELECT count(*) FROM (SELECT min(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON s.k = r.k;
 ----
 16
 
 # Ordinary injective casts retain the singleton proof.
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
-JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
+FROM (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT min(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
 query II
 SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
-JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
+FROM (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT min(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
 ----
 32	224
 
 # Common-subplan extraction retains the domains in a self join as well.
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
-JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) r USING (k);
+FROM (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
 
 # Successful strict narrowing casts are injective too.
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::TINYINT) l
-JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::TINYINT) r USING (k);
+FROM (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::TINYINT) l
+JOIN (SELECT min(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::TINYINT) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
@@ -528,15 +528,15 @@ JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GR
 # Repeated grouping sets emit each key twice.
 query II
 EXPLAIN SELECT count(*)
-FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
-JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
+FROM (SELECT min(x) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
+JOIN (SELECT min(x) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
 
 query I
 SELECT count(*)
-FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
-JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
+FROM (SELECT min(x) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
+JOIN (SELECT min(x) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
 ----
 128
 
@@ -546,44 +546,44 @@ RESET disabled_optimizers;
 # The grouping alias can coexist with another projection of its source key.
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z
+FROM (SELECT min(x) AS k, max(id) AS z
       FROM (SELECT id::BIGINT AS gid, id, x FROM unique_list_values) p GROUP BY gid) l
-JOIN (SELECT first(x) AS k, max(id) AS z
+JOIN (SELECT min(x) AS k, max(id) AS z
       FROM (SELECT id::BIGINT AS gid, id, x FROM unique_list_values_right) p GROUP BY gid) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z
+FROM (SELECT min(x) AS k, max(id) AS z
       FROM (SELECT id AS gid, id, x FROM unique_list_values) p GROUP BY gid) l
-JOIN (SELECT first(x) AS k, max(id) AS z
+JOIN (SELECT min(x) AS k, max(id) AS z
       FROM (SELECT id AS gid, id, x FROM unique_list_values_right) p GROUP BY gid) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z)
-FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT::HUGEINT) l
-JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT::HUGEINT) r USING (k);
+FROM (SELECT min(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT::HUGEINT) l
+JOIN (SELECT min(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT::HUGEINT) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
 
 # Retain a window output so pruning cannot remove the window boundary.
 query II
 EXPLAIN SELECT count(*), sum(l.z + r.z), sum(l.w + r.w)
-FROM (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+FROM (SELECT min(x) AS k, max(id) AS z, max(rn) AS w
       FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values) p GROUP BY id) l
-JOIN (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+JOIN (SELECT min(x) AS k, max(id) AS z, max(rn) AS w
       FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values_right) p GROUP BY id) r USING (k);
 ----
 logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*Window.*
 
 query III
 SELECT count(*), sum(l.z + r.z), sum(l.w + r.w)
-FROM (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+FROM (SELECT min(x) AS k, max(id) AS z, max(rn) AS w
       FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values) p GROUP BY id) l
-JOIN (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+JOIN (SELECT min(x) AS k, max(id) AS z, max(rn) AS w
       FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values_right) p GROUP BY id) r USING (k);
 ----
 32	224	288
@@ -602,7 +602,7 @@ ANALYZE deferred_unique;
 # Deferred keys do not certify singleton groups.
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM deferred_unique GROUP BY id) l
-JOIN (SELECT first(x) AS k FROM deferred_unique GROUP BY id) r ON l.k = r.k;
+FROM (SELECT min(x) AS k FROM deferred_unique GROUP BY id) l
+JOIN (SELECT min(x) AS k FROM deferred_unique GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "8".*
