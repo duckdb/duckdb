@@ -10,6 +10,23 @@ SET threads = 1
 statement ok
 SET memory_limit = '2MB'
 
+query II
+SELECT sum(len(xs)), max(a) = 32799 FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs, avg(i) AS a
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	true
+
+query II
+SELECT sum(len(xs)), sum(length(v)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           min(CASE WHEN i % 2 = 0 THEN repeat('x', 512) ELSE repeat('y', 512) END) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	51200
+
 foreach width 0 512
 
 foreach aggr min first
@@ -101,6 +118,32 @@ DROP TABLE dense_output
 
 statement ok
 SET memory_limit = '16MB'
+
+foreach width 128 1024
+
+query II
+SELECT sum(len(xs)), sum(length(v)) FROM (
+    SELECT (i % 32)::UTINYINT AS g, list(i) FILTER (WHERE i = 0) AS xs,
+           last(CASE WHEN (i // 2048) % 2 = 0 THEN repeat('x', {width}) ELSE 'x' END) AS v
+    FROM range(1073741824 // {width}) t(i) GROUP BY g
+)
+----
+1	32
+
+endloop
+
+foreach start_row 0 524288
+
+query II
+SELECT sum(len(xs)), sum(length(v)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           min(CASE WHEN i BETWEEN {start_row} AND {start_row} + 99 THEN repeat('x', 16385) || (i % 100)::VARCHAR END) AS v
+    FROM range(524388) t(i) GROUP BY g
+)
+----
+524388	1638690
+
+endloop
 
 query I
 SELECT sum(len(xs)) FROM (

@@ -27,8 +27,9 @@ public:
 	~PerfectAggregateHashTable() override;
 
 public:
-	//! Add the given data to the HT
-	void AddChunk(DataChunk &groups, DataChunk &payload);
+	//! Resolve group slots and filters, which are shared by memory budgeting and the update.
+	void PrepareChunk(DataChunk &groups, DataChunk &payload);
+	void AddChunk(DataChunk &payload);
 
 	//! Combines the target perfect aggregate HT into this one
 	void Combine(PerfectAggregateHashTable &other);
@@ -43,8 +44,9 @@ public:
 	            vector<unique_ptr<ColumnDataCollection>> &exported, idx_t radix_bits);
 
 	idx_t ArenaAllocationSize() const;
-	//! Deduct native string payloads from the list budget if they fit in one spill block.
-	bool ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size, idx_t &available) const;
+	//! Budget for retained strings and the incoming aggregate input before the next update.
+	bool ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size, idx_t &available,
+	                          optional_ptr<DataChunk> input);
 	bool SingleGroupExceeds(const AggregateStateSpillPlan &plan, idx_t available, idx_t list_width, idx_t input_rows);
 	bool ListResultExceeds(const AggregateStateSpillPlan &plan, idx_t available,
 	                       idx_t max_groups = STANDARD_VECTOR_SIZE, optional_ptr<idx_t> largest_list = nullptr) const;

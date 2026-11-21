@@ -24,6 +24,7 @@ struct AggregateStateSpillPlan {
 	vector<AggregateStateLayout> state_layouts;
 	vector<LogicalType> exported_types;
 
+	bool HasArenaReferences(idx_t index) const;
 	//! Width of one materialized element for a native fixed-width LIST, or zero for other states.
 	idx_t FixedListElementWidth(idx_t index, const AggregateObject &aggregate) const;
 };

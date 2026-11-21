@@ -137,7 +137,7 @@ static inline void CheckGroupInRange(uint64_t group, idx_t total_groups) {
 	}
 }
 
-void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+void PerfectAggregateHashTable::PrepareChunk(DataChunk &groups, DataChunk &payload) {
 	const auto row_count = groups.size();
 	// first we need to find the location in the HT of each of the groups
 	FlatVector::SetSize(addresses, row_count);
@@ -155,6 +155,11 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 
 	// evaluate every aggregate filter once for this chunk
 	filter_set.ApplyFilters(payload);
+}
+
+void PerfectAggregateHashTable::AddChunk(DataChunk &payload) {
+	const auto row_count = addresses.size();
+	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	if (AddChunkClustered(address_data, payload)) {
 		return;
 	}
@@ -371,56 +376,123 @@ idx_t PerfectAggregateHashTable::ArenaAllocationSize() const {
 	return size;
 }
 
-static bool ReserveStringResult(const AggregateStateField &field, const LogicalType &type, const_data_ptr_t state,
-                                idx_t &available) {
+static optional_idx StringHeapSize(const AggregateStateField &field, const LogicalType &type, const_data_ptr_t state) {
 	switch (field.kind) {
 	case AggregateFieldKind::OPTIONAL_VALUE:
-		return !Load<bool>(state + field.field_offset) ||
-		       ReserveStringResult(field.children[0], type, state, available);
+		if (!Load<bool>(state + field.field_offset)) {
+			return 0;
+		}
+		return StringHeapSize(field.children[0], type, state);
 	case AggregateFieldKind::STRUCT:
-		return field.children.size() == 1 &&
-		       ReserveStringResult(field.children[0], StructType::GetChildTypes(type)[0].second,
-		                           state + field.field_offset, available);
+		if (field.children.size() == 1) {
+			return StringHeapSize(field.children[0], StructType::GetChildTypes(type)[0].second,
+			                      state + field.field_offset);
+		}
+		break;
 	case AggregateFieldKind::PRIMITIVE: {
-		if (type.InternalType() != PhysicalType::VARCHAR) {
-			return false;
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			const auto value = Load<string_t>(state + field.field_offset);
+			return value.IsInlined() ? 0 : value.GetSize();
 		}
-		const auto value = Load<string_t>(state + field.field_offset);
-		const auto bytes = value.IsInlined() ? 0 : value.GetSize();
-		if (bytes > available) {
-			return false;
-		}
-		available -= bytes;
-		return true;
+		break;
 	}
 	default:
-		return false;
+		break;
 	}
+	return optional_idx();
+}
+
+static bool ReserveStringUpdates(const Vector &values, const SelectionVector &selection, const Vector &addresses,
+                                 vector<idx_t> &heap_sizes, idx_t &remaining) {
+	const auto slots = FlatVector::GetData<uintptr_t>(addresses);
+	for (auto entry : values.ValidValues<string_t>()) {
+		const auto slot = slots[selection.get_index(entry.GetIndex())];
+		CheckGroupInRange(slot, heap_sizes.size());
+		auto &held = heap_sizes[slot];
+		const auto &value = entry.GetValue();
+		if (value.IsInlined()) {
+			// An inline replacement loses the group's reference to its heap buffer.
+			held = 0;
+			continue;
+		}
+		if (held >= value.GetSize()) {
+			continue;
+		}
+		const auto bytes = NextPowerOfTwo(value.GetSize());
+		if (bytes > remaining) {
+			return false;
+		}
+		remaining -= bytes;
+	}
+	return true;
 }
 
 bool PerfectAggregateHashTable::ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size,
-                                                     idx_t &available) const {
+                                                     idx_t &available, optional_ptr<DataChunk> input) {
 	const auto budget = MinValue(block_size, available);
 	auto remaining = budget;
+	idx_t new_bytes = 0;
+	vector<idx_t> heap_sizes;
 	idx_t offset = 0;
+	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < plan.state_layouts.size(); i++) {
 		const auto &state = plan.state_layouts[i];
 		const auto &aggregate = layout_ptr->GetAggregates()[i];
 		const auto base = data + offset;
 		offset += aggregate.payload_size;
-		if (TypeIsConstantSize(state.type.InternalType()) || plan.FixedListElementWidth(i, aggregate)) {
+		const auto column = payload_idx;
+		payload_idx += aggregate.child_count;
+		if (plan.FixedListElementWidth(i, aggregate) || !plan.HasArenaReferences(i)) {
 			continue;
 		}
 		if (aggregate.function.GetReturnType().InternalType() != PhysicalType::VARCHAR ||
 		    aggregate.function.HasExportAggregateStateCallback()) {
 			return false;
 		}
-		for (idx_t slot = 0; slot < total_groups; slot++) {
-			if (group_is_set[slot] &&
-			    !ReserveStringResult(state.field, state.type, base + tuple_size * slot, remaining)) {
+		optional_ptr<const Vector> values;
+		optional_ptr<const AggregateFilterData> filter;
+		if (input) {
+			if (aggregate.child_count != 1 || input->data[column].GetType().InternalType() != PhysicalType::VARCHAR) {
 				return false;
 			}
+			if (aggregate.filter) {
+				filter = filter_set.GetFilterData(i);
+			}
+			const auto &column_values = filter ? filter->filtered_payload.data[column] : input->data[column];
+			if (column_values.size()) {
+				values = column_values;
+				heap_sizes.resize(total_groups);
+			}
 		}
+		for (idx_t slot = 0; slot < total_groups; slot++) {
+			if (!group_is_set[slot]) {
+				continue;
+			}
+			const auto size = StringHeapSize(state.field, state.type, base + tuple_size * slot);
+			if (!size.IsValid() || size.GetIndex() > remaining) {
+				return false;
+			}
+			remaining -= size.GetIndex();
+			if (values) {
+				heap_sizes[slot] = size.GetIndex();
+			}
+		}
+		if (!values) {
+			continue;
+		}
+		const auto before = remaining;
+		const auto &selection =
+		    filter && !filter->all_selected ? filter->true_sel : *FlatVector::IncrementalSelectionVector();
+		if (!ReserveStringUpdates(*values, selection, addresses, heap_sizes, remaining)) {
+			return false;
+		}
+		new_bytes += before - remaining;
+	}
+	// Crossing the end of the current block can require doubling it even for a small update.
+	const auto head = aggregate_allocator->GetPosition().chunk;
+	if (head && new_bytes > head->maximum_size - head->current_position &&
+	    aggregate_allocator->AllocationSize() > available) {
+		return false;
 	}
 	available -= budget - remaining;
 	return true;
@@ -520,8 +592,7 @@ void PerfectAggregateHashTable::Export(ClientContext &context, const vector<Logi
 	auto &aggregates = layout_ptr->GetAggregates();
 	auto max_groups = idx_t(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (!TypeIsConstantSize(plan.state_layouts[i].type.InternalType()) &&
-		    !plan.FixedListElementWidth(i, aggregates[i])) {
+		if (plan.HasArenaReferences(i) && !plan.FixedListElementWidth(i, aggregates[i])) {
 			max_groups = 1;
 			break;
 		}

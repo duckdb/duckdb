@@ -73,7 +73,7 @@ public:
 			auto &aggregate = op.aggregate_objects[i];
 			const auto width = spill_plan->FixedListElementWidth(i, aggregate);
 			list_width += width;
-			if (!width && !TypeIsConstantSize(spill_plan->state_layouts[i].type.InternalType())) {
+			if (!width && spill_plan->HasArenaReferences(i)) {
 				has_variable_width_state = true;
 			}
 		}
@@ -89,7 +89,8 @@ public:
 		return MinValue(limit - MinValue(limit, allocated), pool_limit - MinValue(pool_limit, reserved));
 	}
 
-	bool NeedsRadix(ExecutionContext &context, PerfectAggregateHashTable &table, idx_t rows) const {
+	bool NeedsRadix(ExecutionContext &context, PerfectAggregateHashTable &table, idx_t rows,
+	                optional_ptr<DataChunk> input = nullptr) const {
 		auto available = AvailableMemory(context.client);
 		const auto allocated = arena_capacity.load();
 		if (allocated <= available) {
@@ -104,7 +105,7 @@ public:
 		if (has_variable_width_state) {
 			// Dense combine can copy string states into another arena before they can be exported.
 			const auto block = BufferManager::GetBufferManager(context.client).GetBlockAllocSize();
-			if (!list_width || !table.ReserveStringResults(*spill_plan, block, available)) {
+			if (!list_width || !table.ReserveStringResults(*spill_plan, block, available, input)) {
 				return true;
 			}
 		}
@@ -235,10 +236,13 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	auto &global = input.global_state.Cast<PerfectHashAggregateGlobalState>();
+	if (lstate.ht) {
+		lstate.ht->PrepareChunk(group_chunk, aggregate_input_chunk);
+	}
 	if (global.spill_plan) {
 		if (!global.external) {
 			lstate.AccountArena(global);
-			if (global.NeedsRadix(context, *lstate.ht, lstate.rows)) {
+			if (global.NeedsRadix(context, *lstate.ht, lstate.rows, aggregate_input_chunk)) {
 				lock_guard<mutex> guard(global.lock);
 				global.SwitchToRadix(context, *this);
 			}
@@ -252,7 +256,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 			return SinkResultType::NEED_MORE_INPUT;
 		}
 	}
-	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
+	lstate.ht->AddChunk(aggregate_input_chunk);
 	lstate.rows += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }

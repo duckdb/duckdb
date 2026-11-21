@@ -38,6 +38,11 @@ static bool FieldHasArenaReferences(const LogicalType &type, const AggregateStat
 	}
 }
 
+bool AggregateStateSpillPlan::HasArenaReferences(idx_t index) const {
+	const auto &state = state_layouts[index];
+	return FieldHasArenaReferences(state.type, state.field);
+}
+
 idx_t AggregateStateSpillPlan::FixedListElementWidth(idx_t index, const AggregateObject &aggregate) const {
 	const auto &state = state_layouts[index];
 	if (state.field.kind != AggregateFieldKind::LIST || aggregate.function.HasExportAggregateStateCallback() ||
