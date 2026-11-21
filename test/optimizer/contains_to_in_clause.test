@@ -29,11 +29,22 @@ EXPLAIN FROM the_table WHERE the_id in [1,42,999,12345,99999,100001]
 ----
 logical_opt	<REGEX>:.*COMPARISON_JOIN.*
 
-# Not yet implemented
+# NOT IN with a large constant list becomes a mark join
 query II
 EXPLAIN FROM the_table WHERE the_id NOT IN [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 ----
-logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query I
+SELECT count(*) FROM the_table WHERE the_id NOT IN (1, 3, 5, 7, 9, 11)
+----
+2499994
+
+# a NULL in the list makes NOT IN NULL for every non-matching row
+query I
+SELECT count(*) FROM the_table WHERE the_id NOT IN (1, 3, 5, 7, 9, NULL)
+----
+0
 
 statement ok
 CREATE TABLE t AS SELECT * FROM (VALUES (1), (2), (NULL::INTEGER)) v(a);

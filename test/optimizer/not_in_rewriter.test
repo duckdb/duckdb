@@ -1,0 +1,161 @@
+# name: test/optimizer/not_in_rewriter.test
+# description: Large constant NOT IN / IN rewrite to a mark join (#28903)
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output = 'optimized_only';
+
+statement ok
+CREATE TABLE t(id INTEGER, b INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 1, '1'), (2, 0, '2'), (10, 1, '3'), (NULL, 0, 'x');
+
+# rewritten to a join
+query II
+EXPLAIN SELECT id FROM t WHERE id NOT IN (1, 2, 3, 4, 5, 6)
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (id IN (1, 2, 3, 4, 5, 6))
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE id NOT IN [1, 2, 3, 4, 5, 6]
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (id > 100 OR id IN (1, 2, 3, 4, 5, 6))
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (b = 1 OR id IN (1, 2, 3, 4, 5, 6))
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE id NOT IN (1, 2, 3, 4, 5, 6) AND b = 1
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE id IN (1, 2, 3, 4, 5, 6) OR id > 100
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (NOT (id IN (1, 2, 3, 4, 5, 6)))
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE (id IN (1, 2, 3, 4, 5, 6)) = false
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE (id IN (1, 2, 3, 4, 5, 6)) IS FALSE
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE (id IN (1, 2, 3, 4, 5, 6)) IS NOT TRUE
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (b = 1 AND id IN (1, 2, 3, 4, 5, 6))
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT (CASE WHEN b = 1 THEN id IN (1, 2, 3, 4, 5, 6) ELSE false END)
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+# stay scan filters
+query II
+EXPLAIN SELECT id FROM t WHERE id NOT IN (1, 2, 3)
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT id FROM t WHERE NOT TRY(id IN (1, 2, 3, 4, 5, 6))
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN SELECT s FROM t WHERE NOT (s::INTEGER IN (1, 2, 3))
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+statement ok
+SET explain_output = 'physical_only';
+
+query II
+EXPLAIN SELECT s FROM t WHERE NOT (s::INTEGER IN (1, 2, 3))
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*NOT \(CAST\(s AS INTEGER\) IN \(1, 2, 3\)\).*
+
+statement ok
+SET explain_output = 'optimized_only';
+
+# results
+query I
+SELECT id FROM t WHERE id NOT IN (1, 2, 3, 4, 5, 6) ORDER BY ALL
+----
+10
+
+query I
+SELECT id FROM t WHERE NOT (id IN (1, 2, 3, 4, 5, 6)) ORDER BY ALL
+----
+10
+
+query I
+SELECT id FROM t WHERE id NOT IN (1, 2, 3, 4, 5, 6) AND b = 1 ORDER BY ALL
+----
+10
+
+query I
+SELECT id FROM t WHERE NOT (id > 100 OR id IN (1, 2, 3, 4, 5, 6)) ORDER BY ALL
+----
+10
+
+query I
+SELECT id FROM t WHERE NOT (b = 1 OR id IN (1, 2, 3, 4, 5, 6)) ORDER BY ALL
+----
+
+query I
+SELECT id FROM t WHERE NOT (b = 1 AND id IN (1, 2, 3, 4, 5, 6)) ORDER BY ALL
+----
+2
+10
+NULL
+
+query I
+SELECT id FROM t WHERE (id IN (1, 2, 3, 4, 5, 6)) = false ORDER BY ALL
+----
+10
+
+query I
+SELECT id FROM t WHERE (id IN (1, 2, 3, 4, 5, 6)) IS NOT TRUE ORDER BY ALL
+----
+10
+NULL
+
+query I
+SELECT id FROM t WHERE id NOT IN (1, 2, 3) ORDER BY ALL
+----
+10
+
+statement error
+SELECT s FROM t WHERE NOT (s::INTEGER IN (1, 2, 3))
+----
+<REGEX>:.*Could not convert.*
