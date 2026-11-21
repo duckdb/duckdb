@@ -158,6 +158,12 @@ SELECT stats(d), stats(f) FROM nan_first LIMIT 1
 ----
 {'has_no_null': true, 'has_null': false, 'max': nan, 'min': 1.0}	{'has_no_null': true, 'has_null': false, 'max': nan, 'min': 1.0}
 
+# an open upper bound is not the exact max, even when the file marks its bounds exact
+query II
+SELECT max(doubles), max(floats) FROM '{DATA_DIR}/parquet-testing/byte_stream_split.parquet'
+----
+98.98346963218356	99.441986
+
 # an explicit can_have_nan := false of the scan takes precedence over the setting (the NaN row is lost again)
 query IIIIII
 FROM nan_forms('nan_first_explicit_false')

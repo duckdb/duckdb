@@ -2668,6 +2668,13 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
 		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
 			const auto &stats = column_chunk.meta_data.statistics;
+			const auto type_id = column_schema.type.id();
+			const bool is_floating_point = type_id == LogicalTypeId::FLOAT || type_id == LogicalTypeId::DOUBLE;
+			const bool can_have_nan = parquet_options->can_have_nan && stats.__isset.nan_count == 0;
+			if (is_floating_point && can_have_nan) {
+				// the max is replaced by NaN as an upper bound, as the stored max leaves out NaN values
+				return false;
+			}
 			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
 		return false;
