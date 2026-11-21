@@ -19,6 +19,17 @@ string EncodingFunction::FunctionName(const string &encoding_name) {
 	return StringUtil::Lower(encoding_name);
 }
 
+string EncodingFunction::NormalizeName(const string &encoding_name) {
+	string result;
+	result.reserve(encoding_name.size());
+	for (char c : encoding_name) {
+		if (c != '-' && c != '_' && c != ' ') {
+			result.push_back(StringUtil::CharacterToLower(c));
+		}
+	}
+	return result;
+}
+
 void EncodingFunction::SetSchema(CreateFunctionInfo &info) {
 	info.SetQualifiedName(
 	    QualifiedName(Identifier::InvalidCatalog(), Identifier(SCHEMA), info.GetQualifiedName().Name()));
@@ -127,10 +138,24 @@ optional_ptr<ScalarFunctionCatalogEntry> EncodingFunction::Find(ClientContext &c
 		auto &schema = Catalog::GetSystemCatalog(context).GetSchema(transaction, Identifier(SCHEMA));
 		auto entry =
 		    schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(FunctionName(encoding_name)));
-		if (!entry) {
+		if (entry) {
+			return &entry->Cast<ScalarFunctionCatalogEntry>();
+		}
+		// Fallback: UTS #22 loose matching (ignore '-', '_', and spaces)
+		const auto normalized = NormalizeName(encoding_name);
+		if (normalized.empty()) {
 			return nullptr;
 		}
-		return &entry->Cast<ScalarFunctionCatalogEntry>();
+		optional_ptr<ScalarFunctionCatalogEntry> best_match = nullptr;
+		schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &candidate) {
+			if (candidate.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
+			    NormalizeName(candidate.name.GetIdentifierName()) == normalized) {
+				if (!best_match || candidate.name.GetIdentifierName() < best_match->name.GetIdentifierName()) {
+					best_match = &candidate.Cast<ScalarFunctionCatalogEntry>();
+				}
+			}
+		});
+		return best_match;
 	};
 	auto entry = lookup();
 	if (!entry && Catalog::TryAutoLoad(context, "encodings")) {
@@ -178,7 +203,7 @@ unique_ptr<Expression> EncodingFunction::BindCall(ClientContext &context, vector
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(children[0]));
 	FunctionBinder binder(context);
-	if (encoding_name == "utf-8") {
+	if (encoding_name == "utf-8" || NormalizeName(encoding_name) == "utf8") {
 		return binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(is_encode ? "encode" : "decode"),
 		                                 std::move(arguments));
 	}

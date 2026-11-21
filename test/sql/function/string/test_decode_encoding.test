@@ -177,3 +177,31 @@ statement error
 SELECT encode('a', e) FROM (VALUES ('latin-1')) t(e)
 ----
 the encoding must be a constant
+
+# separator-insensitive matching for built-in encodings (utf8, utf_8, utf16, utf_16, latin1, latin_1)
+foreach enc utf8 utf_8 UTF8 UTF_8
+
+query I
+SELECT decode(encode('café', '{enc}'), '{enc}')
+----
+café
+
+endloop
+
+foreach enc utf16 utf_16 UTF16 UTF_16
+
+query I
+SELECT decode(encode('aé😀', '{enc}'), '{enc}')
+----
+aé😀
+
+endloop
+
+foreach enc latin1 latin_1 LATIN1 LATIN_1
+
+query I
+SELECT decode(encode('café', '{enc}'), '{enc}')
+----
+café
+
+endloop
