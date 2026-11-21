@@ -159,8 +159,8 @@ bool ExpressionExecutor::ExecuteErrorCapture(const Expression &child, Expression
 		flag_writer = make_uniq<VectorWriter<bool>>(*error_flags, count, 0ULL);
 	}
 	for (idx_t i = 0; i < count; i++) {
+		// the reset vector is empty: a CASE/COALESCE result only covers the row it writes, not the rows below it
 		intermediate.Reset();
-		intermediate.SetChildCardinality(1);
 
 		// clear any dictionary states in the child expression, so that it is executed anew for every row
 		child_state.ResetDictionaryStates();
