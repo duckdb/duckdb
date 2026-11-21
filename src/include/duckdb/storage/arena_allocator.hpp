@@ -79,6 +79,8 @@ public:
 		head->current_position += len;
 		return result;
 	}
+	//! Limit future block growth to this size unless an individual allocation needs more space.
+	DUCKDB_API void SetMaximumBlockSize(idx_t size);
 	//! Resize in place when possible, otherwise copy into this arena. The source may belong to another live arena.
 	//! Equal sizes return the source unchanged.
 	DUCKDB_API data_ptr_t Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size);

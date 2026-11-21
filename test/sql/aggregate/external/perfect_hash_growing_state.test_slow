@@ -27,6 +27,32 @@ SELECT sum(len(xs)), sum(length(v)) FROM (
 ----
 65536	51200
 
+foreach aggr first min
+
+query II
+SELECT sum(len(xs)), count(*) FILTER (WHERE v = 'a') FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           {aggr}(CASE WHEN i < 100 THEN 'a' ELSE repeat('z', 512) END) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	100
+
+endloop
+
+foreach aggr last max
+
+query II
+SELECT sum(len(xs)), count(*) FILTER (WHERE v = repeat('z', 512)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           {aggr}(CASE WHEN i < 61440 THEN 'a' ELSE repeat('z', 512) END) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	100
+
+endloop
+
 foreach width 0 512
 
 foreach aggr min first

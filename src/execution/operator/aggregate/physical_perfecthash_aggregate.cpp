@@ -89,8 +89,7 @@ public:
 		return MinValue(limit - MinValue(limit, allocated), pool_limit - MinValue(pool_limit, reserved));
 	}
 
-	bool NeedsRadix(ExecutionContext &context, PerfectAggregateHashTable &table, idx_t rows,
-	                optional_ptr<DataChunk> input = nullptr) const {
+	bool NeedsRadix(ExecutionContext &context, PerfectAggregateHashTable &table, idx_t rows) const {
 		auto available = AvailableMemory(context.client);
 		const auto allocated = arena_capacity.load();
 		if (allocated <= available) {
@@ -105,9 +104,11 @@ public:
 		if (has_variable_width_state) {
 			// Dense combine can copy string states into another arena before they can be exported.
 			const auto block = BufferManager::GetBufferManager(context.client).GetBlockAllocSize();
-			if (!list_width || !table.ReserveStringResults(*spill_plan, block, available, input)) {
+			if (!list_width || !table.ReserveStringResults(*spill_plan, block, available)) {
 				return true;
 			}
+			// A small native allocation should not double the arena under pressure.
+			table.GetArena().SetMaximumBlockSize(block);
 		}
 		// Each LIST accepts at most one element per input row. Inspect individual groups only near the limit.
 		if (!list_width || !rows ||
@@ -236,13 +237,10 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	auto &global = input.global_state.Cast<PerfectHashAggregateGlobalState>();
-	if (lstate.ht) {
-		lstate.ht->PrepareChunk(group_chunk, aggregate_input_chunk);
-	}
 	if (global.spill_plan) {
 		if (!global.external) {
 			lstate.AccountArena(global);
-			if (global.NeedsRadix(context, *lstate.ht, lstate.rows, aggregate_input_chunk)) {
+			if (global.NeedsRadix(context, *lstate.ht, lstate.rows)) {
 				lock_guard<mutex> guard(global.lock);
 				global.SwitchToRadix(context, *this);
 			}
@@ -256,7 +254,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 			return SinkResultType::NEED_MORE_INPUT;
 		}
 	}
-	lstate.ht->AddChunk(aggregate_input_chunk);
+	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
 	lstate.rows += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -278,15 +276,25 @@ SinkCombineResultType PhysicalPerfectHashAggregate::Combine(ExecutionContext &co
 				return SinkCombineResultType::FINISHED;
 			}
 			lstate.AccountArena(gstate);
-			const auto before = gstate.ht->GetArena().AllocationSize();
-			gstate.ht->Combine(*lstate.ht);
-			lstate.ht.reset();
-			gstate.arena_capacity.fetch_add(gstate.ht->GetArena().AllocationSize() - before);
-			gstate.combined_rows += lstate.rows;
-			if (gstate.NeedsRadix(context, *gstate.ht, gstate.combined_rows)) {
+			if (!gstate.combined_rows) {
+				// The first local table already owns its states and their arena.
+				gstate.ht = std::move(lstate.ht);
+			} else if (gstate.has_variable_width_state && gstate.NeedsRadix(context, *lstate.ht, lstate.rows)) {
+				// The last input chunk may have filled string states that dense combine would copy.
 				gstate.SwitchToRadix(context, *this);
+			} else {
+				const auto before = gstate.ht->GetArena().AllocationSize();
+				gstate.ht->Combine(*lstate.ht);
+				lstate.ht.reset();
+				gstate.arena_capacity.fetch_add(gstate.ht->GetArena().AllocationSize() - before);
 			}
-			return SinkCombineResultType::FINISHED;
+			if (!gstate.external) {
+				gstate.combined_rows += lstate.rows;
+				if (gstate.NeedsRadix(context, *gstate.ht, gstate.combined_rows)) {
+					gstate.SwitchToRadix(context, *this);
+				}
+				return SinkCombineResultType::FINISHED;
+			}
 		}
 	}
 	if (!lstate.radix) {
