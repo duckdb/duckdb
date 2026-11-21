@@ -86,8 +86,7 @@ enum class FloatRounding : uint8_t { FLOOR, CEIL, TRUNC };
 
 static bool GetFloatRounding(const BoundFunctionExpression &func, const LogicalType &col_type,
                              FloatRounding &rounding) {
-	if ((col_type.id() != LogicalTypeId::FLOAT && col_type.id() != LogicalTypeId::DOUBLE) ||
-	    func.GetReturnType() != col_type) {
+	if (col_type.id() != LogicalTypeId::FLOAT && col_type.id() != LogicalTypeId::DOUBLE) {
 		return false;
 	}
 	auto &name = func.Function().GetName();
