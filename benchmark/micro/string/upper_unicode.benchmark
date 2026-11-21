@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/upper_unicode.benchmark
+# description: UPPER on short strings mixing Latin with diacritics, Greek and Cyrillic
+# group: [string]
+
+name Upper (Unicode)
+group string
+
+load benchmark/micro/string/strings_unicode.sql
+
+run
+SELECT SUM(STRLEN(UPPER(s))) FROM strings
+
+result I
+578750000

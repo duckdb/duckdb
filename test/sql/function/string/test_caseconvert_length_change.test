@@ -1,0 +1,161 @@
+# name: test/sql/function/string/test_caseconvert_length_change.test
+# description: UPPER/LOWER/ILIKE with characters whose other case has a different UTF-8 length
+# group: [string]
+
+# KELVIN SIGN (3 bytes) lowercases to 'k' (1 byte)
+query TTTTT
+SELECT lower('K'), lower('éK'), lower('Kéé'), lower('ωωKωω'), lower('Ωmega and more K')
+----
+k	ék	kéé	ωωkωω	ωmega and more k
+
+# U+023A (2 bytes) lowercases to U+2C65 (3 bytes)
+query TTTTT
+SELECT lower('Ⱥ'), lower('éȺ'), lower('Ⱥéé'), lower('ééȺéé'), lower('Ωmega and more Ⱥ')
+----
+ⱥ	éⱥ	ⱥéé	ééⱥéé	ωmega and more ⱥ
+
+# U+2C65 (3 bytes) uppercases to U+023A (2 bytes)
+query TTTTT
+SELECT upper('ⱥ'), upper('éⱥ'), upper('ⱥéé'), upper('ééⱥéé'), upper('ωmega and more ⱥ')
+----
+Ⱥ	ÉȺ	ȺÉÉ	ÉÉȺÉÉ	ΩMEGA AND MORE Ⱥ
+
+query TTTTTT
+SELECT lower('İ'), lower('éİé'), lower('ẞ'), lower('éẞé'), upper('ı'), upper('éıé')
+----
+i	éié	ß	éßé	I	ÉIÉ
+
+# the result grows by one byte per U+023A after a same-length prefix
+query TII
+SELECT lower('ÀÉÎ' || repeat('Ⱥ', 10) || 'ÕÜ'), length(lower('ÀÉÎ' || repeat('Ⱥ', 10) || 'ÕÜ')), strlen(lower('ÀÉÎ' || repeat('Ⱥ', 10) || 'ÕÜ'))
+----
+àéîⱥⱥⱥⱥⱥⱥⱥⱥⱥⱥõü	15	40
+
+statement ok
+CREATE TABLE strings(id INTEGER, s VARCHAR)
+
+# row 3 is the longest input and grows when lowercased, after a lowercased prefix
+statement ok
+INSERT INTO strings VALUES (1, 'Ωmega'), (2, 'éK'), (3, 'Ünïcödé text that ends in ȺȺȺȺȺȺȺȺ'), (4, 'İstanbul'), (5, 'plain ascii'), (6, 'ÉCOLE Ⱥ'), (7, NULL)
+
+query IT
+SELECT id, lower(s) FROM strings ORDER BY id
+----
+1	ωmega
+2	ék
+3	ünïcödé text that ends in ⱥⱥⱥⱥⱥⱥⱥⱥ
+4	istanbul
+5	plain ascii
+6	école ⱥ
+7	NULL
+
+query IT
+SELECT id, upper(s) FROM strings ORDER BY id
+----
+1	ΩMEGA
+2	ÉK
+3	ÜNÏCÖDÉ TEXT THAT ENDS IN ȺȺȺȺȺȺȺȺ
+4	İSTANBUL
+5	PLAIN ASCII
+6	ÉCOLE Ⱥ
+7	NULL
+
+query I
+SELECT id FROM strings WHERE s ILIKE '%k' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM strings WHERE s ILIKE '%ⱥ' ORDER BY id
+----
+3
+6
+
+query I
+SELECT id FROM strings WHERE s NOT ILIKE '%ⱥⱥ%' ORDER BY id
+----
+1
+2
+4
+5
+6
+
+query I
+SELECT id FROM strings WHERE s ILIKE 'istanbul' ORDER BY id
+----
+4
+
+query I
+SELECT id FROM strings WHERE s ILIKE '%!_%' ESCAPE '!' OR s ILIKE '%ÉCOLE ⱥ' ESCAPE '!' ORDER BY id
+----
+6
+
+query I
+SELECT id FROM strings WHERE s NOT ILIKE '%ends in ⱥ%' ESCAPE '!' ORDER BY id
+----
+1
+2
+4
+5
+6
+
+# ILIKE with the length-changing code point in the middle of the string
+statement ok
+CREATE TABLE middle(id INTEGER, s VARCHAR)
+
+statement ok
+INSERT INTO middle VALUES (1, 'ééKéé'), (2, 'xxȺyy'), (3, 'ÀBİCD'), (4, 'ab_ÉKÉ_cd')
+
+query I
+SELECT id FROM middle WHERE s ILIKE '%ékéé' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM middle WHERE s ILIKE 'xxⱥ%' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM middle WHERE s ILIKE '%bic%' ORDER BY id
+----
+3
+
+query I
+SELECT id FROM middle WHERE s NOT ILIKE '%ⱥ%' ORDER BY id
+----
+1
+3
+4
+
+query I
+SELECT id FROM middle WHERE s ILIKE '%!_ékÉ!_%' ESCAPE '!' ORDER BY id
+----
+4
+
+# results that cross the 12-byte inline string length in both directions
+query TITITITI
+SELECT lower('ȺȺȺȺȺȺ'), strlen(lower('ȺȺȺȺȺȺ')), lower('KKKKK'), strlen(lower('KKKKK')), upper(repeat('ß', 7)), strlen(upper(repeat('ß', 7))), lower('KKKKKabcdefghij'), strlen(lower('KKKKKabcdefghij'))
+----
+ⱥⱥⱥⱥⱥⱥ	18	kkkkk	5	ẞẞẞẞẞẞẞ	21	kkkkkabcdefghij	15
+
+statement ok
+CREATE TABLE boundary(id INTEGER, s VARCHAR)
+
+statement ok
+INSERT INTO boundary SELECT i, CASE i % 4 WHEN 0 THEN repeat('Ⱥ', i % 9) WHEN 1 THEN repeat('K', i % 7) || 'xyz' WHEN 2 THEN 'éé' || repeat('ß', i % 11) ELSE repeat('Ⱥ', 6) || repeat('a', i % 5) END FROM range(0, 3000) t(i)
+
+query IIIT
+SELECT count(*), sum(strlen(lower(s))), sum(strlen(upper(s))), md5(string_agg(lower(s) || '|' || upper(s), ',' ORDER BY id)) FROM boundary
+----
+3000	38994	35242	55b1e8731fd406dc9ded0cf3b8ed316b
+
+query I
+SELECT count(*) FROM boundary WHERE s ILIKE '%ⱥⱥⱥⱥⱥⱥ%'
+----
+1000
+
+query I
+SELECT count(*) FROM boundary WHERE s ILIKE '%kxyz'
+----
+643
