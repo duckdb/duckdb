@@ -305,6 +305,48 @@ struct MetricOperatorType {
 };
 
 // Optimizer metrics
+struct MetricOptimizerFilterConditionedStatisticsCompressedBytes {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_compressed_bytes";
+	static constexpr const char *Description = "Projected compressed bytes scanned for filter-conditioned statistics";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricOptimizerFilterConditionedStatisticsGroups {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_groups";
+	static constexpr const char *Description = "Physical provider groups scanned for filter-conditioned statistics";
+	static constexpr const char *Unit = "groups";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricOptimizerFilterConditionedStatisticsRequests {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_requests";
+	static constexpr const char *Description = "Logical scans submitted to filter-conditioned statistics batches";
+	static constexpr const char *Unit = "requests";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricOptimizerFilterConditionedStatisticsRowsCollected {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_rows_collected";
+	static constexpr const char *Description = "Filtered rows used to build filter-conditioned statistics";
+	static constexpr const char *Unit = "rows";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricOptimizerFilterConditionedStatisticsTime {
+	using METRIC_TYPE = double;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_time";
+	static constexpr const char *Description = "Time spent collecting filter-conditioned statistics in query-level batches";
+	static constexpr const char *Unit = "seconds";
+	static constexpr const char *TypeStr = "double";
+};
+struct MetricOptimizerFilterConditionedStatisticsUncompressedBytes {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "optimizer.filter_conditioned_statistics_uncompressed_bytes";
+	static constexpr const char *Description = "Projected uncompressed bytes scanned for filter-conditioned statistics";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOptimizerTotalTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "optimizer.total_time";

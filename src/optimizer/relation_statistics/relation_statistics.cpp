@@ -43,8 +43,10 @@ RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount do
 
 RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount total_domain,
                                          DistinctCount current_domain, Identifier name,
-                                         SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence)
+                                         SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence,
+                                         optional<DistinctCount> filtered_join_domain)
     : binding(binding), total_domain(total_domain), current_domain(current_domain),
+      filtered_join_domain(std::move(filtered_join_domain)),
       semi_anti_join_domain_evidence(semi_anti_join_domain_evidence), name(std::move(name)) {
 }
 

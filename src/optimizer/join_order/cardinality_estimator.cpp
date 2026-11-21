@@ -15,6 +15,7 @@ public:
 
 public:
 	double GetDistinctCount(const JoinPredicate &predicate) const;
+	double GetOrderingDistinctCount(const JoinPredicate &predicate) const;
 	bool HasReliableDistinctCount() const;
 	idx_t GetReliableDistinctCount() const;
 	void Update(ColumnBinding binding, const DistinctCount &distinct_count,
@@ -26,6 +27,10 @@ private:
 	optional<DistinctCount> estimate;
 	//! Row-count fallbacks apply only to predicates involving their relation.
 	column_binding_map_t<DistinctCount> local_fallbacks;
+	//! Complete and filter-conditioned domains retained per predicate endpoint.
+	column_binding_map_t<DistinctCount> binding_domains;
+	column_binding_map_t<DistinctCount> filtered_domains;
+	column_binding_map_t<idx_t> binding_source_cardinalities;
 	column_binding_set_t sources;
 	idx_t reliable_source_count = 0;
 	idx_t reliable_source_cardinality = NumericLimits<idx_t>::Maximum();
@@ -36,6 +41,60 @@ DomainEstimate::DomainEstimate() {
 }
 
 double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
+	vector<DistinctCount> predicate_domains;
+	vector<idx_t> predicate_min_max_candidates;
+	bool has_filtered_domain = false;
+	idx_t predicate_reliable_count = 0;
+	idx_t predicate_reliable_source_cardinality = NumericLimits<idx_t>::Maximum();
+	for (bool left : {true, false}) {
+		auto &binding = predicate.GetStatsBinding(left);
+		if (!binding.table_index.IsValid()) {
+			continue;
+		}
+		auto filtered = filtered_domains.find(binding);
+		auto complete = binding_domains.find(binding);
+		if (filtered == filtered_domains.end() && complete == binding_domains.end()) {
+			continue;
+		}
+		auto domain = filtered != filtered_domains.end() ? filtered->second : complete->second;
+		has_filtered_domain |= filtered != filtered_domains.end();
+		predicate_domains.push_back(domain);
+		if (domain.source == DistinctCountSource::HLL || domain.source == DistinctCountSource::EXACT) {
+			predicate_reliable_count++;
+			auto source_cardinality = binding_source_cardinalities.find(binding);
+			if (source_cardinality != binding_source_cardinalities.end()) {
+				predicate_reliable_source_cardinality =
+				    MinValue(predicate_reliable_source_cardinality, source_cardinality->second);
+			}
+		} else if (domain.source == DistinctCountSource::MIN_MAX) {
+			predicate_min_max_candidates.push_back(domain.distinct_count);
+		}
+	}
+	// Prefer observed predicate support to an uninformative cardinality fallback to avoid severe underestimates.
+	if (has_filtered_domain && !predicate_domains.empty()) {
+		auto predicate_domain = RelationStatisticsHelper::SelectTotalDomain(predicate_domains);
+		D_ASSERT(predicate_domain);
+		auto result = predicate_domain->distinct_count;
+		if ((predicate_domain->source == DistinctCountSource::HLL ||
+		     predicate_domain->source == DistinctCountSource::EXACT) &&
+		    predicate_reliable_count == 1) {
+			idx_t key_domain = NumericLimits<idx_t>::Maximum();
+			for (auto candidate : predicate_min_max_candidates) {
+				if (candidate > result && candidate <= predicate_reliable_source_cardinality) {
+					key_domain = MinValue(key_domain, candidate);
+				}
+			}
+			if (key_domain != NumericLimits<idx_t>::Maximum()) {
+				return static_cast<double>(key_domain);
+			}
+		}
+		return static_cast<double>(result);
+	}
+
+	return GetOrderingDistinctCount(predicate);
+}
+
+double DomainEstimate::GetOrderingDistinctCount(const JoinPredicate &predicate) const {
 	auto domain = estimate;
 	for (bool left : {true, false}) {
 		auto entry = local_fallbacks.find(predicate.GetStatsBinding(left));
@@ -101,6 +160,13 @@ void DomainEstimate::AddSource(const JoinColumnSource &source) {
 
 void DomainEstimate::Update(ColumnBinding binding, const DistinctCount &distinct_count,
                             optional_ptr<const JoinColumnSources> column_sources) {
+	binding_domains.emplace(binding, distinct_count);
+	if (column_sources) {
+		binding_source_cardinalities.emplace(binding, column_sources->direct.source_cardinality);
+		if (column_sources->direct.filtered_domain) {
+			filtered_domains.emplace(binding, *column_sources->direct.filtered_domain);
+		}
+	}
 	if (column_sources) {
 		AddSource(column_sources->direct);
 		for (auto &source : column_sources->equivalents) {
@@ -136,11 +202,13 @@ public:
 struct FilterInfoWithTotalDomains {
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
 	    : predicate(predicate), domain_estimate(relation_set_to_stats.domain_estimate),
-	      distinct_count(domain_estimate.get().GetDistinctCount(predicate)) {
+	      distinct_count(domain_estimate.get().GetDistinctCount(predicate)),
+	      ordering_distinct_count(domain_estimate.get().GetOrderingDistinctCount(predicate)) {
 	}
 
 public:
 	double GetDistinctCount() const;
+	double GetOrderingDistinctCount() const;
 	bool HasReliableDistinctCount() const;
 	idx_t GetReliableDistinctCount() const;
 	ExpressionType GetComparisonType();
@@ -152,6 +220,7 @@ public:
 	reference<JoinPredicate> predicate;
 	reference<const DomainEstimate> domain_estimate;
 	double distinct_count;
+	double ordering_distinct_count;
 };
 
 struct SelectivitySubgraph {
@@ -224,6 +293,10 @@ CardinalityEstimator::~CardinalityEstimator() {
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
 	return distinct_count;
+}
+
+double FilterInfoWithTotalDomains::GetOrderingDistinctCount() const {
+	return ordering_distinct_count;
 }
 
 bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
@@ -958,7 +1031,7 @@ static bool SortEdges(const FilterInfoWithTotalDomains &a, const FilterInfoWithT
 	if (a_comparison != b_comparison) {
 		return b_comparison;
 	}
-	return a.GetDistinctCount() > b.GetDistinctCount();
+	return a.GetOrderingDistinctCount() > b.GetOrderingDistinctCount();
 }
 
 void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,

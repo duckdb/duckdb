@@ -22,6 +22,7 @@ struct JoinColumnSource {
 	idx_t source_cardinality;
 	idx_t scan_cardinality;
 	DistinctCount domain;
+	optional<DistinctCount> filtered_domain;
 };
 
 struct JoinColumnSources {
@@ -34,17 +35,23 @@ struct JoinColumnSources {
 
 using join_column_sources_t = column_binding_map_t<JoinColumnSources>;
 
+enum class FilterConditionedStatisticsMode : uint8_t { SKIP, COLLECT };
+
 //! Immutable source evidence captured before any join-order subtree is optimized.
 class JoinOrderSourceStats {
 public:
-	JoinOrderSourceStats(ClientContext &context, LogicalOperator &root);
+	JoinOrderSourceStats(ClientContext &context, LogicalOperator &root,
+	                     FilterConditionedStatisticsMode mode = FilterConditionedStatisticsMode::SKIP);
 
 public:
-	//! Capture additional read-only roots, such as externally supplied CTE definitions.
+	//! Capture additional read-only roots without invoking filter-conditioned statistics providers.
 	void AddPlan(ClientContext &context, LogicalOperator &root);
 	optional_ptr<const RelationStats> FindScanStats(const LogicalGet &get) const;
 	//! Resolve the visible columns of one relation, respecting statistics boundaries.
 	join_column_sources_t Resolve(LogicalOperator &root) const;
+
+private:
+	void AddPlan(ClientContext &context, LogicalOperator &root, bool collect_filter_conditioned_statistics);
 
 private:
 	struct ScanStats {

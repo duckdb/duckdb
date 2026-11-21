@@ -32,6 +32,7 @@ class LogicalLimit;
 class LogicalProjection;
 class LogicalWindow;
 class RelationStatsExtractor;
+struct TableFunctionFilterConditionedStatistics;
 
 struct SemiAntiJoinDomain {
 	idx_t total_domain;
@@ -57,6 +58,9 @@ public:
 public:
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, idx_t source_cardinality);
+	static RelationStats
+	ExtractGetStats(LogicalGet &get, ClientContext &context, idx_t source_cardinality,
+	                optional_ptr<const TableFunctionFilterConditionedStatistics> filter_conditioned_statistics);
 	static RelationStats ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context);
 	static RelationStats ExtractDummyScanStats(LogicalDummyScan &dummy_scan, ClientContext &context);
 	static RelationStats ExtractExpressionGetStats(LogicalExpressionGet &expression_get, ClientContext &context);

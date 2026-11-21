@@ -271,6 +271,65 @@ TEST_CASE("Join source populations survive changes in relation cardinality", "[o
 	}
 }
 
+TEST_CASE("Filter-conditioned support domains preserve sparse key ranges", "[optimizer][relation_statistics]") {
+	struct TestCase {
+		idx_t left_rows;
+		idx_t left_total_domain;
+		DistinctCountSource left_source;
+		idx_t right_source_rows;
+		idx_t right_rows;
+		idx_t right_total_domain;
+		idx_t right_current_domain;
+		idx_t right_support_domain;
+		idx_t expected;
+	};
+	vector<TestCase> cases {
+	    {3711434748, 500, DistinctCountSource::MIN_MAX, 1002, 107, 1002, 107, 940, 422471827},
+	    {3711434748, 3711434748, DistinctCountSource::CARDINALITY, 1002, 107, 1002, 107, 940, 422471827},
+	    {100000000, 100000000, DistinctCountSource::CARDINALITY, 73049, 365, 73049, 365, 365, 100000000},
+	};
+	for (auto &test : cases) {
+		JoinRelationSetManager sets;
+		auto &left_set = sets.GetJoinRelation(RelationIndex(0));
+		auto &right_set = sets.GetJoinRelation(RelationIndex(1));
+		auto &joined = sets.Union(left_set, right_set);
+		auto left = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+		auto right = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+		FilterInfo filter(CreateJoinComparison(left, right, ExpressionType::COMPARE_EQUAL), joined, 0);
+		filter.SetLeftSet(left_set);
+		filter.SetRightSet(right_set);
+		filter.left_binding = left;
+		filter.right_binding = right;
+		JoinPredicateModel model;
+		auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, left, right);
+		predicate.SetEqualityClassIndex(optional_idx(0));
+		JoinEqualityClass equality;
+		equality.index = 0;
+		equality.columns = {left, right};
+		equality.relations = {RelationIndex(0), RelationIndex(1)};
+		equality.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), left, right);
+		model.AddEqualityClass(std::move(equality));
+
+		auto left_stats = CreateStats({left}, {test.left_rows}, test.left_rows);
+		left_stats.columns[0].total_domain = DistinctCount(test.left_total_domain, test.left_source);
+		left_stats.columns[0].current_domain = left_stats.columns[0].total_domain;
+		auto right_stats = CreateStats({right}, {test.right_current_domain}, test.right_rows);
+		right_stats.columns[0].total_domain = DistinctCount(test.right_total_domain, DistinctCountSource::MIN_MAX);
+		right_stats.columns[0].current_domain = DistinctCount(test.right_current_domain, DistinctCountSource::HLL);
+		right_stats.columns[0].filtered_join_domain =
+		    DistinctCount(test.right_support_domain, DistinctCountSource::MIN_MAX);
+		join_column_sources_t sources;
+		sources.emplace(left,
+		                JoinColumnSources({left, test.left_rows, test.left_rows, left_stats.columns[0].total_domain}));
+		sources.emplace(right, JoinColumnSources({right, test.right_source_rows, test.right_rows,
+		                                          right_stats.columns[0].total_domain,
+		                                          right_stats.columns[0].filtered_join_domain}));
+		CardinalityEstimator estimator(sets, model);
+		estimator.Initialize({left_stats, right_stats}, {}, sources);
+		REQUIRE(estimator.EstimateCardinality(joined).GetIndex() == test.expected);
+	}
+}
+
 TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimizer][relation_statistics]") {
 	for (auto synthetic_rows : {idx_t(6), idx_t(600)}) {
 		JoinRelationSetManager sets;
@@ -1430,6 +1489,12 @@ struct CardinalityProviderData : public TableFunctionData {
 	NodeStatistics statistics {0, 0};
 	shared_ptr<idx_t> calls = make_shared_ptr<idx_t>(0);
 	shared_ptr<idx_t> column_calls = make_shared_ptr<idx_t>(0);
+	shared_ptr<idx_t> filter_conditioned_statistics_calls = make_shared_ptr<idx_t>(0);
+	shared_ptr<idx_t> filter_conditioned_statistics_batch_calls = make_shared_ptr<idx_t>(0);
+	shared_ptr<vector<ColumnIndex>> filter_conditioned_statistics_columns = make_shared_ptr<vector<ColumnIndex>>();
+	shared_ptr<vector<ColumnIndex>> filter_conditioned_scan_columns = make_shared_ptr<vector<ColumnIndex>>();
+	shared_ptr<vector<ProjectionIndex>> filter_conditioned_statistics_filters =
+	    make_shared_ptr<vector<ProjectionIndex>>();
 	vector<reference<LogicalGet>> observed_scans;
 	shared_ptr<bool> captured_before_mutation = make_shared_ptr<bool>(true);
 	DistinctCount domain {0, DistinctCountSource::CARDINALITY};
@@ -1460,6 +1525,89 @@ static unique_ptr<LogicalGet> CreateCardinalityProvider(optional_idx estimate, o
 	                                 vector<LogicalType> {LogicalType::INTEGER}, vector<Identifier> {"i"});
 	get->AddColumnId(0);
 	return get;
+}
+
+TEST_CASE("Only the final join-order snapshot collects filter-conditioned statistics",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto left = CreateCardinalityProvider(100, 1000);
+	auto right = CreateCardinalityProvider(100, 1000);
+	right->table_index = TableIndex(11);
+	auto *left_ref = left.get();
+	auto *right_ref = right.get();
+	auto callback = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		for (idx_t request_index = 0; request_index < inputs.size(); request_index++) {
+			auto &input = inputs[request_index];
+			auto &data = input.bind_data->template Cast<CardinalityProviderData>();
+			(*data.filter_conditioned_statistics_calls)++;
+			data.filter_conditioned_statistics_filters->clear();
+			for (auto &entry : input.filters) {
+				data.filter_conditioned_statistics_filters->push_back(entry.GetIndex());
+			}
+			vector<unique_ptr<BaseStatistics>> statistics(input.statistics_column_indexes.size());
+			for (auto &entry : statistics) {
+				entry = BaseStatistics::CreateUnknown(LogicalType::INTEGER).ToUnique();
+				entry->SetDistinctCount(8);
+			}
+			batch->statistics[request_index] =
+			    make_uniq<TableFunctionFilterConditionedStatistics>(20, std::move(statistics));
+		}
+		return batch;
+	};
+	left->function.collect_filter_conditioned_statistics_batch = callback;
+	right->function.collect_filter_conditioned_statistics_batch = callback;
+
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(left->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+
+	RelationStatsExtractor preliminary(*connection.context);
+	REQUIRE(preliminary.Extract(*join));
+	REQUIRE(*left_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+	REQUIRE(*right_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+
+	left_ref->table_filters.PushFilter(
+	    ProjectionIndex(0),
+	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(10)));
+	JoinOrderSourceStats join_order_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+	auto captured = join_order_stats.FindScanStats(*left_ref);
+	REQUIRE(captured);
+	REQUIRE(captured->cardinality == 20);
+	auto &left_data = left_ref->bind_data->Cast<CardinalityProviderData>();
+	REQUIRE(*left_data.filter_conditioned_statistics_calls == 1);
+	REQUIRE(*left_data.filter_conditioned_statistics_filters == vector<ProjectionIndex> {ProjectionIndex(0)});
+
+	auto additional_left = CreateCardinalityProvider(100, 1000);
+	auto additional_right = CreateCardinalityProvider(100, 1000);
+	additional_left->table_index = TableIndex(12);
+	additional_right->table_index = TableIndex(13);
+	auto *additional_left_ref = additional_left.get();
+	additional_left->function.collect_filter_conditioned_statistics_batch = callback;
+	additional_right->function.collect_filter_conditioned_statistics_batch = callback;
+	auto additional_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	additional_join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(additional_left->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(additional_right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_EQUAL);
+	additional_join->children.push_back(std::move(additional_left));
+	additional_join->children.push_back(std::move(additional_right));
+	join_order_stats.AddPlan(*connection.context, *additional_join);
+	REQUIRE(join_order_stats.FindScanStats(*additional_left_ref));
+	REQUIRE(*additional_left_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+
+	RelationStatsExtractor later(*connection.context);
+	REQUIRE(later.Extract(*join));
+	REQUIRE(*left_data.filter_conditioned_statistics_calls == 1);
 }
 
 TEST_CASE("Scan filters acquire hidden input columns once and apply conjunction rows once",
@@ -1495,6 +1643,338 @@ TEST_CASE("Scan filters acquire hidden input columns once and apply conjunction 
 	REQUIRE(extractor.Extract(*scan));
 	REQUIRE(*data.column_calls == 2);
 	REQUIRE(*data.calls == 1);
+}
+
+TEST_CASE("Filter-conditioned statistics read filters but collect only equality join columns",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto left = CreateCardinalityProvider(100, 1000);
+	for (idx_t column_idx = 1; column_idx < 3; column_idx++) {
+		left->returned_types.push_back(LogicalType::INTEGER);
+		left->names.emplace_back("column_" + to_string(column_idx));
+		left->AddColumnId(column_idx);
+	}
+	left->projection_ids = {ProjectionIndex(0), ProjectionIndex(1)};
+	auto right = CreateCardinalityProvider(100, 1000);
+	right->table_index = TableIndex(11);
+	auto *left_scan = left.get();
+	auto *right_scan = right.get();
+	auto statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+		auto &data = bind_data->template Cast<CardinalityProviderData>();
+		(*data.column_calls)++;
+		auto result = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+		result.SetDistinctCount(50);
+		return result.ToUnique();
+	};
+	left->function.statistics = statistics;
+	right->function.statistics = statistics;
+	auto callback = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		if (!inputs.empty()) {
+			(*inputs[0]
+			      .bind_data->template Cast<CardinalityProviderData>()
+			      .filter_conditioned_statistics_batch_calls)++;
+		}
+		for (idx_t request_index = 0; request_index < inputs.size(); request_index++) {
+			auto &input = inputs[request_index];
+			auto &data = input.bind_data->template Cast<CardinalityProviderData>();
+			(*data.filter_conditioned_statistics_calls)++;
+			*data.filter_conditioned_statistics_columns = input.statistics_column_indexes;
+			*data.filter_conditioned_scan_columns = input.scan_column_indexes;
+			for (auto &entry : input.filters) {
+				data.filter_conditioned_statistics_filters->push_back(entry.GetIndex());
+			}
+			vector<unique_ptr<BaseStatistics>> result(input.statistics_column_indexes.size());
+			result[0] = BaseStatistics::CreateUnknown(LogicalType::INTEGER).ToUnique();
+			result[0]->SetDistinctCount(3);
+			NumericStats::SetMin(*result[0], int32_t(2));
+			NumericStats::SetMax(*result[0], int32_t(7));
+			batch->statistics[request_index] =
+			    make_uniq<TableFunctionFilterConditionedStatistics>(8, std::move(result));
+		}
+		return batch;
+	};
+	left->function.collect_filter_conditioned_statistics_batch = callback;
+	right->function.collect_filter_conditioned_statistics_batch = callback;
+	auto batch_calls = make_shared_ptr<idx_t>(0);
+	left->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	right->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	left->table_filters.PushFilter(
+	    ProjectionIndex(2), ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(1)));
+
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(left->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+
+	JoinOrderSourceStats source_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+	auto result = source_stats.FindScanStats(*left_scan);
+	REQUIRE(result);
+	REQUIRE(result->cardinality == 8);
+	REQUIRE(result->row_retention == Approx(0.08));
+	REQUIRE(result->columns.size() == 2);
+	REQUIRE(result->columns[0].total_domain.distinct_count == 50);
+	REQUIRE(result->columns[0].current_domain.distinct_count == 3);
+	REQUIRE(result->columns[0].filtered_join_domain);
+	REQUIRE(result->columns[0].filtered_join_domain->distinct_count == 6);
+	REQUIRE(result->columns[1].total_domain.distinct_count == 50);
+	REQUIRE_FALSE(result->columns[1].filtered_join_domain);
+	REQUIRE(result->columns[1].current_domain.distinct_count ==
+	        RelationStatisticsHelper::EstimateCurrentDomain(DistinctCount(50, DistinctCountSource::HLL), 100, 8)
+	            .distinct_count);
+	auto &left_data = left_scan->bind_data->Cast<CardinalityProviderData>();
+	auto &right_data = right_scan->bind_data->Cast<CardinalityProviderData>();
+	REQUIRE(*left_data.filter_conditioned_statistics_calls == 1);
+	REQUIRE(*right_data.filter_conditioned_statistics_calls == 1);
+	REQUIRE(*batch_calls == 1);
+	REQUIRE(*left_data.column_calls == 3);
+	REQUIRE(left_data.filter_conditioned_statistics_columns->size() == 1);
+	REQUIRE(left_data.filter_conditioned_statistics_columns->at(0).GetPrimaryIndex() == 0);
+	REQUIRE(left_data.filter_conditioned_scan_columns->size() == 2);
+	REQUIRE(left_data.filter_conditioned_scan_columns->at(0).GetPrimaryIndex() == 0);
+	REQUIRE(left_data.filter_conditioned_scan_columns->at(1).GetPrimaryIndex() == 2);
+	REQUIRE(*left_data.filter_conditioned_statistics_filters == vector<ProjectionIndex> {ProjectionIndex(1)});
+	REQUIRE(right_data.filter_conditioned_statistics_columns->size() == 1);
+	REQUIRE(right_data.filter_conditioned_statistics_columns->at(0).GetPrimaryIndex() == 0);
+	REQUIRE(right_data.filter_conditioned_scan_columns->size() == 1);
+
+	JoinOrderSourceStats second_source_stats(*connection.context, *join);
+	REQUIRE(second_source_stats.FindScanStats(*left_scan));
+	REQUIRE(*left_data.filter_conditioned_statistics_calls == 1);
+}
+
+TEST_CASE("Filter-conditioned statistics skip scans outside equality joins", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreateCardinalityProvider(100, 1000);
+	auto *scan_ref = scan.get();
+	scan->function.collect_filter_conditioned_statistics_batch = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		for (auto &input : inputs) {
+			(*input.bind_data->template Cast<CardinalityProviderData>().filter_conditioned_statistics_calls)++;
+		}
+		return batch;
+	};
+	JoinOrderSourceStats source_stats(*connection.context, *scan, FilterConditionedStatisticsMode::COLLECT);
+	REQUIRE(source_stats.FindScanStats(*scan_ref));
+	REQUIRE(*scan_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+
+	auto left = CreateCardinalityProvider(100, 1000);
+	auto right = CreateCardinalityProvider(100, 1000);
+	right->table_index = TableIndex(11);
+	auto *left_ref = left.get();
+	auto *right_ref = right.get();
+	auto callback = scan_ref->function.collect_filter_conditioned_statistics_batch;
+	left->function.collect_filter_conditioned_statistics_batch = callback;
+	right->function.collect_filter_conditioned_statistics_batch = callback;
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(left->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_LESSTHAN);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+	JoinOrderSourceStats range_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+	REQUIRE(range_stats.FindScanStats(*left_ref));
+	REQUIRE(range_stats.FindScanStats(*right_ref));
+	REQUIRE(*left_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+	REQUIRE(*right_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls == 0);
+}
+
+TEST_CASE("Filter-conditioned join columns follow expressions and aggregate groups",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto callback = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		for (auto &input : inputs) {
+			auto &data = input.bind_data->template Cast<CardinalityProviderData>();
+			(*data.filter_conditioned_statistics_calls)++;
+			*data.filter_conditioned_statistics_columns = input.statistics_column_indexes;
+			*data.filter_conditioned_scan_columns = input.scan_column_indexes;
+		}
+		return batch;
+	};
+
+	SECTION("computed equality operand") {
+		auto left = CreateCardinalityProvider(100, 1000);
+		left->returned_types.push_back(LogicalType::INTEGER);
+		left->names.emplace_back("payload");
+		left->AddColumnId(1);
+		auto right = CreateCardinalityProvider(100, 1000);
+		right->table_index = TableIndex(11);
+		auto *left_ref = left.get();
+		auto *right_ref = right.get();
+		left->function.collect_filter_conditioned_statistics_batch = callback;
+		right->function.collect_filter_conditioned_statistics_batch = callback;
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+		                                                       ColumnBinding(right->table_index, ProjectionIndex(0))));
+		children.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(0)));
+		auto computed = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, LogicalType::INTEGER,
+		                                                   std::move(children));
+		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+		join->conditions.emplace_back(make_uniq<BoundColumnRefExpression>(
+		                                  LogicalType::INTEGER, ColumnBinding(left->table_index, ProjectionIndex(0))),
+		                              std::move(computed), ExpressionType::COMPARE_EQUAL);
+		join->children.push_back(std::move(left));
+		join->children.push_back(std::move(right));
+		JoinOrderSourceStats source_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+		REQUIRE(left_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_columns->size() ==
+		        1);
+		REQUIRE(left_ref->bind_data->Cast<CardinalityProviderData>()
+		            .filter_conditioned_statistics_columns->at(0)
+		            .GetPrimaryIndex() == 0);
+		REQUIRE(right_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_columns->size() ==
+		        1);
+	}
+
+	SECTION("aggregate group output") {
+		auto source = CreateCardinalityProvider(100, 1000);
+		source->returned_types.push_back(LogicalType::INTEGER);
+		source->names.emplace_back("payload");
+		source->AddColumnId(1);
+		auto peer = CreateCardinalityProvider(100, 1000);
+		peer->table_index = TableIndex(11);
+		auto *source_ref = source.get();
+		source->function.collect_filter_conditioned_statistics_batch = callback;
+		peer->function.collect_filter_conditioned_statistics_batch = callback;
+		auto aggregate = make_uniq<LogicalAggregate>(TableIndex(20), TableIndex(21), vector<unique_ptr<Expression>>());
+		aggregate->groups.push_back(make_uniq<BoundColumnRefExpression>(
+		    LogicalType::INTEGER, ColumnBinding(source->table_index, ProjectionIndex(0))));
+		aggregate->children.push_back(std::move(source));
+		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+		join->conditions.emplace_back(make_uniq<BoundColumnRefExpression>(
+		                                  LogicalType::INTEGER, ColumnBinding(TableIndex(20), ProjectionIndex(0))),
+		                              make_uniq<BoundColumnRefExpression>(
+		                                  LogicalType::INTEGER, ColumnBinding(peer->table_index, ProjectionIndex(0))),
+		                              ExpressionType::COMPARE_EQUAL);
+		join->children.push_back(std::move(aggregate));
+		join->children.push_back(std::move(peer));
+		JoinOrderSourceStats source_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+		auto &columns = *source_ref->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_columns;
+		REQUIRE(columns.size() == 1);
+		REQUIRE(columns[0].GetPrimaryIndex() == 0);
+	}
+}
+
+TEST_CASE("A declined filter-conditioned statistics request preserves filter fallback",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreateCardinalityProvider(100, 1000);
+	auto right = CreateCardinalityProvider(100, 1000);
+	right->table_index = TableIndex(11);
+	auto *scan_ref = scan.get();
+	auto &data = scan->bind_data->Cast<CardinalityProviderData>();
+	scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+		auto &data = bind_data->template Cast<CardinalityProviderData>();
+		(*data.column_calls)++;
+		auto result = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+		result.SetDistinctCount(10);
+		return result.ToUnique();
+	};
+	auto callback = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		if (!inputs.empty()) {
+			(*inputs[0]
+			      .bind_data->template Cast<CardinalityProviderData>()
+			      .filter_conditioned_statistics_batch_calls)++;
+		}
+		for (auto &input : inputs) {
+			auto &data = input.bind_data->template Cast<CardinalityProviderData>();
+			(*data.filter_conditioned_statistics_calls)++;
+		}
+		return batch;
+	};
+	scan->function.collect_filter_conditioned_statistics_batch = callback;
+	right->function.collect_filter_conditioned_statistics_batch = callback;
+	auto batch_calls = make_shared_ptr<idx_t>(0);
+	scan->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	right->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                       ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(1)));
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(scan->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(scan));
+	join->children.push_back(std::move(right));
+
+	JoinOrderSourceStats source_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+	auto result = source_stats.FindScanStats(*scan_ref);
+	REQUIRE(result);
+	REQUIRE(result->cardinality == 20);
+	REQUIRE(*data.filter_conditioned_statistics_calls == 1);
+	REQUIRE(*batch_calls == 1);
+	REQUIRE(*data.column_calls == 1);
+
+	JoinOrderSourceStats second_source_stats(*connection.context, *join);
+	REQUIRE(second_source_stats.FindScanStats(*scan_ref));
+	REQUIRE(*data.filter_conditioned_statistics_calls == 1);
+}
+
+TEST_CASE("Final join-order snapshot batches repeated logical scans once", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto left = CreateCardinalityProvider(100, 100);
+	auto right = CreateCardinalityProvider(100, 100);
+	right->table_index = TableIndex(11);
+	auto batch_calls = make_shared_ptr<idx_t>(0);
+	left->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	right->bind_data.write().Cast<CardinalityProviderData>().filter_conditioned_statistics_batch_calls = batch_calls;
+	auto callback = [](ClientContext &, const auto &inputs) {
+		auto batch = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+		batch->statistics.resize(inputs.size());
+		if (!inputs.empty()) {
+			(*inputs[0]
+			      .bind_data->template Cast<CardinalityProviderData>()
+			      .filter_conditioned_statistics_batch_calls)++;
+		}
+		for (idx_t i = 0; i < inputs.size(); i++) {
+			auto &data = inputs[i].bind_data->template Cast<CardinalityProviderData>();
+			(*data.filter_conditioned_statistics_calls)++;
+			vector<unique_ptr<BaseStatistics>> statistics(inputs[i].statistics_column_indexes.size());
+			statistics[0] = BaseStatistics::CreateUnknown(LogicalType::INTEGER).ToUnique();
+			statistics[0]->SetDistinctCount(10);
+			batch->statistics[i] = make_uniq<TableFunctionFilterConditionedStatistics>(100, std::move(statistics));
+		}
+		return batch;
+	};
+	left->function.collect_filter_conditioned_statistics_batch = callback;
+	right->function.collect_filter_conditioned_statistics_batch = callback;
+	auto left_calls = left->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls;
+	auto right_calls = right->bind_data->Cast<CardinalityProviderData>().filter_conditioned_statistics_calls;
+
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(left->table_index, ProjectionIndex(0))),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER,
+	                                        ColumnBinding(right->table_index, ProjectionIndex(0))),
+	    ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+
+	JoinOrderSourceStats source_stats(*connection.context, *join, FilterConditionedStatisticsMode::COLLECT);
+	REQUIRE(*batch_calls == 1);
+	REQUIRE(*left_calls == 1);
+	REQUIRE(*right_calls == 1);
+	JoinOrderSourceStats second_source_stats(*connection.context, *join);
+	REQUIRE(*batch_calls == 1);
+	REQUIRE(*left_calls == 1);
+	REQUIRE(*right_calls == 1);
 }
 
 static unique_ptr<LogicalOperator> PlanStatisticsQuery(Connection &connection, const string &query) {

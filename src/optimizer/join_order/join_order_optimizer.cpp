@@ -41,7 +41,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// make sure query graph manager has not extracted a relation graph already
 	auto &op = *plan;
 	if (!source_stats) {
-		source_stats = make_shared_ptr<JoinOrderSourceStats>(context, op);
+		source_stats = make_shared_ptr<JoinOrderSourceStats>(context, op, FilterConditionedStatisticsMode::COLLECT);
 	}
 
 	// extract the relations that go into the hyper graph.

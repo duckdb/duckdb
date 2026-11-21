@@ -31,7 +31,18 @@ CREATE VIEW c AS SELECT * FROM read_parquet('{TEST_DIR}/shared_domain_c.parquet'
 query II
 EXPLAIN SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k);
 ----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~20,000 rows.*
+
+statement ok
+SET parquet_enable_filter_conditioned_statistics=false;
+
+query II
+EXPLAIN SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k);
+----
 physical_plan	<REGEX>:(?s).*HASH_JOIN.*~500,000 rows.*
+
+statement ok
+RESET parquet_enable_filter_conditioned_statistics;
 
 # Numeric min/max provides ten values. Filtering every key to one value must
 # also restrict the common join denominator.
@@ -64,7 +75,18 @@ SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k) WHERE a.k IN ('key_3', 
 query II
 EXPLAIN SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k) WHERE a.k IN ('key_3', 'key_7');
 ----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~4,000 rows.*
+
+statement ok
+SET parquet_enable_filter_conditioned_statistics=false;
+
+query II
+EXPLAIN SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k) WHERE a.k IN ('key_3', 'key_7');
+----
 physical_plan	<REGEX>:(?s).*HASH_JOIN.*~100,000 rows.*
+
+statement ok
+RESET parquet_enable_filter_conditioned_statistics;
 
 # A redundant equality must not apply another selectivity factor.
 query II

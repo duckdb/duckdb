@@ -110,6 +110,10 @@ public:
 	DUCKDB_API static unique_ptr<MultiFileReader> Create(const BoundTableFunction &table_function);
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
+	//! True only for the core reader created when a table function did not install a custom reader.
+	bool IsDefaultReader() const {
+		return is_default_reader;
+	}
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	//! Which of the multi-file options to declare on a function. A function that reads exactly one file per call
@@ -283,6 +287,8 @@ public:
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
 	Identifier function_name;
+	//! Set only on the core reader, never inherited by custom lakehouse readers.
+	bool is_default_reader = false;
 
 public:
 	template <class TARGET>
