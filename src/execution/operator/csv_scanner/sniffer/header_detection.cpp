@@ -300,10 +300,17 @@ vector<Identifier> CSVSniffer::DetectHeaderInternal(
 			}
 		}
 		case_insensitive_map_t<idx_t> name_collision_count;
+		// zsv header row: the first cell ends in ~zsv
+		const bool zsv_header = !best_header_row.empty() && StringUtil::EndsWith(best_header_row[0].value, "~zsv");
 
 		// get header names from CSV
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
 			string &col_name = best_header_row[col].value;
+
+			// strip zsv metadata from colum name
+			if (zsv_header) {
+				col_name = col_name.substr(0, col_name.find('~'));
+			}
 
 			// generate name if field is empty
 			if (EmptyHeader(col_name, best_header_row[col].is_null, options.normalize_names)) {
