@@ -1,0 +1,98 @@
+# name: test/sql/optimizer/monotone_preimage_rounding.test
+# description: Rewrite floor/ceil/trunc(col) OP const into a range on col for DOUBLE, FLOAT and DECIMAL columns
+# group: [optimizer]
+
+statement ok
+CREATE TABLE r AS SELECT (range - 250000) / 1000 AS d, ((range - 250000) / 1000)::FLOAT AS f,
+	((range - 250000) / 1000)::DECIMAL(9,2) AS dec FROM range(500000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE floor(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d >= 5\.0\) AND \(d < 6\.0\).*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE ceil(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d > 4\.0\) AND \(d <= 5\.0\).*
+
+# trunc rounds toward zero
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE trunc(d) = -3;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d > -4\.0\) AND \(d <= -3\.0\).*
+
+# a fractional constant compares with the integer next to it
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE floor(d) < -249.5;
+----
+analyzed_plan	<REGEX>:.*Filters: d < -249\.0.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE floor(f) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(f >= 5\.0\) AND \(f < 6\.0\).*
+
+# DECIMAL columns are bisected over their unscaled integers
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE ceil(dec) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(dec >= 4\.01\) AND \(dec <= 5\.00\).*
+
+# round is not rewritten on a floating-point column
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE round(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: round\(d\) = 5\.0.*
+
+# correctness on NaN, the infinities, signed zero, NULL and values around the edges of the exact integers, as a
+# filter and nested in an expression (where NULL must be kept). The reference wraps the rounding in a volatile CASE
+# that always takes its branch, which is not rewritten.
+statement ok
+CREATE TABLE v(id INTEGER, d DOUBLE, dec DECIMAL(9,2));
+
+statement ok
+INSERT INTO v VALUES (1, 'nan', -3.50), (2, 'inf', -3.00), (3, '-inf', -0.50), (4, -0.0, 0.00), (5, 0.5, 0.50),
+	(6, -0.5, 0.99), (7, 0.9999999999999999, 1.00), (8, -2.5, 2.50), (9, 5, 4.99), (10, 5.5, 5.00), (11, -3, 5.01),
+	(12, 9007199254740991, 9999999.99), (13, 4503599627370495.5, -9999999.99), (14, -4503599627370495.5, -2.49),
+	(15, 1e300, -2.51), (16, NULL, NULL);
+
+foreach fn floor ceil trunc
+
+foreach op = > >= < <=
+
+foreach c -3.0 -2.5 0.0 0.5 5.0 4503599627370495.0 1e300 'nan'
+
+query II
+SELECT (SELECT list(id ORDER BY id) FROM v WHERE {fn}(d) {op} {c}::DOUBLE) IS NOT DISTINCT FROM
+	(SELECT list(id ORDER BY id) FROM v WHERE CASE WHEN random() >= 0 THEN {fn}(d) END {op} {c}::DOUBLE),
+	(SELECT count(*) FROM v
+		WHERE ({fn}(d) {op} {c}::DOUBLE) IS DISTINCT FROM (CASE WHEN random() >= 0 THEN {fn}(d) END {op} {c}::DOUBLE))
+----
+true	0
+
+endloop
+
+endloop
+
+endloop
+
+foreach fn floor ceil trunc round
+
+foreach op = > >= < <=
+
+foreach c -3 -2.5 0 5 10000000
+
+query II
+SELECT (SELECT list(id ORDER BY id) FROM v WHERE {fn}(dec) {op} {c}) IS NOT DISTINCT FROM
+	(SELECT list(id ORDER BY id) FROM v WHERE CASE WHEN random() >= 0 THEN {fn}(dec) END {op} {c}),
+	(SELECT count(*) FROM v
+		WHERE ({fn}(dec) {op} {c}) IS DISTINCT FROM (CASE WHEN random() >= 0 THEN {fn}(dec) END {op} {c}))
+----
+true	0
+
+endloop
+
+endloop
+
+endloop
