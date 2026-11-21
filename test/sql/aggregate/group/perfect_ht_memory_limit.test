@@ -11,6 +11,13 @@ SET explain_output='physical_only';
 statement ok
 SET memory_limit='100MB'
 
+# Keep aggregate states in memory so spilling cannot satisfy the query.
+statement ok
+SET temp_directory=''
+
+statement ok
+SET max_temp_directory_size='0B'
+
 statement ok
 CREATE TABLE t AS SELECT (i%16)::INT g FROM range(300000) t(i);
 

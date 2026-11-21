@@ -9,8 +9,10 @@ using namespace duckdb;
 
 TEST_CASE("Limiting arena growth permits larger individual allocations", "[arena_allocator]") {
 	ArenaAllocator arena(Allocator::DefaultAllocator(), 64);
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	REQUIRE_THROWS(arena.SetMaximumBlockSize(0));
 	REQUIRE_THROWS(arena.SetMaximumBlockSize(63));
+#endif
 	arena.Allocate(128);
 	arena.SetMaximumBlockSize(64);
 	arena.Allocate(64);
