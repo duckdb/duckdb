@@ -371,6 +371,61 @@ idx_t PerfectAggregateHashTable::ArenaAllocationSize() const {
 	return size;
 }
 
+static bool ReserveStringResult(const AggregateStateField &field, const LogicalType &type, const_data_ptr_t state,
+                                idx_t &available) {
+	switch (field.kind) {
+	case AggregateFieldKind::OPTIONAL_VALUE:
+		return !Load<bool>(state + field.field_offset) ||
+		       ReserveStringResult(field.children[0], type, state, available);
+	case AggregateFieldKind::STRUCT:
+		return field.children.size() == 1 &&
+		       ReserveStringResult(field.children[0], StructType::GetChildTypes(type)[0].second,
+		                           state + field.field_offset, available);
+	case AggregateFieldKind::PRIMITIVE: {
+		if (type.InternalType() != PhysicalType::VARCHAR) {
+			return false;
+		}
+		const auto value = Load<string_t>(state + field.field_offset);
+		const auto bytes = value.IsInlined() ? 0 : value.GetSize();
+		if (bytes > available) {
+			return false;
+		}
+		available -= bytes;
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+bool PerfectAggregateHashTable::ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size,
+                                                     idx_t &available) const {
+	const auto budget = MinValue(block_size, available);
+	auto remaining = budget;
+	idx_t offset = 0;
+	for (idx_t i = 0; i < plan.state_layouts.size(); i++) {
+		const auto &state = plan.state_layouts[i];
+		const auto &aggregate = layout_ptr->GetAggregates()[i];
+		const auto base = data + offset;
+		offset += aggregate.payload_size;
+		if (TypeIsConstantSize(state.type.InternalType()) || plan.FixedListElementWidth(i, aggregate)) {
+			continue;
+		}
+		if (aggregate.function.GetReturnType().InternalType() != PhysicalType::VARCHAR ||
+		    aggregate.function.HasExportAggregateStateCallback()) {
+			return false;
+		}
+		for (idx_t slot = 0; slot < total_groups; slot++) {
+			if (group_is_set[slot] &&
+			    !ReserveStringResult(state.field, state.type, base + tuple_size * slot, remaining)) {
+				return false;
+			}
+		}
+	}
+	available -= budget - remaining;
+	return true;
+}
+
 bool PerfectAggregateHashTable::SingleGroupExceeds(const AggregateStateSpillPlan &plan, idx_t available,
                                                    idx_t list_width, idx_t input_rows) {
 	D_ASSERT(list_width && input_rows >= measured_rows);

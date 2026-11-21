@@ -10,6 +10,23 @@ SET threads = 1
 statement ok
 SET memory_limit = '2MB'
 
+foreach width 0 512
+
+foreach aggr min first
+
+query III
+SELECT sum(len(xs)), count(v), min(v) = repeat('x', {width}) || '0' FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           {aggr}(CASE WHEN i = 0 THEN repeat('x', {width}) || i::VARCHAR END) FILTER (WHERE i < 2) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	1	true
+
+endloop
+
+endloop
+
 query I
 SELECT sum(len(xs)) FROM (
     SELECT (i % 30)::UTINYINT AS g, list(hash(i)) AS xs FROM range(2000000) t(i)
@@ -36,6 +53,22 @@ SELECT count(*), count(*) FILTER (WHERE v = repeat('x', 512) || lpad(g::VARCHAR,
 )
 ----
 10	10
+
+foreach budget 8 13
+
+statement ok
+SET memory_limit = '{budget}MB'
+
+query III
+SELECT sum(len(xs)), count(v), sum(length(v)) FROM (
+    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
+           min(CASE WHEN i < 100 THEN repeat('x', 16384) || i::VARCHAR END) AS v
+    FROM range(65536) t(i) GROUP BY g
+)
+----
+65536	100	1638590
+
+endloop
 
 statement ok
 SET memory_limit = '22MB'

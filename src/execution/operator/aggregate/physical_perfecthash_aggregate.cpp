@@ -90,7 +90,7 @@ public:
 	}
 
 	bool NeedsRadix(ExecutionContext &context, PerfectAggregateHashTable &table, idx_t rows) const {
-		const auto available = AvailableMemory(context.client);
+		auto available = AvailableMemory(context.client);
 		const auto allocated = arena_capacity.load();
 		if (allocated <= available) {
 			if (!list_width || !rows || allocated <= available / 2) {
@@ -102,7 +102,11 @@ public:
 			return table.SingleGroupExceeds(*spill_plan, room, list_width, rows);
 		}
 		if (has_variable_width_state) {
-			return true;
+			// Dense combine can copy string states into another arena before they can be exported.
+			const auto block = BufferManager::GetBufferManager(context.client).GetBlockAllocSize();
+			if (!list_width || !table.ReserveStringResults(*spill_plan, block, available)) {
+				return true;
+			}
 		}
 		// Each LIST accepts at most one element per input row. Inspect individual groups only near the limit.
 		if (!list_width || !rows ||

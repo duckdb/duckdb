@@ -43,6 +43,8 @@ public:
 	            vector<unique_ptr<ColumnDataCollection>> &exported, idx_t radix_bits);
 
 	idx_t ArenaAllocationSize() const;
+	//! Deduct native string payloads from the list budget if they fit in one spill block.
+	bool ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size, idx_t &available) const;
 	bool SingleGroupExceeds(const AggregateStateSpillPlan &plan, idx_t available, idx_t list_width, idx_t input_rows);
 	bool ListResultExceeds(const AggregateStateSpillPlan &plan, idx_t available,
 	                       idx_t max_groups = STANDARD_VECTOR_SIZE, optional_ptr<idx_t> largest_list = nullptr) const;
