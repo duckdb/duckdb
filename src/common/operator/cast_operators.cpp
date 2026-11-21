@@ -3333,8 +3333,7 @@ static bool CanUseDecimalFloatingPointFastPath(SRC input, uint32_t scale) {
 //! Rounds magnitude * 10^-scale to the nearest float from its full decimal digits
 template <class DST>
 static duckdb_fast_float::adjusted_mantissa ComputeFloatFromDigits(hugeint_t magnitude, uint32_t scale) {
-	// a hugeint can have one more digit than the maximum decimal width
-	char buffer[DecimalWidth<hugeint_t>::max + 1];
+	char buffer[DecimalWidth<hugeint_t>::max];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(magnitude, end);
 
@@ -3373,11 +3372,10 @@ static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint
 	}
 	// Eisel-Lemire; a truncated mantissa is only usable if mantissa + 1 rounds to the same float
 	auto rounded = duckdb_fast_float::compute_float<binary>(exponent, mantissa);
-	if (remainder != 0 && (mantissa == NumericLimits<uint64_t>::Maximum() ||
-	                       rounded != duckdb_fast_float::compute_float<binary>(exponent, mantissa + 1))) {
-		rounded.power2 = -1;
-	}
-	if (rounded.power2 < 0) {
+	const bool truncation_matters =
+	    remainder != 0 && (mantissa == NumericLimits<uint64_t>::Maximum() ||
+	                       rounded != duckdb_fast_float::compute_float<binary>(exponent, mantissa + 1));
+	if (truncation_matters || rounded.power2 < 0) {
 		rounded = ComputeFloatFromDigits<DST>(input, scale);
 	}
 	duckdb_fast_float::detail::to_float(negative, rounded, result);
