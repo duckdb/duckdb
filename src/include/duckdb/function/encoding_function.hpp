@@ -43,9 +43,13 @@ struct EncodingFunction {
 	//! LIST(STRUCT(mark BLOB, encoding VARCHAR)) function property: a stream that starts with a mark is decoded with
 	//! that encoding. The first matching mark wins, an empty mark matches any stream.
 	static constexpr const char *BYTE_ORDER_MARKS_PROPERTY = "duckdb.encodings.byte_order_marks";
+	//! Boolean function property: marks an encoding entry as an alias omitted from GetEncodings()
+	static constexpr const char *IS_ALIAS_PROPERTY = "duckdb.encodings.is_alias";
 
 	//! The name of the scalar function that decodes the encoding
 	DUCKDB_API static string FunctionName(const string &encoding_name);
+	//! Whether the encoding name refers to UTF-8 (utf-8, utf8, utf_8)
+	DUCKDB_API static bool IsUTF8(const string &encoding_name);
 	//! Registers the functions of an encoding in the system.encodings schema
 	DUCKDB_API static void SetSchema(CreateFunctionInfo &info);
 	//! The type returned by the streaming overload

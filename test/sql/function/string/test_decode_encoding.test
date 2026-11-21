@@ -276,3 +276,54 @@ SELECT count(*) FROM range(0, 25) t(n)
 WHERE system.encodings."utf-16"(unhex(repeat('6100', n) || '3DD8'), false) <> {'decoded': repeat('a', n), 'consumed': 2 * n}
 ----
 0
+
+# built-in encoding aliases (utf8, utf_8, utf16, utf_16, latin1, latin_1)
+query II
+SELECT system.encodings.latin1('caf\xe9'::BLOB), system.encodings.utf16('a\x00\xe9\x00'::BLOB)
+----
+café	aé
+
+foreach enc utf8 utf_8 UTF8 UTF_8
+
+query I
+SELECT decode(encode('café', '{enc}'), '{enc}')
+----
+café
+
+endloop
+
+foreach enc utf16 utf_16 UTF16 UTF_16
+
+query I
+SELECT decode(encode('aé😀', '{enc}'), '{enc}')
+----
+aé😀
+
+endloop
+
+foreach enc latin1 latin_1 LATIN1 LATIN_1
+
+query I
+SELECT decode(encode('café', '{enc}'), '{enc}')
+----
+café
+
+endloop
+
+foreach enc utf16le utf_16_le utf-16-le UTF16LE
+
+query I
+SELECT decode(encode('aé😀', '{enc}'), '{enc}')
+----
+aé😀
+
+endloop
+
+foreach enc utf16be utf_16_be utf-16-be UTF16BE
+
+query I
+SELECT decode(encode('aé😀', '{enc}'), '{enc}')
+----
+aé😀
+
+endloop

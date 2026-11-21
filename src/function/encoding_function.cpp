@@ -19,6 +19,11 @@ string EncodingFunction::FunctionName(const string &encoding_name) {
 	return StringUtil::Lower(encoding_name);
 }
 
+bool EncodingFunction::IsUTF8(const string &encoding_name) {
+	return StringUtil::CIEquals(encoding_name, "utf-8") || StringUtil::CIEquals(encoding_name, "utf8") ||
+	       StringUtil::CIEquals(encoding_name, "utf_8");
+}
+
 void EncodingFunction::SetSchema(CreateFunctionInfo &info) {
 	info.SetQualifiedName(
 	    QualifiedName(Identifier::InvalidCatalog(), Identifier(SCHEMA), info.GetQualifiedName().Name()));
@@ -143,9 +148,17 @@ vector<string> EncodingFunction::GetEncodings(ClientContext &context) {
 	vector<string> result {"utf-8"};
 	auto &schema = Catalog::GetSystemCatalog(context).GetSchema(context, Identifier(SCHEMA));
 	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-			result.push_back(entry.name.GetIdentifierName());
+		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+			return;
 		}
+		auto &functions = entry.Cast<ScalarFunctionCatalogEntry>().functions;
+		if (functions.Size() > 0) {
+			auto is_alias = functions.GetFunctionByOffset(0)->GetProperties().GetProperty(IS_ALIAS_PROPERTY);
+			if (is_alias && is_alias->GetValue<bool>()) {
+				return;
+			}
+		}
+		result.push_back(entry.name.GetIdentifierName());
 	});
 	std::sort(result.begin(), result.end());
 	return result;
@@ -178,7 +191,7 @@ unique_ptr<Expression> EncodingFunction::BindCall(ClientContext &context, vector
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(children[0]));
 	FunctionBinder binder(context);
-	if (encoding_name == "utf-8") {
+	if (IsUTF8(encoding_name)) {
 		return binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(is_encode ? "encode" : "decode"),
 		                                 std::move(arguments));
 	}
