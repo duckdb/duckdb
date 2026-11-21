@@ -10,7 +10,7 @@ CREATE MACRO dec_str(u, s) AS
 # unscaled values of varying digit counts, most of them too large for the exact int -> float fast path
 statement ok
 CREATE TABLE unscaled AS
-SELECT (CASE WHEN i % 2 = 0 THEN -1 ELSE 1 END) * (
+SELECT (CASE WHEN (i // 38) % 2 = 0 THEN -1 ELSE 1 END) * (
 	((hash(i)::UHUGEINT * 10000000000000000000::UHUGEINT + hash(i + 1000000)::UHUGEINT) %
 	100000000000000000000000000000000000000::UHUGEINT) // ('1' || repeat('0', (i % 38)::INT))::UHUGEINT)::HUGEINT AS u
 FROM range(100000) t(i)

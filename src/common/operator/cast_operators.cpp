@@ -3330,31 +3330,6 @@ static bool CanUseDecimalFloatingPointFastPath(SRC input, uint32_t scale) {
 	       IsRepresentableExactly<SRC, DST>(input, DST(0.0));
 }
 
-template <class UNSIGNED>
-static void FillDecimalDigits(UNSIGNED input, duckdb_fast_float::decimal &decimal) {
-	uint8_t digits[DecimalWidth<hugeint_t>::max];
-	while (input > 0) {
-		digits[decimal.num_digits++] = UnsafeNumericCast<uint8_t>(input % 10);
-		input /= 10;
-	}
-	for (uint32_t i = 0; i < decimal.num_digits; i++) {
-		decimal.digits[i] = digits[decimal.num_digits - i - 1];
-	}
-}
-
-template <class SRC>
-static void FillDecimalDigits(SRC input, duckdb_fast_float::decimal &decimal, bool &negative) {
-	using UNSIGNED = typename MakeUnsigned<SRC>::type;
-	if (input < 0) {
-		negative = true;
-		auto unsigned_input = UnsafeNumericCast<UNSIGNED>(-(input + 1));
-		FillDecimalDigits<UNSIGNED>(unsigned_input + 1, decimal);
-	} else {
-		negative = false;
-		FillDecimalDigits<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(input), decimal);
-	}
-}
-
 static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decimal, bool &negative) {
 	negative = false;
 	if (input == 0) {
@@ -3395,11 +3370,14 @@ static bool TryComputeFloatingPoint(uint64_t mantissa, int64_t exponent, bool in
 }
 
 template <class DST, class SRC>
-static bool TryCastDecimalToFloatingPointEiselLemire(SRC input, DST &result, uint32_t scale) {
+static void CastDecimalToFloatingPointRounded(SRC input, DST &result, uint32_t scale) {
 	const bool negative = input < 0;
-	const auto value = static_cast<uint64_t>(static_cast<int64_t>(input));
+	const auto value = static_cast<uint64_t>(input);
 	const auto magnitude = negative ? uint64_t(0) - value : value;
-	return TryComputeFloatingPoint<DST>(magnitude, -int64_t(scale), false, negative, result);
+	// the exponent -scale is within [-18, -1], where Eisel-Lemire always decides
+	const bool success = TryComputeFloatingPoint<DST>(magnitude, -int64_t(scale), false, negative, result);
+	D_ASSERT(success);
+	(void)success;
 }
 
 template <class DST>
@@ -3420,17 +3398,11 @@ static bool TryCastDecimalToFloatingPointEiselLemire(hugeint_t input, DST &resul
 	return TryComputeFloatingPoint<DST>(truncated, dropped_digits - int64_t(scale), remainder != 0, negative, result);
 }
 
-template <class SRC, class DST>
-bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint32_t scale) {
-	if (scale == 0 || CanUseDecimalFloatingPointFastPath<SRC, DST>(input, scale)) {
-		// Fast path, integer and decimal exponent are representable exactly as a float/double
-		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
-		return true;
-	}
+template <class DST>
+static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint32_t scale) {
 	if (TryCastDecimalToFloatingPointEiselLemire<DST>(input, result, scale)) {
-		return true;
+		return;
 	}
-
 	duckdb_fast_float::decimal decimal;
 	bool negative = false;
 	FillDecimalDigits(input, decimal, negative);
@@ -3444,6 +3416,16 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint3
 
 	auto adjusted_mantissa = duckdb_fast_float::compute_float<duckdb_fast_float::binary_format<DST>>(decimal);
 	duckdb_fast_float::detail::to_float(negative, adjusted_mantissa, result);
+}
+
+template <class SRC, class DST>
+bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint32_t scale) {
+	if (scale == 0 || CanUseDecimalFloatingPointFastPath<SRC, DST>(input, scale)) {
+		// Fast path, integer and decimal exponent are representable exactly as a float/double
+		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+		return true;
+	}
+	CastDecimalToFloatingPointRounded<DST>(input, result, scale);
 	return true;
 }
 
