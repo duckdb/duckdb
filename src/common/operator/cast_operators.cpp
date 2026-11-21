@@ -3330,55 +3330,19 @@ static bool CanUseDecimalFloatingPointFastPath(SRC input, uint32_t scale) {
 	       IsRepresentableExactly<SRC, DST>(input, DST(0.0));
 }
 
-static void FillDecimalDigits(hugeint_t magnitude, duckdb_fast_float::decimal &decimal) {
+//! Rounds magnitude * 10^-scale to the nearest float from its full decimal digits
+template <class DST>
+static duckdb_fast_float::adjusted_mantissa ComputeFloatFromDigits(hugeint_t magnitude, uint32_t scale) {
 	// a hugeint can have one more digit than the maximum decimal width
 	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(magnitude, end);
 
+	duckdb_fast_float::decimal decimal;
 	decimal.num_digits = UnsafeNumericCast<uint32_t>(end - begin);
 	for (uint32_t i = 0; i < decimal.num_digits; i++) {
 		decimal.digits[i] = UnsafeNumericCast<uint8_t>(begin[i] - '0');
 	}
-}
-
-//! Rounds mantissa * 10^exponent to the nearest float with Eisel-Lemire; fails in the rare cases it cannot decide.
-//! If inexact, the value lies strictly between mantissa and mantissa + 1, which must then round to the same float.
-template <class DST>
-static bool TryComputeFloatingPoint(uint64_t mantissa, int64_t exponent, bool inexact, bool negative, DST &result) {
-	using binary = duckdb_fast_float::binary_format<DST>;
-	auto rounded = duckdb_fast_float::compute_float<binary>(exponent, mantissa);
-	if (rounded.power2 < 0) {
-		return false;
-	}
-	if (inexact && (mantissa == NumericLimits<uint64_t>::Maximum() ||
-	                duckdb_fast_float::compute_float<binary>(exponent, mantissa + 1) != rounded)) {
-		return false;
-	}
-	duckdb_fast_float::detail::to_float(negative, rounded, result);
-	return true;
-}
-
-template <class DST>
-static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint32_t scale) {
-	const bool negative = input < 0;
-	if (negative) {
-		Hugeint::NegateInPlace(input);
-	}
-	// drop as many low digits as upper has, so that the rest fits a uint64_t; at most 19 because upper < 2^63
-	const auto upper = static_cast<uint64_t>(input.upper);
-	const int64_t dropped_digits = upper == 0 ? 0 : NumericHelper::UnsignedLength<uint64_t>(upper);
-	uint64_t mantissa = input.lower;
-	uint64_t remainder = 0;
-	if (dropped_digits > 0) {
-		mantissa =
-		    BignumLimb::DivRemPortable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
-	}
-	if (TryComputeFloatingPoint<DST>(mantissa, dropped_digits - int64_t(scale), remainder != 0, negative, result)) {
-		return;
-	}
-	duckdb_fast_float::decimal decimal;
-	FillDecimalDigits(input, decimal);
 	decimal.decimal_point = UnsafeNumericCast<int32_t>(decimal.num_digits) - UnsafeNumericCast<int32_t>(scale);
 	while (decimal.num_digits > 0 && decimal.digits[decimal.num_digits - 1] == 0) {
 		decimal.num_digits--;
@@ -3386,13 +3350,41 @@ static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint
 	for (uint32_t i = decimal.num_digits; i < duckdb_fast_float::max_digit_without_overflow; i++) {
 		decimal.digits[i] = 0;
 	}
+	return duckdb_fast_float::compute_float<duckdb_fast_float::binary_format<DST>>(decimal);
+}
 
-	auto adjusted_mantissa = duckdb_fast_float::compute_float<duckdb_fast_float::binary_format<DST>>(decimal);
-	duckdb_fast_float::detail::to_float(negative, adjusted_mantissa, result);
+template <class DST>
+static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint32_t scale) {
+	using binary = duckdb_fast_float::binary_format<DST>;
+	const bool negative = input < 0;
+	if (negative) {
+		Hugeint::NegateInPlace(input);
+	}
+	int64_t exponent = -int64_t(scale);
+	uint64_t mantissa = input.lower;
+	uint64_t remainder = 0;
+	if (input.upper != 0) {
+		// drop the fewest low digits that make the rest fit a uint64_t: as many as upper has, at most 19
+		const auto upper = static_cast<uint64_t>(input.upper);
+		const auto dropped_digits = NumericHelper::UnsignedLength<uint64_t>(upper);
+		mantissa =
+		    BignumLimb::DivRemPortable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
+		exponent += dropped_digits;
+	}
+	// Eisel-Lemire; a truncated mantissa is only usable if mantissa + 1 rounds to the same float
+	auto rounded = duckdb_fast_float::compute_float<binary>(exponent, mantissa);
+	if (remainder != 0 && (mantissa == NumericLimits<uint64_t>::Maximum() ||
+	                       rounded != duckdb_fast_float::compute_float<binary>(exponent, mantissa + 1))) {
+		rounded.power2 = -1;
+	}
+	if (rounded.power2 < 0) {
+		rounded = ComputeFloatFromDigits<DST>(input, scale);
+	}
+	duckdb_fast_float::detail::to_float(negative, rounded, result);
 }
 
 template <class SRC, class DST>
-bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint32_t scale) {
+bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t scale) {
 	if (scale == 0 || CanUseDecimalFloatingPointFastPath<SRC, DST>(input, scale)) {
 		// Fast path, integer and decimal exponent are representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
@@ -3406,50 +3398,50 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint3
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, float &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, float &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, scale);
 }
 
 // DECIMAL -> DOUBLE
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, double &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, double &result, CastParameters &parameters, uint32_t width,
                                    uint32_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, width, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, scale);
 }
 
 //===--------------------------------------------------------------------===//
