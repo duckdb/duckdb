@@ -170,7 +170,7 @@ bool ExpressionExecutor::ExecuteErrorCapture(const Expression &child, Expression
 		bool has_error = false;
 		try {
 			Execute(child, &child_state, &selvec, 1, intermediate.data[0]);
-			val = intermediate.data[0].GetValue(0);
+			val = intermediate.GetValue(0, 0);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			if (!Exception::IsExecutionError(error.Type())) {
