@@ -3330,21 +3330,11 @@ static bool CanUseDecimalFloatingPointFastPath(SRC input, uint32_t scale) {
 	       IsRepresentableExactly<SRC, DST>(input, DST(0.0));
 }
 
-static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decimal, bool &negative) {
-	negative = false;
-	if (input == 0) {
-		return;
-	}
-
-	if (input < 0) {
-		negative = true;
-		Hugeint::NegateInPlace(input);
-	}
-
+static void FillDecimalDigits(hugeint_t magnitude, duckdb_fast_float::decimal &decimal) {
 	// a hugeint can have one more digit than the maximum decimal width
 	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
-	auto begin = NumericHelper::FormatUnsigned(input, end);
+	auto begin = NumericHelper::FormatUnsigned(magnitude, end);
 
 	decimal.num_digits = UnsafeNumericCast<uint32_t>(end - begin);
 	for (uint32_t i = 0; i < decimal.num_digits; i++) {
@@ -3369,43 +3359,26 @@ static bool TryComputeFloatingPoint(uint64_t mantissa, int64_t exponent, bool in
 	return true;
 }
 
-template <class DST, class SRC>
-static void CastDecimalToFloatingPointRounded(SRC input, DST &result, uint32_t scale) {
-	const bool negative = input < 0;
-	const auto value = static_cast<uint64_t>(input);
-	const auto magnitude = negative ? uint64_t(0) - value : value;
-	// the exponent -scale is within [-18, -1], where Eisel-Lemire always decides
-	const bool success = TryComputeFloatingPoint<DST>(magnitude, -int64_t(scale), false, negative, result);
-	D_ASSERT(success);
-	(void)success;
-}
-
 template <class DST>
-static bool TryCastDecimalToFloatingPointEiselLemire(hugeint_t input, DST &result, uint32_t scale) {
+static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint32_t scale) {
 	const bool negative = input < 0;
 	if (negative) {
 		Hugeint::NegateInPlace(input);
 	}
-	const auto upper = static_cast<uint64_t>(input.upper);
-	if (upper == 0) {
-		return TryComputeFloatingPoint<DST>(input.lower, -int64_t(scale), false, negative, result);
-	}
 	// drop as many low digits as upper has, so that the rest fits a uint64_t; at most 19 because upper < 2^63
-	const int64_t dropped_digits = NumericHelper::UnsignedLength<uint64_t>(upper);
-	uint64_t remainder;
-	const auto truncated =
-	    BignumLimb::DivRemPortable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
-	return TryComputeFloatingPoint<DST>(truncated, dropped_digits - int64_t(scale), remainder != 0, negative, result);
-}
-
-template <class DST>
-static void CastDecimalToFloatingPointRounded(hugeint_t input, DST &result, uint32_t scale) {
-	if (TryCastDecimalToFloatingPointEiselLemire<DST>(input, result, scale)) {
+	const auto upper = static_cast<uint64_t>(input.upper);
+	const int64_t dropped_digits = upper == 0 ? 0 : NumericHelper::UnsignedLength<uint64_t>(upper);
+	uint64_t mantissa = input.lower;
+	uint64_t remainder = 0;
+	if (dropped_digits > 0) {
+		mantissa =
+		    BignumLimb::DivRemPortable(upper, input.lower, Uhugeint::POWERS_OF_TEN[dropped_digits].lower, remainder);
+	}
+	if (TryComputeFloatingPoint<DST>(mantissa, dropped_digits - int64_t(scale), remainder != 0, negative, result)) {
 		return;
 	}
 	duckdb_fast_float::decimal decimal;
-	bool negative = false;
-	FillDecimalDigits(input, decimal, negative);
+	FillDecimalDigits(input, decimal);
 	decimal.decimal_point = UnsafeNumericCast<int32_t>(decimal.num_digits) - UnsafeNumericCast<int32_t>(scale);
 	while (decimal.num_digits > 0 && decimal.digits[decimal.num_digits - 1] == 0) {
 		decimal.num_digits--;
@@ -3425,7 +3398,7 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint3
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}
-	CastDecimalToFloatingPointRounded<DST>(input, result, scale);
+	CastDecimalToFloatingPointRounded<DST>(Hugeint::Convert(input), result, scale);
 	return true;
 }
 
