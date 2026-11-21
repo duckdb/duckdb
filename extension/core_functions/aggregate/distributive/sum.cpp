@@ -344,6 +344,38 @@ struct HugeintSumOperation
 	}
 };
 
+struct IntervalSumSetOperation : public SumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+		} else {
+			target.value = AddOperator::Operation<interval_t, interval_t, interval_t>(target.value, source.value);
+		}
+	}
+};
+
+//! Sums months, days and micros separately (as PostgreSQL does), throwing when any of them overflows
+struct IntervalSumOperation : public BaseSumOperation<IntervalSumSetOperation, IntervalAdd> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
+
 //! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
 template <class OP>
 struct DecimalSumOperation : public OP {
@@ -847,6 +879,13 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
+	auto sum_interval =
+	    AggregateFunction::UnaryAggregate<SumState<interval_t>, interval_t, interval_t, IntervalSumOperation>(
+	        LogicalType::INTERVAL, LogicalType::INTERVAL);
+	sum_interval.GetSignature().GetParameter(0).SetName("arg");
+	sum_interval.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	sum_interval.SetFallible(); // interval addition throws on overflow of any field
+	sum.AddFunction(sum_interval);
 	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM);
 	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
