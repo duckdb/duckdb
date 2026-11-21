@@ -8,6 +8,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -3734,4 +3735,52 @@ TEST_CASE("The parser's tokens keep the literal info the tokenizer cached", "[ap
 	TokenIterator borrowing_iterator(borrowed);
 	REQUIRE_FALSE(borrowing_iterator.GetToken(0).HasLiteralInfo(table));
 	REQUIRE(borrowed[0].GetLiteralInfo(table).LiteralId() == table.Lookup("SELECT").LiteralId());
+}
+
+class MemoryLimitGrammarExtension final : public GrammarExtension {
+public:
+	MemoryLimitGrammarExtension() : GrammarExtension("memory_limit_test", "ARENA_MEMORY") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule(
+		    "ArenaMemoryStatement <- 'ARENA_MEMORY'",
+		    [this](PEGTransformer &transformer, ParseResult &) -> arena_ptr<TransformProcess> {
+			    transform_calls++;
+			    auto &buffer_manager = transformer.options.context->GetBufferManager();
+			    transformer.GetAllocator().Allocate(buffer_manager.GetMaxMemory());
+			    throw InternalException("Transform arena allocation unexpectedly exceeded the memory limit");
+		    }));
+		changes.push_back(GrammarChange::PrependChoice("Statement", "ArenaMemoryStatement"));
+		return changes;
+	}
+
+	mutable idx_t transform_calls = 0;
+};
+
+TEST_CASE("Top-level transform arenas honor the database memory limit", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto extension = make_shared_ptr<MemoryLimitGrammarExtension>();
+	GrammarExtension::Register(*db.instance, extension);
+	REQUIRE_NO_FAIL(con.Query("SET active_grammar_extensions=['memory_limit_test']"));
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit='16MB'"));
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	const auto memory_before = buffer_manager.GetUsedMemory();
+	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		auto result = con.Query("ARENA_MEMORY");
+		REQUIRE(result->HasError());
+		REQUIRE(result->GetErrorType() == ExceptionType::OUT_OF_MEMORY);
+		REQUIRE(extension->transform_calls == attempt + 1);
+		REQUIRE(buffer_manager.GetUsedMemory() == memory_before);
+		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	}
+	Parser parser(*con.context);
+	try {
+		parser.ParseQuery("ARENA_MEMORY");
+		FAIL("Expected an out-of-memory exception during parsing");
+	} catch (const OutOfMemoryException &ex) {
+		REQUIRE(StringUtil::Contains(ErrorData(ex).RawMessage(), "While parsing SQL:"));
+	}
 }
