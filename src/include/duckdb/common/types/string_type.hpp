@@ -213,9 +213,26 @@ public:
 			if (a_prefix != b_prefix) {
 				return BSwapIfLE(a_prefix) > BSwapIfLE(b_prefix);
 			}
+			if (left.IsInlined() && right.IsInlined()) {
+				return InlinedSuffixGreaterThan(left, right);
+			}
 #endif
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
+		}
+		//! Both strings must be inlined and have equal prefixes: the zero-padded inlined bytes are compared as one
+		//! big-endian integer, ties are broken by length (e.g. "a" < "a\0")
+		static inline bool InlinedSuffixGreaterThan(const string_t &left, const string_t &right) {
+			const auto a_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(&left) + 8u));
+			const auto b_suffix = BSwapIfLE(Load<uint64_t>(const_data_ptr_cast(&right) + 8u));
+			return (a_suffix > b_suffix) | ((a_suffix == b_suffix) & (left.GetSize() > right.GetSize()));
+		}
+		//! At least one side must be inlined: equal strings then have equal (inlined) lengths, so all 16 bytes match
+		static inline bool InlinedEquals(const string_t &a, const string_t &b) {
+			const auto a_ptr = const_data_ptr_cast(&a);
+			const auto b_ptr = const_data_ptr_cast(&b);
+			return ((Load<uint64_t>(a_ptr) ^ Load<uint64_t>(b_ptr)) |
+			        (Load<uint64_t>(a_ptr + 8u) ^ Load<uint64_t>(b_ptr + 8u))) == 0;
 		}
 	};
 

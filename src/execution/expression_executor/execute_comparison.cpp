@@ -16,6 +16,18 @@ namespace duckdb {
 // Select comparisons
 //===--------------------------------------------------------------------===//
 template <class OP>
+static idx_t StringSelectOperation(const Vector &left, const Vector &right, const SelectionVector *sel, idx_t count,
+                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+	if constexpr (InlinedStringEqualityOperator<OP>::ENABLED) {
+		if (HasInlinedStringConstant(left, right)) {
+			using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
+			return BinaryExecutor::Select<string_t, string_t, INLINED_OP>(left, right, sel, count, true_sel, false_sel);
+		}
+	}
+	return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
+}
+
+template <class OP>
 static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
                                         optional_ptr<const SelectionVector> sel, idx_t count,
                                         optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
@@ -92,8 +104,7 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 		                                                            false_sel.get());
 		return true;
 	case PhysicalType::VARCHAR:
-		result = BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel.get(), count, true_sel.get(),
-		                                                        false_sel.get());
+		result = StringSelectOperation<OP>(left, right, sel.get(), count, true_sel.get(), false_sel.get());
 		return true;
 	default:
 		return false;

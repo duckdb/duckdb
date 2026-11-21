@@ -25,6 +25,18 @@ namespace duckdb {
 // Fast path: direct BinaryExecutor for primitive types (single pass, no intermediate vector)
 //===--------------------------------------------------------------------===//
 template <class OP>
+static void StringComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
+	if constexpr (InlinedStringEqualityOperator<OP>::ENABLED) {
+		if (HasInlinedStringConstant(left, right)) {
+			using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
+			BinaryExecutor::Execute<string_t, string_t, bool, INLINED_OP>(left, right, result);
+			return;
+		}
+	}
+	BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
+}
+
+template <class OP>
 static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
 #if DUCKDB_SMALLER_BINARY(primitive_comparison_execute)
 	return false;
@@ -72,7 +84,7 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::VARCHAR:
-		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
+		StringComparisonExecute<OP>(left, right, result);
 		return true;
 	default:
 		return false;
