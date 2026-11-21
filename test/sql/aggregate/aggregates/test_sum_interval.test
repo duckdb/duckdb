@@ -1,0 +1,24 @@
+# name: test/sql/aggregate/aggregates/test_sum_interval.test
+# description: Test SUM on INTERVAL
+# group: [aggregates]
+
+query I
+SELECT sum(INTERVAL 1 DAY) FROM range(3)
+----
+3 days
+
+# months, days and micros are summed separately
+query I
+SELECT sum(i) FROM (VALUES (INTERVAL '1 month 20 days 13 hours'), (INTERVAL '2 months 20 days 13 hours'), (NULL)) t(i)
+----
+3 months 40 days 26:00:00
+
+query I
+SELECT sum(NULL::INTERVAL)
+----
+NULL
+
+statement error
+SELECT sum(i) FROM (VALUES (INTERVAL '2147483647 days'), (INTERVAL '1 day')) t(i)
+----
+Overflow in addition
