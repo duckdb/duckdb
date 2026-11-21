@@ -31,6 +31,7 @@ struct ArenaAllocatorData : public PrivateAllocatorData {
 	}
 
 	ArenaAllocator &allocator;
+	idx_t max_block_size = NumericLimits<idx_t>::Maximum();
 };
 
 static data_ptr_t ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
@@ -61,6 +62,13 @@ ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
 ArenaAllocator::~ArenaAllocator() {
 }
 
+void ArenaAllocator::SetMaximumBlockSize(idx_t size) {
+	if (!size || !ValueIsAligned(size)) {
+		throw InternalException("Arena block size must be positive and aligned");
+	}
+	arena_allocator.GetPrivateData()->Cast<ArenaAllocatorData>().max_block_size = size;
+}
+
 void ArenaAllocator::AllocateNewBlock(idx_t min_size) {
 	idx_t capacity;
 	// start off with either (1) initial capacity (if we have no block) or (2) capacity of the previous block
@@ -78,6 +86,7 @@ void ArenaAllocator::AllocateNewBlock(idx_t min_size) {
 	if (capacity < ARENA_ALLOCATOR_MAX_CAPACITY) {
 		capacity *= 2;
 	}
+	capacity = MinValue(capacity, arena_allocator.GetPrivateData()->Cast<ArenaAllocatorData>().max_block_size);
 	// we double the size until we can fit `len`
 	// this is generally only relevant if len is very large
 	while (capacity < min_size) {

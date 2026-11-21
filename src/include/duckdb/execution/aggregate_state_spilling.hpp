@@ -23,6 +23,10 @@ class ClientContext;
 struct AggregateStateSpillPlan {
 	vector<AggregateStateLayout> state_layouts;
 	vector<LogicalType> exported_types;
+
+	bool HasArenaReferences(idx_t index) const;
+	//! Width of one materialized element for a native fixed-width LIST, or zero for other states.
+	idx_t FixedListElementWidth(idx_t index, const AggregateObject &aggregate) const;
 };
 
 //! Converts native aggregate states to and from a spillable columnar representation.
@@ -35,6 +39,10 @@ public:
 	static void ExportStates(ClientContext &context, const TupleDataLayout &layout, const AggregateStateSpillPlan &plan,
 	                         TupleDataCollection &source, vector<unique_ptr<ColumnDataCollection>> &exported,
 	                         idx_t exported_radix_bits, ArenaAllocator &allocator);
+	//! Append a serialized batch to the spill partitions selected by its hash column.
+	static void AppendToPartitions(ClientContext &context, DataChunk &chunk, idx_t hash_column, idx_t radix_bits,
+	                               vector<unique_ptr<ColumnDataCollection>> &exported, DataChunk &slice,
+	                               SelectionVector &selection);
 	//! Imports and combines one chunk of exported states at a time
 	static void ImportStates(ClientContext &context, const shared_ptr<TupleDataLayout> &layout,
 	                         const AggregateStateSpillPlan &plan, ColumnDataCollection &exported,

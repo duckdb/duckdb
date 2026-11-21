@@ -19,6 +19,7 @@ class GlobalSinkState;
 class LocalSinkState;
 
 class GroupedAggregateHashTable;
+class PerfectAggregateHashTable;
 struct AggregatePartition;
 
 class RadixPartitionedHashTable {
@@ -48,6 +49,8 @@ public:
 	void AdjustScheduledWorkers(ClientContext &context, GlobalSinkState &gstate, idx_t scheduled_workers) const;
 	void ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 
+	void Sink(ExecutionContext &context, PerfectAggregateHashTable &dense, GlobalSinkState &global,
+	          LocalSinkState &local, idx_t available) const;
 	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &aggregate_input_chunk,
 	          const unsafe_vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
@@ -71,6 +74,8 @@ public:
 	static void SetMultiScan(GlobalSinkState &sink);
 
 private:
+	GroupedAggregateHashTable &GetLocalTable(ExecutionContext &context, GlobalSinkState &global,
+	                                         LocalSinkState &local) const;
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 

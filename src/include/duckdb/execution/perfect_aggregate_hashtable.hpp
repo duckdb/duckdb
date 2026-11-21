@@ -15,6 +15,10 @@
 
 namespace duckdb {
 
+class ColumnDataCollection;
+class GroupedAggregateHashTable;
+struct AggregateStateSpillPlan;
+
 class PerfectAggregateHashTable : public BaseAggregateHashTable {
 public:
 	PerfectAggregateHashTable(ClientContext &context, Allocator &allocator, const vector<LogicalType> &group_types,
@@ -29,12 +33,38 @@ public:
 	//! Combines the target perfect aggregate HT into this one
 	void Combine(PerfectAggregateHashTable &other);
 
+	bool HasSingleArena() const {
+		return stored_allocators.empty();
+	}
+	void MoveToRadix(ClientContext &context, const vector<LogicalType> &group_types, GroupedAggregateHashTable &target);
+
+	//! Export dense state in bounded batches before releasing its backing arenas.
+	void Export(ClientContext &context, const vector<LogicalType> &group_types, const AggregateStateSpillPlan &plan,
+	            vector<unique_ptr<ColumnDataCollection>> &exported, idx_t radix_bits);
+
+	idx_t ArenaAllocationSize() const;
+	//! Deduct native string payloads from the list budget if they fit in one spill block.
+	bool ReserveStringResults(const AggregateStateSpillPlan &plan, idx_t block_size, idx_t &available) const;
+	bool SingleGroupExceeds(const AggregateStateSpillPlan &plan, idx_t available, idx_t list_width, idx_t input_rows);
+	bool ListResultExceeds(const AggregateStateSpillPlan &plan, idx_t available,
+	                       idx_t max_groups = STANDARD_VECTOR_SIZE, optional_ptr<idx_t> largest_list = nullptr) const;
+
+	const TupleDataLayout &GetLayout() const {
+		return *layout_ptr;
+	}
+	ArenaAllocator &GetArena() {
+		return *aggregate_allocator;
+	}
+	const ArenaAllocator &GetArena() const {
+		return *aggregate_allocator;
+	}
+
 	idx_t Capacity() const {
 		return total_groups;
 	}
 
 	//! Scan the HT starting from the scan_position
-	void Scan(idx_t &scan_position, DataChunk &result);
+	void Scan(idx_t &scan_position, DataChunk &result, idx_t max_groups = STANDARD_VECTOR_SIZE);
 
 protected:
 	Vector addresses;
@@ -72,8 +102,12 @@ protected:
 	unique_ptr<RowOperationsState> scan_row_state;
 
 private:
+	idx_t measured_rows = 0;
+	idx_t largest_measured_list = 0;
+
 	//! Try adding a chunk using the clustered aggregation path. Returns false if not applicable.
 	bool AddChunkClustered(uintptr_t *address_data, DataChunk &payload);
+	idx_t ScanGroups(idx_t &scan_position, DataChunk &result, idx_t max_groups = STANDARD_VECTOR_SIZE);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
 };

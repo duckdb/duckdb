@@ -7,6 +7,22 @@
 
 using namespace duckdb;
 
+TEST_CASE("Limiting arena growth permits larger individual allocations", "[arena_allocator]") {
+	ArenaAllocator arena(Allocator::DefaultAllocator(), 64);
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	REQUIRE_THROWS(arena.SetMaximumBlockSize(0));
+	REQUIRE_THROWS(arena.SetMaximumBlockSize(63));
+#endif
+	arena.Allocate(128);
+	arena.SetMaximumBlockSize(64);
+	arena.Allocate(64);
+	REQUIRE(arena.GetHead()->maximum_size == 64);
+	arena.Allocate(256);
+	REQUIRE(arena.GetHead()->maximum_size == 256);
+	arena.Allocate(1);
+	REQUIRE(arena.GetHead()->maximum_size == 64);
+}
+
 TEST_CASE("Arena reset preserves the bounds of an unaligned chunk", "[arena_allocator]") {
 	// Use malloc directly so ASan provides a redzone at the requested size.
 	Allocator allocator([](PrivateAllocatorData *, idx_t size) { return data_ptr_cast(std::malloc(size)); },

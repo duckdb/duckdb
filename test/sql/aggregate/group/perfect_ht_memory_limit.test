@@ -1,27 +1,63 @@
 # name: test/sql/aggregate/group/perfect_ht_memory_limit.test
-# description: Perfect hash aggregate states are allocated through the buffer manager and respect the memory limit
+# description: Perfect hash and radix hash aggregate states respect the memory limit
 # group: [group]
-
-statement ok
-SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
 SET explain_output='physical_only';
 
 statement ok
-SET memory_limit='100MB'
+SET threads=1
 
 statement ok
-CREATE TABLE t AS SELECT (i%16)::INT g FROM range(300000) t(i);
+SET temp_directory=''
 
-# the perfect hash aggregate must be used for this query
+statement ok
+SET max_temp_directory_size='0B'
+
+statement ok
+CREATE TABLE t AS SELECT (i % 16)::INT AS g FROM range(50000) t(i);
+
+# The nested median has a state destructor, so the perfect hash path cannot hand its lists to radix.
+statement ok
+CREATE VIEW totals AS
+SELECT count(*) AS groups, sum(len(xs)) AS elements, sum(median_key) AS key_sum
+FROM (
+    SELECT list(repeat('x', 1000)) AS xs, median([g])[1] AS median_key
+    FROM t GROUP BY g
+) grouped;
+
+foreach threshold 0 12
+
+statement ok
+SET perfect_ht_threshold={threshold}
+
+statement ok
+SET memory_limit='16MB'
+
+onlyif threshold=0
 query II
-EXPLAIN SELECT g, list(repeat('x', 1000)) FROM t GROUP BY g
+EXPLAIN (FORMAT JSON) SELECT * FROM totals
 ----
-physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
 
-# 300MB of list payload does not fit in the 100MB limit
+onlyif threshold=12
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM totals
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+# The lists retain 50 MB of strings in the aggregate arena.
 statement error
-SELECT g, list(repeat('x', 1000)) FROM t GROUP BY g
+SELECT * FROM totals
 ----
 Out of Memory
+
+statement ok
+SET memory_limit='256MB'
+
+query III
+SELECT * FROM totals
+----
+16	50000	120
+
+endloop
