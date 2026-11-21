@@ -1,0 +1,49 @@
+# name: test/optimizer/pushdown/issue_29162.test
+# description: A narrowing cast in a filter must not be copied to the other side of a join
+# group: [pushdown]
+
+statement ok
+CREATE TABLE a(id INTEGER, k INTEGER);
+
+statement ok
+CREATE TABLE b(id INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO a VALUES (1, 0), (2, 1);
+
+statement ok
+INSERT INTO b VALUES (1, 128), (2, 0);
+
+# No pair matches the join, so b.k = 128 must not be cast to TINYINT
+query I
+SELECT count(*)
+FROM a JOIN b ON a.id = b.id AND a.k = b.k
+WHERE a.k::TINYINT = 0;
+----
+0
+
+# A cast that cannot throw is still copied to both sides
+query II
+EXPLAIN SELECT count(*) FROM a JOIN b ON a.id = b.id AND a.k = b.k WHERE (a.k::BIGINT) % 2 = 1;
+----
+physical_plan	<REGEX>:.*Filters: \(CAST\(k AS BIGINT\) % 2\) = 1.*Filters: \(CAST\(k AS BIGINT\) % 2\) = 1.*
+
+# The cast in the lambda body must not throw on ra's out-of-range value
+statement ok
+CREATE TABLE la(l INTEGER[]);
+
+statement ok
+CREATE TABLE ra(l INTEGER[]);
+
+statement ok
+INSERT INTO la VALUES ([0]);
+
+statement ok
+INSERT INTO ra VALUES ([128]);
+
+query I
+SELECT count(*)
+FROM la JOIN ra ON la.l = ra.l
+WHERE list_transform(la.l, lambda x: x::TINYINT = 0) = [true];
+----
+0
