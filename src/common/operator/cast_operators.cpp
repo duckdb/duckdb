@@ -27,6 +27,7 @@
 #include "fast_float/fast_float.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/bignum_limbs.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -3376,11 +3377,67 @@ static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decim
 	}
 }
 
+//! Rounds mantissa * 10^exponent to the nearest float with Eisel-Lemire; fails in the rare cases it cannot decide
+template <class DST>
+static bool TryComputeFloatingPoint(uint64_t mantissa, int64_t exponent, bool negative, DST &result) {
+	using binary = duckdb_fast_float::binary_format<DST>;
+	auto adjusted_mantissa = duckdb_fast_float::compute_float<binary>(exponent, mantissa);
+	if (adjusted_mantissa.power2 < 0) {
+		return false;
+	}
+	duckdb_fast_float::detail::to_float(negative, adjusted_mantissa, result);
+	return true;
+}
+
+template <class DST, class SRC>
+static bool TryCastDecimalToFloatingPointEiselLemire(SRC input, DST &result, uint32_t scale) {
+	const bool negative = input < 0;
+	const auto value = static_cast<uint64_t>(static_cast<int64_t>(input));
+	const auto magnitude = negative ? uint64_t(0) - value : value;
+	return TryComputeFloatingPoint<DST>(magnitude, -int64_t(scale), negative, result);
+}
+
+template <class DST>
+static bool TryCastDecimalToFloatingPointEiselLemire(hugeint_t input, DST &result, uint32_t scale) {
+	const bool negative = input < 0;
+	if (negative) {
+		Hugeint::NegateInPlace(input);
+	}
+	const auto upper = static_cast<uint64_t>(input.upper);
+	if (upper == 0) {
+		return TryComputeFloatingPoint<DST>(input.lower, -int64_t(scale), negative, result);
+	}
+	// drop as many low digits as upper has, so that the rest fits a uint64_t; at most 19 because upper < 2^63
+	const int64_t dropped_digits = NumericHelper::UnsignedLength<uint64_t>(upper);
+	const auto divisor = Uhugeint::POWERS_OF_TEN[dropped_digits].lower;
+	uint64_t remainder;
+	const auto truncated = BignumLimb::DivRemPortable(upper, input.lower, divisor, remainder);
+	const auto exponent = dropped_digits - int64_t(scale);
+	if (remainder == 0) {
+		return TryComputeFloatingPoint<DST>(truncated, exponent, negative, result);
+	}
+	if (truncated == NumericLimits<uint64_t>::Maximum()) {
+		return false;
+	}
+	// the value lies strictly between truncated and truncated + 1: both must round to the same float
+	using binary = duckdb_fast_float::binary_format<DST>;
+	auto lower_bound = duckdb_fast_float::compute_float<binary>(exponent, truncated);
+	auto upper_bound = duckdb_fast_float::compute_float<binary>(exponent, truncated + 1);
+	if (lower_bound.power2 < 0 || lower_bound != upper_bound) {
+		return false;
+	}
+	duckdb_fast_float::detail::to_float(negative, lower_bound, result);
+	return true;
+}
+
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t width, uint32_t scale) {
 	if (scale == 0 || CanUseDecimalFloatingPointFastPath<SRC, DST>(input, scale)) {
 		// Fast path, integer and decimal exponent are representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+		return true;
+	}
+	if (TryCastDecimalToFloatingPointEiselLemire<DST>(input, result, scale)) {
 		return true;
 	}
 
