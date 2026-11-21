@@ -29,6 +29,9 @@ struct DatabaseCacheEntry {
 
 enum class CacheBehavior { AUTOMATIC, ALWAYS_CACHE, NEVER_CACHE };
 
+//! Whether a cached instance, running with `existing`, can be shared by a request for `requested`
+using db_config_match_t = std::function<bool(const DBConfig &existing, const DBConfig &requested)>;
+
 class DBInstanceCache {
 public:
 	DBInstanceCache();
@@ -41,12 +44,15 @@ public:
 	shared_ptr<DuckDB> CreateInstance(const string &database, DBConfig &config_dict, bool cache_instance = true,
 	                                  const std::function<void(DuckDB &)> &on_create = nullptr);
 
-	//! Either returns an existing entry, or creates and caches a new DB Instance
+	//! Either returns an existing entry, or creates and caches a new DB Instance. `on_create` runs before another call
+	//! can share a new instance; if it throws, the instance is dropped. `is_same_config` replaces the default config
+	//! comparison when given.
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance,
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict,
 	                                       CacheBehavior cache_behavior = CacheBehavior::AUTOMATIC,
-	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
+	                                       const std::function<void(DuckDB &)> &on_create = nullptr,
+	                                       const db_config_match_t &is_same_config = nullptr);
 
 	//! Creates an uncached instance with no database attached (see DuckDB::CreateEmpty). Databases attached to it
 	//! later go through this cache's path manager, so opening one file twice is detected across every instance
@@ -63,7 +69,8 @@ private:
 
 private:
 	shared_ptr<DuckDB> GetInstanceInternal(const string &database, const DBConfig &config,
-	                                       std::unique_lock<std::mutex> &db_instances_lock);
+	                                       std::unique_lock<std::mutex> &db_instances_lock,
+	                                       const db_config_match_t &is_same_config = nullptr);
 	shared_ptr<DuckDB> CreateInstanceInternal(const string &database, DBConfig &config_dict, bool cache_instance,
 	                                          std::unique_lock<std::mutex> db_instances_lock,
 	                                          const std::function<void(DuckDB &)> &on_create);

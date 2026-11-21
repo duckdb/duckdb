@@ -609,6 +609,34 @@ auto Instance::OpenShared(const std::string &path, const StartupOptions &options
 }
 
 auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(env, path, options, nullptr);
+}
+
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+    -> Instance {
+	return OpenShared(Environment::Default(), path, options, init);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+                          const InitCallback &init) -> Instance {
+	duckdb_v2_instance_init_callback_fn init_fn = nullptr;
+	// a copy, as the callback's user data is not const
+	InitCallback init_copy = init;
+	if (init_copy) {
+		init_fn = [](duckdb_v2_instance_handle created, void *user_data, duckdb_v2_error_info_handle *err) {
+			WithExceptionGuard(err, [&]() {
+				// borrowed: released rather than destroyed when the callback returns
+				Instance borrowed(static_cast<void *>(created));
+				try {
+					(*static_cast<InitCallback *>(user_data))(borrowed);
+				} catch (...) {
+					borrowed.release();
+					throw;
+				}
+				borrowed.release();
+			});
+		};
+	}
 	auto pairs = StartupOptionPairs(options);
 	StringArrays names(pairs.size());
 	StringArrays values(pairs.size());
@@ -619,7 +647,8 @@ auto Instance::OpenShared(Environment &env, const std::string &path, const Start
 	auto path_str = ToStr(path);
 	duckdb_v2_instance_handle instance = nullptr;
 	CheckedAPICall(duckdb_v2_instance_open_shared, env.handle(), path_str.data(), path_str.size(), names.ptrs(),
-	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), &instance);
+	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), init_fn,
+	               init_fn ? static_cast<void *>(&init_copy) : nullptr, &instance);
 	return Instance(instance);
 }
 

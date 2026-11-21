@@ -71,7 +71,7 @@ const buffer_ptr<DictionaryEntry> &DictionaryOwnershipCache::GetEntry(idx_t colu
 	}
 	auto &local_entry = entries[column];
 	if (local_entry.get() != entry.get()) {
-		auto owner = make_shared_ptr<DictionaryOwner>(entry);
+		auto owner = make_buffer<DictionaryOwner>(entry);
 		local_entry = buffer_ptr<DictionaryEntry>(owner, entry.get());
 	}
 	return local_entry;

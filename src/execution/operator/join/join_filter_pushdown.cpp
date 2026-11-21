@@ -299,16 +299,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 	return final_min_max;
 }
 
-static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(unique_ptr<Expression> child_expr,
-                                                                              const LogicalType &column_type,
-                                                                              SelectivityOptionalFilterType type) {
-	float selectivity_threshold;
-	idx_t n_vectors_to_check;
-	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
-	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
-	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
-}
-
 static SelectivityOptionalFilterType GetSelectivityOptionalFilterType(DeferredRuntimeFilterType type) {
 	switch (type) {
 	case DeferredRuntimeFilterType::BLOOM_FILTER:
@@ -413,7 +403,7 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 			continue;
 		}
 		deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
-		                                     CreateSelectivityOptionalExpressionFilter(
+		                                     ExpressionFilter::CreateSelectivityOptionalFilter(
 		                                         std::move(filter_expr), deferred.column.storage_type, filter_type));
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *deferred.op, "PhysicalHashJoin", "PublishRuntimeFilter",
 		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
@@ -433,8 +423,8 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
 	if (selectivity_optional) {
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
-		    CreateSelectivityOptionalExpressionFilter(std::move(filter_expr), column_type,
-		                                              SelectivityOptionalFilterType::MIN_MAX));
+		    ExpressionFilter::CreateSelectivityOptionalFilter(std::move(filter_expr), column_type,
+		                                                      SelectivityOptionalFilterType::MIN_MAX));
 	} else {
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
@@ -568,8 +558,8 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 	in_expr = RetainRuntimeFilterNulls(std::move(in_expr), std::move(null_check_input));
 	if (mode == InFilterMode::ADAPTIVE_ROW_FILTERING && column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
 	    ExpressionFilterExecutor::TryCreate(*in_expr)) {
-		auto filter = CreateSelectivityOptionalExpressionFilter(std::move(in_expr), column.storage_type,
-		                                                        SelectivityOptionalFilterType::IN_FILTER);
+		auto filter = ExpressionFilter::CreateSelectivityOptionalFilter(std::move(in_expr), column.storage_type,
+		                                                                SelectivityOptionalFilterType::IN_FILTER);
 		info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 		return true;
 	}
