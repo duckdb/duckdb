@@ -103,37 +103,19 @@ static bool GetFloatRounding(const BoundFunctionExpression &func, const LogicalT
 	return true;
 }
 
-//! The values whose rounding is at least an integer: `x >= bound` if inclusive, `x > bound` otherwise
-struct RoundingThreshold {
-	double bound;
-	bool inclusive;
-};
-
-static RoundingThreshold RoundingAtLeast(FloatRounding rounding, double k) {
-	switch (rounding) {
-	case FloatRounding::FLOOR:
-		return RoundingThreshold {k, true};
-	case FloatRounding::CEIL:
-		return RoundingThreshold {k - 1, false};
-	default:
-		// trunc rounds positive values down and negative values up
-		return k > 0 ? RoundingThreshold {k, true} : RoundingThreshold {k - 1, false};
+//! `rounding(col) >= k`, or its complement `rounding(col) < k`, as a comparison on col. NaN sorts above every number
+//! and the infinities and NaN round to themselves, so this agrees with comparing the rounding for every value.
+static unique_ptr<Expression> RoundingAtLeast(FloatRounding rounding, double k, bool complement,
+                                              const BoundColumnRefExpression &col, const LogicalType &col_type) {
+	// floor and positive trunc reach k at k, ceil and non-positive trunc right above k - 1
+	const bool from_k = rounding == FloatRounding::FLOOR || (rounding == FloatRounding::TRUNC && k > 0);
+	auto type = from_k ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+	const double bound = from_k ? k : k - 1;
+	if (complement) {
+		type = NegateComparisonExpression(type);
 	}
-}
-
-//! `x >= bound` / `x > bound` if at_least, otherwise the complement `x < bound` / `x <= bound`. NaN sorts above every
-//! number and the infinities and NaN round to themselves, so these agree with comparing the rounding for every value.
-static unique_ptr<Expression> MakeRoundingBound(bool at_least, const RoundingThreshold &threshold,
-                                                const BoundColumnRefExpression &col, const LogicalType &col_type) {
-	ExpressionType type;
-	if (at_least) {
-		type = threshold.inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
-	} else {
-		type = threshold.inclusive ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	}
-	auto bound = col_type.id() == LogicalTypeId::FLOAT ? Value::FLOAT(static_cast<float>(threshold.bound))
-	                                                   : Value::DOUBLE(threshold.bound);
-	return BoundComparisonExpression::Create(type, col.Copy(), make_uniq<BoundConstantExpression>(std::move(bound)));
+	auto value = col_type.id() == LogicalTypeId::FLOAT ? Value::FLOAT(static_cast<float>(bound)) : Value::DOUBLE(bound);
+	return BoundComparisonExpression::Create(type, col.Copy(), make_uniq<BoundConstantExpression>(std::move(value)));
 }
 
 //! Preimage of `rounding(col) cmp c` on a FLOAT or DOUBLE column
@@ -151,8 +133,8 @@ static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, Floa
 		if (std::floor(value) != value) {
 			return ExpressionRewriter::ConstantOrNull(context, col.Copy(), Value::BOOLEAN(false));
 		}
-		auto lower = MakeRoundingBound(true, RoundingAtLeast(rounding, value), col, col_type);
-		auto upper = MakeRoundingBound(false, RoundingAtLeast(rounding, value + 1), col, col_type);
+		auto lower = RoundingAtLeast(rounding, value, false, col, col_type);
+		auto upper = RoundingAtLeast(rounding, value + 1, true, col, col_type);
 		return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower),
 		                                             std::move(upper));
 	}
@@ -161,7 +143,7 @@ static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, Floa
 	const bool use_ceil =
 	    cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp == ExpressionType::COMPARE_LESSTHAN;
 	const double k = use_ceil ? std::ceil(value) : std::floor(value) + 1;
-	return MakeRoundingBound(at_least, RoundingAtLeast(rounding, k), col, col_type);
+	return RoundingAtLeast(rounding, k, !at_least, col, col_type);
 }
 
 //! Evaluate f at the probe value with internal representation `i`, returning false if the result is
