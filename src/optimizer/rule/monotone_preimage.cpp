@@ -147,17 +147,7 @@ static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, Floa
 		return nullptr;
 	}
 	// the rounding is an integer (or NaN or an infinity), so it is compared with the integer next to the constant
-	switch (cmp) {
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return MakeRoundingBound(true, RoundingAtLeast(rounding, std::ceil(value)), col, col_type);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return MakeRoundingBound(true, RoundingAtLeast(rounding, std::floor(value) + 1), col, col_type);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return MakeRoundingBound(false, RoundingAtLeast(rounding, std::ceil(value)), col, col_type);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return MakeRoundingBound(false, RoundingAtLeast(rounding, std::floor(value) + 1), col, col_type);
-	default: {
-		D_ASSERT(cmp == ExpressionType::COMPARE_EQUAL);
+	if (cmp == ExpressionType::COMPARE_EQUAL) {
 		if (std::floor(value) != value) {
 			return ExpressionRewriter::ConstantOrNull(context, col.Copy(), Value::BOOLEAN(false));
 		}
@@ -166,7 +156,12 @@ static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, Floa
 		return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower),
 		                                             std::move(upper));
 	}
-	}
+	const bool at_least =
+	    cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp == ExpressionType::COMPARE_GREATERTHAN;
+	const bool use_ceil =
+	    cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp == ExpressionType::COMPARE_LESSTHAN;
+	const double k = use_ceil ? std::ceil(value) : std::floor(value) + 1;
+	return MakeRoundingBound(at_least, RoundingAtLeast(rounding, k), col, col_type);
 }
 
 //! Evaluate f at the probe value with internal representation `i`, returning false if the result is
