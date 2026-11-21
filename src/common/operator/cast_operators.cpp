@@ -3388,7 +3388,7 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint32_t scale) {
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}
-	CastDecimalToFloatingPointRounded<DST>(Hugeint::Convert(input), result, scale);
+	CastDecimalToFloatingPointRounded<DST>(hugeint_t(input), result, scale);
 	return true;
 }
 
