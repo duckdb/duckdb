@@ -483,6 +483,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		if (scan_chunk.size() == 0) {
 			break;
 		}
+		D_ASSERT(scan_state.vector_index == vector_idx + 1);
 
 		const idx_t scan_count = scan_chunk.size();
 		const idx_t visible_count = GetSelVector(visibility_options, vector_idx, visible_sel, scan_count);

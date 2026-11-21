@@ -21,6 +21,43 @@ SELECT v FROM t_basic ORDER BY v
 1
 2
 
+# A deleted NULL placeholder is ignored by NOT NULL re-verification.
+statement ok con1
+CREATE TABLE nn(v VARCHAR NOT NULL)
+
+statement ok con1
+INSERT INTO nn VALUES ('1'), ('2'), ('x')
+
+statement ok con1
+DELETE FROM nn WHERE v = 'x'
+
+statement ok con1
+ALTER TABLE nn ALTER v TYPE INTEGER
+
+query I con1
+SELECT v FROM nn ORDER BY v
+----
+1
+2
+
+# A USING expression can reference other columns in the scan chunk.
+statement ok con1
+CREATE TABLE using_multi(v VARCHAR, w VARCHAR)
+
+statement ok con1
+INSERT INTO using_multi VALUES ('1', '2'), ('3', 'bad')
+
+statement ok con1
+DELETE FROM using_multi WHERE w = 'bad'
+
+statement ok con1
+ALTER TABLE using_multi ALTER v TYPE INTEGER USING (v || w)::INTEGER
+
+query II con1
+SELECT v, w FROM using_multi ORDER BY v
+----
+12	2
+
 # An older active snapshot can still see the deleted value, so the cast must fail.
 statement ok con1
 CREATE TABLE t_snapshot(v VARCHAR)
