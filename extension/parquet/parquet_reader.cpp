@@ -2656,13 +2656,26 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 
 		// Special handle generated columns.
-		const auto &column_schema = root_schema->children[primary_index];
-		if (column_schema.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		reference<const ParquetColumnSchema> column_schema = root_schema->children[primary_index];
+		if (column_schema.get().schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 			return true;
+		}
+		// resolve an extracted struct field to the leaf column it reads
+		if (storage_index.IsPushdownExtract()) {
+			reference<const StorageIndex> index = storage_index;
+			while (index.get().HasChildren() && column_schema.get().type.id() == LogicalTypeId::STRUCT) {
+				index = index.get().GetChildIndex(0);
+				column_schema = column_schema.get().children[index.get().GetPrimaryIndex()];
+			}
+		}
+		// row_group.columns is indexed by leaf column, so only leaf columns map to a column chunk
+		auto &leaf_schema = column_schema.get();
+		if (leaf_schema.schema_type != ParquetColumnSchemaType::COLUMN || !leaf_schema.children.empty()) {
+			return false;
 		}
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_chunk = row_group.columns[primary_index];
+		const auto &column_chunk = row_group.columns[leaf_schema.column_index];
 
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
