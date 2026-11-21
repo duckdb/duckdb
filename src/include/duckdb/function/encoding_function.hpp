@@ -43,6 +43,8 @@ struct EncodingFunction {
 
 	//! The name of the scalar function that decodes the encoding
 	DUCKDB_API static string FunctionName(const string &encoding_name);
+	//! Normalizes an encoding name for loose UTS #22 matching (lowercase, stripping '-', '_', and spaces)
+	DUCKDB_API static string NormalizeName(const string &encoding_name);
 	//! Registers the functions of an encoding in the system.encodings schema
 	DUCKDB_API static void SetSchema(CreateFunctionInfo &info);
 	//! The type returned by the streaming overload
