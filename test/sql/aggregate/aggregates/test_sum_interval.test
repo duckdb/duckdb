@@ -18,6 +18,13 @@ SELECT sum(NULL::INTERVAL)
 ----
 NULL
 
+# NULLs are skipped, a group of only NULLs sums to NULL
+query II rowsort
+SELECT g, sum(i) FROM (VALUES (1, INTERVAL 1 DAY), (1, NULL), (1, INTERVAL 2 DAY), (2, NULL), (2, NULL)) t(g, i) GROUP BY g
+----
+1	3 days
+2	NULL
+
 statement error
 SELECT sum(i) FROM (VALUES (INTERVAL '2147483647 days'), (INTERVAL '1 day')) t(i)
 ----
