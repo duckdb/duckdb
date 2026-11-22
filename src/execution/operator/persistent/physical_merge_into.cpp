@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
+#include "duckdb/common/bitset.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
@@ -377,6 +379,32 @@ public:
 	//! The exchange of every action - NULL for actions that have no operator to push data into
 	vector<shared_ptr<PipelineBroadcastExchange>> exchanges;
 	atomic<idx_t> merged_count;
+	static constexpr idx_t MATCHED_ROW_SEGMENT_SIZE = 8192;
+	mutex matched_rows_lock;
+	//! The target rows modified by a WHEN MATCHED action - a bitmap per segment of row ids
+	unordered_map<idx_t, bitset<MATCHED_ROW_SEGMENT_SIZE>> matched_rows;
+
+	void RegisterMatchedRows(DataChunk &rows) {
+		D_ASSERT(op.row_id_index + 1 == rows.ColumnCount());
+		auto row_ids = rows.data[op.row_id_index].Values<row_t>();
+		lock_guard<mutex> guard(matched_rows_lock);
+		optional_ptr<bitset<MATCHED_ROW_SEGMENT_SIZE>> segment;
+		idx_t segment_idx = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < rows.size(); i++) {
+			auto row_id = UnsafeNumericCast<idx_t>(row_ids[i].GetValue());
+			auto row_segment_idx = row_id / MATCHED_ROW_SEGMENT_SIZE;
+			if (row_segment_idx != segment_idx) {
+				segment_idx = row_segment_idx;
+				segment = matched_rows[segment_idx];
+			}
+			auto offset = row_id % MATCHED_ROW_SEGMENT_SIZE;
+			if (segment->test(offset)) {
+				throw InvalidInputException("MERGE command cannot affect row a second time - ensure that each target "
+				                            "row is matched by at most one source row");
+			}
+			segment->set(offset);
+		}
+	}
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, MergeIntoLocalState &local_state,
 	                    OperatorSinkInput &input, MergeActionRange range, idx_t &index_in_match) {
@@ -391,6 +419,9 @@ public:
 				if (!input_chunk) {
 					// no data for this action - move to next action
 					continue;
+				}
+				if (op.check_matched_rows && action->op && range.condition == MergeActionCondition::WHEN_MATCHED) {
+					RegisterMatchedRows(*input_chunk);
 				}
 			}
 			// process the action

@@ -139,6 +139,7 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 	// plan the merge into clauses
 	// FIXME: disable parallelism when we have multiple INSERTs because they do not work nicely together currently
 	idx_t append_count = 0;
+	idx_t matched_write_count = 0;
 	for (auto &entry : op.actions) {
 		vector<unique_ptr<MergeIntoOperator>> planned_actions;
 		for (auto &action : entry.second) {
@@ -147,6 +148,11 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 			}
 			if (action->action_type == MergeActionType::MERGE_UPDATE && action->update_is_del_and_insert) {
 				append_count++;
+			}
+			if (entry.first == MergeActionCondition::WHEN_MATCHED &&
+			    (action->action_type == MergeActionType::MERGE_UPDATE ||
+			     action->action_type == MergeActionType::MERGE_DELETE)) {
+				matched_write_count++;
 			}
 			planned_actions.push_back(PlanMergeIntoAction(context, op, planner, plan, entry.first, *action));
 		}
@@ -157,8 +163,11 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 	// multiple operators appending to the same table cannot run concurrently - run their actions one after the other
 	bool serialize_actions = append_count > 1;
 
-	return planner.Make<PhysicalMergeInto>(op.types, plan, std::move(actions), op.row_id_start, op.source_marker,
-	                                       parallel, op.return_chunk, serialize_actions);
+	auto &merge_into = planner.Make<PhysicalMergeInto>(op.types, plan, std::move(actions), op.row_id_start,
+	                                                   op.source_marker, parallel, op.return_chunk, serialize_actions);
+	// the operators of different WHEN MATCHED actions cannot modify the same target row
+	merge_into.Cast<PhysicalMergeInto>().check_matched_rows = matched_write_count > 1;
+	return merge_into;
 }
 
 //===--------------------------------------------------------------------===//

@@ -1,0 +1,86 @@
+# name: test/sql/merge/merge_into_delete_then_update.test
+# description: Test MERGE INTO that modifies a target row through several WHEN MATCHED actions
+# group: [merge]
+
+statement ok
+CREATE TABLE t AS SELECT i id, 0 a FROM range(10) r(i);
+
+statement ok
+CREATE TABLE src AS SELECT * FROM (VALUES (5, 1), (5, 2)) v(id, k);
+
+statement error
+MERGE INTO t USING src ON t.id = src.id
+WHEN MATCHED AND src.k = 1 THEN DELETE
+WHEN MATCHED THEN UPDATE SET a = src.k;
+----
+MERGE command cannot affect row a second time
+
+query II
+SELECT count(*), sum(a) FROM t
+----
+10	0
+
+# DO NOTHING does not modify the target row
+query I
+MERGE INTO t USING src ON t.id = src.id
+WHEN MATCHED AND src.k = 1 THEN DO NOTHING
+WHEN MATCHED THEN UPDATE SET a = src.k;
+----
+1
+
+# a single action can match a target row several times
+query I
+MERGE INTO t USING src ON t.id = src.id
+WHEN MATCHED THEN UPDATE SET a = 3;
+----
+2
+
+# updating the primary key deletes the row and inserts it again
+statement ok
+CREATE TABLE pk(id INTEGER PRIMARY KEY, a INTEGER);
+
+statement ok
+INSERT INTO pk SELECT i, 0 FROM range(10) r(i);
+
+statement error
+MERGE INTO pk USING src ON pk.id = src.id
+WHEN MATCHED AND src.k = 1 THEN UPDATE SET id = 100
+WHEN MATCHED THEN UPDATE SET a = src.k;
+----
+MERGE command cannot affect row a second time
+
+# target rows spanning several row groups
+statement ok
+CREATE TABLE big AS SELECT i id, 0 a FROM range(300000) r(i);
+
+query I
+MERGE INTO big USING (SELECT i id FROM range(300000) r(i) WHERE i % 3 = 0) s ON big.id = s.id
+WHEN MATCHED AND s.id % 2 = 0 THEN UPDATE SET a = 1
+WHEN MATCHED THEN UPDATE SET a = 1;
+----
+100000
+
+# the two source rows of a target row are far apart
+statement error
+MERGE INTO big USING (SELECT i % 150000 id, i // 150000 k FROM range(300000) r(i)) s ON big.id = s.id
+WHEN MATCHED AND s.k = 0 THEN DELETE
+WHEN MATCHED THEN UPDATE SET a = 2;
+----
+MERGE command cannot affect row a second time
+
+# target rows that the transaction inserted itself
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO t SELECT i, 0 FROM range(10, 20) r(i);
+
+statement error
+MERGE INTO t USING (SELECT 12 id, i k FROM range(2) r(i)) s ON t.id = s.id
+WHEN MATCHED AND s.k = 0 THEN DELETE
+WHEN MATCHED THEN UPDATE SET a = 4;
+----
+MERGE command cannot affect row a second time
+
+statement ok
+ROLLBACK
