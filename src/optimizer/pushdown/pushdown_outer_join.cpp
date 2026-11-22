@@ -183,6 +183,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<Logical
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::OUTER);
 
+	if (filters.empty()) {
+		return FinishPushdown(std::move(op));
+	}
+
+	vector<unique_ptr<Expression>> left_key_filters, right_key_filters;
+	if (PushDownFiltersOnCoalescedEqualJoinKeys(
+	        filters, join.conditions,
+	        [&](unique_ptr<Expression> filter) { left_key_filters.push_back(std::move(filter)); },
+	        [&](unique_ptr<Expression> filter) { right_key_filters.push_back(std::move(filter)); })) {
+		op->children[0] = AddLogicalFilter(std::move(op->children[0]), std::move(left_key_filters));
+		op->children[1] = AddLogicalFilter(std::move(op->children[1]), std::move(right_key_filters));
+	}
+
 	if (!filters.empty() && !optimizer.OptimizerDisabled(OptimizerType::OUTER_JOIN_SIMPLIFICATION)) {
 		bool rejects_null_left = false;
 		bool rejects_null_right = false;
@@ -229,21 +242,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<Logical
 		}
 	}
 
-	FilterPushdown left_pushdown(optimizer, projection_mode);
-	FilterPushdown right_pushdown(optimizer, projection_mode);
-	auto has_applied_pushdown = PushDownFiltersOnCoalescedEqualJoinKeys(
-	    filters, join.conditions, [&](unique_ptr<Expression> filter) { left_pushdown.AddFilter(std::move(filter)); },
-	    [&](unique_ptr<Expression> filter) { right_pushdown.AddFilter(std::move(filter)); });
-
-	if (!has_applied_pushdown) {
-		return FinishPushdown(std::move(op));
-	}
-
-	left_pushdown.GenerateFilters();
-	right_pushdown.GenerateFilters();
-	left_pushdown.RewriteChild(*op, 0);
-	right_pushdown.RewriteChild(*op, 1);
-	return PushFinalFilters(std::move(op));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

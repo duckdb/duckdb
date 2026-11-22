@@ -1,0 +1,47 @@
+# name: test/optimizer/pushdown/full_join_shared_key_range.test
+# description: Narrowing a FULL join preserves shared-key pruning on both inputs
+# group: [pushdown]
+
+require parquet
+
+statement ok
+SET threads = 1;
+
+statement ok
+COPY (SELECT i AS id, (i % 40)::INTEGER AS age FROM range(16384) t(i) ORDER BY i)
+TO '{TEST_DIR}/full_join_shared_key_range.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE VIEW ages AS SELECT * FROM read_parquet('{TEST_DIR}/full_join_shared_key_range.parquet');
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND r.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 AND r.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query I
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 AND r.age <= 25 ORDER BY id;
+----
+100
+101
+102
+103
+104
+105
