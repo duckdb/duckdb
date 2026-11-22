@@ -61,6 +61,42 @@ SELECT max(active_jobs) FROM duckdb_logs_parsed('ReadAheadBudget');
 ----
 2
 
+# Keep the projection between the limit and the scan.
+statement ok
+SET disabled_optimizers = 'late_materialization,limit_pushdown';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT projected
+FROM (
+    SELECT i + 10 AS projected
+    FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+)
+LIMIT 1 OFFSET 1;
+----
+physical_plan	<REGEX>:.*"name": "STREAMING_LIMIT".*"name": "PROJECTION".*"name": "READ_PARQUET".*
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT projected
+FROM (
+    SELECT i + 10 AS projected
+    FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+)
+LIMIT 1 OFFSET 1;
+----
+10
+
+query I
+SELECT max(active_jobs) FROM duckdb_logs_parsed('ReadAheadBudget');
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
 statement ok
 CALL truncate_duckdb_logs();
 
