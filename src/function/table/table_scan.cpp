@@ -1113,8 +1113,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	auto &info = storage.GetDataTableInfo();
-	auto &indexes = info->GetIndexes();
-	if (indexes.Empty()) {
+	auto index_entries = info->GetIndexes().GetIndexEntries();
+	if (index_entries.empty()) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -1143,7 +1143,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	// probe without the entry-list lock, so that concurrent index scans of this table do not serialize on it
-	for (auto &entry : indexes.GetIndexEntries()) {
+	for (auto &entry : index_entries) {
 		{
 			// a concurrently dropped index is retired: the scan does without it
 			auto index = entry->TryGetReadHandle<ART>();
