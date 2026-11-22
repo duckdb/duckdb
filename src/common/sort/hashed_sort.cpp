@@ -341,7 +341,12 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 		// The partition is complete: register the group's sort now, reserving its size if below the default minimum
 		if (!gsink.CanBypassSort(hash_bin)) {
 			hash_group->sort_global = sort->GetGlobalSinkState(client);
-			sort->SetExpectedSize(client, *hash_group->sort_global, partition.SizeInBytes());
+			const auto count = partition.Count();
+			const auto row_size = count * partition.GetLayout().GetRowWidth();
+			D_ASSERT(partition.SizeInBytes() >= row_size);
+			// the variable-size data is what the partition holds beyond its fixed-size rows
+			const auto variable_data_size = partition.SizeInBytes() - row_size;
+			sort->SetExpectedSize(client, *hash_group->sort_global, count, variable_data_size);
 		}
 
 		// Prepare to scan into the sort
