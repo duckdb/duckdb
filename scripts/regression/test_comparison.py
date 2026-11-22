@@ -67,6 +67,52 @@ class TestPlanCostComparison(unittest.TestCase):
                 self.assertEqual(old < new, regressed)
                 self.assertFalse(new > old and old > new)
 
+    def test_run_to_run_variation_is_not_a_difference(self):
+        def cost(total, build, probe):
+            result = PlanCost()
+            result.total, result.build_side, result.probe_side = total, build, probe
+            return result
+
+        def profile(old_probes, new_probes):
+            samples = {
+                'old': [cost(20, 10, probe) for probe in old_probes],
+                'new': [cost(20, 10, probe) for probe in new_probes],
+            }
+            with patch.object(
+                plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: samples[cli].pop(0)
+            ):
+                return plan_cost_runner.query_plan_costs('old', 'new', 'db', 'SELECT 1;')
+
+        old, new = profile([100], [100])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [102, 97, 100, 99, 105])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [150, 151, 149, 150, 152])
+        self.assertEqual((old.probe_side, new.probe_side), (101, 150))
+        varying = [1652908, 1626111, 1629118, 1679707, 1626186]
+        old, new = profile(varying, [int(probe * 1.03) for probe in varying])
+        self.assertEqual(old, new)
+
+    def test_variation_tolerance_applies_to_every_cost_component(self):
+        def costs(component, values):
+            result = []
+            for value in values:
+                cost = PlanCost()
+                setattr(cost, component, value)
+                result.append(cost)
+            return result
+
+        for component in ("total", "build_side", "probe_side"):
+            for old_values, new_values, expected in (
+                ([180, 189, 190, 191, 210], [180, 199, 200, 201, 220], True),
+                ([180, 188, 189, 190, 210], [180, 199, 200, 201, 220], False),
+                ([100] * 5, [103] * 5, False),
+            ):
+                with self.subTest(component=component, old_values=old_values, new_values=new_values):
+                    old, new = costs(component, old_values), costs(component, new_values)
+                    self.assertEqual(plan_cost_runner.within_run_variation(old, new), expected)
+                    self.assertEqual(plan_cost_runner.within_run_variation(new, old), expected)
+
     def test_runner_confirms_hot_regression_on_shared_database(self):
         old, new = PlanCost(), PlanCost()
         old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
@@ -78,7 +124,11 @@ class TestPlanCostComparison(unittest.TestCase):
             database = str(root / 'plan_cost.duckdb')
             stack.enter_context(patch.object(plan_cost_runner, 'DB_NAME', database))
             initialize = stack.enter_context(patch.object(plan_cost_runner, 'init_db'))
-            profiles = stack.enter_context(patch.object(plan_cost_runner, 'query_plan_cost', side_effect=[old, new]))
+            profiles = stack.enter_context(
+                patch.object(
+                    plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: old if cli == 'old' else new
+                )
+            )
             timings = stack.enter_context(
                 patch.object(
                     plan_cost_runner,
@@ -93,7 +143,10 @@ class TestPlanCostComparison(unittest.TestCase):
                 plan_cost_runner.main()
             self.assertEqual(result.exception.code, 1)
             initialize.assert_called_once_with('old', database, directory, [])
-            self.assertEqual(profiles.call_args_list, [call(cli, database, 'SELECT 1;') for cli in ('old', 'new')])
+            self.assertEqual(
+                profiles.call_args_list,
+                [call(cli, database, 'SELECT 1;') for cli in ('old', 'new') * plan_cost_runner.PROFILE_RUNS],
+            )
             self.assertEqual(
                 timings.call_args_list,
                 [call(cli, database, 'SELECT 1;', 5) for cli in ('old', 'new', 'new', 'old') * 4],

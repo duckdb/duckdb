@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
@@ -155,6 +156,58 @@ TEST_CASE("RLE filtering advances past a partially selected batch", "[storage][c
 	for (idx_t row = 0; row < 10; row++) {
 		REQUIRE(values[row].GetValue() == (row == 0 ? 5 : 6));
 	}
+}
+
+TEST_CASE("RLE filtering preserves selections retained by dictionary results",
+          "[storage][compression][rle][buffer_ptr]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto function = RLEFun::GetFunction(PhysicalType::INT32);
+	const idx_t batch_size = STANDARD_VECTOR_SIZE;
+	const auto half_batch = NumericCast<uint16_t>(batch_size / 2);
+	vector<uint16_t> counts {half_batch, half_batch, half_batch, half_batch};
+	auto segment = MakeRLETestSegment(db, function, counts, 2 * batch_size);
+	ColumnScanState state(nullptr);
+	segment->InitializeScan(state);
+	auto filter = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(1));
+	auto filter_state = TableFilterState::Initialize(*con.context, *filter);
+	Vector retained(LogicalType::INTEGER);
+	{
+		Vector first(LogicalType::INTEGER, batch_size);
+		FlatVector::SetSize(first, count_t(batch_size));
+		SelectionVector selection;
+		idx_t selected_count = batch_size;
+		segment->Filter(state, batch_size, first, selection, selected_count, *filter, *filter_state);
+		REQUIRE(selected_count == half_batch);
+		// Retain the filter's selection as a dictionary result, just like a row-group scan.
+		retained.Slice(first, selection, selected_count);
+	}
+	auto &retained_selection = DictionaryVector::SelVector(retained);
+	REQUIRE(retained_selection.Capacity() >= batch_size);
+	// Only the scan state and the dictionary result still own this selection.
+	REQUIRE(retained_selection.sel_data().use_count() == 2);
+	auto check_retained = [&]() {
+		REQUIRE(retained.size() == half_batch);
+		for (idx_t row = 0; row < half_batch; row++) {
+			REQUIRE(retained_selection.get_index(row) == half_batch + row);
+			REQUIRE(retained.GetValue(row) == Value::INTEGER(2));
+		}
+	};
+	check_retained();
+
+	state.offset_in_column = batch_size;
+	Vector second(LogicalType::INTEGER, batch_size);
+	FlatVector::SetSize(second, count_t(batch_size));
+	SelectionVector selection;
+	idx_t selected_count = batch_size;
+	segment->Filter(state, batch_size, second, selection, selected_count, *filter, *filter_state);
+	REQUIRE(selected_count == batch_size);
+	for (idx_t row = 0; row < batch_size; row++) {
+		REQUIRE(second.GetValue(row) == Value::INTEGER(row < half_batch ? 3 : 4));
+	}
+	// Capacity was sufficient: the scan replaced its selection because it was shared.
+	REQUIRE(retained_selection.sel_data().use_count() == 1);
+	check_retained();
 }
 
 TEST_CASE("Malformed RLE batches fail before unchecked run access", "[storage][compression][rle]") {
