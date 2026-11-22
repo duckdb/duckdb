@@ -166,22 +166,23 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 		    make_uniq<ExpressionExecutor>(executor.GetContext(), *not_distinct_from_p[not_distinct_from.size()]));
 		modifiers.emplace_back(order.type, order.null_order);
 	}
-	heap.reserve(InitialHeapAllocSize());
 	vector<LogicalType> sort_keys_type {LogicalType::BLOB};
 	sort_keys.Initialize(allocator, sort_keys_type);
-	heap_data.Initialize(allocator, payload_types, InitialHeapAllocSize());
-	payload_chunk.Initialize(allocator, payload_types);
 	sort_chunk.Initialize(allocator, sort_types);
-	compare_chunk.Initialize(allocator, sort_types);
-	boundary_values.Initialize(allocator, sort_types);
-	auto boundary_compare_types = sort_types;
-	boundary_compare_types.insert(boundary_compare_types.end(), sort_types.begin(), sort_types.end());
-	boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
+	heap_data.Initialize(allocator, payload_types, InitialHeapAllocSize());
 
 	//	Can we use a fast aggregate?
 	topone = TopOneFactory(*this);
 	if (topone) {
 		topone_state.resize(topone->state_size());
+	} else {
+		//	Set up heap-only data structures
+		heap.reserve(InitialHeapAllocSize());
+		compare_chunk.Initialize(allocator, sort_types);
+		boundary_values.Initialize(allocator, sort_types);
+		auto boundary_compare_types = sort_types;
+		boundary_compare_types.insert(boundary_compare_types.end(), sort_types.begin(), sort_types.end());
+		boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
 	}
 }
 

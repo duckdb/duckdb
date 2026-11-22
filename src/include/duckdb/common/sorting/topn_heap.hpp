@@ -115,7 +115,6 @@ public:
 	vector<unique_ptr<ExpressionExecutor>> not_distinct_from;
 	DataChunk sort_chunk;
 	DataChunk heap_data;
-	DataChunk payload_chunk;
 	DataChunk sort_keys;
 	CreateSortKeyState sort_key_state;
 	StringHeap sort_key_heap;
