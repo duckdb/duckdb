@@ -600,8 +600,8 @@ LogicalType ExternalFileCacheLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"path", LogicalType::VARCHAR},
 	    {"event", LogicalType::VARCHAR},
-	    {"bytes", LogicalType::UBIGINT},
-	    {"pos", LogicalType::UBIGINT},
+	    {"bytes", LogicalType::BIGINT},
+	    {"pos", LogicalType::BIGINT},
 	};
 	return LogicalType::STRUCT(child_list);
 }
@@ -610,8 +610,8 @@ string ExternalFileCacheLogType::ConstructLogMessage(const string &path, const c
 	child_list_t<Value> child_list = {
 	    {"path", Value(path)},
 	    {"event", Value(event)},
-	    {"bytes", Value::UBIGINT(bytes)},
-	    {"pos", Value::UBIGINT(pos)},
+	    {"bytes", Value::BIGINT(NumericCast<int64_t>(bytes))},
+	    {"pos", Value::BIGINT(NumericCast<int64_t>(pos))},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

@@ -71,11 +71,11 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 	}
 }
 
-void LogCacheEvent(QueryContext context, DatabaseInstance &db, CachingFileHandle &handle, const char *event,
+void LogCacheEvent(QueryContext context, DatabaseInstance &db, const CachingFileHandle &handle, const char *event,
                    idx_t bytes, idx_t location) {
-	auto services = context.GetContext();
-	if (services) {
-		DUCKDB_LOG(*services, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	auto client_context = context.GetContext();
+	if (client_context) {
+		DUCKDB_LOG(*client_context, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
 	} else {
 		DUCKDB_LOG(db, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
 	}
