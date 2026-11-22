@@ -193,7 +193,7 @@ public:
 	template <class TARGET>
 	optional<IndexReadHandle<TARGET>> TryGetReadHandle() {
 		auto entry_lock = lock.GetSharedLock();
-		if (bind_state.load() != IndexBindState::BOUND || owned_index->GetIndexType() != TARGET::TYPE_NAME) {
+		if (GetBindState() != IndexBindState::BOUND || owned_index->GetIndexType() != TARGET::TYPE_NAME) {
 			return nullopt;
 		}
 		return IndexReadHandle<TARGET>(shared_from_this(), std::move(entry_lock));
