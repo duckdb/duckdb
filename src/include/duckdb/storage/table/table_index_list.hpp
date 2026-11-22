@@ -43,7 +43,7 @@ public:
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Returns shared ownership of the current index entries. The entry-list lock is not held afterwards, so an entry
 	//! can be retired concurrently.
-	vector<shared_ptr<IndexEntry>> GetIndexEntries() const;
+	vector<shared_ptr<IndexEntry>> SnapshotIndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Initializes the transaction-local delete and append indexes.

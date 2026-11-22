@@ -71,7 +71,7 @@ TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries()
 	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
 }
 
-vector<shared_ptr<IndexEntry>> TableIndexList::GetIndexEntries() const {
+vector<shared_ptr<IndexEntry>> TableIndexList::SnapshotIndexEntries() const {
 	annotated_lock_guard lock(index_entries_lock);
 	return index_entries;
 }
