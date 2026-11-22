@@ -1766,17 +1766,21 @@ void ColumnDataCollection::Truncate(idx_t new_count) {
 		InitializeScan(scan);
 		InitializeScanChunk(scan, chunk);
 
+		//	If this collection has finished_append true, then calling InitializeAppend is not valid.
+		//	So build the tail into a new collection and Combine it back in.
+		auto tail = make_uniq<ColumnDataCollection>(allocator, types);
 		ColumnDataAppendState append;
-		InitializeAppend(append);
+		tail->InitializeAppend(append);
 		idx_t chunk_index = 0;
 		while (segment_rows < new_count) {
 			scan.current_chunk_state.properties = scan.properties;
 			truncated->ReadChunk(chunk_index++, scan.current_chunk_state, chunk, scan.column_ids);
 			idx_t append_count = MinValue(chunk.size(), new_count - segment_rows);
 			chunk.SetChildCardinality(append_count);
-			Append(append, chunk);
+			tail->Append(append, chunk);
 			segment_rows += append_count;
 		}
+		Combine(*tail);
 		break;
 	}
 }

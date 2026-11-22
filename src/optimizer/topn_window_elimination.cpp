@@ -689,6 +689,11 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientConte
 
 	// 	Window fusion works better than TopN for certain cases
 
+	//	Fusion does not yet support partitioning
+	if (!window_expr.Partitions().empty()) {
+		return can_optimize;
+	}
+
 	//	Fusion is better for non-numeric keys
 	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
 		return cant_optimize;
