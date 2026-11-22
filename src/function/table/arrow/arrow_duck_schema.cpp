@@ -338,7 +338,7 @@ unique_ptr<ArrowType> ArrowType::CreateListType(ClientContext &context, ArrowSch
 
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (use_dictionary && dictionary_type) {
-		return dictionary_type->GetDuckType();
+		return dictionary_type->GetDuckType(true);
 	}
 	if (!use_dictionary) {
 		return type;
@@ -372,6 +372,10 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		auto &list_info = type_info->Cast<ArrowListInfo>();
 		auto &child = list_info.GetChild();
 		return LogicalType::LIST(child.GetDuckType(true));
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &array_info = type_info->Cast<ArrowArrayInfo>();
+		return LogicalType::ARRAY(array_info.GetChild().GetDuckType(true), array_info.FixedSize());
 	}
 	case LogicalTypeId::MAP: {
 		auto &list_info = type_info->Cast<ArrowListInfo>();

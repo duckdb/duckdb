@@ -6,6 +6,7 @@ add_library_unity(
   arrow_move_children.cpp
   arrow_filter_pushdown.cpp
   arrow_dictionary_sentinel.cpp
+  arrow_dictionary_index_bounds.cpp
   arrow_dict_nested_offset.cpp
   arrow_list_view_nested_offset.cpp
   arrow_nested_struct_offset.cpp

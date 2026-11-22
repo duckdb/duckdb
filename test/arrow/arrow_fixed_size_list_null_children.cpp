@@ -57,6 +57,30 @@ struct StringColumn {
 	ArrowArray array {};
 };
 
+struct DictionaryStringColumn {
+	DictionaryStringColumn() {
+		schema.format = "c";
+		schema.name = "item";
+		schema.flags = 2;
+		schema.dictionary = &values.schema;
+		schema.release = ReleaseSchema;
+		array.length = sizeof(indices);
+		array.null_count = 1;
+		array.n_buffers = 2;
+		array.buffers = buffers;
+		array.dictionary = &values.array;
+		array.release = ReleaseArray;
+	}
+	DictionaryStringColumn(const DictionaryStringColumn &) = delete;
+
+	StringColumn values {{"1000", "5", "6"}};
+	int8_t indices[8] = {1, 2, 0, 0, 1, 2, 2, 1};
+	uint8_t validity[1] = {0xDF};
+	const void *buffers[2] = {validity, indices};
+	ArrowSchema schema {};
+	ArrowArray array {};
+};
+
 // LIST (format "+l", given offsets) or FIXED_SIZE_LIST (format "+w:<n>") column over child, starting at row offset,
 // NULL for the given rows (counted from the start of the buffers).
 struct NestedColumn {
@@ -125,10 +149,11 @@ bool QueryMatches(ArrowSchema &col_schema, ArrowArray &col_array, const string &
 	auto result = con.Query(query);
 	auto expected_result = con.Query(expected);
 	stream.release = nullptr;
-	if (result->HasError() || expected_result->HasError()) {
+	if (result->HasError() || expected_result->HasError() || !result->Equals(*expected_result, false)) {
+		WARN("Actual: " + result->ToString() + " Expected: " + expected_result->ToString());
 		return false;
 	}
-	return result->Equals(*expected_result, false);
+	return true;
 }
 
 // Row 0 is NULL over the inner rows ['1000', '1000'] and ['5', '5'], row 1 is [['5', '5'], NULL].
@@ -179,4 +204,13 @@ TEST_CASE("Arrow scan of a NULL FIXED_SIZE_LIST row at an array offset", "[arrow
 	REQUIRE(arrow_fixed_size_list_null_children_test::QueryMatches(
 	    outer.schema, outer.array, "SELECT a::TINYINT[2][2]::VARCHAR FROM arrow_view",
 	    "SELECT * FROM (VALUES (NULL), ('[[5, 5], NULL]')) t(a)"));
+}
+
+TEST_CASE("Arrow scan broadcasts NULL FIXED_SIZE_LIST rows to sliced dictionary children", "[arrow]") {
+	using namespace arrow_fixed_size_list_null_children_test;
+	DictionaryStringColumn strings;
+	NestedColumn outer(strings, "+w:2", 3, {1}, {}, 1);
+	// The ARRAY cast processes the child vector, so the two '1000' values under the NULL parent must be masked.
+	REQUIRE(QueryMatches(outer.schema, outer.array, "SELECT a::TINYINT[2]::VARCHAR FROM arrow_view",
+	                     "SELECT * FROM (VALUES (NULL), ('[5, NULL]'), ('[6, 5]')) t(a)"));
 }

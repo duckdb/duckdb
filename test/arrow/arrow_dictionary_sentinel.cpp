@@ -13,6 +13,8 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "test_helpers.hpp"
 
+#include <vector>
+
 using namespace duckdb;
 
 namespace {
@@ -337,6 +339,182 @@ TEST_CASE("Arrow scan of dict-encoded STRUCT column with NULL sentinel", "[arrow
 	REQUIRE(ScanColumnMatches(verified_col.schema, verified_col.array, expected, /*verify_vectors=*/true));
 	StructDictionaryColumn col;
 	REQUIRE(ScanColumnMatches(col.schema, col.array, expected));
+}
+
+TEST_CASE("Arrow dictionary sentinel reserves capacity in nested zero-copy children", "[arrow]") {
+	StructDictionaryColumn column;
+	// Three dictionary rows plus the sentinel fit the STRUCT and ARRAY's original capacity.
+	// The zero-copy integer elements of the ARRAY still need to be grown from six to eight.
+	column.value_array.length = 3;
+	column.value_array.null_count = 0;
+	column.value_buffers[0] = nullptr;
+	column.s_array.length = 3;
+	column.i_array.length = 3;
+	int32_t integers[] = {1, 2, 3, 4, 5, 6};
+	const void *element_buffers[] = {nullptr, integers};
+	ArrowSchema element_schema = column.i_schema;
+	element_schema.name = "item";
+	ArrowArray element_array = column.i_array;
+	element_array.length = 6;
+	element_array.buffers = element_buffers;
+	ArrowSchema *array_schema_children[] = {&element_schema};
+	ArrowArray *array_children[] = {&element_array};
+	column.i_schema.format = "+w:2";
+	column.i_schema.n_children = 1;
+	column.i_schema.children = array_schema_children;
+	column.i_array.n_buffers = 1;
+	column.i_array.n_children = 1;
+	column.i_array.children = array_children;
+
+	NullIndexColumn dict(column.value_schema, column.value_array);
+	dict.indices[2] = 2;
+	REQUIRE(ScanColumnMatches(dict.schema, dict.array,
+	                          "SELECT * FROM (VALUES ({'i': [1, 2]::INTEGER[2], 's': 'a'}), (NULL), "
+	                          "({'i': [5, 6]::INTEGER[2], 's': 'c'})) t(d)",
+	                          /*verify_vectors=*/true));
+}
+
+TEST_CASE("Arrow dictionary keeps fixed-size array values and NULL indices", "[arrow]") {
+	ArrowSchema elements_schema {};
+	elements_schema.format = "i";
+	elements_schema.name = "item";
+	elements_schema.release = NoopReleaseSchema;
+	int32_t integers[] = {1, 2, 3, 4};
+	const void *elements_buffers[] = {nullptr, integers};
+	ArrowArray elements {};
+	elements.length = 4;
+	elements.n_buffers = 2;
+	elements.buffers = elements_buffers;
+	elements.release = NoopReleaseArray;
+
+	ArrowSchema *schema_children[] = {&elements_schema};
+	ArrowSchema array_schema {};
+	array_schema.format = "+w:2";
+	array_schema.n_children = 1;
+	array_schema.children = schema_children;
+	array_schema.release = NoopReleaseSchema;
+	ArrowArray *children[] = {&elements};
+	const void *buffers[] = {nullptr};
+	ArrowArray array {};
+	array.length = 2;
+	array.n_buffers = 1;
+	array.buffers = buffers;
+	array.n_children = 1;
+	array.children = children;
+	array.release = NoopReleaseArray;
+
+	NullIndexColumn dict(array_schema, array);
+	REQUIRE(ScanColumnMatches(dict.schema, dict.array,
+	                          "SELECT * FROM (VALUES ([1, 2]::INTEGER[2]), (NULL), ([3, 4]::INTEGER[2])) t(d)",
+	                          /*verify_vectors=*/true));
+}
+
+TEST_CASE("Arrow dictionary of STRUCT values with a dictionary-encoded child keeps the value types", "[arrow]") {
+	// inner dictionary: utf8 values {"x", "y"}, int8 indices {1, 0}
+	ArrowSchema inner_values_schema {};
+	inner_values_schema.format = "u";
+	inner_values_schema.release = NoopReleaseSchema;
+	int32_t inner_offsets[] = {0, 1, 2};
+	const void *inner_values_buffers[] = {nullptr, inner_offsets, "xy"};
+	ArrowArray inner_values {};
+	inner_values.length = 2;
+	inner_values.n_buffers = 3;
+	inner_values.buffers = inner_values_buffers;
+	inner_values.release = NoopReleaseArray;
+
+	ArrowSchema s_schema {};
+	s_schema.format = "c";
+	s_schema.name = "s";
+	s_schema.flags = 2;
+	s_schema.dictionary = &inner_values_schema;
+	s_schema.release = NoopReleaseSchema;
+	int8_t inner_indices[] = {1, 0};
+	const void *s_buffers[] = {nullptr, inner_indices};
+	ArrowArray s_array {};
+	s_array.length = 2;
+	s_array.n_buffers = 2;
+	s_array.buffers = s_buffers;
+	s_array.dictionary = &inner_values;
+	s_array.release = NoopReleaseArray;
+
+	ArrowSchema *struct_schema_children[] = {&s_schema};
+	ArrowSchema struct_schema {};
+	struct_schema.format = "+s";
+	struct_schema.n_children = 1;
+	struct_schema.children = struct_schema_children;
+	struct_schema.release = NoopReleaseSchema;
+	ArrowArray *struct_children[] = {&s_array};
+	const void *struct_buffers[] = {nullptr};
+	ArrowArray struct_array {};
+	struct_array.length = 2;
+	struct_array.n_buffers = 1;
+	struct_array.buffers = struct_buffers;
+	struct_array.n_children = 1;
+	struct_array.children = struct_children;
+	struct_array.release = NoopReleaseArray;
+
+	// outer indices {0, NULL, 1}
+	NullIndexColumn dict(struct_schema, struct_array);
+	REQUIRE(ScanColumnMatches(dict.schema, dict.array,
+	                          "SELECT * FROM (VALUES ({'s': 'y'}), (NULL), ({'s': 'x'})) t(d)",
+	                          /*verify_vectors=*/true));
+}
+
+TEST_CASE("Arrow dictionary of fixed-size arrays across several scan chunks", "[arrow]") {
+	// dictionary values [[1, 2], [3, 4]]; row i selects i % 2 and is NULL when i % 7 == 0
+	constexpr idx_t ROWS = 5000;
+	ArrowSchema elements_schema {};
+	elements_schema.format = "i";
+	elements_schema.release = NoopReleaseSchema;
+	int32_t integers[] = {1, 2, 3, 4};
+	const void *elements_buffers[] = {nullptr, integers};
+	ArrowArray elements {};
+	elements.length = 4;
+	elements.n_buffers = 2;
+	elements.buffers = elements_buffers;
+	elements.release = NoopReleaseArray;
+	ArrowSchema *array_schema_children[] = {&elements_schema};
+	ArrowSchema array_schema {};
+	array_schema.format = "+w:2";
+	array_schema.n_children = 1;
+	array_schema.children = array_schema_children;
+	array_schema.release = NoopReleaseSchema;
+	ArrowArray *array_children[] = {&elements};
+	const void *array_buffers[] = {nullptr};
+	ArrowArray values {};
+	values.length = 2;
+	values.n_buffers = 1;
+	values.buffers = array_buffers;
+	values.n_children = 1;
+	values.children = array_children;
+	values.release = NoopReleaseArray;
+
+	std::vector<int16_t> indices(ROWS);
+	std::vector<uint8_t> validity((ROWS + 7) / 8, 0);
+	for (idx_t i = 0; i < ROWS; i++) {
+		indices[i] = int16_t(i % 2);
+		if (i % 7 != 0) {
+			validity[i / 8] |= uint8_t(1u << (i % 8));
+		}
+	}
+	ArrowSchema schema {};
+	schema.format = "s";
+	schema.name = "d";
+	schema.flags = 2;
+	schema.dictionary = &array_schema;
+	schema.release = NoopReleaseSchema;
+	const void *buffers[] = {validity.data(), indices.data()};
+	ArrowArray array {};
+	array.length = ROWS;
+	array.null_count = -1;
+	array.n_buffers = 2;
+	array.buffers = buffers;
+	array.dictionary = &values;
+	array.release = NoopReleaseArray;
+	REQUIRE(ScanColumnMatches(schema, array,
+	                          "SELECT CASE WHEN i % 7 = 0 THEN NULL WHEN i % 2 = 0 THEN [1, 2]::INTEGER[2] "
+	                          "ELSE [3, 4]::INTEGER[2] END AS d FROM range(5000) r(i)",
+	                          /*verify_vectors=*/true));
 }
 
 TEST_CASE("Arrow scan of dict-encoded LIST column with NULL sentinel", "[arrow]") {
