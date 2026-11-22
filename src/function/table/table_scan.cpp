@@ -1143,7 +1143,6 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	for (auto &entry : index_entries) {
-		// a concurrently dropped index is retired: the scan does without it
 		auto index = entry->TryGetReadHandle<ART>();
 		if (index && TryScanIndex(*index, column_list, input, filter_set, row_ids)) {
 			index_scan = true;
