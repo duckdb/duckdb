@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
@@ -180,6 +182,52 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<Logical
 
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::OUTER);
+
+	if (!filters.empty() && !optimizer.OptimizerDisabled(OptimizerType::OUTER_JOIN_SIMPLIFICATION)) {
+		bool rejects_null_left = false;
+		bool rejects_null_right = false;
+		bool can_narrow = true;
+		for (const auto &filter : filters) {
+			const auto &expr = *filter->filter;
+			if (expr.IsVolatile() || expr.CanThrow()) {
+				can_narrow = false;
+				break;
+			}
+			const auto side = JoinSide::GetJoinSide(filter->bindings, left_bindings, right_bindings);
+			if (side == JoinSide::LEFT && !rejects_null_left) {
+				rejects_null_left = FilterRejectsNull(expr, left_bindings);
+			}
+			if (side == JoinSide::RIGHT && !rejects_null_right) {
+				rejects_null_right = FilterRejectsNull(expr, right_bindings);
+			}
+		}
+		if (can_narrow && (rejects_null_left || rejects_null_right)) {
+			for (const auto &cond : join.conditions) {
+				if (!cond.IsComparison() || cond.GetLHS().IsVolatile() || cond.GetLHS().CanThrow() ||
+				    cond.GetRHS().IsVolatile() || cond.GetRHS().CanThrow()) {
+					can_narrow = false;
+					break;
+				}
+			}
+			if (can_narrow) {
+				if (rejects_null_left && rejects_null_right) {
+					join.join_type = JoinType::INNER;
+					return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
+				}
+				join.join_type = JoinType::LEFT;
+				if (rejects_null_right) {
+					// Normalize a right-preserving join for the left join pushdown path.
+					std::swap(op->children[0], op->children[1]);
+					std::swap(join.left_projection_map, join.right_projection_map);
+					for (auto &cond : join.conditions) {
+						cond.Swap();
+					}
+					return PushdownLeftJoin(std::move(op), right_bindings, left_bindings);
+				}
+				return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
+			}
+		}
+	}
 
 	FilterPushdown left_pushdown(optimizer, projection_mode);
 	FilterPushdown right_pushdown(optimizer, projection_mode);

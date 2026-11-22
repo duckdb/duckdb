@@ -1,0 +1,51 @@
+# name: test/optimizer/full_join_filter_pushdown.test
+# description: Push down scan filters after narrowing a full join
+# group: [optimizer]
+
+statement ok
+CREATE TABLE lhs (id INTEGER, la INTEGER);
+CREATE TABLE rhs (id INTEGER, ra INTEGER);
+INSERT INTO lhs VALUES (1, 20), (2, 30), (3, NULL), (4, 25);
+INSERT INTO rhs VALUES (1, 20), (1, 21), (2, 40), (3, NULL), (5, 25);
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*la <= 25.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+4	NULL	NULL
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE r.ra <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*ra <= 25.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+NULL	5	25
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25 AND r.ra <= 25;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 AND r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la IS NULL ORDER BY 1, 2;
+----
+3	3
+NULL	5

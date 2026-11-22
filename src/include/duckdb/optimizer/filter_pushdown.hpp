@@ -100,6 +100,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
 	                                             unordered_set<TableIndex> &left_bindings,
 	                                             unordered_set<TableIndex> &right_bindings);
+	//! Whether substituting NULLs for the given bindings proves that the filter cannot be TRUE
+	bool FilterRejectsNull(const Expression &expr, const unordered_set<TableIndex> &bindings);
 
 	// Pushdown an outer join
 	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op,
