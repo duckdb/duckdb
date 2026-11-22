@@ -369,11 +369,17 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 		// COALESCE returns the first non-NULL child: merge the stats of every reachable child,
 		// stopping at the first child that can never be NULL since later children are unreachable
 		unique_ptr<BaseStatistics> merged;
+		optional_ptr<const BaseStatistics> always_null_stats;
 		bool last_child_can_be_null = true;
 		for (auto &child : op.GetChildren()) {
 			auto child_stats = TryGetExpressionStats(context_p, *child, input_stats, owned_stats);
 			if (!child_stats) {
 				return nullptr;
+			}
+			if (!child_stats->CanHaveNoNull()) {
+				// a child that is always NULL never produces the result
+				always_null_stats = child_stats;
+				continue;
 			}
 			if (!merged) {
 				merged = child_stats->ToUnique();
@@ -384,6 +390,10 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			if (!last_child_can_be_null) {
 				break;
 			}
+		}
+		if (!merged) {
+			// every child is always NULL
+			return always_null_stats;
 		}
 		if (!last_child_can_be_null) {
 			// the result is NULL only if every considered child is NULL
