@@ -364,12 +364,9 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
                           bool skip_mismatched_keys) {
-	{
-		// Early-out, if we have no unbound indexes.
-		annotated_lock_guard lock(index_entries_lock);
-		if (unbound_count == 0) {
-			return;
-		}
+	// Early-out, if we have no unbound indexes.
+	if (unbound_count == 0) {
+		return;
 	}
 
 	// Get the table from the catalog, so we can add it to the binder.

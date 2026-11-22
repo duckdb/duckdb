@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -116,7 +117,7 @@ public:
 		std::lock(lock, other_lock);
 		D_ASSERT(index_entries.empty());
 		index_entries = std::move(other.index_entries);
-		unbound_count = other.unbound_count;
+		unbound_count = other.unbound_count.load();
 		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
@@ -154,8 +155,8 @@ private:
 	mutable annotated_mutex index_entries_lock;
 	//! The index entries of the table.
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
-	//! Contains the number of unbound indexes.
-	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
+	//! Contains the number of unbound indexes. Only written while holding index_entries_lock.
+	atomic<idx_t> unbound_count {0};
 };
 
 template <class T>
