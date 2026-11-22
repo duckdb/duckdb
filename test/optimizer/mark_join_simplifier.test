@@ -81,6 +81,11 @@ statement ok
 SET disabled_optimizers='mark_join_simplifier';
 
 query II
+EXPLAIN SELECT __mark_join_marker FROM mark_probe JOIN BY(TYPE MARK) (SELECT NULL::INTEGER AS b) r ON a=b;
+----
+logical_opt	<REGEX>:.*MARK.*
+
+query II
 EXPLAIN SELECT a FROM mark_probe WHERE a IN (SELECT b FROM mark_build);
 ----
 logical_opt	<REGEX>:.*MARK.*

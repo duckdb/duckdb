@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/mark_join_simplifier.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -22,6 +24,132 @@
 namespace duckdb {
 
 MarkJoinSimplifier::MarkJoinSimplifier(Optimizer &optimizer) : optimizer(optimizer) {
+}
+
+static bool IsConstantInputComparisonOptimizable(const JoinCondition &condition) {
+	if (!condition.IsComparison() || condition.GetRHS().IsVolatile()) {
+		return false;
+	}
+
+	const auto comparison_type = condition.GetComparisonType();
+	if ((condition.GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||
+	     condition.GetRHS().GetReturnType().id() == LogicalTypeId::TUPLE) &&
+	    comparison_type == ExpressionType::COMPARE_NOTEQUAL) {
+		return false;
+	}
+
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool MarkJoinSimplifier::TrySimplifyConstantInput(unique_ptr<LogicalOperator> &op,
+                                                  BindingReplacementGraph &replacements) {
+	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+
+	auto &join = op->Cast<LogicalComparisonJoin>();
+	if (join.join_type != JoinType::MARK || join.HasArbitraryConditions() || join.conditions.size() != 1 ||
+	    !IsConstantInputComparisonOptimizable(join.conditions[0])) {
+		return false;
+	}
+
+	D_ASSERT(join.children.size() == 2);
+	auto &right_plan = *join.children[1];
+	if (right_plan.type != LogicalOperatorType::LOGICAL_PROJECTION || right_plan.children.size() != 1 ||
+	    right_plan.children[0]->type != LogicalOperatorType::LOGICAL_DUMMY_SCAN || right_plan.expressions.size() != 1) {
+		return false;
+	}
+
+	const auto &constant_expression = *right_plan.expressions[0];
+	if (!constant_expression.IsFoldable() || constant_expression.HasParameter() || constant_expression.IsVolatile() ||
+	    constant_expression.CanThrow()) {
+		return false;
+	}
+
+	const auto &right_bindings = right_plan.GetColumnBindings();
+	if (right_bindings.size() != 1) {
+		return false;
+	}
+
+	Value constant;
+	if (!ExpressionExecutor::TryEvaluateScalar(optimizer.context, constant_expression, constant)) {
+		return false;
+	}
+
+	const auto &condition = join.conditions[0];
+	const auto &left_bindings = join.children[0]->GetColumnBindings();
+	bool valid_left_expression = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(condition.GetLHS(), [&](const auto &ref) {
+		if (ref.Depth() != 0 ||
+		    std::find(left_bindings.begin(), left_bindings.end(), ref.Binding()) == left_bindings.end()) {
+			valid_left_expression = false;
+		}
+	});
+
+	const auto right_binding = right_bindings[0];
+	bool valid_right_expression = true;
+	bool found_right_binding = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(condition.GetRHS(), [&](const auto &ref) {
+		if (ref.Depth() != 0 || ref.Binding() != right_binding) {
+			valid_right_expression = false;
+		}
+		found_right_binding |= ref.Binding() == right_binding;
+	});
+
+	if (!valid_left_expression || !valid_right_expression || !found_right_binding) {
+		return false;
+	}
+
+	const auto old_bindings = join.GetColumnBindings();
+	const auto old_types = join.types;
+	if (old_bindings.size() != old_types.size() || old_bindings.empty() ||
+	    old_bindings.back() != ColumnBinding(join.mark_index, ProjectionIndex(0)) ||
+	    old_types.back() != LogicalType::BOOLEAN) {
+		return false;
+	}
+
+	for (idx_t i = 0; i + 1 < old_bindings.size(); ++i) {
+		if (std::find(left_bindings.begin(), left_bindings.end(), old_bindings[i]) == left_bindings.end()) {
+			return false;
+		}
+	}
+
+	auto comparison_right = condition.GetRHS().Copy();
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    comparison_right, [&right_binding, &constant](auto &ref, auto &slot) {
+		    if (ref.Binding() == right_binding) {
+			    slot = make_uniq<BoundConstantExpression>(constant);
+		    }
+	    });
+
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(old_bindings.size());
+	for (idx_t i = 0; i + 1 < old_bindings.size(); ++i) {
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(old_types[i], old_bindings[i]));
+	}
+	expressions.push_back(BoundComparisonExpression::Create(condition.GetComparisonType(), condition.GetLHS().Copy(),
+	                                                        std::move(comparison_right)));
+	auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(expressions));
+	projection->children.push_back(std::move(join.children[0]));
+	projection->ResolveOperatorTypes();
+	const auto new_bindings = projection->GetColumnBindings();
+	for (idx_t i = 0; i < old_bindings.size(); ++i) {
+		replacements.Add(old_bindings[i], new_bindings[i]);
+	}
+	op = std::move(projection);
+	return true;
 }
 
 static bool ComparisonInputIsNotNull(NotNullExpressionAnalyzer &analyzer, LogicalOperator &op, const Expression &expr) {
@@ -439,17 +567,26 @@ bool MarkJoinSimplifier::TrySimplifyDisjunction(unique_ptr<LogicalOperator> &op,
 }
 
 void MarkJoinSimplifier::Rewrite(unique_ptr<LogicalOperator> &op, NotNullExpressionAnalyzer &nullability,
-                                 BindingReplacementGraph &replacements, vector<reference<LogicalOperator>> &ancestors) {
+                                 BindingReplacementGraph &replacements, vector<reference<LogicalOperator>> &ancestors,
+                                 bool constant_input_only) {
 	ancestors.push_back(*op);
-	for (auto &child : op->children) {
-		Rewrite(child, nullability, replacements, ancestors);
+	for (idx_t child_idx = 0; child_idx < op->children.size(); ++child_idx) {
+		ColumnBindingRewrite::RewriteChild(
+		    op, child_idx,
+		    [this, &nullability, &replacements, &ancestors,
+		     constant_input_only](unique_ptr<LogicalOperator> &child, BindingReplacementGraph &child_replacements) {
+			    Rewrite(child, nullability, child_replacements, ancestors, constant_input_only);
+			    replacements.Merge(child_replacements);
+		    });
 	}
 	ancestors.pop_back();
 	// Visit original consumers before adding their enclosing conversion's replacement edges.
 	ColumnBindingRewrite::ApplyToOperatorBindings(*op, replacements);
-	if (op->type == LogicalOperatorType::LOGICAL_FILTER &&
-	    (TrySimplify(op, nullability, replacements) ||
-	     TrySimplifyDisjunction(op, nullability, ancestors, replacements))) {
+	if (constant_input_only) {
+		TrySimplifyConstantInput(op, replacements);
+	} else if (op->type == LogicalOperatorType::LOGICAL_FILTER &&
+	           (TrySimplify(op, nullability, replacements) ||
+	            TrySimplifyDisjunction(op, nullability, ancestors, replacements))) {
 		auto &filter = op->Cast<LogicalFilter>();
 		if (filter.expressions.empty() && !filter.HasProjectionMap()) {
 			op = std::move(filter.children[0]);
@@ -457,11 +594,19 @@ void MarkJoinSimplifier::Rewrite(unique_ptr<LogicalOperator> &op, NotNullExpress
 	}
 }
 
+void MarkJoinSimplifier::OptimizeConstantInput(unique_ptr<LogicalOperator> &plan) {
+	plan->ResolveOperatorTypes();
+	NotNullExpressionAnalyzer nullability(optimizer.context, *plan);
+	BindingReplacementGraph replacements;
+	vector<reference<LogicalOperator>> ancestors;
+	Rewrite(plan, nullability, replacements, ancestors, true);
+}
+
 void MarkJoinSimplifier::Optimize(unique_ptr<LogicalOperator> &plan) {
 	NotNullExpressionAnalyzer nullability(optimizer.context, *plan);
 	BindingReplacementGraph replacements;
 	vector<reference<LogicalOperator>> ancestors;
-	Rewrite(plan, nullability, replacements, ancestors);
+	Rewrite(plan, nullability, replacements, ancestors, false);
 }
 
 } // namespace duckdb
