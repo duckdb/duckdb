@@ -7,6 +7,8 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -69,6 +71,16 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 	}
 }
 
+void LogCacheEvent(QueryContext context, DatabaseInstance &db, CachingFileHandle &handle, const char *event,
+                   idx_t bytes, idx_t location) {
+	auto services = context.GetContext();
+	if (services) {
+		DUCKDB_LOG(*services, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	} else {
+		DUCKDB_LOG(db, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	}
+}
+
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -92,6 +104,8 @@ public:
 #ifdef DEBUG
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
+					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
+					              ExternalFileCacheLogType::HIT_EVENT, block->nr_bytes, block->location);
 					result_pin = std::move(pin);
 					return;
 				}
@@ -118,6 +132,8 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
+					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
+					              ExternalFileCacheLogType::MISS_EVENT, to_read, offset);
 					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
 					lk.lock();
@@ -432,6 +448,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	if (location >= file_size) {
 		return FileBufferHandleGroup();
 	}
+	LogCacheEvent(context, db, *this, ExternalFileCacheLogType::READ_EVENT, MinValue(nr_bytes, file_size - location),
+	              location);
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(current_cached_file->path);
 	const idx_t min_block_size =
 	    MinValue(external_file_cache.GetCacheMinBlockSize(current_cached_file->path), max_block_size);

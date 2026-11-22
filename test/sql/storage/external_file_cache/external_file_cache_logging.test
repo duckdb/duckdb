@@ -1,0 +1,86 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_logging.test
+# description: Test logging of reads served by the external file cache
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set cache_local_files=true;
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+copy (select range i, range % 100 j from range(10000)) to '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+create macro cache_logs() as table
+	select event, bytes from duckdb_logs_parsed('ExternalFileCache')
+	where parse_filename(path) = 'test_cache_logging.parquet';
+
+statement ok
+create macro file_reads() as table
+	select bytes from duckdb_logs_parsed('FileSystem')
+	where op = 'READ' and parse_filename(path) = 'test_cache_logging.parquet';
+
+statement ok
+CALL enable_logging(['ExternalFileCache', 'FileSystem']);
+
+statement ok
+select * from '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+CALL disable_logging();
+
+# A cold read misses, and the missed blocks are what is read from the file
+query III
+select count(*) filter (event = 'READ') > 0,
+       count(*) filter (event = 'MISS') > 0,
+       sum(bytes) filter (event = 'MISS') = (select sum(bytes) from file_reads())
+from cache_logs();
+----
+true	true	true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging(['ExternalFileCache', 'FileSystem']);
+
+statement ok
+select * from '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+CALL disable_logging();
+
+# A warm read is served from the cache without reading the file
+query IIII
+select count(*) filter (event = 'READ') > 0,
+       count(*) filter (event = 'HIT') > 0,
+       count(*) filter (event = 'MISS'),
+       (select count(*) from file_reads())
+from cache_logs();
+----
+true	true	0	0
+
+# Reads that bypass the cache are not logged
+statement ok
+set enable_external_file_cache=false;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging(['ExternalFileCache', 'FileSystem']);
+
+statement ok
+select * from '{TEST_DIR}/test_cache_logging.parquet';
+
+statement ok
+CALL disable_logging();
+
+query II
+select (select count(*) from cache_logs()), count(*) > 0
+from file_reads();
+----
+0	true
