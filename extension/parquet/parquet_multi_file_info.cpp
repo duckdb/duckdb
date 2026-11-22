@@ -589,6 +589,18 @@ void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState
 	InitializeScan(context, lstate.scan_state, lstate.group_index);
 }
 
+optional_idx ParquetReader::GetReadAheadRowCount(const LocalTableFunctionState &lstate_p) const {
+	if (deletion_filter || (filters && filters->HasFilters())) {
+		return {};
+	}
+	const auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	const auto row_count = GetFileMetadata()->row_groups[lstate.group_index].num_rows;
+	if (row_count < 0) {
+		return {};
+	}
+	return NumericCast<idx_t>(row_count);
+}
+
 AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();

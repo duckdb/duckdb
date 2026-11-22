@@ -129,6 +129,8 @@ typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunct
 typedef bool (*table_function_supports_read_ahead_t)(optional_ptr<const FunctionData> bind_data);
 //! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
 typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
+//! Returns the prepared batch's row count when known without further I/O.
+typedef optional_idx (*table_function_batch_row_count_t)(TableFunctionInput &input);
 //! Called on the read-ahead pool once the scan of this function has been initialized, before any batch is claimed.
 //! Lets the function pre-open the resources its scan needs, so that claiming a batch does no I/O
 typedef void (*table_function_prepare_read_ahead_t)(ClientContext &context, TableFunctionInput &input);
@@ -198,6 +200,7 @@ struct TableFunctionMultiFileSettings {
 	table_function_finish_batch_t finish_batch = nullptr;
 	table_function_supports_read_ahead_t supports_read_ahead = nullptr;
 	table_function_schedule_io_t schedule_io = nullptr;
+	table_function_batch_row_count_t batch_row_count = nullptr;
 	table_function_prepare_read_ahead_t prepare_read_ahead = nullptr;
 	table_function_combine_schema_t combine_schema = nullptr;
 	table_function_get_file_columns_t get_file_columns = nullptr;
@@ -264,6 +267,7 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                 LocalTableFunctionState &lstate) override;
+	optional_idx GetReadAheadRowCount(const LocalTableFunctionState &lstate) const override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate,

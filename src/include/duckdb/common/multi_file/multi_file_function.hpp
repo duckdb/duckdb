@@ -812,15 +812,15 @@ public:
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		// Keep one job queued for limits that can be satisfied by the first output vector.
-		optional_idx auto_job_window;
+		// Small ordered limits only need read-ahead for their requested rows.
+		optional_idx auto_row_limit;
 		if (gstate.op && gstate.op->type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto limit_rows = gstate.op->Cast<PhysicalTableScan>().limit_rows;
 			if (limit_rows.IsValid() && limit_rows.GetIndex() <= STANDARD_VECTOR_SIZE) {
-				auto_job_window = 1;
+				auto_row_limit = limit_rows;
 			}
 		}
-		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, auto_job_window);
+		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, auto_row_limit);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -1023,6 +1023,9 @@ public:
 		}
 		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
 			return nullptr;
+		}
+		if (gstate.read_ahead->TracksRowLimit()) {
+			job->row_count = job->reader->GetReadAheadRowCount(*job->scan_state);
 		}
 		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {

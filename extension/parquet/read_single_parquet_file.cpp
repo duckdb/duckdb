@@ -314,6 +314,12 @@ static bool ReadSingleParquetFileSupportsReadAhead(optional_ptr<const FunctionDa
 	return true;
 }
 
+static optional_idx ReadSingleParquetFileBatchRowCount(TableFunctionInput &input) {
+	const auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
+	const auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
+	return lstate.has_row_group ? gstate.reader->GetReadAheadRowCount(lstate.state) : optional_idx();
+}
+
 //! Load the data of the claimed row group
 static AsyncResult ReadSingleParquetFileScheduleIO(ClientContext &context, TableFunctionInput &input) {
 	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
@@ -592,6 +598,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.finish_batch = ReadSingleParquetFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleParquetFileScheduleIO;
+	settings.batch_row_count = ReadSingleParquetFileBatchRowCount;
 	settings.prepare_read_ahead = ReadSingleParquetFilePrepareReadAhead;
 	settings.get_file_columns = ReadSingleParquetFileColumns;
 	// the order the filters are best applied in is learned while reading, and carries over to the next file

@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/read_ahead/readahead_small_ordered_limit.test
-# description: Automatic read-ahead keeps one job queued for a small ordered limit
+# description: Automatic read-ahead queues enough rows for a small ordered limit
 # group: [read_ahead]
 
 require parquet
@@ -23,7 +23,7 @@ statement ok
 COPY (SELECT i FROM range(8192) t(i)) TO '{TEST_DIR}/small_ordered_limit.parquet' (ROW_GROUP_SIZE 2048);
 
 statement ok
-CALL enable_logging('AsyncTaskSchedule', level = 'DEBUG');
+CALL enable_logging(['AsyncTaskSchedule', 'ReadAheadBudget'], level = 'DEBUG');
 
 query I
 SELECT i FROM read_parquet('{TEST_DIR}/small_ordered_limit.parquet') LIMIT 1;
@@ -38,6 +38,9 @@ SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool =
 statement ok
 COPY (SELECT -1::BIGINT AS i) TO '{TEST_DIR}/small_ordered_limit_first.parquet' (FORMAT parquet);
 
+statement ok
+CALL truncate_duckdb_logs();
+
 query I
 SELECT i
 FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
@@ -45,6 +48,11 @@ LIMIT 2;
 ----
 -1
 0
+
+query I
+SELECT max(active_jobs) FROM duckdb_logs_parsed('ReadAheadBudget');
+----
+2
 
 statement ok
 CALL truncate_duckdb_logs();

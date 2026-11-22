@@ -106,6 +106,10 @@ public:
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Prepare a scan - called after TryInitializeScan succeeds - this is done without any lock held
 	virtual void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
+	//! Rows in the prepared batch, when known without further I/O.
+	virtual optional_idx GetReadAheadRowCount(const LocalTableFunctionState &) const {
+		return {};
+	}
 	//! Function to schedule IO tasks, if Reader supports that
 	DUCKDB_API virtual AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                          LocalTableFunctionState &lstate);

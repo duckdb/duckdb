@@ -370,6 +370,15 @@ void TableFunctionFileReader::PrepareScan(ClientContext &context, GlobalTableFun
 	settings.prepare_batch(context, input);
 }
 
+optional_idx TableFunctionFileReader::GetReadAheadRowCount(const LocalTableFunctionState &lstate_p) const {
+	if (!settings.batch_row_count) {
+		return {};
+	}
+	const auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
+	return settings.batch_row_count(input);
+}
+
 AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
                                                 LocalTableFunctionState &lstate_p) {
 	if (!settings.schedule_io) {

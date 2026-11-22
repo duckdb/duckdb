@@ -417,6 +417,7 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
 	                 LocalTableFunctionState &lstate_p) override;
+	optional_idx GetReadAheadRowCount(const LocalTableFunctionState &lstate_p) const override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
