@@ -1,0 +1,30 @@
+# name: test/sql/index/art/scan/test_art_scan_concurrent_drop_index.test
+# description: Test index scans racing with concurrent CREATE INDEX and DROP INDEX on the same table.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS id, range * 2 AS v FROM range(100000);
+
+concurrentloop threadid 0 8
+
+loop i 0 30
+
+statement ok
+CREATE INDEX idx_{threadid} ON tbl(id);
+
+query I
+SELECT count(*) FROM tbl WHERE id = {threadid} * 1000 + {i} AND v = 2 * id;
+----
+1
+
+statement ok
+DROP INDEX idx_{threadid};
+
+endloop
+
+endloop
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE table_name = 'tbl';
+----
+0

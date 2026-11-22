@@ -1142,13 +1142,15 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto entry : indexes.IndexEntries()) {
-		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
-			continue;
-		}
+	// probe without the entry-list lock, so that concurrent index scans of this table do not serialize on it
+	for (auto &entry : indexes.GetIndexEntries()) {
 		{
-			auto index = entry->GetReadHandle<ART>();
-			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids);
+			// a concurrently dropped index is retired: the scan does without it
+			auto index = entry->TryGetReadHandle<ART>();
+			if (!index) {
+				continue;
+			}
+			index_scan = TryScanIndex(*index, column_list, input, filter_set, row_ids);
 		}
 		if (index_scan) {
 			// found an index - break
