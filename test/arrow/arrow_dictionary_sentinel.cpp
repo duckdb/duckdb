@@ -517,6 +517,109 @@ TEST_CASE("Arrow dictionary of fixed-size arrays across several scan chunks", "[
 	                          /*verify_vectors=*/true));
 }
 
+// Two dictionary values of ARRAY(width INTEGER): all 'a' and all 'b'. Rows are value 0, NULL index, value 1.
+TEST_CASE("Arrow dictionary with the maximum ARRAY width and a NULL index", "[arrow]") {
+	const idx_t width = ArrayType::MAX_ARRAY_SIZE;
+	std::vector<int32_t> integers(width * 2);
+	std::fill(integers.begin(), integers.begin() + NumericCast<idx_t>(width), 7);
+	std::fill(integers.begin() + NumericCast<idx_t>(width), integers.end(), 9);
+	ArrowSchema elements_schema {};
+	elements_schema.format = "i";
+	elements_schema.release = NoopReleaseSchema;
+	const void *elements_buffers[] = {nullptr, integers.data()};
+	ArrowArray elements {};
+	elements.length = NumericCast<int64_t>(width * 2);
+	elements.n_buffers = 2;
+	elements.buffers = elements_buffers;
+	elements.release = NoopReleaseArray;
+	ArrowSchema *schema_children[] = {&elements_schema};
+	const string format = "+w:" + std::to_string(width);
+	ArrowSchema array_schema {};
+	array_schema.format = format.c_str();
+	array_schema.n_children = 1;
+	array_schema.children = schema_children;
+	array_schema.release = NoopReleaseSchema;
+	ArrowArray *children[] = {&elements};
+	const void *buffers[] = {nullptr};
+	ArrowArray array {};
+	array.length = 2;
+	array.n_buffers = 1;
+	array.buffers = buffers;
+	array.n_children = 1;
+	array.children = children;
+	array.release = NoopReleaseArray;
+
+	NullIndexColumn dict(array_schema, array);
+	DuckDB db(nullptr);
+	Connection con(db);
+	ColumnStream stream(dict.schema, dict.array);
+	ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(stream.stream), "arrow_view", true, true);
+	auto result = con.Query("SELECT d[1], d[" + std::to_string(width) + "], d IS NULL FROM arrow_view");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(7), Value(), Value::INTEGER(9)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(7), Value(), Value::INTEGER(9)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BOOLEAN(false), Value::BOOLEAN(true), Value::BOOLEAN(false)}));
+	stream.stream.release = nullptr;
+}
+
+TEST_CASE("Arrow dictionary of nested ARRAY values and a NULL index", "[arrow]") {
+	// value 0 is [[7, 7], [7, 7]], value 1 is [[9, 9], [9, 9]]
+	const idx_t outer = 2;
+	const idx_t inner = 2;
+	std::vector<int32_t> integers(outer * inner * 2);
+	std::fill(integers.begin(), integers.begin() + 4, 7);
+	std::fill(integers.begin() + 4, integers.end(), 9);
+	ArrowSchema int_schema {};
+	int_schema.format = "i";
+	int_schema.release = NoopReleaseSchema;
+	const void *int_buffers[] = {nullptr, integers.data()};
+	ArrowArray ints {};
+	ints.length = 8;
+	ints.n_buffers = 2;
+	ints.buffers = int_buffers;
+	ints.release = NoopReleaseArray;
+	ArrowSchema *inner_children[] = {&int_schema};
+	ArrowSchema inner_schema {};
+	inner_schema.format = "+w:2";
+	inner_schema.n_children = 1;
+	inner_schema.children = inner_children;
+	inner_schema.release = NoopReleaseSchema;
+	ArrowArray *inner_arrays[] = {&ints};
+	const void *inner_buffers[] = {nullptr};
+	ArrowArray inner_array {};
+	inner_array.length = 4;
+	inner_array.n_buffers = 1;
+	inner_array.buffers = inner_buffers;
+	inner_array.n_children = 1;
+	inner_array.children = inner_arrays;
+	inner_array.release = NoopReleaseArray;
+	ArrowSchema *outer_children[] = {&inner_schema};
+	ArrowSchema outer_schema {};
+	outer_schema.format = "+w:2";
+	outer_schema.n_children = 1;
+	outer_schema.children = outer_children;
+	outer_schema.release = NoopReleaseSchema;
+	ArrowArray *outer_arrays[] = {&inner_array};
+	const void *outer_buffers[] = {nullptr};
+	ArrowArray outer_array {};
+	outer_array.length = 2;
+	outer_array.n_buffers = 1;
+	outer_array.buffers = outer_buffers;
+	outer_array.n_children = 1;
+	outer_array.children = outer_arrays;
+	outer_array.release = NoopReleaseArray;
+
+	NullIndexColumn dict(outer_schema, outer_array);
+	DuckDB db(nullptr);
+	Connection con(db);
+	ColumnStream stream(dict.schema, dict.array);
+	ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(stream.stream), "arrow_view", true, true);
+	auto result = con.Query("SELECT d[2][2], d[1][1], d IS NULL FROM arrow_view");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(7), Value(), Value::INTEGER(9)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(7), Value(), Value::INTEGER(9)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BOOLEAN(false), Value::BOOLEAN(true), Value::BOOLEAN(false)}));
+	stream.stream.release = nullptr;
+}
+
 TEST_CASE("Arrow scan of dict-encoded LIST column with NULL sentinel", "[arrow]") {
 	ArrowSchema element_schema {};
 	element_schema.format = "u";
