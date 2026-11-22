@@ -4,6 +4,9 @@
 
 require parquet
 
+# The test reads in-memory logs from earlier statements.
+require skip_reload
+
 statement ok
 SET debug_physical_table_scan_execution_strategy = DEFAULT;
 
@@ -34,6 +37,10 @@ query I
 SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD';
 ----
 1
+
+# Allow the read-ahead memory reservation to grow for the two-file scan.
+statement ok
+SET debug_force_external = false;
 
 statement ok
 COPY (SELECT -1::BIGINT AS i) TO '{TEST_DIR}/small_ordered_limit_first.parquet' (FORMAT parquet);
