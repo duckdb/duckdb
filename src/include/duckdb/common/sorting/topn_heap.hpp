@@ -117,6 +117,7 @@ public:
 	DataChunk heap_data;
 	DataChunk payload_chunk;
 	DataChunk sort_keys;
+	CreateSortKeyState sort_key_state;
 	StringHeap sort_key_heap;
 
 	SelectionVector matching_sel;

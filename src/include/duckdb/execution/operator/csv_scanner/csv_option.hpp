@@ -57,10 +57,6 @@ public:
 		}
 	}
 
-	void ChangeSetByUserTrue() {
-		set_by_user = true;
-	}
-
 	bool operator==(const CSVOption &other) const {
 		return value == other.value;
 	}

@@ -56,7 +56,7 @@ public:
 	WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, idx_t group_idx, idx_t bin_idx);
 
 	void AllocateMasks();
-	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
+	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx, unordered_map<idx_t, DataChunk> &prefixes);
 
 	ExecutorGlobalStates &GetGlobalStates(ClientContext &client);
 
@@ -624,7 +624,8 @@ void WindowHashGroup::AllocateMasks() {
 	});
 }
 
-void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
+void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end,
+                                   unordered_map<idx_t, DataChunk> &prefixes) {
 	D_ASSERT(count > 0);
 
 	//	Initialise our range
@@ -662,15 +663,15 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	auto &collection = *rows;
 	auto &scan_cols = gsink.sort_strategy->sort_ids;
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
-	unordered_map<idx_t, DataChunk> prefixes;
 	unordered_map<idx_t, unique_ptr<ExpressionExecutor>> distinct_from;
 	for (auto &order_mask : order_masks) {
 		D_ASSERT(order_mask.first >= order_begin);
-		auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
-		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
-		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
-		keys.Initialize(collection.GetAllocator(), types);
+		if (keys.ColumnCount() == 0) {
+			auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
+			vector<LogicalType> types(2, order_type);
+			keys.Initialize(collection.GetAllocator(), types);
+		}
 		if (order_mask.first == order_begin) {
 			continue;
 		}
@@ -727,6 +728,9 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   }
 		                   }
 	                   });
+	for (auto &prefix : prefixes) {
+		prefix.second.Reset();
+	}
 }
 
 // Per-thread scan state
@@ -765,6 +769,7 @@ public:
 	unique_ptr<WindowCollectionChunkScanner> scanner;
 	//! Buffer for window results
 	DataChunk output_chunk;
+	unordered_map<idx_t, DataChunk> boundary_prefixes;
 
 protected:
 	//! Sort the partition
@@ -845,7 +850,7 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::MASK);
 
-	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx);
+	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx, boundary_prefixes);
 
 	//	Mark this range as done
 	window_hash_group->masked += (task->end_idx - task->begin_idx);

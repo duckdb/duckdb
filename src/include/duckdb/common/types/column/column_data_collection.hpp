@@ -211,7 +211,7 @@ private:
 
 private:
 	//! The Column Data Allocator
-	buffer_ptr<ColumnDataAllocator> allocator;
+	shared_ptr<ColumnDataAllocator> allocator;
 	//! The types of the stored entries
 	vector<LogicalType> types;
 	//! The number of entries stored in the column data collection

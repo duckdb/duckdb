@@ -230,7 +230,7 @@ void TopNHeap::AddSingleHeap(DataChunk &input, optional_ptr<TopNBoundaryValue> g
 		sort_chunk.Slice(matching_sel, match_count);
 		sort_keys.Reset();
 		auto &sort_keys_vec = sort_keys.data[0];
-		CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
+		CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec, sort_key_state);
 		global_boundary->UpdateValue(FlatVector::GetData<string_t>(sort_keys_vec)[0]);
 	}
 }
@@ -413,7 +413,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 	// construct the sort key from the sort chunk
 	sort_keys.Reset();
 	auto &sort_keys_vec = sort_keys.data[0];
-	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
+	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec, sort_key_state);
 
 	if (heap_size <= SMALL_HEAP_THRESHOLD) {
 		AddSmallHeap(input, sort_keys_vec);

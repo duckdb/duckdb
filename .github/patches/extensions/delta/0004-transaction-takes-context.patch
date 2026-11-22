@@ -1,0 +1,256 @@
+diff --git a/src/include/storage/delta_transaction.hpp b/src/include/storage/delta_transaction.hpp
+index db31d77..b7aaefa 100644
+--- a/src/include/storage/delta_transaction.hpp
++++ b/src/include/storage/delta_transaction.hpp
+@@ -12,6 +12,7 @@
+ #include "duckdb/common/optional_idx.hpp"
+ #include "duckdb/common/types/timestamp.hpp"
+ #include "duckdb/transaction/transaction.hpp"
++#include "duckdb/main/context.hpp"
+ 
+ namespace duckdb {
+ class DeltaCatalog;
+@@ -24,14 +25,30 @@ struct DeltaMultiFileColumnDefinition;
+ 
+ enum class DeltaTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STARTED, TRANSACTION_FINISHED };
+ 
++class DeltaTransaction;
++
++//! Makes the client context available to CommitCallback for the duration of a kernel commit call
++class CommitContextScope {
++public:
++	CommitContextScope(DeltaTransaction &transaction, ClientContext &context);
++	~CommitContextScope();
++	CommitContextScope(const CommitContextScope &) = delete;
++	CommitContextScope &operator=(const CommitContextScope &) = delete;
++
++private:
++	DeltaTransaction &transaction;
++};
++
+ class DeltaTransaction : public Transaction {
++	friend class CommitContextScope;
++
+ public:
+-	DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context);
++	DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, Context &context);
+ 	~DeltaTransaction() override;
+ 
+ 	void Start();
+ 	void Commit(ClientContext &context);
+-	void Rollback();
++	void Rollback(ClientContext &context);
+ 
+ 	void Append(ClientContext &context, const vector<DeltaDataFile> &append_files);
+ 
+@@ -52,7 +69,7 @@ public:
+ 	vector<DeltaMultiFileColumnDefinition> GetWriteSchema(ClientContext &context);
+ 
+ 	//! Removes all outstanding appends and removes the files if possible
+-	void CleanUpFiles();
++	void CleanUpFiles(ClientContext &context);
+ 
+ 	//! CGetCommits callback for Unity Catalog managed commits
+ 	//! CCommit callback for Unity Catalog managed commits - returns None on success, Some(error) on failure
+@@ -111,7 +128,8 @@ private:
+ 	// string parent_catalog_schema;
+ 	optional_ptr<TableFunctionCatalogEntry> commit_function;
+ 	string unity_table_id;
+-	weak_ptr<ClientContext> current_context;
++	//! Only set while a kernel commit call is running (see CommitContextScope), read by CommitCallback
++	optional_ptr<ClientContext> commit_context;
+ 	optional_ptr<TableCatalogEntry> parent_table_entry;
+ 
+ 	ErrorData active_error;
+diff --git a/src/include/storage/delta_transaction_manager.hpp b/src/include/storage/delta_transaction_manager.hpp
+index 3957982..aaf5fd9 100644
+--- a/src/include/storage/delta_transaction_manager.hpp
++++ b/src/include/storage/delta_transaction_manager.hpp
+@@ -18,9 +18,9 @@ class DeltaTransactionManager : public TransactionManager {
+ public:
+ 	DeltaTransactionManager(AttachedDatabase &db_p, DeltaCatalog &delta_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 0d453d9..9d6241d 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -327,8 +327,12 @@ optional_ptr<CatalogEntry> DeltaSchemaEntry::CreateTable(CatalogTransaction tran
+ 	}
+ 
+ 	ffi::ExclusiveCommittedTransaction *committed;
+-	auto commit_res =
+-	    KernelUtils::TryUnpackResult(ffi::create_table_commit(create_transaction, engine.get()), committed);
++	ErrorData commit_res;
++	{
++		CommitContextScope commit_scope(GetDeltaTransaction(transaction), context);
++		commit_res =
++		    KernelUtils::TryUnpackResult(ffi::create_table_commit(create_transaction, engine.get()), committed);
++	}
+ 	if (commit_res.HasError()) {
+ 		commit_res.Throw();
+ 	}
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+index 4c8961e..7ec33f8 100644
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -29,7 +29,7 @@
+ 
+ namespace duckdb {
+ 
+-DeltaTransaction::DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context)
++DeltaTransaction::DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), access_mode(delta_catalog.access_mode), parent_commit(delta_catalog.parent_commit),
+       parent_catalog_name(delta_catalog.parent_catalog_name), unity_table_id(delta_catalog.unity_table_id) {
+ 	commit_function = delta_catalog.commit_function;
+@@ -334,27 +334,33 @@ vector<DeltaMultiFileColumnDefinition> DeltaTransaction::GetWriteSchema(ClientCo
+ 	return result;
+ }
+ 
+-void DeltaTransaction::CleanUpFiles() {
++void DeltaTransaction::CleanUpFiles(ClientContext &context) {
+ 	// Clean up the files created by this transaction
+-	auto context_ptr = context.lock();
+-	if (context_ptr) {
+-		for (const auto &append : outstanding_appends) {
+-			auto &fs = FileSystem::GetFileSystem(*context_ptr);
+-			fs.TryRemoveFile(append.file_name);
+-		}
++	auto &fs = FileSystem::GetFileSystem(context);
++	for (const auto &append : outstanding_appends) {
++		fs.TryRemoveFile(append.file_name);
+ 	}
+ 	outstanding_appends.clear();
+ }
+ 
++CommitContextScope::CommitContextScope(DeltaTransaction &transaction_p, ClientContext &context)
++    : transaction(transaction_p) {
++	transaction.commit_context = context;
++}
++
++CommitContextScope::~CommitContextScope() {
++	transaction.commit_context = optional_ptr<ClientContext>();
++}
++
+ ffi::OptionalValue<ffi::Handle<ffi::ExclusiveRustString>> DeltaTransaction::CommitCallback(ffi::NullableCvoid context,
+                                                                                            ffi::CommitRequest request) {
+ 	auto transaction = reinterpret_cast<DeltaTransaction *>(context);
+ 
+ 	try {
+-		auto current_context = transaction->current_context.lock();
+-		if (!current_context) {
+-			throw InternalException("No current client context in Catalog Commit Callback");
++		if (!transaction->commit_context) {
++			throw InternalException("Catalog Commit Callback invoked outside of a kernel commit call");
+ 		}
++		auto &current_context = *transaction->commit_context;
+ 		if (!transaction->write_entry) {
+ 			throw InternalException("No write entry in Catalog Commit Callback");
+ 		}
+@@ -387,13 +393,13 @@ ffi::OptionalValue<ffi::Handle<ffi::ExclusiveRustString>> DeltaTransaction::Comm
+ 
+ 		auto staged_commit_data = Value::STRUCT(children);
+ 
+-		DUCKDB_LOG_INTERNAL(*current_context, "delta.CatalogManagedCommit", LogLevel::LOG_DEBUG,
++		DUCKDB_LOG_INTERNAL(current_context, "delta.CatalogManagedCommit", LogLevel::LOG_DEBUG,
+ 		                    staged_commit_data.ToString());
+ 
+ 		// Invoke the commit function on the catalog
+ 		DataChunk output;
+ 		TableFunctionInput data = {nullptr, nullptr, nullptr};
+-		output.Initialize(*current_context, {staged_commit_data.type(), LogicalType::BOOLEAN}, 1);
++		output.Initialize(current_context, {staged_commit_data.type(), LogicalType::BOOLEAN}, 1);
+ 		output.SetValue(0, 0, staged_commit_data);
+ 		output.SetCardinality(1);
+ 
+@@ -402,7 +408,7 @@ ffi::OptionalValue<ffi::Handle<ffi::ExclusiveRustString>> DeltaTransaction::Comm
+ 		}
+ 		// Special function that expects a 2-sized ANY datachunk containing the input on row 1 that will place the
+ 		// output on row 2
+-		transaction->commit_function->functions.functions[0]->function(*current_context, data, output);
++		transaction->commit_function->functions.functions[0]->function(current_context, data, output);
+ 
+ 		auto result = output.GetValue(1, 0);
+ 		if (result.IsNull()) {
+@@ -498,6 +504,7 @@ void DeltaTransaction::Commit(ClientContext &context) {
+ 
+ 			DUCKDB_LOG_INTERNAL(context, "delta.Commit", LogLevel::LOG_DEBUG, "Committing %s",
+ 			                    table_entry->snapshot->GetPath());
++			CommitContextScope commit_scope(*this, context);
+ 			auto res = KernelUtils::TryUnpackResult(
+ 			    ffi::commit(kernel_transaction.release(), table_entry->snapshot->extern_engine.get()), commit_result);
+ 			if (res.HasError()) {
+@@ -513,10 +520,10 @@ void DeltaTransaction::Commit(ClientContext &context) {
+ 	}
+ }
+ 
+-void DeltaTransaction::Rollback() {
++void DeltaTransaction::Rollback(ClientContext &context) {
+ 	if (transaction_state == DeltaTransactionState::TRANSACTION_STARTED) {
+ 		transaction_state = DeltaTransactionState::TRANSACTION_FINISHED;
+-		CleanUpFiles();
++		CleanUpFiles(context);
+ 	}
+ }
+ 
+@@ -543,8 +550,6 @@ ffi::Handle<ffi::MutableCommitter> DeltaTransaction::CreateCatalogCommitter(cons
+ }
+ 
+ void DeltaTransaction::InitializeTransaction(ClientContext &context) {
+-	current_context = context.shared_from_this();
+-
+ 	if (access_mode == AccessMode::READ_ONLY) {
+ 		throw InvalidInputException("Can not append to a read only table");
+ 	}
+diff --git a/src/storage/delta_transaction_manager.cpp b/src/storage/delta_transaction_manager.cpp
+index e3f5265..ce8e872 100644
+--- a/src/storage/delta_transaction_manager.cpp
++++ b/src/storage/delta_transaction_manager.cpp
+@@ -8,7 +8,7 @@ DeltaTransactionManager::DeltaTransactionManager(AttachedDatabase &db_p, DeltaCa
+     : TransactionManager(db_p), delta_catalog(delta_catalog) {
+ }
+ 
+-Transaction &DeltaTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &DeltaTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
+ 	auto transaction = make_uniq<DeltaTransaction>(delta_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;
+@@ -17,9 +17,9 @@ Transaction &DeltaTransactionManager::StartTransaction(ClientContext &context) {
+ 	return result;
+ }
+ 
+-static ErrorData HandleConflict(DeltaTransaction &transaction, ErrorData &original_error) {
++static ErrorData HandleConflict(ClientContext &context, DeltaTransaction &transaction, ErrorData &original_error) {
+ 	try {
+-		transaction.CleanUpFiles();
++		transaction.CleanUpFiles(context);
+ 	} catch (std::exception &ex) {
+ 		ErrorData new_error(ex);
+ 		string new_message = StringUtil::Format(
+@@ -37,16 +37,16 @@ ErrorData DeltaTransactionManager::CommitTransaction(ClientContext &context, Tra
+ 		delta_transaction.Commit(context);
+ 	} catch (std::exception &ex) {
+ 		ErrorData err(ex);
+-		return HandleConflict(delta_transaction, err);
++		return HandleConflict(context, delta_transaction, err);
+ 	}
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ 	return ErrorData();
+ }
+ 
+-void DeltaTransactionManager::RollbackTransaction(Transaction &transaction) {
++void DeltaTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &delta_transaction = transaction.Cast<DeltaTransaction>();
+-	delta_transaction.Rollback();
++	delta_transaction.Rollback(context);
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ }

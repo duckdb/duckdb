@@ -1,0 +1,94 @@
+# name: test/sql/filter/adaptive_in_filter.test
+# description: Adaptive IN scan filters preserve rows across selectivity changes and dictionary boundaries
+# group: [filter]
+
+load {TEST_DIR}/adaptive_in_filter.db readwrite v2.0.0
+
+statement ok
+SET threads=1
+
+foreach compression dict_fsst uncompressed
+
+statement ok
+SET force_compression='{compression}'
+
+# Start with mostly matching rows, then become selective; include NULLs and a partial final vector.
+statement ok
+CREATE TABLE t AS
+SELECT i AS id,
+       CASE WHEN i%101=0 THEN NULL
+            WHEN i<131072 THEN ['AIR','AIR REG'][i%2+1]
+            ELSE ['AIR','AIR REG','MAIL','RAIL','SHIP','TRUCK','FOB'][i%7+1] END AS s,
+       (i%17)::INTEGER AS k
+FROM range(300007) r(i)
+
+statement ok
+CHECKPOINT
+
+# The reference predicate uses only the row id, independently of string filtering.
+query I
+SELECT count(*) FROM (
+    (SELECT id FROM t WHERE s IN ('AIR','AIR REG')
+     EXCEPT ALL
+     SELECT i FROM range(300007) r(i) WHERE i%101<>0 AND (i<131072 OR i%7<2))
+    UNION ALL
+    (SELECT i FROM range(300007) r(i) WHERE i%101<>0 AND (i<131072 OR i%7<2)
+     EXCEPT ALL
+     SELECT id FROM t WHERE s IN ('AIR','AIR REG'))
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+    (SELECT id FROM t WHERE (s='AIR' OR s='AIR REG') AND id>=80000 AND id<280000
+     EXCEPT ALL
+     SELECT i FROM range(80000,280000) r(i) WHERE i%101<>0 AND (i<131072 OR i%7<2))
+    UNION ALL
+    (SELECT i FROM range(80000,280000) r(i) WHERE i%101<>0 AND (i<131072 OR i%7<2)
+     EXCEPT ALL
+     SELECT id FROM t WHERE (s='AIR' OR s='AIR REG') AND id>=80000 AND id<280000)
+)
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE s IN ('absent','missing')
+----
+0
+
+query I
+SELECT count(*) = (SELECT count(*) FROM range(300007) r(i) WHERE i%101<>0)
+FROM t WHERE s IN ('AIR','AIR REG','MAIL','RAIL','SHIP','TRUCK','FOB')
+----
+true
+
+query I
+SELECT count(*) = (SELECT count(*) FROM range(300007) r(i) WHERE i%17=2 OR i%17=11)
+FROM t WHERE k IN (2,11)
+----
+true
+
+statement ok
+PREPARE selected AS SELECT count(*), sum(id) FROM t WHERE s IN ('AIR','AIR REG')
+
+query II
+EXECUTE selected
+----
+177563	18805259732
+
+statement ok
+UPDATE t SET s=NULL WHERE id>=250000
+
+query II
+EXECUTE selected
+----
+163418	14915312935
+
+statement ok
+DEALLOCATE selected
+
+statement ok
+DROP TABLE t
+
+endloop
