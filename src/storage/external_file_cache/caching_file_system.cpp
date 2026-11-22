@@ -104,9 +104,11 @@ public:
 #ifdef DEBUG
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
-					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
-					              ExternalFileCacheLogType::HIT_EVENT, block->nr_bytes, block->location);
+					const idx_t nr_bytes = block->nr_bytes;
 					result_pin = std::move(pin);
+					lk.unlock();
+					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
+					              ExternalFileCacheLogType::HIT_EVENT, nr_bytes, block->location);
 					return;
 				}
 				// Evicted by buffer manager, need to re-fetch
