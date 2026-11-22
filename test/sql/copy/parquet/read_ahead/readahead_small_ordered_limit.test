@@ -1,0 +1,63 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_small_ordered_limit.test
+# description: Automatic read-ahead keeps one job queued for a small ordered limit
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET debug_physical_table_scan_execution_strategy = DEFAULT;
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET async_threads = 1;
+
+statement ok
+SET preserve_insertion_order = true;
+
+statement ok
+SET read_ahead_depth = -1;
+
+statement ok
+COPY (SELECT i FROM range(8192) t(i)) TO '{TEST_DIR}/small_ordered_limit.parquet' (ROW_GROUP_SIZE 2048);
+
+statement ok
+CALL enable_logging('AsyncTaskSchedule', level = 'DEBUG');
+
+query I
+SELECT i FROM read_parquet('{TEST_DIR}/small_ordered_limit.parquet') LIMIT 1;
+----
+0
+
+query I
+SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD';
+----
+1
+
+statement ok
+COPY (SELECT -1::BIGINT AS i) TO '{TEST_DIR}/small_ordered_limit_first.parquet' (FORMAT parquet);
+
+query I
+SELECT i
+FROM read_parquet(['{TEST_DIR}/small_ordered_limit_first.parquet', '{TEST_DIR}/small_ordered_limit.parquet'])
+LIMIT 2;
+----
+-1
+0
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET read_ahead_depth = 4;
+
+query I
+SELECT i FROM read_parquet('{TEST_DIR}/small_ordered_limit.parquet') LIMIT 1;
+----
+0
+
+query I
+SELECT sum(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD';
+----
+4

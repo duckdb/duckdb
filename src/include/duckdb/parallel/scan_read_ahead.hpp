@@ -174,9 +174,11 @@ public:
 
 	//! Create a driver with a fixed scheduling policy; prefetch also requires async threads and read_ahead_depth.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
+	//! An optional window bounds automatic ordered read-ahead.
 	//! Without prefetch, ordered scans need no driver; affinity scans retain their fixed assignment window.
 	static unique_ptr<ScanReadAhead> Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch = true,
-	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0,
+	                                        optional_idx auto_job_window = {});
 	bool PrefetchEnabled() const {
 		return prefetch_enabled;
 	}

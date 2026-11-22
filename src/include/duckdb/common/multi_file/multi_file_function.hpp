@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
@@ -811,7 +812,15 @@ public:
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED);
+		// Keep one job queued for limits that can be satisfied by the first output vector.
+		optional_idx auto_job_window;
+		if (gstate.op && gstate.op->type == PhysicalOperatorType::TABLE_SCAN) {
+			const auto limit_rows = gstate.op->Cast<PhysicalTableScan>().limit_rows;
+			if (limit_rows.IsValid() && limit_rows.GetIndex() <= STANDARD_VECTOR_SIZE) {
+				auto_job_window = 1;
+			}
+		}
+		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, auto_job_window);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,

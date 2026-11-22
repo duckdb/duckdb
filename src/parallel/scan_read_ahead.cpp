@@ -241,7 +241,8 @@ void ScanReadAhead::CancelAndDrain() {
 }
 
 unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch,
-                                                idx_t shard_count, idx_t scan_concurrency) {
+                                                idx_t shard_count, idx_t scan_concurrency,
+                                                optional_idx auto_job_window) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	prefetch = prefetch && TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() > 0 && configured_depth != 0;
 	if (!prefetch) {
@@ -252,8 +253,8 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanRead
 		return nullptr;
 	}
 	if (configured_depth < 0) {
-		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
-		return make_uniq<ScanReadAhead>(context, policy, NumericLimits<idx_t>::Maximum(),
+		const auto depth = auto_job_window.IsValid() ? auto_job_window.GetIndex() : NumericLimits<idx_t>::Maximum();
+		return make_uniq<ScanReadAhead>(context, policy, depth,
 		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()), true, shard_count,
 		                                scan_concurrency);
 	}
