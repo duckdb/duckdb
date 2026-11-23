@@ -59,3 +59,16 @@ SELECT min(file_row_group_number), max(file_row_group_number) FROM '{TEST_DIR}/e
 ----
 0	3
 
+# INT96 struct fields have no physical child columns or usable min/max statistics
+query II
+SELECT min(ts['date']), max(ts['date'])
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='struct')
+----
+1970-01-02	2200-12-31
+
+query II
+SELECT min(ts['time']), max(ts['time'])
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds_dictionary.parquet', int96_as='struct')
+----
+00:00:00.000000001	10:20:30.123456789
+

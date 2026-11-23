@@ -2664,6 +2664,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		if (storage_index.IsPushdownExtract()) {
 			reference<const StorageIndex> index = storage_index;
 			while (index.get().HasChildren() && column_schema.get().type.id() == LogicalTypeId::STRUCT) {
+				if (column_schema.get().children.empty()) {
+					// INT96 can be exposed as a struct without physical child columns.
+					return false;
+				}
 				index = index.get().GetChildIndex(0);
 				column_schema = column_schema.get().children[index.get().GetPrimaryIndex()];
 			}
