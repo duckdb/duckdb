@@ -294,10 +294,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto fetch_state = ColumnFetchState();
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		table.Fetch(transaction, fetch_chunk, column_ids, del_row_ids, update_count, fetch_state);
-		// the rows are distinct and visible to the scan, so another operator of this statement deleted the missing ones
+		// the rows are distinct and were visible to the scan, so this transaction has deleted the missing ones since
 		if (fetch_chunk.size() != update_count) {
-			throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each "
-			                            "target row is matched by at most one source row");
+			throw TransactionException("Conflict on update!");
 		}
 
 		idx_t fetch_idx = 0;
@@ -313,8 +312,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	if (table.Delete(delete_state, context.client, tableref, del_row_ids, update_count) != update_count) {
-		throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each target "
-		                            "row is matched by at most one source row");
+		throw TransactionException("Conflict on update!");
 	}
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced

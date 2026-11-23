@@ -14,7 +14,7 @@ MERGE INTO t USING src ON t.id = src.id
 WHEN MATCHED AND src.k = 1 THEN DELETE
 WHEN MATCHED THEN UPDATE SET a = src.k;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 # the MERGE is rolled back and the database stays usable
 query II
@@ -27,7 +27,7 @@ MERGE INTO t USING src ON t.id = src.id
 WHEN MATCHED AND src.k = 2 THEN DELETE
 WHEN MATCHED THEN UPDATE SET a = src.k;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 query II
 SELECT count(*), sum(a) FROM t
@@ -111,14 +111,14 @@ MERGE INTO pk USING src ON pk.id = src.id
 WHEN MATCHED AND src.k = 1 THEN DELETE
 WHEN MATCHED THEN UPDATE SET id = 100;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 statement error
 MERGE INTO pk USING src ON pk.id = src.id
 WHEN MATCHED AND src.k = 1 THEN UPDATE SET id = 100
 WHEN MATCHED THEN UPDATE SET a = src.k;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 query III
 SELECT count(*), max(id), sum(a) FROM pk
@@ -134,7 +134,7 @@ MERGE INTO lt USING src ON lt.id = src.id
 WHEN MATCHED AND src.k = 1 THEN DELETE
 WHEN MATCHED THEN UPDATE SET l = [src.k];
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 query II
 SELECT count(*), count(*) FILTER (WHERE id = 5) FROM lt
@@ -158,7 +158,7 @@ MERGE INTO big USING (SELECT i % 150000 id, i // 150000 k FROM range(300000) r(i
 WHEN MATCHED AND s.k = 0 THEN DELETE
 WHEN MATCHED THEN UPDATE SET a = 2;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 query II
 SELECT count(*), sum(a) FROM big
@@ -174,7 +174,7 @@ MERGE INTO t USING src ON t.id = src.id
 WHEN MATCHED AND src.k = 1 THEN DELETE
 WHEN MATCHED THEN UPDATE SET a = src.k;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 statement error
 SELECT count(*) FROM t
@@ -248,7 +248,7 @@ MERGE INTO pk USING (SELECT 12 id, i k FROM range(2) r(i)) s ON pk.id = s.id
 WHEN MATCHED AND s.k = 0 THEN DELETE
 WHEN MATCHED THEN UPDATE SET id = 100;
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 statement ok
 ROLLBACK
@@ -264,7 +264,7 @@ MERGE INTO lt USING (SELECT 12 id, i k FROM range(2) r(i)) s ON lt.id = s.id
 WHEN MATCHED AND s.k = 0 THEN DELETE
 WHEN MATCHED THEN UPDATE SET l = [s.k];
 ----
-Cannot update a row that the same statement already deleted
+Conflict on update
 
 statement ok
 ROLLBACK
