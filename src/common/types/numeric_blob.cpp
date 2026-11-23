@@ -756,7 +756,7 @@ LogicalType NumericBlob::RangeType(Vector &canonical, idx_t count) {
 	LogicalType type;
 	if (!TryRangeType(canonical, count, type)) {
 		throw OutOfRangeException("NUMERIC values with no common representation: they need more than %d digits",
-		                          Decimal::MAX_WIDTH_DECIMAL);
+		                          NumericType::MAX_WIDTH);
 	}
 	return type;
 }

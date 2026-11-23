@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/storage/table/numeric_range.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -18,6 +19,7 @@
 
 namespace duckdb {
 class ColumnSegment;
+class Context;
 class DataTable;
 class LocalTableStorage;
 class RowGroup;
@@ -133,6 +135,8 @@ struct ConstraintState {
 struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
+	//! The context of the operation that appends (the local storage can outlive the connection that created it)
+	optional_ptr<Context> context;
 	unique_ptr<ConstraintState> constraint_state;
 };
 

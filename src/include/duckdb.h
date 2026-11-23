@@ -286,13 +286,16 @@ typedef enum DUCKDB_TYPE {
 	//! duckdb_timestamp (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
 
+	//! GEOGRAPHY type, WKB blob with spherical edges
+	DUCKDB_TYPE_GEOGRAPHY = 43,
+
 	/*!
 	 * NUMERIC: an exact number of up to 255 digits. Fetched through the value functions as its decimal text
 	 * (duckdb_value_varchar) or converted (duckdb_value_double, the integer fetches when the value fits); in a chunk,
 	 * duckdb_vector_get_data yields duckdb_string_t values holding the canonical binary encoding, so cast the column to
 	 * VARCHAR, DOUBLE or DECIMAL in SQL to read it from a vector
 	 */
-	DUCKDB_TYPE_NUMERIC = 43,
+	DUCKDB_TYPE_NUMERIC = 44,
 } DUCKDB_TYPE;
 
 /*!
@@ -742,8 +745,8 @@ struct duckdb_uhugeint {
 
 /*!
  * DECIMAL is composed of a width and a scale. Value is stored in a HUGEINT. Decimals wider than 38 digits store their
- * value as BIGNUM; a duckdb_decimal can only carry those whose value fits in 128 bits, the exact value is available
- * through the VARCHAR conversions.
+ * value as BIGNUM; a duckdb_decimal can only carry those whose width fits in the uint8_t and whose value fits in 128
+ * bits, the exact value is available through the VARCHAR conversions.
  *
  * history:
  * - stable: v0.3.3
@@ -5292,6 +5295,8 @@ DUCKDB_C_API duckdb_logical_type duckdb_create_enum_type(const char **member_nam
  * Creates a DECIMAL type with the specified width and scale. The resulting type should be destroyed with
  * `duckdb_destroy_logical_type`.
  *
+ * The uint8_t parameters reach widths up to 255; widths above 38 create wide decimals stored as BIGNUM.
+ *
  * history:
  * - stable: v0.3.3
  *
@@ -5319,6 +5324,9 @@ DUCKDB_C_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
 /*!
  * Retrieves the width of a decimal type.
  *
+ * The uint8_t reaches widths up to 255; a wider decimal reports 0, its values are best read through their VARCHAR
+ * conversion.
+ *
  * history:
  * - stable: v0.3.3
  *
@@ -5331,6 +5339,8 @@ DUCKDB_C_API uint8_t duckdb_decimal_width(duckdb_logical_type type);
 #if DUCKDB_API_VERSION_AT_LEAST(0, 3, 3)
 /*!
  * Retrieves the scale of a decimal type.
+ *
+ * Reports 0 for a decimal whose width does not fit in a uint8_t, like `duckdb_decimal_width`.
  *
  * history:
  * - stable: v0.3.3
@@ -5592,13 +5602,13 @@ DUCKDB_C_API duckdb_state duckdb_register_logical_type(duckdb_connection con, du
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
- * Gets the CRS (Coordinate Reference System) of a GEOMETRY type. Result must be freed with `duckdb_free`.
+ * Gets the CRS (Coordinate Reference System) of a GEOMETRY or GEOGRAPHY type. Result must be freed with `duckdb_free`.
  *
  * history:
  * - unstable: v1.5.2
  * - stable: v1.5.6
  *
- * @param type The GEOMETRY type.
+ * @param type The GEOMETRY or GEOGRAPHY type.
  * @return char*
  */
 DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
@@ -8683,8 +8693,8 @@ DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0)
 /*!
- * Creates a DECIMAL value from a duckdb_decimal. The width can be up to 255 digits; widths above 38 create a wide
- * decimal whose unscaled value is the 128-bit value of the duckdb_decimal.
+ * Creates a DECIMAL value from a duckdb_decimal. The uint8_t fields of a duckdb_decimal reach widths up to 255 digits;
+ * widths above 38 create a wide decimal whose unscaled value is the 128-bit value of the duckdb_decimal.
  *
  * history:
  * - stable: v1.2.0

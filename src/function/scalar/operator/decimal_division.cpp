@@ -41,7 +41,7 @@ struct DecimalDivBindData : public FunctionData {
 //===--------------------------------------------------------------------===//
 
 template <class T>
-static constexpr uint32_t DecimalTierWidth() {
+static constexpr uint8_t DecimalTierWidth() {
 	if constexpr (std::is_same_v<T, int16_t>) {
 		return Decimal::MAX_WIDTH_INT16;
 	} else if constexpr (std::is_same_v<T, int32_t>) {

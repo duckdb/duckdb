@@ -20,6 +20,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class ClientContext;
+class DatabaseInstance;
 class SecretManager;
 class SecretStorage;
 struct DatabaseModificationType;
@@ -39,19 +40,15 @@ struct TransactionReference {
 //! The MetaTransaction manages multiple transactions for different attached databases
 class MetaTransaction {
 public:
-	DUCKDB_API MetaTransaction(ClientContext &context, timestamp_t start_timestamp,
-	                           transaction_t global_transaction_id);
+	DUCKDB_API MetaTransaction(DatabaseInstance &db, timestamp_t start_timestamp, transaction_t global_transaction_id);
 	DUCKDB_API ~MetaTransaction();
 
-	ClientContext &context;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
 	//! The global identifier of the transaction
 	transaction_t global_transaction_id;
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
-	//! The active query number
-	atomic<transaction_t> active_query;
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
@@ -59,21 +56,19 @@ public:
 		return start_timestamp;
 	}
 
-	Transaction &GetTransaction(AttachedDatabase &db);
+	//! The transaction for the database, started on behalf of the given context if it does not exist yet
+	Transaction &GetTransaction(ClientContext &context, AttachedDatabase &db);
 	optional_ptr<Transaction> TryGetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
 
-	ErrorData Commit();
-	void Rollback();
+	ErrorData Commit(ClientContext &context);
+	void Rollback(ClientContext &context);
 	// Finalize the transaction after a COMMIT of ROLLBACK.
-	void Finalize();
-
-	idx_t GetActiveQuery();
-	void SetActiveQuery(transaction_t query_number);
+	void Finalize(ClientContext &context);
 
 	void SetReadOnly();
 	bool IsReadOnly() const;
-	void ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification);
+	void ModifyDatabase(ClientContext &context, AttachedDatabase &db, DatabaseModificationType modification);
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}

@@ -1,5 +1,4 @@
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/main/settings.hpp"
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
@@ -13,11 +12,9 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
@@ -40,12 +37,6 @@ ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(
 
 DatabaseInstance &ExtensionLoader::GetDatabaseInstance() const {
 	return db;
-}
-
-void ExtensionLoader::TakeOverProcessWideSettings() const {
-	if (Settings::Get<DebugForceWideDecimalSetting>(DBConfig::GetConfig(db))) {
-		Decimal::SetForceWide(true);
-	}
 }
 
 void ExtensionLoader::SetDescription(const string &description) {
@@ -281,26 +272,6 @@ void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
-}
-
-void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
-	info.extension_name = GetRegisteredExtensionName();
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
-		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema,
-		                                    info.GetQualifiedName().Name()));
-	}
-	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	system_catalog.CreateCollation(data, info);
-
-	// Also register as a function for serialisation
-	CreateScalarFunctionInfo finfo(info.function);
-	finfo.extension_name = GetRegisteredExtensionName();
-	finfo.SetQualifiedName(QualifiedName(finfo.GetQualifiedName().Catalog(), loader_info.extension_schema,
-	                                     finfo.GetQualifiedName().Name()));
-	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	system_catalog.CreateFunction(data, finfo);
 }
 
 void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info) {

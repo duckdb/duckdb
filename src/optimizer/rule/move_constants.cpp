@@ -318,12 +318,12 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		new_constant = std::move(*result_value);
 	} else if (constant_type.id() == LogicalTypeId::DECIMAL && constant_type.InternalType() == PhysicalType::VARCHAR) {
 		// wide decimal, negate the BIGNUM blob of the unscaled value
-		bignum_t unscaled(string_t(StringValue::Get(outer_constant.GetValue())));
+		const auto unscaled = outer_constant.GetValue().GetValueUnsafe<bignum_t>();
 		const BignumIntermediate intermediate(unscaled);
 		StringHeap heap;
-		auto negated = intermediate.Negate(heap);
-		new_constant = Value::WIDEDECIMAL(negated.GetString(), DecimalType::GetWidth(constant_type),
-		                                  DecimalType::GetScale(constant_type));
+		auto negated = bignum_t(intermediate.Negate(heap));
+		new_constant =
+		    Value::DECIMAL(negated, DecimalType::GetWidth(constant_type), DecimalType::GetScale(constant_type));
 	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
 		// negate the unscaled integer and reconstruct with the same width/scale
 		hugeint_t negated_value;

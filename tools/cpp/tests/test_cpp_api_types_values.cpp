@@ -136,6 +136,15 @@ TEST_CASE("Stable C++API: per-kind type getters are sugar over GetParam", "[cpp_
 	REQUIRE(dec.GetDecimalWidth() == 18);
 	REQUIRE(dec.GetDecimalScale() == 3);
 
+	// Wide decimals: the width is any uint32_t, not capped at 38 or 255.
+	auto wide = factory.ParseType("DECIMAL(39,2)");
+	REQUIRE(wide.GetDecimalWidth() == 39);
+	REQUIRE(wide.GetDecimalScale() == 2);
+	auto wider = factory.ParseType("DECIMAL(300,10)");
+	REQUIRE(wider.GetDecimalWidth() == 300);
+	REQUIRE(wider.GetDecimalScale() == 10);
+	REQUIRE(wider.ToText() == "DECIMAL(300,10)");
+
 	std::vector<TypeParam> entries;
 	entries.push_back({"", Value::Create(factory, varchar_t("sad"))});
 	entries.push_back({"", Value::Create(factory, varchar_t("ok"))});
@@ -244,7 +253,7 @@ TEST_CASE("Stable C++API: storage-tier conveniences follow the committed tables"
 	} decimal_cases[] = {
 	    {4, LogicalTypeId::SMALLINT}, {5, LogicalTypeId::INTEGER}, {9, LogicalTypeId::INTEGER},
 	    {10, LogicalTypeId::BIGINT},  {18, LogicalTypeId::BIGINT}, {19, LogicalTypeId::HUGEINT},
-	    {38, LogicalTypeId::HUGEINT},
+	    {38, LogicalTypeId::HUGEINT}, {39, LogicalTypeId::BIGNUM}, {300, LogicalTypeId::BIGNUM},
 	};
 	for (auto &c : decimal_cases) {
 		auto dec = factory.ParseType("DECIMAL(" + std::to_string(c.width) + ",2)");
@@ -463,6 +472,64 @@ TEST_CASE("Stable C++API: precise temporal and decimal Values round trip", "[cpp
 	auto huge = Value::Create(factory, decimal_t<38, 6> {int128_t {123, 0}});
 	REQUIRE(huge.Get<38, 6>().value.lower == 123);
 	REQUIRE_THROWS_MATCHES((huge.Get<18, 6>()), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+
+TEST_CASE("Stable C++API: DECIMAL Values of a runtime width and scale", "[cpp_api][types_values]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	// Every storage tier, read back widened to 128 bits.
+	auto small = Value::CreateDecimal(factory, int128_t {static_cast<uint64_t>(-1234), -1}, 4, 2);
+	REQUIRE(small.ToText() == "-12.34");
+	auto small_read = small.GetDecimal();
+	REQUIRE(small_read.width == 4);
+	REQUIRE(small_read.scale == 2);
+	REQUIRE(small_read.value.lower == static_cast<uint64_t>(-1234));
+	REQUIRE(small_read.value.upper == -1);
+	REQUIRE(Value::CreateDecimal(factory, int128_t {123456789, 0}, 9, 3).GetDecimal().value.lower == 123456789);
+	REQUIRE(Value::CreateDecimal(factory, int128_t {123456789012345678ULL, 0}, 18, 0).ToText() == "123456789012345678");
+	auto huge = Value::CreateDecimal(factory, int128_t {0, 1}, 38, 10);
+	auto huge_read = huge.GetDecimal();
+	REQUIRE(huge_read.width == 38);
+	REQUIRE(huge_read.scale == 10);
+	REQUIRE(huge_read.value.lower == 0);
+	REQUIRE(huge_read.value.upper == 1);
+
+	// The same value as the typed constructor.
+	REQUIRE(Value::Create(factory, decimal_t<9, 3> {123456789}).GetDecimal().value.lower == 123456789);
+	// And from a query.
+	auto chunk = conn.Execute("SELECT 1234.5::DECIMAL(10, 1)").FetchChunk();
+	auto from_query = chunk.GetVector(0).GetValue(0).GetDecimal();
+	REQUIRE(from_query.width == 10);
+	REQUIRE(from_query.scale == 1);
+	REQUIRE(from_query.value.lower == 12345);
+
+	// Out of range widths, scales and values are refused.
+	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {1, 0}, 0, 0), Exception);
+	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {1, 0}, 4, 5), Exception);
+	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {100000, 0}, 4, 0), Exception);
+	// A value with more digits than the width is refused, in every storage tier.
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {10000, 0}, 4, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {40000, 0}, 4, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {3000000000ULL, 0}, 9, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {0, INT64_MIN}, 38, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// 10^38 does not fit DECIMAL(38, 0), 10^38 - 1 does.
+	auto ten_pow_38 = int128_t {687399551400673280ULL, 5421010862427522170LL};
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, ten_pow_38, 38, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	auto widest = Value::CreateDecimal(factory, int128_t {687399551400673279ULL, 5421010862427522170LL}, 38, 0);
+	REQUIRE(widest.GetDecimal().value.upper == 5421010862427522170LL);
+	REQUIRE(Value::CreateDecimal(factory, int128_t {9999, 0}, 4, 0).GetDecimal().value.lower == 9999);
+	// Reading a DECIMAL off another type, or off NULL, is refused.
+	REQUIRE_THROWS_AS(Value::Create(factory, int32_t(42)).GetDecimal(), Exception);
+	auto decimal_type = factory.ParseType("DECIMAL(9, 3)");
+	REQUIRE_THROWS_AS(Value::CreateNull(factory, decimal_type).GetDecimal(), Exception);
 }
 
 TEST_CASE("Stable C++API: composite and encoded Values cover empty and non-empty forms", "[cpp_api][types_values]") {

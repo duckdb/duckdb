@@ -55,7 +55,7 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 
 //! Rewrite the page into the plain BYTE_ARRAY layout ([4-byte length][data] repeated) and consume it from the block
 void DeltaLengthByteArrayDecoder::DecodeToPlain(ResizeableBuffer &block, idx_t total_string_length) {
-	auto &allocator = reader.GetAllocator();
+	auto &allocator = reader.reader.allocator;
 	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 	plain_data = make_shared_ptr<ResizeableBuffer>();
 	plain_data->Resize(allocator, total_string_length + byte_array_count * sizeof(uint32_t));

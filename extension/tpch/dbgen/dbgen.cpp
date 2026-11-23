@@ -3,7 +3,6 @@
 #include "tpch_constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -44,6 +43,8 @@ enum class TPCHAppendMode : uint8_t { APPENDER, OPTIMISTIC };
 struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
+	//! The context of the optimistic append (set in InitializeOptimistic)
+	optional_ptr<ClientContext> optimistic_context;
 	optional_ptr<OptimisticWriteCollection> optimistic_collection;
 	optional_ptr<DuckTableEntry> table_entry;
 	PhysicalIndex optimistic_collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
@@ -83,9 +84,10 @@ struct tpch_append_information {
 	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table,
 	                          OptimisticWritePartialManagers partial_manager_type) {
 		table_entry = table;
-		optimistic_writer = make_uniq<OptimisticDataWriter>(context, table.GetStorage());
-		auto collection =
-		    optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes(), partial_manager_type);
+		optimistic_context = context;
+		optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
+		auto collection = optimistic_writer->CreateCollection(context.GetContext(), table.GetStorage(), table.GetTypes(),
+		                                                      partial_manager_type);
 		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		// the transaction id keeps the rows invisible to other transactions until the commit
@@ -117,7 +119,7 @@ struct tpch_append_information {
 			auto &row_collection = *optimistic_collection->collection;
 			auto flushed_row_group_idx = row_collection.Append(chunk, append_state);
 			if (flushed_row_group_idx.IsValid()) {
-				optimistic_writer->WriteNewRowGroup(*optimistic_collection, flushed_row_group_idx.GetIndex());
+				optimistic_writer->WriteNewRowGroup(optimistic_context->GetContext(), *optimistic_collection, flushed_row_group_idx.GetIndex());
 			}
 		}
 		chunk.Reset();
@@ -155,10 +157,10 @@ struct tpch_append_information {
 			storage.FinalizeLocalAppend(local_append_state);
 			ResetOptimisticCollection(context);
 		} else {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
+			optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
 			storage.LocalMerge(context, table, *optimistic_collection);
 			auto &storage_writer = storage.GetOptimisticWriter(context);
-			storage_writer.Merge(*optimistic_writer);
+			storage_writer.Merge(context.GetContext(), *optimistic_writer);
 			ResetOptimisticCollection(context);
 		}
 		optimistic_writer.reset();
@@ -194,8 +196,8 @@ struct tpch_append_information {
 		auto &storage = table_entry->GetStorage();
 		auto &row_collection = *optimistic_collection->collection;
 		if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
-			optimistic_writer->FinalFlush();
+			optimistic_writer->WriteUnflushedRowGroups(optimistic_context->GetContext(), *optimistic_collection);
+			optimistic_writer->FinalFlush(optimistic_context->GetContext());
 		}
 	}
 };
@@ -245,15 +247,7 @@ void append_string_reference(tpch_append_information &info, const char *value, i
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
-	auto &vector = append_next_column(info);
-	if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-		// a decimal column stored as BIGNUM blobs (debug_force_wide_decimal): the unscaled value as a blob
-		auto blob = BignumDecimal::FromInteger(hugeint_t(value));
-		FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddStringOrBlob(vector, blob);
-		return;
-	}
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::INT64);
-	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
+	append_next_column_data<int64_t>(info)[info.active_row] = value;
 }
 
 void append_char(tpch_append_information &info, char value) {
@@ -652,7 +646,7 @@ static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_appen
                     DBGenContext *dbgen_ctx, idx_t offset = 0) {
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
 		if (count % 1000 == 0) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
@@ -710,131 +704,106 @@ struct RegionInfo {
 	static constexpr char *Name = "region";
 	static constexpr idx_t ColumnCount = 3;
 	static const char *Columns[];
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *RegionInfo::Columns[] = {"r_regionkey", "r_name", "r_comment"};
-vector<LogicalType> RegionInfo::Types() {
-	return {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType RegionInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
                                          LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct NationInfo {
 	static constexpr char *Name = "nation";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 4;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *NationInfo::Columns[] = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
-vector<LogicalType> NationInfo::Types() {
-	return {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType NationInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
                                          LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct SupplierInfo {
 	static constexpr char *Name = "supplier";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 7;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
                                        "s_phone",   "s_acctbal", "s_comment"};
-vector<LogicalType> SupplierInfo::Types() {
-	return {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct CustomerInfo {
 	static constexpr char *Name = "customer";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 8;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
                                        "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
-vector<LogicalType> CustomerInfo::Types() {
-	return {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct PartInfo {
 	static constexpr char *Name = "part";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 9;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
                                    "p_size",    "p_container", "p_retailprice", "p_comment"};
-vector<LogicalType> PartInfo::Types() {
-	return {
+const LogicalType PartInfo::Types[] = {
     LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct PartsuppInfo {
 	static constexpr char *Name = "partsupp";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 5;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-vector<LogicalType> PartsuppInfo::Types() {
-	return {LogicalType(LogicalTypeId::BIGINT), LogicalType(LogicalTypeId::BIGINT),
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT), LogicalType(LogicalTypeId::BIGINT),
                                            LogicalType(LogicalTypeId::BIGINT), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct OrdersInfo {
 	static constexpr char *Name = "orders";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 9;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
                                      "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
-vector<LogicalType> OrdersInfo::Types() {
-	return {
+const LogicalType OrdersInfo::Types[] = {
     LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
     LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 struct LineitemInfo {
 	static constexpr char *Name = "lineitem";
 	static const char *Columns[];
 	static constexpr idx_t ColumnCount = 16;
-	//! Built per call: the physical type of a DECIMAL can change at run time (debug_force_wide_decimal)
-	static vector<LogicalType> Types();
+	static const LogicalType Types[];
 };
 const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_suppkey",  "l_linenumber",
                                        "l_quantity",    "l_extendedprice", "l_discount", "l_tax",
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
-vector<LogicalType> LineitemInfo::Types() {
-	return {
+const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),
     LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR)};
-}
 
 template <class T>
 static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string &table_name) {
 	const auto &columns = table.GetColumns();
-	const auto types = T::Types();
 
 	if (columns.LogicalColumnCount() != T::ColumnCount) {
 		throw InvalidInputException(
@@ -851,27 +820,26 @@ static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string
 			    table_name, T::Columns[i], (unsigned long long)i, column.Name());
 		}
 
-		if (column.Type() != types[i]) {
+		if (column.Type() != T::Types[i]) {
 			throw InvalidInputException(
 			    "TPC-H table \"%s\" has an incompatible schema: column \"%s\" has type %s but expected %s", table_name,
-			    T::Columns[i], column.Type().ToString(), types[i].ToString());
+			    T::Columns[i], column.Type().ToString(), T::Types[i].ToString());
 		}
 	}
 }
 
 template <class T>
-static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
+static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const vector<Identifier> &schema,
                             string suffix) {
 	auto table_name = string(T::Name) + suffix;
-	auto qualified_name = QualifiedName(catalog_name, schema, Identifier(table_name));
+	auto qualified_name = QualifiedName::FromCatalogSchema(catalog_name, schema, Identifier(table_name));
 
 	auto info = make_uniq<CreateTableInfo>();
 	info->SetQualifiedName(qualified_name);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
-	const auto types = T::Types();
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
-		info->columns.AddColumn(ColumnDefinition(T::Columns[i], types[i]));
+		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
@@ -882,7 +850,7 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	ValidateTPCHTableSchema<T>(table, table_name);
 }
 
-void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
+void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const vector<Identifier> &schema,
                                     string suffix) {
 	CreateTPCHTable<RegionInfo>(context, catalog, schema, suffix);
 	CreateTPCHTable<NationInfo>(context, catalog, schema, suffix);
@@ -920,14 +888,15 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 }
 
 struct TPCHDBgenParameters {
-	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const Identifier &schema, const string &suffix) {
+	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const vector<Identifier> &schema,
+	                    const string &suffix) {
 		tables.resize(REGION + 1);
 		for (size_t i = PART; i <= REGION; i++) {
 			auto tname = get_table_name(i);
 			if (!tname.empty()) {
 				string full_tname = string(tname) + string(suffix);
 				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(
-				    context, QualifiedName(catalog.GetName(), schema, Identifier(full_tname)));
+				    context, QualifiedName::FromCatalogSchema(catalog.GetName(), schema, Identifier(full_tname)));
 				tables[i] = &tbl_catalog;
 			}
 		}
@@ -1088,7 +1057,7 @@ public:
 			return;
 		}
 		auto rowcnt = GetDBGenTableRowCount(dbgen_ctx, table_index);
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		if (children > 1 && current_step != -1) {
 			auto range = GetDBGenTableRange(rowcnt, children, current_step);
 			SkipTable(table_index, children, range.offset);
@@ -1171,7 +1140,7 @@ DBGenGenerator::~DBGenGenerator() {
 class TPCHDBGenGenerator : public DBGenGenerator {
 public:
 	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
-	                   const Identifier &schema, string suffix, int children, int current_step)
+	                   const vector<Identifier> &schema, string suffix, int children, int current_step)
 	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
 		// NaN compares false against every scale factor check, and reaches an out-of-range cast below
 		if (Value::IsNan(flt_scale)) {
@@ -1229,7 +1198,7 @@ public:
 	}
 
 	bool GenerateNext() override {
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		if (finished.load()) {
 			return true;
 		}
@@ -1529,12 +1498,13 @@ private:
 };
 
 unique_ptr<DBGenGenerator> CreateDBGenGenerator(ClientContext &context, double sf, const Identifier &catalog,
-                                                const Identifier &schema, string suffix, int children, int step) {
+                                                const vector<Identifier> &schema, string suffix, int children,
+                                                int step) {
 	return make_uniq<TPCHDBGenGenerator>(context, sf, catalog, schema, std::move(suffix), children, step);
 }
 
 void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const Identifier &catalog_name,
-                                const Identifier &schema, string suffix, int children, int current_step) {
+                                const vector<Identifier> &schema, string suffix, int children, int current_step) {
 	auto generator =
 	    CreateDBGenGenerator(context, flt_scale, catalog_name, schema, std::move(suffix), children, current_step);
 	while (!generator->GenerateNext()) {

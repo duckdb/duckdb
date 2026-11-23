@@ -4,7 +4,7 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/bignum_limbs.hpp"
 #include "duckdb/common/types/bignum.hpp"
-#include "duckdb/common/types/bignum_decimal.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
@@ -251,6 +251,67 @@ struct IntegerSumOperation
 	}
 };
 
+//! Adds to an int64 accumulator, throwing instead of wrapping when the sum does not fit
+struct CheckedInt64Add {
+	static void Add(int64_t &target, int64_t input) {
+		if (!TryAddOperator::Operation(target, input, target)) {
+			throw OutOfRangeException("Overflow in sum_no_overflow: the sum does not fit in a 64-bit accumulator");
+		}
+	}
+
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		Add(state.value, int64_t(input));
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		int64_t total;
+		if (!TryMultiplyOperator::Operation(int64_t(input), Cast::Operation<idx_t, int64_t>(count), total)) {
+			throw OutOfRangeException("Overflow in sum_no_overflow: the sum does not fit in a 64-bit accumulator");
+		}
+		Add(state.value, total);
+	}
+};
+
+struct CheckedSumSetOperation : public SumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+		} else {
+			CheckedInt64Add::Add(target.value, source.value);
+		}
+	}
+};
+
+//! The int64 sum of sum_no_overflow without a statistics proof that it fits (e.g. bound by name)
+struct CheckedIntegerSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<CheckedSumSetOperation, CheckedInt64Add>,
+                                   ClusteredAddOp<CheckedInt64Add>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		if (!source.is_set) {
+			return;
+		}
+		target.is_set = true;
+		CheckedInt64Add::AddConstant(target, source.value, count);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = Hugeint::Convert(state.value);
+		}
+	}
+};
+
 struct SumToHugeintOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>> {
 	template <class STATE, class OP>
@@ -286,6 +347,14 @@ struct HugeintSumOperation
 	}
 };
 
+struct UhugeintSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, UhugeintAdd>, ClusteredAddOp<UhugeintAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
 //! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
 template <class OP>
 struct DecimalSumOperation : public OP {
@@ -304,25 +373,28 @@ struct DecimalSumOperation : public OP {
 };
 
 //! Binds the regular sum that sum_no_overflow is a specialized implementation of
-pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(ClientContext &context,
+pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(FunctionBinder &binder,
                                                                       vector<unique_ptr<Expression>> &arguments) {
+	auto &context = binder.context;
 	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
 	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
-	auto selection = FunctionBinder::SelectFunction(context, entry.functions, {arguments, keyword_args});
+	auto selection = FunctionBinder::SelectFunction(context, entry.functions, {arguments, keyword_args}, false,
+	                                                binder.FixedDecimalWidthLimit());
 	if (!selection.IsSuccess()) {
 		selection.GetError().Throw();
 	}
-	FunctionBinder binder(context);
 	return binder.ResolveAggregateFunction(selection.GetBinding(), arguments, keyword_args);
 }
 
-void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                             const BoundAggregateFunction &function) {
 	// record whether the implementation was installed without a statistics proof (bound by name)
 	serializer.WritePropertyWithDefault<bool>(100, "fallible",
 	                                          function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 }
+
+bool TryUseNoOverflowSum(BoundAggregateFunction &function, bool checked);
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	bool fallible = false;
@@ -334,48 +406,66 @@ unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, Bo
 	for (auto &child : children) {
 		arguments.push_back(child.get().Copy());
 	}
-	auto logical = BindLogicalSum(context, arguments);
+	// the sum is rebound within the decimal width it was bound in
+	const auto decimal_width_limit = DecimalWidthLimit::FromReturnType(return_type);
+	FunctionBinder binder(context, &decimal_width_limit);
+	auto logical = BindLogicalSum(binder, arguments);
 	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
 		throw SerializationException("Cannot reconstruct the logical sum signature");
 	}
-	logical.first.ReplaceImplementation(function);
+	if (!TryUseNoOverflowSum(logical.first, fallible)) {
+		throw SerializationException("Cannot reconstruct the no-overflow sum implementation");
+	}
 	function = std::move(logical.first);
 	function.SetReturnType(return_type);
-	if (fallible) {
-		function.SetFallible();
-	}
 	return nullptr;
 }
 
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input);
 
-AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
+template <class INPUT_TYPE, class OP>
+AggregateFunction GetSumAggregateNoOverflow(const LogicalType &input_type) {
+	auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, INPUT_TYPE, hugeint_t, OP>(
+	    input_type, LogicalType::HUGEINT);
+	function.GetSignature().GetParameter(0).SetName("arg");
+	function.SetName("sum_no_overflow");
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetBindCallback(SumNoOverflowBind);
+	function.SetSerializeCallback(SumNoOverflowSerialize);
+	function.SetDeserializeCallback(SumNoOverflowDeserialize);
+	if constexpr (std::is_same<OP, CheckedIntegerSumOperation>::value) {
+		function.SetFallible();
+	}
+	return function;
+}
+
+//! The checked variant throws when the sum overflows the int64 accumulator, it shares the state layout
+AggregateFunction GetSumAggregateNoOverflow(PhysicalType type, bool checked = false) {
 	switch (type) {
-	case PhysicalType::INT32: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.GetSignature().GetParameter(0).SetName("arg");
-		function.SetName("sum_no_overflow");
-		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		function.SetBindCallback(SumNoOverflowBind);
-		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		return function;
-	}
-	case PhysicalType::INT64: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.GetSignature().GetParameter(0).SetName("arg");
-		function.SetName("sum_no_overflow");
-		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		function.SetBindCallback(SumNoOverflowBind);
-		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		return function;
-	}
+	case PhysicalType::INT32:
+		return checked ? GetSumAggregateNoOverflow<int32_t, CheckedIntegerSumOperation>(LogicalType::INTEGER)
+		               : GetSumAggregateNoOverflow<int32_t, IntegerSumOperation>(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return checked ? GetSumAggregateNoOverflow<int64_t, CheckedIntegerSumOperation>(LogicalType::BIGINT)
+		               : GetSumAggregateNoOverflow<int64_t, IntegerSumOperation>(LogicalType::BIGINT);
 	default:
 		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
+}
+
+//! Swaps in the int64 accumulator but keeps the bound signature (e.g. DECIMAL(15,2) -> DECIMAL(38,2)), so that binding
+//! sum_no_overflow by that signature (e.g. to finalize an exported state) yields the same state layout
+bool TryUseNoOverflowSum(BoundAggregateFunction &function, bool checked) {
+	const auto internal_type = function.GetArguments()[0].InternalType();
+	if (internal_type != PhysicalType::INT32 && internal_type != PhysicalType::INT64) {
+		return false;
+	}
+	auto arguments = function.GetArguments();
+	auto return_type = function.GetReturnType();
+	function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type, checked));
+	function.GetArguments() = std::move(arguments);
+	function.SetReturnType(std::move(return_type));
+	return true;
 }
 
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
@@ -391,16 +481,11 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 //! Binding sum_no_overflow by name (e.g. when re-binding an exported aggregate state) delegates to the regular sum,
 //! with the no-overflow implementation swapped in as statistics propagation does
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	const auto parameter_type = function.GetArguments()[0];
-	auto logical = BindLogicalSum(input.GetClientContext(), arguments);
-	if (parameter_type.id() != LogicalTypeId::DECIMAL) {
-		logical.first.ReplaceImplementation(GetSumAggregateNoOverflow(parameter_type.InternalType()));
-		// bound by name there is no statistics proof that the int64 accumulator cannot overflow
-		logical.first.SetFallible();
-	}
-	function = std::move(logical.first);
+	auto binder = input.NestedFunctionBinder();
+	auto logical = BindLogicalSum(binder, input.GetArguments());
+	// bound by name there is no statistics proof that the int64 accumulator cannot overflow
+	TryUseNoOverflowSum(logical.first, true);
+	input.GetBoundFunction() = std::move(logical.first);
 	return std::move(logical.second);
 }
 
@@ -422,13 +507,9 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		return nullptr;
 	}
 
-	// Replace with fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to
-	// swap in.
-	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
-	const bool sum_fits_in_int64 =
-	    bounds->min > NumericLimits<int64_t>::Minimum() && bounds->max < NumericLimits<int64_t>::Maximum();
-	if (has_no_overflow_variant && sum_fits_in_int64) {
-		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+	// Replace with fast implementation when possible
+	if (bounds->min > NumericLimits<int64_t>::Minimum() && bounds->max < NumericLimits<int64_t>::Maximum()) {
+		TryUseNoOverflowSum(expr.FunctionMutable(), false);
 	}
 
 	// Propagate stats.
@@ -486,6 +567,15 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.SetFallible(); // adding HUGEINT values to the HUGEINT accumulator throws on overflow
 		return function;
 	}
+	case PhysicalType::UINT128: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<uhugeint_t>, uhugeint_t, uhugeint_t, UhugeintSumOperation>(
+		        LogicalType::UHUGEINT, LogicalType::UHUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetFallible(); // adding UHUGEINT values to the UHUGEINT accumulator throws on overflow
+		return function;
+	}
 	default:
 		throw InternalException("Unimplemented sum aggregate");
 	}
@@ -523,15 +613,18 @@ AggregateFunction GetDecimalSumAggregate(PhysicalType type) {
 	}
 }
 
+//! The digits a wide decimal sum adds to the width of its input, enough for the sum of 2^64 values
+static constexpr uint32_t WIDE_SUM_EXTRA_DIGITS = 20;
+
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
 	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
-		// wide decimals sum their BIGNUM blobs into the widest decimal of the same scale; a decimal that is only
-		// stored as a BIGNUM blob because of debug_force_wide_decimal keeps the DECIMAL(38,s) result of its width
-		auto result_width = DecimalType::GetWidth(decimal_type) > Decimal::MAX_WIDTH_INT128 ? Decimal::MAX_WIDTH_DECIMAL
-		                                                                                    : Decimal::MAX_WIDTH_INT128;
+		// wide decimals sum their BIGNUM blobs exactly: 20 more digits hold the sum of any number of rows (below 2^64)
+		const auto input_width = DecimalType::GetWidth(decimal_type);
+		const auto result_width = input.GetDecimalWidthLimit().CheckedWidth(idx_t(input_width) + WIDE_SUM_EXTRA_DIGITS,
+		                                                                    input_width, "The sum");
 		function.ReplaceImplementation(GetWideDecimalSumAggregate());
 		function.SetName("sum");
 		function.GetArguments()[0] = decimal_type;
@@ -692,66 +785,75 @@ struct BignumOperation {
 	}
 };
 
-//! Sums wide decimals as BIGNUMs, the result must still fit the width of the result decimal
-struct WideDecimalSumOperation : public BignumOperation {
-	template <class TARGET_TYPE, class STATE>
-	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-			return;
-		}
-		BignumOperation::Finalize(state, target, finalize_data);
-		auto width = DecimalType::GetWidth(finalize_data.result.GetType());
-		if (!BignumDecimal::FitsWidth(target.data, width)) {
-			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in %s",
-			                          finalize_data.result.GetType().ToString());
-		}
-	}
-};
-
-//! The exported state is the sum as a BIGNUM, NULL while no value was added. The sum lives in a hugeint_t until it
-//! outgrows it, which the static field layouts cannot describe, hence the explicit callbacks
-AggregateStateLayout BignumSumGetStateType(AggregateLayoutInput &) {
-	AggregateStateLayout layout;
-	layout.type = LogicalType::BIGNUM;
-	layout.total_state_size = AlignValue<idx_t>(sizeof(BignumState));
-	return layout;
+//! The BIGNUM sum states are exported as the BIGNUM blob of their sum, NULL for an empty state
+AggregateStateLayout BignumSumStateLayout(AggregateLayoutInput &input) {
+	return AggregateStateLayout(LogicalType::BIGNUM, AlignValue<idx_t>(sizeof(BignumState)));
 }
 
-void BignumSumExportState(Vector &state_vector, AggregateFinalizeInputData &input, Vector &result, idx_t count,
+void BignumSumExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                           idx_t offset) {
 	auto states = state_vector.Values<BignumState *>();
-	auto writer = FlatVector::Writer<string_t>(result, count, offset);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		if (!state.is_set) {
-			writer.WriteNull();
+			result_validity.SetInvalid(offset + i);
 			continue;
 		}
-		writer.WriteValue(BignumOperation::ToBignum(state, input.allocator).data);
+		if (state.is_wide) {
+			result_data[offset + i] = BignumAggregates::WriteBignum(state.wide, result);
+		} else {
+			char blob[2 * BignumLimb::BYTES + Bignum::BIGNUM_HEADER_SIZE];
+			const auto size = BignumOperation::EncodeSmall(state.small, blob);
+			result_data[offset + i] = StringVector::AddStringOrBlob(result, blob, size);
+		}
 	}
 }
 
 void BignumSumImportState(AggregateImportInputData &input) {
-	auto values = input.input_vec.Values<string_t>();
-	const auto count = input.input_vec.size();
-	for (idx_t i = 0; i < count; i++) {
+	auto entries = input.input_vec.Values<string_t>();
+	for (idx_t i = 0; i < input.input_vec.size(); i++) {
 		auto &state = *reinterpret_cast<BignumState *>(input.dest_buffer + i * input.layout.total_state_size);
-		const auto entry = values[i];
-		if (!entry.IsValid()) {
-			// a NULL state has no values, the state stays empty
+		const auto entry = entries[i];
+		state.is_set = entry.IsValid();
+		state.is_wide = false;
+		state.small = 0;
+		if (!state.is_set) {
 			continue;
 		}
-		BignumOperation::Add(state, BignumIntermediate(bignum_t(entry.GetValue())), input.allocator);
+		const bignum_t value(entry.GetValue());
+		if (BignumOperation::TryGetSmall(BignumIntermediate(value), state.small)) {
+			continue;
+		}
+		state.is_wide = true;
+		state.wide = BignumAggregates::ImportBignum(value.data, input.allocator);
 	}
 }
+
+//! Sums wide decimals as BIGNUMs, the result must still fit the width of the result decimal
+struct WideDecimalSumOperation : public BignumOperation {
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		BignumOperation::Finalize<TARGET_TYPE, STATE>(state, target, finalize_data);
+		if (!state.is_set) {
+			return;
+		}
+		// the result width holds the sum of 2^64 rows, but an imported state can carry any value
+		const auto &result_type = finalize_data.result.GetType();
+		if (!DecimalHelper<bignum_t>::FitsWidth(target, DecimalType::GetWidth(result_type))) {
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in %s",
+			                          result_type.ToString());
+		}
+	}
+};
 
 AggregateFunction GetWideDecimalSumAggregate() {
 	auto function = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, WideDecimalSumOperation>(
 	    LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL);
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	function.SetFallible(); // the finalize throws when the sum does not fit the width of the result
-	function.SetStateExportCallbacks(BignumSumGetStateType, BignumSumExportState, BignumSumImportState);
+	function.SetStateExportCallbacks(BignumSumStateLayout, BignumSumExportState, BignumSumImportState);
 	return function;
 }
 
@@ -769,6 +871,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
+	sum.AddFunction(GetSumAggregate(PhysicalType::UINT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
@@ -776,7 +879,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM);
 	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
-	sum_bignum.SetStateExportCallbacks(BignumSumGetStateType, BignumSumExportState, BignumSumImportState);
+	sum_bignum.SetStateExportCallbacks(BignumSumStateLayout, BignumSumExportState, BignumSumImportState);
 	sum.AddFunction(sum_bignum);
 	sum.AddFunction(NumericAggregates::GetSum());
 	return sum;

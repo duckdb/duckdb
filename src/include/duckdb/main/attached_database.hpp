@@ -213,6 +213,13 @@ public:
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
+	//! A database marked as detached closes with the action recorded by MarkDetached instead.
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database,
+	                                       DatabaseCloseAction close_action);
+	//! The close action a detach issued by this context uses.
+	static DatabaseCloseAction GetDetachCloseAction(ClientContext &context);
+	//! Mark as detached: whoever releases the last reference closes the database with close_action.
+	void MarkDetached(DatabaseCloseAction close_action);
 	//! Obtain a reference unless closing the database has already started.
 	static shared_ptr<AttachedDatabase> TryGetReference(const weak_ptr<AttachedDatabase> &attached_database);
 
@@ -232,6 +239,8 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	bool is_closing = false;
+	bool is_detached = false;
+	DatabaseCloseAction detach_close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;

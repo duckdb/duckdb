@@ -1,0 +1,63 @@
+# name: test/optimizer/pushdown/join_filter_pushdown_bloom_copies.test
+# description: Replicated join Bloom filters preserve results across copy events and repeated execution
+# group: [pushdown]
+
+statement ok
+SET debug_force_bloom_filter_replication=true;
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+statement ok
+CREATE TABLE probe AS SELECT (i % 2000) * 1000000 AS k, i FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE build AS SELECT (i * 1000000)::INTEGER AS k FROM range(0, 2000, 5) t(i);
+
+statement ok
+INSERT INTO probe VALUES (NULL, 20000);
+
+statement ok
+INSERT INTO build VALUES (NULL);
+
+statement ok
+PREPARE matches AS SELECT count(*), sum(p.i) FROM probe p JOIN build b ON p.k IS NOT DISTINCT FROM b.k;
+
+# Single-thread execution must complete both dependent copy phases without waiting for another CPU group.
+# Repetition checks repeated initialization and publication of the prepared join filters.
+loop threads 1 5
+
+statement ok
+SET threads={threads};
+
+loop iteration 0 3
+
+query II
+EXECUTE matches;
+----
+4001	40010000
+
+query I
+SELECT count(*) FROM probe p JOIN build b ON CAST(p.k AS INTEGER)=b.k WHERE p.i % 3 = 0;
+----
+1334
+
+endloop
+
+endloop
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM probe p JOIN build b ON CAST(p.k AS INTEGER)=b.k;
+----
+analyzed_plan	<REGEX>:.*IN BF.*
+
+statement ok
+RESET debug_force_bloom_filter_replication;
+
+query II
+EXECUTE matches;
+----
+4001	40010000

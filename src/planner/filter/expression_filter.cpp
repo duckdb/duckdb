@@ -83,6 +83,16 @@ unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(Expression
 	return make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
+unique_ptr<ExpressionFilter> ExpressionFilter::CreateSelectivityOptionalFilter(unique_ptr<Expression> child_expr,
+                                                                               const LogicalType &column_type,
+                                                                               SelectivityOptionalFilterType type) {
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
+	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
+	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
+}
+
 bool ExpressionFilter::IsSimpleFilterColumnRef(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF ||
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
@@ -218,6 +228,9 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
 			return StringStats::CheckZonemap(stats, comparison_type, values);
 		}
+		if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+			return BignumStats::CheckZonemap(stats, comparison_type, values);
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -302,7 +315,7 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-			FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+			FunctionStatisticsInput input(func_copy, func_copy.BindInfoMutable(), child_stats, &expr_copy);
 			owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
 			return owned_stats.back().get();
 		}

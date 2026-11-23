@@ -63,10 +63,10 @@ static bool CastTextToNumeric(Vector &source, Vector &result, idx_t count, CastP
 			success = false;
 			continue;
 		}
-		if (value_integer_digits + value_fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+		if (value_integer_digits + value_fractional_digits > NumericType::MAX_WIDTH) {
 			HandleCastError::AssignError(
 			    StringUtil::Format("NUMERIC value needs %d digits, more than the maximum of %d",
-			                       value_integer_digits + value_fractional_digits, Decimal::MAX_WIDTH_DECIMAL),
+			                       value_integer_digits + value_fractional_digits, NumericType::MAX_WIDTH),
 			    parameters);
 			number_validity.SetInvalid(i);
 			success = false;

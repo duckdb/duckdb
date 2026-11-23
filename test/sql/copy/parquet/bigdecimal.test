@@ -30,7 +30,7 @@ SELECT bigdec::DOUBLE FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 5.7896044618658096e+38
 -5.7896044618658096e+38
 
-# functions without a wide implementation compute through DOUBLE, as the old DOUBLE mapping did
+# avg sums exactly and returns DOUBLE, the interpolating median computes through DOUBLE
 query I
 SELECT avg(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----

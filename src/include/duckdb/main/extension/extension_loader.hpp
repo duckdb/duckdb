@@ -23,7 +23,6 @@ class TableFunctionCatalogEntry;
 
 class DatabaseInstance;
 struct CreateMacroInfo;
-struct CreateCollationInfo;
 struct CreateAggregateFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
@@ -47,10 +46,6 @@ public:
 
 	//! Returns the DatabaseInstance associated with this extension loader
 	DUCKDB_API DatabaseInstance &GetDatabaseInstance() const;
-	//! Takes the process-wide debug switches over from the database. A loadable extension is linked with its own copy
-	//! of the library, so it runs this with its own copy of the switches: an extension that builds types whose physical
-	//! representation depends on such a switch (DECIMAL under debug_force_wide_decimal) calls this when it loads
-	DUCKDB_API void TakeOverProcessWideSettings() const;
 
 public:
 	//! Set the description of the extension
@@ -106,9 +101,6 @@ public:
 	DUCKDB_API void RegisterFunction(CopyFunction function);
 	//! Register a new macro function - throw an exception if the function already exists
 	DUCKDB_API void RegisterFunction(CreateMacroInfo &info);
-
-	//! Register a new collation
-	DUCKDB_API void RegisterCollation(CreateCollationInfo &info);
 
 	//! Register a new coordinate system
 	DUCKDB_API void RegisterCoordinateSystem(CreateCoordinateSystemInfo &info);

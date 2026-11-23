@@ -522,9 +522,9 @@ unique_ptr<BaseStatistics> NumericColumnData::GetUpdateStatistics() {
 //----------------------------------------------------------------------------------------------------------------------
 class NumericColumnCheckpointState final : public ColumnCheckpointState {
 public:
-	NumericColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	NumericColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                             PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		global_stats = BaseStatistics::CreateEmpty(LogicalType::NUMERIC).ToUnique();
 	}
 
@@ -562,14 +562,15 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> NumericColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> NumericColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                            PartialBlockManager &partial_block_manager) {
-	return make_uniq<NumericColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<NumericColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> NumericColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
                                                                 const BaseStatistics &old_stats) {
-	auto checkpoint_state = make_uniq<NumericColumnCheckpointState>(row_group, *this, info.GetPartialBlockManager());
+	auto checkpoint_state =
+	    make_uniq<NumericColumnCheckpointState>(row_group, *this, info.GetContext(), info.GetPartialBlockManager());
 	auto current = GetInner();
 	auto target_column = current;
 	auto current_range = GetRange();

@@ -143,13 +143,13 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &se
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &result_sel,
-                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+                                           optional_ptr<const SelectionVector> current_sel, idx_t current_count) {
 	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
                                            optional_ptr<SelectionVector> false_sel,
-                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+                                           optional_ptr<const SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
 	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);

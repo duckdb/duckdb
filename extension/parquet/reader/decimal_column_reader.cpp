@@ -1,7 +1,7 @@
 #include "reader/decimal_column_reader.hpp"
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/bignum.hpp"
-#include "duckdb/common/types/bignum_decimal.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 
 #include <memory>
 #include <cmath>
@@ -82,7 +82,7 @@ unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(const ParquetReader &
 
 string ParquetDecimalUtils::ReadWideDecimalValue(const_data_ptr_t pointer, idx_t size) {
 	// Parquet decimals are big-endian two's complement
-	return BignumDecimal::FromTwosComplement(pointer, size, true);
+	return DecimalHelper<bignum_t>::FromTwosComplement(pointer, size, true);
 }
 
 idx_t ParquetDecimalUtils::WideDecimalByteLength(uint32_t width) {
@@ -90,8 +90,8 @@ idx_t ParquetDecimalUtils::WideDecimalByteLength(uint32_t width) {
 	return static_cast<idx_t>(std::ceil((static_cast<double>(width) * 3.3219280948873626 + 1) / 8.0));
 }
 
-void ParquetDecimalUtils::WriteWideDecimal(const string_t &blob, idx_t byte_length, data_ptr_t result) {
-	BignumDecimal::ToTwosComplement(blob, result, byte_length, true);
+void ParquetDecimalUtils::WriteWideDecimal(const bignum_t &value, idx_t byte_length, data_ptr_t result) {
+	DecimalHelper<bignum_t>::ToTwosComplement(value, result, byte_length, true);
 }
 
 } // namespace duckdb

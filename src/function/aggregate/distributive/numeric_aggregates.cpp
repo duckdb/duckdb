@@ -204,7 +204,7 @@ struct NumericInput {
 
 //! Runs OP::Typed<T> for the fixed-size representation of the input, OP::Blob for canonical blobs
 template <class OP, class... ARGS>
-void DispatchInput(const NumericInput &input, ARGS &&... args) {
+void DispatchInput(const NumericInput &input, ARGS &&...args) {
 	switch (input.physical) {
 	case PhysicalType::INT8:
 		return OP::template Typed<int8_t>(input, std::forward<ARGS>(args)...);

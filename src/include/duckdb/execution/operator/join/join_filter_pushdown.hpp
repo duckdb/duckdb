@@ -24,6 +24,9 @@ class LogicalGet;
 class JoinHashTable;
 class PhysicalOperator;
 class PhysicalComparisonJoin;
+class BloomFilter;
+class Event;
+class Pipeline;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
 
@@ -64,6 +67,8 @@ struct JoinFilterPushdownColumn {
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
+
+enum class InFilterMode { PRUNING_ONLY, ADAPTIVE_ROW_FILTERING };
 
 struct DeferredRuntimeFilterPushdown {
 	DeferredRuntimeFilterType type = DeferredRuntimeFilterType::BLOOM_FILTER;
@@ -124,6 +129,15 @@ struct JoinFilterPushdownInfo {
 	bool build_side_has_filter;
 
 public:
+	//! Bound replicated prefix-range build state independently of the radix partitions.
+	static constexpr idx_t MAX_PREFIX_RANGE_BUILD_MEMORY = 16ULL * 1024ULL * 1024ULL;
+	static idx_t GetMemoryBudget(ClientContext &context);
+	static void InitializeBloomFilters(ClientContext &context, const PhysicalComparisonJoin &op, JoinHashTable &ht,
+	                                   shared_ptr<BloomFilter> recycled_filter = nullptr);
+	//! Complete optional read preparation before publishing filters and finalizing the hash table.
+	static void FinalizeRuntimeFilters(Pipeline &pipeline, Event &event, const PhysicalOperator &op, JoinHashTable &ht,
+	                                   optional_ptr<JoinFilterGlobalState> gstate, idx_t num_threads);
+
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
 
@@ -143,7 +157,7 @@ private:
 
 	bool PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
 	                  const JoinFilterPushdownColumn &column, JoinHashTable &ht, const PhysicalOperator &op,
-	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	                  idx_t filter_idx, ProjectionIndex filter_col_idx, InFilterMode mode) const;
 
 	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
 	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,

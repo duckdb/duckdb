@@ -8,6 +8,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
+#include "duckdb/storage/statistics/bignum_stats.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 
@@ -142,7 +143,7 @@ static uint32_t NeededScaleWide(UnifiedVectorFormat &vdata, idx_t count, const L
 		if (!vdata.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto text = Value::WIDEDECIMAL(data[idx].GetString(), width, scale).ToString();
+		auto text = Value::DECIMAL(bignum_t(data[idx]), width, scale).ToString();
 		auto point = text.find('.');
 		if (point == string::npos) {
 			continue;
@@ -182,7 +183,7 @@ void NumericRange::UpdateCanonical(const Vector &canonical, idx_t count) {
 		return;
 	}
 	uint32_t needed_scale = 0;
-	for (idx_t i = 0; i < count && needed_scale < Decimal::MAX_WIDTH_DECIMAL; i++) {
+	for (idx_t i = 0; i < count && needed_scale < NumericType::MAX_WIDTH; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
 			continue;
@@ -235,8 +236,8 @@ void NumericRange::Update(const Vector &vector, idx_t count) {
 		string_t lo, hi;
 		found = FindMinMax<string_t>(vdata, count, lo, hi);
 		if (found) {
-			vector_min = Value::WIDEDECIMAL(lo.GetString(), DecimalType::GetWidth(type), type_scale);
-			vector_max = Value::WIDEDECIMAL(hi.GetString(), DecimalType::GetWidth(type), type_scale);
+			vector_min = Value::DECIMAL(bignum_t(lo), DecimalType::GetWidth(type), type_scale);
+			vector_max = Value::DECIMAL(bignum_t(hi), DecimalType::GetWidth(type), type_scale);
 			if (type_scale > 0) {
 				needed_scale = NeededScaleWide(vdata, count, type);
 			}
@@ -277,16 +278,13 @@ bool NumericRange::TryUpdate(const BaseStatistics &typed_stats) {
 		Update(NumericStats::Min(typed_stats));
 		Update(NumericStats::Max(typed_stats));
 		return true;
-	case StatisticsType::STRING_STATS:
-		// wide decimals: the statistics are exact only for short blobs
-		if (StringStats::GetMinType(typed_stats) != StringStatsType::EXACT_STATS ||
-		    StringStats::GetMaxType(typed_stats) != StringStatsType::EXACT_STATS) {
+	case StatisticsType::BIGNUM_STATS:
+		// wide decimals: the bounds are exact only for short blobs
+		if (!BignumStats::MinIsExact(typed_stats) || !BignumStats::MaxIsExact(typed_stats)) {
 			return false;
 		}
-		Update(Value::WIDEDECIMAL(StringStats::Min(typed_stats), DecimalType::GetWidth(type),
-		                          DecimalType::GetScale(type)));
-		Update(Value::WIDEDECIMAL(StringStats::Max(typed_stats), DecimalType::GetWidth(type),
-		                          DecimalType::GetScale(type)));
+		Update(BignumStats::Min(typed_stats));
+		Update(BignumStats::Max(typed_stats));
 		return true;
 	default:
 		return false;
@@ -377,12 +375,12 @@ BaseStatistics NumericRange::ToTyped(const LogicalType &type) const {
 	    (!NumericType::TryExactCast(min, type, typed_min) || !NumericType::TryExactCast(max, type, typed_max))) {
 		return BaseStatistics::CreateUnknown(type);
 	}
-	if (BaseStatistics::GetStatsType(type) == StatisticsType::STRING_STATS) {
-		// wide decimals keep their BIGNUM blobs as string statistics
-		auto result = StringStats::CreateEmpty(type);
+	if (BaseStatistics::GetStatsType(type) == StatisticsType::BIGNUM_STATS) {
+		// wide decimals keep the BIGNUM blobs of their bounds
+		auto result = BignumStats::CreateEmpty(type);
 		if (has_values) {
-			StringStats::FromConstant(result, string_t(StringValue::Get(typed_min)));
-			StringStats::MergeInConstant(result, string_t(StringValue::Get(typed_max)));
+			BignumStats::SetMin(result, typed_min);
+			BignumStats::SetMax(result, typed_max);
 		}
 		return result;
 	}

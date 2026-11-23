@@ -346,3 +346,44 @@ NULL
 [2, 3, 4]
 [1, NULL, 3]
 [1, 2, 3]
+
+# Reuse the encoder and decoder across full batches and a final partial batch.
+statement ok
+CREATE TABLE sort_inputs AS
+SELECT i::INTEGER n, CASE WHEN i % 17 = 0 THEN NULL
+                         ELSE [{'n': i, 's': repeat('x', (i % 31)::INTEGER)}, NULL] END nested
+FROM range(8195) t(i)
+
+# An integer key uses the fixed-width representation.
+query II
+SELECT count(*), count(*) FILTER (WHERE n IS DISTINCT FROM 8195 - r)
+FROM (
+    SELECT n, row_number() OVER () r
+    FROM (SELECT n FROM sort_inputs ORDER BY n DESC)
+)
+----
+8195	0
+
+# Nested keys use the variable-width representation.
+query II
+SELECT count(*), count(*) FILTER (
+    WHERE n IS DISTINCT FROM 8195 - r
+       OR nested IS DISTINCT FROM CASE WHEN n % 17 = 0 THEN NULL
+          ELSE [{'n': n::BIGINT, 's': repeat('x', (n % 31)::INTEGER)}, NULL] END)
+FROM (
+    SELECT *, row_number() OVER () r
+    FROM (SELECT * FROM sort_inputs ORDER BY n DESC, nested ASC NULLS FIRST)
+)
+----
+8195	0
+
+# Top-N supplies its own reusable encoding state.
+query I
+SELECT sum(n) FROM (
+    SELECT n FROM sort_inputs ORDER BY n DESC, nested ASC NULLS FIRST LIMIT 500
+)
+----
+3972250
+
+statement ok
+DROP TABLE sort_inputs

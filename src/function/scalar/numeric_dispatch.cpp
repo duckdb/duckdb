@@ -230,7 +230,7 @@ bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRa
 	if (kind == NumericDispatchKind::MULTIPLY) {
 		idx_t scale = idx_t(ranges[0].scale) + ranges[1].scale;
 		hugeint_t candidates[4];
-		if (scale > Decimal::MAX_WIDTH_DECIMAL || !Hugeint::TryMultiply(ranges[0].min, ranges[1].min, candidates[0]) ||
+		if (scale > NumericType::MAX_WIDTH || !Hugeint::TryMultiply(ranges[0].min, ranges[1].min, candidates[0]) ||
 		    !Hugeint::TryMultiply(ranges[0].min, ranges[1].max, candidates[1]) ||
 		    !Hugeint::TryMultiply(ranges[0].max, ranges[1].min, candidates[2]) ||
 		    !Hugeint::TryMultiply(ranges[0].max, ranges[1].max, candidates[3])) {
@@ -265,8 +265,8 @@ bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRa
 LogicalType ClampedForDigits(idx_t integer_digits, uint32_t scale) {
 	// scale never exceeds the widest DECIMAL (callers that sum scales check that first), so a full-width scale leaves
 	// no room for integer digits: cap them and let the wide kernel check the result for overflow at run time
-	if (integer_digits + scale > Decimal::MAX_WIDTH_DECIMAL) {
-		integer_digits = idx_t(Decimal::MAX_WIDTH_DECIMAL) - scale;
+	if (integer_digits + scale > NumericType::MAX_WIDTH) {
+		integer_digits = idx_t(NumericType::MAX_WIDTH) - scale;
 	}
 	return NumericType::ForDigits(integer_digits, scale);
 }
@@ -281,8 +281,8 @@ LogicalType ResultTypeByDigits(NumericDispatchKind kind, vector<unique_ptr<Vecto
 	GetOperandDigits(typed[1]->GetType(), right_digits, right_scale);
 	if (kind == NumericDispatchKind::MULTIPLY) {
 		idx_t scale = idx_t(left_scale) + right_scale;
-		if (scale > Decimal::MAX_WIDTH_DECIMAL) {
-			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
+		if (scale > NumericType::MAX_WIDTH) {
+			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", NumericType::MAX_WIDTH);
 		}
 		return ClampedForDigits(idx_t(left_digits) + right_digits, NumericCast<uint32_t>(scale));
 	}
@@ -323,8 +323,8 @@ vector<LogicalType> WidenedKernelTypes(NumericDispatchKind kind, vector<unique_p
 			left_width = Decimal::MAX_WIDTH_INT64 + 1;
 		}
 		left_width = MaxValue<idx_t>(left_width, scales[0]);
-		if (left_width > Decimal::MAX_WIDTH_DECIMAL) {
-			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
+		if (left_width > NumericType::MAX_WIDTH) {
+			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", NumericType::MAX_WIDTH);
 		}
 		cast_types.push_back(LogicalType::DECIMAL(NumericCast<uint32_t>(left_width), scales[0]));
 		cast_types.push_back(LogicalType::DECIMAL(MaxValue(widths[1], scales[1]), scales[1]));
@@ -422,7 +422,7 @@ void DisableOverflowChecks(ClientContext &context, BoundFunctionExpression &expr
 		NumericStats::SetMax(stats, zero);
 		child_stats.push_back(std::move(stats));
 	}
-	FunctionStatisticsInput input(expr, expr.BindInfoMutable().get(), child_stats, nullptr);
+	FunctionStatisticsInput input(expr, expr.BindInfoMutable(), child_stats, nullptr);
 	statistics_callback(context, input);
 }
 
@@ -499,7 +499,7 @@ struct NumericDispatchState : public FunctionLocalState {
 };
 
 unique_ptr<FunctionLocalState> InitNumericDispatchState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data) {
+                                                        optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<NumericDispatchState>();
 }
 
@@ -714,7 +714,7 @@ void DispatchInGroups(DataChunk &args, ExpressionState &state, Vector &result) {
 		}
 		auto integer_digits = MaxValue(group_integer_digits, row_integer_digits);
 		auto fractional_digits = MaxValue(group_fractional_digits, row_fractional_digits);
-		if (group_size > 0 && integer_digits + fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+		if (group_size > 0 && integer_digits + fractional_digits > NumericType::MAX_WIDTH) {
 			flush();
 			integer_digits = row_integer_digits;
 			fractional_digits = row_fractional_digits;

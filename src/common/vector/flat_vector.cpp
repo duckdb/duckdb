@@ -115,7 +115,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	auto offset_ptr = data_ptr ? data_ptr + type_size * offset : nullptr;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, count, type_size);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 
@@ -125,7 +125,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const Logic
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	result->SetVectorSize(count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 
@@ -155,8 +155,8 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 		// to avoid creating a DictionaryBuffer with a null selection vector.
 		return SliceInternal(type, idx_t(0), count);
 	}
-	Vector child_vector(type, shared_from_this());
-	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	Vector child_vector(type, buffer_from_this());
+	auto entry = make_buffer<DictionaryEntry>(std::move(child_vector));
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
@@ -445,7 +445,7 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
 		case PhysicalType::VARCHAR:
 			// the unscaled value of a wide decimal is a BIGNUM blob
-			return Value::WIDEDECIMAL(reinterpret_cast<const string_t *>(data_ptr)[index].GetString(), width, scale);
+			return Value::DECIMAL(reinterpret_cast<const bignum_t *>(data_ptr)[index], width, scale);
 		default:
 			throw InternalException("Unimplemented physical type '%s' for DECIMAL",
 			                        TypeIdToString(type.InternalType()));
@@ -489,6 +489,13 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
 		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::GEOGRAPHY: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		if (GeoType::HasCRS(type)) {
+			return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
+		}
+		return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];

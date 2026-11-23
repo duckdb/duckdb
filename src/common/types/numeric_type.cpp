@@ -117,9 +117,9 @@ static LogicalType SignedIntegerType(idx_t rank) {
 
 static LogicalType DecimalForDigits(idx_t integer_digits, uint32_t scale) {
 	auto width = integer_digits + scale;
-	if (width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (width > NumericType::MAX_WIDTH) {
 		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
-		                          Decimal::MAX_WIDTH_DECIMAL);
+		                          NumericType::MAX_WIDTH);
 	}
 	if (width < 1) {
 		width = 1;
@@ -151,7 +151,7 @@ LogicalType NumericType::Widen(const LogicalType &left, const LogicalType &right
 	if (!TryWiden(left, right, result)) {
 		throw OutOfRangeException("NUMERIC values of %s and %s have no common representation: they need more than %d "
 		                          "digits",
-		                          left.ToString(), right.ToString(), Decimal::MAX_WIDTH_DECIMAL);
+		                          left.ToString(), right.ToString(), NumericType::MAX_WIDTH);
 	}
 	return result;
 }
@@ -212,7 +212,7 @@ LogicalType NumericType::ForRange(const Value &min, const Value &max, uint32_t s
 	if (!TryForRange(min, max, scale, result)) {
 		throw OutOfRangeException("NUMERIC values %s and %s have no common representation: they need more than %d "
 		                          "digits",
-		                          min.ToString(), max.ToString(), Decimal::MAX_WIDTH_DECIMAL);
+		                          min.ToString(), max.ToString(), NumericType::MAX_WIDTH);
 	}
 	return result;
 }
@@ -249,9 +249,9 @@ LogicalType NumericType::ForUnscaledRange(hugeint_t min, hugeint_t max, uint32_t
 	}
 	auto digits = MaxValue(Digits(min), Digits(max));
 	auto width = MaxValue<idx_t>(digits, scale);
-	if (width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (width > NumericType::MAX_WIDTH) {
 		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
-		                          Decimal::MAX_WIDTH_DECIMAL);
+		                          NumericType::MAX_WIDTH);
 	}
 	return LogicalType::DECIMAL(NumericCast<uint32_t>(width), scale);
 }
@@ -526,8 +526,7 @@ string NumericType::ExpandExponent(const char *text, idx_t size) {
 }
 
 bool NumericType::TryForDigits(idx_t integer_digits, idx_t fractional_digits, LogicalType &type) {
-	if (fractional_digits > Decimal::MAX_WIDTH_DECIMAL ||
-	    integer_digits + fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+	if (fractional_digits > NumericType::MAX_WIDTH || integer_digits + fractional_digits > NumericType::MAX_WIDTH) {
 		return false;
 	}
 	type = ForDigits(integer_digits, NumericCast<uint32_t>(fractional_digits));
@@ -553,9 +552,9 @@ bool NumericType::TryParseLiteral(const string &text, Value &result) {
 		return false;
 	}
 	auto width = MaxValue<idx_t>(integer_digits + fractional_digits, 1);
-	if (width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (width > NumericType::MAX_WIDTH) {
 		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
-		                          Decimal::MAX_WIDTH_DECIMAL);
+		                          NumericType::MAX_WIDTH);
 	}
 	auto scale = NumericCast<uint32_t>(fractional_digits);
 	auto plain = HasExponent(text.c_str(), text.size()) ? ExpandExponent(text.c_str(), text.size())
@@ -647,7 +646,7 @@ LogicalType NumericType::ResolveCastTarget(const LogicalType &source, const Logi
 }
 
 LogicalType NumericType::WidestType(uint32_t scale) {
-	return LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, scale);
+	return LogicalType::DECIMAL(NumericType::MAX_WIDTH, scale);
 }
 
 } // namespace duckdb

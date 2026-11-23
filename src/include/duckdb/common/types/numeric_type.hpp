@@ -18,6 +18,9 @@ class Value;
 //! DECIMAL(width, scale)) that covers every value in the table; each row group stores its rows in the narrowest
 //! representation that fits them. The rules below decide those representations.
 struct NumericType {
+	//! The widest value a NUMERIC holds, in decimal digits
+	static constexpr uint32_t MAX_WIDTH = 255;
+
 	//! Whether values of this type can be stored in a NUMERIC column without loss (integers and decimals)
 	DUCKDB_API static bool IsExact(const LogicalType &type);
 	//! The representation of a NUMERIC column that holds no values

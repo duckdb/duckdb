@@ -4,6 +4,13 @@
 
 load {TEST_DIR}/wide_decimal.db
 
+# wide decimal columns need the latest storage version
+statement ok
+ATTACH '{TEST_DIR}/wide_decimal_latest.db' AS wd (STORAGE_VERSION 'latest');
+
+statement ok
+USE wd;
+
 statement ok
 CREATE TABLE t AS
 SELECT (i::VARCHAR || '12345678901234567890123456789012345678901234567890.' || (i % 100)::VARCHAR)::DECIMAL(60,2) AS d, i
@@ -25,7 +32,7 @@ SELECT sum(d) FROM t
 query I
 SELECT typeof(sum(d)) FROM t
 ----
-DECIMAL(255,2)
+DECIMAL(80,2)
 
 # filters, including ones that can be pruned with the (string) zonemaps
 query I
@@ -126,17 +133,27 @@ SELECT list(d ORDER BY i), {'x': min(d)} FROM t WHERE i < 2
 ----
 [12345678901234567890123456789012345678901234567890.00, 112345678901234567890123456789012345678901234567890.10]	{'x': 12345678901234567890123456789012345678901234567890.00}
 
-# SUM overflows when the result exceeds 255 digits
-statement error
-SELECT sum(x) FROM (VALUES (repeat('9', 255)::DECIMAL(255,0)), (repeat('9', 255)::DECIMAL(255,0))) t(x)
+# SUM adds 20 digits to the width, the sum of any number of rows fits
+query II
+SELECT sum(x) AS s, typeof(s) FROM (VALUES (repeat('9', 255)::DECIMAL(255,0)), (repeat('9', 255)::DECIMAL(255,0))) t(x)
 ----
-Overflow in SUM
+1999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999998	DECIMAL(275,0)
 
 # persistence
 statement ok
 CHECKPOINT
 
+# the restart restores the search path before the attached database is back
+statement ok
+USE wide_decimal;
+
 restart
+
+statement ok
+ATTACH '{TEST_DIR}/wide_decimal_latest.db' AS wd;
+
+statement ok
+USE wd;
 
 query IIII
 SELECT count(*), count(d), min(d), max(d) FROM t

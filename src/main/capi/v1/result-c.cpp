@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/types/bignum_decimal.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
@@ -138,7 +138,7 @@ struct CWideDecimalConverter : public CBaseConverter {
 	static DST Convert(SRC input) {
 		duckdb_hugeint result;
 		hugeint_t value;
-		if (!BignumDecimal::TryToHugeint(input, value)) {
+		if (!DecimalHelper<bignum_t>::TryToHugeint(input, value)) {
 			result.lower = 0;
 			result.upper = 0;
 			return result;
@@ -331,7 +331,7 @@ duckdb_state deprecated_duckdb_translate_column(QueryResult &result, duckdb_colu
 			break;
 		}
 		case PhysicalType::VARCHAR: {
-			WriteData<string_t, duckdb_hugeint, CWideDecimalConverter>(column, collection, column_ids);
+			WriteData<bignum_t, duckdb_hugeint, CWideDecimalConverter>(column, collection, column_ids);
 			break;
 		}
 		default:
