@@ -31,6 +31,8 @@ public:
 	const WindowAggregateExecutor &executor;
 	//! Whether two rows have the same arguments, over [left arguments..., right arguments...] (can be nullptr)
 	unique_ptr<Expression> args_equal;
+	//! "hash(#0, #1, ...)" over the arguments
+	unique_ptr<Expression> args_hash;
 	//! The column indices of any ORDER BY argument expressions
 	vector<column_t> arg_order_idx;
 };
