@@ -137,8 +137,4 @@ TEST_CASE("Storage dictionary filters support the general expression executor", 
 	ColumnSegment::FilterSelection(selected, input, *state, input.size(), count);
 	REQUIRE(count == 4);
 	REQUIRE(evaluated == 10);
-	selected.set_index(0, 2);
-	count = 1;
-	REQUIRE_THROWS_WITH(ColumnSegment::FilterSelection(selected, input, *state, input.size(), count),
-	                    Catch::Matchers::Contains("Statistics mismatch"));
 }

@@ -96,6 +96,9 @@ endloop
 
 endloop
 
+# The following fixtures need room for an eight-row prefix and a NULL suffix in one vector.
+require vector_size 16
+
 # The final non-NULL value makes the scan a dictionary. Selecting it away leaves
 # eight valid zeros followed by NULLs, so only the repeated prefix sets the SUM.
 statement ok
@@ -138,6 +141,9 @@ SELECT sum(v), sum_no_overflow(v) FROM prefix_only
 WHERE i >= 8 AND i < getvariable('vector_size') - 1
 ----
 NULL	NULL
+
+# Keep the 32-row prefix and a NULL suffix in the same vector.
+require vector_size 64
 
 # The first eight codes are mixed, so repeated-code batching cannot set the SUM.
 # Only the fully valid 32-row prefix contributes; the checked suffix is all NULL.

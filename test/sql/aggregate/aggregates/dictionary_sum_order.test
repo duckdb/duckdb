@@ -2,6 +2,9 @@
 # description: Dictionary batches preserve scalar SUM order and checked overflow
 # group: [aggregates]
 
+# The final ten rows must fit in one vector to exercise repeated-code batching.
+require vector_size 16
+
 load {TEST_DIR}/dictionary_sum_order.db
 
 statement ok
