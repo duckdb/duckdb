@@ -169,14 +169,14 @@ static bool UpdateFirstSet(Matcher &matcher) {
 		for (idx_t i = 0; i < children.size() && nullable; i++) {
 			auto &child_first = children[i].get().first_set;
 			changed |= first.MergeTokens(child_first);
-			// the element can be followed by the FIRST set of the rest of the sequence
-			MatcherTokenSet suffix_first;
+			// the element can be followed by the FIRST set of the rest of the sequence, up to and including its
+			// first element that is not nullable
+			idx_t suffix_end = i + 1;
 			bool suffix_nullable = true;
-			for (idx_t j = i + 1; j < children.size(); j++) {
-				auto &suffix_child = children[j].get().first_set;
-				suffix_first.MergeTokens(suffix_child);
-				if (!suffix_child.nullable) {
+			for (; suffix_end < children.size(); suffix_end++) {
+				if (!children[suffix_end].get().first_set.nullable) {
 					suffix_nullable = false;
+					suffix_end++;
 					break;
 				}
 			}
@@ -185,7 +185,9 @@ static bool UpdateFirstSet(Matcher &matcher) {
 			}
 			changed |= first.second.MergeTokens(child_first.second);
 			if (!child_first.one.IsEmpty()) {
-				changed |= first.second.MergeTokens(suffix_first);
+				for (idx_t j = i + 1; j < suffix_end; j++) {
+					changed |= first.second.MergeTokens(children[j].get().first_set);
+				}
 			}
 			nullable = child_first.nullable;
 		}
