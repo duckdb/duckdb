@@ -3574,6 +3574,27 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 	}
 }
 
+//! Runs the estimate of a statement inside a transaction: the one the user started, or one that is rolled back again
+struct EstimateTransaction {
+	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
+		if (started) {
+			con.BeginTransaction();
+		}
+	}
+	~EstimateTransaction() {
+		if (!started) {
+			return;
+		}
+		try {
+			con.Rollback();
+		} catch (...) { // NOLINT: the statement itself reports what is wrong with the connection
+		}
+	}
+
+	duckdb::Connection &con;
+	bool started;
+};
+
 void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
 	case duckdb::StatementType::SELECT_STATEMENT:
@@ -3589,6 +3610,9 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 	}
 	try {
 		auto &context = *conn->context;
+		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
+		// extract it, read the estimates and destroy it inside one transaction
+		EstimateTransaction transaction(*conn);
 		auto plan = context.ExtractPlan(sql);
 		vector<ScanEstimate> scans;
 		CollectScanEstimates(context, *plan, scans);

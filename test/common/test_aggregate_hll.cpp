@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 
 namespace duckdb {
 
@@ -18,11 +19,12 @@ TEST_CASE("Aggregate HLL observes every distinct hash across lookup hits and reu
 	HyperLogLogP<8> expected;
 	DataChunk groups;
 	groups.Initialize(Allocator::DefaultAllocator(), types);
+	ChunkHasher hasher(*con.context, types);
 	Vector hashes(LogicalType::HASH);
 	Vector addresses(LogicalType::POINTER);
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	auto check = [&]() {
-		groups.Hash(hashes);
+		hasher.Hash(groups, hashes);
 		expected.Update(hashes);
 		ht.FindOrCreateGroups(groups, hashes, addresses, new_groups);
 		const auto upper_bound = LossyNumericCast<idx_t>((1 + HyperLogLogP<8>::GetErrorRate()) * expected.Count());

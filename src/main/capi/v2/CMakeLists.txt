@@ -41,6 +41,7 @@ add_library_unity(
   capi_v2_replacement_scan.cpp
   capi_v2_result.cpp
   capi_v2_schema.cpp
+  capi_v2_secret.cpp
   capi_v2_object_cache.cpp
   capi_v2_statement.cpp
   capi_v2_stats.cpp

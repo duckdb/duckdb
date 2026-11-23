@@ -3380,6 +3380,12 @@ auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	return *this;
 }
 
+auto ScalarFunction::SetSchema(const std::string &schema) & -> ScalarFunction & {
+	auto view = ToStr(schema);
+	CheckedAPICall(duckdb_v2_scalar_function_set_schema, handle(), view.data(), view.size());
+	return *this;
+}
+
 auto ScalarFunction::GetDocs() -> FunctionDocs {
 	duckdb_v2_function_docs_handle docs = nullptr;
 	CheckedAPICall(duckdb_v2_scalar_function_get_docs, handle(), &docs);

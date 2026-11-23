@@ -6,7 +6,6 @@ add_library_unity(
   cast_to_type.cpp
   can_implicitly_cast.cpp
   current_setting.cpp
-  hash.cpp
   least.cpp
   replace_type.cpp
   stats.cpp

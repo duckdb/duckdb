@@ -1,0 +1,127 @@
+# name: test/sql/types/struct/remap_struct_empty_nested_mapping.test
+# description: A field that is mapped with an empty child mapping is built as an empty struct and keeps the NULLs of its source
+# group: [struct]
+
+# the source of s has a field, the target has none
+query I
+SELECT remap_struct({s: {a: 1}}, {s: {}}, {s: ('s', {})}, NULL);
+----
+{'s': {}}
+
+query III
+SELECT remap_struct(x, {s: {}}, {s: ('s', {})}, NULL),
+       remap_struct(x, {s: {}}, {s: ('s', {})}, {s: {}}),
+       remap_struct(x, {s: {}}, {s: ('s', {})}, {s: nullif({}, {})})
+FROM (VALUES ({s: {a: 1}}), ({s: NULL}), (NULL)) t(x);
+----
+{'s': {}}	{'s': {}}	{'s': {}}
+{'s': NULL}	{'s': NULL}	{'s': NULL}
+NULL	NULL	NULL
+
+# as the element of a list, and as the value and the key of a map
+query III
+SELECT remap_struct([{a: 1}], [{}], {list: ('list', {})}, {list: {}}),
+       remap_struct(MAP {1: {a: 1}}, MAP {1: {}}, {key: 'key', value: ('value', {})}, {value: {}}),
+       remap_struct(MAP {{a: 1}: 1}, MAP {{}: 1}, {key: ('key', {}), value: 'value'}, NULL);
+----
+[{}]	{1={}}	{{}=1}
+
+query IIII
+SELECT id,
+       remap_struct(l, [{}], {list: ('list', {})}, NULL),
+       remap_struct(l, [{}], {list: ('list', {})}, {list: nullif({}, {})}),
+       remap_struct(m, MAP {1: {}}, {key: 'key', value: ('value', {})}, {value: {}})
+FROM (VALUES (1, [{a: 1}, NULL], MAP {1: {a: 1}, 2: NULL}), (2, NULL, NULL), (3, [], MAP {})) t(id, l, m) ORDER BY id;
+----
+1	[{}, NULL]	[{}, NULL]	{1={}, 2=NULL}
+2	NULL	NULL	NULL
+3	[]	[]	{}
+
+# the source is an empty struct as well: the field keeps its source, where a default used to replace it
+# ({e: NULL} became {'e': {}}, and a NULL default returned NULL for every row)
+query III
+SELECT remap_struct(x, {e: {}}, {e: ('e', {})}, NULL),
+       remap_struct(x, {e: {}}, {e: ('e', {})}, {e: {}}),
+       remap_struct(x, {e: {}}, {e: ('e', {})}, {e: nullif({}, {})})
+FROM (VALUES ({e: {}}), ({e: NULL}), (NULL)) t(x);
+----
+{'e': {}}	{'e': {}}	{'e': {}}
+{'e': NULL}	{'e': NULL}	{'e': NULL}
+NULL	NULL	NULL
+
+# below a list element, a map value and a map key, next to a sibling that takes its default
+query III
+SELECT remap_struct(x.l, [{e: {}, n: 0}], {list: ('list', {e: ('e', {})})}, {list: {e: {}, n: 5}}),
+       remap_struct(x.m, MAP {1: {e: {}, n: 0}}, {key: 'key', value: ('value', {e: ('e', {})})}, {value: {n: 5}}),
+       remap_struct(x.k, MAP {{e: {}, n: 0}: 1}, {key: ('key', {e: ('e', {})}), value: 'value'}, {key: {e: nullif({}, {}), n: 5}})
+FROM (VALUES
+	({l: [{e: {a: 1}}, {e: NULL}, NULL], m: MAP {1: {e: {a: 1}}, 2: {e: NULL}, 3: NULL}, k: MAP {{e: {a: 1}}: 1, {e: NULL}: 2}}),
+	({l: NULL, m: NULL, k: NULL}),
+	({l: [], m: MAP {}, k: MAP {}})
+) t(x);
+----
+[{'e': {}, 'n': 5}, {'e': NULL, 'n': 5}, NULL]	{1={'e': {}, 'n': 5}, 2={'e': NULL, 'n': 5}, 3=NULL}	{{'e': {}, 'n': 5}=1, {'e': NULL, 'n': 5}=2}
+NULL	NULL	NULL
+[]	{}	{}
+
+# the same on a constant input
+query I
+SELECT remap_struct({l: [{e: {a: 1}}, {e: NULL}, NULL]}, {l: [{e: {}, n: 0}]}, {l: ('l', {list: ('list', {e: ('e', {})})})}, {l: {list: {e: {}, n: 5}}});
+----
+{'l': [{'e': {}, 'n': 5}, {'e': NULL, 'n': 5}, NULL]}
+
+# several vectors, a filtered and a joined input
+statement ok
+CREATE VIEW big AS
+SELECT i AS id,
+       CASE WHEN i % 5 = 0 THEN NULL
+            WHEN i % 5 = 1 THEN {s: NULL, l: NULL}
+            WHEN i % 5 = 2 THEN {s: {a: i}, l: []}
+            ELSE {s: {a: i}, l: [{a: i}, NULL]} END AS x
+FROM range(10000) t(i);
+
+query IIIII
+SELECT count(*), count(r), count(r.s), sum(len(r.l)), sum(len(list_filter(r.l, lambda e: e IS NOT NULL)))
+FROM (
+	SELECT remap_struct(x, {s: {}, l: [{}], n: 0}, {s: ('s', {}), l: ('l', {list: ('list', {})})}, {s: {}, l: {list: {}}, n: 5}) AS r
+	FROM big
+);
+----
+10000	8000	6000	8000	4000
+
+query III
+SELECT count(*), count(r.s), sum(r.n)
+FROM (
+	SELECT remap_struct(x, {s: {}, n: 0}, {s: ('s', {})}, {s: nullif({}, {}), n: 5}) AS r
+	FROM big WHERE id % 5 IN (1, 3)
+);
+----
+4000	2000	20000
+
+query III
+SELECT count(*), count(r.s), count(o.x.s)
+FROM (SELECT id, remap_struct(x, {s: {}}, {s: ('s', {})}, {s: {}}) AS r FROM big) b
+JOIN big o ON o.id = b.id + 1
+WHERE b.r IS NOT NULL;
+----
+7999	5999	6000
+
+# protection: a field that is mapped by name is referenced as before
+query II
+SELECT remap_struct(x, {e: {}, s: {a: 1}}, {e: 'e', s: 's'}, NULL), remap_struct(x, {s: {a: 1::BIGINT}}, {s: ('s', {a: 'a'})}, NULL)
+FROM (VALUES ({e: {}, s: {a: 1}}), ({e: NULL, s: NULL}), (NULL)) t(x);
+----
+{'e': {}, 's': {'a': 1}}	{'s': {'a': 1}}
+{'e': NULL, 's': NULL}	{'s': NULL}
+NULL	NULL
+
+# protection: an empty child mapping for a target with fields needs their defaults
+statement error
+SELECT remap_struct({s: {a: 1}}, {s: {a: 0}}, {s: ('s', {})}, NULL);
+----
+<REGEX>:Binder Error:.*Missing target value "a" for remap.*
+
+query I
+SELECT remap_struct({s: {a: 1}}, {s: {a: 0}}, {s: ('s', {})}, {s: {a: 2}});
+----
+{'s': {'a': 2}}

@@ -70,6 +70,7 @@ public:
 	bool IsReadOnly() const;
 	void ModifyDatabase(ClientContext &context, AttachedDatabase &db, DatabaseModificationType modification);
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
+		lock_guard<mutex> guard(modification_lock);
 		return modified_database;
 	}
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
@@ -89,6 +90,8 @@ private:
 	reference_map_t<AttachedDatabase, TransactionReference> transactions;
 	//! The set of referenced databases in invocation order.
 	vector<reference<AttachedDatabase>> all_transactions;
+	//! Guards modified_database and the read/write state of the transactions (statements can modify concurrently)
+	mutex modification_lock;
 	//! The database we are modifying. We can only modify one database per meta transaction.
 	optional_ptr<AttachedDatabase> modified_database;
 	//! Whether the meta transaction is marked as read only.

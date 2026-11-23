@@ -452,6 +452,7 @@ void LocalStorage::InitializeAppend(Context &context, LocalAppendState &state, D
                                     DuckTableEntry &table_entry) {
 	state.context = &context;
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
+	state.append_lock = state.storage->append_lock.GetExclusiveLock();
 	state.storage->table_entry = &table_entry;
 	state.storage->GetCollection().InitializeAppend(TransactionData(transaction), state.append_state);
 }
@@ -520,11 +521,13 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.storage->GetCollection().FinalizeAppend(state.append_state.transaction, state.append_state);
+	state.append_lock.reset();
 }
 
 void LocalStorage::LocalMerge(Context &context, DataTable &table, DuckTableEntry &table_entry,
                               OptimisticWriteCollection &collection) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	auto append_lock = storage.append_lock.GetExclusiveLock();
 	storage.table_entry = &table_entry;
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
