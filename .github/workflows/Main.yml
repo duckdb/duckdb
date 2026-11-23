@@ -585,9 +585,9 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         env:
           EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
-          LOCAL_EXTENSION_REPO: ${{ github.workspace }}/build/release/repository
           DUCKDB_TEST_DESCRIPTION: 'Running extension SQL tests with available extension autoloading. Add require no_extension_autoloading to skip the test'
         run: |
+          export LOCAL_EXTENSION_REPO="$PWD/build/release/repository"
           python3 scripts/ci/run_extension_autoload_tests.py
 
       - name: Install parser tools

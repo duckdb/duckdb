@@ -130,12 +130,38 @@ class ExtensionTestConfigTest(unittest.TestCase):
             self.assertEqual(runner.prepare_test_roots(self.root, entries, build), [test_root])
         sync.assert_not_called()
 
+    def test_unity_catalog_config_uses_custom_root_for_synced_and_build_sources(self):
+        config = runner.REPO_ROOT / ".github/config/extensions/unity_catalog.cmake"
+        entries = runner.read_extension_configs(runner.REPO_ROOT, str(config), "Linux", "linux_amd64")
+        self.assertEqual([entry["name"] for entry in entries], ["unity_catalog"])
+        self.assertEqual(entries[0]["test_dir"], "test")
+        build = self.root / "build/release"
+        for use_build_source in (False, True):
+            with self.subTest(use_build_source=use_build_source):
+                source = (
+                    build / "_deps/unity_catalog_extension_fc-src"
+                    if use_build_source
+                    else self.root / "extension/external/unity_catalog"
+                )
+                test_root = source / "test"
+                (test_root / "functions").mkdir(parents=True)
+                self.assertFalse((test_root / "sql").exists())
+                with mock.patch.object(runner.sync_out_of_tree_extensions, "sync_extension") as sync:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(runner.prepare_test_roots(self.root, entries, build), [test_root])
+                if use_build_source:
+                    sync.assert_not_called()
+                else:
+                    sync.assert_called_once_with(entries[0], self.root / "extension/external", self.root)
+
     def test_empty_selection_and_missing_directory_fail(self):
         with self.assertRaisesRegex(RuntimeError, "No extension SQL test roots"):
             runner.prepare_test_roots(self.root, [])
-        entries = self.read("duckdb_extension_load(missing LOAD_TESTS)")
-        with self.assertRaisesRegex(RuntimeError, "extension 'missing' does not exist"):
-            runner.prepare_test_roots(self.root, entries)
+        for test_dir in ("", 'TEST_DIR "tests/custom sql"'):
+            with self.subTest(test_dir=test_dir):
+                entries = self.read(f"duckdb_extension_load(missing LOAD_TESTS {test_dir})")
+                with self.assertRaisesRegex(RuntimeError, "extension 'missing' does not exist"):
+                    runner.prepare_test_roots(self.root, entries)
 
 
 class ExtensionTestInvocationTest(unittest.TestCase):
@@ -181,6 +207,7 @@ class ExtensionTestInvocationTest(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("DUCKDB_TEST_BINARY"), "requires DUCKDB_TEST_BINARY")
 class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("sh"), "requires a POSIX shell")
     def test_downloaded_artifacts_run_only_fast_extension_sql_tests_and_report_skips(self):
         binary = Path(os.environ["DUCKDB_TEST_BINARY"]).resolve()
         metadata = subprocess.run(
@@ -211,14 +238,17 @@ class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
                 repository / "test.duckdb_extension",
             )
             shutil.copy2(binary.parent / "extension/json/json.duckdb_extension", repository / "json.duckdb_extension")
-            test_root = root / "extension" / "fixture" / "test" / "sql"
-            test_root.mkdir(parents=True)
+            test_root = root / "extension" / "fixture" / "test"
+            for suite in ("databricks", "functions", "oss_local"):
+                (test_root / suite).mkdir(parents=True)
             (test_root / "pass.test").write_text("query I\nSELECT 42\n----\n42\n")
-            (test_root / "present_extension.test").write_text("require json\n\nquery I\nSELECT 42\n----\n42\n")
-            (test_root / "environment.test").write_text(
+            (test_root / "functions" / "present_extension.test").write_text(
+                "require json\n\nquery I\nSELECT 42\n----\n42\n"
+            )
+            (test_root / "databricks" / "environment.test").write_text(
                 "require-env DUCKDB_ARTIFACT_TEST_UNSET\n\nstatement error\nSELECT 'never reached';\n----\nmissing\n"
             )
-            (test_root / "missing_extension.test").write_text(
+            (test_root / "oss_local" / "missing_extension.test").write_text(
                 "require delta\n\nstatement error\nSELECT 'never reached';\n----\nmissing\n"
             )
             for path in [
@@ -229,7 +259,9 @@ class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("query I\nSELECT 42\n----\n0\n")
             config = root / "extensions.cmake"
-            config.write_text("duckdb_extension_load(fixture LOAD_TESTS)")
+            config.write_text(
+                'duckdb_extension_load(fixture LOAD_TESTS TEST_DIR "${PROJECT_SOURCE_DIR}/extension/fixture/test")'
+            )
             extensions = runner.read_extension_configs(root, str(config), "Linux")
             with contextlib.redirect_stdout(io.StringIO()):
                 roots = runner.prepare_test_roots(root, extensions)
@@ -244,10 +276,18 @@ class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
             env.pop("CI", None)
             env.pop("DUCKDB_ARTIFACT_TEST_UNSET", None)
             env["PYTHONPATH"] = str(runner.REPO_ROOT)
-            env["LOCAL_EXTENSION_REPO"] = str(build_dir / "repository")
+            env["LOCAL_EXTENSION_REPO"] = str(root / "host-workspace/build/release/repository")
             with output.open("w") as stream:
                 result = subprocess.run(
-                    [runner.sys.executable, "-c", code],
+                    [
+                        shutil.which("sh"),
+                        "-c",
+                        'export LOCAL_EXTENSION_REPO="$PWD/build/release/repository"; exec "$@"',
+                        "run-extension-tests",
+                        runner.sys.executable,
+                        "-c",
+                        code,
+                    ],
                     cwd=root,
                     env=env,
                     stdout=stream,
@@ -257,7 +297,7 @@ class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
             text = output.read_text()
             self.assertEqual(result.returncode, 0, text)
             self.assertIn("Selected 4 extension SQL tests from 1 test roots", text)
-            self.assertIn("skipped tests", text)
+            self.assertIn("2 skipped tests", text)
             self.assertIn("DUCKDB_ARTIFACT_TEST_UNSET", text)
             self.assertIn("require delta", text)
             self.assertNotIn("core.test", text)
