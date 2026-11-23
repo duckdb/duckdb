@@ -12,26 +12,26 @@ FROM range(current_setting('standard_vector_size')::BIGINT) t(i)
 
 # At the vector boundary, the temporal sort can carry the original integer payload.
 query TT
-EXPLAIN SELECT p FROM events ORDER BY d
+EXPLAIN (FORMAT JSON) SELECT p FROM events ORDER BY d
 ----
-logical_opt	<!REGEX>:.*TINYINT.*
+logical_opt	<!REGEX>:.*CAST\([^)]* AS TINYINT\).*
 
 # An integer sort key or string payload still takes the regular compression path.
 query TT
-EXPLAIN SELECT p FROM events ORDER BY d, p
+EXPLAIN (FORMAT JSON) SELECT p FROM events ORDER BY d, p
 ----
-logical_opt	<REGEX>:.*TINYINT.*
+logical_opt	<REGEX>:.*CAST\([^)]* AS TINYINT\).*
 
 query TT
-EXPLAIN SELECT p, label FROM events ORDER BY d
+EXPLAIN (FORMAT JSON) SELECT p, label FROM events ORDER BY d
 ----
-logical_opt	<REGEX>:.*TINYINT.*
+logical_opt	<REGEX>:.*CAST\([^)]* AS TINYINT\).*
 
 statement ok
 INSERT INTO events VALUES (NULL, NULL, NULL)
 
 # The same temporal sort crosses the boundary when one more row is visible.
 query TT
-EXPLAIN SELECT p FROM events ORDER BY d
+EXPLAIN (FORMAT JSON) SELECT p FROM events ORDER BY d
 ----
-logical_opt	<REGEX>:.*TINYINT.*
+logical_opt	<REGEX>:.*CAST\([^)]* AS TINYINT\).*
