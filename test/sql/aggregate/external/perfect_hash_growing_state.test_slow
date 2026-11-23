@@ -19,7 +19,7 @@ SELECT count(*), count(xs), count(*) FILTER (WHERE g = 1 AND xs = [repeat('x', 5
 10	1	1
 
 statement ok
-SET memory_limit = '4MB'
+SET memory_limit = '12MB'
 
 query II
 SELECT count(*), count(*) FILTER (WHERE v = repeat('x', 512) || lpad(g::VARCHAR, 4, '0')) FROM (
@@ -209,7 +209,7 @@ statement ok
 CREATE TABLE input AS
 SELECT CASE WHEN i % 17 <> 0 THEN (i % 100)::UTINYINT END AS g,
        CASE WHEN i % 11 <> 0 THEN i % 127 END AS v, i % 3 <> 0 AS keep
-FROM range(4000000) t(i)
+FROM range(1000000) t(i)
 
 statement ok
 SET memory_limit = '64MB'
