@@ -520,12 +520,26 @@ static optional<RelationStats> CombineNonReorderableStats(LogicalOperator &op, c
 	return result;
 }
 
+static void OptimizeChild(JoinOrderOptimizer &optimizer, LogicalOperator &op, idx_t child_index,
+                          optional_ptr<RelationStats> stats) {
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
+	vector<ColumnBinding> old_bindings;
+	if (projection_map) {
+		old_bindings = op.children[child_index]->GetColumnBindings();
+	}
+	op.children[child_index] = optimizer.Optimize(std::move(op.children[child_index]), stats);
+	if (projection_map) {
+		auto new_bindings = op.children[child_index]->GetColumnBindings();
+		LogicalOperatorVisitor::RemapProjectionMap(*projection_map, old_bindings, new_bindings);
+	}
+}
+
 bool RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
                                               LogicalOperator &input_op, optional_ptr<LogicalOperator> parent,
                                               RelationStats &child_stats) {
 	D_ASSERT(!op.children.empty());
 	auto child_optimizer = optimizer.CreateChildOptimizer();
-	op.children[0] = child_optimizer.Optimize(std::move(op.children[0]), &child_stats);
+	OptimizeChild(child_optimizer, op, 0, &child_stats);
 	vector<reference<const RelationStats>> children_stats {child_stats};
 	auto operator_stats = RelationStatisticsHelper::ExtractOperatorStats(op, context, children_stats);
 	if (!operator_stats) {
@@ -559,7 +573,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		auto &join = *relation.parent;
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
-		join.children[1] = child_optimizer.Optimize(std::move(join.children[1]), &child_stats);
+		OptimizeChild(child_optimizer, join, 1, &child_stats);
 		if (!AddRelation(*join.children[1], join, child_stats)) {
 			return false;
 		}
@@ -606,10 +620,10 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 		// stats.cardinality will be initiated to highest cardinality of the children.
 		vector<RelationStats> children_stats;
-		for (auto &child : op->children) {
+		for (idx_t child_index = 0; child_index < op->children.size(); child_index++) {
 			auto stats = RelationStats();
 			auto child_optimizer = optimizer.CreateChildOptimizer();
-			child = child_optimizer.Optimize(std::move(child), &stats);
+			OptimizeChild(child_optimizer, *op, child_index, &stats);
 			children_stats.push_back(stats);
 		}
 
@@ -627,7 +641,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		// optimize children
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		OptimizeChild(child_optimizer, *op, 0, &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		RelationStatsExtractor extractor(context, optimizer.GetSourceStats());
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats, extractor, true);
@@ -643,7 +657,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		// optimize children
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		OptimizeChild(child_optimizer, *op, 0, &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
 		if (!operator_stats) {
@@ -659,7 +673,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		// the boundary - its own estimate, and the domains of its columns only if it may propagate statistics
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		OptimizeChild(child_optimizer, *op, 0, &child_stats);
 		auto &secure_view = op->Cast<LogicalSecureView>();
 		RelationStats stats;
 		stats.cardinality = secure_view.EstimateCardinality(context);
@@ -741,7 +755,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		RelationStats child_stats;
 		// optimize the child and copy the stats
 		auto child_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		OptimizeChild(child_optimizer, *op, 0, &child_stats);
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
@@ -772,7 +786,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		RelationStats lhs_stats;
 		// optimize the lhs child and copy the stats
 		auto lhs_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+		OptimizeChild(lhs_optimizer, *op, 0, &lhs_stats);
 		// optimize the rhs child
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
 		auto table_index = op->Cast<LogicalCTE>().table_index;
@@ -783,7 +797,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 			rhs_optimizer.recursive_cte_indexes.insert(op->Cast<LogicalCTE>().table_index);
 		}
 		RelationStats rhs_stats;
-		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), &rhs_stats);
+		OptimizeChild(rhs_optimizer, *op, 1, &rhs_stats);
 
 		// create the stats for the CTE
 		auto child_2_card = rhs_stats.stats_initialized ? rhs_stats.cardinality : 0;
@@ -851,7 +865,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		// optimize LHS (duplicate-eliminated) child
 		RelationStats lhs_stats;
 		auto lhs_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+		OptimizeChild(lhs_optimizer, *op, 0, &lhs_stats);
 
 		// create dummy aggregation for the duplicate elimination
 		auto dummy_aggr = make_uniq<LogicalAggregate>(TableIndex(DConstants::INVALID_INDEX - 1), TableIndex(),
@@ -873,7 +887,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		RelationStats rhs_stats;
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
 		rhs_optimizer.AddDelimScanStats(*lhs_delim_stats);
-		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), rhs_stats);
+		OptimizeChild(rhs_optimizer, *op, 1, &rhs_stats);
 
 		RelationStats dj_stats;
 		switch (delim_join.join_type) {
