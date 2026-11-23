@@ -91,8 +91,27 @@ class TestPlanCostComparison(unittest.TestCase):
         self.assertEqual((old.probe_side, new.probe_side), (101, 150))
         varying = [1652908, 1626111, 1629118, 1679707, 1626186]
         old, new = profile(varying, [int(probe * 1.03) for probe in varying])
-        self.assertEqual((old.probe_side, new.probe_side), (1629118, 1677991))
-        self.assertTrue(old.needs_timing(new) or new > old)
+        self.assertEqual(old, new)
+
+    def test_variation_tolerance_applies_to_every_cost_component(self):
+        def costs(component, values):
+            result = []
+            for value in values:
+                cost = PlanCost()
+                setattr(cost, component, value)
+                result.append(cost)
+            return result
+
+        for component in ("total", "build_side", "probe_side"):
+            for old_values, new_values, expected in (
+                ([180, 189, 190, 191, 210], [180, 199, 200, 201, 220], True),
+                ([180, 188, 189, 190, 210], [180, 199, 200, 201, 220], False),
+                ([100] * 5, [103] * 5, False),
+            ):
+                with self.subTest(component=component, old_values=old_values, new_values=new_values):
+                    old, new = costs(component, old_values), costs(component, new_values)
+                    self.assertEqual(plan_cost_runner.within_run_variation(old, new), expected)
+                    self.assertEqual(plan_cost_runner.within_run_variation(new, old), expected)
 
     def test_runner_confirms_hot_regression_on_shared_database(self):
         old, new = PlanCost(), PlanCost()

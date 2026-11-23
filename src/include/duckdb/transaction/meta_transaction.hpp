@@ -49,8 +49,6 @@ public:
 	transaction_t global_transaction_id;
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
-	//! The active query number
-	atomic<transaction_t> active_query;
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
@@ -67,9 +65,6 @@ public:
 	void Rollback(ClientContext &context);
 	// Finalize the transaction after a COMMIT of ROLLBACK.
 	void Finalize(ClientContext &context);
-
-	idx_t GetActiveQuery();
-	void SetActiveQuery(transaction_t query_number);
 
 	void SetReadOnly();
 	bool IsReadOnly() const;
