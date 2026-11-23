@@ -3,18 +3,18 @@
 # group: [table_function]
 
 statement ok
-CREATE MACRO "glob"(pattern) AS TABLE SELECT pattern AS file;
-
-query I
-SELECT count(*) FROM read_text('/dev/null')
-----
-1
-
-statement ok
 COPY (SELECT 42 AS i) TO '{TEST_DIR}/glob_shadowed_a.csv'
 
 statement ok
 COPY (SELECT 43 AS i) TO '{TEST_DIR}/glob_shadowed_b.csv'
+
+statement ok
+CREATE MACRO "glob"(pattern) AS TABLE SELECT pattern AS file;
+
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/glob_shadowed_a.csv')
+----
+1
 
 query I
 SELECT sum(i) FROM read_csv('{TEST_DIR}/glob_shadowed_*.csv')
