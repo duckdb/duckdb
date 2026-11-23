@@ -61,8 +61,7 @@ public:
 	//! Applies a removal or removal rollback to all index entries.
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
 	                       optional_idx active_checkpoint = optional_idx());
-	//! Removes an index entry from the list of index entries, if it is in there: the table no longer maintains the
-	//! index. The entry keeps its physical index.
+	//! Removes the index entry from the list, if present. The entry keeps its physical index.
 	void RemoveIndex(IndexEntry &index_entry);
 	//! Returns the bound entry of this list that has the OID of the index, e.g. its transaction-local delete index.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;

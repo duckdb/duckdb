@@ -18,7 +18,6 @@ class TableCatalogEntry;
 //! The storage of a DuckIndexEntry, shared by all versions of the entry (e.g. after COMMENT ON INDEX)
 struct IndexDataTableInfo {
 	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, shared_ptr<IndexEntry> index_p);
-	//! Destroys the physical index: no version of the catalog entry is left
 	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo
@@ -50,9 +49,6 @@ public:
 	Identifier GetTableName() const override;
 
 	DataTableInfo &GetDataTableInfo() const;
-	//! Returns the index entry of this catalog entry. It is pending until its physical index is built or loaded and
-	//! added to the indexes of the table (see TableIndexList::AddIndex). Once the drop of this catalog entry is
-	//! committed the table no longer maintains the index, and it is destroyed when this catalog entry is cleaned up.
 	shared_ptr<IndexEntry> GetIndexEntry() const;
 
 	//! Saves the removal of the index from the indexes of its table into drop_state, to be done after FlushCommit().

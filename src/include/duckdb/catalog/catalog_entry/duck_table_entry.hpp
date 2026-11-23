@@ -25,8 +25,7 @@ class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info);
-	//! Create a new version of a table: it takes over the triggers and the constraint indexes of its parent.
-	//! A constraint that the parent does not have gets a pending index entry (see GetAddedConstraintIndex).
+	//! Create a new version of a table, which takes over the triggers and constraint indexes of its parent
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
 	               const DuckTableEntry &parent, shared_ptr<DataTable> storage);
 
@@ -55,18 +54,11 @@ public:
 	void CommitAlter(string &column_name, CommitDropState &drop_state);
 	void CommitDrop(CommitDropState &drop_state);
 
-	//! Returns the constraint indexes of this table that prev_table does not have.
-	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
 	//! Returns the index of the one constraint that ALTER TABLE added to prev_table.
 	shared_ptr<IndexEntry> GetAddedConstraintIndex(const DuckTableEntry &prev_table) const;
 	//! Returns the indexes that back the constraints of this table, in constraint order.
 	const vector<shared_ptr<IndexEntry>> &GetConstraintIndexes() const;
-	//! Returns the indexes of this table as the transaction sees them: the indexes of the constraints, in constraint
-	//! order, followed by the indexes of the index catalog entries on this table that the transaction sees.
-	//! The table can maintain more indexes than these, e.g. of uncommitted transactions.
-	//! An index that a later transaction dropped stays usable for this transaction, but is no longer maintained.
-	//! An index of a not yet loaded extension is unbound, and an index that this transaction is still building is
-	//! pending (see IndexEntry::GetBindState).
+	//! The indexes the transaction sees: constraint indexes in constraint order, then those of index catalog entries.
 	vector<shared_ptr<IndexEntry>> GetIndexes(CatalogTransaction transaction) const;
 	//! Returns the indexes of this table that are committed below the bound, e.g. of a checkpoint.
 	vector<shared_ptr<IndexEntry>> GetIndexes(VisibilityBound bound) const;
@@ -121,6 +113,8 @@ private:
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
 	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
 	                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
+	//! Returns the constraint indexes of this table that prev_table does not have.
+	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
 
 protected:
 	//! A list of columns that are part of this table

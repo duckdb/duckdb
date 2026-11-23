@@ -115,8 +115,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	//! Creates a pending entry: the catalog holds it from here on, and it gets its physical index once that is built
-	//! or loaded (see TableIndexList::AddIndex).
+	//! Creates a pending entry, without physical index (see InstallIndex).
 	IndexEntry(idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Sets the physical index of a pending entry.
 	void InstallIndex(unique_ptr<Index> index);

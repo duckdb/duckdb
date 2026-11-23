@@ -44,7 +44,6 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 }
 
 vector<shared_ptr<IndexEntry>> TableDataWriter::GetIndexes() {
-	// The indexes of the constraints come first, in constraint order: the reader assigns them by position.
 	return table.GetIndexes(GetCheckpointOptions().visibility_bound);
 }
 
