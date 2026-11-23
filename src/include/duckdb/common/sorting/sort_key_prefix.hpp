@@ -18,7 +18,7 @@ template <class ITERATOR>
 class SortKeyPrefixScope {
 public:
 	SortKeyPrefixScope(const ITERATOR &begin_p, const ITERATOR &end_p)
-	    : begin(begin_p), end(end_p), original_part0(begin->part0) {
+	    : begin(begin_p), end(end_p), original_part0((*begin).part0) {
 	}
 
 	SortKeyPrefixScope(const SortKeyPrefixScope &) = delete;
@@ -26,7 +26,7 @@ public:
 
 	~SortKeyPrefixScope() {
 		for (auto it = begin; it != end; ++it) {
-			it->part0 = original_part0;
+			(*it).part0 = original_part0;
 		}
 	}
 

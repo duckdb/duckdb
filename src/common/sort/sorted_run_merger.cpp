@@ -786,7 +786,7 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 			    unsafe_array_ptr<const SORT_KEY>(merged_partition_keys, merged_partition_count), run_boundaries);
 			if (prefix != 0) {
 				// Sorted endpoints establish this prefix for every key in each gathered fragment.
-				const unsafe_array_ptr<SORT_KEY> keys(merged_partition_keys, merged_partition_count);
+				unsafe_array_ptr<SORT_KEY> keys(merged_partition_keys, merged_partition_count);
 				SortKeyPrefixScope<array_ptr_iterator<SORT_KEY>> prefix_scope(keys.begin(), keys.end());
 				for (auto &key : keys) {
 					D_ASSERT(key.GetHeapSize() >= prefix);
