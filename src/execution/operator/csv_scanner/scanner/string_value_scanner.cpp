@@ -1748,6 +1748,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
+	// With a single column, a record separator read right after a state reset is an empty line only when it does not
+	// end an open row or comment
+	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
+	const bool empty_line = single_column_empty_line && result.cur_col_id == 0 && !result.comment;
 	bool skip_value = false;
 	if (result.projecting_columns) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
@@ -1857,8 +1861,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 			}
 		}
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
+		if (single_column_empty_line) {
+			if (empty_line) {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+			}
 		} else if (!cast_errored && !states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
@@ -1870,15 +1876,14 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 			result.AddValueToVector(value.GetData(), value_size, true);
 		}
-	} else {
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
-		}
+	} else if (empty_line) {
+		result.EmptyLine(result, iterator.pos.buffer_pos);
 	}
 
 	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 	const idx_t tail_extra_bytes = states.IsDelimiter() && !delimiter_tail.empty() ? delimiter_tail.size() - 1 : 0;
-	if (result.embedded_quote_fields) {
+	// an empty line has no field to count
+	if (result.embedded_quote_fields && !empty_line) {
 		result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
 		                                                              ? over_buffer_string.size() - tail_extra_bytes
 		                                                              : 0);
@@ -1886,7 +1891,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
-		} else {
+		} else if (!empty_line) {
 			result.AddRowInternal();
 		}
 		lines_read++;

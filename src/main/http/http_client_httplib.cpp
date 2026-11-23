@@ -35,6 +35,7 @@ public:
 		client->set_read_timeout(sec, usec);
 		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
+		client->set_payload_max_length(idx_t(2) * 1024 * 1024 * 1024);
 
 		if (!http_params.http_proxy.empty()) {
 			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));

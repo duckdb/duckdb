@@ -120,13 +120,14 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
 	current_transaction = nullptr;
+	active_query_id = MAXIMUM_QUERY_ID;
 }
 
 idx_t TransactionContext::GetActiveQuery() {
 	if (!current_transaction) {
 		throw InternalException("GetActiveQuery called without active transaction");
 	}
-	return current_transaction->GetActiveQuery();
+	return active_query_id;
 }
 
 void TransactionContext::ResetActiveQuery() {
@@ -139,7 +140,7 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 	if (!current_transaction) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}
-	current_transaction->SetActiveQuery(query_number);
+	active_query_id = query_number;
 }
 
 } // namespace duckdb
