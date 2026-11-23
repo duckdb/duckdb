@@ -125,7 +125,7 @@ public:
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
 	//! Borrows source data and metadata: keep their storage and selection stable until the final read.
 	DUCKDB_API void ToUnifiedFormat(UnifiedVectorFormat &data) const;
-	//! Retains selection and validity allocations, but still borrows value data.
+	//! Shares owned selection/validity allocations; non-owning metadata and value data are still borrowed.
 	DUCKDB_API void ToUnifiedFormatRetained(UnifiedVectorFormat &data) const;
 	//! Retains metadata when preparing an aliased result could release it.
 	DUCKDB_API void ToUnifiedFormat(UnifiedVectorFormat &data, const Vector &result) const;
