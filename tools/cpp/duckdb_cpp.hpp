@@ -3741,6 +3741,9 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> ScalarFunction &;
+	/// Sets the schema of the system catalog the function is registered in, for example `encodings`. Without it the
+	/// function is registered in the default schema. The schema must exist when the function is registered.
+	auto SetSchema(const std::string &schema) & -> ScalarFunction &;
 	/// The documentation of this overload, borrowed for in-place mutation.
 	auto GetDocs() -> FunctionDocs;
 

@@ -6,6 +6,7 @@
         "test/optimizer/statistics/statistics_numeric.test",
         "test/optimizer/statistics/statistics_join_aggregate_bounds.test",
         "test/optimizer/statistics/statistics_monotone_infinity.test",
+        "test/optimizer/statistics/statistics_date_sub_month.test",
         "test/optimizer/statistics/right_semi_join_filter.test",
         "test/optimizer/statistics/statistics_additive_duplication.test",
         "test/optimizer/statistics/statistics_all_null_operand.test",
@@ -105,7 +106,9 @@
         "test/sql/types/geo/geography_stats.test",
         "test/issues/general/test_24298.test",
         "test/sql/optimizer/secure_view_statistics.test",
-        "test/sql/window/test_window_agg_stats_propagation.test"
+        "test/sql/window/test_window_agg_stats_propagation.test",
+        "test/optimizer/statistics/statistics_cast_time_of_day.test",
+        "test/parquet/parquet_schema_time_of_day_cast.test"
       ]
     }
   ]

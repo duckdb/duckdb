@@ -1,0 +1,99 @@
+# name: test/sql/alter/struct/alter_struct_with_empty_struct_field.test
+# description: Altering the fields of a struct keeps its empty struct fields and their NULLs, also in stored expressions
+# group: [struct]
+
+load {TEST_DIR}/alter_struct_with_empty_struct_field.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE tbl AS
+SELECT * FROM (VALUES
+	(1, {e: {}, a: 1, l: [{}, NULL]}),
+	(2, {e: NULL, a: 2, l: NULL}),
+	(3, NULL),
+	(4, {e: {}, a: NULL, l: []})
+) t(id, s);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+ALTER TABLE tbl ADD COLUMN s.b INT DEFAULT 7;
+
+statement ok
+ALTER TABLE tbl RENAME COLUMN s.a TO c;
+
+query II
+SELECT id, s FROM tbl ORDER BY id;
+----
+1	{'e': {}, 'c': 1, 'l': [{}, NULL], 'b': 7}
+2	{'e': NULL, 'c': 2, 'l': NULL, 'b': 7}
+3	NULL
+4	{'e': {}, 'c': NULL, 'l': [], 'b': 7}
+
+statement ok
+ALTER TABLE tbl DROP COLUMN s.c;
+
+# a field added to the empty struct and to the element of the list
+statement ok
+ALTER TABLE tbl ADD COLUMN s.e.x INT DEFAULT 3;
+
+statement ok
+ALTER TABLE tbl ADD COLUMN s.l.element.y INT DEFAULT 4;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT id, s FROM tbl ORDER BY id;
+----
+1	{'e': {'x': 3}, 'l': [{'y': 4}, NULL], 'b': 7}
+2	{'e': NULL, 'l': NULL, 'b': 7}
+3	NULL
+4	{'e': {'x': 3}, 'l': [], 'b': 7}
+
+statement ok
+INSERT INTO tbl VALUES (5, {e: NULL, l: [NULL, {y: 1}], b: 5});
+
+query II
+SELECT id, s FROM tbl WHERE id = 5;
+----
+5	{'e': NULL, 'l': [NULL, {'y': 1}], 'b': 5}
+
+# a column default: the rename rewrites it into a remap_struct call that maps the empty structs with an empty
+# child mapping. The call is stored as an expression and bound again after a restart
+statement ok
+CREATE TABLE dflt AS SELECT 1 AS id, {e: {}, z: NULL::STRUCT, a: 1} AS s;
+
+statement ok
+ALTER TABLE dflt ALTER s SET DEFAULT {e: {}, z: NULL::STRUCT, a: 1};
+
+statement ok
+ALTER TABLE dflt RENAME COLUMN s.a TO c;
+
+# a view that maps a struct with a field onto an empty struct
+statement ok
+CREATE VIEW empty_mapping AS
+SELECT remap_struct(x, {s: {}}, {s: ('s', {})}, NULL) AS r FROM (VALUES ({s: {a: 1}}), ({s: NULL})) t(x);
+
+restart
+
+statement ok
+INSERT INTO dflt (id) VALUES (2);
+
+statement ok
+INSERT INTO dflt DEFAULT VALUES;
+
+query II
+SELECT id, s FROM dflt ORDER BY id;
+----
+1	{'e': {}, 'z': NULL, 'c': 1}
+2	{'e': {}, 'z': NULL, 'c': 1}
+NULL	{'e': {}, 'z': NULL, 'c': 1}
+
+query I
+SELECT r FROM empty_mapping;
+----
+{'s': {}}
+{'s': NULL}

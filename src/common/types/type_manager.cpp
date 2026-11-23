@@ -1,6 +1,7 @@
 #include "duckdb/common/types/type_manager.hpp"
 
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -26,6 +27,9 @@ static LogicalType TransformStringToUnboundType(const string &str, ClientContext
 	try {
 		column_list = Parser(context).ParseColumnList("dummy " + str);
 	} catch (const std::runtime_error &e) {
+		if (ErrorData(e).Type() == ExceptionType::OUT_OF_MEMORY) {
+			throw;
+		}
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",
 		                                      "LONG",

@@ -77,9 +77,12 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 		return true;
 	}
 	if (IsDeleteId(id)) {
-		// a transaction cannot see rows it deleted earlier, so the current statement deleted this row
-		throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each target "
-		                            "row is matched by at most one source row");
+		if (GetWriter(id) == GetWriter(new_id)) {
+			// a concurrent statement of this transaction deleted the row after this write found it
+			return true;
+		}
+		// a transaction cannot see a row whose delete it sees, so it never writes it
+		throw InternalException("ChunkVectorInfo: write of a row whose delete the transaction sees");
 	}
 	return false;
 }

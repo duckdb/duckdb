@@ -108,32 +108,6 @@ static bool CanShareSubplanExpression(const Expression &expr) {
 	return !unsafe;
 }
 
-static bool HasFixedSizeState(const LogicalType &type, const AggregateStateField &field) {
-	switch (field.kind) {
-	case AggregateFieldKind::PRIMITIVE:
-		return TypeIsConstantSize(type.InternalType());
-	case AggregateFieldKind::OPTIONAL_VALUE:
-		return field.children.size() == 1 && HasFixedSizeState(type, field.children[0]);
-	case AggregateFieldKind::STRUCT: {
-		if (type.id() != LogicalTypeId::STRUCT) {
-			return false;
-		}
-		const auto &types = StructType::GetChildTypes(type);
-		if (types.size() != field.children.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < types.size(); i++) {
-			if (!HasFixedSizeState(types[i].second, field.children[i])) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default:
-		return false;
-	}
-}
-
 static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) {
 	const auto &function = aggregate.Function();
 	if (aggregate.IsDistinct() || aggregate.GetOrderBys() ||
@@ -143,7 +117,7 @@ static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) 
 	}
 	// Combining growing states can use more memory than evaluating the original aggregates separately.
 	const auto layout = function.GetStateType(aggregate.BindInfo().get());
-	return HasFixedSizeState(layout.type, layout.field);
+	return layout.field.IsFixedSize(layout.type);
 }
 
 enum class ConversionType {

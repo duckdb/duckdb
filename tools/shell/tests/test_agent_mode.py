@@ -258,6 +258,38 @@ def test_no_estimate_without_agent(shell):
     result = test.run()
     assert "estimate:" not in result.stderr
 
+@pytest.mark.parametrize("agent_flag", [False, True])
+@pytest.mark.parametrize("query", [
+    "SELECT count(*) FROM read_duckdb('{db}')",
+    "SELECT count(*) FROM '{db}'",
+    "CREATE TABLE copied AS FROM read_duckdb('{db}'); SELECT count(*) FROM copied",
+    "COPY (FROM read_duckdb('{db}')) TO '{out}' (FORMAT csv); SELECT count(*) FROM read_csv('{out}')",
+    # a transaction of the user is used for the estimate and left open
+    "BEGIN; CREATE TABLE kept AS FROM read_duckdb('{db}'); COMMIT; SELECT count(*) FROM kept",
+    "BEGIN; CREATE TABLE dropped AS FROM read_duckdb('{db}'); ROLLBACK; SELECT count(*) FROM read_duckdb('{db}')",
+])
+def test_estimate_read_duckdb(shell, tmp_path, query, agent_flag):
+    # read_duckdb attaches the database file while binding and detaches it again when the plan is destroyed, which
+    # needs the transaction the plan of the estimate was bound in
+    # ten rows are below the threshold of the estimate line: the plan is extracted before that is checked
+    db = (tmp_path / "source.db").as_posix()
+    out = (tmp_path / "out.csv").as_posix()
+    # agent mode from the environment and from the explicit flag
+    test = ShellTest(shell).add_argument("-agent") if agent_flag else agent_shell(shell)
+    test = (
+        test
+        .statement(f"ATTACH '{db}' AS source")
+        .statement("CREATE TABLE source.t AS SELECT range AS i FROM range(10)")
+        .statement("DETACH source")
+        .statement(query.format(db=db, out=out))
+        # the file is no longer attached by the reader
+        .statement(f"ATTACH '{db}' AS source")
+        .statement("SELECT count(*) + 1 FROM source.t")
+    )
+    result = test.run()
+    result.check_stdout("| count_star():BIGINT |\n|---|\n| 10 |")
+    result.check_stdout("| 11 |")
+
 def test_echo_second_statement(shell):
     # the statement text the shell works with must be each statement's own text
     test = ShellTest(shell).add_argument("-echo", "-c", "SELECT 1 AS a; SELECT 2 AS b")

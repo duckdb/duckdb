@@ -1,0 +1,320 @@
+# name: test/optimizer/window_self_join_shared_input.test
+# description: The window self-join reads an aggregated input once: its copy of the input is a common subplan
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE t AS
+SELECT i AS x, i % 100 AS k, i % 7 AS g, CASE WHEN i % 11 = 0 THEN NULL ELSE i % 5 END AS n, 's' || (i % 13) AS s
+FROM range(10000) r(i);
+
+# share of the total: the window over the aggregate becomes an aggregate over the same aggregate
+query II
+EXPLAIN SELECT g, count(x) AS c, count(x) * 100.0 / sum(count(x)) OVER () AS pct FROM t GROUP BY g;
+----
+physical_plan	<REGEX>:.*CTE.*CROSS_PRODUCT.*CTE_SCAN.*CTE_SCAN.*
+
+# and the table is read once
+query II
+EXPLAIN SELECT g, count(x) AS c, count(x) * 100.0 / sum(count(x)) OVER () AS pct FROM t GROUP BY g;
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*SEQ_SCAN.*
+
+query IIII
+SELECT g, count(x) AS c, sum(count(x)) OVER () AS total, round(count(x) * 100.0 / sum(count(x)) OVER (), 2) AS pct
+FROM t GROUP BY g ORDER BY g;
+----
+0	1429	10000	14.29
+1	1429	10000	14.29
+2	1429	10000	14.29
+3	1429	10000	14.29
+4	1428	10000	14.28
+5	1428	10000	14.28
+6	1428	10000	14.28
+
+# partitioned window over the aggregate
+query II
+EXPLAIN SELECT k, g, sum(x) AS s, sum(sum(x)) OVER (PARTITION BY g) AS w FROM t GROUP BY k, g;
+----
+physical_plan	<REGEX>:.*CTE.*Join Type: INNER.*CTE_SCAN.*CTE_SCAN.*
+
+query II
+EXPLAIN SELECT k, g, sum(x) AS s, sum(sum(x)) OVER (PARTITION BY g) AS w FROM t GROUP BY k, g;
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*SEQ_SCAN.*
+
+query IIII
+SELECT k, g, sum(x) AS s, sum(sum(x)) OVER (PARTITION BY g) AS w FROM t WHERE k < 2 GROUP BY k, g ORDER BY k, g;
+----
+0	0	73500	141414
+0	1	69300	142815
+0	2	75000	144314
+0	3	70700	145715
+0	4	66500	137214
+0	5	72100	138614
+0	6	67900	140014
+1	0	67914	141414
+1	1	73515	142815
+1	2	69314	144314
+1	3	75015	145715
+1	4	70714	137214
+1	5	66514	138614
+1	6	72114	140014
+
+# a NULL partition key, a filter on the aggregate, and a filter on the window
+query II
+EXPLAIN SELECT n, c, w FROM (
+	SELECT n, g, count(*) AS c, sum(count(*)) OVER (PARTITION BY n) AS w FROM t GROUP BY n, g HAVING count(*) > 250
+) WHERE w > 1500;
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*SEQ_SCAN.*
+
+query III
+SELECT n, c, w FROM (
+	SELECT n, g, count(*) AS c, sum(count(*)) OVER (PARTITION BY n) AS w FROM t GROUP BY n, g HAVING count(*) > 250
+) WHERE w > 1500 ORDER BY ALL;
+----
+0	259	1818
+0	259	1818
+0	260	1818
+0	260	1818
+0	260	1818
+0	260	1818
+0	260	1818
+1	259	1818
+1	259	1818
+1	260	1818
+1	260	1818
+1	260	1818
+1	260	1818
+1	260	1818
+2	259	1818
+2	259	1818
+2	260	1818
+2	260	1818
+2	260	1818
+2	260	1818
+2	260	1818
+3	259	1818
+3	259	1818
+3	260	1818
+3	260	1818
+3	260	1818
+3	260	1818
+3	260	1818
+4	259	1818
+4	259	1818
+4	260	1818
+4	260	1818
+4	260	1818
+4	260	1818
+4	260	1818
+
+# QUALIFY on the window over the aggregate
+query II
+SELECT k, sum(x) AS s FROM t GROUP BY k QUALIFY sum(x) = max(sum(x)) OVER () ORDER BY k;
+----
+99	504900
+
+# two windows over the same aggregate with different partitions
+query IIIII
+SELECT k, g, count(*) AS c, sum(count(*)) OVER (PARTITION BY k) AS wk, sum(count(*)) OVER (PARTITION BY g) AS wg
+FROM t WHERE k < 2 GROUP BY k, g ORDER BY k, g;
+----
+0	0	15	100	29
+0	1	14	100	29
+0	2	15	100	29
+0	3	14	100	29
+0	4	14	100	28
+0	5	14	100	28
+0	6	14	100	28
+1	0	14	100	29
+1	1	15	100	29
+1	2	14	100	29
+1	3	15	100	29
+1	4	14	100	28
+1	5	14	100	28
+1	6	14	100	28
+
+# an empty input
+query III
+SELECT g, count(x) AS c, sum(count(x)) OVER () AS total FROM t WHERE x < 0 GROUP BY g;
+----
+
+# the same answers as the window itself, for aggregates of every kind over the shared input
+# (d holds dyadic fractions: its sums are exact in any order)
+statement ok
+CREATE VIEW agg AS
+SELECT k, g, n, count(*) AS c, min(x) AS m, sum(x / 8) AS d, max(s) AS z FROM t WHERE n IS NULL OR n < 4 GROUP BY k, g, n;
+
+query II
+EXPLAIN SELECT k, g, n, c, median(c) OVER (PARTITION BY n), count(DISTINCT c) OVER (PARTITION BY n) FROM agg;
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*SEQ_SCAN.*
+
+statement ok
+CREATE OR REPLACE TABLE shared AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS ();
+
+statement ok
+SET disabled_optimizers = 'window_self_join';
+
+statement ok
+CREATE OR REPLACE TABLE windowed AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS ();
+
+statement ok
+RESET disabled_optimizers;
+
+query I
+SELECT count(*) FROM ((FROM shared EXCEPT ALL FROM windowed) UNION ALL (FROM windowed EXCEPT ALL FROM shared));
+----
+0
+
+query I
+SELECT count(*) FROM shared;
+----
+1260
+
+foreach partition_key g n g,n
+
+statement ok
+CREATE OR REPLACE TABLE shared AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS (PARTITION BY {partition_key});
+
+statement ok
+SET disabled_optimizers = 'window_self_join';
+
+statement ok
+CREATE OR REPLACE TABLE windowed AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS (PARTITION BY {partition_key});
+
+statement ok
+RESET disabled_optimizers;
+
+query I
+SELECT count(*) FROM ((FROM shared EXCEPT ALL FROM windowed) UNION ALL (FROM windowed EXCEPT ALL FROM shared));
+----
+0
+
+query I
+SELECT count(*) FROM shared;
+----
+1260
+
+endloop
+
+# an ordered window whose frame is the whole partition
+statement ok
+CREATE OR REPLACE TABLE shared AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS (PARTITION BY g ORDER BY k, g, n RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+
+statement ok
+SET disabled_optimizers = 'window_self_join';
+
+statement ok
+CREATE OR REPLACE TABLE windowed AS
+SELECT k, g, n, c,
+	sum(c) OVER w AS w1, avg(c) OVER w AS w2, min(m) OVER w AS w3, max(d) OVER w AS w4, sum(d) OVER w AS w5,
+	count(DISTINCT c) OVER w AS w6, median(c) OVER w AS w7, string_agg(z, ',' ORDER BY k, g, n) OVER w AS w8,
+	list(c ORDER BY k, g, n) OVER w AS w9, count(*) FILTER (WHERE c > 3) OVER w AS w10
+FROM agg WINDOW w AS (PARTITION BY g ORDER BY k, g, n RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+
+statement ok
+RESET disabled_optimizers;
+
+query I
+SELECT count(*) FROM ((FROM shared EXCEPT ALL FROM windowed) UNION ALL (FROM windowed EXCEPT ALL FROM shared));
+----
+0
+
+query I
+SELECT count(*) FROM shared;
+----
+1260
+
+# a prepared statement: the parameter reaches the one input that is left
+statement ok
+PREPARE share AS SELECT g, count(x) AS c, sum(count(x)) OVER () AS total FROM t WHERE k < $1 GROUP BY g ORDER BY g;
+
+query III
+EXECUTE share(1);
+----
+0	15	100
+1	14	100
+2	15	100
+3	14	100
+4	14	100
+5	14	100
+6	14	100
+
+query III
+EXECUTE share(2);
+----
+0	29	200
+1	29	200
+2	29	200
+3	29	200
+4	28	200
+5	28	200
+6	28	200
+
+# a window over a plain scan keeps its two scans: the aggregate reads fewer columns than the other side, and
+# filters reach the two sides separately
+query II
+EXPLAIN SELECT x, count(*) OVER (PARTITION BY k) FROM t;
+----
+physical_plan	<!REGEX>:.*CTE.*
+
+# a volatile input is not copied, so that there is nothing to share
+statement ok
+CREATE SEQUENCE seq;
+
+query II
+EXPLAIN SELECT g, c, sum(c) OVER () FROM (SELECT g, count(x + nextval('seq')) AS c FROM t GROUP BY g);
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query III
+SELECT g, c, sum(c) OVER () FROM (SELECT g, count(x + nextval('seq')) AS c FROM t GROUP BY g) ORDER BY g;
+----
+0	1429	10000
+1	1429	10000
+2	1429	10000
+3	1429	10000
+4	1428	10000
+5	1428	10000
+6	1428	10000
+
+query I
+SELECT nextval('seq');
+----
+10001
+
+# the input of the window is a join: there the window stays
+query II
+EXPLAIN SELECT a.g, count(*) AS c, sum(count(*)) OVER () FROM t a JOIN t b ON a.x = b.k GROUP BY a.g;
+----
+physical_plan	<REGEX>:.*WINDOW.*
