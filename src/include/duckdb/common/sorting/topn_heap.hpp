@@ -107,9 +107,6 @@ public:
 
 	//! Refreshes the local copy of the shared boundary. Returns whether there is a boundary.
 	bool Refresh(TopNBoundaryValue &global_boundary);
-	bool HasBoundary() const {
-		return !boundary_val.empty();
-	}
 	//! The local copy of the shared boundary as constant vectors (only valid if there is a boundary)
 	DataChunk &BoundaryValues() {
 		return boundary_values;

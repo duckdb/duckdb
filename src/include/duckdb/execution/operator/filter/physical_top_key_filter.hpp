@@ -18,7 +18,7 @@ struct DynamicFilterData;
 //! keys. Every thread keeps the smallest "limit" distinct key tuples that it has seen. The largest of them is not
 //! smaller than the limit-th smallest distinct key tuple of the whole input, and neither is the smallest such bound of
 //! all threads, which is shared (TopNBoundaryValue). A row is removed only if its key tuple sorts strictly after a
-//! bound (ties pass), so that every group that the Top-N can return still receives all of its rows.//!
+//! bound (ties pass), so that every group that the Top-N can return still receives all of its rows.
 //! The pruning is conservative. The contract of the operator is:
 //!   * it never removes a row of a group whose key tuple is among the "limit" smallest distinct key tuples of its
 //!     input (the groups that the Top-N above the aggregate can return), and
