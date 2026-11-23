@@ -78,7 +78,7 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 	}
 	if (IsDeleteId(id)) {
 		if (GetWriter(id) == GetWriter(new_id)) {
-			// a statement of a connection that shares the transaction deleted the row after this write found it
+			// a concurrent statement of this transaction deleted the row after this write found it
 			return true;
 		}
 		// a transaction cannot see a row whose delete it sees, so it never writes it

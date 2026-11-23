@@ -80,7 +80,7 @@ public:
 	//! Whether or not the storage was dropped
 	bool is_dropped = false;
 
-	//! Serializes the appends and merges into the primary collection (connections that share the transaction)
+	//! Serializes the appends and merges into the primary collection
 	StorageLock append_lock;
 
 public:

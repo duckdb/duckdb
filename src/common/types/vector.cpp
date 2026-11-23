@@ -466,6 +466,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 
 void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
+	format.owned_sel = SelectionVector();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
