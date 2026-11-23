@@ -8,42 +8,50 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Sequence check
 //===--------------------------------------------------------------------===//
-static constexpr idx_t MAX_TAIL_SCAN = 128;
-
 namespace {
-enum class BracketKind : uint8_t { NONE, OPEN, CLOSE };
-} // namespace
 
-static BracketKind TokenBracket(const MatcherToken &token) {
+//! How many tokens the tail scan looks at before it accepts
+constexpr idx_t MAX_TAIL_SCAN = 128;
+
+enum class BracketKind { NONE, OPEN, CLOSE };
+
+struct BracketPair {
+	char open;
+	char close;
+};
+
+//! The bracket pairs whose content the tail scan skips
+constexpr BracketPair BRACKET_PAIRS[] = {{'(', ')'}, {'[', ']'}, {'{', '}'}};
+
+BracketKind TokenBracket(const MatcherToken &token) {
 	if (token.length != 1) {
 		return BracketKind::NONE;
 	}
-	switch (token.text[0]) {
-	case '(':
-	case '[':
-	case '{':
-		return BracketKind::OPEN;
-	case ')':
-	case ']':
-	case '}':
-		return BracketKind::CLOSE;
-	default:
-		return BracketKind::NONE;
+	for (auto &bracket_pair : BRACKET_PAIRS) {
+		if (token.text[0] == bracket_pair.open) {
+			return BracketKind::OPEN;
+		}
+		if (token.text[0] == bracket_pair.close) {
+			return BracketKind::CLOSE;
+		}
 	}
+	return BracketKind::NONE;
 }
 
 //! String literals also carry the WORD class for name positions; alphabets mark string consumption with STRING
-static uint8_t TailTokenClass(const MatcherToken &token) {
+uint8_t TailTokenClass(const MatcherToken &token) {
 	return token.type == TokenType::STRING_LITERAL ? MatcherTokenClass::STRING : token.token_class;
 }
 
 //! A skipped sequence could have come as far as the token that stopped the scan
-static bool RejectTail(MatchState &state, idx_t stop_position) {
+bool RejectTail(MatchState &state, idx_t stop_position) {
 	if (stop_position > state.context.tail_rejected_until) {
 		state.context.tail_rejected_until = stop_position;
 	}
 	return false;
 }
+
+} // namespace
 
 bool MatcherSequenceCheck::MightMatch(MatchState &state) const {
 	auto &iterator = state.token_iterator;
@@ -167,11 +175,9 @@ bool MatcherSequenceCheck::MightMatchTail(MatchState &state) const {
 //===--------------------------------------------------------------------===//
 namespace {
 
-enum class TailBracket : uint8_t { NONE, OPEN, CLOSE };
-
 //! Calls fun(child) for every child of a built-in composite matcher
 template <class FUN>
-static void ForEachChildMatcher(Matcher &matcher, FUN &&fun) {
+void ForEachChildMatcher(Matcher &matcher, FUN &&fun) {
 	switch (matcher.Type()) {
 	case MatcherType::LIST:
 		for (auto &child : matcher.Cast<ListMatcher>().matchers) {
@@ -195,7 +201,7 @@ static void ForEachChildMatcher(Matcher &matcher, FUN &&fun) {
 }
 
 //! Derived matchers can override StartMatch, so only matchers marked as structural follow the semantics of their type
-static bool IsCompositeMatcher(const Matcher &matcher) {
+bool IsCompositeMatcher(const Matcher &matcher) {
 	if (!matcher.IsStructural()) {
 		return false;
 	}
@@ -240,7 +246,7 @@ struct ConsumedTokens {
 };
 
 template <class FUN>
-static void ForEachLiteralId(const MatcherTokenSet &set, FUN &&fun) {
+void ForEachLiteralId(const MatcherTokenSet &set, FUN &&fun) {
 	for (idx_t word = 0; word < set.literals.size(); word++) {
 		auto bits = set.literals[word];
 		while (bits) {
@@ -261,30 +267,39 @@ struct SequenceCheckNode {
 	vector<idx_t> parents;
 	ConsumedTokens consumed;
 	//! set when the matcher consumes exactly one bracket literal
-	TailBracket bracket = TailBracket::NONE;
+	BracketKind bracket = BracketKind::NONE;
 	idx_t bracket_pair = 0;
 	bool queued = false;
+	//! the check of a sequence, when the analysis derives one
+	unique_ptr<MatcherSequenceCheck> check;
+};
+
+//! A sequence and the check derived for it
+struct CheckedSequence {
+	ListMatcher &sequence;
+	unique_ptr<MatcherSequenceCheck> check;
 };
 
 class SequenceCheckAnalysis {
 public:
 	SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &all_matchers, const GrammarLiteralTable &table);
 
-	//! The tail check of every sequence that has one
-	vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> CreateSequenceChecks();
+public:
+	//! The check of every sequence that has one
+	vector<CheckedSequence> CreateSequenceChecks();
 
 private:
-	static constexpr idx_t BRACKET_PAIRS = 3;
-	static constexpr idx_t MAX_LEADING_ALTERNATIVES = 6;
-	static constexpr idx_t MAX_FIXED_PREFIX = 6;
-
 	//! Appends the tokens of a matcher that consumes a fixed number of tokens; false once the length can vary
 	bool AppendFixedPrefix(idx_t node_index, vector<MatcherTokenSet> &pattern) const;
 	//! The check of a sequence, created on first use
-	MatcherSequenceCheck &CheckFor(vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> &checks,
-	                               Matcher &matcher) const;
+	MatcherSequenceCheck &CheckFor(SequenceCheckNode &node) const;
 
-	TailBracket BracketLiteral(idx_t literal_id, idx_t &pair) const;
+	//! What a matcher that is not a built-in composite consumes
+	void InitializeLeaf(SequenceCheckNode &node) const;
+	//! Whether a literal is a bracket, and of which pair of BRACKET_PAIRS
+	BracketKind BracketLiteral(idx_t literal_id, idx_t &pair_idx) const;
+	//! The bracket a matcher consumes when it matches exactly one literal, a bracket
+	BracketKind SingleBracket(const MatcherFirstSet &first, idx_t &pair_idx) const;
 	//! Merges the tokens consumed by children[begin, end) outside of the bracket pairs among them into result
 	bool AnalyzeSequence(const vector<idx_t> &children, idx_t begin, idx_t end, ConsumedTokens &result) const;
 	bool Update(idx_t node_index);
@@ -292,10 +307,16 @@ private:
 	bool Disjoint(const ConsumedTokens &prefix, const MatcherTokenSet &required) const;
 
 private:
+	//! A leading choice with more alternatives is not checked per alternative
+	static constexpr idx_t MAX_LEADING_ALTERNATIVES = 6;
+	//! The number of leading tokens of a sequence that are recorded
+	static constexpr idx_t MAX_FIXED_PREFIX = 6;
+
 	const GrammarLiteralTable &table;
 	vector<SequenceCheckNode> nodes;
-	uint16_t open_literals[BRACKET_PAIRS];
-	uint16_t close_literals[BRACKET_PAIRS];
+	//! literal ids of the brackets of each pair of BRACKET_PAIRS
+	vector<uint16_t> open_literals;
+	vector<uint16_t> close_literals;
 	//! class of the token spelled like each literal
 	vector<uint8_t> literal_classes;
 };
@@ -303,11 +324,9 @@ private:
 SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &all_matchers,
                                              const GrammarLiteralTable &table_p)
     : table(table_p) {
-	static constexpr const char OPEN_BRACKETS[BRACKET_PAIRS] = {'(', '[', '{'};
-	static constexpr const char CLOSE_BRACKETS[BRACKET_PAIRS] = {')', ']', '}'};
-	for (idx_t pair = 0; pair < BRACKET_PAIRS; pair++) {
-		open_literals[pair] = table.Lookup(&OPEN_BRACKETS[pair], 1).LiteralId();
-		close_literals[pair] = table.Lookup(&CLOSE_BRACKETS[pair], 1).LiteralId();
+	for (auto &bracket_pair : BRACKET_PAIRS) {
+		open_literals.push_back(table.Lookup(&bracket_pair.open, 1).LiteralId());
+		close_literals.push_back(table.Lookup(&bracket_pair.close, 1).LiteralId());
 	}
 	literal_classes.resize(idx_t(LiteralInfo::MAX_LITERAL_ID) + 1, 0);
 	table.ForEachLiteralText([&](const string &text, const LiteralInfo &info) {
@@ -336,7 +355,6 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
 		auto &node = nodes[node_index];
 		auto &matcher = node.matcher;
-		auto &first = matcher.first_set;
 		if (IsCompositeMatcher(matcher)) {
 			bool complete = true;
 			ForEachChildMatcher(matcher, [&](Matcher &child) {
@@ -356,69 +374,88 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 			}
 			// sized once, so merging never reallocates
 			node.consumed.tokens.literals.resize(literal_words, 0);
-		} else if (matcher.IsAtomic() && !first.any && !first.one.any && !first.second.any) {
-			// built-in atomic matchers consume tokens of their FIRST and SECOND sets only
-			node.consumed.tokens.MergeTokens(first);
-			node.consumed.tokens.MergeTokens(first.second);
-			if (!first.class_mask && first.second.IsEmpty()) {
-				idx_t literal_count = 0;
-				idx_t only_literal = 0;
-				ForEachLiteralId(first, [&](idx_t literal_id) {
-					literal_count++;
-					only_literal = literal_id;
-				});
-				if (literal_count == 1) {
-					node.bracket = BracketLiteral(only_literal, node.bracket_pair);
-				}
-			}
-			// a bracket is only consumed as part of a balanced pair in one sequence
-			if (node.bracket != TailBracket::NONE) {
-				node.consumed.MarkUnbalanced();
-			}
-		} else if (matcher.IsAtomic() && !static_cast<const AtomicMatcher &>(matcher).ConsumesBrackets()) {
-			// the tokens are unknown, but a sequence that brackets this matcher stays balanced
-			node.consumed.safe = false;
 		} else {
-			node.consumed.MarkUnbalanced();
+			InitializeLeaf(node);
 		}
 	}
 }
 
-TailBracket SequenceCheckAnalysis::BracketLiteral(idx_t literal_id, idx_t &pair) const {
-	for (pair = 0; pair < BRACKET_PAIRS; pair++) {
-		if (literal_id == open_literals[pair]) {
-			return TailBracket::OPEN;
+void SequenceCheckAnalysis::InitializeLeaf(SequenceCheckNode &node) const {
+	auto &matcher = node.matcher;
+	if (!matcher.IsAtomic()) {
+		// a matcher with a match process of its own can consume anything
+		node.consumed.MarkUnbalanced();
+		return;
+	}
+	auto &first = matcher.first_set;
+	const bool tokens_known = !first.any && !first.one.any && !first.second.any;
+	if (!tokens_known) {
+		if (static_cast<const AtomicMatcher &>(matcher).ConsumesBrackets()) {
+			node.consumed.MarkUnbalanced();
+		} else {
+			// the tokens are unknown, but a sequence that brackets this matcher stays balanced
+			node.consumed.safe = false;
 		}
-		if (literal_id == close_literals[pair]) {
-			return TailBracket::CLOSE;
+		return;
+	}
+	// built-in atomic matchers consume tokens of their FIRST and SECOND sets only
+	node.consumed.tokens.MergeTokens(first);
+	node.consumed.tokens.MergeTokens(first.second);
+	node.bracket = SingleBracket(first, node.bracket_pair);
+	if (node.bracket != BracketKind::NONE) {
+		// a bracket is only consumed as part of a balanced pair in one sequence
+		node.consumed.MarkUnbalanced();
+	}
+}
+
+BracketKind SequenceCheckAnalysis::SingleBracket(const MatcherFirstSet &first, idx_t &pair_idx) const {
+	if (first.class_mask || !first.second.IsEmpty()) {
+		return BracketKind::NONE;
+	}
+	idx_t literal_count = 0;
+	idx_t only_literal = 0;
+	ForEachLiteralId(first, [&](idx_t literal_id) {
+		literal_count++;
+		only_literal = literal_id;
+	});
+	return literal_count == 1 ? BracketLiteral(only_literal, pair_idx) : BracketKind::NONE;
+}
+
+BracketKind SequenceCheckAnalysis::BracketLiteral(idx_t literal_id, idx_t &pair_idx) const {
+	for (pair_idx = 0; pair_idx < open_literals.size(); pair_idx++) {
+		if (literal_id == open_literals[pair_idx]) {
+			return BracketKind::OPEN;
+		}
+		if (literal_id == close_literals[pair_idx]) {
+			return BracketKind::CLOSE;
 		}
 	}
-	return TailBracket::NONE;
+	return BracketKind::NONE;
 }
 
 bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t begin, idx_t end,
                                             ConsumedTokens &result) const {
 	bool changed = false;
-	idx_t i = begin;
-	while (i < end) {
-		auto &child = nodes[children[i]];
-		if (child.bracket == TailBracket::NONE) {
+	idx_t child_idx = begin;
+	while (child_idx < end) {
+		auto &child = nodes[children[child_idx]];
+		if (child.bracket == BracketKind::NONE) {
 			changed |= result.Merge(child.consumed);
-			i++;
+			child_idx++;
 			continue;
 		}
-		if (child.bracket == TailBracket::CLOSE) {
+		if (child.bracket == BracketKind::CLOSE) {
 			return changed | result.MarkUnbalanced();
 		}
 		// find the closing bracket of the same pair, nested pairs included
 		idx_t depth = 0;
-		idx_t close = i + 1;
+		idx_t close = child_idx + 1;
 		for (; close < end; close++) {
 			auto &candidate = nodes[children[close]];
-			if (candidate.bracket == TailBracket::NONE || candidate.bracket_pair != child.bracket_pair) {
+			if (candidate.bracket == BracketKind::NONE || candidate.bracket_pair != child.bracket_pair) {
 				continue;
 			}
-			if (candidate.bracket == TailBracket::OPEN) {
+			if (candidate.bracket == BracketKind::OPEN) {
 				depth++;
 			} else if (depth == 0) {
 				break;
@@ -430,9 +467,9 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 			return changed | result.MarkUnbalanced();
 		}
 		// the interior is skipped at runtime, so only its brackets matter: they have to be balanced
-		for (idx_t interior = i + 1; interior < close; interior++) {
+		for (idx_t interior = child_idx + 1; interior < close; interior++) {
 			auto &interior_node = nodes[children[interior]];
-			if (interior_node.bracket == TailBracket::NONE && !interior_node.consumed.balanced) {
+			if (interior_node.bracket == BracketKind::NONE && !interior_node.consumed.balanced) {
 				changed |= result.MarkUnbalanced();
 			}
 		}
@@ -440,7 +477,7 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 			result.brackets = true;
 			changed = true;
 		}
-		i = close + 1;
+		child_idx = close + 1;
 	}
 	return changed;
 }
@@ -491,16 +528,11 @@ bool SequenceCheckAnalysis::AppendFixedPrefix(idx_t node_index, vector<MatcherTo
 	}
 }
 
-MatcherSequenceCheck &
-SequenceCheckAnalysis::CheckFor(vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> &checks,
-                                Matcher &matcher) const {
-	for (auto &entry : checks) {
-		if (&entry.first.get() == &matcher) {
-			return *entry.second;
-		}
+MatcherSequenceCheck &SequenceCheckAnalysis::CheckFor(SequenceCheckNode &node) const {
+	if (!node.check) {
+		node.check = make_uniq<MatcherSequenceCheck>(table);
 	}
-	checks.emplace_back(matcher.Cast<ListMatcher>(), make_uniq<MatcherSequenceCheck>(table));
-	return *checks.back().second;
+	return *node.check;
 }
 
 bool SequenceCheckAnalysis::Update(idx_t node_index) {
@@ -517,7 +549,8 @@ bool SequenceCheckAnalysis::Update(idx_t node_index) {
 
 bool SequenceCheckAnalysis::Disjoint(const ConsumedTokens &prefix, const MatcherTokenSet &required) const {
 	auto &alphabet = prefix.tokens;
-	// the classes the tokenizer assigns, so that a class in one set cannot share a token with a class in the other
+	// A token's class can have two bits (an identifier is WORD | IDENTIFIER), so two masks without a common bit can
+	// still accept the same token. Test every class the tokenizer assigns (ComputeMatcherTokenClass) instead.
 	static constexpr uint8_t TOKEN_CLASSES[] = {
 	    MatcherTokenClass::WORD,     MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER,
 	    MatcherTokenClass::STRING,   MatcherTokenClass::NUMBER,
@@ -529,11 +562,11 @@ bool SequenceCheckAnalysis::Disjoint(const ConsumedTokens &prefix, const Matcher
 	}
 	bool disjoint = true;
 	ForEachLiteralId(required, [&](idx_t literal_id) {
-		idx_t pair;
-		auto bracket = BracketLiteral(literal_id, pair);
+		idx_t pair_idx;
+		auto bracket = BracketLiteral(literal_id, pair_idx);
 		// the scan skips bracket pairs the prefix consumes, so a required bracket is only found when it has none
 		if (alphabet.HasLiteral(literal_id) || (literal_classes[literal_id] & alphabet.class_mask) ||
-		    bracket == TailBracket::CLOSE || (bracket == TailBracket::OPEN && prefix.brackets)) {
+		    bracket == BracketKind::CLOSE || (bracket == BracketKind::OPEN && prefix.brackets)) {
 			disjoint = false;
 		}
 	});
@@ -545,7 +578,7 @@ bool SequenceCheckAnalysis::Disjoint(const ConsumedTokens &prefix, const Matcher
 	return disjoint;
 }
 
-vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceCheckAnalysis::CreateSequenceChecks() {
+vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 	// least fixed point over the recursive grammar: a change re-queues the parents
 	vector<idx_t> worklist;
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
@@ -568,32 +601,30 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 			}
 		}
 	}
-	vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> sequence_checks;
+	// a tail check for the first element that cannot start with a token its prefix consumes
 	for (auto &node : nodes) {
 		auto &matcher = node.matcher;
 		if (!IsCompositeMatcher(matcher) || matcher.Type() != MatcherType::LIST) {
 			continue;
 		}
 		auto &children = node.children;
-		for (idx_t i = 1; i < children.size(); i++) {
-			auto &element_first = nodes[children[i]].matcher.first_set;
+		for (idx_t element_idx = 1; element_idx < children.size(); element_idx++) {
+			auto &element_first = nodes[children[element_idx]].matcher.first_set;
 			if (!element_first.computed || element_first.any || element_first.nullable) {
 				continue;
 			}
 			// a one-token prefix is already covered by the SECOND set
-			if (i == 1 && nodes[children[0]].matcher.IsAtomic()) {
+			if (element_idx == 1 && nodes[children[0]].matcher.IsAtomic()) {
 				continue;
 			}
 			ConsumedTokens prefix;
-			AnalyzeSequence(children, 0, i, prefix);
+			AnalyzeSequence(children, 0, element_idx, prefix);
 			if (!prefix.safe || !Disjoint(prefix, element_first)) {
 				continue;
 			}
-			auto check = make_uniq<MatcherSequenceCheck>(table);
 			// the element has to start with a token of its FIRST set
 			const MatcherTokenSet &required = element_first;
-			check->SetTail(std::move(prefix.tokens), required, !prefix.brackets);
-			sequence_checks.emplace_back(matcher.Cast<ListMatcher>(), std::move(check));
+			CheckFor(node).SetTail(std::move(prefix.tokens), required, !prefix.brackets);
 			break;
 		}
 	}
@@ -640,12 +671,12 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 		// what can follow a one-token alternative: the FIRST set of the rest of the sequence
 		MatcherTokenSet rest_first;
 		bool rest_nullable = true;
-		for (idx_t i = 1; i < node.children.size() && rest_nullable; i++) {
-			auto &element_first = nodes[node.children[i]].matcher.first_set;
+		for (idx_t element_idx = 1; element_idx < node.children.size() && rest_nullable; element_idx++) {
+			auto &element_first = nodes[node.children[element_idx]].matcher.first_set;
 			rest_first.MergeTokens(element_first);
 			rest_nullable = element_first.nullable;
 		}
-		CheckFor(sequence_checks, matcher).SetLeadingChoice(choice, std::move(rest_first), rest_nullable);
+		CheckFor(node).SetLeadingChoice(choice, std::move(rest_first), rest_nullable);
 	}
 	// leading single-token elements fix the tokens beyond the two the FIRST and SECOND sets cover
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
@@ -659,7 +690,13 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 		if (pattern.size() < 3) {
 			continue;
 		}
-		CheckFor(sequence_checks, matcher).SetLaterTokens(vector<MatcherTokenSet>(pattern.begin() + 2, pattern.end()));
+		CheckFor(node).SetLaterTokens(vector<MatcherTokenSet>(pattern.begin() + 2, pattern.end()));
+	}
+	vector<CheckedSequence> sequence_checks;
+	for (auto &node : nodes) {
+		if (node.check) {
+			sequence_checks.push_back({node.matcher.Cast<ListMatcher>(), std::move(node.check)});
+		}
 	}
 	return sequence_checks;
 }
@@ -683,8 +720,8 @@ void MatcherAllocator::InitializeSequenceChecks(const GrammarLiteralTable &table
 		if (sequence_checks.size() >= NumericLimits<uint16_t>::Maximum()) {
 			break;
 		}
-		auto &first = entry.first.get().first_set;
-		sequence_checks.push_back(std::move(entry.second));
+		auto &first = entry.sequence.first_set;
+		sequence_checks.push_back(std::move(entry.check));
 		first.sequence_check_index = NumericCast<uint16_t>(sequence_checks.size());
 		// every token passing the FIRST check goes through MightMatchSecond, which runs the checks
 		first.first_suffices = false;
