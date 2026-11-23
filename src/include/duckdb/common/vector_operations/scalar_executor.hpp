@@ -339,7 +339,7 @@ private:
 		constexpr idx_t N = sizeof...(ARGS);
 		std::array<UnifiedVectorFormat, N> formats;
 		for (idx_t i = 0; i < N; i++) {
-			inputs[i].get().ToUnifiedFormat(formats[i]);
+			formats[i].Borrow(inputs[i].get(), result);
 		}
 		auto input_data = std::make_tuple(UnifiedVectorFormat::GetData<ARGS>(formats[Is])...);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
