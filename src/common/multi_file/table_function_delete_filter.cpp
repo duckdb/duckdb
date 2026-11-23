@@ -2,7 +2,6 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -14,11 +13,10 @@ namespace duckdb {
 
 static const char *DELETED_ROWS_OPTION = "deleted_rows";
 static const char *SCAN_ROWS_OPTION = "scan_rows";
-static const char *DELETE_FILE_OPTION = "delete_file";
-static const char *DELETE_FILE_FUNCTION_OPTION = "delete_file_function";
+static const char *DELETE_QUERY_OPTION = "delete_query";
 static const char *SNAPSHOT_FILTER_OPTION = "delete_snapshot_filter";
 static const char *MAX_ROW_COUNT_OPTION = "max_row_count";
-static const char *SNAPSHOT_COLUMN = "_ducklake_internal_snapshot_id";
+static const char *SNAPSHOT_COLUMN = "snapshot_id";
 
 static bool HasOption(const OpenFileInfo &file, const char *name) {
 	auto entry = file.extended_info->options.find(name);
@@ -26,7 +24,7 @@ static bool HasOption(const OpenFileInfo &file, const char *name) {
 }
 
 bool TableFunctionDeleteFilter::HasDeleteOptions(const OpenFileInfo &file) {
-	return file.extended_info && (HasOption(file, DELETED_ROWS_OPTION) || HasOption(file, DELETE_FILE_OPTION) ||
+	return file.extended_info && (HasOption(file, DELETED_ROWS_OPTION) || HasOption(file, DELETE_QUERY_OPTION) ||
 	                              HasOption(file, SCAN_ROWS_OPTION) || HasOption(file, MAX_ROW_COUNT_OPTION));
 }
 
@@ -36,9 +34,8 @@ unique_ptr<DeleteFilter> TableFunctionDeleteFilter::TryCreate(ClientContext &con
 	}
 	auto &options = file.extended_info->options;
 	bool has_deleted_rows = HasOption(file, DELETED_ROWS_OPTION);
-	bool has_delete_file = HasOption(file, DELETE_FILE_OPTION);
+	bool has_delete_query = HasOption(file, DELETE_QUERY_OPTION);
 	auto deleted_rows_entry = options.find(DELETED_ROWS_OPTION);
-	auto delete_file_entry = options.find(DELETE_FILE_OPTION);
 	auto result = make_uniq<TableFunctionDeleteFilter>();
 	idx_t value;
 	if (file.extended_info->TryGetOption(MAX_ROW_COUNT_OPTION, value)) {
@@ -59,15 +56,8 @@ unique_ptr<DeleteFilter> TableFunctionDeleteFilter::TryCreate(ClientContext &con
 		}
 		sort(result->scan_rows.begin(), result->scan_rows.end());
 	}
-	if (has_delete_file) {
-		string function_name = "read_parquet";
-		file.extended_info->TryGetOption(DELETE_FILE_FUNCTION_OPTION, function_name);
-		for (auto c : function_name) {
-			if (!StringUtil::CharacterIsAlphaNumeric(c) && c != '_') {
-				throw InvalidInputException("Invalid delete file function \"%s\"", function_name);
-			}
-		}
-		result->AddDeleteFile(context, delete_file_entry->second, function_name);
+	if (has_delete_query) {
+		result->AddDeletes(context, StringValue::Get(options.at(DELETE_QUERY_OPTION)), file.path);
 	}
 	if (result->snapshot_ids.empty() && !std::is_sorted(result->deleted_rows.begin(), result->deleted_rows.end())) {
 		sort(result->deleted_rows.begin(), result->deleted_rows.end());
@@ -75,15 +65,12 @@ unique_ptr<DeleteFilter> TableFunctionDeleteFilter::TryCreate(ClientContext &con
 	return std::move(result);
 }
 
-void TableFunctionDeleteFilter::AddDeleteFile(ClientContext &context, const Value &delete_file,
-                                              const string &function_name) {
-	// read the delete file on a connection of its own - this runs while the scan holds the lock of its context
+void TableFunctionDeleteFilter::AddDeletes(ClientContext &context, const string &query, const string &path) {
+	// run the query on a connection of its own - this runs while the scan holds the lock of its context
 	Connection connection(DatabaseInstance::GetDatabase(context));
-	auto file = OpenFileInfo::FromValue(delete_file, Identifier("delete_file"));
-	auto file_value = file.ToValue();
-	auto result = connection.Query("SELECT * FROM " + function_name + "([?])", file_value);
+	auto result = connection.Query(query);
 	if (result->HasError()) {
-		result->GetErrorObject().Throw("Failed to read delete file " + file.path + ": ");
+		result->GetErrorObject().Throw("Failed to read the deletes of file " + path + ": ");
 	}
 	optional_idx pos_column;
 	optional_idx snapshot_column;
@@ -96,7 +83,7 @@ void TableFunctionDeleteFilter::AddDeleteFile(ClientContext &context, const Valu
 		}
 	}
 	if (!pos_column.IsValid()) {
-		throw InvalidInputException("Delete file %s must have a \"pos\" column", file.path);
+		throw InvalidInputException("The delete query of file %s must return a \"pos\" column", path);
 	}
 	vector<pair<idx_t, idx_t>> entries;
 	while (true) {

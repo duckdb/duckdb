@@ -46,7 +46,7 @@ SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.
 
 # a delete file
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del.parquet'}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/delete_options_del.parquet'')'}])
 ----
 0
 1
@@ -58,7 +58,7 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 
 # a delete file with snapshot ids only applies up to the snapshot filter
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del_snap.parquet', 'delete_snapshot_filter': 3}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos, _ducklake_internal_snapshot_id AS snapshot_id FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'')', 'delete_snapshot_filter': 3}])
 ----
 0
 2
@@ -82,9 +82,9 @@ SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.
 10
 
 statement error
-SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/does_not_exist.parquet'}])
+SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/does_not_exist.parquet'')'}])
 ----
-Failed to read delete file
+Failed to read the deletes of file
 
 # only the listed rows are scanned
 query I
@@ -106,26 +106,26 @@ SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.
 ----
 3
 
-# the function that reads the delete file can be named
+# the deletes can be any query
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del.parquet', 'delete_file_function': 'read_parquet'}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([1, 4, 8])::BIGINT AS pos'}])
 ----
 0
-1
+2
 3
-4
+5
 6
 7
-8
+9
 
 statement error
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del.parquet', 'delete_file_function': 'read_parquet(1); --'}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT 42 AS something_else'}])
 ----
-Invalid delete file function
+must return a "pos" column
 
 # listed deletes apply in every snapshot - the rows of the delete file keep their own snapshots
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del_snap.parquet', 'delete_snapshot_filter': 3, 'deleted_rows': [9]}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos, _ducklake_internal_snapshot_id AS snapshot_id FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'')', 'delete_snapshot_filter': 3, 'deleted_rows': [9]}])
 ----
 0
 2
