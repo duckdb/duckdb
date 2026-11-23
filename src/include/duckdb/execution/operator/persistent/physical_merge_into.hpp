@@ -117,9 +117,6 @@ public:
 	//! Whether the actions must run one after the other instead of concurrently - required when multiple actions
 	//! append to the same table, which their operators cannot do concurrently
 	bool serialize_actions;
-	//! Whether to reject target rows that WHEN MATCHED actions modify more than once - requires a single column of
-	//! dense row ids (as in DuckDB tables)
-	bool check_matched_rows = false;
 
 public:
 	// Source interface

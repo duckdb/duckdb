@@ -211,12 +211,6 @@ static void AppendReturnRows(ColumnDataCollection &collection, DataChunk &combin
 	collection.Append(combined);
 }
 
-//! The rows are distinct and visible to the scan, so another action of the same MERGE deleted the missing ones
-[[noreturn]] static void ThrowUpdateOfDeletedRow() {
-	throw InvalidInputException(
-	    "MERGE INTO cannot update a target row that it deleted: ensure each target row matches one source row");
-}
-
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g_state = input.global_state.Cast<UpdateGlobalState>();
 	auto &l_state = input.local_state.Cast<UpdateLocalState>();
@@ -300,8 +294,10 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto fetch_state = ColumnFetchState();
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		table.Fetch(transaction, fetch_chunk, column_ids, del_row_ids, update_count, fetch_state);
+		// the rows are distinct and visible to the scan, so another operator of this statement deleted the missing ones
 		if (fetch_chunk.size() != update_count) {
-			ThrowUpdateOfDeletedRow();
+			throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each "
+			                            "target row is matched by at most one source row");
 		}
 
 		idx_t fetch_idx = 0;
@@ -317,7 +313,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	if (table.Delete(delete_state, context.client, tableref, del_row_ids, update_count) != update_count) {
-		ThrowUpdateOfDeletedRow();
+		throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each target "
+		                            "row is matched by at most one source row");
 	}
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced

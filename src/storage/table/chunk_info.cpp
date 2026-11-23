@@ -77,9 +77,9 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 		return true;
 	}
 	if (IsDeleteId(id)) {
-		// a transaction cannot see rows it deleted earlier, so the current statement (a MERGE) deleted this row
-		throw InvalidInputException(
-		    "MERGE INTO cannot update a target row that it deleted: ensure each target row matches one source row");
+		// a transaction cannot see rows it deleted earlier, so the current statement deleted this row
+		throw InvalidInputException("Cannot update a row that the same statement already deleted: ensure each target "
+		                            "row is matched by at most one source row");
 	}
 	return false;
 }
