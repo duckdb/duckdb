@@ -1,0 +1,67 @@
+# name: test/sql/copy/parquet/union_by_name_empty_json_containers.test
+# description: Empty arrays and objects do not force JSON when unifying Parquet schemas
+# group: [parquet]
+
+require parquet
+
+require json
+
+# one file only has empty containers, the other file has the actual data
+statement ok
+COPY (SELECT '{"a": [], "b": {}, "c": []}') TO '{TEST_DIR}/empty.json' (FORMAT CSV, quote '', header 0)
+
+# the full file also contains a string that is not valid JSON on its own
+statement ok
+COPY (SELECT '{"a": [1, 2], "b": {"k": "hello"}, "c": ["1, 2"]}') TO '{TEST_DIR}/full.json' (FORMAT CSV, quote '', header 0)
+
+statement ok
+COPY (SELECT * FROM read_json_auto('{TEST_DIR}/empty.json')) TO '{TEST_DIR}/empty.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT * FROM read_json_auto('{TEST_DIR}/full.json')) TO '{TEST_DIR}/full.parquet' (FORMAT PARQUET)
+
+# empty containers carry no type information, so they are inferred as NULL-typed containers
+query III
+SELECT typeof(a), typeof(b), typeof(c) FROM read_parquet('{TEST_DIR}/empty.parquet');
+----
+"NULL"[]	MAP(VARCHAR, "NULL")	"NULL"[]
+
+# the empty containers are preserved as empty containers, they do not turn into NULL values
+query III
+SELECT cardinality(a), cardinality(map_keys(b)), cardinality(c) FROM read_parquet('{TEST_DIR}/empty.parquet');
+----
+0	0	0
+
+foreach first,second empty,full full,empty
+
+# the NULL-typed containers combine with the inferred types instead of becoming JSON
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_parquet(['{TEST_DIR}/{first}.parquet', '{TEST_DIR}/{second}.parquet'],
+                                                                          union_by_name = true));
+----
+a	BIGINT[]
+b	MAP(VARCHAR, VARCHAR)
+c	VARCHAR[]
+
+query III
+SELECT a, b, c FROM read_parquet(['{TEST_DIR}/{first}.parquet', '{TEST_DIR}/{second}.parquet'],
+                                 union_by_name = true)
+ORDER BY cardinality(a);
+----
+[]	{}	[]
+[1, 2]	{k=hello}	['1, 2']
+
+endloop
+
+# the empty containers survive a JSON -> Parquet -> JSON roundtrip
+statement ok
+COPY (SELECT * FROM read_parquet(['{TEST_DIR}/empty.parquet', '{TEST_DIR}/full.parquet'],
+                                 union_by_name = true)
+      ORDER BY cardinality(a)) TO '{TEST_DIR}/roundtrip.json' (FORMAT JSON)
+
+query III
+SELECT a, b, c FROM read_json('{TEST_DIR}/roundtrip.json',
+                              columns = {'a': 'JSON', 'b': 'JSON', 'c': 'JSON'})
+----
+[]	{}	[]
+[1,2]	{"k":"hello"}	["1, 2"]

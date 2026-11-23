@@ -105,6 +105,7 @@ public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node, bool ignore_errors, bool detect_geojson,
 	                             const idx_t depth = 0);
 	static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
+	//! null_type is the type used for nodes that were never observed, e.g. the elements of an empty array
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, idx_t max_depth,
 	                                   double field_appearance_threshold, idx_t map_inference_threshold,
 	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::JSON());

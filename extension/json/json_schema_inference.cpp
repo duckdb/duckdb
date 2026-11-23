@@ -608,14 +608,15 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                         const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                        const idx_t depth, const LogicalType &null_type) {
+                                        const idx_t depth) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
 
+	// elements of an array that was always empty are unknown - use the NULL type, which combines with any type
 	return LogicalType::LIST(JSONStructure::StructureToType(context, desc.children[0], max_depth,
 	                                                        field_appearance_threshold, map_inference_threshold,
-	                                                        depth + 1, null_type));
+	                                                        depth + 1, LogicalType::SQLNULL));
 }
 
 static void MergeNodeArray(JSONStructureNode &merged, const JSONStructureDescription &child_desc) {
@@ -791,7 +792,7 @@ static bool IsStructureInconsistent(const JSONStructureDescription &desc, const 
 
 static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                  const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                 const idx_t depth, const LogicalType &null_type) {
+                                 const idx_t depth) {
 	D_ASSERT(node.descriptions.size() == 1);
 	auto &desc = node.descriptions[0];
 	auto merged = JSONStructureNode::EmptyLike(node);
@@ -799,23 +800,22 @@ static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode
 		JSONStructure::MergeNodes(merged, child);
 	}
 	return JSONStructure::StructureToType(context, merged, max_depth, field_appearance_threshold,
-	                                      map_inference_threshold, depth + 1, null_type);
+	                                      map_inference_threshold, depth + 1, LogicalType::SQLNULL);
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                          const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                         const idx_t depth, const LogicalType &null_type) {
+                                         const idx_t depth) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
 
 	if (desc.children.empty()) {
 		if (map_inference_threshold != DConstants::INVALID_INDEX) {
-			// Empty struct - use MAP(VARCHAR, JSON) as a generic container;
-			// JSON() is safe for all output formats and is not affected by ExchangeNullType
-			return LogicalType::MAP(LogicalType::VARCHAR, LogicalType::JSON());
-		} else {
-			return LogicalType::JSON();
+			// an empty object is not the same as a NULL value, but we know nothing about its values either.
+			// a MAP with NULL values keeps the empty object intact and combines with any (map) type
+			return LogicalType::MAP(LogicalType::VARCHAR, LogicalType::SQLNULL);
 		}
+		return LogicalType::SQLNULL;
 	}
 
 	// An empty key can't be a STRUCT member name, so such objects can only be a MAP or JSON
@@ -831,9 +831,9 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
 	if (has_empty_key || (map_inference_threshold != DConstants::INVALID_INDEX &&
 	                      IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold))) {
-		return LogicalType::MAP(LogicalType::VARCHAR,
-		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
-		                                      map_inference_threshold, depth + 1, null_type));
+		return LogicalType::MAP(
+		    LogicalType::VARCHAR,
+		    GetMergedType(context, node, max_depth, field_appearance_threshold, map_inference_threshold, depth + 1));
 	}
 
 	// We have a consistent object
@@ -841,15 +841,15 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	child_types.reserve(desc.children.size());
 	for (auto &child : desc.children) {
 		D_ASSERT(child.key);
-		child_types.emplace_back(*child.key,
-		                         JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
-		                                                        map_inference_threshold, depth + 1, null_type));
+		child_types.emplace_back(
+		    *child.key, JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
+		                                               map_inference_threshold, depth + 1, LogicalType::SQLNULL));
 	}
 
 	// If we have many children and all children have similar-enough types we infer map
 	if (desc.children.size() >= map_inference_threshold) {
-		LogicalType map_value_type = GetMergedType(context, node, max_depth, field_appearance_threshold,
-		                                           map_inference_threshold, depth + 1, LogicalTypeId::SQLNULL);
+		LogicalType map_value_type =
+		    GetMergedType(context, node, max_depth, field_appearance_threshold, map_inference_threshold, depth + 1);
 
 		double total_similarity = 0;
 		for (const auto &child_type : child_types) {
@@ -862,10 +862,6 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		}
 		const auto avg_similarity = total_similarity / static_cast<double>(child_types.size());
 		if (avg_similarity >= 0.8) {
-			if (null_type != LogicalTypeId::SQLNULL) {
-				map_value_type = GetMergedType(context, node, max_depth, field_appearance_threshold,
-				                               map_inference_threshold, depth + 1, null_type);
-			}
 			return LogicalType::MAP(LogicalType::VARCHAR, map_value_type);
 		}
 	}
@@ -889,7 +885,8 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 		return LogicalType::JSON();
 	}
 	if (node.descriptions.empty()) {
-		return LogicalType::JSON(); // no data observed, fall back to generic JSON type
+		// no data observed - the NULL type for empty containers, JSON when nothing was sampled at all
+		return null_type;
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
 		return LogicalType::JSON();
@@ -899,10 +896,10 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
 		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
-		                            depth, null_type);
+		                            depth);
 	case LogicalTypeId::STRUCT:
 		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
-		                             depth, null_type);
+		                             depth);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::UBIGINT:
