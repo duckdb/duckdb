@@ -153,6 +153,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>, nullptr);
 	fun.GetSignature().AddParameter("any", input_type);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// The native sketch has a fixed register array.
+	fun.GetProperties().allow_perfect_hash = true;
 	fun.SetStateExportCallbacks(ApproxCountDistinctGetStateType, ApproxCountDistinctExportState,
 	                            ApproxCountDistinctImportState);
 	return fun;

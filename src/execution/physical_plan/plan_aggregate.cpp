@@ -240,8 +240,19 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.Function().HasStateCombineCallback()) {
-			// distinct aggregates are not supported in perfect hash aggregates
+		const auto &function = aggregate.Function();
+		if (aggregate.IsDistinct() || !function.HasStateCombineCallback()) {
+			return false;
+		}
+		if (function.GetProperties().allow_perfect_hash) {
+			continue;
+		}
+		if (!function.HasGetStateTypeCallback() || function.HasStateDestructorCallback() ||
+		    function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback()) {
+			return false;
+		}
+		const auto layout = function.GetStateType(aggregate.BindInfo().get());
+		if (!layout.field.IsFixedSize(layout.type)) {
 			return false;
 		}
 	}

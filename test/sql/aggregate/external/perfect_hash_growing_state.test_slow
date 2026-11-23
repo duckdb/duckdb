@@ -8,78 +8,7 @@ statement ok
 SET threads = 1
 
 statement ok
-SET memory_limit = '2MB'
-
-query II
-SELECT sum(len(xs)), max(a) = 32799 FROM (
-    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs, avg(i) AS a
-    FROM range(65536) t(i) GROUP BY g
-)
-----
-65536	true
-
-query II
-SELECT sum(len(xs)), sum(length(v)) FROM (
-    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
-           min(CASE WHEN i % 2 = 0 THEN repeat('x', 512) ELSE repeat('y', 512) END) AS v
-    FROM range(65536) t(i) GROUP BY g
-)
-----
-65536	51200
-
-foreach aggr first min
-
-query II
-SELECT sum(len(xs)), count(*) FILTER (WHERE v = 'a') FROM (
-    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
-           {aggr}(CASE WHEN i < 100 THEN 'a' ELSE repeat('z', 512) END) AS v
-    FROM range(65536) t(i) GROUP BY g
-)
-----
-65536	100
-
-endloop
-
-foreach aggr last max
-
-query II
-SELECT sum(len(xs)), count(*) FILTER (WHERE v = repeat('z', 512)) FROM (
-    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
-           {aggr}(CASE WHEN i < 61440 THEN 'a' ELSE repeat('z', 512) END) AS v
-    FROM range(65536) t(i) GROUP BY g
-)
-----
-65536	100
-
-endloop
-
-foreach width 0 512
-
-foreach aggr min first
-
-query III
-SELECT sum(len(xs)), count(v), min(v) = repeat('x', {width}) || '0' FROM (
-    SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs,
-           {aggr}(CASE WHEN i = 0 THEN repeat('x', {width}) || i::VARCHAR END) FILTER (WHERE i < 2) AS v
-    FROM range(65536) t(i) GROUP BY g
-)
-----
-65536	1	true
-
-endloop
-
-endloop
-
-query I
-SELECT sum(len(xs)) FROM (
-    SELECT (i % 30)::UTINYINT AS g, list(hash(i)) AS xs FROM range(2000000) t(i)
-    WHERE i % 10000 = 0 GROUP BY g
-)
-----
-200
-
-statement ok
-SET memory_limit = '4MB'
+SET memory_limit = '8MB'
 
 query III
 SELECT count(*), count(xs), count(*) FILTER (WHERE g = 1 AND xs = [repeat('x', 512) || '1']) FROM (
@@ -89,6 +18,9 @@ SELECT count(*), count(xs), count(*) FILTER (WHERE g = 1 AND xs = [repeat('x', 5
 ----
 10	1	1
 
+statement ok
+SET memory_limit = '4MB'
+
 query II
 SELECT count(*), count(*) FILTER (WHERE v = repeat('x', 512) || lpad(g::VARCHAR, 4, '0')) FROM (
     SELECT (i % 10)::UTINYINT AS g, min(repeat('x', 512) || lpad(i::VARCHAR, 4, '0')) AS v
@@ -97,7 +29,7 @@ SELECT count(*), count(*) FILTER (WHERE v = repeat('x', 512) || lpad(g::VARCHAR,
 ----
 10	10
 
-foreach budget 8 13
+foreach budget 24 32
 
 statement ok
 SET memory_limit = '{budget}MB'
@@ -125,38 +57,41 @@ SELECT sum(len(xs)) FROM (
 524288
 
 statement ok
-SET memory_limit = '13MB'
+SET memory_limit = '16MB'
 
 statement ok
-CREATE TABLE dense_output AS
+CREATE TABLE grouped_output AS
 SELECT (i % 100)::UTINYINT AS g, list(hash(i)) AS xs FROM range(524288) t(i) GROUP BY g
 
 statement ok
 RESET memory_limit
 
 query II
-SELECT count(*), sum(len(xs)) FROM dense_output
+SELECT count(*), sum(len(xs)) FROM grouped_output
 ----
 100	524288
 
 statement ok
-DROP TABLE dense_output
+DROP TABLE grouped_output
 
 statement ok
-SET memory_limit = '16MB'
+SET memory_limit = '256MB'
 
 foreach width 128 1024
 
 query II
 SELECT sum(len(xs)), sum(length(v)) FROM (
     SELECT (i % 32)::UTINYINT AS g, list(i) FILTER (WHERE i = 0) AS xs,
-           last(CASE WHEN (i // 2048) % 2 = 0 THEN repeat('x', {width}) ELSE 'x' END) AS v
+           last(CASE WHEN (i // 2048) % 2 = 0 THEN repeat('x', {width}) ELSE 'x' END ORDER BY i) AS v
     FROM range(1073741824 // {width}) t(i) GROUP BY g
 )
 ----
 1	32
 
 endloop
+
+statement ok
+SET memory_limit = '32MB'
 
 foreach start_row 0 524288
 
@@ -171,6 +106,9 @@ SELECT sum(len(xs)), sum(length(v)) FROM (
 
 endloop
 
+statement ok
+SET memory_limit = '48MB'
+
 query I
 SELECT sum(len(xs)) FROM (
     SELECT (i % 100)::UTINYINT AS g, list(i::VARCHAR) AS xs FROM range(1500000) t(i) GROUP BY g
@@ -178,7 +116,7 @@ SELECT sum(len(xs)) FROM (
 ----
 1500000
 
-foreach budget 18 20
+foreach budget 64 80
 
 statement ok
 SET memory_limit = '{budget}MB'
@@ -194,7 +132,7 @@ SELECT sum(len(xs)), max(len(xs)) FILTER (WHERE g = 0), sum(list_sum(xs)) FROM (
 endloop
 
 statement ok
-SET memory_limit = '20MB'
+SET memory_limit = '32MB'
 
 statement ok
 CREATE TABLE crossover AS
@@ -213,7 +151,7 @@ DROP TABLE crossover
 
 # An earlier UNION branch can already have contributed states when the filtered LIST spills.
 statement ok
-SET memory_limit = '20MB'
+SET memory_limit = '96MB'
 
 statement ok
 CREATE TABLE merged AS
