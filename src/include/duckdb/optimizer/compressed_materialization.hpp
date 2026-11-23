@@ -18,7 +18,6 @@ class Optimizer;
 class ClientContext;
 class ColumnBindingReplacer;
 class LogicalOperator;
-class NodeStatistics;
 class Expression;
 class BoundColumnRefExpression;
 class BoundFunctionExpression;
@@ -110,13 +109,13 @@ public:
 	                          const vector<reference<unique_ptr<LogicalOperator>>> &ancestors,
 	                          statistics_map_t &statistics_map);
 
-	void Compress(unique_ptr<LogicalOperator> &op, optional_ptr<const NodeStatistics> node_stats);
+	void Compress(unique_ptr<LogicalOperator> &op);
 
 private:
 	//! Compress materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
 	void CompressComparisonJoin(unique_ptr<LogicalOperator> &op);
-	void CompressOrder(unique_ptr<LogicalOperator> &op, optional_ptr<const NodeStatistics> node_stats);
+	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Update statistics after compressing
 	void UpdateAggregateStats(unique_ptr<LogicalOperator> &op);
