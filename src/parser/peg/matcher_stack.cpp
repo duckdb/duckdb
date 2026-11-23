@@ -533,17 +533,40 @@ class RepeatMatchFrame final : public MatchStackFrame {
 public:
 	RepeatMatchFrame(const RepeatMatcher &matcher_p, MatchState &state_p, ArenaAllocator::Position mark = {},
 	                 const PackratMatchState &packrat = {})
-	    : MatchStackFrame(MatcherType::REPEAT, {matcher_p, state_p}, mark, packrat), matcher(matcher_p),
-	      repeat_state(state_p), results(state_p.context.process_allocator) {
+	    : RepeatMatchFrame(matcher_p, matcher_p, state_p, mark, packrat, false) {
+	}
+	//! A repetition inside an optional (zero or more) runs as one frame and produces the optional's result
+	RepeatMatchFrame(const OptionalMatcher &optional, const RepeatMatcher &matcher_p, MatchState &state_p,
+	                 ArenaAllocator::Position mark, const PackratMatchState &packrat)
+	    : RepeatMatchFrame(optional, matcher_p, state_p, mark, packrat, true) {
+	}
+
+private:
+	RepeatMatchFrame(const Matcher &input_matcher, const RepeatMatcher &matcher_p, MatchState &state_p,
+	                 ArenaAllocator::Position mark, const PackratMatchState &packrat, bool optional_wrapper_p)
+	    : MatchStackFrame(MatcherType::REPEAT, {input_matcher, state_p}, mark, packrat), matcher(matcher_p),
+	      repeat_state(state_p), results(state_p.context.process_allocator), optional_wrapper(optional_wrapper_p) {
 		if (auto current = repeat_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
 	}
 
 public:
+	//! The result of one or more repetitions
 	MatcherResult CreateResult() {
-		return state.AllocateParseResult<RepeatParseResult>(state.context.allocator.MakeChildren(results),
-		                                                    start_offset);
+		auto repeat =
+		    state.AllocateParseResult<RepeatParseResult>(state.context.allocator.MakeChildren(results), start_offset);
+		if (!optional_wrapper) {
+			return repeat;
+		}
+		if (!repeat.HasParseResult()) {
+			return MatcherResult::Success();
+		}
+		return state.AllocateParseResult<OptionalParseResult>(repeat.GetParseResult(), start_offset);
+	}
+	//! The result when the first repetition does not match
+	MatcherResult NoMatch() {
+		return optional_wrapper ? MakeEmptyOptionalResult(state) : MatcherResult::Failure();
 	}
 
 public:
@@ -553,6 +576,8 @@ public:
 	bool matched_once = false;
 	optional_idx start_offset;
 	bool awaiting_child = false;
+	//! the frame stands for the optional around the repetition
+	bool optional_wrapper;
 };
 struct OpaqueMatchFrame final : MatchStackFrame {
 	OpaqueMatchFrame(MatchInput input, ArenaAllocator::Position mark, const PackratMatchState &packrat)
@@ -639,10 +664,19 @@ optional<MatcherResult> MatchStack::PushFrame(MatchInput input) {
 			    arena.Make<ChoiceMatchFrame>(input.matcher.Cast<ChoiceMatcher>(), input.state, mark, packrat));
 			break;
 
-		case MatcherType::OPTIONAL:
-			owned = arena_ptr<MatchStackFrame>(
-			    arena.Make<OptionalMatchFrame>(input.matcher.Cast<OptionalMatcher>(), input.state, mark, packrat));
+		case MatcherType::OPTIONAL: {
+			auto &optional = input.matcher.Cast<OptionalMatcher>();
+			auto &child = optional.GetChildMatcher();
+			if (child.IsStructural() && child.Type() == MatcherType::REPEAT && !child.IsPackratMemoized() &&
+			    !child.GetRule() && !optional.GetRule()) {
+				owned = arena_ptr<MatchStackFrame>(
+				    arena.Make<RepeatMatchFrame>(optional, child.Cast<RepeatMatcher>(), input.state, mark, packrat));
+			} else {
+				owned =
+				    arena_ptr<MatchStackFrame>(arena.Make<OptionalMatchFrame>(optional, input.state, mark, packrat));
+			}
 			break;
+		}
 
 		case MatcherType::REPEAT:
 			owned = arena_ptr<MatchStackFrame>(
@@ -761,9 +795,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			if (child_result) {
 				f.awaiting_child = false;
 				if (!child_result->IsSuccess()) {
-					if (f.matched_once) {
-						completed = f.CreateResult();
-					}
+					completed = f.matched_once ? f.CreateResult() : f.NoMatch();
 					break;
 				}
 				f.matched_once = true;
