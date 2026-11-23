@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 
@@ -57,13 +58,15 @@ public:
 	const vector<Identifier> &GetSchemaPath() const;
 	Identifier GetTableName();
 	void SetTableName(Identifier name);
-	//! The last commit that appended to or deleted from the table, set under the commit lock
-	transaction_t GetLastChangeCommit() const {
-		return last_change_commit;
-	}
+	//! The last commit that changed rows of the table, set under the commit lock
 	void SetLastChangeCommit(transaction_t commit_id) {
 		last_change_commit = commit_id;
 	}
+	//! Records a running CREATE INDEX scan without deltas, which started after start_commit
+	void AddIndexScan(transaction_t start_commit);
+	void RemoveIndexScan(transaction_t start_commit);
+	//! Whether a commit changed the table after the oldest running CREATE INDEX scan without deltas started
+	bool ChangedDuringIndexScan();
 
 private:
 	//! The database instance of the table
@@ -84,8 +87,12 @@ private:
 	optional_idx last_seen_checkpoint;
 	//! The amount of row groups the checkpoint is processing
 	optional_idx checkpoint_row_group_count;
-	//! See GetLastChangeCommit()
+	//! See SetLastChangeCommit()
 	atomic<transaction_t> last_change_commit {0};
+	//! Lock for index_scan_starts
+	mutex index_scan_lock;
+	//! The start commits of the running CREATE INDEX scans without deltas
+	multiset<transaction_t> index_scan_starts;
 };
 
 } // namespace duckdb

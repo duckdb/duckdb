@@ -359,15 +359,20 @@ public:
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
+		// start before the scan fixes its row range, so that it reads every row committed up to the start
 		if (bind_data.index_template) {
-			// start before the scan fixes its row range, so that it reads every row up to the build commit
 			index_build = storage.AddBuildingIndex(tx, *bind_data.index_template);
+		} else if (bind_data.is_create_index) {
+			index_scan_start = storage.AddIndexScan();
 		}
 	}
 
 	~DuckTableScanState() override {
 		if (index_build) {
 			storage.GetDataTableInfo()->GetIndexes().RemoveBuildingIndex(*index_build);
+		}
+		if (index_scan_start.IsValid()) {
+			storage.GetDataTableInfo()->RemoveIndexScan(index_scan_start.GetIndex());
 		}
 	}
 
@@ -395,6 +400,8 @@ private:
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
 	//! The entry of the index that a CREATE INDEX scan builds in place
 	shared_ptr<IndexEntry> index_build;
+	//! The start commit of a CREATE INDEX scan without deltas
+	optional_idx index_scan_start;
 
 private:
 	void InitializeScheduling(ExecutionContext &context, TableFunctionInitInput &input) {

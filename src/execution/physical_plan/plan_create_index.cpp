@@ -15,7 +15,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -24,8 +23,6 @@ static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCrea
 	auto &cindex = plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
 	                                              std::move(op.unbound_expressions), op.estimated_cardinality,
 	                                              index_type, std::move(bind_data), std::move(op.alter_table_info));
-	// before the scan starts: a build without deltas fails if a later commit changes the table
-	cindex.plan_commit = DuckTransactionManager::Get(op.table.catalog.GetAttached()).GetLastCommit();
 
 	cindex.children.push_back(prev);
 	return cindex;

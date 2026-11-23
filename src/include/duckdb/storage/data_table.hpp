@@ -306,9 +306,11 @@ public:
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 	//! Applies the commits made during the build to the index, then makes it usable in the index list.
-	//! Without a building entry, fails if a commit changed the table after plan_commit.
+	//! Without a building entry, fails if a commit changed the table while a CREATE INDEX scan ran.
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
-	                                idx_t index_oid, ConstraintCheckMode check_mode, transaction_t plan_commit);
+	                                idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Records the start of a CREATE INDEX scan without deltas, returns its start commit
+	transaction_t AddIndexScan();
 	//! Starts building an index in place: later commits change the deltas of its entry
 	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
@@ -335,6 +337,8 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
+	//! Fails with a retryable error if a commit changed the table while a CREATE INDEX scan without deltas ran
+	void VerifyNoChangesDuringIndexScan(const Index &index);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,

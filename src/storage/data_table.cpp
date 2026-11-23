@@ -434,16 +434,34 @@ static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
 //! The most consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
+transaction_t DataTable::AddIndexScan() {
+	// under the commit lock no commit is in progress: every later commit has a later commit id
+	auto commit_lock = db.GetStorageManager().GetCommitLock();
+	auto start_commit = DuckTransactionManager::Get(db).GetLastCommit();
+	info->AddIndexScan(start_commit);
+	return start_commit;
+}
+
+void DataTable::VerifyNoChangesDuringIndexScan(const Index &index) {
+	if (info->ChangedDuringIndexScan()) {
+		// without deltas, the build cannot apply the commits made after its scan started
+		throw TransactionException("Transaction conflict: table %s was changed while CREATE INDEX built %s, which "
+		                           "cannot apply concurrent changes. Retry the CREATE INDEX",
+		                           GetTableName(), index.GetIndexName());
+	}
+}
+
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	// publish between commits: a commit reads the index list several times under the commit lock
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
+	VerifyNoChangesDuringIndexScan(*index);
 	auto last_commit = DuckTransactionManager::Get(db).GetLastCommit();
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT, last_commit);
 }
 
 shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
                                            unique_ptr<BoundIndex> index, idx_t index_oid,
-                                           ConstraintCheckMode check_mode, transaction_t plan_commit) {
+                                           ConstraintCheckMode check_mode) {
 	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
 	auto &transaction_manager = DuckTransactionManager::Get(db);
@@ -454,12 +472,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 			                           "been %s by a different transaction",
 			                           GetTableName(), TableModification());
 		}
-		if (info->GetLastChangeCommit() > plan_commit) {
-			// without deltas, the build cannot apply the commits made after its scan started
-			throw TransactionException("Transaction conflict: table %s was changed while CREATE INDEX built %s, which "
-			                           "cannot apply concurrent changes. Retry the CREATE INDEX",
-			                           GetTableName(), index->GetIndexName());
-		}
+		VerifyNoChangesDuringIndexScan(*index);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
 	// the commit lock keeps a commit's changes and their reverts in the same deltas
@@ -567,6 +580,23 @@ Identifier DataTableInfo::GetSchemaName() {
 
 const vector<Identifier> &DataTableInfo::GetSchemaPath() const {
 	return schema_path;
+}
+
+void DataTableInfo::AddIndexScan(transaction_t start_commit) {
+	lock_guard<mutex> l(index_scan_lock);
+	index_scan_starts.insert(start_commit);
+}
+
+void DataTableInfo::RemoveIndexScan(transaction_t start_commit) {
+	lock_guard<mutex> l(index_scan_lock);
+	auto entry = index_scan_starts.find(start_commit);
+	D_ASSERT(entry != index_scan_starts.end());
+	index_scan_starts.erase(entry);
+}
+
+bool DataTableInfo::ChangedDuringIndexScan() {
+	lock_guard<mutex> l(index_scan_lock);
+	return !index_scan_starts.empty() && last_change_commit > *index_scan_starts.begin();
 }
 
 Identifier DataTableInfo::GetTableName() {
