@@ -7,6 +7,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"

@@ -22,6 +22,7 @@ class CatalogEntry;
 class TableIndexList;
 class DataChunk;
 class DuckTransaction;
+class DuckTransactionManager;
 class WriteAheadLog;
 class ClientContext;
 
@@ -43,12 +44,18 @@ public:
 public:
 	//! Register an on-disk block to mark as modified during FinalizeCommit.
 	void DropBlock(block_id_t block_id);
+	//! Register a dropped table, whose on-disk blocks are registered when the commit is finalized.
+	void DropTable(shared_ptr<DataTable> table);
+	//! Registers the on-disk blocks of dropped tables. Marks nothing, so a failure leaves nothing freed
+	void FreeTables(const vector<shared_ptr<DataTable>> &tables);
 	//! Register an index to be removed from a table's index list during FinalizeCommit: the table no longer
 	//! maintains it. The index memory is dropped and its blocks on disk are marked as free when the catalog entry of
 	//! the index is cleaned up.
 	void RemoveIndex(shared_ptr<IndexDataTableInfo> index_info);
 	//! Finalize accumulated block marks and index removals.
 	void FinalizeCommit();
+	//! Finalize a commit: also frees the dropped tables, or hands them over to a running checkpoint.
+	void FinalizeCommit(DuckTransactionManager &transaction_manager);
 	//! True if no work has been queued.
 	bool Empty() const;
 
@@ -57,6 +64,7 @@ private:
 	vector<block_id_t> dropped_block_ids;
 	//! The indexes that have been marked for removal from their table's index list once the commit chain succeeds.
 	vector<shared_ptr<IndexDataTableInfo>> pending_index_removals;
+	vector<shared_ptr<DataTable>> dropped_tables;
 };
 
 struct IndexDataRemover {

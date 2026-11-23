@@ -27,7 +27,8 @@ struct GenericSetting {
 
 struct UserSettingsMap {
 public:
-	void SetUserSetting(idx_t setting_index, Value target_value);
+	//! Returns whether the setting was updated.
+	bool SetUserSetting(idx_t setting_index, Value target_value);
 	void ClearSetting(idx_t setting_index);
 	bool IsSet(idx_t setting_index) const;
 	bool TryGetSetting(idx_t setting_index, Value &result_value) const;

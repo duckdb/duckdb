@@ -562,7 +562,7 @@ public:
 			return PersistentScanResult::YIELD;
 		}
 		// the prepared vector was filtered out entirely, go the next vector
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		return PersistentScanResult::NEXT_VECTOR;
 	}
 
@@ -669,7 +669,6 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		{
@@ -727,7 +726,7 @@ public:
 			}
 
 			// Before looping back, check if we are interrupted
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		} while (true);
 	}
 

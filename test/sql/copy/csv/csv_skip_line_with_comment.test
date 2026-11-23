@@ -1,0 +1,55 @@
+# name: test/sql/copy/csv/csv_skip_line_with_comment.test
+# description: A header or skipped line whose comment follows a delimiter is counted as a line
+# group: [csv]
+
+# a;b;#x
+# 1;2;
+# 4;5;
+statement ok
+COPY (SELECT 'a;b;#x' || chr(10) || '1;2;' || chr(10) || '4;5;') TO '{TEST_DIR}/header_comment_after_delimiter.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query III
+FROM read_csv('{TEST_DIR}/header_comment_after_delimiter.csv', delim = ';', comment = '#', header = true);
+----
+1	2	NULL
+4	5	NULL
+
+query III
+FROM read_csv('{TEST_DIR}/header_comment_after_delimiter.csv', auto_detect = false, delim = ';', comment = '#', header = true, columns = {'a': 'BIGINT', 'b': 'BIGINT', 'c': 'VARCHAR'});
+----
+1	2	NULL
+4	5	NULL
+
+# the same line, skipped
+query III
+FROM read_csv('{TEST_DIR}/header_comment_after_delimiter.csv', auto_detect = false, delim = ';', comment = '#', header = false, skip = 1, columns = {'a': 'BIGINT', 'b': 'BIGINT', 'c': 'VARCHAR'});
+----
+1	2	NULL
+4	5	NULL
+
+# comment lines before the header are not lines to skip: no, one and two spaces in front of the comment
+foreach spaces 0 1 2
+
+statement ok
+COPY (SELECT repeat(' ', {spaces}) || '# note' || chr(10) || 'a;b' || chr(10) || '1;2' || chr(10) || '4;5') TO '{TEST_DIR}/comment_line_before_header.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+SELECT a, b FROM read_csv('{TEST_DIR}/comment_line_before_header.csv', delim = ';', comment = '#', header = true);
+----
+1	2
+4	5
+
+endloop
+
+foreach spaces 0 1
+
+statement ok
+COPY (SELECT repeat(' ', {spaces}) || '# note' || chr(10) || 'a;b' || chr(10) || '1;2' || chr(10) || '4;5') TO '{TEST_DIR}/comment_line_before_header.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_before_header.csv', auto_detect = false, delim = ';', comment = '#', header = true, columns = {'a': 'BIGINT', 'b': 'BIGINT'});
+----
+1	2
+4	5
+
+endloop

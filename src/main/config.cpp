@@ -127,6 +127,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
     DUCKDB_SETTING(DebugFileDescriptorLimitSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    DUCKDB_SETTING(DebugForceBloomFilterReplicationSetting),
     DUCKDB_SETTING(DebugForceCheckpointSetting),
     DUCKDB_SETTING(DebugForceCommitFailureSetting),
     DUCKDB_SETTING(DebugForceCommitRevertFailureSetting),
@@ -698,7 +699,7 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 	if (default_memory != 0) {
 		return default_memory;
 	}
-	auto memory = GetSystemAvailableMemory(file_system ? *file_system : *FileSystem::CreateLocal());
+	auto memory = GetSystemAvailableMemory();
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
 		default_memory = memory;
@@ -706,10 +707,7 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 		// Otherwise, use 80% of the available memory
 		default_memory = memory * 8 / 10;
 	}
-	// not started yet: do not cache, the database may still install another file system
-	if (file_system) {
-		default_max_memory = default_memory;
-	}
+	default_max_memory = default_memory;
 	return default_memory;
 }
 
@@ -750,7 +748,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads() {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
@@ -762,7 +760,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 			return MaxValue<idx_t>(slurm_threads, 1);
 		}
 	}
-	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
+	return MaxValue<idx_t>(CGroups::GetCPULimit(physical_cores), 1);
 #else
 	return MaxValue<idx_t>(physical_cores, 1);
 #endif
@@ -777,8 +775,8 @@ static idx_t AsyncThreadsForThreads(idx_t threads) {
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
-	return AsyncThreadsForThreads(GetSystemMaxThreads(fs));
+idx_t DBConfig::GetSystemMaxAsyncThreads() {
+	return AsyncThreadsForThreads(GetSystemMaxThreads());
 }
 
 idx_t DBConfig::GetDefaultThreads() const {
@@ -786,11 +784,7 @@ idx_t DBConfig::GetDefaultThreads() const {
 	if (threads != 0) {
 		return threads;
 	}
-	if (!file_system) {
-		// not started yet: do not cache, the database may still install another file system
-		return GetSystemMaxThreads(*FileSystem::CreateLocal());
-	}
-	threads = GetSystemMaxThreads(*file_system);
+	threads = GetSystemMaxThreads();
 	default_threads = threads;
 	return threads;
 }
@@ -799,7 +793,7 @@ idx_t DBConfig::GetDefaultAsyncThreads() const {
 	return AsyncThreadsForThreads(GetDefaultThreads());
 }
 
-idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+idx_t DBConfig::GetSystemAvailableMemory() {
 	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
 	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
@@ -817,13 +811,13 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	} else if (slurm_mem_per_cpu) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
-			idx_t num_threads = GetSystemMaxThreads(fs);
+			idx_t num_threads = GetSystemMaxThreads();
 			return mem_per_cpu.GetIndex() * num_threads;
 		}
 	}
 
 	// Check cgroup memory limit
-	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
+	auto cgroup_memory_limit = CGroups::GetMemoryLimit();
 	if (cgroup_memory_limit.IsValid()) {
 		auto cgroup_memory_limit_value = cgroup_memory_limit.GetIndex();
 		return std::min(cgroup_memory_limit_value, available_memory);

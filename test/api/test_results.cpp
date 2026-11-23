@@ -201,7 +201,7 @@ TEST_CASE("A retained result sink rejects results after the connection closes", 
 
 		connection.reset();
 		REQUIRE(weak_context.expired());
-		REQUIRE_THROWS_AS(collector->GetResult(*sink_state), ConnectionException);
+		REQUIRE_THROWS_WITH(collector->GetResult(*sink_state), Catch::Contains("Connection has already been closed"));
 	};
 
 	SECTION("source ordered") {

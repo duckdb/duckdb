@@ -22,4 +22,4 @@ CREATE OR REPLACE TABLE t AS (
 	
 run
 FROM t
-QUALIFY row_number() OVER (ORDER BY i DESC) <= ${k};
+QUALIFY row_number() OVER (ORDER BY ${order} DESC) <= ${k};

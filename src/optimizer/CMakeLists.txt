@@ -47,11 +47,13 @@ add_library_unity(
   runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
+  mark_join_simplifier.cpp
   optimizer.cpp
-  outer_join_simplification.cpp
+  join_simplification.cpp
   partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
+  join_to_semi_join.cpp
   join_build_properties.cpp
   recursive_join_planning.cpp
   regex_range_filter.cpp

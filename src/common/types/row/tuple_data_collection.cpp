@@ -669,6 +669,8 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 }
 
 void TupleDataCollection::Reset() {
+	static constexpr idx_t PARALLEL_RESET_THRESHOLD = 512;
+	static constexpr idx_t MAX_RESET_TASKS = 8;
 	count = 0;
 	data_size = 0;
 	// Find the first non-null segment.
@@ -686,6 +688,12 @@ void TupleDataCollection::Reset() {
 		// match that segment allocator before resetting to preserve segment/allocator consistency.
 		if (live_idx > 0) {
 			segments[0] = std::move(segments[live_idx]);
+		}
+		if (segments.size() > PARALLEL_RESET_THRESHOLD && scheduler.NumberOfThreads() > 1) {
+			// Keep the first segment for reuse, and join before resetting its shared allocator.
+			const auto task_count = MinValue<idx_t>(MAX_RESET_TASKS, scheduler.NumberOfThreads());
+			ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments.begin() + 1, segments.end(),
+			                                                  task_count);
 		}
 		segments.resize(1);
 		allocator = segments[0]->allocator;

@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -36,11 +37,11 @@ TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound
     : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
-DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
+DuckTransaction::DuckTransaction(DuckTransactionManager &manager, Context &context, transaction_t start_time,
                                  SnapshotView view_p, idx_t catalog_version_p)
-    : Transaction(manager, context_p), start_time(start_time), view(view_p), commit_id(0),
-      catalog_version(catalog_version_p), awaiting_cleanup(false),
-      undo_buffer(*this, DatabaseInstance::GetDatabase(context_p)), storage(make_uniq<LocalStorage>(*this)) {
+    : Transaction(manager, context), start_time(start_time), view(view_p), commit_id(0),
+      catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context.GetDatabase()),
+      storage(make_uniq<LocalStorage>(*this)) {
 	D_ASSERT(IsCommitted(start_time) && !IsCommitted(view.transaction_id));
 }
 
@@ -305,7 +306,7 @@ ErrorData DuckTransaction::Commit(ClientContext &context, AttachedDatabase &db, 
 			bool sync_now = commit_info.active_transactions == ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 			commit_info.wal_sync_offset = commit_state->FlushCommit(commit_info.commit_id, sync_now);
 		}
-		drop_state.FinalizeCommit();
+		drop_state.FinalizeCommit(manager.Cast<DuckTransactionManager>());
 		return ErrorData();
 	} catch (std::exception &ex) {
 		// Record the error and run RevertCommit() outside this try-catch: RevertCommit() iterates the

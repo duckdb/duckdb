@@ -77,14 +77,30 @@ TEST_CASE("Parse Expression List rejects invalid clauses", "[parse_expression]")
 #ifdef DUCKDB_CRASH_ON_ASSERT
 	return;
 #endif
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("FIRST(x) AS x WHERE x = 'bad'"), ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x HAVING x"), ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x QUALIFY x"), ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x USING SAMPLE 1 ROWS"),
-	                  ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x GROUP BY x"), ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x ORDER BY x"), ParserException);
-	REQUIRE_THROWS_AS(Parser::GetBuiltinParser().ParseExpressionList("x LIMIT 1"), ParserException);
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("FIRST(x) AS x WHERE x = 'bad'"),
+	                    Catch::Contains("Cannot have a WHERE clause in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x HAVING x"),
+	                    Catch::Contains("Cannot have a HAVING clause in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x QUALIFY x"),
+	                    Catch::Contains("Cannot have a QUALIFY clause in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x USING SAMPLE 1 ROWS"),
+	                    Catch::Contains("Cannot have a SAMPLE clause in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x GROUP BY x"),
+	                    Catch::Contains("Cannot have a GROUP BY clause in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("first(x) AS x ORDER BY x"),
+	                    Catch::Contains("Cannot have any modifiers in the expression list"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("x LIMIT 1"),
+	                    Catch::Contains("Cannot have any modifiers in the expression list"));
+}
+
+TEST_CASE("Parser list helpers reject a second statement or query node", "[parse_expression]") {
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1; DELETE FROM tbl"),
+	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1 UNION SELECT 42"),
+	                    Catch::Matchers::Contains("Expected a single SELECT node"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseColumnList("i INTEGER); SELECT (42"),
+	                    Catch::Matchers::Contains("Expected a single CREATE statement"));
+	REQUIRE(Parser::GetBuiltinParser().ParseColumnList("i INTEGER, j VARCHAR").LogicalColumnCount() == 2);
 }
 
 static_assert(!std::is_default_constructible<Parser>::value, "Parser requires an explicit environment");

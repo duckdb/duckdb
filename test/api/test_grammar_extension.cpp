@@ -234,9 +234,10 @@ TEST_CASE("Keyword category masks require explicit conversions and valid IDs", "
 	REQUIRE((first & last) == keyword_categories_t());
 	REQUIRE(((first | last) & first) == first);
 	REQUIRE(first != keyword_categories_t());
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
-	                  InvalidInputException);
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(256), InvalidInputException);
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
+	                    Catch::Contains("Keyword category ID must be between"));
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(256),
+	                    Catch::Contains("Keyword category ID must be between"));
 }
 
 TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
@@ -595,7 +596,7 @@ TEST_CASE("Transform stack growth preserves processes and unwinds expression dep
 	{
 		TransformStack stack(transformer);
 		if (lifetime.throw_at_leaf || lifetime.throw_in_factory) {
-			REQUIRE_THROWS_AS(stack.Execute<bool>({*nodes.back()}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute<bool>({*nodes.back()}), Catch::Contains("Nested transform"));
 		} else {
 			REQUIRE(stack.Execute<bool>({*nodes.back()}));
 			REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
@@ -794,7 +795,8 @@ TEST_CASE("Failed generated process initialization releases child buffers", "[ap
 		ArenaAllocator results(underlying);
 		PEGTransformer transformer(results, iterator, options, *grammar);
 		for (idx_t i = 0; i < 512; i++) {
-			REQUIRE_THROWS_AS(transformer.Transform<bool>(input), InvalidInputException);
+			REQUIRE_THROWS_WITH(transformer.Transform<bool>(input),
+			                    Catch::Contains("Generated initializer test failure"));
 		}
 		REQUIRE(stats.peak < 4 * 1024 * 1024);
 	}
@@ -1110,8 +1112,9 @@ TEST_CASE("Small grammars resolve missing generated references only when used", 
 	PEGTransformer transformer(arena, iterator, options, grammar);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// InternalException aborts instead of throwing in crash-on-assert builds.
-	REQUIRE_THROWS_AS(transformer.GetRule(id), InternalException);
-	REQUIRE_THROWS_AS(transformer.GetRule("AdditiveExpression"), InternalException);
+	REQUIRE_THROWS_WITH(transformer.GetRule(id), Catch::Contains("No registered data exists for rule"));
+	REQUIRE_THROWS_WITH(transformer.GetRule("AdditiveExpression"),
+	                    Catch::Contains("No registered data exists for rule"));
 #endif
 }
 
@@ -1703,7 +1706,7 @@ TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[ap
 		lifetime.throw_at_leaf = true;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}), Catch::Contains("Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.state_valid);
@@ -2116,7 +2119,7 @@ TEST_CASE("Deep leading list chains retain heap-owned state through exceptions",
 	MatchContext context(suggestions, allocator, processes, max_position);
 	MatchState state(iterator, context);
 	if (lifetime.throw_at_leaf) {
-		REQUIRE_THROWS_AS(lists.back()->MatchParseResult(state), InvalidInputException);
+		REQUIRE_THROWS_WITH(lists.back()->MatchParseResult(state), Catch::Contains("Nested matcher test failure"));
 	} else {
 		REQUIRE(lists.back()->MatchParseResult(state).IsSuccess());
 	}
@@ -2144,9 +2147,10 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	const uint8_t generic_operator = MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
 	const uint8_t string_literal = MatcherTokenClass::STRING | MatcherTokenClass::WORD;
 
+	const uint8_t identifier = MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
 	REQUIRE(token_class("select") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("some_column") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("\"quoted name\"") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("some_column") == identifier);
+	REQUIRE(token_class("\"quoted name\"") == identifier);
 	// string literals are accepted in identifier positions
 	REQUIRE(token_class("'str'") == string_literal);
 	REQUIRE(token_class("E'str'") == string_literal);
@@ -2154,6 +2158,9 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("42") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class(".5") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
+	// malformed numbers are matched by nothing
+	REQUIRE(token_class("1.2.3") == 0);
+	REQUIRE(token_class("1e5e5") == 0);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
 	for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
@@ -2196,6 +2203,114 @@ static void CheckFirstSet(const CompiledGrammar &grammar, const Matcher &matcher
 	}
 }
 
+//! A matcher that describes its FIRST set but not how many tokens it consumes
+class FirstOnlyKeywordTestMatcher final : public KeywordMatcher {
+public:
+	FirstOnlyKeywordTestMatcher(const string &word, const GrammarLiteralTable &table)
+	    : KeywordMatcher(word, KeywordInfo()), literal(table.Lookup(word).LiteralId()) {
+	}
+	void InitializeFirstSet(MatcherFirstSet &first, const GrammarLiteralTable &table) const override {
+		first.AddLiteral(literal);
+	}
+
+private:
+	idx_t literal;
+};
+
+TEST_CASE("Lookahead sets reject matchers that cannot continue with the second token", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+	auto &table = helper.GetLiteralTable();
+
+	// keyword matchers created by the factory are matched by literal id
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- '.' ','");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &keywords = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers;
+	auto &dot = keywords[0].get();
+	auto &comma = keywords[1].get();
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	NumberLiteralMatcher number;
+	StringLiteralMatcher string_literal;
+	FirstOnlyKeywordTestMatcher first_only("SELECT", table);
+	// IDENTIFIER '.'
+	ListMatcher qualified({identifier, dot});
+	// IDENTIFIER '.' / IDENTIFIER
+	ChoiceMatcher name({qualified, identifier});
+	// NUMBER? IDENTIFIER '.'
+	OptionalMatcher optional_number(number);
+	ListMatcher optional_prefix({optional_number, qualified});
+	// IDENTIFIER ','*
+	RepeatMatcher commas(comma);
+	OptionalMatcher optional_commas(commas);
+	ListMatcher trailing({identifier, optional_commas});
+	// 'SELECT' NUMBER with a first-only leading matcher
+	ListMatcher first_only_list({first_only, number});
+	ChoiceMatcher root({name, optional_prefix, trailing, first_only_list, string_literal});
+	for (auto matcher : vector<reference<Matcher>> {qualified, name, optional_number, optional_prefix, commas,
+	                                                optional_commas, trailing, first_only_list, root}) {
+		matcher.get().SetStructural();
+	}
+	ComputeFirstSets(root, table);
+
+	SECTION("Sequences need their second token") {
+		CheckFirstSet(*grammar, qualified, "foo . bar", true);
+		CheckFirstSet(*grammar, qualified, "foo , bar", false);
+		CheckFirstSet(*grammar, qualified, "foo", false);
+		CheckFirstSet(*grammar, qualified, "42 . bar", false);
+	}
+	SECTION("One-token alternatives accept any second token") {
+		CheckFirstSet(*grammar, name, "foo , bar", true);
+		CheckFirstSet(*grammar, name, "foo", true);
+		CheckFirstSet(*grammar, trailing, "foo , ,", true);
+		CheckFirstSet(*grammar, trailing, "foo 42", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 'b'", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 42", true);
+	}
+	SECTION("Nullable prefixes shift the second token") {
+		CheckFirstSet(*grammar, optional_prefix, "42 foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "42 foo , bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo , bar", false);
+		CheckFirstSet(*grammar, optional_prefix, "42 , bar", false);
+	}
+	SECTION("Matchers that only describe FIRST may consume any number of tokens") {
+		REQUIRE(first_only.first_set.one.any);
+		REQUIRE(first_only.first_set.second.any);
+		CheckFirstSet(*grammar, first_only_list, "select", true);
+		CheckFirstSet(*grammar, first_only_list, "select foo", true);
+		CheckFirstSet(*grammar, first_only_list, "foo", false);
+	}
+	SECTION("The autocomplete cursor can stand for any second token") {
+		vector<MatcherToken> tokens {MatcherToken("foo", 0, TokenType::IDENTIFIER),
+		                             MatcherToken("", 3, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE(qualified.first_set.MightMatch(state));
+	}
+	SECTION("A rejected matcher still reports the token it would have consumed") {
+		auto tokens = TokenizeFirstSetTestInput(*grammar, "foo , bar");
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE_FALSE(qualified.first_set.MightMatch(state));
+		REQUIRE(max_token_index == 1);
+		REQUIRE(iterator.Position() == 0);
+	}
+}
+
 TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -2212,6 +2327,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	// other keyword matchers can have their own semantics
 	KeywordMatcher custom_keyword("SELECT", KeywordInfo(), helper);
 	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	IdentifierMatcher table_name(SuggestionState::SUGGEST_TABLE_NAME, helper);
 	NumberLiteralMatcher number;
 	StringLiteralMatcher string_literal;
 	OperatorMatcher generic_operator;
@@ -2237,7 +2353,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	ListMatcher uncomputed_list({number});
 
 	ChoiceMatcher root({choice, optional_prefix, nullable_list, repeat, sequence, custom_list, unmarked_list,
-	                    identifier, string_literal, generic_operator, any_operator, arithmetic_operator,
+	                    identifier, table_name, string_literal, generic_operator, any_operator, arithmetic_operator,
 	                    custom_keyword});
 	for (auto matcher : vector<reference<Matcher>> {choice, optional_number, optional_prefix, nullable_list, repeat,
 	                                                sequence, custom_list, root}) {
@@ -2248,7 +2364,12 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	SECTION("Atomic matchers") {
 		CheckFirstSet(*grammar, identifier, "some_column", true);
 		CheckFirstSet(*grammar, identifier, "\"quoted name\"", true);
-		CheckFirstSet(*grammar, identifier, "'path'", true);
+		// only names that can be given as paths accept string literals
+		CheckFirstSet(*grammar, identifier, "'path'", false);
+		CheckFirstSet(*grammar, table_name, "'path'", true);
+		// keywords are accepted where their category allows it
+		CheckFirstSet(*grammar, identifier, "select", false);
+		CheckFirstSet(*grammar, identifier, "comment", true);
 		CheckFirstSet(*grammar, identifier, "42", false);
 		CheckFirstSet(*grammar, identifier, "+", false);
 		CheckFirstSet(*grammar, identifier, ";", false);
@@ -2382,7 +2503,9 @@ TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api
 		lifetime.depth = 130;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}),
+			                    Catch::Contains(lifetime.throw_in_constructor ? "Nested process constructor failure"
+			                                                                  : "Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.started == lifetime.depth);
@@ -3153,7 +3276,7 @@ TEST_CASE("Derived matchers can forward to built-in processes through deep heap 
 		MatchStack stack;
 		lifetime.throw_at_leaf = true;
 		starts = 0;
-		REQUIRE_THROWS_AS(stack.Execute({*lists.back(), state}), InvalidInputException);
+		REQUIRE_THROWS_WITH(stack.Execute({*lists.back(), state}), Catch::Contains("Nested matcher test failure"));
 		REQUIRE(starts == lists.size());
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(processes.SizeInBytes() == parent_bytes);
@@ -3448,7 +3571,7 @@ TEST_CASE("Deep prepared list groups keep success and exception state on the hea
 		atom.should_throw = fail;
 		MatchState state(iterator, context);
 		if (fail) {
-			REQUIRE_THROWS_AS(stack.Execute({*root, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({*root, state}), Catch::Contains("group leaf failure"));
 		} else {
 			auto result = stack.Execute({*root, state});
 			REQUIRE(result.IsSuccess());
@@ -3509,8 +3632,9 @@ TEST_CASE("Generated list finalization validates its tree before consuming child
 		process.SetChildResult(0, transformer.MakeResult<Identifier>("alpha"));
 		process.SetChildResult(1, transformer.MakeResult<Identifier>("beta"));
 		if (shape >= 2) {
-			REQUIRE_THROWS_AS(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
-			                  InternalException);
+			REQUIRE_THROWS_WITH(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
+			                    Catch::Contains("Failed to cast parse result") ||
+			                        Catch::Contains("Child index out of bounds"));
 			REQUIRE(process.GetResult<Identifier>(0) == Identifier("alpha"));
 			REQUIRE(process.GetResult<Identifier>(1) == Identifier("beta"));
 		} else {

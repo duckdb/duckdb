@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -98,12 +99,11 @@ optional_idx WindowFusion::CanOptimize(LogicalOperator &op) {
 		D_ASSERT(current_column_ref.table_index == projection.table_index);
 		// The filter has to name the window column itself. An expression that only mentions it, such as
 		// row_number + 10, is a different predicate, and following the inner reference would drop that expression.
-		auto &proj_expr = *projection.expressions[current_column_ref.column_index];
-		if (proj_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		auto &proj_expr = projection.expressions[current_column_ref.column_index];
+		if (proj_expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return cant_optimize;
 		}
-		column_references =
-		    ColumnReferenceExtractor::GetReferences(&projection.expressions[current_column_ref.column_index]);
+		column_references = ColumnReferenceExtractor::GetReferences(&proj_expr);
 
 		child = *child.get().children[0];
 	}
@@ -111,32 +111,26 @@ optional_idx WindowFusion::CanOptimize(LogicalOperator &op) {
 	if (column_references.size() != 1) {
 		return cant_optimize;
 	}
-	const auto filter_col_idx = column_references.begin()->first.table_index;
+	const auto &filter_ref = column_references.begin()->first;
 
 	if (child.get().type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return cant_optimize;
 	}
 	const auto &window = child.get().Cast<LogicalWindow>();
-	if (window.window_index != filter_col_idx) {
+	if (window.window_index != filter_ref.table_index) {
 		return cant_optimize;
 	}
-	const auto &first_window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-	for (auto &partition : first_window_expr.Partitions()) {
-		if (partition->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			return cant_optimize;
-		}
+	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	if (window_expr.GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
+		return cant_optimize;
 	}
 	if (window.expressions.size() != 1) {
 		for (idx_t i = 1; i < window.expressions.size(); ++i) {
-			if (!window.expressions[i]->Equals(first_window_expr)) {
+			if (!window.expressions[i]->Equals(window_expr)) {
 				return cant_optimize;
 			}
 		}
 	}
-	if (window.expressions[0]->GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
-		return cant_optimize;
-	}
-	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 
 	if (!window_expr.ArgOrders().empty()) {
 		return cant_optimize;
@@ -157,6 +151,10 @@ unique_ptr<LogicalOperator> WindowFusion::OptimizeInternal(unique_ptr<LogicalOpe
 		return op;
 	}
 
+	if (partition_limit.GetIndex() == 0) {
+		return make_uniq<LogicalEmptyResult>(std::move(op));
+	}
+
 	//	Remove the Filter
 	D_ASSERT(op->children.size() == 1);
 	auto &filter = op->Cast<LogicalFilter>();
@@ -171,7 +169,7 @@ unique_ptr<LogicalOperator> WindowFusion::OptimizeInternal(unique_ptr<LogicalOpe
 	auto &wexpr = window.expressions[0]->Cast<BoundWindowExpression>();
 
 	// Restrict to implemented cases
-	if (!PhysicalStreamingWindow::IsStreamingFunction(client, wexpr)) {
+	if (!wexpr.Partitions().empty()) {
 		return op;
 	}
 

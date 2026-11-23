@@ -302,7 +302,18 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     if(WASM_LOADABLE_EXTENSIONS)
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
     elseif(${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
-        # TODO strip all symbols except the capi init
+        # Export only the entrypoint, so bundled libraries cannot clash with symbols of the host process
+        capi_entrypoint_symbol(${NAME} ${ABI_TYPE} "${CAPI_VERSION}" CAPI_ENTRYPOINT)
+        if (EMSCRIPTEN OR WIN32 OR ZOS)
+            # Wasm only exports EXPORTED_FUNCTIONS, Windows only exports dllexport symbols
+        elseif (APPLE)
+            target_link_options(${TARGET_NAME} PRIVATE "LINKER:-exported_symbol,_${CAPI_ENTRYPOINT}")
+        elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+            set(EXPORTS_MAP "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_loadable_exports.map")
+            file(WRITE "${EXPORTS_MAP}" "{ global: ${CAPI_ENTRYPOINT}; local: *; };\n")
+            target_link_options(${TARGET_NAME} PRIVATE "LINKER:--version-script=${EXPORTS_MAP}")
+            set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_DEPENDS "${EXPORTS_MAP}")
+        endif()
     elseif (EXTENSION_STATIC_BUILD)
         if (WIN32)
             target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})

@@ -1,5 +1,8 @@
 #include "test_capi_v2.hpp"
+#include "test_helpers.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <thread>
 
 namespace test_capi_v2 {
@@ -294,13 +297,13 @@ TEST_CASE("V2: several databases on one handle, with an explicit default", "[cap
 TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][db]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_environment_create(&env, nullptr);
-	auto fs = duckdb::FileSystem::CreateLocal();
+	auto &fs = duckdb::TestLocalFileSystem();
 	auto dir_a = duckdb::TestCreatePath("v2_attach_opts_a");
 	auto dir_b = duckdb::TestCreatePath("v2_attach_opts_b");
 	auto dir_c = duckdb::TestCreatePath("v2_attach_opts_c");
 	for (auto &dir : {dir_a, dir_b, dir_c}) {
-		if (!fs->DirectoryExists(dir)) {
-			fs->CreateDirectory(dir);
+		if (!fs.DirectoryExists(dir)) {
+			fs.CreateDirectory(dir);
 		}
 	}
 	// Three files with the same base name.
@@ -512,12 +515,13 @@ namespace {
 DUCKDB_V2_ERROR OpenShared(duckdb_v2_environment_handle env, std::string_view path,
                            std::initializer_list<std::string_view> names,
                            std::initializer_list<std::string_view> values, duckdb_v2_instance_handle *out_instance,
-                           duckdb_v2_error_info_handle *err = nullptr) {
+                           duckdb_v2_error_info_handle *err = nullptr,
+                           duckdb_v2_instance_init_callback_fn init = nullptr, void *init_user_data = nullptr) {
 	StrArray name_array(names);
 	StrArray value_array(values);
 	return duckdb_v2_instance_open_shared(env, path.data(), path.size(), name_array.ptrs(), name_array.lengths(),
-	                                      value_array.ptrs(), value_array.lengths(), name_array.size(), out_instance,
-	                                      err);
+	                                      value_array.ptrs(), value_array.lengths(), name_array.size(), init,
+	                                      init_user_data, out_instance, err);
 }
 
 //! A connection to `instance`, which must succeed.
@@ -650,8 +654,8 @@ TEST_CASE("V2: instance_open_shared with in-memory databases", "[capi_v2][db]") 
 		duckdb_v2_instance_destroy(&b);
 	}
 	duckdb_v2_instance_handle a = nullptr;
-	REQUIRE(duckdb_v2_instance_open_shared(env, nullptr, 0, nullptr, nullptr, nullptr, nullptr, 0, &a, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_open_shared(env, nullptr, 0, nullptr, nullptr, nullptr, nullptr, 0, nullptr, nullptr, &a,
+	                                       nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_instance_destroy(&a);
 
 	// named: shared like a file
@@ -761,21 +765,202 @@ TEST_CASE("V2: instance_open_shared while the last handle closes the database", 
 	duckdb::DeleteDatabase(path);
 }
 
+TEST_CASE("V2: instance_open_shared compares startup options by their settings", "[capi_v2][db]") {
+	duckdb_v2_environment_handle env = nullptr;
+	duckdb_v2_environment_create(&env, nullptr);
+	auto path = duckdb::TestCreatePath("v2_open_shared_equivalent.db");
+	duckdb::DeleteDatabase(path);
+
+	duckdb_v2_instance_handle a = nullptr;
+	REQUIRE(OpenShared(env, path, {"threads", "access_mode"}, {"3", "READ_WRITE"}, &a) == DUCKDB_V2_ERROR_NONE);
+	// an alias, another number format, another case: the same settings
+	duckdb_v2_instance_handle b = nullptr;
+	REQUIRE(OpenShared(env, path, {"worker_threads", "ACCESS_MODE"}, {"03", "read_write"}, &b) == DUCKDB_V2_ERROR_NONE);
+	auto conn_a = Connect(a);
+	auto conn_b = Connect(b);
+	REQUIRE(Runs(conn_a, "CREATE TABLE t AS SELECT 1 AS i"));
+	REQUIRE(RowCount(conn_b, "SELECT * FROM t") == 1);
+
+	// another value, an option left out, or an extra option: different settings
+	duckdb_v2_instance_handle c = nullptr;
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(OpenShared(env, path, {"threads", "access_mode"}, {"2", "read_write"}, &c, &err) ==
+	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	duckdb_v2_error_info_destroy(&err);
+	REQUIRE(OpenShared(env, path, {"threads"}, {"3"}, &c, &err) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	duckdb_v2_error_info_destroy(&err);
+	REQUIRE(OpenShared(env, path, {"threads", "access_mode", "checkpoint_threshold"}, {"3", "read_write", "1GB"}, &c,
+	                   &err) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	duckdb_v2_error_info_destroy(&err);
+	REQUIRE(c == nullptr);
+
+	duckdb_v2_connection_destroy(&conn_a);
+	duckdb_v2_connection_destroy(&conn_b);
+	duckdb_v2_instance_destroy(&a);
+	duckdb_v2_instance_destroy(&b);
+	duckdb_v2_environment_destroy(&env);
+	duckdb::DeleteDatabase(path);
+}
+
+namespace {
+
+//! What an init callback of instance_open_shared does, and what it saw. Assertions are not thread-safe: the callback
+//! only records.
+struct InitState {
+	std::atomic<idx_t> calls {0};
+	std::atomic<bool> started {false};
+	std::atomic<idx_t> failures {0};
+	bool fail = false;
+	std::chrono::milliseconds delay {0};
+};
+
+//! Creates a table and disables external access, or reports an error when `fail` is set.
+void InitInstance(duckdb_v2_instance_handle instance, void *user_data, duckdb_v2_error_info_handle *err) {
+	auto &state = *static_cast<InitState *>(user_data);
+	state.calls++;
+	state.started = true;
+	if (state.fail) {
+		std::string text = "init refused";
+		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
+		duckdb_v2_error_info_set_text(*err, text.data(), text.size());
+		return;
+	}
+	std::this_thread::sleep_for(state.delay);
+	duckdb_v2_connection_handle conn = nullptr;
+	if (duckdb_v2_connection_create(instance, &conn, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		state.failures++;
+		return;
+	}
+	for (auto sql :
+	     {"CREATE TABLE IF NOT EXISTS init_t AS SELECT 42 AS i", "SET GLOBAL enable_external_access=false"}) {
+		duckdb_v2_result_handle r = nullptr;
+		if (Query(conn, sql, &r, nullptr) != DUCKDB_V2_ERROR_NONE) {
+			state.failures++;
+		} else {
+			(void)DrainRowCount(r);
+		}
+		duckdb_v2_result_destroy(&r);
+	}
+	duckdb_v2_connection_destroy(&conn);
+}
+
+} // namespace
+
+TEST_CASE("V2: instance_open_shared initializes the instance it creates", "[capi_v2][db]") {
+	duckdb_v2_environment_handle env = nullptr;
+	duckdb_v2_environment_create(&env, nullptr);
+	auto path = duckdb::TestCreatePath("v2_open_shared_init.db");
+	duckdb::DeleteDatabase(path);
+
+	InitState state;
+	duckdb_v2_instance_handle a = nullptr;
+	REQUIRE(OpenShared(env, path, {}, {}, &a, nullptr, InitInstance, &state) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(state.calls == 1);
+	REQUIRE(state.failures == 0);
+	// sharing the instance does not initialize it again
+	duckdb_v2_instance_handle b = nullptr;
+	REQUIRE(OpenShared(env, path, {}, {}, &b, nullptr, InitInstance, &state) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(state.calls == 1);
+	auto conn = Connect(b);
+	REQUIRE(RowCount(conn, "SELECT * FROM init_t") == 1);
+	REQUIRE(RowCount(conn, "SELECT 1 WHERE NOT current_setting('enable_external_access')") == 1);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_instance_destroy(&a);
+	duckdb_v2_instance_destroy(&b);
+	idx_t count = 1;
+	duckdb_v2_environment_get_instance_count(env, &count, nullptr);
+	REQUIRE(count == 0);
+
+	// once it is closed, the next call creates and initializes it again
+	REQUIRE(OpenShared(env, path, {}, {}, &a, nullptr, InitInstance, &state) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(state.calls == 2);
+	duckdb_v2_instance_destroy(&a);
+
+	duckdb_v2_environment_destroy(&env);
+	duckdb::DeleteDatabase(path);
+}
+
+TEST_CASE("V2: instance_open_shared waits for the instance to be initialized", "[capi_v2][db]") {
+	duckdb_v2_environment_handle env = nullptr;
+	duckdb_v2_environment_create(&env, nullptr);
+	auto path = duckdb::TestCreatePath("v2_open_shared_init_wait.db");
+	duckdb::DeleteDatabase(path);
+
+	InitState state;
+	state.delay = std::chrono::milliseconds(200);
+	duckdb_v2_instance_handle a = nullptr;
+	DUCKDB_V2_ERROR a_result = DUCKDB_V2_ERROR_NONE;
+	std::thread opener([&]() { a_result = OpenShared(env, path, {}, {}, &a, nullptr, InitInstance, &state); });
+	while (!state.started) {
+		std::this_thread::yield();
+	}
+	// opened while the instance is being initialized: shares it once the initialization is done
+	duckdb_v2_instance_handle b = nullptr;
+	REQUIRE(OpenShared(env, path, {}, {}, &b, nullptr, InitInstance, &state) == DUCKDB_V2_ERROR_NONE);
+	auto conn = Connect(b);
+	REQUIRE(RowCount(conn, "SELECT * FROM init_t") == 1);
+	opener.join();
+	REQUIRE(a_result == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(state.calls == 1);
+	REQUIRE(state.failures == 0);
+
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_instance_destroy(&a);
+	duckdb_v2_instance_destroy(&b);
+	duckdb_v2_environment_destroy(&env);
+	duckdb::DeleteDatabase(path);
+}
+
+TEST_CASE("V2: instance_open_shared with a failing init", "[capi_v2][db]") {
+	duckdb_v2_environment_handle env = nullptr;
+	duckdb_v2_environment_create(&env, nullptr);
+	auto path = duckdb::TestCreatePath("v2_open_shared_init_fail.db");
+	duckdb::DeleteDatabase(path);
+
+	InitState state;
+	state.fail = true;
+	duckdb_v2_instance_handle a = nullptr;
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(OpenShared(env, path, {}, {}, &a, &err, InitInstance, &state) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(a == nullptr);
+	const char *msg = nullptr;
+	idx_t msg_length = 0;
+	duckdb_v2_error_info_get_text(err, &msg, &msg_length);
+	REQUIRE(std::string(msg, msg_length).find("init refused") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
+	idx_t count = 1;
+	duckdb_v2_environment_get_instance_count(env, &count, nullptr);
+	REQUIRE(count == 0);
+
+	// the instance was destroyed: the next call creates one again, also with other options
+	state.fail = false;
+	REQUIRE(OpenShared(env, path, {"threads"}, {"2"}, &a, nullptr, InitInstance, &state) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(state.calls == 2);
+	auto conn = Connect(a);
+	REQUIRE(RowCount(conn, "SELECT * FROM init_t") == 1);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_instance_destroy(&a);
+
+	duckdb_v2_environment_destroy(&env);
+	duckdb::DeleteDatabase(path);
+}
+
 TEST_CASE("V2: instance_open_shared null-arg validation", "[capi_v2][db]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_environment_create(&env, nullptr);
 	std::string_view path = ":memory:";
 	duckdb_v2_instance_handle instance = reinterpret_cast<duckdb_v2_instance_handle>(uintptr_t(1));
 	REQUIRE(duckdb_v2_instance_open_shared(nullptr, path.data(), path.size(), nullptr, nullptr, nullptr, nullptr, 0,
-	                                       &instance, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                       nullptr, nullptr, &instance, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_instance_open_shared(env, path.data(), path.size(), nullptr, nullptr, nullptr, nullptr, 0,
-	                                       nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_instance_open_shared(env, nullptr, 3, nullptr, nullptr, nullptr, nullptr, 0, &instance,
-	                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                       nullptr, nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_open_shared(env, nullptr, 3, nullptr, nullptr, nullptr, nullptr, 0, nullptr, nullptr,
+	                                       &instance, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(instance == nullptr);
 	StrArray values({"1"});
 	REQUIRE(duckdb_v2_instance_open_shared(env, path.data(), path.size(), nullptr, nullptr, values.ptrs(),
-	                                       values.lengths(), 1, &instance, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                       values.lengths(), 1, nullptr, nullptr, &instance,
+	                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(instance == nullptr);
 	duckdb_v2_environment_destroy(&env);
 }

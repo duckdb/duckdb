@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/wide_decimal_cast.benchmark
+# description: Reuse integer rescaling and floating conversion buffers across wide decimal vectors
+# group: [cast]
+
+name Wide decimal cast buffers
+group cast
+
+load
+CREATE TABLE wide_decimal_input AS SELECT i - 500000 AS v FROM range(1000000) t(i);
+
+run
+SELECT sum(CAST(CAST(v AS DECIMAL(60,20)) AS DOUBLE)) = -500000 FROM wide_decimal_input
+
+result I
+true

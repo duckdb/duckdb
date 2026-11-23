@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_union_state.hpp"
 
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -45,12 +46,14 @@ public:
 		output->InitializeAppend(append_state);
 		if (!op.UnionAll()) {
 			partition_chunk.Initialize(Allocator::Get(context), op.GetTypes());
+			hasher = make_uniq<ChunkHasher>(context, op.GetTypes());
 		}
 	}
 
 	const PhysicalRecursiveCTE &op;
 	unique_ptr<ColumnDataCollection> output;
 	ColumnDataAppendState append_state;
+	unique_ptr<ChunkHasher> hasher;
 	Vector hashes;
 	Vector partition_hashes;
 	Vector dummy_addresses;
@@ -171,7 +174,7 @@ void RecursiveCTEUnionState::SinkDistinct(DataChunk &chunk, RecursiveCTEUnionLoc
 	lstate.InitializePartitions(partitions.size());
 	std::fill(lstate.partition_counts.begin(), lstate.partition_counts.end(), 0);
 
-	chunk.Hash(lstate.hashes);
+	lstate.hasher->Hash(chunk, lstate.hashes);
 	auto hash_data = FlatVector::GetData<hash_t>(lstate.hashes);
 	const auto partition_mask = partitions.size() - 1;
 	for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
@@ -244,7 +247,7 @@ void RecursiveCTEUnionState::PromoteDistinctState(ClientContext &context, idx_t 
 	AggregateHTScanState scan_state;
 	ht->InitializeScan(scan_state);
 	while (ht->Scan(scan_state, groups, payload)) {
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		if (groups.size() > 0) {
 			SinkDistinct(groups, migration_state, false, false);
 		}
