@@ -3535,6 +3535,38 @@ TEST_CASE("Prepared list groups do not collapse to a present named prefix", "[ap
 	REQUIRE(snapshots() == expected);
 }
 
+TEST_CASE("An optional repetition matches in one frame as it does in two", "[api][grammar_extension]") {
+	// Program <- 'SELECT' 'FROM'* 'WHERE'?
+	GroupKeywordTestMatcher select("SELECT"), from("FROM"), where("WHERE");
+	RepeatMatcher repeat(from);
+	repeat.SetStructural();
+	OptionalMatcher optional_repeat(repeat), optional_where(where);
+	optional_repeat.SetStructural();
+	optional_where.SetStructural();
+	ListMatcher program;
+	program.SetStructural();
+	program.matchers = {select, optional_repeat, optional_where};
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	ComputeFirstSets(program, grammar->GetKeywordHelper().GetLiteralTable());
+
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		for (auto cursor : {false, true}) {
+			for (auto &text : vector<string> {"", "FROM", "FROM FROM FROM", "WHERE", "FROM WHERE", "X"}) {
+				INFO("optional repetition, input '" << text << "', cursor " << cursor);
+				// stepping the optional through its process runs the optional and the repetition as two frames
+				auto two_frames = MatchSingleStepTest(optional_repeat, mode, text, cursor, true);
+				REQUIRE(MatchSingleStepTest(optional_repeat, mode, text, cursor, false) == two_frames);
+			}
+			for (auto &text : vector<string> {"SELECT", "SELECT FROM", "SELECT FROM FROM WHERE", "SELECT WHERE",
+			                                  "SELECT FROM X", "FROM"}) {
+				INFO("program, input '" << text << "', cursor " << cursor);
+				auto stepped = MatchSingleStepTest(program, mode, text, cursor, true);
+				REQUIRE(MatchSingleStepTest(program, mode, text, cursor, false) == stepped);
+			}
+		}
+	}
+}
+
 TEST_CASE("Deep prepared list groups keep success and exception state on the heap", "[api][grammar_extension]") {
 	CompiledGrammarRule rule("GroupLeaf", nullptr);
 	GroupKeywordTestMatcher atom("SELECT");
