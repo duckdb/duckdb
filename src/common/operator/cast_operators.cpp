@@ -3333,7 +3333,7 @@ static bool CanUseDecimalFloatingPointFastPath(SRC input, uint32_t scale) {
 //! Rounds magnitude * 10^-scale to the nearest float from its full decimal digits
 template <class DST>
 static duckdb_fast_float::adjusted_mantissa ComputeFloatFromDigits(hugeint_t magnitude, uint32_t scale) {
-	char buffer[DecimalWidth<hugeint_t>::max];
+	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(magnitude, end);
 
