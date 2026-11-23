@@ -276,6 +276,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
+         PATH="$(cygpath -u "$llvmX64"):$PATH"
          clang-cl --version
          python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
 

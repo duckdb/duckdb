@@ -1,0 +1,62 @@
+# name: test/sql/join/external/join_state_reuse.test
+# description: Repeated join batches preserve NULLs and duplicate matches
+# group: [external]
+
+statement ok
+SET threads = 2
+
+statement ok
+CREATE TABLE join_left AS
+SELECT i, CASE WHEN i % 17 = 0 THEN NULL ELSE i % 509 END k, repeat(i::VARCHAR, 8) s
+FROM range(8195) t(i)
+
+statement ok
+CREATE TABLE join_right AS
+SELECT i, CASE WHEN i % 19 = 0 THEN NULL ELSE i % 509 END k, repeat(i::VARCHAR, 8) s
+FROM range(12291) t(i)
+
+foreach external false true
+
+statement ok
+SET debug_force_external = {external}
+
+query I
+SELECT count(*) FROM join_left JOIN join_right USING (k)
+----
+176458
+
+query I
+SELECT count(*) FROM join_left SEMI JOIN join_right USING (k)
+----
+7712
+
+query I
+SELECT count(*) FROM join_left a FULL JOIN join_right b USING (k)
+WHERE a.s IS DISTINCT FROM repeat(a.i::VARCHAR, 8) OR b.s IS DISTINCT FROM repeat(b.i::VARCHAR, 8)
+   OR (a.i IS NOT NULL AND b.i IS NOT NULL AND a.k IS DISTINCT FROM b.k)
+----
+0
+
+query I
+SELECT count(*) FROM join_left FULL JOIN join_right USING (k)
+----
+177588
+
+query I
+SELECT count(*) FROM join_left a
+LEFT JOIN (SELECT i, s FROM join_right WHERE i % 2 = 0) b ON a.i = b.i
+WHERE b.i IS DISTINCT FROM CASE WHEN a.i % 2 = 0 THEN a.i ELSE NULL END
+   OR b.s IS DISTINCT FROM CASE WHEN a.i % 2 = 0 THEN repeat(a.i::VARCHAR, 8) ELSE NULL END
+----
+0
+
+endloop
+
+statement ok
+SET debug_force_external = false
+
+statement ok
+DROP TABLE join_left
+
+statement ok
+DROP TABLE join_right

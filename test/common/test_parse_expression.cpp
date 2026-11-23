@@ -93,6 +93,16 @@ TEST_CASE("Parse Expression List rejects invalid clauses", "[parse_expression]")
 	                    Catch::Contains("Cannot have any modifiers in the expression list"));
 }
 
+TEST_CASE("Parser list helpers reject a second statement or query node", "[parse_expression]") {
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1; DELETE FROM tbl"),
+	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1 UNION SELECT 42"),
+	                    Catch::Matchers::Contains("Expected a single SELECT node"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseColumnList("i INTEGER); SELECT (42"),
+	                    Catch::Matchers::Contains("Expected a single CREATE statement"));
+	REQUIRE(Parser::GetBuiltinParser().ParseColumnList("i INTEGER, j VARCHAR").LogicalColumnCount() == 2);
+}
+
 static_assert(!std::is_default_constructible<Parser>::value, "Parser requires an explicit environment");
 static_assert(!std::is_default_constructible<ParserOptions>::value, "Standalone options must be explicit");
 

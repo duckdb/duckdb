@@ -3874,6 +3874,20 @@ typedef struct _duckdb_v2_attach_options {
 
 /* --- Function pointer typedefs for instance --- */
 
+/*!
+ * Initializes an instance that `duckdb_v2_instance_open_shared()` has just created, before the instance is shared:
+ * calls for the same file wait until it returns. It can, for instance, write GLOBAL settings that cannot be given at
+ * startup, or create a connection and run SQL that sets up the database.
+ *
+ * `err` is a live error slot, never NULL. Populate it with `duckdb_v2_error_info_set_code()` /
+ * `duckdb_v2_error_info_set_text()` to fail the initialization; do not destroy it.
+ *
+ * The callback must not throw or unwind across the boundary, and must not open the same file through
+ * `duckdb_v2_instance_open_shared()`, which would wait for the callback to return.
+ */
+typedef void (*duckdb_v2_instance_init_callback_fn)(duckdb_v2_instance_handle instance, void *user_data,
+                                                    duckdb_v2_error_info_handle *err);
+
 /* --- Functions for instance --- */
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3949,12 +3963,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * `duckdb_v2_instance_destroy()`; the instance is destroyed once the last handle and the last connection on it are, and
  * a call for the same file meanwhile waits for it to be, rather than opening the file again while it is being closed.
  *
- * An existing instance is shared only when it was created with the same startup options, compared as written: an option
- * given under an alias, or a value written differently, counts as a different configuration, as for
- * `duckdb_get_or_create_from_cache` in the V1 API. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
- * view opens a new in-memory instance on every call, which is never shared; a named in-memory database such as
- * `:memory:name` is shared like a file. The startup options are those of `duckdb_v2_instance_create_with_options()`,
- * with the same restrictions.
+ * `init`, when given, is called once with the instance this call creates, before any other call can share it: calls for
+ * the same file wait until it returns. It is not called when the call shares an existing instance. When it reports an
+ * error, the instance is destroyed, the call fails with that error, and the next call for the file creates an instance
+ * again.
+ *
+ * An existing instance is shared only when it was created with the same startup options, compared by the settings they
+ * give: both name the same options, an alias counting as the option it stands for, and each value is equal once
+ * converted to the option's type, with text compared regardless of case, so that `threads=03` matches `threads=3` and
+ * `access_mode=read_only` matches `access_mode=READ_ONLY`. The value of an option DuckDB does not know is compared as
+ * written. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty view opens a new in-memory instance on
+ * every call, which is never shared; a named in-memory database such as `:memory:name` is shared like a file. The
+ * startup options are those of `duckdb_v2_instance_create_with_options()`, with the same restrictions.
  *
  * A file that an instance of the environment attached with `duckdb_v2_instance_attach()` is not shared, and opening it
  * returns an error like a second `duckdb_v2_instance_attach()` would; nor can a file opened here be attached to another
@@ -3962,8 +3982,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * shared handle change the instance for every handle to it.
  *
  * A client cannot compose this from the other functions: telling that two paths name the same file as DuckDB resolves
- * it, and waiting for an instance whose last handle and connection were just destroyed to finish closing its files,
- * both need the engine.
+ * it, waiting for an instance whose last handle and connection were just destroyed to finish closing its files, and
+ * initializing a new instance before another call can share it, all need the engine.
  *
  * history:
  * - unstable: v2.0.0
@@ -3981,6 +4001,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * @param option_values_lengths Byte lengths of the entries in `option_values`; element i is the length of
  * `option_values[i]`. May be NULL only when `option_values` is NULL.
  * @param option_count The number of startup options.
+ * @param init Optional. Initializes the instance when this call creates it. Pass NULL for none.
+ * @param init_user_data Opaque pointer passed through to `init` untouched. May be NULL.
  * @param out_instance Receives a new handle to the shared instance.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -3989,7 +4011,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
     duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
     const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
-    idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+    idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
+    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -4316,6 +4339,251 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_log(duckdb_v2_connection_handl
 #endif
 
 /* --- Struct definitions for logging --- */
+
+/* ============================================================================
+ * MODULE: object cache
+ * ============================================================================ */
+
+/* --- Enums for object cache --- */
+
+/* --- Struct forward declarations for object cache --- */
+
+/* --- Types for object cache --- */
+
+/*!
+ * A borrowed opaque handle to the object cache of an instance. Obtained from `duckdb_v2_instance_get_object_cache()` or
+ * `duckdb_v2_context_get_object_cache()`, valid for as long as the instance is, and never destroyed by the caller.
+ */
+typedef struct _duckdb_v2_object_cache {
+	void *internal_ptr;
+} * duckdb_v2_object_cache_handle;
+
+/*!
+ * An owned opaque handle to an entry of an object cache. Obtained from `duckdb_v2_object_cache_get()` or
+ * `duckdb_v2_object_cache_get_or_create()`, and destroyed with `duckdb_v2_object_cache_entry_destroy()`. Holding the
+ * handle keeps the entry's data alive, but not in the cache: the cache may still evict, replace or delete the entry
+ * meanwhile, and the data is only destroyed once the last handle is. Only entries in the cache count against the memory
+ * limit: data that is held through a handle after its entry was evicted, replaced or deleted no longer does.
+ */
+typedef struct _duckdb_v2_object_cache_entry {
+	void *internal_ptr;
+} * duckdb_v2_object_cache_entry_handle;
+
+/* --- Constants for object cache --- */
+
+/* --- Function pointer typedefs for object cache --- */
+
+/*!
+ * Creates the data of a cache entry that does not exist yet.
+ *
+ * Runs outside the cache lock, while other calls creating the same entry on the same instance wait for it: it must not
+ * use the object cache itself. Calls for other keys, or on other instances, do not wait. A failure reported through
+ * `err` leaves the entry uncreated and fails the call, as does a `size_bytes` above the cache capacity; the waiting
+ * calls then retry, running their own create callback.
+ */
+typedef void (*duckdb_v2_object_cache_create_callback_fn)(void *user_data, duckdb_v2_opaque *data, idx_t *size_bytes,
+                                                          duckdb_v2_error_info_handle *err);
+
+/* --- Functions for object cache --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the object cache of an instance.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance to take the object cache from.
+ * @param cache Receives the borrowed object cache.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_object_cache(duckdb_v2_instance_handle instance,
+                                                                 duckdb_v2_object_cache_handle *cache,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the object cache of the instance a context belongs to.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context to take the object cache from.
+ * @param cache Receives the borrowed object cache.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_object_cache(duckdb_v2_context_handle context,
+                                                                duckdb_v2_object_cache_handle *cache,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Puts an entry into the cache, replacing the entry of the same type and key, if any.
+ *
+ * Entries are looked up by type and key together, so a key only has to be unique within its type. Name types after the
+ * extension, e.g. `my_extension.footer`, as the cache is shared by everything on the instance.
+ *
+ * The opaque handle bundles the data with an optional destructor, invoked once the entry is gone from the cache and
+ * nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run on any
+ * thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0 pins the
+ * entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it evictable: the
+ * cache counts it against the memory limit while it is in the cache, and may drop it, least recently used first, when
+ * memory is needed, also while it is held. Sizes above the cache capacity are rejected.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to put the entry into.
+ * @param type The type of the entry. Borrowed and copied.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param data Opaque handle bundling the data pointer plus an optional destructor. Owned by the cache from here on,
+ * even if the call fails.
+ * @param size_bytes The approximate memory the data takes up, or 0 to pin the entry.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_put(duckdb_v2_object_cache_handle cache, const char *type,
+                                                        idx_t type_length, const char *key, idx_t key_length,
+                                                        duckdb_v2_opaque *data, idx_t size_bytes,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks an entry up, marking it as recently used.
+ *
+ * `entry` receives null if the cache has no entry of the type under the key, because there never was one or it was
+ * evicted. Otherwise the caller owns it, and must destroy it via `duckdb_v2_object_cache_entry_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to look the entry up in.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param entry Receives the entry, or null if there is none. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get(duckdb_v2_object_cache_handle cache, const char *type,
+                                                        idx_t type_length, const char *key, idx_t key_length,
+                                                        duckdb_v2_object_cache_entry_handle *entry,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks an entry up, creating it first with the create callback if there is none.
+ *
+ * Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others wait
+ * for it and receive its result. If that creation fails, the call that ran it fails, and each waiting call tries again
+ * with its own create callback. Calls for other keys never wait for a creation. The entry is returned as
+ * `duckdb_v2_object_cache_get()` does, owned by the caller. Fails if the key holds an entry that was not created
+ * through this API.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to look the entry up in.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param create Creates the data of the entry if there is none yet.
+ * @param create_user_data Handed to the create callback. Borrowed for the duration of the call.
+ * @param entry Receives the entry. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get_or_create(duckdb_v2_object_cache_handle cache, const char *type,
+                                                                  idx_t type_length, const char *key, idx_t key_length,
+                                                                  duckdb_v2_object_cache_create_callback_fn create,
+                                                                  void *create_user_data,
+                                                                  duckdb_v2_object_cache_entry_handle *entry,
+                                                                  duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Deletes an entry from the cache. Deleting an entry that is not there is not an error.
+ *
+ * Holders of the entry keep its data until they destroy their handle, but from here on it no longer counts against the
+ * memory limit.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to delete the entry from.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_delete(duckdb_v2_object_cache_handle cache, const char *type,
+                                                           idx_t type_length, const char *key, idx_t key_length,
+                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the data pointer of an entry, valid for as long as the entry handle is.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param entry The entry to take the data of.
+ * @param data Receives the data pointer.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_entry_get_data(duckdb_v2_object_cache_entry_handle entry,
+                                                                   void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the entry handle, releasing its hold on the data. Always succeeds. On success the handle is set to null.
+ * Safe to call on an already-null slot.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param entry The entry handle to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_entry_destroy(duckdb_v2_object_cache_entry_handle *entry);
+#endif
+
+/* --- Struct definitions for object cache --- */
 
 /* ============================================================================
  * MODULE: qname

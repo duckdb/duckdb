@@ -104,6 +104,8 @@ void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 
 bool ColumnCountResult::EmptyLine(ColumnCountResult &result, idx_t buffer_pos) {
 	result.empty_lines++;
+	// the next line starts behind the empty line, the empty lines before a row are not part of its size
+	result.last_position = {result.cur_buffer_idx, buffer_pos + 1, result.current_buffer_size};
 	return false;
 }
 

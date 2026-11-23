@@ -93,16 +93,6 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	return LossyNumericCast<idx_t>(result);
 }
 
-//! The available system memory. The config's filesystem is not set until the database starts, but
-//! options can be configured before that, so fall back to a temporary local filesystem.
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
-	}
-	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
-}
-
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -310,7 +300,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
 	vector<string> directories;
@@ -346,7 +336,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
@@ -1288,7 +1278,7 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
 		maximum_memory =
-		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(info.config); });
+		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(); });
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);

@@ -91,6 +91,17 @@ FROM range(3);
 1	42
 1	42
 
+# NULL frame offsets are rejected
+statement error
+SELECT sum(i) OVER (ROWS BETWEEN NULL PRECEDING AND CURRENT ROW) FROM range(3) r(i);
+----
+Window ROWS PRECEDING expression cannot be NULL
+
+statement error
+SELECT sum(i) OVER (ROWS BETWEEN 0 PRECEDING AND NULL FOLLOWING) FROM range(3) r(i);
+----
+Window ROWS FOLLOWING expression cannot be NULL
+
 # Deferred PKs are not UCC
 statement ok
 CREATE TABLE d(id INTEGER PRIMARY KEY DEFERRED);

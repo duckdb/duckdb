@@ -21,6 +21,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/perfect_hash_join_table.hpp"
 #include "duckdb/parallel/sharded_counter.hpp"
@@ -46,6 +47,13 @@ public:
 	const buffer_ptr<DictionaryEntry> &GetEntry(idx_t column, const buffer_ptr<DictionaryEntry> &entry);
 	void Reset();
 
+	SelectionVector &GetNullSelection(idx_t count) {
+		if (null_selection.Capacity() < count) {
+			null_selection.Initialize(count);
+		}
+		return null_selection;
+	}
+
 private:
 	struct DictionaryOwner {
 		explicit DictionaryOwner(const buffer_ptr<DictionaryEntry> &entry) : entry(entry) {
@@ -57,6 +65,7 @@ private:
 	const idx_t column_count;
 	//! Allocated once on first use; resetting owners does not invalidate references to these slots.
 	unique_array<buffer_ptr<DictionaryEntry>> entries;
+	SelectionVector null_selection;
 };
 
 struct JoinHTScanState {
@@ -299,6 +308,10 @@ public:
 		unsafe_unique_array<ht_entry_t> dense_entries;
 		Vector is_match_v;
 		Vector needs_next_v;
+		//! Executes the hash table's hash expression over the probe keys
+		unique_ptr<ExpressionExecutor> hash_executor;
+		unique_ptr<DataChunk> spill_hashes;
+		SelectionVector spill_false_sel;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
@@ -430,6 +443,13 @@ public:
 	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
+	//! "hash(#0, #1, ...)" over the equality keys
+	unique_ptr<Expression> hash_expression;
+	//! "hash(#i)" for every equality key i, for the per-key-column filters
+	vector<unique_ptr<Expression>> key_hash_expressions;
+	//! Executors of the build side, which is thread-local
+	unique_ptr<ExpressionExecutor> build_hash_executor;
+	unique_ptr<ExpressionExecutor> build_key_hash_executor;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
@@ -538,7 +558,8 @@ private:
 
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	//! Hash all rows of the equality keys, creating the executor if it does not exist yet
+	void Hash(DataChunk &keys, unique_ptr<ExpressionExecutor> &executor, Vector &hashes) const;
 
 	bool TryProbePerfectHashTable(ScanStructure &scan_structure, DataChunk &keys);
 	bool CanUsePerfectDictionaryLookup() const;
@@ -828,6 +849,7 @@ private:
 		explicit KeyFilterBuildScratch(JoinHashTable &ht);
 		DataChunk keys;
 		Vector hashes;
+		ExpressionExecutor key_hash_executor;
 	};
 	//! Gathers one key column of a chunk of materialized rows
 	void GatherKeyColumn(TupleDataChunkState &chunk_state, idx_t count, idx_t key_idx, Vector &result);
@@ -842,9 +864,14 @@ private:
 	//! pinned upstream dictionary, or the reserved NULL index for a NULL-only chunk (e.g. the unmatched-build scan of
 	//! a FULL/RIGHT join upstream). Any other shape means the build pipeline is not single-source and throws.
 	void EncodeDictSurvivingColumn(const DictSurvivingColumn &column, idx_t build_col_idx, const Vector &incoming,
-	                               idx_t count, vector<AllocatedData> &buffers, vector<Vector> &vectors);
+	                               idx_t count, Vector &result);
 
 private:
+	//! Build is local to this table; its buffers are initialized on the first nonempty chunk.
+	struct BuildState;
+	BuildState &GetBuildState();
+	unique_ptr<BuildState> build_state;
+
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 

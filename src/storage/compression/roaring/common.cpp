@@ -8,6 +8,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/bitpacking.hpp"
@@ -234,11 +235,10 @@ void ExtractValidityMaskToData(const ValidityMask &validity, Vector &dst, idx_t 
 	}
 }
 
-void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                        idx_t result_offset) {
+void RoaringScanValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, ValidityMask &result_mask,
+                         idx_t result_offset, ScanVectorType) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
-	auto &result_mask = FlatVector::ValidityMutable(result);
 	scan_state.ScanPartial(start, result_mask, result_offset, scan_count);
 }
 void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
@@ -250,11 +250,6 @@ void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, i
 	scan_state.ScanPartial(start, mask, 0, scan_count);
 	ExtractValidityMaskToData(mask, result, result_offset, scan_count);
 }
-void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten();
-	RoaringScanPartial(segment, state, scan_count, result, 0);
-}
-
 void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
@@ -294,8 +289,8 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	case PhysicalType::BIT: {
 		analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
 		compress = roaring::RoaringCompress<PhysicalType::BIT>;
-		scan = roaring::RoaringScan;
-		scan_partial = roaring::RoaringScanPartial;
+		scan = ValidityColumnData::ScanValidity;
+		scan_partial = ValidityColumnData::ScanPartialValidity;
 		break;
 	}
 	case PhysicalType::BOOL: {
@@ -312,6 +307,9 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
 	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan, scan_partial,
 	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
+	if (data_type == PhysicalType::BIT) {
+		result.scan_validity = roaring::RoaringScanValidity;
+	}
 	result.zero_initialize_segments = false;
 	return result;
 }

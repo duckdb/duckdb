@@ -76,6 +76,24 @@ SELECT SUM(b)::BIGINT FROM bigints
 ----
 Conversion Error: Type INT128 with value 4611686018427388403500
 
+# uhugeint sum stays exact instead of becoming a double
+query II
+SELECT typeof(sum(a)), sum(a) FROM (SELECT '12345678901234567890'::UHUGEINT a FROM range(3));
+----
+UHUGEINT	37037036703703703670
+
+# a constant input is summed as value * count
+statement error
+SELECT sum(a) FROM (SELECT 340282366920938463463374607431768211455::UHUGEINT a FROM range(2));
+----
+Overflow in UHUGEINT multiplication
+
+# a non-constant input is added row by row
+statement error
+SELECT sum(a + i::UHUGEINT) FROM (SELECT 340282366920938463463374607431768211450::UHUGEINT a, i FROM range(2) t(i));
+----
+Overflow in UHUGEINT addition
+
 #
 # Order by
 #

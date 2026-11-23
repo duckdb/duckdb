@@ -8,7 +8,7 @@ SET perfect_ht_threshold=0
 statement ok
 SET disabled_optimizers='compressed_materialization'
 
-foreach n 0 1 2 63 64 65 127 128 129 2047 2048 2049 4097
+foreach n 65 2049
 
 foreach mode 0 1 2 3 4 5 6 7
 

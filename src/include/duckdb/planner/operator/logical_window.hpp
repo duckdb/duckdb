@@ -39,6 +39,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 protected:
 	void ResolveTypes() override;

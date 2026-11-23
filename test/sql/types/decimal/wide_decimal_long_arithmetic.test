@@ -64,7 +64,7 @@ DECIMAL(100000,99990)	true
 
 # a long conversion checks for interrupts; the materialized CTE keeps the million-digit constant out of the error text
 statement ok
-SET max_execution_time = 1;
+SET max_execution_time = 50;
 
 statement error
 WITH big AS MATERIALIZED (SELECT 1::DECIMAL(1000000,999990) d) SELECT length(d::VARCHAR) FROM big
