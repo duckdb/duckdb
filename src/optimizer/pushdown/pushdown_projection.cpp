@@ -10,16 +10,20 @@
 
 namespace duckdb {
 
-static bool IsVolatile(LogicalProjection &proj, const Expression &expr) {
-	bool is_volatile = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		D_ASSERT(colref.Depth() == 0);
-		auto &proj_expr = proj.GetExpression(colref.Binding());
-		if (proj_expr.IsVolatile()) {
-			is_volatile = true;
-		}
-	});
-	return is_volatile;
+static bool CanInlineProjection(LogicalProjection &proj, const FilterPushdown::Filter &filter) {
+	if (filter.filter->CanThrow() && !filter.has_barrier) {
+		return false;
+	}
+	bool can_inline = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    *filter.filter, [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.Depth() == 0);
+		    auto &proj_expr = proj.GetExpression(colref.Binding());
+		    if (proj_expr.IsVolatile() || (proj_expr.CanThrow() && !filter.has_barrier)) {
+			    can_inline = false;
+		    }
+	    });
+	return can_inline;
 }
 
 // A compress expression only holds where it was placed, so a filter must not inline it into a position below
@@ -168,8 +172,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	vector<unique_ptr<Expression>> remain_expressions;
 	vector<unique_ptr<Expression>> split_expressions;
 	auto stays_on_top = [&](const Filter &f) {
-		return IsVolatile(proj, *f.filter) || ReferencesCompressExpression(proj, *f.filter) ||
-		       (f.filter->CanThrow() && !f.has_barrier);
+		return !CanInlineProjection(proj, f) || ReferencesCompressExpression(proj, *f.filter);
 	};
 	auto splits_off = [&](const Filter &f) {
 		return projection_mode == ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS &&
