@@ -22,6 +22,8 @@ namespace duckdb {
 class ConflictManager;
 class ConflictInfo;
 class IndexEntry;
+class IndexBuild;
+struct IndexBuildRange;
 class TableIndexList;
 template <class TARGET>
 class IndexReadHandle;
@@ -42,7 +44,8 @@ public:
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
-	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
+	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode,
+	                                transaction_t last_commit = 0);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -118,6 +121,20 @@ public:
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
 	void MergeCheckpointDeltas(optional_idx checkpoint_id) const;
+
+	//! Registers an index build, which the commits add their changes to.
+	void AddIndexBuild(shared_ptr<IndexBuild> build);
+	//! Unregisters an index build.
+	void RemoveIndexBuild(const IndexBuild &build);
+	//! Returns the index build of this transaction, if any.
+	shared_ptr<IndexBuild> FindIndexBuild(transaction_t transaction_id) const;
+	//! Returns true, if an index build is in progress.
+	bool HasIndexBuilds() const {
+		annotated_lock_guard lock(index_builds_lock);
+		return !index_builds.empty();
+	}
+	//! Adds the rows a commit changed to each index build in progress.
+	void AddIndexBuildChanges(const IndexBuildRange &rows);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	shared_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
@@ -153,6 +170,10 @@ private:
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
+	//! A lock for the index builds.
+	mutable annotated_mutex index_builds_lock;
+	//! The index builds in progress, which commits add their changes to.
+	vector<shared_ptr<IndexBuild>> index_builds DUCKDB_GUARDED_BY(index_builds_lock);
 };
 
 template <class T>

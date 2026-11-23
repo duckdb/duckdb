@@ -1,4 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/function/table/native_scan_job.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -358,6 +359,16 @@ public:
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
+		if (bind_data.create_index == CreateIndexScanType::ONLINE_INDEX_BUILD) {
+			// register before the scan fixes its row range, so that it reads every row up to the build commit
+			index_build = storage.AddIndexBuild(tx);
+		}
+	}
+
+	~DuckTableScanState() override {
+		if (index_build) {
+			storage.GetDataTableInfo()->GetIndexes().RemoveIndexBuild(*index_build);
+		}
 	}
 
 public:
@@ -382,6 +393,8 @@ private:
 	//! Preallocated counters spread progress updates without registering local states
 	vector<PaddedAtomic<idx_t>> progress;
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
+	//! The index build that a CREATE INDEX scan reads for
+	shared_ptr<IndexBuild> index_build;
 
 private:
 	void InitializeScheduling(ExecutionContext &context, TableFunctionInitInput &input) {
@@ -392,7 +405,7 @@ private:
 		auto &blocks = storage.GetTableIOManager().GetBlockManagerForRowData();
 		idx_t affinity_shards = 0;
 		if (input.execution_order == PipelineExecutionOrder::UNORDERED) {
-			const bool supported_scan = input.max_threads > 1 && !blocks.InMemory() && !bind_data.is_create_index &&
+			const bool supported_scan = input.max_threads > 1 && !blocks.InMemory() && !bind_data.IsCreateIndex() &&
 			                            !bind_data.order_options && !sample_options;
 			if (supported_scan &&
 			    CollectionScanState::SupportsAssignmentBlockDiscovery(storage_ids, storage.GetTypes())) {
@@ -404,7 +417,7 @@ private:
 		}
 		const bool repeatable_percentage_sample =
 		    sample_options && sample_options->repeatable && sample_options->is_percentage;
-		const bool prefetch = !bind_data.is_create_index && !repeatable_percentage_sample && blocks.Prefetch();
+		const bool prefetch = !bind_data.IsCreateIndex() && !repeatable_percentage_sample && blocks.Prefetch();
 		const auto policy = affinity_shards ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
 		read_ahead = ScanReadAhead::Create(context.client, policy, prefetch, MaxValue<idx_t>(affinity_shards, 1),
 		                                   input.max_threads);
@@ -680,8 +693,8 @@ public:
 #endif
 
 		do {
-			if (bind_data.is_create_index) {
-				storage.CreateIndexScan(l_state.scan_state, output);
+			if (bind_data.IsCreateIndex()) {
+				storage.CreateIndexScan(l_state.scan_state, output, index_build.get());
 				UpdateScanProgress(l_state, l_state.scan_state);
 			} else if (scheduling == TableScanScheduling::ORDERED) {
 				if (!ScanWithReadAhead(context, data_p, l_state, output) &&
@@ -1142,8 +1155,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
+	auto &transaction = DuckTransaction::Get(context, storage.GetAttached());
 	for (auto entry : indexes.IndexEntries()) {
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			continue;
+		}
+		if (!entry->ScannableAt(transaction.view.visibility_bound)) {
 			continue;
 		}
 		{
@@ -1252,7 +1269,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<const 
 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
 	serializer.WriteProperty(102, "table", bind_data.table.name);
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
-	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
+	serializer.WriteProperty(104, "is_create_index", bind_data.IsCreateIndex());
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
 	serializer.WritePropertyWithDefault<QualifiedName>(
 	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
@@ -1277,7 +1294,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
 	result->is_index_scan = is_index_scan;
-	result->is_create_index = is_create_index;
+	result->create_index = is_create_index ? CreateIndexScanType::CREATE_INDEX : CreateIndexScanType::NONE;
 	return std::move(result);
 }
 
@@ -1327,7 +1344,7 @@ static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
 	if (!get.scan_partition_indices.empty()) {
 		return "scan_partitions";
 	}
-	if (data.is_create_index) {
+	if (data.IsCreateIndex()) {
 		return "create_index";
 	}
 	if (data.partitions_to_scan) {

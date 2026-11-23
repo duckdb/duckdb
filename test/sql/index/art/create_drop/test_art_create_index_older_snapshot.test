@@ -1,0 +1,41 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_older_snapshot.test
+# description: Test that a snapshot older than an index does not scan it
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO t SELECT i, i FROM range(10000) r(i);
+
+statement ok con_old
+BEGIN;
+
+query I con_old
+SELECT count(*) FROM t;
+----
+10000
+
+statement ok
+DELETE FROM t WHERE k = 5;
+
+statement ok
+CREATE INDEX idx_k ON t(k);
+
+query II con_old
+SELECT k, v FROM t WHERE k = 5;
+----
+5	5
+
+statement ok con_old
+COMMIT;
+
+query I
+SELECT count(*) FROM t WHERE k = 5;
+----
+0
+
+query II
+SELECT k, v FROM t WHERE k = 6;
+----
+6	6

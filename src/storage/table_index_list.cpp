@@ -15,6 +15,7 @@
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -91,11 +92,11 @@ TableIndexList::~TableIndexList() {
 }
 
 shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t index_oid,
-                                                const ConstraintCheckMode check_mode) {
+                                                const ConstraintCheckMode check_mode, transaction_t last_commit) {
 	D_ASSERT(index);
 	D_ASSERT(index_oid != DConstants::INVALID_INDEX);
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), index_oid, check_mode);
+	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), index_oid, check_mode, last_commit);
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
 		unbound_count++;
 	}
@@ -586,6 +587,38 @@ void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) con
 	for (const auto &entry : index_entries) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
+}
+
+void TableIndexList::AddIndexBuild(shared_ptr<IndexBuild> build) {
+	annotated_lock_guard lock(index_builds_lock);
+	index_builds.push_back(std::move(build));
+}
+
+void TableIndexList::RemoveIndexBuild(const IndexBuild &build) {
+	annotated_lock_guard lock(index_builds_lock);
+	for (idx_t i = 0; i < index_builds.size(); i++) {
+		if (index_builds[i].get() == &build) {
+			index_builds.erase_at(i);
+			break;
+		}
+	}
+}
+
+void TableIndexList::AddIndexBuildChanges(const IndexBuildRange &rows) {
+	annotated_lock_guard lock(index_builds_lock);
+	for (auto &build : index_builds) {
+		build->AddChanges(rows);
+	}
+}
+
+shared_ptr<IndexBuild> TableIndexList::FindIndexBuild(transaction_t transaction_id) const {
+	annotated_lock_guard lock(index_builds_lock);
+	for (auto &build : index_builds) {
+		if (build->transaction_id == transaction_id) {
+			return build;
+		}
+	}
+	return nullptr;
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

@@ -29,6 +29,9 @@ class DistinctStatistics;
 class DuckTransaction;
 class Expression;
 class Index;
+class IndexBuild;
+struct IndexBuildRange;
+class BoundIndex;
 class OptimisticDataWriter;
 class RowGroup;
 class RowGroupCollection;
@@ -263,8 +266,8 @@ public:
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result);
 
-	//! Scans the next chunk for the CREATE INDEX operator
-	bool CreateIndexScan(TableScanState &state, DataChunk &result);
+	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit if there is a build
+	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexBuild> build);
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -303,6 +306,11 @@ public:
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
+	//! Applies the commits made during the build to the index, then adds it to the index list.
+	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
+	                                idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Starts an index build: later commits add the rows they change to it
+	shared_ptr<IndexBuild> AddIndexBuild(DuckTransaction &transaction);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
@@ -327,6 +335,9 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
+	//! Applies the changed rows of the commits up to commit_id to the index
+	void ApplyIndexBuildChanges(IndexBuild &build, BoundIndex &index, vector<IndexBuildRange> &ranges,
+	                            transaction_t commit_id);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,

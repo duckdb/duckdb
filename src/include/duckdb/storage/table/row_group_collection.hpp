@@ -47,6 +47,7 @@ class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
 class BoundIndex;
+struct IndexBuildRange;
 
 //! How checkpoint vacuum handles table indexes when rowids may change.
 enum class VacuumIndexStrategy : uint8_t {
@@ -162,6 +163,10 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
+	//! Deletes the rows of the ranges seen only before from the index, then appends the rows seen only after
+	void ApplyChangesToIndex(BoundIndex &index, const vector<IndexBuildRange> &ranges, VisibilityBound before,
+	                         VisibilityBound after);
+
 	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
 	             optional_ptr<DeletedRowIds> deleted_ids = nullptr);
@@ -260,6 +265,12 @@ private:
 	                                                       idx_t count) const;
 
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
+	//! Fetches the columns of the rows into result_chunk, with NULL for the other table columns
+	void FetchIndexColumns(TransactionData transaction, DataChunk &result_chunk,
+	                       const unordered_set<column_t> &column_id_set, Vector &row_identifiers, idx_t count);
+	//! Fetches the index columns of the slice's rows that seen sees and other does not; false if none
+	bool FetchRowsOnlySeenBy(BoundIndex &index, TransactionData seen, TransactionData other, idx_t start_row,
+	                         idx_t count, DataChunk &row_ids, DataChunk &table_chunk);
 
 private:
 	//! BlockManager

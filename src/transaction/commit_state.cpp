@@ -1,4 +1,5 @@
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
@@ -69,11 +70,11 @@ IndexDataRemover::IndexDataRemover(DuckTransaction &transaction_p, QueryContext 
     : transaction(transaction_p), context(context), removal_type(removal_type) {
 }
 
-void IndexDataRemover::PushDelete(DeleteInfo &info) {
+bool IndexDataRemover::PushDelete(DeleteInfo &info) {
 	auto &version_table = info.table->GetStorage();
 	if (!version_table.HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
-		return;
+		return false;
 	}
 
 	idx_t count = 0;
@@ -89,6 +90,7 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 		}
 	}
 	Flush(version_table, row_numbers, count);
+	return removal_type == IndexRemovalType::MAIN_INDEX;
 }
 
 void IndexDataRemover::Verify() {
@@ -268,7 +270,32 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
-void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info) {
+void CommitState::AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows) {
+	// a failure here cannot be reverted: throw a FatalException
+	try {
+		storage.GetDataTableInfo()->GetIndexes().AddIndexBuildChanges(rows);
+	} catch (std::exception &ex) {
+		throw FatalException(ErrorData(ex).Message());
+	} catch (...) {
+		throw FatalException("unknown failure in CommitState::AddIndexBuildChanges");
+	}
+}
+
+IndexBuildRange CommitState::DeletedRowSpan(DeleteInfo &info) {
+	if (info.is_consecutive) {
+		return IndexBuildRange {info.base_row, info.count};
+	}
+	auto rows = info.GetRows();
+	auto first = rows[0];
+	auto last = rows[0];
+	for (idx_t i = 1; i < info.count; i++) {
+		first = MinValue(first, rows[i]);
+		last = MaxValue(last, rows[i]);
+	}
+	return IndexBuildRange {info.base_row + first, UnsafeNumericCast<idx_t>(last - first) + 1};
+}
+
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commit_info) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		auto &old_entry = *Load<CatalogEntry *>(data);
@@ -351,7 +378,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *), info);
+		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *), commit_info);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
@@ -365,7 +392,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		info->table->GetStorage().CommitAppend(commit_id, info->start_row, info->count);
+		auto &storage = info->table->GetStorage();
+		storage.CommitAppend(commit_id, info->start_row, info->count);
+		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
+			AddIndexBuildChanges(storage, IndexBuildRange {info->start_row, info->count});
+		}
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -378,7 +409,14 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
-		CommitDelete(*info, transaction.GetTransactionId());
+		auto &storage = info->table->GetStorage();
+		if (CommitDelete(*info, transaction.GetTransactionId())) {
+			commit_info.has_index_deletes = true;
+		}
+		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
+			// applying skips the rows in the span that did not change
+			AddIndexBuildChanges(storage, DeletedRowSpan(*info));
+		}
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -408,11 +446,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	}
 }
 
-void CommitState::CommitDelete(DeleteInfo &info, transaction_t old_id) {
+bool CommitState::CommitDelete(DeleteInfo &info, transaction_t old_id) {
 	// mark the tuples as committed
 	info.version_info->CommitWrite(old_id, commit_id, info, true);
 	// delete from indexes
-	index_data_remover.PushDelete(info);
+	return index_data_remover.PushDelete(info);
 }
 
 void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {

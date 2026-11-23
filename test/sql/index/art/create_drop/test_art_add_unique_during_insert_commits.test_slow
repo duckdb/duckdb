@@ -1,0 +1,46 @@
+# name: test/sql/index/art/create_drop/test_art_add_unique_during_insert_commits.test_slow
+# description: Test ALTER TABLE ADD UNIQUE while another connection commits inserts
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS c0, range AS c1, range AS c2, range AS c3, range AS c4, range AS c5, range AS c6, range AS c7, range AS c8, range AS c9 FROM range(2000000);
+
+# thread 0 adds ten UNIQUE constraints one after the other, thread 1 commits forty 100,000-row inserts (autocommit);
+# a transaction conflict is a legal outcome for either side, a FATAL / INTERNAL error or an invalidation is not
+concurrentloop threadid 0 2
+
+loop j 0 10
+
+onlyif threadid=0
+statement maybe
+ALTER TABLE t ADD UNIQUE (c{j});
+----
+<!REGEX>:.*(FATAL|INTERNAL|invalidated).*
+
+endloop
+
+loop i 0 40
+
+onlyif threadid=1
+statement maybe
+INSERT INTO t SELECT r, r, r, r, r, r, r, r, r, r FROM (SELECT 10000000 + {i} * 100000 + range AS r FROM range(100000));
+----
+<!REGEX>:.*(FATAL|INTERNAL|invalidated).*
+
+endloop
+
+endloop
+
+# the lookups through the new indexes find the rows committed while they were built
+foreach i 0 13 26 39
+
+loop j 0 10
+
+query I
+SELECT (SELECT count(*) FROM t WHERE c{j} = 10000000 + {i} * 100000 + 99999) = (SELECT count(*) FROM t WHERE c{j} = 10000000 + {i} * 100000 + 99999 AND hash(c{j}) IS NOT NULL);
+----
+true
+
+endloop
+
+endloop

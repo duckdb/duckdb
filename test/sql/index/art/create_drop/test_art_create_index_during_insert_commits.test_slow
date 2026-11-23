@@ -1,0 +1,42 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_during_insert_commits.test_slow
+# description: Test ART creation while another connection commits inserts
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t(a BIGINT, b BIGINT);
+
+statement ok
+CREATE INDEX idx_a ON t(a);
+
+# thread 0 creates and drops idx_b on b, thread 1 commits 100,000-row inserts (autocommit), 10 times each
+concurrentloop threadid 0 2
+
+loop i 0 10
+
+onlyif threadid=0
+statement ok
+CREATE INDEX idx_b ON t(b);
+
+# the lookup through idx_b finds the rows committed while it was built
+onlyif threadid=0
+query I
+SELECT (SELECT count(*) FROM t WHERE b = 77) = (SELECT count(*) FROM t WHERE b = 77 AND hash(b) IS NOT NULL);
+----
+true
+
+onlyif threadid=0
+statement ok
+DROP INDEX idx_b;
+
+onlyif threadid=1
+statement ok
+INSERT INTO t SELECT range, range FROM range(100000);
+
+endloop
+
+endloop
+
+query I
+SELECT count(*) FROM t;
+----
+1000000

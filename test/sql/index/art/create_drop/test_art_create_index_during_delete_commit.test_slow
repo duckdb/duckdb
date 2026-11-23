@@ -1,0 +1,137 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_during_delete_commit.test_slow
+# description: Test ART creation while a large DELETE commits
+# group: [create_drop]
+
+# in the unittest's database con_d's large commit otherwise takes the automatic-checkpoint path, and con_x's
+# CREATE INDEX then waits for the whole commit (the window is missed)
+statement ok
+SET checkpoint_threshold = '1TB';
+
+statement ok
+CREATE TABLE orders AS SELECT range AS order_id, hash(range) AS ref_a, hash(range + 1) AS ref_b, range % 1000 AS customer_id FROM range(2000000);
+
+statement ok
+CREATE INDEX idx_ref_a ON orders(ref_a);
+
+statement ok
+CREATE INDEX idx_ref_b ON orders(ref_b);
+
+concurrentforeach role con_d con_x
+
+onlyif role=con_x
+statement ok
+BEGIN;
+
+onlyif role=con_x
+query I
+SELECT count(*) FROM orders;
+----
+2000000
+
+onlyif role=con_d
+statement ok
+BEGIN;
+
+onlyif role=con_d
+statement ok
+DELETE FROM orders WHERE order_id % 2 = 0;
+
+onlyif role=con_d
+sleep 200 millisecond
+
+# the commit walk removes 1M rows from idx_ref_a and idx_ref_b, one 2048-row vector at a time
+onlyif role=con_d
+statement ok
+COMMIT;
+
+onlyif role=con_x
+sleep 400 millisecond
+
+# COALESCE turns the NULL filler of the removal into a real key (-1)
+onlyif role=con_x
+statement ok
+CREATE INDEX idx_new ON orders(COALESCE(customer_id, -1));
+
+onlyif role=con_x
+sleep 4000 millisecond
+
+onlyif role=con_x
+statement ok
+COMMIT;
+
+endloop
+
+query I
+SELECT count(*) FROM orders;
+----
+1000000
+
+query I
+SELECT count(*) FROM orders WHERE COALESCE(customer_id, -1) = 7;
+----
+2000
+
+# the same with an index on a plain column: the index is added after con_d's commit, so the cleanup of con_d's
+# delete at con_x's COMMIT finds nothing of it in the new index
+
+statement ok
+CREATE TABLE plain AS SELECT range AS order_id, hash(range) AS ref_a, hash(range + 1) AS ref_b, range % 1000 AS customer_id FROM range(2000000);
+
+statement ok
+CREATE INDEX idx_plain_ref_a ON plain(ref_a);
+
+statement ok
+CREATE INDEX idx_plain_ref_b ON plain(ref_b);
+
+concurrentforeach role con_d con_x
+
+onlyif role=con_x
+statement ok
+BEGIN;
+
+onlyif role=con_x
+query I
+SELECT count(*) FROM plain;
+----
+2000000
+
+onlyif role=con_d
+statement ok
+BEGIN;
+
+onlyif role=con_d
+statement ok
+DELETE FROM plain WHERE order_id % 2 = 0;
+
+onlyif role=con_d
+sleep 200 millisecond
+
+onlyif role=con_d
+statement ok
+COMMIT;
+
+onlyif role=con_x
+sleep 400 millisecond
+
+onlyif role=con_x
+statement ok
+CREATE INDEX idx_plain_new ON plain(customer_id);
+
+onlyif role=con_x
+sleep 4000 millisecond
+
+onlyif role=con_x
+statement ok
+COMMIT;
+
+endloop
+
+query I
+SELECT count(*) FROM plain;
+----
+1000000
+
+query I
+SELECT count(*) FROM plain WHERE customer_id = 7;
+----
+2000

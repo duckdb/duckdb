@@ -155,6 +155,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/window/match_recognize_matcher.hpp"
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
@@ -1749,6 +1750,25 @@ const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
 template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
 	return static_cast<CopyToType>(StringUtil::StringToEnum(GetCopyToTypeValues(), 2, "CopyToType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCreateIndexScanTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CreateIndexScanType::NONE), "NONE" },
+		{ static_cast<uint32_t>(CreateIndexScanType::CREATE_INDEX), "CREATE_INDEX" },
+		{ static_cast<uint32_t>(CreateIndexScanType::ONLINE_INDEX_BUILD), "ONLINE_INDEX_BUILD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CreateIndexScanType>(CreateIndexScanType value) {
+	return StringUtil::EnumToString(GetCreateIndexScanTypeValues(), 3, "CreateIndexScanType", static_cast<uint32_t>(value));
+}
+
+template<>
+CreateIndexScanType EnumUtil::FromString<CreateIndexScanType>(const char *value) {
+	return static_cast<CreateIndexScanType>(StringUtil::StringToEnum(GetCreateIndexScanTypeValues(), 3, "CreateIndexScanType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCryptoHashFunctionValues() {

@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -133,6 +134,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	D_ASSERT(op.children.size() == 1);
+	// only the generic plan applies the commits made after its scan
+	if (!index_type->create_plan && op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.children[0]->Cast<LogicalGet>();
+		get.bind_data.write().Cast<TableScanBindData>().create_index = CreateIndexScanType::ONLINE_INDEX_BUILD;
+	}
 	auto &scan = CreatePlan(*op.children[0]);
 
 	// Index has a plan replacement function

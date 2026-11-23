@@ -32,6 +32,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -370,7 +371,14 @@ void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanS
 	local_storage.Scan(state.local_state, state.GetColumnIds(), result);
 }
 
-bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result) {
+bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexBuild> build) {
+	if (build) {
+		ScanOptions options(TransactionData(build->transaction_id, VisibilityBound::Through(build->build_commit)));
+		// the transaction's own deletes reach the index through its commit
+		options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+		options.update_type = UpdateScanType::DISALLOW_UPDATES;
+		return state.table_state.Scan(options, result);
+	}
 	return state.table_state.Scan(result, TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED);
 }
 
@@ -393,8 +401,89 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
+shared_ptr<IndexBuild> DataTable::AddIndexBuild(DuckTransaction &transaction) {
+	// under the commit lock no commit is in progress
+	auto commit_lock = db.GetStorageManager().GetCommitLock();
+	auto build_commit = DuckTransactionManager::Get(db).GetLastCommit();
+	auto build = make_shared_ptr<IndexBuild>(transaction.GetTransactionId(), build_commit);
+	info->indexes.AddIndexBuild(build);
+	return build;
+}
+
+//! The most changed rows that CREATE INDEX applies while holding the commit lock
+static constexpr idx_t INDEX_BUILD_LOCKED_ROWS = DEFAULT_ROW_GROUP_SIZE;
+//! The most rounds that CREATE INDEX applies outside the commit lock
+static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
+//! The most consecutive rounds in which the changed rows grow
+static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
+
+//! Returns the number of rows in the ranges
+static idx_t ChangedRows(const vector<IndexBuildRange> &ranges) {
+	idx_t rows = 0;
+	for (auto &range : ranges) {
+		rows += range.count;
+	}
+	return rows;
+}
+
+void DataTable::ApplyIndexBuildChanges(IndexBuild &build, BoundIndex &index, vector<IndexBuildRange> &ranges,
+                                       transaction_t commit_id) {
+	if (!ranges.empty()) {
+		row_groups->ApplyChangesToIndex(index, ranges, VisibilityBound::Through(build.GetAppliedCommit()),
+		                                VisibilityBound::Through(commit_id));
+	}
+	build.SetAppliedCommit(commit_id);
+}
+
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
-	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
+	// publish between commits: a commit reads the index list several times under the commit lock
+	auto commit_lock = db.GetStorageManager().GetCommitLock();
+	auto last_commit = DuckTransactionManager::Get(db).GetLastCommit();
+	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT, last_commit);
+}
+
+shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
+                                           unique_ptr<BoundIndex> index, idx_t index_oid,
+                                           ConstraintCheckMode check_mode) {
+	auto build = info->indexes.FindIndexBuild(transaction.GetTransactionId());
+	auto &bound_index = *index;
+	auto commit_lock = db.GetStorageManager().GetCommitLock();
+	auto last_commit = DuckTransactionManager::Get(db).GetLastCommit();
+	if (build) {
+		// the commit lock guards the changes of the build
+		auto changes = build->TakeChanges();
+		auto rows = ChangedRows(changes);
+		idx_t rounds = 0;
+		idx_t growing_rounds = 0;
+		// apply outside the commit lock until few enough changed rows are left
+		while (rows > INDEX_BUILD_LOCKED_ROWS) {
+			if (rounds == INDEX_BUILD_MAX_ROUNDS || growing_rounds == INDEX_BUILD_MAX_GROWING_ROUNDS) {
+				throw TransactionException(
+				    "CREATE INDEX on table %s cannot keep up with concurrent changes to it: %llu changed rows are left "
+				    "after %llu rounds. Retry when fewer rows are written to the table",
+				    GetTableName(), rows, rounds);
+			}
+			commit_lock.unlock();
+			ApplyIndexBuildChanges(*build, bound_index, changes, last_commit);
+			context.FastInterruptCheck();
+			commit_lock.lock();
+			last_commit = DuckTransactionManager::Get(db).GetLastCommit();
+			changes = build->TakeChanges();
+			auto rows_left = ChangedRows(changes);
+			growing_rounds = rows_left > rows ? growing_rounds + 1 : 0;
+			rows = rows_left;
+			rounds++;
+		}
+		ApplyIndexBuildChanges(*build, bound_index, changes, last_commit);
+		info->indexes.RemoveIndexBuild(*build);
+	}
+	if (!IsMainTable()) {
+		// an ALTER while the index was not yet in the index list did not see it
+		throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has been "
+		                           "%s by a different transaction",
+		                           GetTableName(), TableModification());
+	}
+	return info->indexes.AddIndex(std::move(index), index_oid, check_mode, last_commit);
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
