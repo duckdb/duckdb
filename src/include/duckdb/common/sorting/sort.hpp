@@ -78,8 +78,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
-	//! Before any Sink, lower the reservation to the estimated size of sorting count rows, if below the default minimum
-	void SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t count, idx_t variable_data_size) const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	SinkFinalizeType Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const;
@@ -108,6 +106,9 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
+	//! Before the first Sink, lower the reservation to the estimated sorting size, capped at the default minimum
+	void SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t count, idx_t variable_data_size) const;
+
 	SourceResultType MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const;
 	unique_ptr<ColumnDataCollection> GetColumnData(OperatorSourceInput &input) const;
 
