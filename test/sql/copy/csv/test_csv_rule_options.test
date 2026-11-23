@@ -50,6 +50,12 @@ SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR', 'b'
 3	ok	4
 y"	2	NULL
 
+# the field left open counts toward the column check
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, unterminated_quote='null_at_line_end');
+----
+<REGEX>:.*Expected Number of Columns.*
+
 # embedded_quotes doubled collapses a doubled quote with an unrelated escape, in and outside quoted values
 statement ok
 COPY (SELECT * FROM (VALUES ('1,"a""b"'), ('2,p""q')) t(line)) TO '{TEST_DIR}/rule_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
@@ -87,6 +93,41 @@ statement error
 SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', embedded_quotes='twice');
 ----
 EMBEDDED_QUOTES must be none, doubled, toggle or doubled_toggle
+
+# the toggle leaves the escape alone under the default escape rule
+statement ok
+COPY (SELECT * FROM (VALUES ('xx,a\b"c"d,z'), ('xx,a\b,z')) t(line)) TO '{TEST_DIR}/rule_toggle_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query T
+SELECT b FROM read_csv('{TEST_DIR}/rule_toggle_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle') ORDER BY ALL;
+----
+a\b
+a\b"c"d
+
+# a toggled quote reads across line breaks unless the line rule is on
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a"'), ('b"'), ('2,c')) t(line)) TO '{TEST_DIR}/rule_toggle_nl.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT x, replace(y, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/rule_toggle_nl.csv', columns={'x': 'VARCHAR', 'y': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', null_padding=true, embedded_quotes='toggle', parallel=false) ORDER BY x;
+----
+1	a"<LF>b
+2	c
+
+# the space delimiter keeps its meaning under the field quote rules
+statement ok
+COPY (SELECT 'a  b' AS line) TO '{TEST_DIR}/rule_space_delim.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+FROM read_csv('{TEST_DIR}/rule_space_delim.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, header=false, auto_detect=false, delim=' ', quote='"', escape='\', null_padding=true, embedded_quotes='doubled');
+----
+a	NULL	b
+
+# an overlong encoding is invalid utf8 rather than whitespace in the toggle pass
+statement error
+FROM read_csv('data/csv/overlong_space.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle');
+----
+<REGEX>:.*(Invalid unicode|not utf-8).*
 
 # a new_line list reads every listed line break as a record boundary
 statement ok

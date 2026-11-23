@@ -525,6 +525,55 @@ bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	return was_type_manually_set[i];
 }
 
+static string EscapeModeValue(CSVEscapeMode mode) {
+	switch (mode) {
+	case CSVEscapeMode::ANYWHERE:
+		return "anywhere";
+	case CSVEscapeMode::QUOTES_ONLY:
+		return "quotes_only";
+	default:
+		return "quoted";
+	}
+}
+
+static string EmbeddedQuotesValue(CSVEmbeddedQuotes mode) {
+	switch (mode) {
+	case CSVEmbeddedQuotes::DOUBLED:
+		return "doubled";
+	case CSVEmbeddedQuotes::TOGGLE:
+		return "toggle";
+	case CSVEmbeddedQuotes::DOUBLED_TOGGLE:
+		return "doubled_toggle";
+	default:
+		return "none";
+	}
+}
+
+static string UnterminatedQuoteValue(CSVUnterminatedQuote mode) {
+	switch (mode) {
+	case CSVUnterminatedQuote::VALUE:
+		return "value";
+	case CSVUnterminatedQuote::NULL_AT_LINE_END:
+		return "null_at_line_end";
+	default:
+		return "error";
+	}
+}
+
+static string NewLineTerminatorsValue(idx_t terminators) {
+	vector<string> breaks;
+	if (terminators & 1) {
+		breaks.push_back("'\\n'");
+	}
+	if (terminators & 2) {
+		breaks.push_back("'\\r'");
+	}
+	if (terminators & 4) {
+		breaks.push_back("'\\r\\n'");
+	}
+	return "[" + StringUtil::Join(breaks, ", ") + "]";
+}
+
 string CSVReaderOptions::ToString(const String &current_file_path) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
@@ -562,6 +611,26 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += "sample_size = " + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
 	error += "ignore_errors = " + ignore_errors.FormatValue() + "\n  ";
+	// the parsing rule options print when the user set them
+	auto &sm_options = dialect_options.state_machine_options;
+	if (sm_options.escape_mode.IsSetByUser()) {
+		error += "escape_mode = '" + EscapeModeValue(sm_options.escape_mode.GetValue()) + "'\n  ";
+	}
+	if (sm_options.embedded_quotes.IsSetByUser()) {
+		error += "embedded_quotes = '" + EmbeddedQuotesValue(sm_options.embedded_quotes.GetValue()) + "'\n  ";
+	}
+	if (sm_options.unterminated_quote.IsSetByUser()) {
+		error += "unterminated_quote = '" + UnterminatedQuoteValue(sm_options.unterminated_quote.GetValue()) + "'\n  ";
+	}
+	if (sm_options.new_line_terminators.IsSetByUser()) {
+		error += "new_line = " + NewLineTerminatorsValue(sm_options.new_line_terminators.GetValue()) + "\n  ";
+	}
+	if (sm_options.allow_unescaped_quotes.IsSetByUser()) {
+		error += "allow_unescaped_quotes = " + sm_options.allow_unescaped_quotes.FormatValue() + "\n  ";
+	}
+	if (ignore_extra_columns.IsSetByUser()) {
+		error += "ignore_extra_columns = " + ignore_extra_columns.FormatValue() + "\n  ";
+	}
 	// all_varchar
 	error += "all_varchar = " + std::to_string(all_varchar) + "\n";
 

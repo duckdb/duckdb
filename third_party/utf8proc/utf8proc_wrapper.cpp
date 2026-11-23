@@ -421,6 +421,11 @@ bool Utf8Proc::TryUTF8ToCodepoint(const char *u_input, int &sz, const size_t len
 		// a surrogate is not a valid code point
 		return false;
 	}
+	static constexpr int32_t MIN_CODEPOINT_FOR_LENGTH[5] {0, 0, 0x80, 0x800, 0x10000};
+	if (result < MIN_CODEPOINT_FOR_LENGTH[needed] || result > 0x10FFFF) {
+		// an overlong encoding or a code point past the Unicode range
+		return false;
+	}
 	sz = static_cast<int>(needed);
 	codepoint = result;
 	return true;

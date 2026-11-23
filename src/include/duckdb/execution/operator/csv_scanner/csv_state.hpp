@@ -35,7 +35,7 @@ enum class CSVState : uint8_t {
 	UNQUOTED_ESCAPE = 16,  //! State when encountering an escape character (e.g., \) in an unquoted field
 	ESCAPED_RETURN = 17, //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
 	MAYBE_QUOTED = 18,   //! We are potentially in a quoted value or the end of an unquoted value
-	FIELD_START = 19,    //! At the start of a field after an inert escape under escape_mode 'quote_and_escape'
+	FIELD_START = 19,    //! At the start of a field after an inert escape under escape_mode 'quotes_only'
 	FIELD_QUOTE = 20,    //! A quote inside an unquoted field, under doubled_quotes a doubled quote is one quote
 	//! The NO_FIELD and IN_FIELD states track the embedded quote field flag, flipped by every quote event
 	STANDARD_NO_FIELD = 21, //! Outside quotes with the field flag off, so escapes are inert and a quote opens quotes

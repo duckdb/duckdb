@@ -43,7 +43,7 @@ struct CSVStateMachineOptions {
 	CSVOption<CSVUnterminatedQuote> unterminated_quote = CSVUnterminatedQuote::ERROR;
 	//! The record terminators the reading accepts, as bits for \n, \r and \r\n, with zero meaning new_line alone
 	CSVOption<idx_t> new_line_terminators = 0;
-	//! A quote that does not close its value is data rather than an error
+	//! Content after a closing quote is tolerated rather than an error
 	CSVOption<bool> allow_unescaped_quotes = false;
 
 	//! Whether the escape works outside quoted values

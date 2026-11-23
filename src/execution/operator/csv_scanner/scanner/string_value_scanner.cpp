@@ -603,6 +603,10 @@ void StringValueResult::AddUnterminatedQuoteNull() {
 	if (cur_col_id >= number_of_columns) {
 		if (tolerate_extra_columns) {
 			used_unstrictness = true;
+		} else {
+			// the field left open holds content beyond the declared columns
+			current_errors.Insert(TOO_MANY_COLUMNS, cur_col_id, chunk_col_id, last_position);
+			cur_col_id++;
 		}
 		return;
 	}
@@ -646,8 +650,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				// normalize the raw bytes first and convert the result into the column's type as any plain value
 				auto value = StringValueScanner::ResolveEmbeddedQuotes(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    sm_opts.delimiter.GetValue(), sm_opts.DoubledQuotes(), result.units_before_field,
-				    result.value_scratch);
+				    sm_opts.delimiter.GetValue(), sm_opts.escape_mode.GetValue(), sm_opts.DoubledQuotes(),
+				    result.units_before_field, result.value_scratch);
 				result.AddValueToVector(value.GetData(), value.GetSize(), true);
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
@@ -1530,8 +1534,8 @@ static bool IsUnicodeWhitespace(int32_t code_point) {
 }
 
 string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-                                                   const string &separator, bool doubled_quotes, idx_t units_before,
-                                                   vector<char> &scratch) {
+                                                   const string &separator, CSVEscapeMode escape_mode,
+                                                   bool doubled_quotes, idx_t units_before, vector<char> &scratch) {
 	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
 	auto prev_is_separator = [&](idx_t pos) {
 		return pos >= separator.size() &&
@@ -1557,23 +1561,34 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 	bool in_quotes = false;
 	bool in_field = false;
 	bool all_whitespace = true;
+	bool just_escaped = false;
 	for (idx_t pos = 0; pos < size;) {
 		const char c = str_ptr[pos];
 		const bool has_next = pos + 1 < size;
-		if (c == escape) {
-			if ((in_quotes || in_field) && has_next && (str_ptr[pos + 1] == quote || str_ptr[pos + 1] == escape)) {
-				// an escaped quote or escape character, while any other escape is consumed without effect
-				result_ptr[result_pos++] = str_ptr[pos + 1];
-				all_whitespace = false;
-				add_units(2);
-				pos += 2;
+		if (c == escape && escape != '\0' && !just_escaped) {
+			if (escape_mode == CSVEscapeMode::QUOTES_ONLY) {
+				if ((in_quotes || in_field) && has_next && (str_ptr[pos + 1] == quote || str_ptr[pos + 1] == escape)) {
+					// an escaped quote or escape character, while any other escape is consumed without effect
+					result_ptr[result_pos++] = str_ptr[pos + 1];
+					all_whitespace = false;
+					add_units(2);
+					pos += 2;
+					continue;
+				}
+				add_units(1);
+				pos++;
 				continue;
 			}
-			add_units(1);
-			pos++;
-			continue;
+			if (escape_mode == CSVEscapeMode::ANYWHERE || in_quotes) {
+				// the escape consumes itself and keeps the next character as plain content
+				just_escaped = true;
+				add_units(1);
+				pos++;
+				continue;
+			}
+			// outside quotes the quoted rule reads the escape as plain content
 		}
-		if (c == quote) {
+		if (c == quote && !just_escaped) {
 			if (doubled_quotes && (in_quotes || in_field) && has_next && str_ptr[pos + 1] == quote) {
 				// a doubled quote is one quote
 				result_ptr[result_pos++] = quote;
@@ -1600,6 +1615,7 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 			continue;
 		}
 		// a plain character sets the field flag and counts one UTF-16 unit, or two beyond the basic plane
+		just_escaped = false;
 		int decoded_len = 1;
 		int32_t code_point = -1;
 		if (!Utf8Proc::TryUTF8ToCodepoint(str_ptr + pos, decoded_len, size - pos, code_point)) {
@@ -1827,7 +1843,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 						value = ResolveEmbeddedQuotes(
 						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
 						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
-						    sm_options.DoubledQuotes(), result.units_before_field, result.value_scratch);
+						    sm_options.escape_mode.GetValue(), sm_options.DoubledQuotes(), result.units_before_field,
+						    result.value_scratch);
 						removed_extra_delimiter_bytes = true;
 					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns

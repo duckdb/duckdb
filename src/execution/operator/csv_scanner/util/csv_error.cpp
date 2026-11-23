@@ -388,7 +388,7 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 		how_to_fix_it << "* Accept every line break as a record boundary (new_line=['\\n', '\\r', '\\r\\n'])" << '\n';
 	}
 	if (!options.dialect_options.state_machine_options.allow_unescaped_quotes.IsSetByUser()) {
-		how_to_fix_it << "* Accept quotes that do not close their value as data (allow_unescaped_quotes=true)" << '\n';
+		how_to_fix_it << "* Tolerate content after a closing quote (allow_unescaped_quotes=true)" << '\n';
 	}
 	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
 	                options, how_to_fix_it.str(), current_path);

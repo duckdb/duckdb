@@ -554,12 +554,14 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (quote_in_field) {
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
 		// a space is field content, as in opencsv, so a quote after it is a quote in a field
-		const vector<uint8_t> space_states {
-		    static_cast<uint8_t>(CSVState::DELIMITER),        static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
-		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN),  static_cast<uint8_t>(CSVState::NOT_SET),
-		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE), static_cast<uint8_t>(CSVState::FIELD_START)};
-		for (const auto state : space_states) {
-			transition_array[' '][state] = CSVState::STANDARD;
+		if (delimiter_first_byte != ' ') {
+			const vector<uint8_t> space_states {
+			    static_cast<uint8_t>(CSVState::DELIMITER),        static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+			    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN),  static_cast<uint8_t>(CSVState::NOT_SET),
+			    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE), static_cast<uint8_t>(CSVState::FIELD_START)};
+			for (const auto state : space_states) {
+				transition_array[' '][state] = CSVState::STANDARD;
+			}
 		}
 		transition_array[quote][static_cast<uint8_t>(CSVState::STANDARD)] = CSVState::FIELD_QUOTE;
 		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::STANDARD);
@@ -589,7 +591,13 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (enable_unquoted_escape) {
 			transition_array[escape][field_quote] = CSVState::ESCAPE_NO_FIELD;
 		}
-		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		if (state_machine_options.LineRecords()) {
+			end_record_on_line_break(CSVState::FIELD_QUOTE);
+		} else {
+			// without line records the toggled quote reads across line breaks like a quoted value
+			transition_array[static_cast<uint8_t>('\n')][field_quote] = CSVState::QUOTED_NEW_LINE;
+			transition_array[static_cast<uint8_t>('\r')][field_quote] = CSVState::QUOTED_NEW_LINE;
+		}
 		// after a close with the field flag off an escape is inert and a quote is a pair staying inside quotes
 		InitializeTransitionArray(transition_array, CSVState::UNQUOTED, CSVState::STANDARD);
 		transition_array[quote][unquoted] = doubled ? CSVState::QUOTED_NO_FIELD : CSVState::QUOTED;

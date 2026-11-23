@@ -206,7 +206,7 @@ public:
 	const bool ignore_errors;
 	//! Fields beyond the last column are ignored rather than an error
 	const bool tolerate_extra_columns;
-	//! A quote that does not close its value is data rather than an error
+	//! Content after a closing quote is tolerated rather than an error
 	const bool allow_unescaped_quotes;
 	//! A quote that is never closed reads as a value rather than an error
 	const bool allow_unterminated_quotes;
@@ -458,9 +458,10 @@ public:
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
+	//! The returned value borrows the scratch buffer until the next call
 	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-	                                      const string &separator, bool doubled_quotes, idx_t units_before,
-	                                      vector<char> &scratch);
+	                                      const string &separator, CSVEscapeMode escape_mode, bool doubled_quotes,
+	                                      idx_t units_before, vector<char> &scratch);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
