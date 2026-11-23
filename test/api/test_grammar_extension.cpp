@@ -947,6 +947,36 @@ static void ActivateGrammarExtensionTestSyntax(Connection &con) {
 	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['extension_test_value', 'extension_test_atom']"));
 }
 
+TEST_CASE("Grammar changes expose their flags and whether they depend on code", "[api][grammar_extension]") {
+	auto cursor = [](const PEGExpression &) {
+		return true;
+	};
+	auto matcher = [](const PEGKeywordHelper &) {
+		return make_uniq<GrammarExtensionTestMatcher>();
+	};
+
+	// changes that are data: their type, rule name and definition describe them
+	auto add_rule =
+	    GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'", StartGrammarExtensionTestValueTransform, true);
+	REQUIRE_FALSE(add_rule.HasCode());
+	REQUIRE(add_rule.SuppressSuggestions());
+	REQUIRE_FALSE(add_rule.Collapsible());
+	auto set_transform = GrammarChange::SetTransformProcess("GrammarExtensionTestValue",
+	                                                        StartGrammarExtensionTestValueTransform, true, false);
+	REQUIRE_FALSE(set_transform.HasCode());
+	REQUIRE(set_transform.Collapsible());
+	REQUIRE_FALSE(set_transform.SuppressSuggestions());
+	REQUIRE_FALSE(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'").HasCode());
+	REQUIRE_FALSE(GrammarChange::PrependChoice("UnreservedKeyword", "'ANSWER'").HasCode());
+
+	// changes that depend on a function
+	REQUIRE(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'", cursor).HasCode());
+	REQUIRE(GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::RemoveChoice("SelectAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::ReplaceChoice("SelectAtom", "GrammarExtensionTestAtom", cursor).HasCode());
+	REQUIRE(GrammarChange::AddTerminalRuleOverride("GrammarExtensionTestValue", matcher).HasCode());
+}
+
 TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);

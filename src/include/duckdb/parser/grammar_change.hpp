@@ -56,6 +56,19 @@ public:
 	const string &Definition() const {
 		return definition;
 	}
+	//! See ParsedGrammar::SetTransformProcess for the meaning of collapsible
+	bool Collapsible() const {
+		return collapsible;
+	}
+	//! See ParsedGrammar::AddRule for the meaning of suppress_suggestions
+	bool SuppressSuggestions() const {
+		return suppress_suggestions;
+	}
+	//! Whether the change depends on a function (a cursor lookup or a terminal rule matcher), and so cannot be
+	//! rebuilt from its type, rule name and definition alone
+	bool HasCode() const {
+		return find_cursor || matcher_factory;
+	}
 
 public:
 	void Apply(ParsedGrammar &grammar) const;
