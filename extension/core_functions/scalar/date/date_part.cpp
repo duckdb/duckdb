@@ -1364,6 +1364,11 @@ int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
 }
 
 template <>
+int64_t DatePart::EpochMillisOperator::Operation(timestamp_ns_t input) {
+	return Operation<timestamp_t, int64_t>(Truncate(input));
+}
+
+template <>
 int64_t DatePart::EpochMicrosecondsOperator::Operation(dtime_t input) {
 	return input.value;
 }
@@ -1392,6 +1397,11 @@ int64_t DatePart::EpochMillisOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::EpochMillisOperator::Operation(dtime_t input) {
 	return input.value / Interval::MICROS_PER_MSEC;
+}
+
+template <>
+int64_t DatePart::EpochMillisOperator::Operation(dtime_ns_t input) {
+	return Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
