@@ -6,15 +6,15 @@
 statement ok
 COPY (SELECT * FROM (VALUES ('1,\'), ('2,b'), ('3,c')) t(line)) TO '{TEST_DIR}/dialect_rows.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
-# escape_mode 'all' applies the escape to the line break and joins the second row to the first
+# unquoted_escapes applies the escape to the line break and joins the second row to the first
 query I
-SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='all', ignore_extra_columns=true, null_padding=true, header=false, auto_detect=false);
+SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, ignore_extra_columns=true, null_padding=true, header=false, auto_detect=false);
 ----
 2
 
 # the inert escape leaves an empty field, read as an empty string through the empty NULL string list
 query IT
-SELECT id, concat('<', val, '>') FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT id, concat('<', val, '>') FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 1	<>
 2	<b>
@@ -36,7 +36,7 @@ COPY (SELECT * FROM (VALUES
 # an escaped escape or quote is kept (3, 4) and a trailing escape drops with missing fields NULL (5)
 # leading escapes are inert (6) and a quote after one opens a quoted field with the quote kept as a literal (7)
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, nullstr=[], null_padding=true, header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, nullstr=[], null_padding=true, header=false, auto_detect=false) ORDER BY id;
 ----
 1	a	7
 2	ax	8
@@ -51,7 +51,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('\"123"'), ('456')) t(line)) TO '{TEST_DIR}/dialect_typed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query I
-SELECT * FROM read_csv('{TEST_DIR}/dialect_typed.csv', columns={'v': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY v;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_typed.csv', columns={'v': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY v;
 ----
 123
 456
@@ -61,7 +61,7 @@ statement ok
 COPY (SELECT 'a,\' AS line) TO '{TEST_DIR}/dialect_sniff.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query T
-SELECT * FROM read_csv('{TEST_DIR}/dialect_sniff.csv', columns={'a': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false);
+SELECT * FROM read_csv('{TEST_DIR}/dialect_sniff.csv', columns={'a': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false);
 ----
 a
 
@@ -77,7 +77,7 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': '
 
 # each line is its own record and a field left open by a quote reads as NULL
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': 'VARCHAR', 'val': 'VARCHAR', 'n': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, nullstr=[], null_padding=true, header=false, auto_detect=false) ORDER BY id NULLS FIRST;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': 'VARCHAR', 'val': 'VARCHAR', 'n': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, nullstr=[], null_padding=true, header=false, auto_detect=false) ORDER BY id NULLS FIRST;
 ----
 NULL	NULL	NULL
 1	NULL	NULL
@@ -88,14 +88,14 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,"abc'), ('2,ok')) t(line)) TO '{TEST_DIR}/dialect_last.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query IT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 1	NULL
 2	ok
 
 # a projection that skips the unterminated field reads without an error
 query I
-SELECT id FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT id FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 1
 2
@@ -105,7 +105,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('3,"q uoted",9'), ('4,"a""b",10')) t(line)) TO '{TEST_DIR}/dialect_closed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false) ORDER BY id;
 ----
 3	q uoted	9
 4	a"b	10
@@ -115,7 +115,7 @@ statement ok
 COPY (SELECT '1,"a' || chr(13) || chr(10) || '2,ok' AS line) TO '{TEST_DIR}/dialect_crlf.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query IT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_crlf.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\r\n', header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_crlf.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\r\n', header=false, auto_detect=false) ORDER BY id;
 ----
 1	NULL
 2	ok
@@ -125,7 +125,7 @@ statement ok
 CREATE TABLE dialect_rows (id INTEGER, val VARCHAR);
 
 statement ok
-COPY dialect_rows FROM '{TEST_DIR}/dialect_rows.csv' (DELIM ',', QUOTE '"', ESCAPE '\', ESCAPE_MODE 'quote_and_escape', QUOTE_MODE 'lines', EMBEDDED_QUOTE 'toggle', DOUBLED_QUOTES true, MIXED_LINE_BREAKS true, IGNORE_EXTRA_COLUMNS true, NULL_PADDING true, NULLSTR [], HEADER false);
+COPY dialect_rows FROM '{TEST_DIR}/dialect_rows.csv' (DELIM ',', QUOTE '"', ESCAPE '\', UNQUOTED_ESCAPES true, ESCAPE_QUOTES_ONLY true, LINE_RECORDS true, EMBEDDED_QUOTES true, DOUBLED_QUOTES true, MIXED_LINE_BREAKS true, IGNORE_EXTRA_COLUMNS true, NULL_PADDING true, NULLSTR [], HEADER false);
 
 query IT
 SELECT id, concat('<', val, '>') FROM dialect_rows ORDER BY id;
@@ -139,7 +139,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('5,"a""b",11'), ('6,"a\"b""c",12'), ('7,"a""",13')) t(line)) TO '{TEST_DIR}/dialect_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 5	a"b	11
 6	a"b"c	12
@@ -150,7 +150,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('8,a""b,14'), ('9,a"b,15'), ('10,a""b""c,16'), ('11,a"",17')) t(line)) TO '{TEST_DIR}/dialect_field_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_field_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 8	a"b	14
 9	NULL	NULL
@@ -162,7 +162,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,a'), ('2,b,8')) t(line)) TO '{TEST_DIR}/dialect_padding.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false) ORDER BY id;
 ----
 1	a	NULL
 2	b	8
@@ -172,7 +172,7 @@ statement ok
 COPY (SELECT '1,a' || chr(0) || 'b,7' AS line) TO '{TEST_DIR}/dialect_nul.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query III
-SELECT id, length(val), n FROM read_csv('{TEST_DIR}/dialect_nul.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false);
+SELECT id, length(val), n FROM read_csv('{TEST_DIR}/dialect_nul.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false);
 ----
 1	3	7
 
@@ -181,7 +181,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,a,7'), (''), ('2,b,8')) t(line)) TO '{TEST_DIR}/dialect_empty_line.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query I
-SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false);
+SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], escape='\', header=false, auto_detect=false);
 ----
 2
 
@@ -190,7 +190,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20'), ('30,filler one,98'), ('31,filler two,99')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 12	a"b"c	18
 13	a"b	19
@@ -200,7 +200,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGE
 
 # the same file read over tiny buffers, so the toggled fields cross buffer boundaries
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, buffer_size=61) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, buffer_size=61) ORDER BY id;
 ----
 12	a"b"c	18
 13	a"b	19
@@ -213,7 +213,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('15,q"r,21'), ('16,ok,22'), ('17,z"')) t(line)) TO '{TEST_DIR}/dialect_toggled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 15	NULL	NULL
 16	ok	22
@@ -224,7 +224,7 @@ statement ok
 COPY (SELECT '18,a"b\"c"d,24' AS line) TO '{TEST_DIR}/dialect_toggled_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled_escape.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
+SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled_escape.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
 ----
 18	a"b"c"d	24
 
@@ -233,7 +233,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('a"b"c,30,1'), ('x,a"b"c,2'), (',x"y"z,28')) t(line)) TO '{TEST_DIR}/dialect_gate.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_gate.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY c;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_gate.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY c;
 ----
 ab"c	30	1
 x	a"b"c	2
@@ -244,7 +244,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('20,  "ws",26'), ('21,a"b",27')) t(line)) TO '{TEST_DIR}/dialect_ws.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_ws.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_ws.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 20	ws	26
 21	a"b	27
@@ -254,7 +254,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('22,b ""\"x,29'), ('23,ok,31')) t(line)) TO '{TEST_DIR}/dialect_field_flag.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY id;
 ----
 22	NULL	NULL
 23	ok	31
@@ -264,7 +264,7 @@ statement ok
 COPY (SELECT '24,"a"""\"x,32' AS line) TO '{TEST_DIR}/dialect_field_flag_on.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag_on.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag_on.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
 ----
 24	a"""x	32
 
@@ -273,13 +273,13 @@ statement ok
 COPY (SELECT chr(65536) || '"x"y,5,1' AS line) TO '{TEST_DIR}/dialect_units.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT a = chr(65536) || 'x"y', b, c FROM read_csv('{TEST_DIR}/dialect_units.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
+SELECT a = chr(65536) || 'x"y', b, c FROM read_csv('{TEST_DIR}/dialect_units.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
 ----
 true	5	1
 
 # a file that ends inside an open quote without a final line break reads that field as NULL
 query ITI
-SELECT * FROM read_csv('data/csv/opencsv_unclosed_eof.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
+SELECT * FROM read_csv('data/csv/opencsv_unclosed_eof.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
 ----
 1	ok	2
 3	NULL	NULL
@@ -289,7 +289,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,2,"x'), ('3,4'), ('5,6,extra')) t(line)) TO '{TEST_DIR}/dialect_extra.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query II
-SELECT * FROM read_csv('{TEST_DIR}/dialect_extra.csv', columns={'a': 'INTEGER', 'b': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_extra.csv', columns={'a': 'INTEGER', 'b': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
 ----
 1	2
 3	4
@@ -300,7 +300,7 @@ statement ok
 COPY (SELECT '1,"x' || chr(13) || 'y",7' || chr(13) || chr(10) || '2,ok,8' || chr(13) || chr(10) AS line) TO '{TEST_DIR}/dialect_lone_cr.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_lone_cr.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\r\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_lone_cr.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\r\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
 ----
 NULL	NULL	NULL
 1	NULL	NULL
@@ -311,7 +311,7 @@ statement ok
 COPY (SELECT '1,"ab' || chr(13) || 'cd"' || chr(10) || '2,x' AS line) TO '{TEST_DIR}/dialect_cr_data.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_cr_data.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_cr_data.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], new_line='\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
 ----
 NULL	NULL
 1	NULL
@@ -322,7 +322,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,"ab\'), ('3,ok')) t(line)) TO '{TEST_DIR}/dialect_escape_eol.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query IT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_escape_eol.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_escape_eol.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
 ----
 1	NULL
 3	ok
@@ -332,7 +332,7 @@ statement ok
 COPY (SELECT '25,"""",33' AS line) TO '{TEST_DIR}/dialect_pure_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_pure_doubled.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
+SELECT * FROM read_csv('{TEST_DIR}/dialect_pure_doubled.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
 ----
 25	"	33
 
@@ -341,7 +341,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('¦a"b"c'), ('a¦"x¦"y¦b')) t(line)) TO '{TEST_DIR}/dialect_wide_delim.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_delim.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim='¦', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_delim.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim='¦', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false) ORDER BY a;
 ----
 (empty)	ab"c	NULL
 a	x¦y	b
@@ -354,7 +354,7 @@ statement ok
 COPY (SELECT CASE WHEN i % 7 = 0 THEN i || ',"open ' || i ELSE i || ',"clo\"sed' || i || '""x",' || i END AS line FROM range(2000) t(i)) TO '{TEST_DIR}/dialect_stress.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query IIII
-SELECT count(*), count(b), count(*) FILTER (b = 'clo"sed' || a || '"x'), count(c) FROM read_csv('{TEST_DIR}/dialect_stress.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, buffer_size=701, max_line_size=500);
+SELECT count(*), count(b), count(*) FILTER (b = 'clo"sed' || a || '"x'), count(c) FROM read_csv('{TEST_DIR}/dialect_stress.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, buffer_size=701, max_line_size=500);
 ----
 2000	1714	1714	1714
 
@@ -365,7 +365,7 @@ COPY (SELECT * FROM (VALUES ('"1"23'), ('12'), ('456')) t(line)) TO '{TEST_DIR}/
 foreach bsz 10 11 12 2000000
 
 query I
-SELECT * FROM read_csv('{TEST_DIR}/dialect_typed_embedded.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size={bsz}, max_line_size=9) ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_typed_embedded.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size={bsz}, max_line_size=9) ORDER BY a;
 ----
 12
 123
@@ -378,7 +378,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('12'), ('4x5'), ('456'), ('789')) t(line)) TO '{TEST_DIR}/dialect_span_error.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query I
-SELECT * FROM read_csv('{TEST_DIR}/dialect_span_error.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, ignore_errors=true, buffer_size=8, max_line_size=7) ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_span_error.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, ignore_errors=true, buffer_size=8, max_line_size=7) ORDER BY a;
 ----
 12
 456
@@ -389,7 +389,7 @@ statement ok
 COPY (SELECT * FROM (VALUES (repeat('x', 58)), ('ab"x"¦z')) t(line)) TO '{TEST_DIR}/dialect_wide_boundary.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
 ----
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	NULL
 abx	z
@@ -398,7 +398,7 @@ statement ok
 COPY (SELECT * FROM (VALUES (repeat('x', 60)), ('¦a"b"c')) t(line)) TO '{TEST_DIR}/dialect_wide_boundary2.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary2.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary2.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
 ----
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	NULL
 (empty)	ab"c
@@ -408,7 +408,7 @@ statement ok
 COPY (SELECT * FROM (VALUES ('1,"N\ULL"'), ('2,"NULL"'), ('3,NULL')) t(line)) TO '{TEST_DIR}/dialect_nullstr.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/dialect_nullstr.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr='NULL', allow_quoted_nulls=false, header=false, auto_detect=false) ORDER BY a;
+SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/dialect_nullstr.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr='NULL', allow_quoted_nulls=false, header=false, auto_detect=false) ORDER BY a;
 ----
 1	NULL	false
 2	NULL	false
@@ -416,7 +416,7 @@ SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/dialect_nullstr.csv', columns={
 
 # an explicit empty NULL string means an empty field is NULL
 query II
-SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, escape='\', nullstr='', header=false, auto_detect=false) ORDER BY a;
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, escape='\', nullstr='', header=false, auto_detect=false) ORDER BY a;
 ----
 1	false
 2	false
@@ -426,7 +426,7 @@ statement ok
 COPY (SELECT 'xx,' || chr(8195) || '"a",z' AS line) TO '{TEST_DIR}/dialect_uni_ws.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_uni_ws.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote_and_escape', quote_mode='lines', embedded_quote='toggle', doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
+SELECT * FROM read_csv('{TEST_DIR}/dialect_uni_ws.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', unquoted_escapes=true, escape_quotes_only=true, line_records=true, embedded_quotes=true, doubled_quotes=true, mixed_line_breaks=true, ignore_extra_columns=true, null_padding=true, nullstr=[], header=false, auto_detect=false);
 ----
 xx	a	z
 

@@ -78,7 +78,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr.csv', delim=',', quo
 
 # file, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q<CR>q	x	8
@@ -91,7 +91,7 @@ SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(re
 
 # file, lenient strict count
 statement error
-SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 Invalid Input Error: CSV Error on Line: 5
 
@@ -201,7 +201,7 @@ SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr_pipe2.csv', delim='|
 
 # file_pipe2, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q<CR>q	x	8
@@ -214,7 +214,7 @@ SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(re
 
 # file_pipe2, lenient strict count
 statement error
-SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr_pipe2.csv', delim='||', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 Invalid Input Error: CSV Error on Line: 5
 
@@ -296,7 +296,7 @@ Invalid Input Error: The CSV Parser state machine reached an invalid state.
 
 # file_lf, lenient, selecting *
 query IIII
-SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr_lf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
+SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(replace(c, chr(10), '<LF>'), chr(13), '<CR>') AS c, d FROM read_csv('{DATA_DIR}/csv/block_scan_cr_lf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true) ORDER BY ALL
 ----
 1	ann	x	7
 2	q<CR>q	x	8
@@ -310,7 +310,7 @@ SELECT a, replace(replace(b, chr(10), '<LF>'), chr(13), '<CR>') AS b, replace(re
 
 # file_lf, lenient strict count
 statement error
-SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr_lf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/block_scan_cr_lf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r', auto_detect=false, columns={'a':'INTEGER','b':'VARCHAR','c':'VARCHAR','d':'INTEGER'}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 Invalid Input Error: CSV Error on Line: 5
 

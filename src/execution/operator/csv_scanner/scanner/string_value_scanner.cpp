@@ -294,9 +294,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 
 	if (((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
 		// an escaped null string like \N applies when the escape works outside quoted values
-		const bool check_unquoted_escaped_null =
-		    state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::ALL && escaped &&
-		    !policy_quoted && size == 1;
+		const bool check_unquoted_escaped_null = state_machine.state_machine_options.unquoted_escapes.GetValue() &&
+		                                         !state_machine.state_machine_options.escape_quotes_only.GetValue() &&
+		                                         escaped && !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
@@ -640,11 +640,12 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			const auto &sm_opts = result.state_machine.dialect_options.state_machine_options;
-			if (sm_opts.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
+			if (sm_opts.embedded_quotes.GetValue()) {
 				// normalize the raw bytes first and convert the result into the column's type as any plain value
 				auto value = StringValueScanner::ResolveEmbeddedQuotes(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    sm_opts.delimiter.GetValue(), result.units_before_field, result.value_scratch);
+				    sm_opts.delimiter.GetValue(), sm_opts.doubled_quotes.GetValue(), result.units_before_field,
+				    result.value_scratch);
 				result.AddValueToVector(value.GetData(), value.GetSize(), true);
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
@@ -664,8 +665,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    !result.allow_unescaped_quotes,
-				    !result.quoted && sm_opts.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
+				    !result.allow_unescaped_quotes, !result.quoted && sm_opts.escape_quotes_only.GetValue(),
 				    sm_opts.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -1547,7 +1547,8 @@ static bool IsUnicodeWhitespace(int32_t code_point) {
 }
 
 string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-                                                   const string &separator, idx_t units_before, Vector &vector) {
+                                                   const string &separator, bool doubled_quotes, idx_t units_before,
+                                                   Vector &vector) {
 	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
 	auto prev_is_separator = [&](idx_t pos) {
 		return pos >= separator.size() &&
@@ -1583,7 +1584,7 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 			continue;
 		}
 		if (c == quote) {
-			if ((in_quotes || in_field) && has_next && str_ptr[pos + 1] == quote) {
+			if (doubled_quotes && (in_quotes || in_field) && has_next && str_ptr[pos + 1] == quote) {
 				// a doubled quote is one quote
 				result_ptr[result_pos++] = quote;
 				all_whitespace = false;
@@ -1826,12 +1827,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
-					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
+					if (sm_options.embedded_quotes.GetValue()) {
 						// normalize the raw bytes without the trailing delimiter prefix, through the scratch heap
 						value = ResolveEmbeddedQuotes(
 						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
 						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
-						    result.units_before_field, result.value_scratch);
+						    sm_options.doubled_quotes.GetValue(), result.units_before_field, result.value_scratch);
 						removed_extra_delimiter_bytes = true;
 					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
@@ -1852,11 +1853,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 						result.chunk_col_id++;
 						cast_errored = true;
 					} else {
-						value = RemoveEscape(
-						    over_buffer_string.c_str(), over_buffer_string.size(), sm_options.escape.GetValue(),
-						    sm_options.quote.GetValue(), !result.allow_unescaped_quotes,
-						    sm_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
-						    sm_options.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
+						value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
+						                     !result.allow_unescaped_quotes, sm_options.escape_quotes_only.GetValue(),
+						                     sm_options.doubled_quotes.GetValue(),
+						                     result.parse_chunk.data[result.chunk_col_id]);
 					}
 				}
 			}
@@ -2166,8 +2167,8 @@ void StringValueScanner::SetStart() {
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
 		// the boundary search uses the strict reading rules unless set otherwise
-		if (!state_options.escape_mode.IsSetByUser()) {
-			state_options.escape_mode = CSVEscapeMode::QUOTED_ONLY;
+		if (!state_options.unquoted_escapes.IsSetByUser()) {
+			state_options.unquoted_escapes = false;
 		}
 		if (!state_options.mixed_line_breaks.IsSetByUser()) {
 			state_options.mixed_line_breaks = false;

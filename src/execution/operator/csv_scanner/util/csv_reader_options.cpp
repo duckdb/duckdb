@@ -183,66 +183,6 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
-string CSVReaderOptions::GetEscapeMode() const {
-	return dialect_options.state_machine_options.escape_mode.FormatValue();
-}
-
-void CSVReaderOptions::SetEscapeMode(const string &input) {
-	auto mode = StringUtil::Lower(input);
-	auto &option = dialect_options.state_machine_options.escape_mode;
-	if (mode == "all") {
-		option.Set(CSVEscapeMode::ALL);
-	} else if (mode == "quote_and_escape") {
-		option.Set(CSVEscapeMode::QUOTE_AND_ESCAPE);
-	} else if (mode == "quoted_only") {
-		option.Set(CSVEscapeMode::QUOTED_ONLY);
-	} else {
-		throw BinderException("'%s' is not accepted as an escape_mode. The option must be one of 'quoted_only' (the "
-		                      "default when STRICT_MODE is on), 'all' (the default when STRICT_MODE is off, the escape "
-		                      "escapes any character after it) or 'quote_and_escape' (the escape only escapes the "
-		                      "quote and escape characters, as in opencsv)",
-		                      input);
-	}
-}
-
-string CSVReaderOptions::GetQuoteMode() const {
-	return dialect_options.state_machine_options.quote_mode.FormatValue();
-}
-
-void CSVReaderOptions::SetQuoteMode(const string &input) {
-	auto mode = StringUtil::Lower(input);
-	auto &option = dialect_options.state_machine_options.quote_mode;
-	if (mode == "standard") {
-		option.Set(CSVQuoteMode::STANDARD);
-	} else if (mode == "lines") {
-		option.Set(CSVQuoteMode::LINES);
-	} else {
-		throw BinderException("'%s' is not accepted as a quote_mode. The option must be 'standard' (a quoted value "
-		                      "continues across line breaks) or 'lines' (a line break ends the record even inside "
-		                      "quotes, as line readers such as OpenCSVSerde do)",
-		                      input);
-	}
-}
-
-string CSVReaderOptions::GetEmbeddedQuote() const {
-	return dialect_options.state_machine_options.embedded_quote.FormatValue();
-}
-
-void CSVReaderOptions::SetEmbeddedQuote(const string &input) {
-	auto mode = StringUtil::Lower(input);
-	auto &option = dialect_options.state_machine_options.embedded_quote;
-	if (mode == "data") {
-		option.Set(CSVEmbeddedQuote::DATA);
-	} else if (mode == "toggle") {
-		option.Set(CSVEmbeddedQuote::TOGGLE);
-	} else {
-		throw BinderException("'%s' is not accepted as an embedded_quote. The option must be 'data' (a quote in the "
-		                      "middle of a field is a plain byte) or 'toggle' (the quote toggles the quote state and "
-		                      "may stay as a literal, following opencsv's embedded quote rule)",
-		                      input);
-	}
-}
-
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -392,12 +332,14 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
-	} else if (loption == "escape_mode") {
-		SetEscapeMode(ParseString(value, loption));
-	} else if (loption == "quote_mode") {
-		SetQuoteMode(ParseString(value, loption));
-	} else if (loption == "embedded_quote") {
-		SetEmbeddedQuote(ParseString(value, loption));
+	} else if (loption == "unquoted_escapes") {
+		dialect_options.state_machine_options.unquoted_escapes.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "escape_quotes_only") {
+		dialect_options.state_machine_options.escape_quotes_only.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "line_records") {
+		dialect_options.state_machine_options.line_records.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "embedded_quotes") {
+		dialect_options.state_machine_options.embedded_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "doubled_quotes") {
 		dialect_options.state_machine_options.doubled_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "mixed_line_breaks") {
@@ -644,13 +586,11 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		const auto &state_machine_options = dialect_options.state_machine_options;
 		const auto quote = state_machine_options.quote.GetValue();
 		const auto escape = state_machine_options.escape.GetValue();
-		if (state_machine_options.escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE &&
-		    (escape == '\0' || escape == quote)) {
-			throw BinderException(
-			    "ESCAPE_MODE 'quote_and_escape' requires an ESCAPE character other than the QUOTE character");
+		if (state_machine_options.escape_quotes_only.GetValue() && (escape == '\0' || escape == quote)) {
+			throw BinderException("ESCAPE_QUOTES_ONLY requires an ESCAPE character other than the QUOTE character");
 		}
-		if (state_machine_options.embedded_quote == CSVEmbeddedQuote::TOGGLE && (quote == '\0' || quote == escape)) {
-			throw BinderException("EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character");
+		if (state_machine_options.embedded_quotes.GetValue() && (quote == '\0' || quote == escape)) {
+			throw BinderException("EMBEDDED_QUOTES requires a QUOTE character other than the ESCAPE character");
 		}
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.

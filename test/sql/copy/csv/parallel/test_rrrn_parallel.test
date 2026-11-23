@@ -36,12 +36,12 @@ SELECT
     (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
         auto_detect=false, header=true, delim=',',
         columns={'id':'BIGINT','val':'VARCHAR'},
-        escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
+        unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
         buffer_size=1024, parallel=true)) AS parallel_count,
     (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
         auto_detect=false, header=true, delim=',',
         columns={'id':'BIGINT','val':'VARCHAR'},
-        escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
+        unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
         buffer_size=1024, parallel=false)) AS sequential_count
 ----
 60	60
@@ -53,13 +53,13 @@ SELECT
     (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
         auto_detect=false, header=true, delim=',',
         columns={'id':'BIGINT','val':'VARCHAR'},
-        escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
+        unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
         buffer_size=1024, parallel=true)
      WHERE id = 40) AS id40_count,
     (SELECT COUNT(*) FROM read_csv('{TEST_DIR}/rrrn_test.csv',
         auto_detect=false, header=true, delim=',',
         columns={'id':'BIGINT','val':'VARCHAR'},
-        escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
+        unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
         buffer_size=1024, parallel=true)
      WHERE id = 39) AS id39_count
 ----
@@ -72,7 +72,7 @@ SELECT COUNT(*) FROM (
     FROM read_csv('{TEST_DIR}/rrrn_test.csv',
         auto_detect=false, header=true, delim=',',
         columns={'id':'BIGINT','val':'VARCHAR'},
-        escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
+        unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true,
         buffer_size=1024, parallel=true)
     GROUP BY id
     HAVING cnt > 1
@@ -91,6 +91,6 @@ COPY (
 query II
 SELECT count(*), count(DISTINCT id) FROM read_csv('{TEST_DIR}/rrrn_mid.csv',
     auto_detect=false, header=true, delim=',', columns={'id':'BIGINT','val':'VARCHAR'},
-    escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true, buffer_size=4096, max_line_size=2048, parallel=true)
+    unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, ignore_errors=true, buffer_size=4096, max_line_size=2048, parallel=true)
 ----
 90	90

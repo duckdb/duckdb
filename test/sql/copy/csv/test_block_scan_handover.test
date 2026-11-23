@@ -86,9 +86,9 @@ SELECT * FROM read_csv('{TEST_DIR}/handover.csv', delim=',', quote='"', escape='
 9	NULL	11
 10	x""y	12
 
-# quotes and spaces inside rows, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# quotes and spaces inside rows, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query III
-SELECT * FROM read_csv('{TEST_DIR}/handover.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) ORDER BY a::INT
+SELECT * FROM read_csv('{TEST_DIR}/handover.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) ORDER BY a::INT
 ----
 1	a"b	3
 2	quoted	4
@@ -107,9 +107,9 @@ SELECT a, replace(b, chr(13), '<CR>') FROM read_csv('{TEST_DIR}/irregular.csv', 
 ----
 The CSV Parser state machine reached an invalid state.
 
-# empty line and lone carriage return in an LF file, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# empty line and lone carriage return in an LF file, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query II
-SELECT a, replace(b, chr(13), '<CR>') FROM read_csv('{TEST_DIR}/irregular.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR'}) WHERE a NOT LIKE 'p%'
+SELECT a, replace(b, chr(13), '<CR>') FROM read_csv('{TEST_DIR}/irregular.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR'}) WHERE a NOT LIKE 'p%'
 ----
 1	a
 2	b
@@ -122,9 +122,9 @@ SELECT replace(a, chr(13), '<CR>'), replace(replace(b, chr(13), '<CR>'), chr(10)
 ----
 The CSV Parser state machine reached an invalid state.
 
-# lone line feed and lone carriage return in a CRLF file, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# lone line feed and lone carriage return in a CRLF file, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query II
-SELECT replace(a, chr(13), '<CR>'), replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>') FROM read_csv('{TEST_DIR}/irregular_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR'}) WHERE a NOT LIKE 'p%'
+SELECT replace(a, chr(13), '<CR>'), replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>') FROM read_csv('{TEST_DIR}/irregular_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR'}) WHERE a NOT LIKE 'p%'
 ----
 1	a
 2	b

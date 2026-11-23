@@ -312,9 +312,9 @@ public:
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();
-	//! Whether the record ended while a quote was still open, under the line records of quote_mode 'lines'
+	//! Whether the record ended while a quote was still open, under line records
 	inline bool RecordEndsInsideQuotes() const {
-		if (state_machine.state_machine_options.quote_mode.GetValue() != CSVQuoteMode::LINES) {
+		if (!state_machine.state_machine_options.line_records.GetValue()) {
 			return false;
 		}
 		const auto inside = [](CSVState state) {
@@ -331,15 +331,14 @@ public:
 	void AddUnterminatedQuoteNull();
 	//! Routes a quoted field through the embedded quote text pass when that pass could change it
 	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
-		if (!quoted || size == 0 ||
-		    state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::TOGGLE) {
+		if (!quoted || size == 0 || !state_machine.state_machine_options.embedded_quotes.GetValue()) {
 			return;
 		}
 		const auto quote_character = state_machine.state_machine_options.quote.GetValue();
 		const auto escape_character = state_machine.state_machine_options.escape.GetValue();
 		// inert escapes before the opening quote are not part of the value
 		idx_t start = 0;
-		if (state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE) {
+		if (state_machine.state_machine_options.escape_quotes_only.GetValue()) {
 			while (start < size && value_ptr[start] == escape_character) {
 				start++;
 			}
@@ -376,7 +375,7 @@ public:
 	}
 	//! Advances the line offset past the field just consumed and its separator
 	inline void UpdateUnitsBeforeField(const char *value_ptr, idx_t size) {
-		if (state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::TOGGLE) {
+		if (!state_machine.state_machine_options.embedded_quotes.GetValue()) {
 			return;
 		}
 		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();
@@ -455,7 +454,8 @@ public:
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
 	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-	                                      const string &separator, idx_t units_before, Vector &vector);
+	                                      const string &separator, bool doubled_quotes, idx_t units_before,
+	                                      Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);

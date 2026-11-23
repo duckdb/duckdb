@@ -3,7 +3,7 @@
 # group: [unquoted_escape]
 
 query TT
-SELECT concat('#', columns(*), '#') FROM read_csv('{DATA_DIR}/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+SELECT concat('#', columns(*), '#') FROM read_csv('{DATA_DIR}/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
 ----
 ##	#a""b#
 #c""d#	##

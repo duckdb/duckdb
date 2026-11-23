@@ -5,79 +5,78 @@
 statement ok
 COPY (SELECT * FROM (VALUES ('1,a\,7'), ('2,a\x,8'), ('3,c\')) t(line)) TO '{TEST_DIR}/rule_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
-# escape_mode 'all' escapes everything, the behavior the old unstrict reading had
+# unquoted_escapes lets the escape work outside quoted values, escaping any character after it
 query TTT
-SELECT a, replace(b, chr(10), '<nl>'), c FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, parallel=false) ORDER BY a;
+SELECT a, replace(b, chr(10), '<nl>'), c FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, parallel=false) ORDER BY a;
 ----
 1	a,7	NULL
 2	ax	8
 3	c<nl>	NULL
 
-# escape_mode 'quote_and_escape' keeps the delimiter and line break active after an escape
+# with escape_quotes_only the escape keeps the delimiter and line break active, as it only escapes specials
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, escape_mode='quote_and_escape') ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, unquoted_escapes=true, escape_quotes_only=true) ORDER BY a;
 ----
 1	a	7
 2	ax	8
 3	c	NULL
 
-# escape_mode 'quoted_only' reads the escape as data outside quotes, as strict parsing does
+# without unquoted_escapes the escape is data outside quotes, the default
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, escape_mode='quoted_only') ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, unquoted_escapes=false) ORDER BY a;
 ----
 1	a\	7
 2	a\x	8
 3	c\	NULL
 
 statement error
-SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', escape_mode='banana');
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', quote='"', escape='"', unquoted_escapes=true, escape_quotes_only=true);
 ----
-'banana' is not accepted as an escape_mode
+ESCAPE_QUOTES_ONLY requires an ESCAPE character other than the QUOTE character
 
-statement error
-SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', quote='"', escape='"', escape_mode='quote_and_escape');
-----
-ESCAPE_MODE 'quote_and_escape' requires an ESCAPE character other than the QUOTE character
-
-# quote_mode 'lines' ends the record on a line break even inside quotes, on its own
+# line_records ends the record on a line break even inside quotes, on its own
 statement ok
 COPY (SELECT * FROM (VALUES ('1,"x'), ('y",2'), ('3,ok,4')) t(line)) TO '{TEST_DIR}/rule_lines.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, quote_mode='lines') ORDER BY a;
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, line_records=true) ORDER BY a;
 ----
 1	NULL	NULL
 3	ok	4
 y"	2	NULL
-
-statement error
-SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', quote_mode='banana');
-----
-'banana' is not accepted as a quote_mode
 
 # doubled_quotes collapses a doubled quote with an unrelated escape, in and outside quoted values
 statement ok
 COPY (SELECT * FROM (VALUES ('1,"a""b"'), ('2,p""q')) t(line)) TO '{TEST_DIR}/rule_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TT
-SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, doubled_quotes=true) ORDER BY a;
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, doubled_quotes=true) ORDER BY a;
 ----
 1	a"b
 2	p"q
 
-# embedded_quote 'toggle' applies opencsv's embedded quote rule on its own
+# without doubled_quotes a doubled quote under embedded_quotes is two toggles, each kept by the position rule
+statement ok
+COPY (SELECT '1,a""b,2' AS line) TO '{TEST_DIR}/rule_two_toggles.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/rule_two_toggles.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, embedded_quotes=true, line_records=true, null_padding=true);
+----
+1	a""b	2
+
+# embedded_quotes applies opencsv's embedded quote rule on its own
 statement ok
 COPY (SELECT '1,a"b"c,2' AS line) TO '{TEST_DIR}/rule_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query TTT
-SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, embedded_quote='toggle', doubled_quotes=true);
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, embedded_quotes=true, doubled_quotes=true);
 ----
 1	a"b"c	2
 
 statement error
-SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', quote='"', escape='"', embedded_quote='toggle');
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', quote='"', escape='"', embedded_quotes=true);
 ----
-EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character
+EMBEDDED_QUOTES requires a QUOTE character other than the ESCAPE character
 
 # mixed_line_breaks reads any line break as a record boundary, also in strict mode
 statement ok
@@ -140,7 +139,7 @@ statement ok
 CREATE TABLE rule_rows (a VARCHAR, b VARCHAR, c VARCHAR);
 
 statement ok
-COPY rule_rows FROM '{TEST_DIR}/rule_escape.csv' (DELIM ',', QUOTE '"', ESCAPE '\', HEADER false, MIXED_LINE_BREAKS true, IGNORE_EXTRA_COLUMNS true, ALLOW_UNESCAPED_QUOTES true, ALLOW_UNTERMINATED_QUOTES true, NULL_PADDING true, AUTO_DETECT false, ESCAPE_MODE 'quote_and_escape');
+COPY rule_rows FROM '{TEST_DIR}/rule_escape.csv' (DELIM ',', QUOTE '"', ESCAPE '\', HEADER false, MIXED_LINE_BREAKS true, IGNORE_EXTRA_COLUMNS true, ALLOW_UNESCAPED_QUOTES true, ALLOW_UNTERMINATED_QUOTES true, NULL_PADDING true, AUTO_DETECT false, UNQUOTED_ESCAPES true, ESCAPE_QUOTES_ONLY true);
 
 query I
 SELECT count(*) FROM rule_rows;
@@ -148,6 +147,6 @@ SELECT count(*) FROM rule_rows;
 3
 
 statement error
-COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (ESCAPE_MODE 'quote_and_escape');
+COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (UNQUOTED_ESCAPES true, ESCAPE_QUOTES_ONLY true);
 ----
 <REGEX>:.*not supported for writing.*

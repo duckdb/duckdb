@@ -33,7 +33,7 @@ statement ok
 COPY (SELECT 'a\b||x' FROM range(3)) TO '{TEST_DIR}/mb_uesc.csv' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\t')
 
 query II
-SELECT * FROM read_csv('{TEST_DIR}/mb_uesc.csv', delim='||', quote='"', escape='\', header=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT * FROM read_csv('{TEST_DIR}/mb_uesc.csv', delim='||', quote='"', escape='\', header=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 ab	x
 ab	x
@@ -43,7 +43,7 @@ statement ok
 COPY (SELECT 'a\b::::x' FROM range(3)) TO '{TEST_DIR}/mb_uesc2.csv' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\t')
 
 query II
-SELECT * FROM read_csv('{TEST_DIR}/mb_uesc2.csv', delim='::::', quote='"', escape='\', header=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT * FROM read_csv('{TEST_DIR}/mb_uesc2.csv', delim='::::', quote='"', escape='\', header=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 ab	x
 ab	x

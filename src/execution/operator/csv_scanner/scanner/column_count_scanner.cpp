@@ -174,7 +174,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				if (states.IsQuotedCurrent() && !states.IsUnquoted() &&
-				    state_machine->state_machine_options.quote_mode.GetValue() != CSVQuoteMode::LINES) {
+				    !state_machine->state_machine_options.line_records.GetValue()) {
 					// the file ended inside a quote that never closed, which only line records accept as a NULL field
 					result.error = true;
 					return;

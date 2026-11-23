@@ -51,17 +51,14 @@ struct HashCSVStateMachineConfig {
 		auto h_escape = Hash(config.escape.GetValue());
 		auto h_newline = Hash(static_cast<uint8_t>(config.new_line.GetValue()));
 		auto h_comment = Hash(static_cast<uint8_t>(config.comment.GetValue()));
-		auto h_escape_mode = Hash(static_cast<uint8_t>(config.escape_mode.GetValue()));
-		auto h_quote_mode = Hash(static_cast<uint8_t>(
-		    (config.allow_unescaped_quotes.GetValue() ? 16 : 0) + (config.mixed_line_breaks.GetValue() ? 8 : 0) +
-		    (static_cast<uint8_t>(config.embedded_quote.GetValue()) << 2) +
-		    (static_cast<uint8_t>(config.quote_mode.GetValue()) << 1) + config.doubled_quotes.GetValue()));
+		auto h_rules = Hash(static_cast<uint8_t>(
+		    (config.unquoted_escapes.GetValue() ? 1 : 0) + (config.escape_quotes_only.GetValue() ? 2 : 0) +
+		    (config.doubled_quotes.GetValue() ? 4 : 0) + (config.embedded_quotes.GetValue() ? 8 : 0) +
+		    (config.line_records.GetValue() ? 16 : 0) + (config.mixed_line_breaks.GetValue() ? 32 : 0) +
+		    (config.allow_unescaped_quotes.GetValue() ? 64 : 0)));
 		return CombineHash(
 		    h_delimiter,
-		    CombineHash(
-		        h_quote,
-		        CombineHash(h_escape,
-		                    CombineHash(h_newline, CombineHash(h_comment, CombineHash(h_escape_mode, h_quote_mode))))));
+		    CombineHash(h_quote, CombineHash(h_escape, CombineHash(h_newline, CombineHash(h_comment, h_rules)))));
 	}
 };
 

@@ -1235,18 +1235,18 @@
       {
         "id": 145,
         "version": "v2.1.0",
-        "name": "escape_mode",
-        "property": "options.dialect_options.state_machine_options.escape_mode",
-        "type": "CSVOption<CSVEscapeMode>",
-        "default": "CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED_ONLY)"
+        "name": "unquoted_escapes",
+        "property": "options.dialect_options.state_machine_options.unquoted_escapes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       },
       {
         "id": 146,
         "version": "v2.1.0",
-        "name": "quote_mode",
-        "property": "options.dialect_options.state_machine_options.quote_mode",
-        "type": "CSVOption<CSVQuoteMode>",
-        "default": "CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD)"
+        "name": "line_records",
+        "property": "options.dialect_options.state_machine_options.line_records",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       },
       {
         "id": 148,
@@ -1259,10 +1259,10 @@
       {
         "id": 149,
         "version": "v2.1.0",
-        "name": "embedded_quote",
-        "property": "options.dialect_options.state_machine_options.embedded_quote",
-        "type": "CSVOption<CSVEmbeddedQuote>",
-        "default": "CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA)"
+        "name": "embedded_quotes",
+        "property": "options.dialect_options.state_machine_options.embedded_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       },
       {
         "id": 150,
@@ -1293,6 +1293,14 @@
         "version": "v2.1.0",
         "name": "allow_unterminated_quotes",
         "property": "options.allow_unterminated_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 154,
+        "version": "v2.1.0",
+        "name": "escape_quotes_only",
+        "property": "options.dialect_options.state_machine_options.escape_quotes_only",
         "type": "CSVOption<bool>",
         "default": "CSVOption<bool>(false)"
       }

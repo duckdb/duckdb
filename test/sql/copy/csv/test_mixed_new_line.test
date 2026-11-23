@@ -5,7 +5,7 @@
 require notwindows
 
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 1	2	3
 4	5	6
@@ -14,7 +14,7 @@ from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', escape_mode='all', mixed_line
 foreach newline '\r' '\n' '\r\n'
 
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = {newline}, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = {newline}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 1	2	3
 4	5	6
@@ -34,12 +34,12 @@ from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b'
 The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
 statement error
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1
 

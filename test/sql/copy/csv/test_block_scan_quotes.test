@@ -23,9 +23,9 @@ SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv
 ----
 CSV Error on Line: 308
 
-# quotes in quotes.csv, escape='"', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# quotes in quotes.csv, escape='"', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query III
-SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
+SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
 ----
 1	a	x
 2	a"b	x
@@ -46,9 +46,9 @@ SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv
 ----
 CSV Error on Line: 302
 
-# quotes in quotes.csv, escape='', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# quotes in quotes.csv, escape='', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query III
-SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes.csv', delim=',', quote='"', escape='', header=false, new_line='\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
+SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes.csv', delim=',', quote='"', escape='', header=false, new_line='\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
 ----
 1	a	x
 2	a""b	x
@@ -81,9 +81,9 @@ SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv
 ----
 CSV Error on Line: 308
 
-# quotes in quotes_crlf.csv, escape='"', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# quotes in quotes_crlf.csv, escape='"', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query III
-SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
+SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes_crlf.csv', delim=',', quote='"', escape='"', header=false, new_line='\r\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
 ----
 1	a	x
 2	a"b	x
@@ -104,9 +104,9 @@ SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv
 ----
 CSV Error on Line: 302
 
-# quotes in quotes_crlf.csv, escape='', escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# quotes in quotes_crlf.csv, escape='', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 query III
-SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes_crlf.csv', delim=',', quote='"', escape='', header=false, new_line='\r\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
+SELECT a, replace(replace(b, chr(13), '<CR>'), chr(10), '<LF>'), c FROM read_csv('{TEST_DIR}/quotes_crlf.csv', delim=',', quote='"', escape='', header=false, new_line='\r\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}) WHERE a NOT LIKE 'p%' ORDER BY a::INT
 ----
 1	a	x
 2	a""b	x
@@ -146,9 +146,9 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/unterminated.csv', delim=',', quote='"
 ----
 CSV Error on Line: 301
 
-# an unterminated quote, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
+# an unterminated quote, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true
 statement error
-SELECT count(*) FROM read_csv('{TEST_DIR}/unterminated.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, escape_mode='all', mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'})
+SELECT count(*) FROM read_csv('{TEST_DIR}/unterminated.csv', delim=',', quote='"', escape='"', header=false, new_line='\n', auto_detect=false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'})
 ----
 CSV Error on Line: 301
 
