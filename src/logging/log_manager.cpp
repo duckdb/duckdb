@@ -371,8 +371,10 @@ void LogManager::SetDisabledLogTypes(optional_ptr<unordered_set<string>> disable
 }
 
 void LogManager::WarnIfPrintedTwice(DatabaseInstance &db, const string &requested_sink_name,
-                                    const string &requested_sink_type) {
+                                    const string &requested_sink_type,
+                                    optional_ptr<const LogSinkFilterUpdate> filter_update) {
 	string shell_sink_name;
+	bool prints_all = false;
 	{
 		annotated_unique_lock<annotated_mutex> lck(lock);
 		auto sink_name = StringUtil::Lower(requested_sink_name);
@@ -381,34 +383,67 @@ void LogManager::WarnIfPrintedTwice(DatabaseInstance &db, const string &requeste
 		if (sink_type.empty()) {
 			sink_type = entry ? entry->type : sink_name;
 		}
-		// an enabled stdout sink already prints the log entries
-		if (sink_type != LogConfig::STDOUT_STORAGE_NAME ||
-		    (entry && entry->type == sink_type && entry->filter.enabled)) {
+		if (sink_type != LogConfig::STDOUT_STORAGE_NAME) {
 			return;
 		}
-		auto prints = [&](const string &other_name, const LogSinkEntry &other) {
-			return other_name != sink_name && other.type == SHELL_LOG_SINK_NAME && other.filter.enabled;
-		};
-		if (prints(LogConfig::DEFAULT_LOG_SINK_NAME, default_log_sink)) {
-			shell_sink_name = LogConfig::DEFAULT_LOG_SINK_NAME;
+		// the filter of the stdout sink before and after the change, as EnableLogSink sets it
+		const bool same_sink = entry && entry->type == sink_type;
+		LogConfig previous_filter;
+		if (same_sink) {
+			previous_filter = entry->filter;
 		}
-		for (auto &other : named_log_sinks) {
-			if (prints(other.first, other.second)) {
-				shell_sink_name = other.first;
+		LogConfig filter;
+		if (filter_update) {
+			if (same_sink && !filter_update->reset) {
+				filter = entry->filter;
+			}
+			UpdateLogSinkFilterInternal(filter, *filter_update);
+			filter.enabled = true;
+		} else if (entry) {
+			// the logging_storage setting changes the type of the default log sink, which keeps its filter
+			filter = entry->filter;
+		}
+		// the CLI sink is a registered sink, so one sink at most holds it
+		string other_name;
+		optional_ptr<const LogSinkEntry> other;
+		if (default_log_sink.type == SHELL_LOG_SINK_NAME) {
+			other_name = LogConfig::DEFAULT_LOG_SINK_NAME;
+			other = default_log_sink;
+		}
+		for (auto &named_sink : named_log_sinks) {
+			if (named_sink.second.type == SHELL_LOG_SINK_NAME) {
+				other_name = named_sink.first;
+				other = named_sink.second;
 			}
 		}
+		if (!other || other_name == sink_name || !other->filter.enabled) {
+			return;
+		}
+		// warn once, when the sinks start printing the same log entries
+		bool overlapped, covered, overlaps, covers;
+		CompareLogSinkFiltersInternal(previous_filter, other->filter, overlapped, covered);
+		CompareLogSinkFiltersInternal(filter, other->filter, overlaps, covers);
+		if (!overlaps || overlapped) {
+			return;
+		}
+		shell_sink_name = other_name;
+		prints_all = covers;
 	}
-	if (shell_sink_name == LogConfig::DEFAULT_LOG_SINK_NAME) {
-		DUCKDB_LOG_WARNING(db,
-		                   "The 'stdout' log sink and the default log sink, which is '%s', both print the log "
-		                   "entries to the console.\nTo print them once, run CALL disable_logging().",
-		                   SHELL_LOG_SINK_NAME);
-	} else if (!shell_sink_name.empty()) {
-		DUCKDB_LOG_WARNING(db,
-		                   "The 'stdout' log sink and the '%s' log sink both print the log entries to the console.\nTo "
-		                   "print them once, run CALL disable_log_sink('%s').",
-		                   shell_sink_name, shell_sink_name);
+	const bool is_default = shell_sink_name == LogConfig::DEFAULT_LOG_SINK_NAME;
+	auto shell_sink = is_default ? StringUtil::Format("the default log sink, which is '%s',", SHELL_LOG_SINK_NAME)
+	                             : StringUtil::Format("the '%s' log sink", shell_sink_name);
+	string hint;
+	if (prints_all) {
+		// the stdout sink prints every log entry that the shell sink prints
+		hint = is_default ? string("run CALL disable_logging()")
+		                  : StringUtil::Format("run CALL disable_log_sink('%s')", shell_sink_name);
+	} else {
+		hint = StringUtil::Format("give the 'stdout' log sink log types that %s does not print",
+		                          is_default ? string("the default log sink") : "'" + shell_sink_name + "'");
 	}
+	DUCKDB_LOG_WARNING(
+	    db, "The 'stdout' log sink and %s both print %s log entries to the console.\nTo print them once, %s.",
+	    shell_sink, prints_all ? "the" : "some of the", hint);
 }
 
 void LogManager::SetDefaultLogSink(DatabaseInstance &db, const string &requested_sink_type) {
@@ -547,6 +582,31 @@ void LogManager::UpdateLogSinkConfigInternal(DatabaseInstance &db, const string 
 	auto config_copy = sink_config;
 	entry.sink->UpdateConfig(db, config_copy);
 	RememberSinkConfig(entry, sink_config);
+}
+
+void LogManager::CompareLogSinkFiltersInternal(const LogConfig &filter, const LogConfig &other, bool &overlap,
+                                               bool &covers) {
+	static constexpr LogLevel LOG_LEVELS[] = {LogLevel::LOG_TRACE,   LogLevel::LOG_DEBUG, LogLevel::LOG_INFO,
+	                                          LogLevel::LOG_WARNING, LogLevel::LOG_ERROR, LogLevel::LOG_FATAL};
+	overlap = false;
+	covers = true;
+	for (auto &entry : registered_log_types) {
+		auto &log_type = *entry.second;
+		for (auto log_level : LOG_LEVELS) {
+			// the log entries of a log type have its level, the ones of the default log type have any level
+			if (log_type.name != DefaultLogType::NAME && log_level != log_type.level) {
+				continue;
+			}
+			if (!other.Accepts(log_type.name.c_str(), log_level)) {
+				continue;
+			}
+			if (filter.Accepts(log_type.name.c_str(), log_level)) {
+				overlap = true;
+			} else {
+				covers = false;
+			}
+		}
+	}
 }
 
 void LogManager::UpdateLogSinkFilterInternal(LogConfig &filter, const LogSinkFilterUpdate &filter_update) {
@@ -792,6 +852,8 @@ void LogManager::RegisterDefaultLogTypes() {
 	RegisterLogType(make_uniq<QueryLogType>());
 	RegisterLogType(make_uniq<PhysicalOperatorLogType>());
 	RegisterLogType(make_uniq<MetricsLogType>());
+	RegisterLogType(make_uniq<CheckpointLogType>());
+	RegisterLogType(make_uniq<TransactionLogType>());
 	RegisterLogType(make_uniq<AdaptiveFilterLogType>());
 	RegisterLogType(make_uniq<ParquetPrefetchLogType>());
 	RegisterLogType(make_uniq<AsyncTaskScheduleLogType>());

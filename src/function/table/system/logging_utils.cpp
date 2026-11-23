@@ -206,7 +206,8 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 
 	auto &log_manager = context.db->GetLogManager();
 	WarnIfWarningsAreNoLongerPrinted(context, bind_data);
-	log_manager.WarnIfPrintedTwice(*context.db, LogConfig::DEFAULT_LOG_SINK_NAME, bind_data.sink_type);
+	log_manager.WarnIfPrintedTwice(*context.db, LogConfig::DEFAULT_LOG_SINK_NAME, bind_data.sink_type,
+	                               bind_data.filter_update);
 
 	// a prepared call can run after the sink it was bound against changed
 	VerifyFileSinkPath(log_manager, bind_data.sink_type, bind_data.sink_config);
@@ -351,10 +352,20 @@ public:
 	LogSinkFilterUpdate filter_update;
 };
 
+//! The configuration lock locks the log sinks as well, unless these logging settings are allowed
+static void CheckLogSinkLock(ClientContext &context, const char *function_name, const vector<Identifier> &settings) {
+	auto &config = DBConfig::GetConfig(context);
+	try {
+		for (auto &setting : settings) {
+			config.CheckLock(setting);
+		}
+	} catch (InvalidInputException &) {
+		throw InvalidInputException("Cannot call %s - the configuration has been locked", function_name);
+	}
+}
+
 static unique_ptr<FunctionData> BindLogSinkName(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
-	// turning a sink on or off is turning logging on or off for it
-	DBConfig::GetConfig(context).CheckLock(EnableLogging::Name);
 	if (input.inputs[0].IsNull()) {
 		throw InvalidInputException("The log sink name cannot be NULL");
 	}
@@ -369,13 +380,17 @@ static unique_ptr<FunctionData> BindLogSinkName(ClientContext &context, TableFun
 	return make_uniq<LogSinkNameBindData>(std::move(name));
 }
 
+static unique_ptr<FunctionData> BindDisableLogSink(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
+	// turning a sink off is turning logging off for it
+	CheckLogSinkLock(context, "disable_log_sink", {EnableLogging::Name});
+	return BindLogSinkName(context, input, return_types, names);
+}
+
 static unique_ptr<FunctionData> BindEnableLogSink(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto &config = DBConfig::GetConfig(context);
-	config.CheckLock(EnableLogging::Name);
-	config.CheckLock(EnabledLogTypes::Name);
-	config.CheckLock(LoggingLevel::Name);
-	config.CheckLock(LoggingStorage::Name);
+	CheckLogSinkLock(context, "enable_log_sink",
+	                 {EnableLogging::Name, EnabledLogTypes::Name, LoggingLevel::Name, LoggingStorage::Name});
 	auto result = BindLogSinkName(context, input, return_types, names);
 	auto &bind_data = result->Cast<LogSinkNameBindData>();
 	for (const auto &param : input.named_parameters) {
@@ -403,7 +418,7 @@ static unique_ptr<FunctionData> BindEnableLogSink(ClientContext &context, TableF
 static void EnableLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &bind_data = data.bind_data->Cast<LogSinkNameBindData>();
 	auto &log_manager = context.db->GetLogManager();
-	log_manager.WarnIfPrintedTwice(*context.db, bind_data.name, bind_data.type);
+	log_manager.WarnIfPrintedTwice(*context.db, bind_data.name, bind_data.type, bind_data.filter_update);
 	log_manager.EnableLogSink(*context.db, bind_data.name, bind_data.type, bind_data.sink_config,
 	                          bind_data.filter_update);
 }
@@ -458,7 +473,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(enable_sink_fun);
 
 	auto disable_sink_fun =
-	    TableFunction("disable_log_sink", {LogicalType::VARCHAR}, DisableLogSink, BindLogSinkName, nullptr, nullptr);
+	    TableFunction("disable_log_sink", {LogicalType::VARCHAR}, DisableLogSink, BindDisableLogSink, nullptr, nullptr);
 	disable_sink_fun.stability = FunctionStability::VOLATILE;
 	set.AddFunction(disable_sink_fun);
 }

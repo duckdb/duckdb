@@ -156,4 +156,24 @@ def test_stdout_sink_in_the_cli_warns_about_printing_twice(shell):
     result = test.run()
     result.check_not_exist("both print the log entries to the console")
 
+    # the queries are not the warnings that the CLI's sink prints
+    test = ShellTest(shell).statement("CALL enable_log_sink('stdout', log_types := ['QueryLog'])")
+    result = test.run()
+    result.check_not_exist("log entries to the console")
+
+    # until the stdout sink takes every log type
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_log_sink('stdout', log_types := ['QueryLog'])")
+        .statement("CALL enable_log_sink('stdout', log_types := [])")
+    )
+    result = test.run()
+    result.check_stdout("both print the log entries to the console")
+
+    # a stdout sink for the errors prints them twice, but not the warnings, which the CLI's sink still has to print
+    test = ShellTest(shell).statement("CALL enable_log_sink('stdout', level := 'error')")
+    result = test.run()
+    result.check_stdout("both print some of the log entries to the console")
+    result.check_stdout("To print them once, give the 'stdout' log sink log types that the default log sink does not print.")
+
 # fmt: on

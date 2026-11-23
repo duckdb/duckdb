@@ -48,3 +48,32 @@ QueryLog	INFO	CONNECTION	SELECT 'hallo' as value;
 
 statement ok
 SELECT type, log_level, scope, message FROM duckdb_logs WHERE type='QueryLog';
+
+# the checkpoint and transaction log types can be selected and parsed
+statement ok
+CALL enable_logging(log_types := ['Checkpoint', 'Transaction']);
+
+query II
+SELECT current_setting('enabled_log_types').split(',').list_sort(), current_setting('logging_level')
+----
+[Checkpoint, Transaction]	DEBUG
+
+statement ok
+ATTACH '{TEST_DIR}/logging_types_checkpoint.db' AS checkpointed;
+
+statement ok
+CREATE OR REPLACE TABLE checkpointed.numbers AS SELECT range AS n FROM range(10);
+
+statement ok
+CHECKPOINT checkpointed;
+
+query III
+SELECT DISTINCT log_level, database, "table" FROM duckdb_logs_parsed('Checkpoint') WHERE database = 'checkpointed'
+----
+DEBUG	checkpointed	numbers
+
+# the type of the log entry is 'type', the one of the transaction 'type_1'
+query II
+SELECT DISTINCT log_level, type_1 FROM duckdb_logs_parsed('Transaction') WHERE database = 'checkpointed' AND type_1 = 'Start Checkpoint'
+----
+DEBUG	Start Checkpoint

@@ -109,10 +109,11 @@ public:
 	//! Replaces the default log sink by a sink of this type, unless it already is of this type. The default log sink
 	//! keeps its filter
 	DUCKDB_API void SetDefaultLogSink(DatabaseInstance &db, const string &sink_type);
-	//! Warns when the sink with this name becomes a sink of this type that prints the log entries to the console next
-	//! to an enabled CLI sink, which already prints them. Without a type, the sink keeps its type. Call it without
-	//! holding the lock, before enabling the sink
-	DUCKDB_API void WarnIfPrintedTwice(DatabaseInstance &db, const string &sink_name, const string &sink_type);
+	//! Warns when the sink with this name becomes a sink of this type that prints log entries to the console that an
+	//! enabled CLI sink already prints. Without a type, the sink keeps its type. The filter update is the one given to
+	//! EnableLogSink, without one the sink keeps its filter. Call it without holding the lock, before enabling the sink
+	DUCKDB_API void WarnIfPrintedTwice(DatabaseInstance &db, const string &sink_name, const string &sink_type,
+	                                   optional_ptr<const LogSinkFilterUpdate> filter_update = nullptr);
 	//! Enables the log sink with this name, of this type. Without a type, an existing sink keeps its type and a new
 	//! sink is named after its type. The config and the filter update the ones of an existing sink, a sink that gets
 	//! another type is a new sink. The default log sink is named 'default'
@@ -172,6 +173,10 @@ protected:
 	                                 const case_insensitive_map_t<Value> &sink_config) DUCKDB_REQUIRES(lock);
 	//! Applies the level and the log types to the filter of a sink
 	void UpdateLogSinkFilterInternal(LogConfig &filter, const LogSinkFilterUpdate &filter_update) DUCKDB_REQUIRES(lock);
+	//! Whether a log entry of a registered log type can pass both filters (overlap), and whether every one that passes
+	//! the other filter passes this one as well (covers)
+	void CompareLogSinkFiltersInternal(const LogConfig &filter, const LogConfig &other, bool &overlap, bool &covers)
+	    DUCKDB_REQUIRES(lock);
 	shared_ptr<LogSink> GetLogSinkInternal(const string &name) DUCKDB_REQUIRES(lock);
 	//! The error for a name that is not the name of a sink
 	InvalidInputException LogSinkDoesNotExistInternal(const string &name) DUCKDB_REQUIRES(lock);
