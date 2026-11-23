@@ -8,7 +8,7 @@ FROM read_csv('{DATA_DIR}/csv/one_r_two.csv', columns = {'a': 'BIGINT'}, new_lin
 new_line = \r (Set By User)
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', header = false)
+FROM read_csv('{DATA_DIR}/csv/one_n_two.csv', columns = {'a': 'BIGINT'}, new_line= '\n', header = false)
 ----
 new_line = \n (Set By User)
 
