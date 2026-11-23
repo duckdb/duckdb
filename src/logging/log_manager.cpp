@@ -460,7 +460,7 @@ shared_ptr<LogSink> LogManager::CreateLogSinkInternal(DatabaseInstance &db, cons
 	}
 	if (sink_type_to_lower == LogConfig::FILE_STORAGE_NAME) {
 		auto &fs = FileSystem::GetFileSystem(db);
-		if (fs.SubSystemIsDisabled(LocalFileSystem().GetName())) {
+		if (fs.SubSystemIsDisabled("LocalFileSystem")) {
 			throw InvalidConfigurationException("Can not enable file logging with the LocalFileSystem disabled");
 		}
 		return make_shared_ptr<FileLogSink>(db);

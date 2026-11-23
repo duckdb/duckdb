@@ -1,0 +1,126 @@
+# name: test/sql/optimizer/temporal_cast_zonemap_icu.test
+# description: Test that casts reading the time zone never prune rows whose cast value an offset change moves
+# group: [optimizer]
+
+require icu
+
+# the ORDER BY pipelines that build the 200000-row tables can report stalled progress under verify_progress
+statement ok
+SET debug_verify_progress_ignore='STALLED:ORDER_BY'
+
+statement ok
+SET TimeZone = 'America/New_York';
+
+# 200000 rows per value, so each fills at least one row group: the last local hour of 2021-11-07 (a 25-hour day),
+# and both 01:30s of that day; the first value keeps the widened bound non-trivial, so the filter is still pushed
+statement ok
+CREATE TABLE tz_table AS
+SELECT * FROM (
+	SELECT TIMESTAMPTZ '2021-11-01 12:00:00-04' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMPTZ '2021-11-07 23:30:00-05' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMPTZ '2021-11-07 01:30:00-04' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMPTZ '2021-11-07 01:30:00-05' AS col FROM range(200000)
+) ORDER BY col;
+
+query II
+EXPLAIN SELECT count(*) FROM tz_table WHERE CAST(col AS DATE) = DATE '2021-11-07';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM tz_table WHERE CAST(col AS DATE) = DATE '2021-11-07';
+----
+600000
+
+statement ok
+CREATE TABLE tzns_table AS SELECT CAST(col AS TIMESTAMPTZ_NS) AS col FROM tz_table ORDER BY col;
+
+query II
+EXPLAIN SELECT count(*) FROM tzns_table WHERE CAST(col AS DATE) = DATE '2021-11-07';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM tzns_table WHERE CAST(col AS DATE) = DATE '2021-11-07';
+----
+600000
+
+# ICU overrides TIMESTAMPTZ_NS -> TIMESTAMP too, so both 01:30s read as the same local time
+query II
+EXPLAIN SELECT count(*) FROM tzns_table WHERE CAST(col AS TIMESTAMP) = TIMESTAMP '2021-11-07 01:30:00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM tzns_table WHERE CAST(col AS TIMESTAMP) = TIMESTAMP '2021-11-07 01:30:00';
+----
+400000
+
+query II
+EXPLAIN SELECT count(*) FROM tz_table WHERE CAST(col AS TIMESTAMP_S) = TIMESTAMP_S '2021-11-07 01:30:00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM tz_table WHERE CAST(col AS TIMESTAMP_S) = TIMESTAMP_S '2021-11-07 01:30:00';
+----
+400000
+
+query II
+EXPLAIN SELECT count(*) FROM tz_table WHERE CAST(col AS TIMESTAMP_MS) = TIMESTAMP_MS '2021-11-07 01:30:00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM tz_table WHERE CAST(col AS TIMESTAMP_MS) = TIMESTAMP_MS '2021-11-07 01:30:00';
+----
+400000
+
+# a 3 hour fall-back: 01:30 on 2010-03-05 is first at +11, then at +08
+statement ok
+SET TimeZone = 'Antarctica/Casey';
+
+statement ok
+CREATE TABLE casey AS
+SELECT * FROM (
+	SELECT TIMESTAMPTZ '2010-01-01 00:00:00+00' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMPTZ '2010-03-05 01:30:00+11' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMPTZ '2010-03-05 01:30:00+08' AS col FROM range(200000)
+) ORDER BY col;
+
+query II
+EXPLAIN SELECT count(*) FROM casey WHERE CAST(col AS TIMESTAMP) = TIMESTAMP '2010-03-05 01:30:00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM casey WHERE CAST(col AS TIMESTAMP) = TIMESTAMP '2010-03-05 01:30:00';
+----
+400000
+
+# a skipped day: Apia went from -10 to +14, so 2011-12-30 12:00 local is read as 2011-12-31 12:00+14
+statement ok
+SET TimeZone = 'Pacific/Apia';
+
+statement ok
+CREATE TABLE apia AS
+SELECT * FROM (
+	SELECT TIMESTAMP '2011-01-01 00:00:00' AS col FROM range(200000)
+	UNION ALL
+	SELECT TIMESTAMP '2011-12-30 12:00:00' AS col FROM range(200000)
+) ORDER BY col;
+
+query II
+EXPLAIN SELECT count(*) FROM apia WHERE CAST(col AS TIMESTAMPTZ) = TIMESTAMPTZ '2011-12-31 12:00:00+14';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query I
+SELECT count(*) FROM apia WHERE CAST(col AS TIMESTAMPTZ) = TIMESTAMPTZ '2011-12-31 12:00:00+14';
+----
+200000

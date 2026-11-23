@@ -17,20 +17,21 @@ class BoundAggregateExpression;
 class BoundWindowExpression;
 
 struct FunctionDataWrapper {
-	explicit FunctionDataWrapper(unique_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
+	explicit FunctionDataWrapper(cow_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
 	}
 
-	unique_ptr<FunctionData> function_data;
+	cow_ptr<FunctionData> function_data;
 };
 
 struct AggregateObject { // NOLINT: work-around bug in clang-tidy
-	AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
-	                AggregateType aggr_type, PhysicalType return_type, optional_ptr<const Expression> filter = nullptr);
+	AggregateObject(BoundAggregateFunction function, optional_ptr<const FunctionData> bind_data, idx_t child_count,
+	                idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
+	                optional_ptr<const Expression> filter = nullptr);
 	explicit AggregateObject(BoundAggregateExpression &aggr);
 	explicit AggregateObject(BoundAggregateExpression *aggr);
 	explicit AggregateObject(const BoundWindowExpression &window);
 
-	FunctionData *GetFunctionData() const {
+	optional_ptr<const FunctionData> GetFunctionData() const {
 		return bind_data_wrapper ? bind_data_wrapper->function_data.get() : nullptr;
 	}
 
@@ -63,6 +64,8 @@ struct AggregateFilterData {
 	SelectionVector true_sel;
 	//! The number of rows selected by the last Select
 	idx_t selected_count = 0;
+	//! Whether the last Select selected every row of the chunk: the payload is then used as it is
+	bool all_selected = false;
 	//! The non-distinct aggregates that use this filter
 	unsafe_vector<idx_t> aggregates;
 	//! The payload columns (the children of those aggregates) that ApplyFilter slices

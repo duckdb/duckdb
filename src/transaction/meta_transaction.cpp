@@ -10,11 +10,9 @@
 
 namespace duckdb {
 
-MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p,
-                                 transaction_t transaction_id_p)
-    : context(context_p), start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p),
-      transaction_validity(*context_p.db), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
-      is_read_only(false) {
+MetaTransaction::MetaTransaction(DatabaseInstance &db, timestamp_t start_timestamp_p, transaction_t transaction_id_p)
+    : start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p), transaction_validity(db),
+      modified_database(nullptr), is_read_only(false) {
 }
 
 MetaTransaction::~MetaTransaction() = default;
@@ -29,7 +27,7 @@ ValidChecker &ValidChecker::Get(MetaTransaction &transaction) {
 
 Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	auto &meta_transaction = MetaTransaction::Get(context);
-	return meta_transaction.GetTransaction(db);
+	return meta_transaction.GetTransaction(context, db);
 }
 
 optional_ptr<Transaction> Transaction::TryGet(ClientContext &context, AttachedDatabase &db) {
@@ -57,15 +55,14 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 	}
 }
 
-Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+Transaction &MetaTransaction::GetTransaction(ClientContext &context, AttachedDatabase &db) {
 	if (ValidChecker::IsInvalidated(db)) {
 		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
 	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
-		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction.active_query = active_query.load();
+		auto &new_transaction = db.GetTransactionManager().StartTransaction(context.GetContext(), *this);
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
@@ -80,7 +77,6 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 
 		return new_transaction;
 	} else {
-		D_ASSERT(entry->second.transaction.active_query == active_query);
 		return entry->second.transaction;
 	}
 }
@@ -116,7 +112,7 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 	return Transaction::Get(context, catalog.GetAttached());
 }
 
-ErrorData MetaTransaction::Commit() {
+ErrorData MetaTransaction::Commit(ClientContext &context) {
 	ErrorData error;
 #ifdef DEBUG
 	reference_set_t<AttachedDatabase> committed_tx;
@@ -153,7 +149,7 @@ ErrorData MetaTransaction::Commit() {
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
 				// Rollback due to previous error.
-				transaction_manager.RollbackTransaction(transaction);
+				transaction_manager.RollbackTransaction(context, transaction);
 				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
@@ -164,7 +160,7 @@ ErrorData MetaTransaction::Commit() {
 	return error;
 }
 
-void MetaTransaction::Rollback() {
+void MetaTransaction::Rollback(ClientContext &context) {
 	// Rollback all transactions in reverse order.
 	ErrorData error;
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
@@ -182,7 +178,7 @@ void MetaTransaction::Rollback() {
 		}
 		try {
 			auto &transaction = transaction_ref.transaction;
-			transaction_manager.RollbackTransaction(transaction);
+			transaction_manager.RollbackTransaction(context, transaction);
 		} catch (std::exception &ex) {
 			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 		}
@@ -193,24 +189,12 @@ void MetaTransaction::Rollback() {
 	}
 }
 
-void MetaTransaction::Finalize() {
+void MetaTransaction::Finalize(ClientContext &context) {
 	// Try to checkpoint any attached databases potentially still held by this transaction.
 	for (auto &database : referenced_databases) {
 		// If the use count is down to one, then we already detached the database.
 		// That means new transactions can no longer obtain a shared pointer to it.
 		AttachedDatabase::InvokeCloseIfLastReference(database.second, context);
-	}
-}
-
-idx_t MetaTransaction::GetActiveQuery() {
-	return active_query;
-}
-
-void MetaTransaction::SetActiveQuery(transaction_t query_number) {
-	lock_guard<mutex> guard(lock);
-	active_query = query_number;
-	for (auto &entry : transactions) {
-		entry.second.transaction.active_query = query_number;
 	}
 }
 
@@ -256,13 +240,14 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	return db_ref;
 }
 
-void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
+void MetaTransaction::ModifyDatabase(ClientContext &context, AttachedDatabase &db,
+                                     DatabaseModificationType modification) {
 	// Temporary objects are private to the connection, so a read-only transaction may still write them
 	if (IsReadOnly() && !db.IsTemporary()) {
 		throw TransactionException("Cannot write to database %s - transaction is launched in read-only mode",
 		                           db.GetName());
 	}
-	auto &transaction = GetTransaction(db);
+	auto &transaction = GetTransaction(context, db);
 	if (transaction.IsReadOnly()) {
 		transaction.SetReadWrite();
 	}

@@ -2258,8 +2258,8 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
-	duckdb::LocalFileSystem lfs;
-	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	auto canonical_file = lfs.CanonicalizePath(file);
 	if (!active_read_files.insert(canonical_file).second) {
 		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
 		return false;
@@ -3167,14 +3167,9 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
-}
-
 string ShellState::GetDefaultDuckDBRC() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	return lfs.JoinPath(lfs.GetHomeDirectory(), ".duckdbrc");
 }
 
 MetadataResult ShellState::FormatSQL(string &sql) {
@@ -3908,7 +3903,7 @@ int RunShell(int argc, const char **argv) {
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
-				zHome = GetHomeDirectory() + "/.duckdb_history";
+				zHome = duckdb::FileSystem::GetLocal(*data.db->instance).GetHomeDirectory() + "/.duckdb_history";
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {

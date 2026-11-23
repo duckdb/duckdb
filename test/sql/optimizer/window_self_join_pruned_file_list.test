@@ -1,0 +1,161 @@
+# name: test/sql/optimizer/window_self_join_pruned_file_list.test
+# description: Window aggregates over a scan whose file list was pruned by a filter only see the remaining files
+# group: [optimizer]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		('a', 'x', 1, DATE '2026-07-01'),
+		('b', 'x', 2, DATE '2026-07-01'),
+		('c', 'x', 4, DATE '2026-07-02'),
+		('d', 'y', 8, DATE '2026-07-01')
+	) t(k, grp, v, d)
+) TO '{TEST_DIR}/window_self_join_hive' (FORMAT parquet, PARTITION_BY (d));
+
+query I
+SELECT n FROM (
+	SELECT k, count(*) OVER (PARTITION BY grp) AS n
+	FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+	WHERE d = DATE '2026-07-01'
+) WHERE k = 'a';
+----
+2
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE d = DATE '2026-07-01'
+ORDER BY k;
+----
+a	2	3
+b	2	3
+d	1	8
+
+# no partitions
+query III
+SELECT k, count(*) OVER (), sum(v) OVER ()
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE d = DATE '2026-07-01'
+ORDER BY k;
+----
+a	3	11
+b	3	11
+d	3	11
+
+# the pruned scan sits below a projection and a filter
+query III
+SELECT k, count(*) OVER (PARTITION BY g), sum(w) OVER (PARTITION BY g)
+FROM (
+	SELECT k, upper(grp) AS g, v * 10 AS w
+	FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+	WHERE d > DATE '2026-07-01' OR v < 2
+)
+ORDER BY k;
+----
+a	2	50
+c	2	50
+
+# filter on the file name
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true, filename = true)
+WHERE filename LIKE '%d=2026-07-02%'
+ORDER BY k;
+----
+c	1	4
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = false, filename = true)
+WHERE filename LIKE '%d=2026-07-01%'
+ORDER BY k;
+----
+a	2	3
+b	2	3
+d	1	8
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE filename LIKE '%d=2026-07-01%'
+ORDER BY k;
+----
+a	2	3
+b	2	3
+d	1	8
+
+# a filter that prunes every file
+query II
+SELECT k, count(*) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE d = DATE '2026-07-03';
+----
+
+# a filter that does not prune any file still uses the self-join
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE v <> 2
+ORDER BY k;
+----
+a	2	5
+c	2	5
+d	1	8
+
+query II
+EXPLAIN SELECT k, count(*) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE v <> 2;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE d >= DATE '2026-07-01'
+ORDER BY k;
+----
+a	3	7
+b	3	7
+c	3	7
+d	1	8
+
+# same answers without the rewrite
+statement ok
+SET disabled_optimizers = 'window_self_join';
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_parquet('{TEST_DIR}/window_self_join_hive/**/*.parquet', hive_partitioning = true)
+WHERE d = DATE '2026-07-01'
+ORDER BY k;
+----
+a	2	3
+b	2	3
+d	1	8
+
+statement ok
+RESET disabled_optimizers;
+
+# hive partitioned CSV
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		('a', 'x', 1, DATE '2026-07-01'),
+		('b', 'x', 2, DATE '2026-07-01'),
+		('c', 'x', 4, DATE '2026-07-02'),
+		('d', 'y', 8, DATE '2026-07-01')
+	) t(k, grp, v, d)
+) TO '{TEST_DIR}/window_self_join_hive_csv' (FORMAT csv, PARTITION_BY (d));
+
+query III
+SELECT k, count(*) OVER (PARTITION BY grp), sum(v) OVER (PARTITION BY grp)
+FROM read_csv('{TEST_DIR}/window_self_join_hive_csv/**/*.csv', hive_partitioning = true)
+WHERE d = DATE '2026-07-01'
+ORDER BY k;
+----
+a	2	3
+b	2	3
+d	1	8

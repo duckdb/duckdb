@@ -26,4 +26,4 @@ CREATE SECRET lax_elsewhere (TYPE http, VERIFY_SSL false, SCOPE 'https://other.e
 statement error
 CREATE EXTENSION REPOSITORY 'lax.example'
 ----
-<REGEX>:IO Error.*does not serve a metadata file.*
+<REGEX>:IO Error.*Cannot create extension repository 'lax.example': Failed to read the host's metadata file 'https://lax.example/.well-known/duckdb-extension-repo.json'.*WITH PREFIX.*

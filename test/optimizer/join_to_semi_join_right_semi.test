@@ -1,0 +1,88 @@
+# name: test/optimizer/join_to_semi_join_right_semi.test
+# description: The SEMI join of the rewrite builds the smaller relation like the INNER join did and keeps its runtime filter
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE bounds AS SELECT 1::INTEGER AS x, true AS keep FROM range(100);
+
+statement ok
+INSERT INTO bounds VALUES (20001, false);
+
+statement ok
+CREATE TABLE many AS SELECT i::INTEGER AS x FROM range(20000) t(i);
+
+# the INNER join builds the 100 rows of l and filters the scan of many with their maximum
+statement ok
+SET disabled_optimizers = 'join_to_semi_join';
+
+query II
+EXPLAIN WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+physical_plan	<REGEX>:(?s).*PIECEWISE_MERGE_JOIN.*Join Type: INNER.*
+
+# the build side publishes its maximum into the scan of many before the probe starts; the filter reads `x < 1`, or
+# `TRY_CAST(x AS SMALLINT) < 1` where compressed materialization casts the join keys (every join in debug builds)
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+analyzed_plan	<REGEX>:(?s).*"Join Type": "INNER".*"Table": "[^"]*[.]many"[^}]*"Dynamic Filters": "[^"]*< 1[^"]*".*
+
+query I
+WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+1
+
+statement ok
+SET disabled_optimizers = '';
+
+# the SEMI join swaps its sides: a RIGHT SEMI merge join that builds l and keeps the runtime filter on many
+query II
+EXPLAIN WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+physical_plan	<REGEX>:(?s).*PIECEWISE_MERGE_JOIN.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_SEMI".*"Table": "[^"]*[.]many"[^}]*"Dynamic Filters": "[^"]*< 1[^"]*".*
+
+query I
+WITH l AS MATERIALIZED (SELECT x FROM bounds WHERE keep)
+SELECT count(*) FROM (SELECT DISTINCT l.x FROM l, many WHERE l.x > many.x);
+----
+1
+
+# the other comparisons swap as well
+query II
+EXPLAIN SELECT count(*) FROM (SELECT DISTINCT b.x FROM bounds b, many WHERE b.x <= many.x);
+----
+physical_plan	<REGEX>:(?s).*PIECEWISE_MERGE_JOIN.*Join Type: RIGHT_SEMI.*
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT b.x FROM bounds b, many WHERE b.x <= many.x);
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT b.x FROM bounds b, many WHERE b.x >= many.x);
+----
+2
+
+# an ANTI join does not swap
+query II
+EXPLAIN SELECT * FROM bounds b WHERE NOT EXISTS (SELECT 1 FROM many WHERE b.x > many.x);
+----
+physical_plan	<!REGEX>:(?s).*RIGHT_ANTI.*
+
+query I
+SELECT count(*) FROM bounds b WHERE NOT EXISTS (SELECT 1 FROM many WHERE b.x > many.x);
+----
+0

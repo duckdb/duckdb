@@ -416,6 +416,9 @@ AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::INTEGER);
 	case PhysicalType::INT64:
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::BIGINT);
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs
+		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::VARCHAR);
 	default:
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::HUGEINT);
 	}
@@ -530,6 +533,14 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 }
 
 } // namespace
+
+bool IsFirstLastOrAnyValue(const BoundAggregateFunction &function) {
+	// All specializations and aliases bind one of these private callbacks. An
+	// implementation replacement installs its own callbacks even if it keeps the name.
+	auto rewrite = function.GetDirectRewriteCallback();
+	return rewrite == RewriteOrderedFirst<false, false> || rewrite == RewriteOrderedFirst<true, false> ||
+	       rewrite == RewriteOrderedFirst<false, true>;
+}
 
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
