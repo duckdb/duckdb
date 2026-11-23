@@ -540,8 +540,8 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
-	if (!options.allow_unterminated_quotes.IsSetByUser()) {
-		how_to_fix_it << "* Read a quote that is never closed as a value (allow_unterminated_quotes=true)" << '\n';
+	if (!options.dialect_options.state_machine_options.unterminated_quote.IsSetByUser()) {
+		how_to_fix_it << "* Read a quote that is never closed as a value (unterminated_quote='value')" << '\n';
 	}
 	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
 	how_to_fix_it << "* Set quote to empty or to a different value (e.g., quote=\'\')" << '\n';

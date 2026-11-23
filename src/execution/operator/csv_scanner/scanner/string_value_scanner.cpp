@@ -36,9 +36,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
       tolerate_extra_columns(state_machine.options.ignore_extra_columns.GetValue()),
       allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.GetValue()),
-      allow_unterminated_quotes(state_machine.options.allow_unterminated_quotes.GetValue()),
-      line_record_rows(state_machine.state_machine_options.line_records.GetValue()),
-      embedded_quote_fields(state_machine.state_machine_options.embedded_quotes.GetValue()),
+      allow_unterminated_quotes(state_machine.state_machine_options.UnterminatedAsValue()),
+      line_record_rows(state_machine.state_machine_options.LineRecords()),
+      embedded_quote_fields(state_machine.state_machine_options.ToggleQuotes()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -296,9 +296,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 
 	if (((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
 		// an escaped null string like \N applies when the escape works outside quoted values
-		const bool check_unquoted_escaped_null = state_machine.state_machine_options.unquoted_escapes.GetValue() &&
-		                                         !state_machine.state_machine_options.escape_quotes_only.GetValue() &&
-		                                         escaped && !policy_quoted && size == 1;
+		const bool check_unquoted_escaped_null =
+		    state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::ANYWHERE && escaped &&
+		    !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
@@ -642,11 +642,11 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			const auto &sm_opts = result.state_machine.dialect_options.state_machine_options;
-			if (sm_opts.embedded_quotes.GetValue()) {
+			if (sm_opts.ToggleQuotes()) {
 				// normalize the raw bytes first and convert the result into the column's type as any plain value
 				auto value = StringValueScanner::ResolveEmbeddedQuotes(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    sm_opts.delimiter.GetValue(), sm_opts.doubled_quotes.GetValue(), result.units_before_field,
+				    sm_opts.delimiter.GetValue(), sm_opts.DoubledQuotes(), result.units_before_field,
 				    result.value_scratch);
 				result.AddValueToVector(value.GetData(), value.GetSize(), true);
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
@@ -667,8 +667,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    !result.allow_unescaped_quotes, !result.quoted && sm_opts.escape_quotes_only.GetValue(),
-				    sm_opts.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
+				    !result.allow_unescaped_quotes, !result.quoted && sm_opts.EscapeQuotesOnly(),
+				    sm_opts.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
 		}
@@ -1806,12 +1806,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 						result.chunk_col_id++;
 						cast_errored = true;
 					} else {
-						value = RemoveEscape(
-						    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						    !result.allow_unescaped_quotes, false,
-						    result.state_machine.dialect_options.state_machine_options.doubled_quotes.GetValue(),
-						    result.parse_chunk.data[result.chunk_col_id]);
+						value = RemoveEscape(str_ptr, length,
+						                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						                     !result.allow_unescaped_quotes, false,
+						                     result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
+						                     result.parse_chunk.data[result.chunk_col_id]);
 					}
 				}
 			}
@@ -1822,12 +1822,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
-					if (sm_options.embedded_quotes.GetValue()) {
+					if (sm_options.ToggleQuotes()) {
 						// normalize the raw bytes without the trailing delimiter prefix, through the scratch heap
 						value = ResolveEmbeddedQuotes(
 						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
 						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
-						    sm_options.doubled_quotes.GetValue(), result.units_before_field, result.value_scratch);
+						    sm_options.DoubledQuotes(), result.units_before_field, result.value_scratch);
 						removed_extra_delimiter_bytes = true;
 					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
@@ -1850,9 +1850,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 					} else {
 						value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
-						                     !result.allow_unescaped_quotes, sm_options.escape_quotes_only.GetValue(),
-						                     sm_options.doubled_quotes.GetValue(),
-						                     result.parse_chunk.data[result.chunk_col_id]);
+						                     !result.allow_unescaped_quotes,
+						                     !result.quoted && sm_options.EscapeQuotesOnly(),
+						                     sm_options.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 					}
 				}
 			}
@@ -2164,8 +2164,8 @@ void StringValueScanner::SetStart() {
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
 		// the boundary search uses the strict reading rules unless set otherwise
-		if (!state_options.unquoted_escapes.IsSetByUser()) {
-			state_options.unquoted_escapes = false;
+		if (!state_options.escape_mode.IsSetByUser()) {
+			state_options.escape_mode = CSVEscapeMode::QUOTED;
 		}
 		if (!state_options.new_line_terminators.IsSetByUser()) {
 			state_options.new_line_terminators = 0;

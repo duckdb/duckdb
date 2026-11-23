@@ -131,8 +131,6 @@ struct CSVReaderOptions {
 	string encoding = "utf-8";
 	//! Fields beyond the last column are ignored rather than an error
 	CSVOption<bool> ignore_extra_columns = false;
-	//! A quote that is never closed reads as a value rather than an error
-	CSVOption<bool> allow_unterminated_quotes = false;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;
 

@@ -43,7 +43,7 @@ select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv
 ----
 
 query IIII
-select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i}, unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i}, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -79,7 +79,7 @@ select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv')
 <REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 query IIII
-select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')
 ----
 1	6370	371	p1
 10	214	465	p2

@@ -1235,34 +1235,27 @@
       {
         "id": 145,
         "version": "v2.1.0",
-        "name": "unquoted_escapes",
-        "property": "options.dialect_options.state_machine_options.unquoted_escapes",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
+        "name": "escape_mode",
+        "property": "options.dialect_options.state_machine_options.escape_mode",
+        "type": "CSVOption<CSVEscapeMode>",
+        "default": "CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED)"
       },
       {
         "id": 146,
         "version": "v2.1.0",
-        "name": "line_records",
-        "property": "options.dialect_options.state_machine_options.line_records",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
+        "name": "unterminated_quote",
+        "property": "options.dialect_options.state_machine_options.unterminated_quote",
+        "type": "CSVOption<CSVUnterminatedQuote>",
+        "default": "CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::ERROR)"
       },
-      {
-        "id": 148,
-        "version": "v2.1.0",
-        "name": "doubled_quotes",
-        "property": "options.dialect_options.state_machine_options.doubled_quotes",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
-      },
+
       {
         "id": 149,
         "version": "v2.1.0",
         "name": "embedded_quotes",
         "property": "options.dialect_options.state_machine_options.embedded_quotes",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
+        "type": "CSVOption<CSVEmbeddedQuotes>",
+        "default": "CSVOption<CSVEmbeddedQuotes>(CSVEmbeddedQuotes::NONE)"
       },
       {
         "id": 150,
@@ -1285,22 +1278,6 @@
         "version": "v2.1.0",
         "name": "allow_unescaped_quotes",
         "property": "options.dialect_options.state_machine_options.allow_unescaped_quotes",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
-      },
-      {
-        "id": 153,
-        "version": "v2.1.0",
-        "name": "allow_unterminated_quotes",
-        "property": "options.allow_unterminated_quotes",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
-      },
-      {
-        "id": 154,
-        "version": "v2.1.0",
-        "name": "escape_quotes_only",
-        "property": "options.dialect_options.state_machine_options.escape_quotes_only",
         "type": "CSVOption<bool>",
         "default": "CSVOption<bool>(false)"
       }

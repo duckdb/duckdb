@@ -16,6 +16,6 @@ COPY (SELECT concat_ws(E'\t', s1, i, s2, s3) FROM (
 
 query II
 SELECT log2(count(*))::int, bool_and(s[1] = f1 AND s[2] = f2 AND s[3] = f3)::int
-FROM pseudorandom_fields JOIN read_csv('{TEST_DIR}/pseudorandom_fields.tsv', quote = '', sep = '\t', escape = '\', header = false, unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true) t(f1, j, f2, f3) ON i = j;
+FROM pseudorandom_fields JOIN read_csv('{TEST_DIR}/pseudorandom_fields.tsv', quote = '', sep = '\t', escape = '\', header = false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value') t(f1, j, f2, f3) ON i = j;
 ----
 15	1

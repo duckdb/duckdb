@@ -210,9 +210,9 @@ public:
 	const bool allow_unescaped_quotes;
 	//! A quote that is never closed reads as a value rather than an error
 	const bool allow_unterminated_quotes;
-	//! Whether a line break ends the record even inside quotes, the line_records option
+	//! Whether a line break ends the record even inside quotes, reading a field left open as NULL
 	const bool line_record_rows;
-	//! Whether fields follow the embedded quote rules, the embedded_quotes option
+	//! Whether fields follow the embedded quote toggle rule
 	const bool embedded_quote_fields;
 
 	const idx_t extra_delimiter_bytes = 0;
@@ -319,7 +319,7 @@ public:
 	inline void SkipValueInternal();
 	//! Whether the record ended while a quote was still open, under line records
 	inline bool RecordEndsInsideQuotes() const {
-		if (!state_machine.state_machine_options.line_records.GetValue()) {
+		if (!state_machine.state_machine_options.LineRecords()) {
 			return false;
 		}
 		const auto inside = [](CSVState state) {
@@ -336,14 +336,14 @@ public:
 	void AddUnterminatedQuoteNull();
 	//! Routes a quoted field through the embedded quote text pass when that pass could change it
 	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
-		if (!quoted || size == 0 || !state_machine.state_machine_options.embedded_quotes.GetValue()) {
+		if (!quoted || size == 0 || !state_machine.state_machine_options.ToggleQuotes()) {
 			return;
 		}
 		const auto quote_character = state_machine.state_machine_options.quote.GetValue();
 		const auto escape_character = state_machine.state_machine_options.escape.GetValue();
 		// inert escapes before the opening quote are not part of the value
 		idx_t start = 0;
-		if (state_machine.state_machine_options.escape_quotes_only.GetValue()) {
+		if (state_machine.state_machine_options.EscapeQuotesOnly()) {
 			while (start < size && value_ptr[start] == escape_character) {
 				start++;
 			}
@@ -380,7 +380,7 @@ public:
 	}
 	//! Advances the line offset past the field just consumed and its separator
 	inline void UpdateUnitsBeforeField(const char *value_ptr, idx_t size) {
-		if (!state_machine.state_machine_options.embedded_quotes.GetValue()) {
+		if (!state_machine.state_machine_options.ToggleQuotes()) {
 			return;
 		}
 		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();

@@ -7,7 +7,7 @@ from read_csv('{DATA_DIR}/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"
 ----
 
 query III
-from read_csv('{DATA_DIR}/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+from read_csv('{DATA_DIR}/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH	 	2011
 ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÄNKTER HAFTUN	 	2012
@@ -15,12 +15,12 @@ ENERGYS MAINTENANCE S	 	2015
 SYSTEMAT BELGIUM  S	 	2013
 
 query II
-SELECT DELIMITER, QUOTE FROM sniff_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+SELECT DELIMITER, QUOTE FROM sniff_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')
 ----
 ,	"
 
 statement ok
-CREATE TABLE T AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+CREATE TABLE T AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 
 query I
 select count(*) from T

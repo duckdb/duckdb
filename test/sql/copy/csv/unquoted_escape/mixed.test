@@ -8,6 +8,6 @@ SELECT
     hamming(replace(string_agg(w, '|' ORDER BY y), E'\r\n', E'\n'), E'\\|,|"|\n'),
     hamming(string_agg(z, '|' ORDER BY y), '"|"a"|"b|c"'),
     bool_and(x = concat(w, '"', w))::int
-FROM read_csv('{DATA_DIR}/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+FROM read_csv('{DATA_DIR}/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 0	0	1

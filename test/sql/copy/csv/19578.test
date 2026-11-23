@@ -8,6 +8,6 @@ SELECT Delimiter, Quote, Escape FROM sniff_csv('data/19578.csv');
 ;	"	(empty)
 
 query III
-SELECT Delimiter, Quote, Escape FROM sniff_csv('data/19578.csv',  unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+SELECT Delimiter, Quote, Escape FROM sniff_csv('data/19578.csv',  escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 ;	"	(empty)

@@ -149,11 +149,9 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				D_ASSERT(buffer_manager);
 				CSVStateMachineOptions state_machine_options(
 				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,
-				    options.dialect_options.state_machine_options.unquoted_escapes,
-				    options.dialect_options.state_machine_options.escape_quotes_only,
-				    options.dialect_options.state_machine_options.doubled_quotes,
+				    options.dialect_options.state_machine_options.escape_mode,
 				    options.dialect_options.state_machine_options.embedded_quotes,
-				    options.dialect_options.state_machine_options.line_records,
+				    options.dialect_options.state_machine_options.unterminated_quote,
 				    options.dialect_options.state_machine_options.new_line_terminators,
 				    options.dialect_options.state_machine_options.allow_unescaped_quotes);
 				auto sniffing_state_machine =
@@ -396,7 +394,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			} else {
 				// Give preference to one that got escaped
 				if (!scanner->ever_escaped && successful_candidates.front()->ever_escaped &&
-				    !sniffing_state_machine.dialect_options.state_machine_options.unquoted_escapes.GetValue()) {
+				    !sniffing_state_machine.dialect_options.state_machine_options.UnquotedEscapes()) {
 					return;
 				}
 				if (stats.best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
@@ -431,7 +429,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		if (quoted && num_cols < max_columns_found) {
 			if (scanner->ever_escaped &&
-			    !sniffing_state_machine.dialect_options.state_machine_options.unquoted_escapes.GetValue()) {
+			    !sniffing_state_machine.dialect_options.state_machine_options.UnquotedEscapes()) {
 				for (auto &candidate : successful_candidates) {
 					if (candidate->ever_quoted && candidate->ever_escaped) {
 						return;

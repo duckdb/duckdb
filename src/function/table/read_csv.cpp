@@ -103,14 +103,11 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("column_names", LogicalType::LIST(LogicalType::VARCHAR))
 		    .Add("comment", LogicalType::VARCHAR)
 		    .Add("encoding", LogicalType::VARCHAR)
-		    .Add("unquoted_escapes", LogicalType::BOOLEAN)
-		    .Add("escape_quotes_only", LogicalType::BOOLEAN)
-		    .Add("line_records", LogicalType::BOOLEAN)
-		    .Add("embedded_quotes", LogicalType::BOOLEAN)
-		    .Add("doubled_quotes", LogicalType::BOOLEAN)
+		    .Add("escape_mode", LogicalType::VARCHAR)
+		    .Add("embedded_quotes", LogicalType::VARCHAR)
+		    .Add("unterminated_quote", LogicalType::VARCHAR)
 		    .Add("ignore_extra_columns", LogicalType::BOOLEAN)
 		    .Add("allow_unescaped_quotes", LogicalType::BOOLEAN)
-		    .Add("allow_unterminated_quotes", LogicalType::BOOLEAN)
 		    .Add("thousands", LogicalType::VARCHAR)
 		    .Add("files_to_sniff", LogicalType::BIGINT);
 	});

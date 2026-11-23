@@ -768,7 +768,7 @@ protected:
 				     states.states[0] == CSVState::UNQUOTED_ESCAPE || states.states[0] == CSVState::ESCAPE_NO_FIELD) &&
 				    (buffer_handle_ptr[iterator.pos.buffer_pos] ==
 				         state_machine->dialect_options.state_machine_options.quote.GetValue() ||
-				     state_machine->dialect_options.state_machine_options.unquoted_escapes.GetValue())) {
+				     state_machine->dialect_options.state_machine_options.UnquotedEscapes())) {
 					// the escaped variable is set on a quote char, or whenever the escape works outside quotes
 					ever_escaped = true;
 					if (states.states[0] == CSVState::UNQUOTED_ESCAPE) {

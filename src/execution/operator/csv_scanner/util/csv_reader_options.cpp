@@ -351,22 +351,45 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
-	} else if (loption == "unquoted_escapes") {
-		dialect_options.state_machine_options.unquoted_escapes.Set(ParseBoolean(context, value, loption));
-	} else if (loption == "escape_quotes_only") {
-		dialect_options.state_machine_options.escape_quotes_only.Set(ParseBoolean(context, value, loption));
-	} else if (loption == "line_records") {
-		dialect_options.state_machine_options.line_records.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "escape_mode") {
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "quoted") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTED);
+		} else if (mode == "anywhere") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::ANYWHERE);
+		} else if (mode == "quotes_only") {
+			dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTES_ONLY);
+		} else {
+			throw BinderException("ESCAPE_MODE must be quoted, anywhere or quotes_only");
+		}
 	} else if (loption == "embedded_quotes") {
-		dialect_options.state_machine_options.embedded_quotes.Set(ParseBoolean(context, value, loption));
-	} else if (loption == "doubled_quotes") {
-		dialect_options.state_machine_options.doubled_quotes.Set(ParseBoolean(context, value, loption));
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "none") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::NONE);
+		} else if (mode == "doubled") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::DOUBLED);
+		} else if (mode == "toggle") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::TOGGLE);
+		} else if (mode == "doubled_toggle") {
+			dialect_options.state_machine_options.embedded_quotes.Set(CSVEmbeddedQuotes::DOUBLED_TOGGLE);
+		} else {
+			throw BinderException("EMBEDDED_QUOTES must be none, doubled, toggle or doubled_toggle");
+		}
+	} else if (loption == "unterminated_quote") {
+		const auto mode = StringUtil::Lower(ParseString(value, loption));
+		if (mode == "error") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::ERROR);
+		} else if (mode == "value") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::VALUE);
+		} else if (mode == "null_at_line_end") {
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::NULL_AT_LINE_END);
+		} else {
+			throw BinderException("UNTERMINATED_QUOTE must be error, value or null_at_line_end");
+		}
 	} else if (loption == "ignore_extra_columns") {
 		ignore_extra_columns.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "allow_unescaped_quotes") {
 		dialect_options.state_machine_options.allow_unescaped_quotes.Set(ParseBoolean(context, value, loption));
-	} else if (loption == "allow_unterminated_quotes") {
-		allow_unterminated_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -611,10 +634,12 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		const auto &state_machine_options = dialect_options.state_machine_options;
 		const auto quote = state_machine_options.quote.GetValue();
 		const auto escape = state_machine_options.escape.GetValue();
-		if (state_machine_options.escape_quotes_only.GetValue() && (escape == '\0' || escape == quote)) {
-			throw BinderException("ESCAPE_QUOTES_ONLY requires an ESCAPE character other than the QUOTE character");
+		if (state_machine_options.EscapeQuotesOnly() && (escape == '\0' || escape == quote)) {
+			throw BinderException(
+			    "ESCAPE_MODE 'quotes_only' requires an ESCAPE character other than the QUOTE character");
 		}
-		if (state_machine_options.embedded_quotes.GetValue() && (quote == '\0' || quote == escape)) {
+		if (state_machine_options.embedded_quotes.GetValue() != CSVEmbeddedQuotes::NONE &&
+		    (quote == '\0' || quote == escape)) {
 			throw BinderException("EMBEDDED_QUOTES requires a QUOTE character other than the ESCAPE character");
 		}
 	}

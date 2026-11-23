@@ -42,7 +42,7 @@ FROM read_csv('{DATA_DIR}/csv/afl/3977/case_8.csv', auto_detect=false, buffer_si
 ----
 
 statement maybe
-FROM read_csv('{DATA_DIR}/csv/afl/3977/case_9.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_9.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 
 statement maybe
@@ -166,7 +166,7 @@ FROM read_csv('{DATA_DIR}/csv/afl/3977/case_39.csv', auto_detect=false, buffer_s
 ----
 
 statement maybe
-FROM read_csv('{DATA_DIR}/csv/afl/3977/case_40.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, comment=';', rejects_table='"', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_40.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, comment=';', rejects_table='"', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value');
 ----
 
 statement maybe
