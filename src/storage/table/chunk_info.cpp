@@ -77,8 +77,9 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 		return true;
 	}
 	if (IsDeleteId(id)) {
-		// a transaction cannot see a row whose delete it sees, so it never writes it
-		throw InternalException("ChunkVectorInfo: write of a row whose delete the transaction sees");
+		// a transaction cannot see rows it deleted earlier, so the current statement (a MERGE) deleted this row
+		throw InvalidInputException(
+		    "MERGE INTO cannot update a target row that it deleted: ensure each target row matches one source row");
 	}
 	return false;
 }
