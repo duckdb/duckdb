@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregates/arena_states_memory_limit.test
-# description: Histogram, binned histogram and mode states count against the memory limit, sorted, combined and framed states are reclaimed
+# description: Histogram, binned histogram, mode and reservoir_quantile states count against the memory limit, sorted, combined and framed states are reclaimed
 # group: [aggregates]
 
 require vector_size 2048
@@ -25,6 +25,18 @@ statement error
 SELECT count(*) FROM (SELECT i % 30000 g, histogram(i, range(0, 100000, 200)) x FROM range(300000) r(i) GROUP BY g) WHERE cardinality(x) > 0;
 ----
 Out of Memory Error
+
+# 1000 groups with a full sample of 8192 values and their weights
+statement error
+SELECT count(*) FROM (SELECT i % 1000 g, reservoir_quantile(i, 0.5) x FROM range(10000000) r(i) GROUP BY g) WHERE x IS NOT NULL;
+----
+Out of Memory Error
+
+# the sample grows with its group instead of being allocated for the full sample size up front
+query II
+SELECT count(*), sum(x) FROM (SELECT i // 2 g, reservoir_quantile(i, 0.5) x FROM range(200000) r(i) GROUP BY g);
+----
+100000	9999900000
 
 # the inner states of a sorted aggregate are reclaimed per batch of groups
 query II

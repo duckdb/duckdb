@@ -4,6 +4,10 @@
 
 require icu
 
+# the ORDER BY pipelines that build the 200000-row tables can report stalled progress under verify_progress
+statement ok
+SET debug_verify_progress_ignore='STALLED:ORDER_BY'
+
 statement ok
 SET TimeZone = 'America/New_York';
 
