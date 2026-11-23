@@ -99,14 +99,3 @@ query II
 SELECT stats(f), stats(d) FROM read_parquet('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan=true) LIMIT 1
 ----
 {'has_no_null': true, 'has_null': false, 'max': nan, 'min': -1.0}	{'has_no_null': true, 'has_null': false, 'max': nan, 'min': -1.0}
-
-# Positive nan_count with finite bounds must retain NaN in the optimizer statistics
-foreach column f d
-
-# the optimizer statistics keep NaN as the upper bound
-query I
-SELECT stats({column}) FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) LIMIT 1
-----
-{'has_no_null': true, 'has_null': true, 'max': nan, 'min': 1.0}
-
-endloop

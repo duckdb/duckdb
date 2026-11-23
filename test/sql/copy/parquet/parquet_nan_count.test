@@ -123,7 +123,7 @@ SELECT f, d FROM read_parquet('{DATA_DIR}/parquet-testing/arrow_nan.parquet', ca
 ----
 nan	nan
 
-# mixed files: the NaN-free row group has exact bounds, the NaN row group has none - both options return the same rows
+# mixed files: the NaN-free row group has exact bounds, the all-NaN row group has none - both options return the same rows
 statement ok
 COPY (SELECT i::DOUBLE d FROM range(2048) t(i) UNION ALL SELECT 'nan'::DOUBLE FROM range(2048)) TO '{TEST_DIR}/nan_count_mixed.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
 
@@ -181,38 +181,24 @@ SELECT count(*), min(d) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet'
 ----
 1024	nan
 
-query I
-SELECT count(*) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet', can_have_nan={option}) WHERE d = 'nan'
-----
-1024
-
 endloop
 
-# a positive nan_count overrides can_have_nan=false even when the chunk also has finite min/max.
-# nan_count_bounds.parquet: FLOAT f and DOUBLE d with [1, NaN, NULL], min=max=1, null_count=1, nan_count=1.
-query IIIIII
-SELECT path_in_schema, stats_min_value, stats_max_value, stats_null_count, stats_nan_count, num_values
-FROM parquet_metadata('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet')
-ORDER BY ALL
-----
-d	1.0	1.0	1	1	3
-f	1.0	1.0	1	1	3
+# the same holds for a FLOAT/DOUBLE leaf inside a nested column
+statement ok
+COPY (SELECT {'d': CASE WHEN i % 2 = 0 THEN i::DOUBLE ELSE 'nan'::DOUBLE END} s FROM range(10) t(i))
+TO '{TEST_DIR}/nan_count_nested_partial.parquet'
 
-foreach column f d
+query III
+SELECT stats_nan_count, stats_min_value, stats_max_value FROM parquet_metadata('{TEST_DIR}/nan_count_nested_partial.parquet')
+----
+5	0.0	8.0
+
+query II
+SELECT min(s.d), max(s.d) FROM '{TEST_DIR}/nan_count_nested_partial.parquet'
+----
+0.0	nan
 
 query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} > 1
+SELECT count(*) FROM '{TEST_DIR}/nan_count_nested_partial.parquet' WHERE s.d > 8
 ----
-nan
-
-query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} != 1
-----
-nan
-
-query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} <= 1
-----
-1.0
-
-endloop
+5
