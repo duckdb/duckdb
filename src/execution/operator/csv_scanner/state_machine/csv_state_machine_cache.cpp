@@ -17,6 +17,11 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 	const auto quote = static_cast<uint8_t>(options.quote.GetValue());
 	const auto escape = static_cast<uint8_t>(options.escape.GetValue());
 	const auto comment = static_cast<uint8_t>(options.comment.GetValue());
+	// the block scan reads the standard rules, so its skipped value hooks do no rule bookkeeping
+	if (options.escape_quotes_only.GetValue() || options.line_records.GetValue() || options.doubled_quotes.GetValue() ||
+	    options.embedded_quotes.GetValue()) {
+		return false;
+	}
 	if (delimiter.empty() || delimiter.size() > 4 || (escape != '\0' && escape != quote)) {
 		return false;
 	}

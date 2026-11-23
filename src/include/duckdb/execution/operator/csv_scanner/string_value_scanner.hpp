@@ -210,6 +210,10 @@ public:
 	const bool allow_unescaped_quotes;
 	//! A quote that is never closed reads as a value rather than an error
 	const bool allow_unterminated_quotes;
+	//! Whether a line break ends the record even inside quotes, the line_records option
+	const bool line_record_rows;
+	//! Whether fields follow the embedded quote rules, the embedded_quotes option
+	const bool embedded_quote_fields;
 
 	const idx_t extra_delimiter_bytes = 0;
 
@@ -278,8 +282,8 @@ public:
 	idx_t units_before_field = 0;
 	//! Whether the current field was quoted before DemoteUnenclosedQuotedValue rerouted it
 	bool was_quoted = false;
-	//! Scratch heap for normalized field text before its conversion into the column's type
-	Vector value_scratch {LogicalType::VARCHAR, 1ULL};
+	//! Scratch buffer for normalized field text before its conversion into the column's type, reused by every field
+	vector<char> value_scratch;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -295,6 +299,7 @@ public:
 		return result.projecting_columns && result.cur_col_id < result.number_of_columns &&
 		       !result.projected_columns[result.cur_col_id];
 	}
+	//! Called by the block scan only, which reads the standard rules, see BlockScanEligible
 	static inline void SkipValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool AddRowWithoutValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool TracksAscii(const StringValueResult &result) {
@@ -455,7 +460,7 @@ public:
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
 	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
 	                                      const string &separator, bool doubled_quotes, idx_t units_before,
-	                                      Vector &vector);
+	                                      vector<char> &scratch);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);

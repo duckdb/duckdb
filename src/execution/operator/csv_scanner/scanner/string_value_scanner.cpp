@@ -37,6 +37,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       tolerate_extra_columns(state_machine.options.ignore_extra_columns.GetValue()),
       allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.GetValue()),
       allow_unterminated_quotes(state_machine.options.allow_unterminated_quotes.GetValue()),
+      line_record_rows(state_machine.state_machine_options.line_records.GetValue()),
+      embedded_quote_fields(state_machine.state_machine_options.embedded_quotes.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -704,8 +706,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
-	result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
-	                                   result.HandleMultiDelimiter(buffer_pos));
+	if (result.embedded_quote_fields) {
+		result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+		                                   result.HandleMultiDelimiter(buffer_pos));
+	}
 	if (result.quoted) {
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
@@ -715,20 +719,21 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
 	}
-	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
-	                              result.HandleMultiDelimiter(buffer_pos));
+	if (result.embedded_quote_fields) {
+		result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+		                              result.HandleMultiDelimiter(buffer_pos));
+	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
 void StringValueResult::SkipValueInternal() {
 	D_ASSERT(CanSkipValue(*this));
-	if (quoted && !unquoted && !RecordEndsInsideQuotes()) {
+	if (quoted && !unquoted) {
 		current_errors.Insert(UNTERMINATED_QUOTES, cur_col_id, chunk_col_id, last_position);
 	}
 	cur_col_id++;
 	quoted = false;
 	escaped = false;
-	was_quoted = false;
 }
 
 void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -736,8 +741,6 @@ void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_
 		return;
 	}
 	result.SkipValueInternal();
-	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
-	                              result.HandleMultiDelimiter(buffer_pos));
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
@@ -1027,12 +1030,14 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.RecordEndsInsideQuotes()) {
+		if (result.line_record_rows && result.RecordEndsInsideQuotes()) {
 			// the line break ended the record inside an open quote
 			result.AddUnterminatedQuoteNull();
 		} else if (result.quoted) {
-			result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
-			                                   buffer_pos - result.last_position.buffer_pos);
+			if (result.embedded_quote_fields) {
+				result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+				                                   buffer_pos - result.last_position.buffer_pos);
+			}
 			if (result.quoted) {
 				AddQuotedValue(result, buffer_pos);
 			} else {
@@ -1548,7 +1553,7 @@ static bool IsUnicodeWhitespace(int32_t code_point) {
 
 string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
                                                    const string &separator, bool doubled_quotes, idx_t units_before,
-                                                   Vector &vector) {
+                                                   vector<char> &scratch) {
 	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
 	auto prev_is_separator = [&](idx_t pos) {
 		return pos >= separator.size() &&
@@ -1557,8 +1562,15 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 	auto next_is_separator = [&](idx_t pos) {
 		return pos + 1 + separator.size() <= size && memcmp(str_ptr + pos + 1, separator.data(), separator.size()) == 0;
 	};
-	auto result_string = StringVector::EmptyString(vector, size);
-	auto result_ptr = result_string.GetDataWriteable();
+	if (size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException("Cannot create a string of size: '%d', the maximum supported string size is: '%d'",
+		                          size, string_t::MAX_STRING_SIZE);
+	}
+	// the normalized text is at most as long as the raw bytes and is copied or converted before the next field
+	if (scratch.size() < size) {
+		scratch.resize(size);
+	}
+	auto result_ptr = scratch.data();
 	idx_t result_pos = 0;
 	idx_t units = units_before;
 	auto add_units = [&units](idx_t count) {
@@ -1620,8 +1632,7 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 		add_units(code_point >= 0x10000 ? 2 : 1);
 		pos += char_len;
 	}
-	result_string.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(result_pos), size);
-	return result_string;
+	return string_t(scratch.data(), UnsafeNumericCast<uint32_t>(result_pos));
 }
 
 void StringValueScanner::ProcessOverBufferValue() {
@@ -1760,7 +1771,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			skip_value = true;
 		}
 	}
-	if (!skip_value && !result.comment && result.RecordEndsInsideQuotes()) {
+	if (!skip_value && !result.comment && result.line_record_rows && result.RecordEndsInsideQuotes()) {
 		// the line break ended the record inside an open quote
 		result.AddUnterminatedQuoteNull();
 	} else if (!skip_value) {
@@ -1768,7 +1779,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;
 		bool removed_extra_delimiter_bytes = false;
-		if (!result.comment && over_buffer_string.size() >= extra_delimiter_bytes) {
+		if (result.embedded_quote_fields && !result.comment && over_buffer_string.size() >= extra_delimiter_bytes) {
 			result.DemoteUnenclosedQuotedValue(over_buffer_string.c_str(),
 			                                   over_buffer_string.size() - extra_delimiter_bytes);
 		}
@@ -1883,9 +1894,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 
 	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 	const idx_t tail_extra_bytes = states.IsDelimiter() && !delimiter_tail.empty() ? delimiter_tail.size() - 1 : 0;
-	result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
-	                                                              ? over_buffer_string.size() - tail_extra_bytes
-	                                                              : 0);
+	if (result.embedded_quote_fields) {
+		result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
+		                                                              ? over_buffer_string.size() - tail_extra_bytes
+		                                                              : 0);
+	}
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
