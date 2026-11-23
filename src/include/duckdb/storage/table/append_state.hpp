@@ -131,6 +131,8 @@ struct LocalAppendState {
 	//! The context of the operation that appends (the local storage can outlive the connection that created it)
 	optional_ptr<Context> context;
 	unique_ptr<ConstraintState> constraint_state;
+	//! Held from InitializeAppend until FinalizeAppend (or until the state is destroyed)
+	unique_ptr<StorageLockKey> append_lock;
 };
 
 } // namespace duckdb
