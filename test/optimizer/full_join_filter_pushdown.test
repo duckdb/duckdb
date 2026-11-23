@@ -199,6 +199,10 @@ WHERE l.la <= 25 AND random() < 0.5;
 ----
 physical_plan	<!REGEX>:.*Filters:.*la <= 25.*
 
+# Keep runtime join filters from removing the invalid row before the cast.
+statement ok
+SET disabled_optimizers = 'outer_join_simplification,join_filter_pushdown';
+
 # Inlining a computed column must not move its cast below the input's inner join.
 statement ok
 CREATE TABLE cast_source (id INTEGER, s VARCHAR);
@@ -210,6 +214,14 @@ query II
 SELECT l.id, l.age
 FROM (SELECT s.id, s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id) l
 WHERE l.age <= 25 ORDER BY 1, 2;
+----
+1	20
+
+# A barrier can inline the cast but must keep it above the join.
+query II
+SELECT l.id, l.age
+FROM (SELECT s.id, s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id) l
+WHERE __internal_barrier(l.age <= 25) ORDER BY 1, 2;
 ----
 1	20
 
@@ -235,6 +247,9 @@ FROM (SELECT s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.
 FULL JOIN rhs r ON l.age = r.ra WHERE l.age <= 25 ORDER BY 1;
 ----
 20
+
+statement ok
+SET disabled_optimizers = 'outer_join_simplification';
 
 # Non-throwing grouping expressions still permit scan pushdown.
 query II
