@@ -199,7 +199,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				if (gstate.right_outer.Enabled()) {
 					lock_guard<mutex> guard(gstate.lock);
 					gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
-					                           state.cross_product.PositionInChunk());
+					                            state.cross_product.PositionInChunk());
 				}
 			} else {
 				// set the match flag in the LHS
