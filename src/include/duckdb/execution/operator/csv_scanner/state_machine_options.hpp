@@ -40,16 +40,16 @@ struct CSVStateMachineOptions {
 	CSVOption<bool> unquoted_escapes = false;
 	//! The escape escapes only the quote and escape characters and is inert before anything else
 	CSVOption<bool> escape_quotes_only = false;
-	//! Every line break ends the record even inside quotes, and a quote left open reads its field as NULL
-	CSVOption<bool> line_records = false;
 	//! A doubled quote is one quote also outside quoted fields and with an unrelated escape, as in opencsv
 	CSVOption<bool> doubled_quotes = false;
+	//! A lone quote in the middle of a field toggles the quote state, as opencsv's embedded quote rule reads it
+	CSVOption<bool> embedded_quotes = false;
+	//! Every line break ends the record even inside quotes, and a quote left open reads its field as NULL
+	CSVOption<bool> line_records = false;
 	//! Any line break ends a record whatever the file's line break is
 	CSVOption<bool> mixed_line_breaks = false;
 	//! A quote that does not close its value is data rather than an error
 	CSVOption<bool> allow_unescaped_quotes = false;
-	//! A lone quote in the middle of a field toggles the quote state, as opencsv's embedded quote rule reads it
-	CSVOption<bool> embedded_quotes = false;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
