@@ -1052,6 +1052,60 @@ TEST_CASE("add_grammar_extension appends to the active grammar extensions", "[ap
 	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
 }
 
+TEST_CASE("duckdb_grammar_changes lists the changes of the active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection con(db);
+
+	// no active grammar extension, no changes
+	auto result = con.Query("SELECT count(*) FROM duckdb_grammar_changes()");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
+
+	// the changes come in the order they are applied: by extension as activated, then by position
+	ActivateGrammarExtensionTestSyntax(con);
+	result = con.Query("SELECT extension, position, type, rule_name, definition, collapsible, suppress_suggestions, "
+	                   "has_code FROM duckdb_grammar_changes() ORDER BY extension DESC, position");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 5);
+	struct ExpectedChange {
+		const char *extension;
+		int64_t position;
+		const char *type;
+		const char *rule_name;
+		const char *definition;
+		bool has_code;
+	};
+	// the definitions of a change are data, a change that depends on a function (a cursor lookup or a matcher) is
+	// flagged: a client that parses on its own cannot rebuild it
+	ExpectedChange expected[] = {
+	    {"extension_test_value", 0, "ADD_RULE", "GrammarExtensionTestValue", "GrammarExtensionTestValue <- 'WRONG'",
+	     false},
+	    {"extension_test_value", 1, "ADD_CHOICE", "UnreservedKeyword", "'ANSWER'", false},
+	    {"extension_test_value", 2, "ADD_TERMINAL_RULE_OVERRIDE", "GrammarExtensionTestValue", "", true},
+	    {"extension_test_atom", 0, "ADD_RULE", "GrammarExtensionTestAtom",
+	     "GrammarExtensionTestAtom <- GrammarExtensionTestValue", false},
+	    {"extension_test_atom", 1, "PREPEND_CHOICE", "SelectAtom", "GrammarExtensionTestAtom", true},
+	};
+	for (idx_t row = 0; row < 5; row++) {
+		auto &change = expected[row];
+		REQUIRE(result->Collection().GetValue(0, row) == Value(change.extension));
+		REQUIRE(result->Collection().GetValue(1, row) == Value::BIGINT(change.position));
+		REQUIRE(result->Collection().GetValue(2, row) == Value(change.type));
+		REQUIRE(result->Collection().GetValue(3, row) == Value(change.rule_name));
+		REQUIRE(result->Collection().GetValue(4, row) == Value(change.definition));
+		REQUIRE(result->Collection().GetValue(5, row) == Value::BOOLEAN(false));
+		REQUIRE(result->Collection().GetValue(6, row) == Value::BOOLEAN(false));
+		REQUIRE(result->Collection().GetValue(7, row) == Value::BOOLEAN(change.has_code));
+	}
+
+	// an extension that is registered but not active lists nothing
+	REQUIRE_NO_FAIL(*con.Query("CALL remove_grammar_extension('extension_test_atom')"));
+	result = con.Query("SELECT count(*) FROM duckdb_grammar_changes() WHERE extension = 'extension_test_atom'");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
+}
+
 class ConstantSevenTransformProcess final : public TransformProcess {
 public:
 	explicit ConstantSevenTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {

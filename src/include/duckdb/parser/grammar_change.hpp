@@ -69,6 +69,8 @@ public:
 	bool HasCode() const {
 		return find_cursor || matcher_factory;
 	}
+	//! The change type as text, as listed by duckdb_grammar_changes()
+	DUCKDB_API string TypeName() const;
 
 public:
 	void Apply(ParsedGrammar &grammar) const;
