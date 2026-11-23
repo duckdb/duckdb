@@ -25,12 +25,20 @@ select * from '{TEST_DIR}/test_cache_logging.parquet';
 statement ok
 CALL disable_logging();
 
-# The cold read misses, the warm read is served from the cache
+# Statement verification can add queries before each select, so only check the first and the last one
+# The first read misses
+query I
+select count(*) filter (event = 'MISS') > 0 from duckdb_logs_parsed('ExternalFileCache')
+where query_id = (select min(query_id) from duckdb_logs_parsed('ExternalFileCache'));
+----
+true
+
+# The last read is entirely served from the cache
 query II
 select count(*) filter (event = 'MISS') > 0, count(*) filter (event = 'HIT') > 0
-from duckdb_logs_parsed('ExternalFileCache') group by query_id order by query_id;
+from duckdb_logs_parsed('ExternalFileCache')
+where query_id = (select max(query_id) from duckdb_logs_parsed('ExternalFileCache'));
 ----
-true	true
 false	true
 
 # The missed blocks are what is read from the file
