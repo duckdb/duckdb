@@ -21,10 +21,11 @@ public:
 
 public:
 	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
-	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
-	               vector<column_t> partitions);
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality, vector<column_t> partitions,
+	               optional_idx partition_limit = optional_idx());
 	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
-	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+	               optional_idx partition_limit = optional_idx());
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;
@@ -35,6 +36,8 @@ public:
 	bool is_order_dependent;
 	//! The partitions over which this is grouped (if any)
 	OperatorPartitionInfo partition_info;
+	//! The partition size limit (if any)
+	optional_idx partition_limit;
 	//! DISTINCT FROM comparison of the partition keys
 	unique_ptr<Expression> partition_distinct_from;
 	//! DISTINCT FROM comparison of the order keys of every window expression, by the end of its order key prefix
