@@ -1,0 +1,134 @@
+# name: test/sql/join/inner/test_join_minmax_compressed_filter.test
+# description: Min/max join filtering preserves compressed scans and mandatory predicates
+# group: [inner]
+
+require parquet
+
+require exact_vector_size 2048
+
+statement ok
+SET threads=1;
+
+statement ok
+SET disabled_optimizers='statistics_propagation,join_order,build_side_probe_side';
+
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+statement ok
+ATTACH '{TEST_DIR}/compressed_minmax.db' AS compressed (STORAGE_VERSION 'v1.3.0');
+
+statement ok
+CREATE TABLE build_keys AS SELECT 1 AS w,lpad(k::VARCHAR,4,'0') AS s,k,k>=2700 AS keep FROM range(1,3001)t(k);
+
+statement ok
+SET force_compression='rle';
+
+# Each dictionary/run value has different frequency among actual rows.
+statement ok
+CREATE TABLE compressed.rle_probe AS SELECT 1 AS w,CASE WHEN i%2048=0 THEN 1 ELSE 3000 END::BIGINT AS k FROM range(122880)t(i);
+
+statement ok
+CHECKPOINT compressed;
+
+statement ok
+SET force_compression='dict_fsst';
+
+statement ok
+CREATE TABLE compressed.dict_probe AS SELECT w,lpad(k::VARCHAR,4,'0') AS s FROM compressed.rle_probe;
+
+statement ok
+CHECKPOINT compressed;
+
+statement ok
+COPY compressed.rle_probe TO '{TEST_DIR}/frequency.parquet' (FORMAT PARQUET,ROW_GROUP_SIZE 122880);
+
+statement ok
+DETACH compressed;
+
+statement ok
+ATTACH '{TEST_DIR}/compressed_minmax.db' AS compressed;
+
+query T
+SELECT DISTINCT compression FROM pragma_storage_info('compressed.rle_probe') WHERE column_name='k' AND segment_type<>'VALIDITY';
+----
+RLE
+
+query T
+SELECT DISTINCT compression FROM pragma_storage_info('compressed.dict_probe') WHERE column_name='s' AND segment_type<>'VALIDITY';
+----
+DICT_FSST
+
+query I
+SELECT count(*) FROM parquet_metadata('{TEST_DIR}/frequency.parquet') WHERE path_in_schema='k' AND encodings IN ('PLAIN_DICTIONARY','RLE_DICTIONARY');
+----
+1
+
+foreach source compressed.rle_probe read_parquet('{TEST_DIR}/frequency.parquet')
+
+query I
+SELECT count(*) FROM ${source} p JOIN build_keys b ON p.w=b.w AND p.k=b.k WHERE b.keep;
+----
+122820
+
+# Cached predicates must reject actual rows even when their frequencies are skewed.
+query II
+EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*) FROM ${source} p JOIN build_keys b ON p.w=b.w AND p.k=b.k WHERE b.keep;
+----
+analyzed_plan	<REGEX>:(?s).*(rle_probe|frequency\.parquet)[^}]*},\s*"intermediate_rows": 122820,.*
+
+# Mandatory predicates sharing the filtered column retain their semantics.
+query I
+SELECT count(*) FROM ${source} p JOIN build_keys b ON p.w=b.w AND p.k=b.k WHERE b.keep AND p.k<>3000;
+----
+0
+
+endloop
+
+# Bounds match every row in the first/last group, but only half the middle group.
+statement ok
+COPY (SELECT 1 AS w,CASE WHEN i BETWEEN 2048 AND 4095 AND i%2=0 THEN 1 ELSE 3000 END::BIGINT AS k FROM range(6144)t(i)) TO '{TEST_DIR}/row_groups.parquet' (FORMAT PARQUET,ROW_GROUP_SIZE 2048);
+
+query ITT
+SELECT row_group_id,stats_min_value,stats_max_value FROM parquet_metadata('{TEST_DIR}/row_groups.parquet') WHERE path_in_schema='k' ORDER BY row_group_id;
+----
+0	3000	3000
+1	1	3000
+2	3000	3000
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/row_groups.parquet') p JOIN build_keys b ON p.w=b.w AND p.k=b.k WHERE b.keep;
+----
+5120
+
+query II
+EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*) FROM read_parquet('{TEST_DIR}/row_groups.parquet') p JOIN build_keys b ON p.w=b.w AND p.k=b.k WHERE b.keep;
+----
+analyzed_plan	<REGEX>:(?s).*row_groups\.parquet[^}]*},\s*"intermediate_rows": 5120,.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/row_groups.parquet') WHERE k>2000;
+----
+5120
+
+query I
+SELECT count(*) FROM compressed.dict_probe p JOIN build_keys b ON p.w=b.w AND p.s=b.s WHERE b.keep;
+----
+122820
+
+query II
+EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*) FROM compressed.dict_probe p JOIN build_keys b ON p.w=b.w AND p.s=b.s WHERE b.keep;
+----
+analyzed_plan	<REGEX>:(?s).*dict_probe[^}]*},\s*"intermediate_rows": 122820,.*
+
+statement ok
+DETACH compressed;
+
+statement ok
+RESET force_compression;
+
+statement ok
+RESET disabled_optimizers;
+
+statement ok
+RESET dynamic_or_filter_threshold;

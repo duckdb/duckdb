@@ -253,7 +253,7 @@ JOIN inequality_build b
 ----
 analyzed_plan	<!REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\((k IN|k <=).*
 
-# If the InFilter is rejected for a dense range, we still keep min/max pruning.
+# If the InFilter is rejected for a dense range, we still apply min/max to probe rows.
 statement ok
 SET dynamic_or_filter_threshold=1000;
 
@@ -295,7 +295,7 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*>=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*\(k.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -305,7 +305,7 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*<=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*\(k.*<=.*
 
 # Multiple equality keys make PRF and Bloom filters ineligible; min/max is used for each key.
 statement ok
@@ -331,7 +331,7 @@ JOIN multi_build b
   ON p.k1 = b.k1
  AND p.k2 = b.k2;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k1.*>=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*\(k1.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -341,7 +341,7 @@ JOIN multi_build b
   ON p.k1 = b.k1
  AND p.k2 = b.k2;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k1.*<=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*\(k1.*<=.*
 
 query II
 EXPLAIN ANALYZE

@@ -380,12 +380,86 @@ TEST_CASE("State export retires aggregate telemetry even after another worker co
 	}
 }
 
+TEST_CASE("Aggregate lookup history tolerates short unique runs and decays", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("8GB");
+	fixture.Keys(0, NumericLimits<idx_t>::Maximum());
+	fixture.Sink();
+	auto &ht = *fixture.Local().ht;
+	// Keep growth from bypassing the small-table lookup policy.
+	ht.EnableHLL(false);
+	const auto &state = ht.GetAdaptivityState();
+	const auto capacity = ht.Capacity();
+	const auto minimum_input = RadixHTAdaptivity::MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP;
+	idx_t offset = STANDARD_VECTOR_SIZE;
+	while (state.GetSinkCount() < minimum_input + 2 * capacity) {
+		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
+		offset += STANDARD_VECTOR_SIZE;
+		fixture.Sink();
+		if (ht.Count() != 0) {
+			// Repeat keys within the fill, without reusing keys across fills.
+			fixture.Sink();
+		}
+		REQUIRE_FALSE(state.LookupsSkipped());
+		if (state.GetSinkCount() >= minimum_input && ht.Count() == 0) {
+			break;
+		}
+	}
+	REQUIRE(state.GetSinkCount() >= minimum_input);
+	REQUIRE(ht.Count() == 0);
+	REQUIRE(ht.Capacity() == capacity);
+
+	const auto unique_fill = [&]() {
+		for (idx_t input = 0; input < 2 * capacity; input += STANDARD_VECTOR_SIZE) {
+			fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
+			offset += STANDARD_VECTOR_SIZE;
+			fixture.Sink();
+			if (ht.Count() == 0) {
+				break;
+			}
+		}
+		REQUIRE(ht.Count() == 0);
+		REQUIRE(state.GetCycleInputCount() == 0);
+		REQUIRE(ht.Capacity() == capacity);
+	};
+	unique_fill();
+	REQUIRE_FALSE(state.LookupsSkipped());
+	for (idx_t fill = 0; fill < 32 && !state.LookupsSkipped(); fill++) {
+		unique_fill();
+	}
+	REQUIRE(state.LookupsSkipped());
+	REQUIRE_FALSE(state.HLLEnabled());
+	REQUIRE_FALSE(fixture.Global().external);
+	fixture.Combine(0);
+	REQUIRE(fixture.ScanGroupCount() == offset);
+}
+
 TEST_CASE("Aggregate lookup retries recover a small recurring domain after unique input", "[radix_ht_sink]") {
 	// Keep chunk metadata at tiny vector sizes from triggering spill before the lookup decision.
 	RadixSinkFixture fixture("8GB");
-	const auto sample_size = RadixHTAdaptivity::LOOKUP_SAMPLE_SIZE;
-	idx_t offset = 0;
-	for (; offset < sample_size + 2 * fixture.Global().config.sink_capacity; offset += STANDARD_VECTOR_SIZE) {
+	fixture.Keys(0, NumericLimits<idx_t>::Maximum());
+	fixture.Sink();
+	auto &local = fixture.Local();
+	auto &ht = *local.ht;
+	bool hll_enabled = true;
+	bool external = false;
+	bool memory_pressure = false;
+	SECTION("HLL enabled") {
+	}
+	SECTION("HLL disabled") {
+		ht.EnableHLL(false);
+		hll_enabled = false;
+	}
+	SECTION("External aggregation") {
+		REQUIRE(fixture.Global().config.SetRadixBitsToExternal());
+		hll_enabled = false;
+		external = true;
+	}
+	SECTION("Memory-pressure retry boundaries") {
+		memory_pressure = true;
+	}
+	const auto minimum_input = RadixHTAdaptivity::MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP;
+	idx_t offset = STANDARD_VECTOR_SIZE;
+	for (; offset < minimum_input + 2 * fixture.Global().config.sink_capacity; offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
 		fixture.Sink();
 		if (fixture.Local().ht->GetAdaptivityState().LookupsSkipped()) {
@@ -393,34 +467,44 @@ TEST_CASE("Aggregate lookup retries recover a small recurring domain after uniqu
 			break;
 		}
 	}
-	auto &ht = *fixture.Local().ht;
 	CAPTURE(ht.GetAdaptivityState().GetSinkCount(), ht.GetSizeInBytes(), fixture.Global().GetThreadLimit(),
 	        fixture.Global().external.load());
 	REQUIRE(ht.GetAdaptivityState().LookupsSkipped());
-	REQUIRE(ht.GetAdaptivityState().HLLEnabled());
+	REQUIRE(ht.GetAdaptivityState().HLLEnabled() == hll_enabled);
 	REQUIRE(ht.Count() == 0);
 	const auto capacity = ht.Capacity();
 	REQUIRE(capacity == fixture.Global().config.sink_capacity);
 	REQUIRE(ht.GetAdaptivityState().GetSkippedInputCount() == 0);
 
+	const auto sink = [&]() {
+		if (memory_pressure) {
+			ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+			local.adaptivity.HandleSinkBoundary(fixture.Global(), local, true);
+		} else {
+			fixture.Sink();
+		}
+	};
 	// Ordinary abandonment must not reset the skipped-input interval.
-	for (; ht.GetAdaptivityState().GetSkippedInputCount() + STANDARD_VECTOR_SIZE < sample_size;
+	for (; ht.GetAdaptivityState().GetSkippedInputCount() + STANDARD_VECTOR_SIZE <
+	       RadixHTAdaptivity::MIN_LOOKUP_RETRY_ROWS;
 	     offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
-		fixture.Sink();
+		sink();
 		REQUIRE(ht.GetAdaptivityState().LookupsSkipped());
 	}
 	const auto unique_count = offset;
-	const auto estimate = ht.GetAdaptivityState().GetHLLUpperBound();
+	const auto estimate = hll_enabled ? ht.GetAdaptivityState().GetHLLUpperBound() : 0;
 	for (idx_t retry_input = 0; retry_input < 2 * capacity && ht.GetAdaptivityState().LookupsSkipped();
 	     retry_input += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(retry_input, 64);
-		fixture.Sink();
+		sink();
 	}
 	REQUIRE_FALSE(ht.GetAdaptivityState().LookupsSkipped());
-	REQUIRE_FALSE(fixture.Global().external);
-	REQUIRE(ht.GetAdaptivityState().HLLEnabled());
-	REQUIRE(ht.GetAdaptivityState().GetHLLUpperBound() == estimate);
+	REQUIRE(fixture.Global().external == external);
+	REQUIRE(ht.GetAdaptivityState().HLLEnabled() == hll_enabled);
+	if (hll_enabled) {
+		REQUIRE(ht.GetAdaptivityState().GetHLLUpperBound() == estimate);
+	}
 	REQUIRE(ht.Capacity() == capacity);
 	REQUIRE(ht.Count() == 0);
 	REQUIRE(ht.GetAdaptivityState().GetCycleInputCount() == 0);
@@ -568,7 +652,7 @@ TEST_CASE("Failed adaptive growth preserves rows and falls back to the existing 
 	{
 		auto competing_allocation =
 		    manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - manager.GetUsedMemory() - 65536);
-		REQUIRE_FALSE(RadixHTAdaptivity::TryGrow(global, local));
+		REQUIRE_FALSE(local.adaptivity.HandleSinkBoundary(global, local, false));
 		REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE(local.ht->Capacity() == old_capacity);
 		REQUIRE(local.local_sink_capacity == old_capacity);
