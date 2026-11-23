@@ -1,7 +1,7 @@
 #include "duckdb/common/cgroups.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -14,9 +14,6 @@ namespace duckdb {
 #if defined(__linux__) && !defined(DUCKDB_WASM)
 
 namespace {
-
-static constexpr const char *CGROUP_PATH = "/proc/self/cgroup";
-static constexpr const int64_t DEFAULT_CGROUP_FILE_BUFFER_SIZE = 1024;
 
 struct CGroupEntry {
 public:
@@ -41,22 +38,12 @@ public:
 	string cgroup_path;
 };
 
-static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
+static vector<CGroupEntry> ParseGroupEntries() {
 	vector<CGroupEntry> result;
-	if (!fs.FileExists(CGROUP_PATH)) {
+	string cgroup_file_content;
+	if (!OSUtil::TryReadSystemFile(SystemFile::PROCESS_CGROUPS, string(), cgroup_file_content)) {
 		return result;
 	}
-
-	auto handle = fs.OpenFile(CGROUP_PATH, FileFlags::FILE_FLAGS_READ);
-
-	char buffer[DEFAULT_CGROUP_FILE_BUFFER_SIZE];
-	int64_t bytes_read;
-	string cgroup_file_content;
-	do {
-		bytes_read = fs.Read(*handle, buffer, DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
-		buffer[bytes_read] = '\0';
-		cgroup_file_content += string(buffer);
-	} while (bytes_read >= DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
 
 	auto lines = StringUtil::Split(cgroup_file_content, "\n");
 	for (auto &line : lines) {
@@ -87,27 +74,19 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	return result;
 }
 
-static optional_idx GetCPUCountV2(const string &cgroup_path, FileSystem &fs) {
-	static constexpr const char *CPU_MAX = "/sys/fs/cgroup%s/cpu.max";
-
-	auto cpu_max = StringUtil::Format(CPU_MAX, cgroup_path);
-
+static optional_idx GetCPUCountV2(const string &cgroup_path) {
 	//! See https://docs.kernel.org/scheduler/sched-bwc.html
 	//! run-time replenished within a period (in microseconds)
 	int64_t quota;
 	//! the length of a period (in microseconds)
 	int64_t period;
 
-	if (!fs.FileExists(cpu_max)) {
+	// cgroup v2
+	string cpu_max;
+	if (!OSUtil::TryReadSystemFile(SystemFile::CGROUP_V2_CPU_MAX, cgroup_path, cpu_max)) {
 		return optional_idx();
 	}
-
-	// cgroup v2
-	char byte_buffer[1000];
-	auto handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ);
-	int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-	byte_buffer[read_bytes] = '\0';
-	if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
+	if (std::sscanf(cpu_max.c_str(), "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
 		return optional_idx();
 	}
 
@@ -117,17 +96,7 @@ static optional_idx GetCPUCountV2(const string &cgroup_path, FileSystem &fs) {
 	return optional_idx();
 }
 
-static optional_idx GetCPUCountV1(const string &cgroup_path, FileSystem &fs) {
-	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu%s/cpu.cfs_quota_us";
-	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu%s/cpu.cfs_period_us";
-
-	auto cfs_quota = StringUtil::Format(CFS_QUOTA, cgroup_path);
-	auto cfs_period = StringUtil::Format(CFS_PERIOD, cgroup_path);
-
-	if (!fs.FileExists(cfs_quota) || !fs.FileExists(cfs_period)) {
-		return optional_idx();
-	}
-
+static optional_idx GetCPUCountV1(const string &cgroup_path) {
 	//! See https://docs.kernel.org/scheduler/sched-bwc.html
 	//! run-time replenished within a period (in microseconds)
 	int64_t quota;
@@ -135,22 +104,17 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, FileSystem &fs) {
 	int64_t period;
 
 	// cgroup v1
-	char byte_buffer[1000];
-	{
-		auto handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ);
-		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
-			return optional_idx();
-		}
+	string cfs_quota;
+	string cfs_period;
+	if (!OSUtil::TryReadSystemFile(SystemFile::CGROUP_V1_CPU_QUOTA, cgroup_path, cfs_quota) ||
+	    !OSUtil::TryReadSystemFile(SystemFile::CGROUP_V1_CPU_PERIOD, cgroup_path, cfs_period)) {
+		return optional_idx();
 	}
-	{
-		auto handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ);
-		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
-			return optional_idx();
-		}
+	if (std::sscanf(cfs_quota.c_str(), "%" SCNd64 "", &quota) != 1) {
+		return optional_idx();
+	}
+	if (std::sscanf(cfs_period.c_str(), "%" SCNd64 "", &period) != 1) {
+		return optional_idx();
 	}
 
 	if (quota > 0 && period > 0) {
@@ -159,19 +123,14 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, FileSystem &fs) {
 	return optional_idx();
 }
 
-static optional_idx ReadMemoryLimit(FileSystem &fs, const string &file_path) {
-	if (!fs.FileExists(file_path)) {
+static optional_idx ReadMemoryLimit(SystemFile file, const string &cgroup_path) {
+	string contents;
+	if (!OSUtil::TryReadSystemFile(file, cgroup_path, contents)) {
 		return optional_idx();
 	}
 
-	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
-	char buffer[100];
-	auto bytes_read = fs.Read(*handle, buffer, 99);
-	buffer[bytes_read] = '\0';
-
-	auto contents = string_t(buffer);
 	idx_t value;
-	if (TryCast::Operation<string_t, idx_t>(contents, value)) {
+	if (TryCast::Operation<string_t, idx_t>(string_t(contents.c_str()), value)) {
 		return optional_idx(value);
 	}
 	return optional_idx();
@@ -179,14 +138,11 @@ static optional_idx ReadMemoryLimit(FileSystem &fs, const string &file_path) {
 
 } // namespace
 
-optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
-	static constexpr const char *MEMORY_LIMIT_IN_BYTES = "/sys/fs/cgroup/memory%s/memory.limit_in_bytes";
-	static constexpr const char *MEMORY_MAX = "/sys/fs/cgroup%s/memory.max";
-
+optional_idx CGroups::GetMemoryLimit() {
 	optional_idx root_entry;
 	optional_idx memory_entry;
 
-	auto cgroup_entries = ParseGroupEntries(fs);
+	auto cgroup_entries = ParseGroupEntries();
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
 		auto &controller_list = entry.controller_list;
@@ -207,28 +163,24 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	// To properly handle this, we should parse and use the mapping in `/proc/self/mountinfo`
 	if (memory_entry.IsValid()) {
 		auto &entry = cgroup_entries[memory_entry.GetIndex()];
-		auto path = StringUtil::Format(MEMORY_LIMIT_IN_BYTES, entry.cgroup_path);
-		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
+		auto memory_limit = ReadMemoryLimit(SystemFile::CGROUP_V1_MEMORY_LIMIT, entry.cgroup_path);
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
 		//! try falling back to the root directory
-		path = StringUtil::Format(MEMORY_LIMIT_IN_BYTES, "");
-		memory_limit = ReadMemoryLimit(fs, path.c_str());
+		memory_limit = ReadMemoryLimit(SystemFile::CGROUP_V1_MEMORY_LIMIT, string());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
 	}
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto path = StringUtil::Format(MEMORY_MAX, entry.cgroup_path);
-		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
+		auto memory_limit = ReadMemoryLimit(SystemFile::CGROUP_V2_MEMORY_MAX, entry.cgroup_path);
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
 		//! try falling back to the root directory
-		path = StringUtil::Format(MEMORY_MAX, "");
-		memory_limit = ReadMemoryLimit(fs, path.c_str());
+		memory_limit = ReadMemoryLimit(SystemFile::CGROUP_V2_MEMORY_MAX, string());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
@@ -236,11 +188,11 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	return optional_idx();
 }
 
-idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
+idx_t CGroups::GetCPULimit(idx_t physical_cores) {
 	optional_idx root_entry;
 	optional_idx cpu_entry;
 
-	auto cgroup_entries = ParseGroupEntries(fs);
+	auto cgroup_entries = ParseGroupEntries();
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
 		auto &controller_list = entry.controller_list;
@@ -261,24 +213,24 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	// To properly handle this, we should parse and use the mapping in `/proc/self/mountinfo`
 	if (cpu_entry.IsValid()) {
 		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
-		auto res = GetCPUCountV1(entry.cgroup_path, fs);
+		auto res = GetCPUCountV1(entry.cgroup_path);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
 		//! try falling back to the root directory
-		res = GetCPUCountV1("", fs);
+		res = GetCPUCountV1(string());
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
 	}
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto res = GetCPUCountV2(entry.cgroup_path, fs);
+		auto res = GetCPUCountV2(entry.cgroup_path);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
 		//! try falling back to the root directory
-		res = GetCPUCountV2("", fs);
+		res = GetCPUCountV2(string());
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
@@ -288,11 +240,11 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 
 #else
 
-optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
+optional_idx CGroups::GetMemoryLimit() {
 	return optional_idx();
 }
 
-idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
+idx_t CGroups::GetCPULimit(idx_t physical_cores) {
 	return physical_cores;
 }
 

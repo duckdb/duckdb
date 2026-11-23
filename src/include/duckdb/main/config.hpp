@@ -316,9 +316,9 @@ public:
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
-	static idx_t GetSystemMaxThreads(FileSystem &fs);
-	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
-	static idx_t GetSystemAvailableMemory(FileSystem &fs);
+	static idx_t GetSystemMaxThreads();
+	static idx_t GetSystemMaxAsyncThreads();
+	static idx_t GetSystemAvailableMemory();
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	idx_t GetDefaultMaxMemory() const;
 	//! The number of threads used when the threads setting is not set
@@ -386,7 +386,7 @@ private:
 	atomic<bool> has_disabled_optimizers {false};
 	//! Cache of GetDefaultThreads, which reads the cgroup CPU limit
 	mutable atomic<idx_t> default_threads {0};
-	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit through the file system
+	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit
 	mutable atomic<idx_t> default_max_memory {0};
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
