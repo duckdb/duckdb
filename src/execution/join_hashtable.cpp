@@ -421,13 +421,15 @@ static idx_t ProbeForPointersBranchless(JoinHashTable::ProbeState &state, JoinHa
 }
 
 //! Finds the first entry of every row whose salt matches (USE_SALTS) or that is occupied, and returns the number of
-//! rows in keys_to_compare_sel, with their entry pointer in pointers_result_v. Short vectors probe with branches.
+//! rows in keys_to_compare_sel, with their entry pointer in pointers_result_v. Short vectors and retries after a key
+//! mismatch probe with branches.
 template <bool USE_SALTS, bool HAS_SEL>
 static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht,
                                       unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
-                                      optional_ptr<const SelectionVector> row_sel, const idx_t count) {
+                                      optional_ptr<const SelectionVector> row_sel, const idx_t count,
+                                      const bool is_retry) {
 	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-	if (count <= JoinHashTable::BRANCHING_PROBE_MAX_COUNT) {
+	if (is_retry || count <= JoinHashTable::BRANCHING_PROBE_MAX_COUNT) {
 		return ProbeForPointersBranching<USE_SALTS, HAS_SEL>(state, ht, entries, pointers_result_v, row_sel, count);
 	}
 	return ProbeForPointersBranchless<USE_SALTS, HAS_SEL>(state, ht, entries, pointers_result_v, row_sel, count);
@@ -441,11 +443,14 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 template <bool USE_SALTS>
 static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &ht,
                               unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
-                              optional_ptr<const SelectionVector> row_sel, idx_t count, const bool has_row_sel) {
+                              optional_ptr<const SelectionVector> row_sel, idx_t count, const bool has_row_sel,
+                              const bool is_retry) {
 	if (has_row_sel) {
-		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, pointers_result_v, row_sel, count);
+		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, pointers_result_v, row_sel, count,
+		                                                 is_retry);
 	} else {
-		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, pointers_result_v, row_sel, count);
+		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, pointers_result_v, row_sel, count,
+		                                                  is_retry);
 	}
 }
 
@@ -497,9 +502,10 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	// every row starts at its initial entry; the steps carry over to the probes after a key mismatch
 	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
 	memset(probe_steps, 0, sizeof(idx_t) * keys.size());
+	bool is_retry = false;
 	do {
 		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, pointers_result_v, row_sel,
-		                                                                elements_to_probe_count, has_row_sel);
+		                                                                elements_to_probe_count, has_row_sel, is_retry);
 
 		// if there are no keys to compare, we are done
 		if (keys_to_compare_count == 0) {
@@ -538,6 +544,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		// in the next iteration, we have a selection vector with the keys that do not match
 		row_sel = state.keys_no_match_sel;
 		has_row_sel = true;
+		is_retry = true;
 
 		elements_to_probe_count = keys_no_match_count;
 
