@@ -1,4 +1,5 @@
 #include "capi_tester.hpp"
+#include "duckdb/common/bswap.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -46,6 +47,10 @@ TEST_CASE("Test C API GEOMETRY type support", "[capi]") {
 	memcpy(&meta, data + 1, 4);
 	memcpy(&x, data + 5, 8);
 	memcpy(&y, data + 13, 8);
+
+	meta = BSwapIfBE(meta);
+	x = BSwapIfBE(x);
+	y = BSwapIfBE(y);
 
 	REQUIRE(le == 1);
 	REQUIRE(meta == 0x00000001); // WKB for POINT

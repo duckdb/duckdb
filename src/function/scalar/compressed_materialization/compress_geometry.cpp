@@ -19,7 +19,7 @@ uhugeint_t GeometryPointCompress(const string_t &input) {
 	// The statistics that lead to this compression can come from a file, so verify that this is a POINT-XY
 	const auto data = const_data_ptr_cast(input.GetData());
 	if (input.GetSize() != POINT_XY_BLOB_SIZE || Load<uint8_t>(data) != 1 ||
-	    Load<uint32_t>(data + sizeof(uint8_t)) != 1) {
+	    LoadLE<uint32_t>(data + sizeof(uint8_t)) != 1) {
 		throw InvalidInputException("Expected only 2D POINT geometries based on the column statistics, but "
 		                            "encountered a different geometry - the statistics might be corrupt");
 	}
@@ -47,8 +47,8 @@ void GeometryPointDecompress(const uhugeint_t &input, const data_ptr_t output) {
 	const auto le_input_ptr = const_data_ptr_cast(&le_input);
 
 	// Reconstruct the fixed POINT-XY WKB header: little-endian byte order (1) + WKB type POINT (1)
-	Store<uint8_t>(1, output);
-	Store<uint32_t>(1, output + sizeof(uint8_t));
+	StoreLE<uint8_t>(1, output);
+	StoreLE<uint32_t>(1, output + sizeof(uint8_t));
 
 	// Restore the coordinate bytes (inverse of the byte reversal in GeometryPointCompress)
 	const auto coords = output + POINT_XY_HEADER_SIZE;
