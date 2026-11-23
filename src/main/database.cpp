@@ -568,8 +568,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	config.block_allocator = std::move(new_config.block_allocator);
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
-		config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
-		                                                   DBConfig::GetSystemAvailableMemory(*config.file_system));
+		config.block_allocator =
+		    make_uniq<BlockAllocator>(*config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory());
 	}
 	config.block_allocator->SetEnabled(config.options.enable_block_allocator);
 	config.replacement_scans = std::move(new_config.replacement_scans);

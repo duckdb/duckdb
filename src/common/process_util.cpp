@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
+#include "duckdb/main/os_util.hpp"
 
 #ifdef _WIN32
 #include "duckdb/common/windows_util.hpp"
@@ -25,7 +26,6 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #include <climits>
 #include <cstring>
 #include <libgen.h>
-#include <fstream>
 #elif defined(__APPLE__)
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
@@ -76,21 +76,6 @@ string FormatProcessDescription(const string &process_name, const string &proces
 
 } // namespace
 
-#if defined(__linux__)
-namespace {
-
-string ReadFirstLine(const string &path) {
-	std::ifstream file(path);
-	string line;
-	if (!file || !std::getline(file, line)) {
-		throw IOException("Could not read \"%s\"", path);
-	}
-	return line;
-}
-
-} // namespace
-#endif
-
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 
 string ProcessUtil::GetProcessDescription(int64_t pid) {
@@ -122,11 +107,10 @@ string ProcessUtil::GetProcessDescription(int64_t pid) {
 string ProcessUtil::GetProcessDescription(int64_t pid) {
 	string process_name, process_owner;
 
-	try {
-		auto cmdline = ReadFirstLine(StringUtil::Format("/proc/%d/cmdline", pid));
+	string cmdline;
+	if (OSUtil::TryReadSystemFile(SystemFile::PROCESS_CMDLINE, std::to_string(pid), cmdline)) {
+		cmdline = cmdline.substr(0, cmdline.find('\n'));
 		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
-	} catch (std::exception &) {
-		// ignore
 	}
 
 	// we would like to provide a full path to the executable if possible but we might not have rights
@@ -141,14 +125,16 @@ string ProcessUtil::GetProcessDescription(int64_t pid) {
 	}
 
 	// try to find out who created that process
-	try {
-		auto uid = std::stoi(ReadFirstLine(StringUtil::Format("/proc/%d/loginuid", pid)));
-		auto pw = getpwuid(uid);
-		if (pw) {
-			process_owner = pw->pw_name;
+	string loginuid;
+	if (OSUtil::TryReadSystemFile(SystemFile::PROCESS_LOGINUID, std::to_string(pid), loginuid)) {
+		try {
+			auto pw = getpwuid(std::stoi(loginuid));
+			if (pw) {
+				process_owner = pw->pw_name;
+			}
+		} catch (std::exception &) {
+			// ignore
 		}
-	} catch (std::exception &) {
-		// ignore
 	}
 
 	return FormatProcessDescription(process_name, process_owner, pid);

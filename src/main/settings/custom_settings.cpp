@@ -1269,8 +1269,8 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 			throw InvalidInputException("%s setting cannot be NULL", MaxMemorySetting::Name);
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-		maximum_memory = ParseMemoryLimitOrPercentage(
-		    input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(*info.config.file_system); });
+		maximum_memory =
+		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(); });
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);
