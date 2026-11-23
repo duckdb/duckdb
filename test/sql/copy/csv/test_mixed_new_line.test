@@ -5,23 +5,33 @@
 require notwindows
 
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
 ----
 1	2	3
 4	5	6
 7	8	9
 
-foreach newline '\r' '\n' '\r\n'
-
+# listing only the line breaks the file uses reads the same records
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = {newline}, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n', '\r\n'])
 ----
 1	2	3
 4	5	6
 7	8	9
 
+# without the pair in the list the carriage return ends the record and the line feed opens an empty line
+query III
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n', '\r'], columns = {'a':'integer', 'b':'integer', 'c':'integer'}, header = false, delim = ',', auto_detect = false)
+----
+1	2	3
+4	5	6
+7	8	9
 
-endloop
+# a line break outside the list is an invalid state
+statement error
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ['\n'], columns = {'a':'integer', 'b':'integer', 'c':'integer'}, header = false, delim = ',', auto_detect = false)
+----
+The CSV Parser state machine reached an invalid state.
 
 statement error
 from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, delim = ',')
@@ -34,12 +44,12 @@ from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b'
 The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line=['\n', '\r', '\r\n'], unquoted_escapes=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
 statement error
-select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line=['\n', '\r', '\r\n'], unquoted_escapes=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1
 

@@ -1267,10 +1267,10 @@
       {
         "id": 150,
         "version": "v2.1.0",
-        "name": "mixed_line_breaks",
-        "property": "options.dialect_options.state_machine_options.mixed_line_breaks",
-        "type": "CSVOption<bool>",
-        "default": "CSVOption<bool>(false)"
+        "name": "new_line_terminators",
+        "property": "options.dialect_options.state_machine_options.new_line_terminators",
+        "type": "CSVOption<idx_t>",
+        "default": "CSVOption<idx_t>(0)"
       },
       {
         "id": 151,

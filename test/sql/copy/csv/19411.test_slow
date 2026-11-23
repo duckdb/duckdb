@@ -16,5 +16,5 @@ FROM read_csv('{TEST_DIR}/fails.csv');
 ----
 
 query I nosort alltypes
-FROM read_csv('{TEST_DIR}/fails.csv', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
+FROM read_csv('{TEST_DIR}/fails.csv', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true);
 ----

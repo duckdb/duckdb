@@ -183,6 +183,25 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
+void CSVReaderOptions::SetNewlineTerminators(const vector<string> &terminators) {
+	idx_t terminator_bits = 0;
+	for (auto &terminator : terminators) {
+		if (terminator == "\\n") {
+			terminator_bits |= 1;
+		} else if (terminator == "\\r") {
+			terminator_bits |= 2;
+		} else if (terminator == "\\r\\n") {
+			terminator_bits |= 4;
+		} else {
+			throw InvalidInputException("This is not accepted as a newline: " + terminator);
+		}
+	}
+	if (terminator_bits == 0) {
+		throw InvalidInputException("NEW_LINE requires at least one line break in its list");
+	}
+	dialect_options.state_machine_options.new_line_terminators.Set(terminator_bits);
+}
+
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -342,8 +361,6 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		dialect_options.state_machine_options.embedded_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "doubled_quotes") {
 		dialect_options.state_machine_options.doubled_quotes.Set(ParseBoolean(context, value, loption));
-	} else if (loption == "mixed_line_breaks") {
-		dialect_options.state_machine_options.mixed_line_breaks.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "ignore_extra_columns") {
 		ignore_extra_columns.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "allow_unescaped_quotes") {
@@ -406,7 +423,15 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 	} else if (loption == "comment") {
 		SetComment(ParseString(value, loption));
 	} else if (loption == "new_line") {
-		SetNewline(ParseString(value, loption));
+		if (!write_option && value.type().id() == LogicalTypeId::LIST) {
+			vector<string> terminators;
+			for (auto &child : ListValue::GetChildren(value)) {
+				terminators.push_back(ParseString(child, loption));
+			}
+			SetNewlineTerminators(terminators);
+		} else {
+			SetNewline(ParseString(value, loption));
+		}
 	} else if (loption == "escape") {
 		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {

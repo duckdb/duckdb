@@ -3,21 +3,21 @@
 # group: [csv]
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+FROM read_csv('{DATA_DIR}/csv/one_r_two.csv', columns = {'a': 'BIGINT'}, new_line= '\r', header = false)
 ----
 new_line = \r (Set By User)
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', header = false)
 ----
 new_line = \n (Set By User)
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, header = false)
 ----
 new_line = \r\n (Set By User)
 
 statement error
-FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r')
 ----
 This is not accepted as a newline: \n\r

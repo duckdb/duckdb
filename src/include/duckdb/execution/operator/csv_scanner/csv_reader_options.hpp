@@ -174,6 +174,7 @@ struct CSVReaderOptions {
 	bool IgnoreErrors() const;
 
 	void SetNewline(const string &input);
+	void SetNewlineTerminators(const vector<string> &terminators);
 
 	CSVOption<char> GetSingleByteDelimiter() const;
 	CSVOption<string> GetMultiByteDelimiter() const;

@@ -154,7 +154,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				    options.dialect_options.state_machine_options.doubled_quotes,
 				    options.dialect_options.state_machine_options.embedded_quotes,
 				    options.dialect_options.state_machine_options.line_records,
-				    options.dialect_options.state_machine_options.mixed_line_breaks,
+				    options.dialect_options.state_machine_options.new_line_terminators,
 				    options.dialect_options.state_machine_options.allow_unescaped_quotes);
 				auto sniffing_state_machine =
 				    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);

@@ -19,12 +19,12 @@ struct CSVStateMachineOptions {
 	                       NewLineIdentifier new_line_p, CSVOption<bool> unquoted_escapes_p = false,
 	                       CSVOption<bool> escape_quotes_only_p = false, CSVOption<bool> doubled_quotes_p = false,
 	                       CSVOption<bool> embedded_quotes_p = false, CSVOption<bool> line_records_p = false,
-	                       CSVOption<bool> mixed_line_breaks_p = false,
+	                       CSVOption<idx_t> new_line_terminators_p = 0,
 	                       CSVOption<bool> allow_unescaped_quotes_p = false)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
 	      unquoted_escapes(unquoted_escapes_p), escape_quotes_only(escape_quotes_only_p),
 	      doubled_quotes(doubled_quotes_p), embedded_quotes(embedded_quotes_p), line_records(line_records_p),
-	      mixed_line_breaks(mixed_line_breaks_p), allow_unescaped_quotes(allow_unescaped_quotes_p) {};
+	      new_line_terminators(new_line_terminators_p), allow_unescaped_quotes(allow_unescaped_quotes_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
@@ -46,8 +46,8 @@ struct CSVStateMachineOptions {
 	CSVOption<bool> embedded_quotes = false;
 	//! Every line break ends the record even inside quotes, and a quote left open reads its field as NULL
 	CSVOption<bool> line_records = false;
-	//! Any line break ends a record whatever the file's line break is
-	CSVOption<bool> mixed_line_breaks = false;
+	//! The record terminators the reading accepts, as bits for \n, \r and \r\n, with zero meaning new_line alone
+	CSVOption<idx_t> new_line_terminators = 0;
 	//! A quote that does not close its value is data rather than an error
 	CSVOption<bool> allow_unescaped_quotes = false;
 
@@ -56,7 +56,8 @@ struct CSVStateMachineOptions {
 		       new_line == other.new_line && comment == other.comment && unquoted_escapes == other.unquoted_escapes &&
 		       escape_quotes_only == other.escape_quotes_only && doubled_quotes == other.doubled_quotes &&
 		       embedded_quotes == other.embedded_quotes && line_records == other.line_records &&
-		       mixed_line_breaks == other.mixed_line_breaks && allow_unescaped_quotes == other.allow_unescaped_quotes;
+		       new_line_terminators == other.new_line_terminators &&
+		       allow_unescaped_quotes == other.allow_unescaped_quotes;
 	}
 };
 } // namespace duckdb

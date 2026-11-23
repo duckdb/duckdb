@@ -150,7 +150,19 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 }
 
 void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_options) {
-	const bool mixed_line_breaks = state_machine_options.mixed_line_breaks.GetValue();
+	const auto new_line_id = state_machine_options.new_line.GetValue();
+	const idx_t new_line_terminators = state_machine_options.new_line_terminators.GetValue();
+	// which line breaks end a record, from the terminator set when given and from the single new_line otherwise
+	const bool accepts_n = new_line_terminators != 0 ? (new_line_terminators & 1) != 0
+	                                                 : new_line_id == NewLineIdentifier::SINGLE_N ||
+	                                                       new_line_id == NewLineIdentifier::NOT_SET;
+	const bool accepts_r = new_line_terminators != 0 ? (new_line_terminators & 2) != 0
+	                                                 : new_line_id == NewLineIdentifier::SINGLE_R ||
+	                                                       new_line_id == NewLineIdentifier::NOT_SET;
+	const bool accepts_rn =
+	    new_line_terminators != 0 ? (new_line_terminators & 4) != 0 : new_line_id == NewLineIdentifier::CARRY_ON;
+	// the carriage return only opens the pair state when it cannot end a record alone
+	const bool pair_cr = accepts_rn && !accepts_r;
 	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.GetValue();
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
@@ -177,11 +189,11 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::COMMENT);
 			break;
 		case CSVState::CARRIAGE_RETURN:
-			if (!mixed_line_breaks) {
-				// a carriage return that does not open the file's line break is invalid
-				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
-			} else {
+			if (accepts_r) {
 				InitializeTransitionArray(transition_array, cur_state, CSVState::STANDARD);
+			} else {
+				// a carriage return that is not a record terminator must open the \r\n pair
+				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			}
 			break;
 		default:
@@ -201,8 +213,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	const auto escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
 	const auto comment = static_cast<uint8_t>(state_machine_options.comment.GetValue());
 
-	const auto new_line_id = state_machine_options.new_line.GetValue();
-
 	const bool multi_byte_delimiter = delimiter_value.size() > 1;
 
 	const bool escape_quotes_only = state_machine_options.escape_quotes_only.GetValue();
@@ -219,32 +229,26 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		} else {
 			transition_array[delimiter_first_byte][state] = CSVState::DELIMITER;
 		}
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		if (pair_cr) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
-			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
-			} else if (mixed_line_breaks) {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			} else {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
-			}
-		} else if (new_line_id == NewLineIdentifier::SINGLE_N) {
-			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			if (mixed_line_breaks) {
-				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
-			} else {
-				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::INVALID;
-			}
-		} else if (new_line_id == NewLineIdentifier::SINGLE_R) {
+		} else if (accepts_r || accepts_rn) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
-			if (mixed_line_breaks) {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			} else {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
-			}
 		} else {
-			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
+			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::INVALID;
+		}
+		if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
+			// the line feed closes a carriage return pair without opening a new record
+			if (pair_cr) {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
+			} else if (accepts_n || accepts_rn) {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
+			} else {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+			}
+		} else if (accepts_n) {
 			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
+		} else {
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
 		}
 
 		if (comment != '\0') {
@@ -274,7 +278,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			transition_array[delimiter_first_byte][state] = CSVState::DELIMITER;
 		}
 		transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		if (pair_cr) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
@@ -324,13 +328,13 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::DELIMITER;
 	}
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-	    CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	    accepts_n || (accepts_rn && accepts_r) ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-		    CSVState::RECORD_SEPARATOR;
+		    accepts_r || accepts_rn ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
 	}
 	if (quote != '\0') {
 		transition_array[quote][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::QUOTED;
@@ -344,33 +348,11 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::UNQUOTED_ESCAPE;
 	}
-	if (!mixed_line_breaks) {
-		// error on any line break that is not the file's
-		switch (new_line_id) {
-		case NewLineIdentifier::CARRY_ON:
-		case NewLineIdentifier::SINGLE_R:
-			transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-			    CSVState::INVALID;
-			break;
-		case NewLineIdentifier::SINGLE_N:
-			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-			    CSVState::INVALID;
-			break;
-		default:
-			break;
-		}
-	}
-
 	// 4) Carriage Return State
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
 	    CSVState::RECORD_SEPARATOR;
-	if (!mixed_line_breaks) {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
-		    CSVState::INVALID;
-	} else {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
-		    CSVState::CARRIAGE_RETURN;
-	}
+	transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
+	    accepts_r ? CSVState::CARRIAGE_RETURN : CSVState::INVALID;
 
 	if (quote != '\0') {
 		transition_array[quote][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::QUOTED;
@@ -395,13 +377,14 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[escape][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::ESCAPE;
 	}
 	// 6) Unquoted State
-	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED)] =
+	    accepts_n ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED)] =
-		    CSVState::RECORD_SEPARATOR;
+		    accepts_r || accepts_rn ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
 	}
 	if (multi_byte_delimiter) {
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::UNQUOTED)] =
@@ -412,22 +395,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (!mixed_line_breaks) {
-		// error on any line break that is not the file's
-		switch (new_line_id) {
-		case NewLineIdentifier::CARRY_ON:
-		case NewLineIdentifier::SINGLE_R:
-			transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::INVALID;
-			break;
-		case NewLineIdentifier::SINGLE_N:
-			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::INVALID;
-			break;
-		default:
-			break;
-		}
-	} else {
+	if (allow_unescaped_quotes) {
 		if (escape == '\0') {
-			// If escape is defined, it limits a bit how relaxed quotes can be in a reliable way.
+			// without an escape the reopened quote might also close an unquoted value
 			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
 		} else {
 			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
@@ -449,7 +419,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::DELIMITER;
 	}
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::NOT_SET)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
@@ -485,7 +455,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] =
 	    CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
@@ -504,7 +474,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// 11) Comment State
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::COMMENT)] = CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::COMMENT)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
@@ -525,7 +495,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	auto end_record_on_line_break = [&](CSVState state) {
 		const auto from = static_cast<uint8_t>(state);
 		transition_array[static_cast<uint8_t>('\n')][from] = CSVState::RECORD_SEPARATOR;
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		if (pair_cr) {
 			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::CARRIAGE_RETURN;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::RECORD_SEPARATOR;
@@ -541,7 +511,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			if (comment != '\0') {
 				transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::COMMENT;
 			}
-		} else if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		} else if (accepts_rn) {
 			// Any character can be escaped, so default to STANDARD
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
 			    CSVState::ESCAPED_RETURN;
@@ -669,7 +639,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		// The new state is STANDARD for \r + \n and \r + ordinary character.
 		// Other special characters need to be handled.
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::DELIMITER;
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		if (pair_cr) {
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] =
 			    CSVState::CARRIAGE_RETURN;
 		} else {
@@ -687,7 +657,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
 	    CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
@@ -755,11 +725,11 @@ CSVStateMachineCache::CSVStateMachineCache() {
 				for (const bool lenient : {false, true}) {
 					// the lenient reading escapes outside quotes and accepts unescaped quotes and any line break
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_N,
-					        lenient, false, false, false, false, lenient, lenient});
+					        lenient, false, false, false, false, static_cast<idx_t>(lenient ? 7 : 0), lenient});
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_R,
-					        lenient, false, false, false, false, lenient, lenient});
+					        lenient, false, false, false, false, static_cast<idx_t>(lenient ? 7 : 0), lenient});
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::CARRY_ON,
-					        lenient, false, false, false, false, lenient, lenient});
+					        lenient, false, false, false, false, static_cast<idx_t>(lenient ? 7 : 0), lenient});
 				}
 			}
 		}

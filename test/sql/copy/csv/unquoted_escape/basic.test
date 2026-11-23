@@ -3,7 +3,7 @@
 # group: [unquoted_escape]
 
 query IT
-SELECT * FROM read_csv('{DATA_DIR}/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, nullstr = '\N');
+SELECT * FROM read_csv('{DATA_DIR}/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true, nullstr = '\N');
 ----
 0	\
 1	,
@@ -33,7 +33,7 @@ loop buffer_size 10 25
 
 # replace CRLF with LF to pass the test on Windows
 query I
-SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('{DATA_DIR}/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', unquoted_escapes=true, mixed_line_breaks=true, ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true) t (i, s, j) ON i = a;
+SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('{DATA_DIR}/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', unquoted_escapes=true, new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, allow_unterminated_quotes=true) t (i, s, j) ON i = a;
 ----
 1
 

@@ -2167,8 +2167,8 @@ void StringValueScanner::SetStart() {
 		if (!state_options.unquoted_escapes.IsSetByUser()) {
 			state_options.unquoted_escapes = false;
 		}
-		if (!state_options.mixed_line_breaks.IsSetByUser()) {
-			state_options.mixed_line_breaks = false;
+		if (!state_options.new_line_terminators.IsSetByUser()) {
+			state_options.new_line_terminators = 0;
 		}
 		if (!state_options.allow_unescaped_quotes.IsSetByUser()) {
 			state_options.allow_unescaped_quotes = false;

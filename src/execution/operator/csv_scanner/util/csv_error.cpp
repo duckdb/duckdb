@@ -384,8 +384,8 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
-	if (!options.dialect_options.state_machine_options.mixed_line_breaks.IsSetByUser()) {
-		how_to_fix_it << "* Accept any line break as a record boundary (mixed_line_breaks=true)" << '\n';
+	if (!options.dialect_options.state_machine_options.new_line_terminators.IsSetByUser()) {
+		how_to_fix_it << "* Accept every line break as a record boundary (new_line=['\\n', '\\r', '\\r\\n'])" << '\n';
 	}
 	if (!options.dialect_options.state_machine_options.allow_unescaped_quotes.IsSetByUser()) {
 		how_to_fix_it << "* Accept quotes that do not close their value as data (allow_unescaped_quotes=true)" << '\n';
