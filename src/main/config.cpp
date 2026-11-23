@@ -1029,7 +1029,7 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 }
 
 string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
-	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener));
+	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener), opener);
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {

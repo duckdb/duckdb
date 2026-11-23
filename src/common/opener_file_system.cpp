@@ -8,10 +8,6 @@
 
 namespace duckdb {
 
-void OpenerFileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
-	GetFileSystem().RegisterCompressionFilesystem(std::move(fs));
-}
-
 unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                              const MMapOptions &options,
                                                              optional_ptr<FileOpener> opener) {

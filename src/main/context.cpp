@@ -24,7 +24,7 @@ public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
-	FileSystem &GetFileSystem() const override {
+	VirtualFileSystem &GetFileSystem() const override {
 		auto &config = DBConfig::GetConfig(context);
 		return *config.file_system;
 	}

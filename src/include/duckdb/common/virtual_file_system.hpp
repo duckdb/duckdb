@@ -15,98 +15,71 @@
 
 namespace duckdb {
 struct FileSystemRegistry;
+struct FileSystemHandle;
+class MemoryMappedFile;
+class MultiFileList;
+struct FileGlobInput;
 
-// bunch of wrappers to allow registering protocol handlers
-class VirtualFileSystem : public FileSystem {
+//! The root of the file systems of a database: it picks the file system that handles a path from the registered
+//! protocol handlers, applies compression and pipes on top, and holds the registry of the file systems and their
+//! compression. It is not a FileSystem itself: the files it opens belong to the file system that handled them.
+class VirtualFileSystem {
 public:
 	VirtualFileSystem();
 	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
-	~VirtualFileSystem() override;
+	~VirtualFileSystem();
 
-	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-
+	unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options,
-	                                           optional_ptr<FileOpener> opener = nullptr) override;
+	                                           const MMapOptions &options, optional_ptr<FileOpener> opener);
 
-	int64_t GetFileSize(FileHandle &handle) override;
-	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
-	string GetVersionTag(FileHandle &handle) override;
-	FileType GetFileType(FileHandle &handle) override;
-	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
-	                                        optional_ptr<FileOpener> opener = nullptr) override;
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener);
 
-	void Truncate(FileHandle &handle, int64_t new_size) override;
-
-	void FileSync(FileHandle &handle) override;
-
-	// need to look up correct fs for this
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener);
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
-
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	                             optional_ptr<FileOpener> opener);
 	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener);
 
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
+	bool ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	               optional_ptr<FileOpener> opener);
+	unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener);
+	vector<OpenFileInfo> Glob(const string &path, optional_ptr<FileOpener> opener);
 
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener);
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener);
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener);
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener);
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener);
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener);
 
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
-	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
-	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
+	string PathSeparator(const string &path);
+	string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener);
 
-	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
-	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
-	void UnregisterSubSystem(const string &name) override;
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
+	void RegisterSubSystem(unique_ptr<FileSystem> fs);
+	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
+	void UnregisterSubSystem(const string &name);
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name);
+	vector<string> ListSubSystems();
 
-	vector<string> ListSubSystems() override;
+	void SetDisabledFileSystems(const vector<string> &names);
+	vector<string> GetDisabledFileSystems();
+	bool SubSystemIsDisabled(const string &name);
+	bool IsDisabledForPath(const string &path);
 
 	FileSystem &GetDefaultFileSystem();
-	//! The local file system: the default file system if it is local, otherwise one owned by this VirtualFileSystem
-	FileSystem &GetLocalFileSystem();
+	//! Replaces the default file system by the result of the function, which receives the current one. The current one
+	//! stays alive for as long as this VirtualFileSystem does. Only valid before the file system is in use.
+	void DecorateDefaultFileSystem(const std::function<unique_ptr<FileSystem>(FileSystem &)> &decorate);
+	//! A VirtualFileSystem for local paths only: it shares the default file system if that is local, and has its own
+	//! local file system otherwise
+	unique_ptr<VirtualFileSystem> CreateLocalView();
 
-	std::string GetName() const override;
-
-	void SetDisabledFileSystems(const vector<string> &names) override;
-	vector<string> GetDisabledFileSystems() override;
-	bool SubSystemIsDisabled(const string &name) override;
-	bool IsDisabledForPath(const string &path) override;
-
-	string PathSeparator(const string &path) override;
-
-	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
-
-protected:
-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-	                                        optional_ptr<FileOpener> opener) override;
-	bool SupportsOpenFileExtended() const override {
-		return true;
-	}
-
-	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                       optional_ptr<FileOpener> opener) override;
-
-	bool SupportsListFilesExtended() const override {
-		return true;
-	}
-
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override;
-	bool SupportsGlobExtended() const override {
-		return true;
-	}
+	std::string GetName() const;
 
 private:
+	explicit VirtualFileSystem(shared_ptr<FileSystemHandle> default_file_system);
+
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
 	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
 	                           optional_ptr<FileOpener> file_opener);
@@ -118,11 +91,11 @@ private:
 	                                                   bool for_writing);
 
 private:
-	//! Only set if the default file system is not local
-	unique_ptr<FileSystem> owned_local_file_system;
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
 	vector<unique_ptr<FileSystem>> unregistered_file_systems;
+	//! Default file systems that were replaced by a decorated one
+	vector<shared_ptr<FileSystemHandle>> decorated_file_systems;
 };
 
 } // namespace duckdb

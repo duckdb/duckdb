@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 
 namespace duckdb {
 class MultiFileList;
@@ -16,7 +17,7 @@ class MultiFileList;
 // The OpenerFileSystem is wrapper for a file system that pushes an appropriate FileOpener into the various API calls
 class OpenerFileSystem : public FileSystem {
 public:
-	virtual FileSystem &GetFileSystem() const = 0;
+	virtual VirtualFileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
@@ -45,7 +46,7 @@ public:
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		GetFileSystem().Read(handle, buffer, nr_bytes, location);
+		handle.file_system.Read(handle, buffer, nr_bytes, location);
 	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -53,35 +54,35 @@ public:
 	}
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		return GetFileSystem().Read(handle, buffer, nr_bytes);
+		return handle.file_system.Read(handle, buffer, nr_bytes);
 	}
 
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		return GetFileSystem().Write(handle, buffer, nr_bytes);
+		return handle.file_system.Write(handle, buffer, nr_bytes);
 	}
 
 	int64_t GetFileSize(FileHandle &handle) override {
-		return GetFileSystem().GetFileSize(handle);
+		return handle.file_system.GetFileSize(handle);
 	}
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
-		return GetFileSystem().GetLastModifiedTime(handle);
+		return handle.file_system.GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) override {
-		return GetFileSystem().GetVersionTag(handle);
+		return handle.file_system.GetVersionTag(handle);
 	}
 	FileType GetFileType(FileHandle &handle) override {
-		return GetFileSystem().GetFileType(handle);
+		return handle.file_system.GetFileType(handle);
 	}
 	FileMetadata Stats(FileHandle &handle) override {
-		return GetFileSystem().Stats(handle);
+		return handle.file_system.Stats(handle);
 	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {
-		GetFileSystem().Truncate(handle, new_size);
+		handle.file_system.Truncate(handle, new_size);
 	}
 
 	void FileSync(FileHandle &handle) override {
-		GetFileSystem().FileSync(handle);
+		handle.file_system.FileSync(handle);
 	}
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
@@ -217,45 +218,11 @@ public:
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, GetOpener().get());
+		return GetFileSystem().Glob(path, GetOpener());
 	}
 
 	std::string GetName() const override {
 		return "OpenerFileSystem - " + GetFileSystem().GetName();
-	}
-
-	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override {
-		GetFileSystem().RegisterSubSystem(std::move(sub_fs));
-	}
-
-	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
-
-	void UnregisterSubSystem(const string &name) override {
-		GetFileSystem().UnregisterSubSystem(name);
-	}
-
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override {
-		return GetFileSystem().ExtractSubSystem(name);
-	}
-
-	void SetDisabledFileSystems(const vector<string> &names) override {
-		GetFileSystem().SetDisabledFileSystems(names);
-	}
-
-	vector<string> GetDisabledFileSystems() override {
-		return GetFileSystem().GetDisabledFileSystems();
-	}
-
-	bool SubSystemIsDisabled(const string &name) override {
-		return GetFileSystem().SubSystemIsDisabled(name);
-	}
-
-	bool IsDisabledForPath(const string &path) override {
-		return GetFileSystem().IsDisabledForPath(path);
-	}
-
-	vector<string> ListSubSystems() override {
-		return GetFileSystem().ListSubSystems();
 	}
 
 protected:
@@ -283,7 +250,7 @@ protected:
 	                       optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
+		return GetFileSystem().ListFiles(directory, callback, GetOpener());
 	}
 
 	bool SupportsListFilesExtended() const override {

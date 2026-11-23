@@ -39,8 +39,13 @@ void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
 		return;
 	}
 	auto &config = DBConfig::GetConfig(db);
-	config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system), db);
-	auto &debug_fs = static_cast<DebugFileSystem &>(*config.file_system);
+	optional_ptr<DebugFileSystem> debug_fs_ptr;
+	config.file_system->DecorateDefaultFileSystem([&](FileSystem &default_fs) {
+		auto debug_fs = make_uniq<DebugFileSystem>(default_fs, db);
+		debug_fs_ptr = debug_fs.get();
+		return unique_ptr<FileSystem>(std::move(debug_fs));
+	});
+	auto &debug_fs = *debug_fs_ptr;
 	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>("instance",
 	                                                   make_shared_ptr<DebugFileSystemCacheEntry>(debug_fs));
 }
