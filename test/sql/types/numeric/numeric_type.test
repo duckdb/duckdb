@@ -259,19 +259,26 @@ statement ok
 CREATE TABLE nested(l NUMERIC[]);
 
 # CREATE TABLE AS keeps results that derive from NUMERIC columns NUMERIC
+# the wide DECIMAL control column needs the latest storage version
 statement ok
-CREATE TABLE copy AS SELECT n, n::DECIMAL(44,2) AS fixed FROM t;
+ATTACH ':memory:' AS wd (STORAGE_VERSION 'latest');
+
+statement ok
+CREATE TABLE wd.copy AS SELECT n, n::DECIMAL(44,2) AS fixed FROM t;
 
 query II
-SELECT column_name, column_type FROM (DESCRIBE copy) ORDER BY column_name;
+SELECT column_name, column_type FROM (DESCRIBE wd.copy) ORDER BY column_name;
 ----
 fixed	DECIMAL(44,2)
 n	NUMERIC
 
 query I
-SELECT typeof(n) FROM copy LIMIT 1;
+SELECT typeof(n) FROM wd.copy LIMIT 1;
 ----
 NUMERIC
+
+statement ok
+DETACH wd;
 
 # string literals that read as numbers are exact numbers, as they are for DECIMAL columns
 statement ok

@@ -36,7 +36,6 @@
 			]
 		},
 		{
-		{
 			"reason": "Roundtrip is not possible (MAP type)",
 			"paths": [
 				"test/parquet/test_parquet_schema.test",
