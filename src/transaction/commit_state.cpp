@@ -379,7 +379,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
-		info->table->GetStorage().GetDataTableInfo()->SetLastChangeCommit(commit_id);
+		info->table->GetStorage().GetDataTableInfo()->AddChange();
 		if (CommitDelete(*info, transaction.GetTransactionId())) {
 			commit_info.has_index_deletes = true;
 		}
@@ -395,7 +395,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
-		info->table->GetStorage().GetDataTableInfo()->SetLastChangeCommit(commit_id);
+		info->table->GetStorage().GetDataTableInfo()->AddChange();
 		info->version_number = commit_id;
 		break;
 	}

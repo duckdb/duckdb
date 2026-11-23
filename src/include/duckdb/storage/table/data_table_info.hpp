@@ -58,14 +58,14 @@ public:
 	const vector<Identifier> &GetSchemaPath() const;
 	Identifier GetTableName();
 	void SetTableName(Identifier name);
-	//! The last commit that changed rows of the table, set under the commit lock
-	void SetLastChangeCommit(transaction_t commit_id) {
-		last_change_commit = commit_id;
+	//! Counts a change to rows of the table, under the commit lock: an append (even if reverted), delete or update
+	void AddChange() {
+		++change_count;
 	}
-	//! Records a running CREATE INDEX scan without deltas, which started after start_commit
-	void AddIndexScan(transaction_t start_commit);
-	void RemoveIndexScan(transaction_t start_commit);
-	//! Whether a commit changed the table after the oldest running CREATE INDEX scan without deltas started
+	//! Records a running CREATE INDEX scan without deltas, returns the change count at its start
+	idx_t AddIndexScan();
+	void RemoveIndexScan(idx_t start_change_count);
+	//! Whether the table changed after the oldest running CREATE INDEX scan without deltas started
 	bool ChangedDuringIndexScan();
 
 private:
@@ -87,12 +87,12 @@ private:
 	optional_idx last_seen_checkpoint;
 	//! The amount of row groups the checkpoint is processing
 	optional_idx checkpoint_row_group_count;
-	//! See SetLastChangeCommit()
-	atomic<transaction_t> last_change_commit {0};
+	//! See AddChange()
+	atomic<idx_t> change_count {0};
 	//! Lock for index_scan_starts
 	mutex index_scan_lock;
-	//! The start commits of the running CREATE INDEX scans without deltas
-	multiset<transaction_t> index_scan_starts;
+	//! The change counts at the start of the running CREATE INDEX scans without deltas
+	multiset<idx_t> index_scan_starts;
 };
 
 } // namespace duckdb

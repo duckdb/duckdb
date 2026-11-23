@@ -400,7 +400,7 @@ private:
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
 	//! The entry of the index that a CREATE INDEX scan builds in place
 	shared_ptr<IndexEntry> index_build;
-	//! The start commit of a CREATE INDEX scan without deltas
+	//! The table's change count at the start of a CREATE INDEX scan without deltas
 	optional_idx index_scan_start;
 
 private:

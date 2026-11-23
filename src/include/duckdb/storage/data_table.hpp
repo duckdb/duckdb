@@ -309,8 +309,8 @@ public:
 	//! Without a building entry, fails if a commit changed the table while a CREATE INDEX scan ran.
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
 	                                idx_t index_oid, ConstraintCheckMode check_mode);
-	//! Records the start of a CREATE INDEX scan without deltas, returns its start commit
-	transaction_t AddIndexScan();
+	//! Records the start of a CREATE INDEX scan without deltas, returns the table's change count at the start
+	idx_t AddIndexScan();
 	//! Starts building an index in place: later commits change the deltas of its entry
 	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
@@ -337,6 +337,8 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
+	//! Takes the commit lock and the append lock, and fails if an ALTER replaced the table
+	unique_lock<mutex> LockMainTableForIndex(unique_lock<mutex> &table_lock);
 	//! Fails with a retryable error if a commit changed the table while a CREATE INDEX scan without deltas ran
 	void VerifyNoChangesDuringIndexScan(const Index &index);
 
