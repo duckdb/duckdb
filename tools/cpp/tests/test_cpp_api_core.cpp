@@ -466,3 +466,43 @@ TEST_CASE("Stable C++API: Instance::OpenShared shares one instance per file", "[
 	}
 	duckdb::DeleteDatabase(path);
 }
+
+TEST_CASE("Stable C++API: Instance::OpenShared initializes the instance it creates", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_open_shared_init.db");
+	duckdb::DeleteDatabase(path);
+	Environment env;
+	idx_t calls = 0;
+	Instance::InitCallback init = [&](Instance &instance) {
+		calls++;
+		instance.Connect().Execute("CREATE TABLE IF NOT EXISTS init_t AS SELECT 42 AS i").Drain();
+		instance.GetConfig().SetOption("enable_external_access", "false", SettingScope::GLOBAL);
+	};
+	{
+		auto a = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"), init);
+		REQUIRE(calls == 1);
+		// the same settings, written differently: shared, and not initialized again
+		auto b = Instance::OpenShared(env, path, StartupOptions().Set("worker_threads", "02"), init);
+		REQUIRE(calls == 1);
+		REQUIRE(env.GetInstanceCount() == 2);
+		auto conn = b.Connect();
+		REQUIRE(conn.Execute("SELECT i FROM init_t").FetchChunk().GetVector(0).GetValue(0).Get<int32_t>() == 42);
+		REQUIRE(!conn.Execute("SELECT current_setting('enable_external_access')")
+		             .FetchChunk()
+		             .GetVector(0)
+		             .GetValue(0)
+		             .Get<bool>());
+	}
+	REQUIRE(env.GetInstanceCount() == 0);
+
+	// an init that throws: the call throws, and the next call creates the instance again
+	REQUIRE_THROWS_AS(Instance::OpenShared(env, path, {}, [](Instance &) { throw std::runtime_error("init refused"); }),
+	                  Exception);
+	REQUIRE(env.GetInstanceCount() == 0);
+	{
+		auto instance = Instance::OpenShared(env, path, {}, init);
+		REQUIRE(calls == 2);
+	}
+	duckdb::DeleteDatabase(path);
+}

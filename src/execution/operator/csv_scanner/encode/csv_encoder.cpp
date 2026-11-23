@@ -42,33 +42,6 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-static optional_ptr<ScalarFunctionCatalogEntry> FindEncoding(ClientContext &context, const string &encoding_name) {
-	// look in the encodings schema directly: the generic lookup would autoload extensions by function name
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	auto &schema = Catalog::GetSystemCatalog(context).GetSchema(transaction, Identifier(EncodingFunction::SCHEMA));
-	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY,
-	                             Identifier(EncodingFunction::FunctionName(encoding_name)));
-	if (!entry) {
-		return nullptr;
-	}
-	return &entry->Cast<ScalarFunctionCatalogEntry>();
-}
-
-//! The names of all encodings: the scalar functions in the encodings schema
-static vector<string> GetLoadedEncodings(ClientContext &context) {
-	vector<string> result {"utf-8"};
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &schema = catalog.GetSchema(context, Identifier(EncodingFunction::SCHEMA));
-	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-			return;
-		}
-		result.push_back(entry.name.GetIdentifierName());
-	});
-	std::sort(result.begin(), result.end());
-	return result;
-}
-
 CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_find, idx_t buffer_size)
     : context(context_p), pass_on_byte(0) {
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
@@ -76,15 +49,8 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 		// UTF-8 is read straight into the CSV buffers (see CSVFileHandle::Read), the encoder buffers are never used
 		return;
 	}
-	auto entry = FindEncoding(context_p, encoding_name);
+	auto entry = EncodingFunction::Find(context_p, encoding_name);
 	if (!entry) {
-		// Maybe we can try to auto-load from our encodings extension, if this somehow fails, we just error.
-		if (Catalog::TryAutoLoad(context_p, "encodings")) {
-			entry = FindEncoding(context_p, encoding_name);
-		}
-	}
-	if (!entry) {
-		// If at this point we still do not have a function we throw an error.
 		std::ostringstream error;
 		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
 		if (!context_p.db->ExtensionIsLoaded("encodings")) {
@@ -93,7 +59,7 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 			      << "\n";
 		}
 		error << "The currently supported encodings are: " << '\n';
-		for (auto &name : GetLoadedEncodings(context_p)) {
+		for (auto &name : EncodingFunction::GetEncodings(context_p)) {
 			error << "*  " << name << '\n';
 		}
 		throw InvalidInputException(error.str());

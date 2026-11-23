@@ -1,0 +1,50 @@
+# name: test/sql/aggregate/external/list_hash_aggregate_spill.test_slow
+# description: Regular hash aggregation of lists spills under memory pressure
+# group: [external]
+
+require core_functions
+
+statement ok
+SET threads = 1
+
+# Each group is an arithmetic progression starting at its key with a step of 250.
+statement ok
+CREATE MACRO group_totals(n) AS TABLE
+SELECT count(*) AS groups,
+       bool_and(len(xs) = n // 250 AND list_avg(xs) = g + (n - 250) / 2) AS groups_match
+FROM (
+    SELECT (i % 250)::UTINYINT AS g, list(i) AS xs FROM range(n) t(i) GROUP BY g
+) grouped
+
+statement ok
+SET tracked_metrics = ['operator.type', 'system.total_bytes_spilled']
+
+statement ok
+SET perfect_ht_threshold = 12
+
+statement ok
+SET memory_limit = '48MB'
+
+statement ok
+SET operator_memory_limit = '24MB'
+
+query II
+EXPLAIN ANALYZE (FORMAT JSON) SELECT * FROM group_totals(50000)
+----
+analyzed_plan	<REGEX>:(?s).*"type": "HASH_GROUP_BY".*"total_bytes_spilled": 0.*
+
+query II
+SELECT * FROM group_totals(50000)
+----
+250	true
+
+# The lists retain 64 MB of integers. Only the grouped aggregate can spill in this query.
+query II
+EXPLAIN ANALYZE (FORMAT JSON) SELECT * FROM group_totals(8000000)
+----
+analyzed_plan	<REGEX>:(?s).*"type": "HASH_GROUP_BY".*"total_bytes_spilled": [1-9].*
+
+query II
+SELECT * FROM group_totals(8000000)
+----
+250	true

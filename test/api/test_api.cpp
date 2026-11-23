@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/main/statement_iterator.hpp"
@@ -952,6 +953,34 @@ TEST_CASE("Test an extracted EXECUTE plan still has types after an optimization 
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }
 
+TEST_CASE("Test destroying an extracted read_duckdb plan inside its transaction", "[api]") {
+	auto db_path = TestCreatePath("extract_plan_read_duckdb.db");
+	TestDeleteFile(db_path);
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "' AS source"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE source.t AS SELECT range AS i FROM range(10)"));
+	REQUIRE_NO_FAIL(con.Query("DETACH source"));
+
+	// the plan holds the reader that attached the database file while binding - destroying the plan detaches the file
+	const auto query = "SELECT * FROM read_duckdb('" + db_path + "')";
+	auto &db_manager = DatabaseManager::Get(*con.context);
+	const auto database_count = db_manager.GetDatabases().size();
+	for (auto commit : {true, false}) {
+		REQUIRE_NOTHROW(con.BeginTransaction());
+		auto plan = con.ExtractPlan(query);
+		REQUIRE(db_manager.GetDatabases().size() == database_count + 1);
+		plan.reset();
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+		if (commit) {
+			REQUIRE_NOTHROW(con.Commit());
+		} else {
+			REQUIRE_NOTHROW(con.Rollback());
+		}
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+	}
+}
+
 static bool HasFlippedDelimJoin(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && op.Cast<LogicalComparisonJoin>().delim_flipped) {
 		return true;
@@ -1084,10 +1113,10 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 	SECTION("Normal interrupt works") {
 		context.Interrupt();
 		REQUIRE(context.IsInterrupted());
-		REQUIRE_THROWS(context.InterruptCheck());
+		REQUIRE_THROWS(context.FastInterruptCheck());
 		context.ClearInterrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 	}
 
 	SECTION("SuppressInterrupts blocks subsequent Interrupt calls") {
@@ -1096,7 +1125,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// Since state is SUPPRESSED, CAS fails and interrupt is discarded
 		context.Interrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1107,7 +1136,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// overriding the INTERRUPTED state
 		context.SuppressInterrupts();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1117,7 +1146,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// Now back to NOT_INTERRUPTED, Interrupt() should work again
 		context.Interrupt();
 		REQUIRE(context.IsInterrupted());
-		REQUIRE_THROWS(context.InterruptCheck());
+		REQUIRE_THROWS(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1128,7 +1157,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// After COMMIT, state should be SUPPRESSED — Interrupt() should be discarded
 		context.Interrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		// Cleanup
 		context.ClearInterrupt();
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
@@ -1147,7 +1176,7 @@ TEST_CASE("Test internal connections follow the interrupts of their base client"
 		con.context->Interrupt();
 		REQUIRE(child.context->IsInterrupted());
 		REQUIRE(grandchild.context->IsInterrupted());
-		REQUIRE_THROWS(grandchild.context->InterruptCheck());
+		REQUIRE_THROWS(grandchild.context->FastInterruptCheck());
 		con.context->ClearInterrupt();
 		REQUIRE(!grandchild.context->IsInterrupted());
 	}
@@ -1159,13 +1188,13 @@ TEST_CASE("Test internal connections follow the interrupts of their base client"
 	}
 
 	SECTION("The base client's query deadline applies to internal connections while it is set") {
-		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_NOTHROW(grandchild.context->InterruptCheck());
 		// a deadline in the past, as a base query that ran out of time would leave it
 		con.context->query_deadline = 1;
-		REQUIRE_THROWS(grandchild.context->BlockingInterruptCheck());
-		REQUIRE_THROWS(child.context->BlockingInterruptCheck());
+		REQUIRE_THROWS(grandchild.context->InterruptCheck());
+		REQUIRE_THROWS(child.context->InterruptCheck());
 		con.context->query_deadline.SetInvalid();
-		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_NOTHROW(grandchild.context->InterruptCheck());
 	}
 
 	SECTION("A query running on behalf of the base stops when the base is interrupted") {

@@ -56,18 +56,20 @@ index 9bbbeb5..cb7333f 100644
  	loader.RegisterFunction(
  	    TableFunction("duckdb_encodings", {}, DuckDBEncodingsFunction, DuckDBEncodingsBind, DuckDBEncodingsInit));
 diff --git a/src/generated_encoded_functions.cpp b/src/generated_encoded_functions.cpp
-index 4e30ee9..71b18a0 100644
+index 4e30ee9..cd22dde 100644
 --- a/src/generated_encoded_functions.cpp
 +++ b/src/generated_encoded_functions.cpp
-@@ -1,6 +1,6 @@
+@@ -1,6 +1,8 @@
  #include "generated_encoded_function.hpp"
  
 -#include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
 +#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
++
++#include "duckdb/common/exception/conversion_exception.hpp"
  
  #include <algorithm>
  #include <mutex>
-@@ -51,22 +51,20 @@ static const EncodingIndex &GetIndex(const EncodingFunction &encoding_function)
+@@ -51,22 +53,20 @@ static const EncodingIndex &GetIndex(const EncodingFunction &encoding_function)
  	return *index;
  }
  
@@ -102,7 +104,7 @@ index 4e30ee9..71b18a0 100644
  		const auto first = static_cast<uint8_t>(*current);
  		// Prefer the longest matching byte sequence
  		const map_entry_encoding *match = nullptr;
-@@ -87,29 +85,46 @@ void GeneratedEncodedFunction::Decode(CSVEncoderBuffer &encoded_buffer, char *ta
+@@ -87,29 +87,116 @@ void GeneratedEncodedFunction::Decode(CSVEncoderBuffer &encoded_buffer, char *ta
  		}
  		if (!match) {
  			// No mapping for this byte: pass it through unchanged
@@ -127,14 +129,79 @@ index 4e30ee9..71b18a0 100644
 -					remaining_bytes_buffer[remaining_pos] = static_cast<char>(match->value[byte_pos + remaining_pos]);
 -				}
 -				return;
--			}
--			target_buffer[target_buffer_current_position++] = match->value[byte_pos];
--		}
 +		std::memcpy(output + out, match->value, match->value_len);
 +		out += match->value_len;
 +		pos += match_len;
- 	}
++	}
 +	consumed = pos;
++	written = out;
++}
++
++//! The inverse of a conversion map: the entries sorted by their UTF-8 value, with a range per first byte. Of several
++//! byte sequences that decode to the same value, the smallest is used.
++struct ReverseIndex {
++	vector<const map_entry_encoding *> entries;
++	uint32_t begin[256] = {};
++	uint32_t end[256] = {};
++	idx_t max_value_len = 1;
++
++	ReverseIndex(const map_entry_encoding *map, size_t map_size) {
++		for (size_t i = 0; i < map_size; i++) {
++			entries.push_back(&map[i]);
++			max_value_len = std::max<idx_t>(max_value_len, map[i].value_len);
++		}
++		std::stable_sort(entries.begin(), entries.end(), [](const map_entry_encoding *a, const map_entry_encoding *b) {
++			return GeneratedEncodedFunction::KeyLess(a->value, a->value_len, b->value, b->value_len);
++		});
++		for (uint32_t i = 0; i < entries.size(); i++) {
++			const auto first = static_cast<uint8_t>(entries[i]->value[0]);
++			if (end[first] == begin[first]) {
++				begin[first] = i;
+ 			}
+-			target_buffer[target_buffer_current_position++] = match->value[byte_pos];
++			end[first] = i + 1;
+ 		}
+ 	}
++};
++
++static const ReverseIndex &GetReverseIndex(const EncodingFunction &encoding_function) {
++	static std::mutex lock;
++	static std::unordered_map<const map_entry_encoding *, unique_ptr<ReverseIndex>> indexes;
++	std::lock_guard<std::mutex> guard(lock);
++	auto &index = indexes[encoding_function.conversion_map];
++	if (!index) {
++		index = make_uniq<ReverseIndex>(encoding_function.conversion_map, encoding_function.map_size);
++	}
++	return *index;
++}
++
++void GeneratedEncodedFunction::Encode(const EncodingFunction &encoding, const char *input, idx_t input_size,
++                                      char *output, idx_t &written) {
++	const auto &index = GetReverseIndex(encoding);
++	idx_t pos = 0;
++	idx_t out = 0;
++	while (pos < input_size) {
++		const auto first = static_cast<uint8_t>(input[pos]);
++		const auto bucket_begin = index.entries.begin() + index.begin[first];
++		const auto bucket_end = index.entries.begin() + index.end[first];
++		const map_entry_encoding *match = nullptr;
++		// Prefer the longest matching UTF-8 sequence
++		for (idx_t len = std::min<idx_t>(index.max_value_len, input_size - pos); len > 0 && !match; len--) {
++			const auto it = std::lower_bound(bucket_begin, bucket_end, std::make_pair(input + pos, len),
++			                                 [](const map_entry_encoding *entry, const std::pair<const char *, idx_t> &key) {
++				                                 return KeyLess(entry->value, entry->value_len, key.first, key.second);
++			                                 });
++			if (it != bucket_end && (*it)->value_len == len && std::memcmp((*it)->value, input + pos, len) == 0) {
++				match = *it;
++			}
++		}
++		if (!match) {
++			throw ConversionException("Could not encode the character at byte %llu in %s", pos, encoding.name);
++		}
++		std::memcpy(output + out, match->key, match->key_len);
++		out += match->key_len;
++		pos += match->value_len;
++	}
 +	written = out;
 +}
 +
@@ -160,7 +227,10 @@ index 4e30ee9..71b18a0 100644
 +	                                  idx_t &consumed, idx_t &written) {
 +		table->decode(*table, input, input_size, is_last, output, consumed, written);
 +	};
-+	CreateScalarFunctionInfo info(duckdb::EncodingFunction::Create(function.name, decode, function.lookup_bytes,
++	duckdb::encode_t encode = [table](const char *input, idx_t input_size, char *output, idx_t &written) {
++		GeneratedEncodedFunction::Encode(*table, input, input_size, output, written);
++	};
++	CreateScalarFunctionInfo info(duckdb::EncodingFunction::Create(function.name, decode, encode, function.lookup_bytes,
 +	                                                               function.max_output_bytes));
 +	duckdb::EncodingFunction::SetSchema(info);
 +	loader.RegisterFunction(std::move(info));
@@ -170,10 +240,10 @@ index 4e30ee9..71b18a0 100644
  
  bool GeneratedEncodedFunction::KeyLess(const char *a, size_t a_len, const char *b, size_t b_len) {
 diff --git a/src/include/generated_encoded_function.hpp b/src/include/generated_encoded_function.hpp
-index f6f60bf..d43cfb4 100644
+index f6f60bf..e745bcc 100644
 --- a/src/include/generated_encoded_function.hpp
 +++ b/src/include/generated_encoded_function.hpp
-@@ -11,15 +11,67 @@
+@@ -11,15 +11,70 @@
  
  #include "duckdb/main/config.hpp"
  #include "duckdb/function/encoding_function.hpp"
@@ -241,6 +311,55 @@ index f6f60bf..d43cfb4 100644
 -	                   EncodingFunction *encoding_function);
 +	static void Decode(const EncodingFunction &encoding, const char *input, idx_t input_size, bool is_last,
 +	                   char *output, idx_t &consumed, idx_t &written);
++
++	static void Encode(const EncodingFunction &encoding, const char *input, idx_t input_size, char *output,
++	                   idx_t &written);
  
  	static bool KeyLess(const char *a, size_t a_len, const char *b, size_t b_len);
  
+diff --git a/test/sql/encode_decode.test b/test/sql/encode_decode.test
+new file mode 100644
+index 0000000..3b52391
+--- /dev/null
++++ b/test/sql/encode_decode.test
+@@ -0,0 +1,40 @@
++# name: test/sql/encode_decode.test
++# description: encode and decode with the encodings of the extension
++# group: [sql]
++
++require encodings
++
++query I
++SELECT encode('日本語', 'shift_jis')
++----
++\x93\xFA\x96{\x8C\xEA
++
++query I
++SELECT decode('\x93\xFA\x96\x7B\x8C\xEA'::BLOB, 'shift_jis')
++----
++日本語
++
++query I
++SELECT decode(encode('mixed 日本語 text', 'shift_jis'), 'shift_jis')
++----
++mixed 日本語 text
++
++query I
++SELECT decode(encode('Zażółć gęślą jaźń', 'cp852'), 'cp852')
++----
++Zażółć gęślą jaźń
++
++query I
++SELECT decode(encode('Ā', 'gb18030'), 'gb18030')
++----
++Ā
++
++statement error
++SELECT encode('😀', 'cp852')
++----
++Could not encode the character
++
++query I
++SELECT system.encodings.cp852(encode('a', 'cp852')::VARCHAR) IS NOT NULL
++----
++true

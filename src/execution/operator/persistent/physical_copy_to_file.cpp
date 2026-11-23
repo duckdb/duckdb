@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
@@ -1793,7 +1794,7 @@ static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		WorkOnTaskOrYield();
 	}
@@ -1807,7 +1808,7 @@ void CopyFileLifecycleExecutor::WaitAll(CopyFileLifecycleWaitMode mode) {
 		return;
 	}
 	while (pending_tasks.load(std::memory_order_acquire) > 0) {
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		WorkOnTaskOrYield();
 	}
 	ThrowError();
@@ -1856,7 +1857,7 @@ void CopyFileLifecycleExecutor::WorkOnTaskOrYield() {
 void CopyFileLifecycleExecutor::WaitForTaskSlot(CopyFileLifecycleWaitMode mode) {
 	while (pending_tasks >= max_pending_tasks) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		}
 		if (async_threads == 0 || mode == CopyFileLifecycleWaitMode::DRAIN) {
 			WorkOnTaskOrYield();
@@ -2586,6 +2587,7 @@ public:
 	unique_ptr<IntegerPartitionedTupleData> partitions;
 	PartitionedTupleDataAppendState append_state;
 	//! The key hashes feeding the partition count estimate
+	unique_ptr<ChunkHasher> key_hasher;
 	DataChunk hashes;
 	optional_ptr<ParallelHyperLogLogLocalState> hll;
 };
@@ -2827,6 +2829,8 @@ IntegerPartitionInput::GetLocalState(ExecutionContext &context, PartitionedCopyI
 	auto result = make_uniq<IntegerPartitionInputLocalState>();
 	result->partitions = CreatePartitions(context.client);
 	result->partitions->InitializeAppendState(result->append_state);
+	result->key_hasher =
+	    make_uniq<ChunkHasher>(context.client, partitioned_copy.op.expected_types, vector<idx_t> {key_col});
 	result->hashes.Initialize(Allocator::Get(context.client), {LogicalType::HASH});
 	result->hll = hll;
 	return std::move(result);
@@ -2840,7 +2844,7 @@ void IntegerPartitionInput::Sink(ExecutionContext &context, DataChunk &chunk, Pa
 	// the flush heuristic estimates the number of partitions from key hashes
 	auto &hashes = lstate.hashes;
 	hashes.Reset();
-	VectorOperations::Hash(chunk.data[key_col], hashes.data[0], chunk.size());
+	lstate.key_hasher->Hash(chunk, hashes.data[0]);
 	hashes.CheckCardinality(chunk.size());
 	lstate.hll->Update(hashes.data[0]);
 }
@@ -3807,7 +3811,7 @@ void PartitionedCopy::NotifyFlushProgress() {
 template <class FUNC>
 bool PartitionedCopy::TryBlockOnFlush(ExecutionContext &execution_context, InterruptState &interrupt_state,
                                       idx_t observed_progress, FUNC &&can_continue) {
-	context.InterruptCheck();
+	context.FastInterruptCheck();
 	Flush(execution_context, interrupt_state);
 	if (!interrupt_state.CanCallback()) {
 		copy_gstate.lifecycle_executor.WorkOnTaskOrYield();
@@ -3947,7 +3951,7 @@ public:
 		                                   event->Cast<BasePipelineEvent>().pipeline);
 		InterruptState interrupt_state(shared_from_this());
 		while (partitioned_copy.flushing.load(std::memory_order_relaxed) || partitioned_copy.HasDelayedPartitions()) {
-			event->GetClientContext().InterruptCheck();
+			event->GetClientContext().FastInterruptCheck();
 			if (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
 				partitioned_copy.Flush(execution_context, interrupt_state);
 			} else {

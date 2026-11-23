@@ -1,0 +1,64 @@
+# name: test/sql/json/peg_memory_limit.test
+# description: JSON SQL and type parsing preserve PEG out-of-memory errors
+# group: [json]
+
+require json
+
+statement ok
+SET VARIABLE oversized_statement = 'SELECT [' || repeat('1,', 400000) || '1]';
+
+statement ok
+SET VARIABLE oversized_type = (
+    SELECT '"STRUCT(' || string_agg('c' || i || ' INTEGER', ',') || ')"'
+    FROM range(10000) t(i)
+);
+
+statement ok
+SET memory_limit='16MB';
+
+statement ok
+SET VARIABLE parser_memory_before = (
+    SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag='ALLOCATOR'
+);
+
+# Allocation failure must abort the query, rather than become a successful JSON error value.
+foreach serializer json_serialize_sql json_serialize_plan
+
+statement error
+SELECT {serializer}(getvariable('oversized_statement'));
+----
+<REGEX>:Out of Memory Error: While parsing SQL: failed to allocate data of size .* \(.*/.* used\).*
+
+query I
+SELECT memory_usage_bytes <= getvariable('parser_memory_before')
+FROM duckdb_memory() WHERE tag='ALLOCATOR';
+----
+true
+
+endloop
+
+# Type parsing must preserve OOM instead of reporting an invalid type name.
+statement error
+SELECT json_transform('{}', getvariable('oversized_type'));
+----
+<REGEX>:Out of Memory Error: While parsing SQL: failed to allocate data of size .* \(.*/.* used\).*
+
+query I
+SELECT memory_usage_bytes <= getvariable('parser_memory_before')
+FROM duckdb_memory() WHERE tag='ALLOCATOR';
+----
+true
+
+# Ordinary parse errors still use the existing JSON error-value contract.
+query TT
+SELECT json_serialize_sql('SELECT') ->> 'error', json_serialize_sql('SELECT') ->> 'error_type';
+----
+true	parser
+
+query I
+SELECT 42;
+----
+42
+
+statement ok
+RESET memory_limit;
