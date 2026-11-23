@@ -1,0 +1,34 @@
+# name: test/sql/copy/parquet/parquet_filter_cast_null_constant.test
+# description: A filter with a NULL constant on a struct field whose type differs between files
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT {'a': i::INT} AS st FROM range(5) t(i)) TO '{TEST_DIR}/cast_null_a.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT {'a': i::BIGINT} AS st FROM range(5, 10) t(i)) TO '{TEST_DIR}/cast_null_b.parquet' (FORMAT parquet);
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/cast_null_a.parquet', '{TEST_DIR}/cast_null_b.parquet']) WHERE st.a IN (1, 6, NULL);
+----
+2
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/cast_null_a.parquet', '{TEST_DIR}/cast_null_b.parquet']) WHERE st.a IS NOT DISTINCT FROM NULL;
+----
+0
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/cast_null_a.parquet', '{TEST_DIR}/cast_null_b.parquet']) WHERE st.a IS DISTINCT FROM NULL;
+----
+10
+
+statement ok
+PREPARE q AS SELECT count(*) FROM read_parquet(['{TEST_DIR}/cast_null_a.parquet', '{TEST_DIR}/cast_null_b.parquet']) WHERE st.a IN (1, ?);
+
+query I
+EXECUTE q(NULL);
+----
+1
