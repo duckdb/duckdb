@@ -733,6 +733,23 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 	REQUIRE(string_from_decimal == "-0.5");
 }
 
+TEST_CASE("Convert wide decimals near a double rounding midpoint through the C API", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto result = tester.Query("SELECT '10000000000000001.0000000000000000000001'::DECIMAL(39,22), "
+	                           "'-10000000000000001.0000000000000000000001'::DECIMAL(39,22)");
+	REQUIRE_NO_FAIL(*result);
+	auto positive = result->Fetch<duckdb_decimal>(0, 0);
+	auto negative = result->Fetch<duckdb_decimal>(1, 0);
+	REQUIRE(positive.width == 39);
+	REQUIRE(positive.scale == 22);
+	REQUIRE(negative.width == 39);
+	REQUIRE(negative.scale == 22);
+	REQUIRE(duckdb_decimal_to_double(positive) == 10000000000000002.0);
+	REQUIRE(duckdb_decimal_to_double(negative) == -10000000000000002.0);
+}
+
 TEST_CASE("Test custom_user_agent config", "[capi]") {
 	{
 		duckdb_database db;
