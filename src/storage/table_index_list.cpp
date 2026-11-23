@@ -604,10 +604,10 @@ void TableIndexList::RemoveIndexBuild(const IndexBuild &build) {
 	}
 }
 
-void TableIndexList::AddIndexBuildChanges(const IndexBuildRange &rows) {
+void TableIndexList::AddIndexBuildChanges(const IndexBuildRange &rows, idx_t changed_rows) {
 	annotated_lock_guard lock(index_builds_lock);
 	for (auto &build : index_builds) {
-		build->AddChanges(rows);
+		build->AddChanges(rows, changed_rows);
 	}
 }
 

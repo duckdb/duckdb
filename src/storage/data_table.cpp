@@ -417,15 +417,6 @@ static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
 //! The most consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
-//! Returns the number of rows in the ranges
-static idx_t ChangedRows(const vector<IndexBuildRange> &ranges) {
-	idx_t rows = 0;
-	for (auto &range : ranges) {
-		rows += range.count;
-	}
-	return rows;
-}
-
 void DataTable::ApplyIndexBuildChanges(IndexBuild &build, BoundIndex &index, vector<IndexBuildRange> &ranges,
                                        transaction_t commit_id) {
 	if (!ranges.empty()) {
@@ -452,7 +443,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 	if (build) {
 		// the commit lock guards the changes of the build
 		auto changes = build->TakeChanges();
-		auto rows = ChangedRows(changes);
+		auto rows = changes.changed_rows;
 		idx_t rounds = 0;
 		idx_t growing_rounds = 0;
 		// apply outside the commit lock until few enough changed rows are left
@@ -464,17 +455,17 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 				    GetTableName(), rows, rounds);
 			}
 			commit_lock.unlock();
-			ApplyIndexBuildChanges(*build, bound_index, changes, last_commit);
+			ApplyIndexBuildChanges(*build, bound_index, changes.ranges, last_commit);
 			context.FastInterruptCheck();
 			commit_lock.lock();
 			last_commit = DuckTransactionManager::Get(db).GetLastCommit();
 			changes = build->TakeChanges();
-			auto rows_left = ChangedRows(changes);
+			auto rows_left = changes.changed_rows;
 			growing_rounds = rows_left > rows ? growing_rounds + 1 : 0;
 			rows = rows_left;
 			rounds++;
 		}
-		ApplyIndexBuildChanges(*build, bound_index, changes, last_commit);
+		ApplyIndexBuildChanges(*build, bound_index, changes.ranges, last_commit);
 		info->indexes.RemoveIndexBuild(*build);
 	}
 	if (!IsMainTable()) {

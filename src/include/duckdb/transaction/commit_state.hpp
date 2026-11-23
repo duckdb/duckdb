@@ -103,7 +103,7 @@ private:
 	//! Returns true, if the deleted rows stay in deleted_rows_in_use until the cleanup
 	bool CommitDelete(DeleteInfo &info, transaction_t old_id);
 	//! Adds the rows a commit changed to the index builds in progress on the table
-	static void AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows);
+	static void AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows, idx_t changed_rows);
 	//! The span from the first to the last deleted row
 	static IndexBuildRange DeletedRowSpan(DeleteInfo &info);
 

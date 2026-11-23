@@ -8,14 +8,15 @@ IndexBuild::IndexBuild(transaction_t transaction_id_p, transaction_t build_commi
     : transaction_id(transaction_id_p), build_commit(build_commit_p), applied_commit(build_commit_p) {
 }
 
-void IndexBuild::AddChanges(const IndexBuildRange &rows) {
-	changes.push_back(rows);
+void IndexBuild::AddChanges(const IndexBuildRange &rows, idx_t changed_rows) {
+	changes.ranges.push_back(rows);
+	changes.changed_rows += changed_rows;
 }
 
-vector<IndexBuildRange> IndexBuild::TakeChanges() {
-	vector<IndexBuildRange> result;
-	result.swap(changes);
-	MergeRanges(result);
+IndexBuildChanges IndexBuild::TakeChanges() {
+	IndexBuildChanges result;
+	std::swap(result, changes);
+	MergeRanges(result.ranges);
 	return result;
 }
 

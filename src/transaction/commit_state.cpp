@@ -270,10 +270,10 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
-void CommitState::AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows) {
+void CommitState::AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows, idx_t changed_rows) {
 	// a failure here cannot be reverted: throw a FatalException
 	try {
-		storage.GetDataTableInfo()->GetIndexes().AddIndexBuildChanges(rows);
+		storage.GetDataTableInfo()->GetIndexes().AddIndexBuildChanges(rows, changed_rows);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {
@@ -395,7 +395,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 		auto &storage = info->table->GetStorage();
 		storage.CommitAppend(commit_id, info->start_row, info->count);
 		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
-			AddIndexBuildChanges(storage, IndexBuildRange {info->start_row, info->count});
+			AddIndexBuildChanges(storage, IndexBuildRange {info->start_row, info->count}, info->count);
 		}
 		break;
 	}
@@ -415,7 +415,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 		}
 		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
 			// applying skips the rows in the span that did not change
-			AddIndexBuildChanges(storage, DeletedRowSpan(*info));
+			AddIndexBuildChanges(storage, DeletedRowSpan(*info), info->count);
 		}
 		break;
 	}

@@ -134,7 +134,7 @@ public:
 		return !index_builds.empty();
 	}
 	//! Adds the rows a commit changed to each index build in progress.
-	void AddIndexBuildChanges(const IndexBuildRange &rows);
+	void AddIndexBuildChanges(const IndexBuildRange &rows, idx_t changed_rows);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	shared_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
