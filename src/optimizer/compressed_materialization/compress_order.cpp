@@ -1,11 +1,36 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
 
-void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
+static bool IsSingleVectorTemporalOrder(const LogicalOrder &order, optional_ptr<const NodeStatistics> node_stats) {
+	if (!node_stats || !node_stats->has_max_cardinality || node_stats->max_cardinality > STANDARD_VECTOR_SIZE) {
+		return false;
+	}
+	for (const auto &key : order.orders) {
+		if (key.expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    !key.expression->GetReturnType().IsTemporal()) {
+			return false;
+		}
+	}
+	for (const auto &type : order.children[0]->types) {
+		if (!type.IsTemporal() && !type.IsIntegral()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op,
+                                              optional_ptr<const NodeStatistics> node_stats) {
 	auto &order = op->Cast<LogicalOrder>();
+	// For a single vector, narrowing integer payloads around a temporal sort costs more than it saves.
+	if (IsSingleVectorTemporalOrder(order, node_stats)) {
+		return;
+	}
 
 	// Find all bindings referenced by non-colref expressions in the order nodes
 	// These are excluded from compression by projection

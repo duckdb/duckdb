@@ -1,0 +1,69 @@
+# name: test/sql/function/timestamp/date_sub_month_bounds.test
+# description: Month subtraction must preserve table rows across a leap-year month end
+# group: [timestamp]
+
+statement ok
+CREATE TABLE ends AS SELECT * FROM (VALUES (TIMESTAMP '2023-12-30 23:30'), (TIMESTAMP '2023-12-31 06:23')) v(e)
+
+query I
+SELECT date_sub('month', TIMESTAMP '2024-02-29 23:00', e) FROM ends ORDER BY e
+----
+-1
+-2
+
+statement ok
+INSERT INTO ends VALUES (TIMESTAMP '2024-01-01')
+
+query I
+SELECT e FROM ends WHERE date_sub('month', TIMESTAMP '2024-02-29 23:00', e) < -1
+----
+2023-12-31 06:23:00
+
+query I
+SELECT e FROM ends WHERE date_sub('month', e, TIMESTAMP '2024-02-29 23:00') > 1
+----
+2023-12-31 06:23:00
+
+statement ok
+PREPARE month_bounds AS SELECT e FROM ends WHERE date_sub($1::VARCHAR, TIMESTAMP '2024-02-29 23:00', e) < -1 ORDER BY e
+
+query I
+EXECUTE month_bounds('seconds')
+----
+2023-12-30 23:30:00
+2023-12-31 06:23:00
+2024-01-01 00:00:00
+
+query I
+EXECUTE month_bounds('months')
+----
+2023-12-31 06:23:00
+
+# A finite timestamp sorts below -infinity, so even finite extrema can enclose a NULL result.
+statement ok
+CREATE TABLE extreme_ends(e TIMESTAMP);
+
+statement ok
+INSERT INTO extreme_ends VALUES (make_timestamp(-9223372036854775807 - 1)), ('-infinity'), ('2024-01-01'), (NULL);
+
+query II
+SELECT count(date_sub('month', TIMESTAMP '2024-02-29', e)), count(date_sub('month', e, TIMESTAMP '2024-02-29')) FROM extreme_ends;
+----
+2	2
+
+# Two calendar boundaries can be only one complete month, in either direction.
+statement ok
+CREATE TABLE partial_months(s TIMESTAMP, e TIMESTAMP);
+
+statement ok
+INSERT INTO partial_months VALUES ('2024-01-15', '2024-03-01'), ('2024-01-16', '2024-03-02');
+
+query I
+SELECT count(*) FROM partial_months WHERE date_sub('month', s, e) < 2;
+----
+2
+
+query I
+SELECT count(*) FROM partial_months WHERE date_sub('month', e, s) > -2;
+----
+2

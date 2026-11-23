@@ -437,7 +437,8 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 	}
 }
 
-void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
+void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op,
+                                         optional_ptr<const NodeStatistics> node_stats) {
 	if (TopN::CanOptimize(*op)) { // Let's not mess with the TopN optimizer
 		return;
 	}
@@ -461,7 +462,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		CompressComparisonJoin(op);
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		CompressOrder(op);
+		CompressOrder(op, node_stats);
 		break;
 	default:
 		break;

@@ -6,6 +6,8 @@
         "test/optimizer/statistics/statistics_numeric.test",
         "test/optimizer/statistics/statistics_join_aggregate_bounds.test",
         "test/optimizer/statistics/statistics_monotone_infinity.test",
+        "test/optimizer/statistics/statistics_date_sub_month.test",
+        "test/optimizer/compressed_materialization_temporal_order.test",
         "test/optimizer/statistics/right_semi_join_filter.test",
         "test/optimizer/statistics/statistics_additive_duplication.test",
         "test/optimizer/statistics/statistics_all_null_operand.test",
