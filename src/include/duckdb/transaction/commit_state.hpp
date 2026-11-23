@@ -29,7 +29,6 @@ struct DataTableInfo;
 class DataTable;
 struct DeleteInfo;
 struct UpdateInfo;
-struct IndexBuildRange;
 
 enum class CommitMode { COMMIT, REVERT_COMMIT };
 
@@ -102,10 +101,6 @@ private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitInfo &info);
 	//! Returns true, if the deleted rows stay in deleted_rows_in_use until the cleanup
 	bool CommitDelete(DeleteInfo &info, transaction_t old_id);
-	//! Adds the rows a commit changed to the index builds in progress on the table
-	static void AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows, idx_t changed_rows);
-	//! The span from the first to the last deleted row
-	static IndexBuildRange DeletedRowSpan(DeleteInfo &info);
 
 private:
 	DuckTransaction &transaction;

@@ -7,7 +7,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -1073,12 +1072,15 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 	}
 }
 
-void RowGroupCollection::FetchIndexColumns(TransactionData transaction, DataChunk &result_chunk,
-                                           const unordered_set<column_t> &column_id_set, Vector &row_identifiers,
-                                           idx_t count) {
+void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
+                                           Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
+                                           optional_idx active_checkpoint) {
+	// Collect all Indexed columns on the table.
+	auto indexed_column_id_set = indexes.GetIndexedColumns();
+
 	// Sorted so that the fetched columns align with the ascending physical order used when
 	// referencing them into result_chunk below.
-	vector<StorageIndex> column_ids {column_id_set.begin(), column_id_set.end()};
+	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
@@ -1092,13 +1094,16 @@ void RowGroupCollection::FetchIndexColumns(TransactionData transaction, DataChun
 
 	ColumnFetchState state;
 	state.fetch_type = FetchType::FORCE_FETCH;
-	Fetch(transaction, fetch_chunk, column_ids, row_identifiers, count, state);
+	TransactionData commit_transaction(MAX_TRANSACTION_ID, VisibilityBound::Before(MAX_COMMIT_ID));
+	Fetch(commit_transaction, fetch_chunk, column_ids, row_identifiers, count, state);
 
+	// Used for index value removal.
 	// Contains all columns but only initializes indexed ones.
+	DataChunk result_chunk;
 	auto fetched_columns = vector<bool>(types.size(), false);
 	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
 	// Now set all to-be-fetched columns.
-	for (auto &col : column_id_set) {
+	for (auto &col : indexed_column_id_set) {
 		fetched_columns[col] = true;
 	}
 
@@ -1111,97 +1116,7 @@ void RowGroupCollection::FetchIndexColumns(TransactionData transaction, DataChun
 		}
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
-}
 
-void RowGroupCollection::ScanChangedRows(RowChangeType type, const vector<IndexBuildRange> &ranges,
-                                         VisibilityBound from, VisibilityBound to,
-                                         const std::function<void(Vector &row_ids, idx_t count)> &callback) {
-	auto row_groups = GetRowGroups();
-	row_t row_data[STANDARD_VECTOR_SIZE];
-	idx_t count = 0;
-	auto flush = [&]() {
-		if (count == 0) {
-			return;
-		}
-		Vector row_ids(LogicalType::ROW_TYPE, data_ptr_cast(row_data), count);
-		callback(row_ids, count);
-		count = 0;
-	};
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	for (auto &range : ranges) {
-		auto row = range.start_row;
-		while (row < range.End()) {
-			optional_ptr<SegmentNode<RowGroup>> row_group;
-			{
-				idx_t segment_index;
-				auto l = row_groups->Lock();
-				if (!row_groups->TryGetSegmentIndex(l, row, segment_index)) {
-					// rows past the end of the table did not change
-					break;
-				}
-				row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-			}
-			auto &node = row_group->GetNode();
-			auto row_group_start = row_group->GetRowStart();
-			auto vector_idx = (row - row_group_start) / STANDARD_VECTOR_SIZE;
-			auto vector_start = row_group_start + vector_idx * STANDARD_VECTOR_SIZE;
-			auto vector_end = MinValue(vector_start + STANDARD_VECTOR_SIZE, row_group_start + node.count);
-			vector_end = MinValue(vector_end, range.End());
-			if (vector_end <= row) {
-				// a revert truncated the row group
-				break;
-			}
-			if (count + (vector_end - row) > STANDARD_VECTOR_SIZE) {
-				flush();
-			}
-			auto changed =
-			    node.GetChangedRows(type, from, to, vector_idx, row - vector_start, vector_end - vector_start, sel);
-			for (idx_t i = 0; i < changed; i++) {
-				row_data[count++] = UnsafeNumericCast<row_t>(vector_start + sel.get_index(i));
-			}
-			row = vector_end;
-		}
-	}
-	flush();
-}
-
-void RowGroupCollection::ApplyChangesToIndex(BoundIndex &index, const IndexBuildChanges &changes) {
-	auto from = VisibilityBound::Through(changes.from_commit);
-	auto to = VisibilityBound::Through(changes.to_commit);
-	auto &column_ids = index.GetColumnIdSet();
-	// delete first: a key can move to a row in an earlier vector, which must not make it a duplicate
-	ScanChangedRows(RowChangeType::DELETED, changes.ranges, from, to, [&](Vector &row_ids, idx_t count) {
-		DataChunk keys;
-		FetchIndexColumns(TransactionData(MAX_TRANSACTION_ID, from), keys, column_ids, row_ids, count);
-		index.Delete(keys, row_ids);
-	});
-	ScanChangedRows(RowChangeType::APPENDED, changes.ranges, from, to, [&](Vector &row_ids, idx_t count) {
-		DataChunk keys;
-		FetchIndexColumns(TransactionData(MAX_TRANSACTION_ID, to), keys, column_ids, row_ids, count);
-		if (index.IsPrimary()) {
-			for (auto column_id : column_ids) {
-				if (VectorOperations::HasNull(keys.data[column_id])) {
-					throw ConstraintException("NOT NULL constraint failed: %s", index.GetIndexName());
-				}
-			}
-		}
-		auto error = index.Append(keys, row_ids);
-		if (error.HasError()) {
-			error.Throw();
-		}
-	});
-}
-
-void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
-                                           Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
-                                           optional_idx active_checkpoint) {
-	// Collect all Indexed columns on the table.
-	auto indexed_column_id_set = indexes.GetIndexedColumns();
-
-	// Used for index value removal.
-	DataChunk result_chunk;
-	TransactionData commit_transaction(MAX_TRANSACTION_ID, VisibilityBound::Before(MAX_COMMIT_ID));
-	FetchIndexColumns(commit_transaction, result_chunk, indexed_column_id_set, row_identifiers, count);
 	indexes.RemoveFromIndexes(result_chunk, row_identifiers, removal_type, active_checkpoint);
 }
 

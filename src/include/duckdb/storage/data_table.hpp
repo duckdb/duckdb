@@ -29,8 +29,8 @@ class DistinctStatistics;
 class DuckTransaction;
 class Expression;
 class Index;
-class IndexBuild;
 class BoundIndex;
+class IndexEntry;
 class OptimisticDataWriter;
 class RowGroup;
 class RowGroupCollection;
@@ -265,8 +265,8 @@ public:
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result);
 
-	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit if there is a build
-	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexBuild> build);
+	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit if the index is built in place
+	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexEntry> build);
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -305,11 +305,11 @@ public:
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
-	//! Applies the commits made during the build to the index, then adds it to the index list.
+	//! Applies the commits made during the build to the index, then makes it usable in the index list.
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
 	                                idx_t index_oid, ConstraintCheckMode check_mode);
-	//! Starts an index build: later commits add the rows they change to it
-	shared_ptr<IndexBuild> AddIndexBuild(DuckTransaction &transaction);
+	//! Starts building an index in place: later commits change the deltas of its entry
+	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

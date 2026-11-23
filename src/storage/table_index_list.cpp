@@ -15,7 +15,6 @@
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -102,6 +101,46 @@ shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t i
 	}
 	index_entries.push_back(index_entry);
 	return index_entry;
+}
+
+shared_ptr<IndexEntry> TableIndexList::AddBuildingIndex(unique_ptr<BoundIndex> empty_index, transaction_t build_commit,
+                                                        transaction_t build_transaction) {
+	annotated_lock_guard lock(index_entries_lock);
+	auto index_entry = make_shared_ptr<IndexEntry>(std::move(empty_index), build_commit, build_transaction);
+	index_entries.push_back(index_entry);
+	return index_entry;
+}
+
+shared_ptr<IndexEntry> TableIndexList::FindBuildingIndex(transaction_t build_transaction) const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		if (entry->IsBuilding() && entry->GetBuildTransaction() == build_transaction) {
+			return entry;
+		}
+	}
+	return nullptr;
+}
+
+void TableIndexList::RemoveBuildingIndex(const IndexEntry &entry) {
+	// commits may still hold the entry: it is dropped from the list, not retired
+	annotated_lock_guard lock(index_entries_lock);
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		if (index_entries[i].get() == &entry && entry.IsBuilding()) {
+			index_entries.erase_at(i);
+			return;
+		}
+	}
+}
+
+idx_t TableIndexList::CountBuiltIndexes() const {
+	annotated_lock_guard lock(index_entries_lock);
+	idx_t count = 0;
+	for (auto &entry : index_entries) {
+		if (!entry->IsBuilding()) {
+			count++;
+		}
+	}
+	return count;
 }
 
 void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
@@ -270,6 +309,9 @@ void TableIndexList::Vacuum() {
 void TableIndexList::Rebuild(const IndexRebuildScan &scan) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
+		if (entry->IsBuilding()) {
+			continue;
+		}
 		entry->Rebuild(scan);
 	}
 }
@@ -534,6 +576,10 @@ vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndex
 	infos.reserve(index_entries.size());
 
 	for (const auto &entry : index_entries) {
+		if (entry->IsBuilding()) {
+			// not committed yet
+			continue;
+		}
 		auto checkpoint = entry->Checkpoint(writer);
 		if (checkpoint.shadow_index) {
 			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
@@ -585,40 +631,12 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
+		if (entry->IsBuilding()) {
+			// the build merges its own deltas
+			continue;
+		}
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
-}
-
-void TableIndexList::AddIndexBuild(shared_ptr<IndexBuild> build) {
-	annotated_lock_guard lock(index_builds_lock);
-	index_builds.push_back(std::move(build));
-}
-
-void TableIndexList::RemoveIndexBuild(const IndexBuild &build) {
-	annotated_lock_guard lock(index_builds_lock);
-	for (idx_t i = 0; i < index_builds.size(); i++) {
-		if (index_builds[i].get() == &build) {
-			index_builds.erase_at(i);
-			break;
-		}
-	}
-}
-
-void TableIndexList::AddIndexBuildChanges(const IndexBuildRange &rows, idx_t changed_rows) {
-	annotated_lock_guard lock(index_builds_lock);
-	for (auto &build : index_builds) {
-		build->AddChanges(rows, changed_rows);
-	}
-}
-
-shared_ptr<IndexBuild> TableIndexList::FindIndexBuild(transaction_t transaction_id) const {
-	annotated_lock_guard lock(index_builds_lock);
-	for (auto &build : index_builds) {
-		if (build->transaction_id == transaction_id) {
-			return build;
-		}
-	}
-	return nullptr;
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

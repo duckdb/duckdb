@@ -469,7 +469,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 
 	auto &get = plan->Cast<LogicalGet>();
 	InitCreateIndexInfo(get, *create_index_info);
-	get.bind_data.write().Cast<TableScanBindData>().create_index = CreateIndexScanType::CREATE_INDEX;
+	get.bind_data.write().Cast<TableScanBindData>().is_create_index = true;
 
 	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table_entry,
 	                                            std::move(alter_table_info));

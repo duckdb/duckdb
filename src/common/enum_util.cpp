@@ -155,7 +155,6 @@
 #include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/window/match_recognize_matcher.hpp"
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
@@ -1751,25 +1750,6 @@ const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
 template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
 	return static_cast<CopyToType>(StringUtil::StringToEnum(GetCopyToTypeValues(), 2, "CopyToType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetCreateIndexScanTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CreateIndexScanType::NONE), "NONE" },
-		{ static_cast<uint32_t>(CreateIndexScanType::CREATE_INDEX), "CREATE_INDEX" },
-		{ static_cast<uint32_t>(CreateIndexScanType::ONLINE_INDEX_BUILD), "ONLINE_INDEX_BUILD" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<CreateIndexScanType>(CreateIndexScanType value) {
-	return StringUtil::EnumToString(GetCreateIndexScanTypeValues(), 3, "CreateIndexScanType", static_cast<uint32_t>(value));
-}
-
-template<>
-CreateIndexScanType EnumUtil::FromString<CreateIndexScanType>(const char *value) {
-	return static_cast<CreateIndexScanType>(StringUtil::StringToEnum(GetCreateIndexScanTypeValues(), 3, "CreateIndexScanType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCryptoHashFunctionValues() {
@@ -6030,24 +6010,6 @@ const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value) {
 template<>
 ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value) {
 	return static_cast<ResultOrdering>(StringUtil::StringToEnum(GetResultOrderingValues(), 3, "ResultOrdering", value));
-}
-
-const StringUtil::EnumStringLiteral *GetRowChangeTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(RowChangeType::DELETED), "DELETED" },
-		{ static_cast<uint32_t>(RowChangeType::APPENDED), "APPENDED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<RowChangeType>(RowChangeType value) {
-	return StringUtil::EnumToString(GetRowChangeTypeValues(), 2, "RowChangeType", static_cast<uint32_t>(value));
-}
-
-template<>
-RowChangeType EnumUtil::FromString<RowChangeType>(const char *value) {
-	return static_cast<RowChangeType>(StringUtil::StringToEnum(GetRowChangeTypeValues(), 2, "RowChangeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {

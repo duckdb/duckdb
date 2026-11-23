@@ -1431,7 +1431,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			}
 		}
 	}
-	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
+	if (storage->GetDataTableInfo()->GetIndexes().CountBuiltIndexes() > constraint_index_count) {
 		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
 	}
 

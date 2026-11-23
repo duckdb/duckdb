@@ -47,8 +47,6 @@ class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
 class BoundIndex;
-struct IndexBuildRange;
-struct IndexBuildChanges;
 
 //! How checkpoint vacuum handles table indexes when rowids may change.
 enum class VacuumIndexStrategy : uint8_t {
@@ -164,9 +162,6 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
-	//! Applies the rows of the ranges that the commits of the changes deleted or appended to the index
-	void ApplyChangesToIndex(BoundIndex &index, const IndexBuildChanges &changes);
-
 	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
 	             optional_ptr<DeletedRowIds> deleted_ids = nullptr);
@@ -265,12 +260,6 @@ private:
 	                                                       idx_t count) const;
 
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
-	//! Fetches the columns of the rows into result_chunk, with NULL for the other table columns
-	void FetchIndexColumns(TransactionData transaction, DataChunk &result_chunk,
-	                       const unordered_set<column_t> &column_id_set, Vector &row_identifiers, idx_t count);
-	//! Calls the callback with the rows of the ranges that commits in (from, to] deleted or appended
-	void ScanChangedRows(RowChangeType type, const vector<IndexBuildRange> &ranges, VisibilityBound from,
-	                     VisibilityBound to, const std::function<void(Vector &row_ids, idx_t count)> &callback);
 
 private:
 	//! BlockManager

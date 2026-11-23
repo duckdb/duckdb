@@ -1,5 +1,4 @@
 #include "duckdb/transaction/commit_state.hpp"
-#include "duckdb/storage/table/index_build.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
@@ -270,31 +269,6 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
-void CommitState::AddIndexBuildChanges(DataTable &storage, const IndexBuildRange &rows, idx_t changed_rows) {
-	// a failure here cannot be reverted: throw a FatalException
-	try {
-		storage.GetDataTableInfo()->GetIndexes().AddIndexBuildChanges(rows, changed_rows);
-	} catch (std::exception &ex) {
-		throw FatalException(ErrorData(ex).Message());
-	} catch (...) {
-		throw FatalException("unknown failure in CommitState::AddIndexBuildChanges");
-	}
-}
-
-IndexBuildRange CommitState::DeletedRowSpan(DeleteInfo &info) {
-	if (info.is_consecutive) {
-		return IndexBuildRange {info.base_row, info.count};
-	}
-	auto rows = info.GetRows();
-	auto first = rows[0];
-	auto last = rows[0];
-	for (idx_t i = 1; i < info.count; i++) {
-		first = MinValue(first, rows[i]);
-		last = MaxValue(last, rows[i]);
-	}
-	return IndexBuildRange {info.base_row + first, UnsafeNumericCast<idx_t>(last - first) + 1};
-}
-
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commit_info) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
@@ -392,11 +366,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		auto &storage = info->table->GetStorage();
-		storage.CommitAppend(commit_id, info->start_row, info->count);
-		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
-			AddIndexBuildChanges(storage, IndexBuildRange {info->start_row, info->count}, info->count);
-		}
+		info->table->GetStorage().CommitAppend(commit_id, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -409,13 +379,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &commi
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
-		auto &storage = info->table->GetStorage();
 		if (CommitDelete(*info, transaction.GetTransactionId())) {
 			commit_info.has_index_deletes = true;
-		}
-		if (storage.GetDataTableInfo()->GetIndexes().HasIndexBuilds()) {
-			// applying skips the rows in the span that did not change
-			AddIndexBuildChanges(storage, DeletedRowSpan(*info), info->count);
 		}
 		break;
 	}

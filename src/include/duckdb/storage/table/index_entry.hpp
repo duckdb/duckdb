@@ -46,6 +46,8 @@ public:
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
 	void MarkWritten(optional_idx checkpoint_id);
+	//! Takes the delta out, leaving none in its place
+	unique_ptr<BoundIndex> Take(IndexDeltaType type);
 	void Reset();
 
 private:
@@ -110,11 +112,23 @@ private:
 	unique_ptr<StorageLockKey> lock;
 };
 
+//! The changes that commits made to a building index entry, taken out of the entry
+struct IndexBuildDeltas {
+	unique_ptr<BoundIndex> added;
+	unique_ptr<BoundIndex> removed;
+	//! The number of rows that commits appended or removed
+	idx_t changed_rows = 0;
+	//! Whether a commit appended a row with a NULL key column
+	bool has_null_keys = false;
+};
+
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
 	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode, transaction_t last_commit);
+	//! Creates a building entry: commits route their changes to its deltas, and readers skip it
+	IndexEntry(unique_ptr<BoundIndex> empty_index, transaction_t build_commit, transaction_t build_transaction);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -179,6 +193,10 @@ public:
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds the required transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
+	//! Takes the changes that commits made to the building entry since the last take
+	IndexBuildDeltas TakeBuildDeltas();
+	//! Replaces the empty index of the building entry with the built index, which readers can then use
+	void FinishBuild(unique_ptr<BoundIndex> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Adds only the transaction-local delete index.
 	void InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const;
 
@@ -202,6 +220,18 @@ public:
 	idx_t GetIndexOid() const {
 		return index_oid;
 	}
+	//! Whether CREATE INDEX is still building the index: commits change its deltas, and readers skip it
+	bool IsBuilding() const {
+		return building;
+	}
+	//! The transaction that builds the index
+	transaction_t GetBuildTransaction() const {
+		return build_transaction;
+	}
+	//! The last commit before the index was added to the table's index list
+	transaction_t GetLastCommit() const {
+		return last_commit;
+	}
 	//! Whether a snapshot at the bound can scan the index: it sees every commit the index was built from.
 	bool ScannableAt(VisibilityBound bound) const {
 		return last_commit < bound;
@@ -220,8 +250,8 @@ private:
 
 private:
 	atomic<IndexBindState> bind_state;
-	//! The OID of this index.
-	const idx_t index_oid;
+	//! The OID of this index (set when a build finishes).
+	atomic<idx_t> index_oid;
 	//! The last commit before the index was added to the table's index list (0: added before every commit).
 	const transaction_t last_commit;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
@@ -229,8 +259,16 @@ private:
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
 	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
-	const ConstraintCheckMode check_mode;
+	ConstraintCheckMode check_mode;
 	IndexDeltas deltas;
+	//! Whether the index is being built, see IsBuilding()
+	atomic<bool> building;
+	//! The transaction that builds the index (0 if the entry was not built in place)
+	const transaction_t build_transaction;
+	//! The rows that commits appended or removed since the build last took the deltas
+	idx_t build_changed_rows = 0;
+	//! Whether a commit appended a row with a NULL key column since the build started
+	bool build_has_null_keys = false;
 };
 
 template <class TARGET>

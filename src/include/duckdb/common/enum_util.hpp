@@ -180,8 +180,6 @@ enum class CopyOverwriteMode : uint8_t;
 
 enum class CopyToType : uint8_t;
 
-enum class CreateIndexScanType : uint8_t;
-
 enum class CryptoHashFunction : uint8_t;
 
 enum class DataFileType : uint8_t;
@@ -553,8 +551,6 @@ enum class ResultLifetime : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class ResultOrdering : uint8_t;
-
-enum class RowChangeType : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
@@ -948,9 +944,6 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
-
-template<>
-const char* EnumUtil::ToChars<CreateIndexScanType>(CreateIndexScanType value);
 
 template<>
 const char* EnumUtil::ToChars<CryptoHashFunction>(CryptoHashFunction value);
@@ -1511,9 +1504,6 @@ template<>
 const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
-const char* EnumUtil::ToChars<RowChangeType>(RowChangeType value);
-
-template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
 
 template<>
@@ -1990,9 +1980,6 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
 
 template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value);
-
-template<>
-CreateIndexScanType EnumUtil::FromString<CreateIndexScanType>(const char *value);
 
 template<>
 CryptoHashFunction EnumUtil::FromString<CryptoHashFunction>(const char *value);
@@ -2551,9 +2538,6 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
-
-template<>
-RowChangeType EnumUtil::FromString<RowChangeType>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
