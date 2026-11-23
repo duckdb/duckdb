@@ -75,8 +75,9 @@ The generator needs `python3` and the `zstd` command line tool.
    ```
 
 The generator writes one file, so the update is `collation_data.cpp` plus the two version
-constants. The size of the compressed tables is printed at the end of the run; a large jump is
-worth understanding before committing.
+constants. The file holds the tables in both byte orders, and `DUCKDB_IS_BIG_ENDIAN` selects the
+one that is compiled, so that the loader reads them without swapping. The size of the compressed
+tables is printed at the end of the run; a large jump is worth understanding before committing.
 
 ## The other scripts
 

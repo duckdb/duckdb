@@ -191,14 +191,14 @@ def emit_bytes(out, declaration, data, per_line=24):
     out.append("};")
 
 
-def zone_blob(zone, final_rule):
+def zone_blob(zone, final_rule, order):
     """The data of one zone, laid out so that every array is aligned once it is decompressed.
 
     The counts and the scalars come first, then the arrays with the widest element first, which
     keeps each of them aligned without any padding between them.
     """
     header = struct.pack(
-        "<3I3i",
+        order + "3I3i",
         len(zone.transitions),
         len(zone.type_offsets),
         len(zone.links),
@@ -207,9 +207,9 @@ def zone_blob(zone, final_rule):
         final_rule,
     )
     assert len(header) % 8 == 0, len(header)
-    body = b"".join(struct.pack("<q", value) for value in zone.transitions)
-    body += b"".join(struct.pack("<ii", raw, dst) for raw, dst in zone.type_offsets)
-    body += b"".join(struct.pack("<H", value) for value in zone.links)
+    body = b"".join(struct.pack(order + "q", value) for value in zone.transitions)
+    body += b"".join(struct.pack(order + "ii", raw, dst) for raw, dst in zone.type_offsets)
+    body += b"".join(struct.pack(order + "H", value) for value in zone.links)
     body += bytes(zone.type_map)
     return header + body
 
@@ -233,7 +233,7 @@ def pad(data, alignment=8):
     return data + b"\0" * ((alignment - len(data) % alignment) % alignment)
 
 
-def build_block(zones, data_zones, data_index, rules, rule_index, windows_zones):
+def build_block(zones, data_zones, data_index, rules, rule_index, windows_zones, order):
     """Everything the zones are described by, in one block.
 
     The sections are ordered so that each one is aligned for the widest thing it holds, and the
@@ -241,7 +241,7 @@ def build_block(zones, data_zones, data_index, rules, rule_index, windows_zones)
     """
     pool = StringPool()
 
-    blobs = [pad(zone_blob(zone, rule_index[zone.final_rule] if zone.final_rule else -1)) for zone in data_zones]
+    blobs = [pad(zone_blob(zone, rule_index[zone.final_rule] if zone.final_rule else -1, order)) for zone in data_zones]
     offsets = []
     position = 0
     for blob in blobs:
@@ -253,17 +253,18 @@ def build_block(zones, data_zones, data_index, rules, rule_index, windows_zones)
     windows_entries = [(pool.add(name), pool.add(region), pool.add(zone)) for name, region, zone in windows_zones]
 
     zone_region = b"".join(blobs)
-    data_offsets = b"".join(struct.pack("<I", offset) for offset in offsets)
+    data_offsets = b"".join(struct.pack(order + "I", offset) for offset in offsets)
     # the name and the data index are separate arrays, so that neither needs padding
-    name_offsets = b"".join(struct.pack("<I", offset) for offset in zone_names)
+    name_offsets = b"".join(struct.pack(order + "I", offset) for offset in zone_names)
     data_indexes = b"".join(
-        struct.pack("<H", data_index[zone.index if zone.link_target is None else zone.link_target]) for zone in zones
+        struct.pack(order + "H", data_index[zone.index if zone.link_target is None else zone.link_target])
+        for zone in zones
     )
-    rule_values = b"".join(struct.pack("<11i", *rules[name]) for name in sorted(rules))
-    windows_index = b"".join(struct.pack("<3I", *entry) for entry in windows_entries)
+    rule_values = b"".join(struct.pack(order + "11i", *rules[name]) for name in sorted(rules))
+    windows_index = b"".join(struct.pack(order + "3I", *entry) for entry in windows_entries)
 
     header = struct.pack(
-        "<6I", len(zones), len(data_zones), len(rules), len(windows_zones), len(pool.data), len(zone_region)
+        order + "6I", len(zones), len(data_zones), len(rules), len(windows_zones), len(pool.data), len(zone_region)
     )
     assert len(header) % 8 == 0, len(header)
     # the zone data holds 64 bit transitions, so it comes first while the block is still aligned
@@ -305,6 +306,8 @@ def generate(version, zones, rules, windows_zones):
     out.append("")
     out.append('#include "tz_data.hpp"')
     out.append("")
+    out.append('#include "duckdb/common/bswap.hpp"')
+    out.append("")
     out.append("namespace duckdb {")
     out.append("namespace datetime {")
     out.append("")
@@ -316,8 +319,11 @@ def generate(version, zones, rules, windows_zones):
         if zone.link_target is None:
             data_index[index] = len(data_index)
 
-    block = build_block(zones, data_zones, data_index, rules, rule_index, windows_zones)
-    compressed = compress_block(block)
+    block_le = build_block(zones, data_zones, data_index, rules, rule_index, windows_zones, "<")
+    block_be = build_block(zones, data_zones, data_index, rules, rule_index, windows_zones, ">")
+    assert len(block_le) == len(block_be)
+    compressed_le = compress_block(block_le)
+    compressed_be = compress_block(block_be)
 
     out.append("// The zones, their identifiers, the recurring rules and the Windows names are all")
     out.append("// held in one block that is compressed with zstd, and decompressed the first time")
@@ -325,10 +331,16 @@ def generate(version, zones, rules, windows_zones):
     out.append("// compressing them apart, and there is nothing to be gained from decompressing a")
     out.append("// zone on its own, because the block is kept once it has been decompressed.")
     out.append("")
-    emit_bytes(out, "TZ_COMPRESSED", compressed)
+    out.append("#if !DUCKDB_IS_BIG_ENDIAN")
+    emit_bytes(out, "TZ_COMPRESSED", compressed_le)
     out.append("")
-    out.append("const idx_t TZ_COMPRESSED_SIZE = %d;" % len(compressed))
-    out.append("const idx_t TZ_UNCOMPRESSED_SIZE = %d;" % len(block))
+    out.append("const idx_t TZ_COMPRESSED_SIZE = %d;" % len(compressed_le))
+    out.append("#else")
+    emit_bytes(out, "TZ_COMPRESSED", compressed_be)
+    out.append("")
+    out.append("const idx_t TZ_COMPRESSED_SIZE = %d;" % len(compressed_be))
+    out.append("#endif")
+    out.append("const idx_t TZ_UNCOMPRESSED_SIZE = %d;" % len(block_le))
     out.append('const char *const TZ_VERSION = "%s";' % version)
     out.append("")
     out.append("} // namespace datetime")

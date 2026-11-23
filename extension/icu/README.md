@@ -43,6 +43,9 @@ against a release other than the one checked in. Either version can also be a pa
 $ python3 scripts/generate_tz_data.py 2026c > datetime/generated/tz_data.cpp
 ```
 
+The file holds the data in both byte orders, and `DUCKDB_IS_BIG_ENDIAN` selects the one that is
+compiled, so that the loader reads it without swapping.
+
 ### Testing the Data
 
 Add a test to the end of `test/sql/timezone/test_icu_timezone.test` for one of the zones the
