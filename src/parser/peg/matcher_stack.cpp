@@ -711,6 +711,8 @@ template <bool SINGLE_STEP>
 MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStackFrame &initial_frame,
                                       optional<MatcherResult> child_result) {
 	reference<MatchStackFrame> current_frame(initial_frame);
+	// the next child was covered by a lookahead test of its parent already
+	bool child_checked = false;
 	while (true) {
 		auto &frame = current_frame.get();
 		optional<MatchInput> next;
@@ -773,6 +775,8 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				f.awaiting_child = true;
 				next.emplace(MatchInput {f.matcher.GetChildMatcher(), f.child_state});
 				has_child = true;
+				// the optional's fast-empty test already tested the child's FIRST set
+				child_checked = true;
 				break;
 			}
 			f.awaiting_child = false;
@@ -813,6 +817,8 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			f.awaiting_child = true;
 			next.emplace(MatchInput {f.matcher.GetChildMatcher(), f.repeat_state});
 			has_child = true;
+			// the repetition's own test covers the first iteration
+			child_checked = !f.matched_once;
 			break;
 		}
 		default: {
@@ -833,11 +839,13 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				return MatchStep::Child(*next);
 			}
 			auto &child = *next;
+			auto checked = child_checked;
+			child_checked = false;
 			if (!child.matcher.IsStructural() && child.matcher.IsAtomic()) {
 				child_result = stack->ExecuteAtomicMatcher(child);
 				continue;
 			}
-			if (child.state.BuildParseResult()) {
+			if (child.state.BuildParseResult() && !checked) {
 				if (child.matcher.Type() == MatcherType::OPTIONAL && child.matcher.IsStructural() &&
 				    !child.matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child.state)) {
 					child.state.rule = child.matcher.GetRule();
