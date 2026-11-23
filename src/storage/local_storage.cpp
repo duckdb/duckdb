@@ -126,6 +126,11 @@ idx_t LocalTableStorage::EstimatedSize() const {
 }
 
 void LocalTableStorage::WriteNewRowGroup(Context &context, idx_t flushed_row_group_idx) {
+	// a flush replaces row groups: skip it while they are in use, the row groups are written at the latest on commit
+	auto flush_key = flush_lock.TryGetExclusiveLock();
+	if (!flush_key) {
+		return;
+	}
 	if (deleted_rows != 0) {
 		// we have deletes - we cannot merge row groups
 		return;
@@ -412,6 +417,7 @@ void LocalStorage::InitializeScan(const QueryContext &context, DataTable &table,
 	if (storage == nullptr || storage->GetCollection().GetTotalRows() == 0) {
 		return;
 	}
+	state.local_row_groups_lock = storage->flush_lock.GetSharedLock();
 	storage->InitializeScan(context, state, table_filters);
 }
 
@@ -444,6 +450,9 @@ optional_idx LocalStorage::NextParallelScan(ClientContext &context, DataTable &t
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
 		return optional_idx();
+	}
+	if (!scan_state.local_row_groups_lock) {
+		scan_state.local_row_groups_lock = storage->flush_lock.GetSharedLock();
 	}
 	return storage->GetCollection().NextParallelScan(context, state, scan_state, initialize_columns);
 }
@@ -581,6 +590,7 @@ idx_t LocalStorage::Delete(Context &context, DataTable &table, DuckTableEntry &t
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	if (storage->append_indexes.Empty()) {
 		idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
@@ -620,6 +630,7 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	storage->GetCollection().Update(TransactionData::Unversioned(), table_entry, ids, column_ids, updates);
 }
@@ -756,6 +767,7 @@ vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table, Tr
 	if (!storage) {
 		return vector<PartitionStatistics>();
 	}
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	return storage->GetCollection().GetPartitionStats(transaction);
 }
 
@@ -818,6 +830,7 @@ void LocalStorage::FetchChunk(DataTable &table, const Vector &row_ids, idx_t cou
 	if (!storage) {
 		throw InternalException("LocalStorage::FetchChunk - local storage not found");
 	}
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	storage->GetCollection().Fetch(transaction, chunk, col_ids, row_ids, count, fetch_state);
 }
 
@@ -826,6 +839,7 @@ bool LocalStorage::CanFetch(DataTable &table, const row_t row_id) {
 	if (!storage) {
 		throw InternalException("LocalStorage::CanFetch - local storage not found");
 	}
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	return storage->GetCollection().CanFetch(transaction, row_id);
 }
 
@@ -843,6 +857,7 @@ void LocalStorage::VerifyNewConstraint(Context &context, DataTable &parent, cons
 	if (!storage) {
 		return;
 	}
+	auto flush_key = storage->flush_lock.GetSharedLock();
 	storage->GetCollection().VerifyNewConstraint(context, transaction, parent, constraint);
 }
 
