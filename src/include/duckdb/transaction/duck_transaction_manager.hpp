@@ -68,14 +68,14 @@ public:
 	}
 	void SetActiveCheckpoint(idx_t checkpoint_id);
 	void ResetActiveCheckpoint();
+
+	bool IsDuckTransactionManager() override {
+		return true;
+	}
 	void SetStartingCheckpointContext(optional_ptr<ClientContext> context);
 	VisibilityBound GetUncheckpointedVisibilityBound() const {
 		auto id = uncheckpointed_commit_id.load();
 		return id == 0 ? VisibilityBound::AllCommitted() : VisibilityBound::Before(id);
-	}
-
-	bool IsDuckTransactionManager() override {
-		return true;
 	}
 
 	//! Obtains a shared lock to the checkpoint lock
