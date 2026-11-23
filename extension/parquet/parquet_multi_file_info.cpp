@@ -1,5 +1,5 @@
 #include "parquet_multi_file_info.hpp"
-#include "duckdb/common/multi_file/options_delete_filter.hpp"
+#include "duckdb/common/multi_file/table_function_delete_filter.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -224,7 +224,7 @@ static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientConte
                                                                      GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	for (auto &file : bind_data.file_list->GetAllFiles()) {
-		if (OptionsDeleteFilter::HasDeleteOptions(file)) {
+		if (TableFunctionDeleteFilter::HasDeleteOptions(file)) {
 			// rows are deleted from the file - its metadata does not tell how many rows the scan produces
 			return vector<PartitionStatistics>();
 		}

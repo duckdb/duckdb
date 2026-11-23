@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file/options_delete_filter.hpp
+// duckdb/common/multi_file/table_function_delete_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,7 +22,7 @@ class ClientContext;
 //!  delete_snapshot_filter only deletions with a snapshot id <= this value apply (delete_file with snapshot ids)
 //!  scan_rows              LIST of row positions - only these rows are produced (the inverse of deleted_rows)
 //!  max_row_count          rows at or past this position are not part of the file
-class OptionsDeleteFilter : public DeleteFilter {
+class TableFunctionDeleteFilter : public DeleteFilter {
 public:
 	//! Create the filter for a file - returns nullptr if its options do not describe any deletes
 	static unique_ptr<DeleteFilter> TryCreate(ClientContext &context, const OpenFileInfo &file);

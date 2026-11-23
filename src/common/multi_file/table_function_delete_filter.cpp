@@ -1,4 +1,4 @@
-#include "duckdb/common/multi_file/options_delete_filter.hpp"
+#include "duckdb/common/multi_file/table_function_delete_filter.hpp"
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
@@ -25,12 +25,12 @@ static bool HasOption(const OpenFileInfo &file, const char *name) {
 	return entry != file.extended_info->options.end() && !entry->second.IsNull();
 }
 
-bool OptionsDeleteFilter::HasDeleteOptions(const OpenFileInfo &file) {
+bool TableFunctionDeleteFilter::HasDeleteOptions(const OpenFileInfo &file) {
 	return file.extended_info && (HasOption(file, DELETED_ROWS_OPTION) || HasOption(file, DELETE_FILE_OPTION) ||
 	                              HasOption(file, SCAN_ROWS_OPTION) || HasOption(file, MAX_ROW_COUNT_OPTION));
 }
 
-unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, const OpenFileInfo &file) {
+unique_ptr<DeleteFilter> TableFunctionDeleteFilter::TryCreate(ClientContext &context, const OpenFileInfo &file) {
 	if (!HasDeleteOptions(file)) {
 		return nullptr;
 	}
@@ -39,7 +39,7 @@ unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, 
 	bool has_delete_file = HasOption(file, DELETE_FILE_OPTION);
 	auto deleted_rows_entry = options.find(DELETED_ROWS_OPTION);
 	auto delete_file_entry = options.find(DELETE_FILE_OPTION);
-	auto result = make_uniq<OptionsDeleteFilter>();
+	auto result = make_uniq<TableFunctionDeleteFilter>();
 	idx_t value;
 	if (file.extended_info->TryGetOption(MAX_ROW_COUNT_OPTION, value)) {
 		result->max_row_count = value;
@@ -75,7 +75,8 @@ unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, 
 	return std::move(result);
 }
 
-void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &delete_file, const string &function_name) {
+void TableFunctionDeleteFilter::AddDeleteFile(ClientContext &context, const Value &delete_file,
+                                              const string &function_name) {
 	// read the delete file on a connection of its own - this runs while the scan holds the lock of its context
 	Connection connection(DatabaseInstance::GetDatabase(context));
 	auto file = OpenFileInfo::FromValue(delete_file, Identifier("delete_file"));
@@ -145,7 +146,7 @@ void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &del
 	deleted_rows.erase(std::unique(deleted_rows.begin(), deleted_rows.end()), deleted_rows.end());
 }
 
-idx_t OptionsDeleteFilter::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
+idx_t TableFunctionDeleteFilter::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 	auto start = NumericCast<idx_t>(start_row_index);
 	if (max_row_count.IsValid()) {
 		auto max_count = max_row_count.GetIndex();
