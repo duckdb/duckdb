@@ -246,18 +246,73 @@ void ForEachLiteralId(const MatcherTokenSet &set, FUN &&fun) {
 	}
 }
 
+//! The child nodes of a composite matcher, in order: a range of the child array of the analysis
+class NodeChildren {
+public:
+	class Iterator {
+	public:
+		Iterator(const NodeChildren &children_p, idx_t index_p) : children(children_p), index(index_p) {
+		}
+		idx_t operator*() const {
+			return children[index];
+		}
+		Iterator &operator++() {
+			index++;
+			return *this;
+		}
+		bool operator!=(const Iterator &other) const {
+			return index != other.index;
+		}
+
+	private:
+		const NodeChildren &children;
+		idx_t index;
+	};
+
+public:
+	explicit NodeChildren(const vector<idx_t> &child_array_p) : child_array(child_array_p) {
+	}
+
+public:
+	void SetRange(idx_t offset_p, idx_t count_p) {
+		offset = offset_p;
+		count = count_p;
+	}
+	idx_t size() const { // NOLINT: match stl API
+		return count;
+	}
+	bool empty() const { // NOLINT: match stl API
+		return count == 0;
+	}
+	idx_t operator[](idx_t index) const {
+		D_ASSERT(index < count);
+		return child_array[offset + index];
+	}
+	Iterator begin() const { // NOLINT: match stl API
+		return Iterator(*this, 0);
+	}
+	Iterator end() const { // NOLINT: match stl API
+		return Iterator(*this, count);
+	}
+
+private:
+	const vector<idx_t> &child_array;
+	idx_t offset = 0;
+	idx_t count = 0;
+};
+
 struct SequenceCheckNode {
-	SequenceCheckNode(Matcher &matcher_p, idx_t index) : matcher(matcher_p), consumed(index) {
+	SequenceCheckNode(Matcher &matcher_p, idx_t index, const vector<idx_t> &child_array)
+	    : matcher(matcher_p), composite(IsCompositeMatcher(matcher_p)), type(matcher_p.Type()), children(child_array),
+	      consumed(index) {
 	}
 
 	Matcher &matcher;
-	//! child nodes of a composite matcher, in order
-	vector<idx_t> children;
+	//! the matcher is a built-in composite matcher of this type; kept here to spare the passes a visit to the matcher
+	bool composite;
+	MatcherType type;
+	NodeChildren children;
 	ConsumedTokens consumed;
-	//! counts the changes of consumed
-	uint64_t version = 0;
-	//! sum of the versions of the children when consumed was last derived from them
-	uint64_t children_version = NumericLimits<uint64_t>::Maximum();
 	//! set when the matcher consumes exactly one bracket literal
 	BracketKind bracket = BracketKind::NONE;
 	idx_t bracket_pair = 0;
@@ -278,6 +333,8 @@ public:
 public:
 	//! The check of every sequence that has one
 	vector<CheckedSequence> CreateSequenceChecks();
+	//! The repetitions among the analysed matchers
+	vector<reference<RepeatMatcher>> Repetitions() const;
 
 private:
 	//! Appends the tokens of a matcher that consumes a fixed number of tokens; false once the length can vary
@@ -294,7 +351,7 @@ private:
 	BracketKind SingleBracket(const MatcherFirstSet &first, idx_t &pair_idx) const;
 	//! Merges the tokens children[covered, end) consume outside of the bracket pairs among them into prefix, which
 	//! holds those of children[0, covered). False while a bracket pair is still open at end
-	bool ExtendPrefix(const vector<idx_t> &children, idx_t end, idx_t &covered, ConsumedTokens &prefix, bool &changed);
+	bool ExtendPrefix(const NodeChildren &children, idx_t end, idx_t &covered, ConsumedTokens &prefix, bool &changed);
 	bool Update(idx_t node_index);
 	//! The composite nodes, each after the children it reaches without a recursive reference
 	vector<idx_t> CompositesChildrenFirst() const;
@@ -340,6 +397,12 @@ private:
 	vector<uint16_t> close_literals;
 	//! for every bit of a token class, the literals whose token has that bit, as a bitset over literal ids
 	vector<vector<uint64_t>> class_literals;
+	//! the children of all nodes, see NodeChildren
+	vector<idx_t> child_array;
+	//! per node: counts the changes of its consumed tokens
+	vector<uint64_t> versions;
+	//! per node: sum of the versions of the children when its consumed tokens were last derived from them
+	vector<uint64_t> children_versions;
 	//! the literals of every ConsumedTokens, literal_words words per slot
 	vector<uint64_t> literal_pool;
 	idx_t literal_words = 0;
@@ -392,20 +455,22 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 		}
 		D_ASSERT(matcher.GetPackratId().GetIndex() == matcher_idx);
 		node_of_matcher[matcher_idx] = nodes.size();
-		nodes.emplace_back(matcher, nodes.size());
+		nodes.emplace_back(matcher, nodes.size(), child_array);
 		literal_words =
 		    MaxValue<idx_t>(literal_words, MaxValue<idx_t>(first.literals.size(), first.second.literals.size()));
 	}
 	// one bitset per node and one for the prefix of the sequence being checked
 	literal_pool.resize((nodes.size() + 1) * literal_words, 0);
+	versions.resize(nodes.size(), 0);
+	children_versions.resize(nodes.size(), NumericLimits<uint64_t>::Maximum());
+	// most matchers have one or two children
+	child_array.reserve(2 * nodes.size());
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
 		auto &node = nodes[node_index];
 		auto &matcher = node.matcher;
-		if (IsCompositeMatcher(matcher)) {
+		if (node.composite) {
 			bool complete = true;
-			idx_t child_count = 0;
-			ForEachChildMatcher(matcher, [&](Matcher &) { child_count++; });
-			node.children.reserve(child_count);
+			const auto offset = child_array.size();
 			ForEachChildMatcher(matcher, [&](Matcher &child) {
 				auto packrat_id = child.GetPackratId();
 				auto child_node = no_node;
@@ -417,11 +482,13 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 				if (child_node == no_node) {
 					complete = false;
 				} else {
-					node.children.push_back(child_node);
+					child_array.push_back(child_node);
 				}
 			});
-			if (!complete) {
-				node.children.clear();
+			if (complete) {
+				node.children.SetRange(offset, child_array.size() - offset);
+			} else {
+				child_array.resize(offset);
 				node.consumed.MarkUnbalanced();
 			}
 		} else {
@@ -527,7 +594,7 @@ BracketKind SequenceCheckAnalysis::BracketLiteral(idx_t literal_id, idx_t &pair_
 	return BracketKind::NONE;
 }
 
-bool SequenceCheckAnalysis::ExtendPrefix(const vector<idx_t> &children, idx_t end, idx_t &covered,
+bool SequenceCheckAnalysis::ExtendPrefix(const NodeChildren &children, idx_t end, idx_t &covered,
                                          ConsumedTokens &prefix, bool &changed) {
 	// nothing changes any more once the prefix is neither safe nor balanced
 	while (covered < end && (prefix.safe || prefix.balanced)) {
@@ -683,7 +750,7 @@ vector<idx_t> SequenceCheckAnalysis::CompositesChildrenFirst() const {
 
 bool SequenceCheckAnalysis::Update(idx_t node_index) {
 	auto &node = nodes[node_index];
-	if (node.matcher.Type() == MatcherType::LIST) {
+	if (node.type == MatcherType::LIST) {
 		bool changed = false;
 		idx_t covered = 0;
 		ExtendPrefix(node.children, node.children.size(), covered, node.consumed, changed);
@@ -731,6 +798,16 @@ bool SequenceCheckAnalysis::Disjoint(const ConsumedTokens &prefix, const Matcher
 	return true;
 }
 
+vector<reference<RepeatMatcher>> SequenceCheckAnalysis::Repetitions() const {
+	vector<reference<RepeatMatcher>> repetitions;
+	for (auto &node : nodes) {
+		if (node.composite && node.type == MatcherType::REPEAT) {
+			repetitions.push_back(node.matcher.Cast<RepeatMatcher>());
+		}
+	}
+	return repetitions;
+}
+
 vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 	// least fixed point over the recursive grammar: sweep until no node changes. Children come before their
 	// parents in the sweep, so only recursive references need another one
@@ -739,26 +816,24 @@ vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 	while (changed) {
 		changed = false;
 		for (auto node_index : order) {
-			auto &node = nodes[node_index];
 			// versions only grow, so an unchanged sum means that no child changed
 			uint64_t children_version = 0;
-			for (auto child : node.children) {
-				children_version += nodes[child].version;
+			for (auto child : nodes[node_index].children) {
+				children_version += versions[child];
 			}
-			if (children_version == node.children_version) {
+			if (children_version == children_versions[node_index]) {
 				continue;
 			}
-			node.children_version = children_version;
+			children_versions[node_index] = children_version;
 			if (Update(node_index)) {
-				node.version++;
+				versions[node_index]++;
 				changed = true;
 			}
 		}
 	}
 	// a tail check for the first element that cannot start with a token its prefix consumes
 	for (auto &node : nodes) {
-		auto &matcher = node.matcher;
-		if (!IsCompositeMatcher(matcher) || matcher.Type() != MatcherType::LIST) {
+		if (!node.composite || node.type != MatcherType::LIST) {
 			continue;
 		}
 		auto &children = node.children;
@@ -808,25 +883,23 @@ vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 	}
 	// a leading choice with few alternatives is checked per alternative
 	for (auto &node : nodes) {
-		auto &matcher = node.matcher;
-		if (!IsCompositeMatcher(matcher) || matcher.Type() != MatcherType::LIST || node.children.empty()) {
+		if (!node.composite || node.type != MatcherType::LIST || node.children.empty()) {
 			continue;
 		}
 		// rules wrap their body in a one-element sequence
 		auto leading_index = node.children[0];
 		while (true) {
 			auto &leading_node = nodes[leading_index];
-			if (IsCompositeMatcher(leading_node.matcher) && leading_node.matcher.Type() == MatcherType::LIST &&
-			    leading_node.children.size() == 1) {
+			if (leading_node.composite && leading_node.type == MatcherType::LIST && leading_node.children.size() == 1) {
 				leading_index = leading_node.children[0];
 				continue;
 			}
 			break;
 		}
-		auto &leading = nodes[leading_index].matcher;
-		if (!IsCompositeMatcher(leading) || leading.Type() != MatcherType::CHOICE) {
+		if (!nodes[leading_index].composite || nodes[leading_index].type != MatcherType::CHOICE) {
 			continue;
 		}
+		auto &leading = nodes[leading_index].matcher;
 		auto &choice = leading.Cast<ChoiceMatcher>();
 		if (choice.matchers.size() < 2 || choice.matchers.size() > MAX_LEADING_ALTERNATIVES) {
 			continue;
@@ -859,8 +932,7 @@ vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 	// leading single-token elements fix the tokens beyond the two the FIRST and SECOND sets cover
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
 		auto &node = nodes[node_index];
-		auto &matcher = node.matcher;
-		if (!IsCompositeMatcher(matcher) || matcher.Type() != MatcherType::LIST || node.children.empty()) {
+		if (!node.composite || node.type != MatcherType::LIST || node.children.empty()) {
 			continue;
 		}
 		idx_t length = 0;
@@ -884,14 +956,16 @@ vector<CheckedSequence> SequenceCheckAnalysis::CreateSequenceChecks() {
 
 void MatcherAllocator::InitializeSequenceChecks(const GrammarLiteralTable &table) {
 	// Clear borrowed links before releasing their owners or making any allocation that can throw.
-	for (auto &matcher : matchers) {
-		auto &first = matcher->first_set;
-		if (first.sequence_check_index) {
-			first.sequence_check_index = 0;
-			first.Finalize();
+	if (!sequence_checks.empty()) {
+		for (auto &matcher : matchers) {
+			auto &first = matcher->first_set;
+			if (first.sequence_check_index) {
+				first.sequence_check_index = 0;
+				first.Finalize();
+			}
 		}
+		sequence_checks.clear();
 	}
-	sequence_checks.clear();
 	SequenceCheckAnalysis analysis(matchers, table);
 	auto checks = analysis.CreateSequenceChecks();
 	sequence_checks.reserve(checks.size());
@@ -925,16 +999,13 @@ void MatcherAllocator::InitializeSequenceChecks(const GrammarLiteralTable &table
 		check->SetAlternativeChecks(std::move(alternative_checks));
 	}
 	// a repetition of a checked sequence starts like the sequence
-	for (auto &matcher : matchers) {
-		if (!matcher->IsStructural() || matcher->Type() != MatcherType::REPEAT) {
-			continue;
-		}
-		auto &child = matcher->Cast<RepeatMatcher>().GetChildMatcher();
+	for (auto &repetition : analysis.Repetitions()) {
+		auto &child = repetition.get().GetChildMatcher();
 		if (!child.first_set.sequence_check_index || child.first_set.nullable) {
 			continue;
 		}
-		matcher->first_set.sequence_check_index = child.first_set.sequence_check_index;
-		matcher->first_set.first_suffices = false;
+		repetition.get().first_set.sequence_check_index = child.first_set.sequence_check_index;
+		repetition.get().first_set.first_suffices = false;
 	}
 }
 
