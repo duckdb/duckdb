@@ -191,10 +191,6 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	return result;
 }
 
-unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
-	return context->ExtractPlan(query);
-}
-
 void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
 }
