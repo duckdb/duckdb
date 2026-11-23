@@ -1521,28 +1521,6 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	return removed_escapes;
 }
 
-//! Decodes one UTF-8 character without throwing, as the field may hold any bytes; an invalid byte stands alone
-static int32_t DecodeCharacter(const char *str, idx_t remaining, idx_t &char_len) {
-	const auto lead = static_cast<uint8_t>(str[0]);
-	char_len = 1;
-	if (lead < 0x80) {
-		return lead;
-	}
-	const idx_t needed = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : (lead >= 0xC0 ? 2 : 0));
-	if (needed == 0 || needed > remaining) {
-		return -1;
-	}
-	int32_t code_point = lead & (0x7F >> needed);
-	for (idx_t i = 1; i < needed; i++) {
-		if ((static_cast<uint8_t>(str[i]) & 0xC0) != 0x80) {
-			return -1;
-		}
-		code_point = (code_point << 6) | (static_cast<uint8_t>(str[i]) & 0x3F);
-	}
-	char_len = needed;
-	return code_point;
-}
-
 static bool IsUnicodeWhitespace(int32_t code_point) {
 	// Java's isWhitespace, the space separators except the non breaking ones plus the line and paragraph separators
 	return (code_point >= 0x09 && code_point <= 0x0D) || code_point == 0x20 ||
@@ -1622,8 +1600,14 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 			continue;
 		}
 		// a plain character sets the field flag and counts one UTF-16 unit, or two beyond the basic plane
-		idx_t char_len;
-		const auto code_point = DecodeCharacter(str_ptr + pos, size - pos, char_len);
+		int decoded_len = 1;
+		int32_t code_point = -1;
+		if (!Utf8Proc::TryUTF8ToCodepoint(str_ptr + pos, decoded_len, size - pos, code_point)) {
+			// an invalid byte stands alone, as the field may hold any bytes
+			decoded_len = 1;
+			code_point = -1;
+		}
+		const auto char_len = UnsafeNumericCast<idx_t>(decoded_len);
 		all_whitespace = all_whitespace && IsUnicodeWhitespace(code_point);
 		for (idx_t i = 0; i < char_len; i++) {
 			result_ptr[result_pos++] = str_ptr[pos + i];
