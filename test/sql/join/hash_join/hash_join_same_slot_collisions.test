@@ -96,3 +96,46 @@ query I
 SELECT count(*) FROM probe p WHERE NOT EXISTS (SELECT 1 FROM big_build b WHERE b.k = p.k)
 ----
 1034
+
+# Salts 0 and 1 in the last slot: the chain wraps through slot 0, where a salt 0 entry has ht offset and salt 0
+statement ok
+CREATE TABLE wrap_keys AS
+SELECT s, m, unmurmur((s::UBIGINT << 48) | (1048575::UBIGINT << 28) | (m::UBIGINT << 20) | 1048575::UBIGINT) k
+FROM range(2) t1(s), range(128) t2(m)
+
+query IIII
+SELECT count(DISTINCT hash(k) & 1048575), min(hash(k) & 1048575), min((hash(k) >> 28) & 1048575), min(hash(k) >> 48)
+FROM wrap_keys
+----
+1	1048575	1048575	0
+
+statement ok
+CREATE TABLE wrap_build AS SELECT k, s * 1000 + m AS payload FROM wrap_keys WHERE m < 64 ORDER BY s, m
+
+# 40 copies of every key, so the retries after a key mismatch hold more than 32 rows
+statement ok
+CREATE TABLE wrap_probe AS SELECT k FROM wrap_keys, range(40) t(copy)
+
+query II
+SELECT count(*), sum(b.payload) FROM wrap_probe p JOIN wrap_build b USING (k)
+----
+5120	2721280
+
+query I
+SELECT count(*) FROM wrap_probe p WHERE NOT EXISTS (SELECT 1 FROM wrap_build b WHERE b.k = p.k)
+----
+5120
+
+statement ok
+CREATE TABLE big_wrap_build AS
+SELECT k, payload FROM wrap_build UNION ALL SELECT i::UBIGINT, -1 FROM range(500000) t(i)
+
+query II
+SELECT count(*), sum(b.payload) FROM wrap_probe p JOIN big_wrap_build b USING (k)
+----
+5120	2721280
+
+query I
+SELECT count(*) FROM wrap_probe p WHERE NOT EXISTS (SELECT 1 FROM big_wrap_build b WHERE b.k = p.k)
+----
+5120
