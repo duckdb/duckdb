@@ -211,6 +211,12 @@ static void AppendReturnRows(ColumnDataCollection &collection, DataChunk &combin
 	collection.Append(combined);
 }
 
+//! The rows are distinct and visible to the scan, so another action of the same MERGE deleted the missing ones
+[[noreturn]] static void ThrowUpdateOfDeletedRow() {
+	throw InvalidInputException(
+	    "MERGE INTO cannot update a target row that it deleted: ensure each target row matches one source row");
+}
+
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g_state = input.global_state.Cast<UpdateGlobalState>();
 	auto &l_state = input.local_state.Cast<UpdateLocalState>();
@@ -294,6 +300,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto fetch_state = ColumnFetchState();
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		table.Fetch(transaction, fetch_chunk, column_ids, del_row_ids, update_count, fetch_state);
+		if (fetch_chunk.size() != update_count) {
+			ThrowUpdateOfDeletedRow();
+		}
 
 		idx_t fetch_idx = 0;
 		for (idx_t i = 0; i < delete_chunk.ColumnCount(); i++) {
@@ -307,7 +316,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
+	if (table.Delete(delete_state, context.client, tableref, del_row_ids, update_count) != update_count) {
+		ThrowUpdateOfDeletedRow();
+	}
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
 	// columns. The del+insert path projects every table column (it re-inserts the full row), so all are referenced.
