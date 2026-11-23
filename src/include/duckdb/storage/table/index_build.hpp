@@ -28,6 +28,9 @@ struct IndexBuildChanges {
 	vector<IndexBuildRange> ranges;
 	//! The number of rows the commits changed, which can be fewer than the ranges cover
 	idx_t changed_rows = 0;
+	//! The changes are those of the commits in (from_commit, to_commit]
+	transaction_t from_commit = 0;
+	transaction_t to_commit = 0;
 };
 
 //! Row ranges that commits change during an index build, applied before the index is added
@@ -43,14 +46,17 @@ public:
 public:
 	//! Adds rows that a commit appended or deleted, changed_rows of them in the range
 	void AddChanges(const IndexBuildRange &rows, idx_t changed_rows);
-	//! Takes the changes that the commits made since the last call
-	IndexBuildChanges TakeChanges();
+	//! Takes the changes of the commits up to last_commit that were not taken yet
+	IndexBuildChanges TakeChanges(transaction_t last_commit);
 	//! Sorts the ranges by start row and merges overlapping and adjacent ones
 	static void MergeRanges(vector<IndexBuildRange> &ranges);
 
 private:
 	//! The changes that the build has not taken yet, guarded by the commit lock
-	IndexBuildChanges changes;
+	vector<IndexBuildRange> ranges;
+	idx_t changed_rows = 0;
+	//! The last commit whose changes were taken
+	transaction_t taken_commit;
 };
 
 } // namespace duckdb

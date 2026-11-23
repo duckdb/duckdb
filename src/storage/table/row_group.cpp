@@ -1214,6 +1214,16 @@ idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVec
 	return vinfo->GetSelVector(options, vector_idx, sel_vector, max_count);
 }
 
+idx_t RowGroup::GetChangedRows(RowChangeType type, VisibilityBound from, VisibilityBound to, idx_t vector_idx,
+                               idx_t start, idx_t end, SelectionVector &sel) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		// every row is visible as of both commits
+		return 0;
+	}
+	return vinfo->GetChangedRows(type, from, to, vector_idx, start, end, sel);
+}
+
 idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t fetch_count,
                       SelectionVector &visible_sel) {
 	if (fetch_count == 0) {

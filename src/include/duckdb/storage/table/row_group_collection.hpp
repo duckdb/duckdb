@@ -48,6 +48,7 @@ class RowGroupIterationHelper;
 class TableScanState;
 class BoundIndex;
 struct IndexBuildRange;
+struct IndexBuildChanges;
 
 //! How checkpoint vacuum handles table indexes when rowids may change.
 enum class VacuumIndexStrategy : uint8_t {
@@ -163,9 +164,8 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
-	//! Deletes the rows of the ranges seen only before from the index, then appends the rows seen only after
-	void ApplyChangesToIndex(BoundIndex &index, const vector<IndexBuildRange> &ranges, VisibilityBound before,
-	                         VisibilityBound after);
+	//! Applies the rows of the ranges that the commits of the changes deleted or appended to the index
+	void ApplyChangesToIndex(BoundIndex &index, const IndexBuildChanges &changes);
 
 	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
@@ -268,9 +268,9 @@ private:
 	//! Fetches the columns of the rows into result_chunk, with NULL for the other table columns
 	void FetchIndexColumns(TransactionData transaction, DataChunk &result_chunk,
 	                       const unordered_set<column_t> &column_id_set, Vector &row_identifiers, idx_t count);
-	//! Fetches the index columns of the slice's rows that seen sees and other does not; false if none
-	bool FetchRowsOnlySeenBy(BoundIndex &index, TransactionData seen, TransactionData other, idx_t start_row,
-	                         idx_t count, DataChunk &row_ids, DataChunk &table_chunk);
+	//! Calls the callback with the rows of the ranges that commits in (from, to] deleted or appended
+	void ScanChangedRows(RowChangeType type, const vector<IndexBuildRange> &ranges, VisibilityBound from,
+	                     VisibilityBound to, const std::function<void(Vector &row_ids, idx_t count)> &callback);
 
 private:
 	//! BlockManager

@@ -30,6 +30,9 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t start_vector, idx_t count);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
+	//! Selects the rows in [start, end) of the vector that commits in (from, to] deleted or appended
+	idx_t GetChangedRows(RowChangeType type, VisibilityBound from, VisibilityBound to, idx_t vector_idx, idx_t start,
+	                     idx_t end, SelectionVector &sel);
 	//! Bulk visibility check. Returns the number of visible rows.
 	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 

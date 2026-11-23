@@ -5,18 +5,23 @@
 namespace duckdb {
 
 IndexBuild::IndexBuild(transaction_t transaction_id_p, transaction_t build_commit_p)
-    : transaction_id(transaction_id_p), build_commit(build_commit_p) {
+    : transaction_id(transaction_id_p), build_commit(build_commit_p), taken_commit(build_commit_p) {
 }
 
 void IndexBuild::AddChanges(const IndexBuildRange &rows, idx_t changed_rows) {
-	changes.ranges.push_back(rows);
-	changes.changed_rows += changed_rows;
+	ranges.push_back(rows);
+	this->changed_rows += changed_rows;
 }
 
-IndexBuildChanges IndexBuild::TakeChanges() {
+IndexBuildChanges IndexBuild::TakeChanges(transaction_t last_commit) {
 	IndexBuildChanges result;
-	std::swap(result, changes);
+	std::swap(result.ranges, ranges);
 	MergeRanges(result.ranges);
+	result.changed_rows = changed_rows;
+	changed_rows = 0;
+	result.from_commit = taken_commit;
+	result.to_commit = last_commit;
+	taken_commit = last_commit;
 	return result;
 }
 

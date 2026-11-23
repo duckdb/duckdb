@@ -1113,76 +1113,83 @@ void RowGroupCollection::FetchIndexColumns(TransactionData transaction, DataChun
 	}
 }
 
-bool RowGroupCollection::FetchRowsOnlySeenBy(BoundIndex &index, TransactionData seen, TransactionData other,
-                                             idx_t start_row, idx_t count, DataChunk &row_ids, DataChunk &table_chunk) {
-	Vector slice_row_ids(LogicalType::ROW_TYPE);
-	VectorOperations::GenerateSequence(slice_row_ids, count, UnsafeNumericCast<int64_t>(start_row));
-	vector<StorageIndex> row_id_column {StorageIndex(COLUMN_IDENTIFIER_ROW_ID)};
-
-	DataChunk other_row_ids;
-	other_row_ids.Initialize(GetAllocator(), {LogicalType::ROW_TYPE});
-	ColumnFetchState other_state;
-	Fetch(other, other_row_ids, row_id_column, slice_row_ids, count, other_state);
-	bool other_sees[STANDARD_VECTOR_SIZE] = {};
-	for (auto entry : other_row_ids.data[0].Values<row_t>()) {
-		other_sees[UnsafeNumericCast<idx_t>(entry.GetValue()) - start_row] = true;
-	}
-
-	row_ids.Initialize(GetAllocator(), {LogicalType::ROW_TYPE});
-	ColumnFetchState seen_state;
-	Fetch(seen, row_ids, row_id_column, slice_row_ids, count, seen_state);
+void RowGroupCollection::ScanChangedRows(RowChangeType type, const vector<IndexBuildRange> &ranges,
+                                         VisibilityBound from, VisibilityBound to,
+                                         const std::function<void(Vector &row_ids, idx_t count)> &callback) {
+	auto row_groups = GetRowGroups();
+	row_t row_data[STANDARD_VECTOR_SIZE];
+	idx_t count = 0;
+	auto flush = [&]() {
+		if (count == 0) {
+			return;
+		}
+		Vector row_ids(LogicalType::ROW_TYPE, data_ptr_cast(row_data), count);
+		callback(row_ids, count);
+		count = 0;
+	};
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t changed_count = 0;
-	for (auto entry : row_ids.data[0].Values<row_t>()) {
-		if (!other_sees[UnsafeNumericCast<idx_t>(entry.GetValue()) - start_row]) {
-			sel.set_index(changed_count++, entry.GetIndex());
+	for (auto &range : ranges) {
+		auto row = range.start_row;
+		while (row < range.End()) {
+			optional_ptr<SegmentNode<RowGroup>> row_group;
+			{
+				idx_t segment_index;
+				auto l = row_groups->Lock();
+				if (!row_groups->TryGetSegmentIndex(l, row, segment_index)) {
+					// rows past the end of the table did not change
+					break;
+				}
+				row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+			}
+			auto &node = row_group->GetNode();
+			auto row_group_start = row_group->GetRowStart();
+			auto vector_idx = (row - row_group_start) / STANDARD_VECTOR_SIZE;
+			auto vector_start = row_group_start + vector_idx * STANDARD_VECTOR_SIZE;
+			auto vector_end = MinValue(vector_start + STANDARD_VECTOR_SIZE, row_group_start + node.count);
+			vector_end = MinValue(vector_end, range.End());
+			if (vector_end <= row) {
+				// a revert truncated the row group
+				break;
+			}
+			if (count + (vector_end - row) > STANDARD_VECTOR_SIZE) {
+				flush();
+			}
+			auto changed =
+			    node.GetChangedRows(type, from, to, vector_idx, row - vector_start, vector_end - vector_start, sel);
+			for (idx_t i = 0; i < changed; i++) {
+				row_data[count++] = UnsafeNumericCast<row_t>(vector_start + sel.get_index(i));
+			}
+			row = vector_end;
 		}
 	}
-	if (changed_count == 0) {
-		return false;
-	}
-	row_ids.Slice(sel, changed_count);
-	row_ids.Flatten();
-	FetchIndexColumns(seen, table_chunk, index.GetColumnIdSet(), row_ids.data[0], changed_count);
-	return true;
+	flush();
 }
 
-void RowGroupCollection::ApplyChangesToIndex(BoundIndex &index, const vector<IndexBuildRange> &ranges,
-                                             VisibilityBound before_bound, VisibilityBound after_bound) {
-	TransactionData before(MAX_TRANSACTION_ID, before_bound);
-	TransactionData after(MAX_TRANSACTION_ID, after_bound);
-	// delete before appending, so a key that moved rows is never in a unique index twice
-	for (auto &range : ranges) {
-		for (idx_t offset = 0; offset < range.count; offset += STANDARD_VECTOR_SIZE) {
-			auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, range.count - offset);
-			DataChunk row_ids;
-			DataChunk table_chunk;
-			if (FetchRowsOnlySeenBy(index, before, after, range.start_row + offset, count, row_ids, table_chunk)) {
-				index.Delete(table_chunk, row_ids.data[0]);
-			}
-		}
-	}
-	for (auto &range : ranges) {
-		for (idx_t offset = 0; offset < range.count; offset += STANDARD_VECTOR_SIZE) {
-			auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, range.count - offset);
-			DataChunk row_ids;
-			DataChunk table_chunk;
-			if (!FetchRowsOnlySeenBy(index, after, before, range.start_row + offset, count, row_ids, table_chunk)) {
-				continue;
-			}
-			if (index.IsPrimary()) {
-				for (auto column_id : index.GetColumnIdSet()) {
-					if (VectorOperations::HasNull(table_chunk.data[column_id])) {
-						throw ConstraintException("NOT NULL constraint failed: %s", index.GetIndexName());
-					}
+void RowGroupCollection::ApplyChangesToIndex(BoundIndex &index, const IndexBuildChanges &changes) {
+	auto from = VisibilityBound::Through(changes.from_commit);
+	auto to = VisibilityBound::Through(changes.to_commit);
+	auto &column_ids = index.GetColumnIdSet();
+	// delete first: a key can move to a row in an earlier vector, which must not make it a duplicate
+	ScanChangedRows(RowChangeType::DELETED, changes.ranges, from, to, [&](Vector &row_ids, idx_t count) {
+		DataChunk keys;
+		FetchIndexColumns(TransactionData(MAX_TRANSACTION_ID, from), keys, column_ids, row_ids, count);
+		index.Delete(keys, row_ids);
+	});
+	ScanChangedRows(RowChangeType::APPENDED, changes.ranges, from, to, [&](Vector &row_ids, idx_t count) {
+		DataChunk keys;
+		FetchIndexColumns(TransactionData(MAX_TRANSACTION_ID, to), keys, column_ids, row_ids, count);
+		if (index.IsPrimary()) {
+			for (auto column_id : column_ids) {
+				if (VectorOperations::HasNull(keys.data[column_id])) {
+					throw ConstraintException("NOT NULL constraint failed: %s", index.GetIndexName());
 				}
 			}
-			auto error = index.Append(table_chunk, row_ids.data[0]);
-			if (error.HasError()) {
-				error.Throw();
-			}
 		}
-	}
+		auto error = index.Append(keys, row_ids);
+		if (error.HasError()) {
+			error.Throw();
+		}
+	});
 }
 
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,

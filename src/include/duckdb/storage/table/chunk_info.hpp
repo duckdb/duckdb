@@ -14,6 +14,9 @@
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
+
+//! How a row changed between two commits
+enum class RowChangeType : uint8_t { DELETED, APPENDED };
 class RowGroup;
 struct SelectionVector;
 class Transaction;

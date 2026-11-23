@@ -430,38 +430,30 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 	auto build = info->indexes.FindIndexBuild(transaction.GetTransactionId());
 	auto &bound_index = *index;
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
-	auto last_commit = DuckTransactionManager::Get(db).GetLastCommit();
+	auto &transaction_manager = DuckTransactionManager::Get(db);
 	if (build) {
 		// the commit lock guards the changes of the build
-		auto changes = build->TakeChanges();
-		auto rows = changes.changed_rows;
-		// the last commit whose changes the built index holds
-		auto applied_commit = build->build_commit;
+		auto changes = build->TakeChanges(transaction_manager.GetLastCommit());
 		idx_t rounds = 0;
 		idx_t growing_rounds = 0;
 		// apply outside the commit lock until few enough changed rows are left
-		while (rows > INDEX_BUILD_LOCKED_ROWS) {
+		while (changes.changed_rows > INDEX_BUILD_LOCKED_ROWS) {
 			if (rounds == INDEX_BUILD_MAX_ROUNDS || growing_rounds == INDEX_BUILD_MAX_GROWING_ROUNDS) {
 				throw TransactionException(
 				    "CREATE INDEX on table %s cannot keep up with concurrent changes to it: %llu changed rows are left "
 				    "after %llu rounds. Retry when fewer rows are written to the table",
-				    GetTableName(), rows, rounds);
+				    GetTableName(), changes.changed_rows, rounds);
 			}
 			commit_lock.unlock();
-			row_groups->ApplyChangesToIndex(bound_index, changes.ranges, VisibilityBound::Through(applied_commit),
-			                                VisibilityBound::Through(last_commit));
-			applied_commit = last_commit;
+			row_groups->ApplyChangesToIndex(bound_index, changes);
 			context.FastInterruptCheck();
 			commit_lock.lock();
-			last_commit = DuckTransactionManager::Get(db).GetLastCommit();
-			changes = build->TakeChanges();
-			auto rows_left = changes.changed_rows;
-			growing_rounds = rows_left > rows ? growing_rounds + 1 : 0;
-			rows = rows_left;
+			auto next = build->TakeChanges(transaction_manager.GetLastCommit());
+			growing_rounds = next.changed_rows > changes.changed_rows ? growing_rounds + 1 : 0;
+			changes = std::move(next);
 			rounds++;
 		}
-		row_groups->ApplyChangesToIndex(bound_index, changes.ranges, VisibilityBound::Through(applied_commit),
-		                                VisibilityBound::Through(last_commit));
+		row_groups->ApplyChangesToIndex(bound_index, changes);
 		info->indexes.RemoveIndexBuild(*build);
 	}
 	if (!IsMainTable()) {
@@ -470,7 +462,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		                           "%s by a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	return info->indexes.AddIndex(std::move(index), index_oid, check_mode, last_commit);
+	return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {

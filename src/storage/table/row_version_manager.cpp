@@ -54,6 +54,44 @@ idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, Sel
 	return chunk_info->GetSelVector(options, sel_vector, max_count);
 }
 
+static void MarkVisibleRows(const ChunkVectorInfo &info, VisibilityBound bound, idx_t count, bool visible[]) {
+	// read on behalf of no transaction, so that only commits count
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	auto visible_count = info.GetSelVector(TransactionData(MAX_TRANSACTION_ID, bound), sel, count);
+	if (visible_count == count) {
+		std::fill_n(visible, count, true);
+		return;
+	}
+	for (idx_t i = 0; i < visible_count; i++) {
+		visible[sel.get_index(i)] = true;
+	}
+}
+
+idx_t RowVersionManager::GetChangedRows(RowChangeType type, VisibilityBound from, VisibilityBound to, idx_t vector_idx,
+                                        idx_t start, idx_t end, SelectionVector &sel) {
+	// both bounds are read under one lock, so a concurrent revert cannot fall between them
+	lock_guard<mutex> l(version_lock);
+	auto chunk_info = GetChunkInfo(vector_idx);
+	if (!chunk_info) {
+		// every row is visible as of both commits
+		return 0;
+	}
+	bool visible_from[STANDARD_VECTOR_SIZE] = {};
+	bool visible_to[STANDARD_VECTOR_SIZE] = {};
+	MarkVisibleRows(*chunk_info, from, end, visible_from);
+	MarkVisibleRows(*chunk_info, to, end, visible_to);
+	// a deleted row is visible as of from but not as of to, an appended row the other way around
+	auto &visible_before = type == RowChangeType::DELETED ? visible_from : visible_to;
+	auto &visible_after = type == RowChangeType::DELETED ? visible_to : visible_from;
+	idx_t count = 0;
+	for (idx_t i = start; i < end; i++) {
+		if (visible_before[i] && !visible_after[i]) {
+			sel.set_index(count++, i);
+		}
+	}
+	return count;
+}
+
 idx_t RowVersionManager::GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count,
                                         SelectionVector &visible_sel) {
 	if (count == 0) {
