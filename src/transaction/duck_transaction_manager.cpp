@@ -301,8 +301,7 @@ bool DuckTransactionManager::HasUnsyncedCommits() {
 	return false;
 }
 
-DuckTransactionManager::DurableSnapshot
-DuckTransactionManager::GetDurableSnapshot(const void *context) {
+DuckTransactionManager::DurableSnapshot DuckTransactionManager::GetDurableSnapshot(const void *context) {
 	DurableSnapshot durable;
 	optional_ptr<DuckTransaction> first_unsynced;
 	for (auto &active_transaction : active_transactions) {
