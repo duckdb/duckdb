@@ -350,7 +350,8 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 		}
 		index[*matcher_p] = nodes.size();
 		nodes.emplace_back(*matcher_p);
-		literal_words = MaxValue(literal_words, MaxValue(first.literals.size(), first.second.literals.size()));
+		literal_words =
+		    MaxValue<idx_t>(literal_words, MaxValue<idx_t>(first.literals.size(), first.second.literals.size()));
 	}
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
 		auto &node = nodes[node_index];
