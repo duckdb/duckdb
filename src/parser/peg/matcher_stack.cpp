@@ -60,6 +60,19 @@ static idx_t FindChoiceChild(const ChoiceMatcher &matcher, MatchState &state, id
 	return index;
 }
 
+//! An optional that matched nothing carries no rule, name or position, so every anonymous optional shares one
+//! immutable result; an optional with a rule of its own still gets a result naming that rule
+static MatcherResult MakeEmptyOptionalResult(MatchState &state) {
+	if (!state.BuildParseResult()) {
+		return MatcherResult::Success();
+	}
+	if (state.rule) {
+		return state.AllocateParseResult<OptionalParseResult>();
+	}
+	static OptionalParseResult shared_empty;
+	return MatcherResult::Success(&shared_empty);
+}
+
 static MatcherResult MakeChoiceResult(MatchState &state, const MatcherResult &child, idx_t index,
                                       optional_idx start_offset) {
 	if (!child.HasParseResult()) {
@@ -730,7 +743,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			}
 			f.awaiting_child = false;
 			if (!child_result->IsSuccess()) {
-				completed = f.state.AllocateParseResult<OptionalParseResult>();
+				completed = MakeEmptyOptionalResult(f.state);
 				break;
 			}
 			f.state.token_iterator.SetPosition(f.child_state.token_iterator);
@@ -796,7 +809,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				if (child.matcher.Type() == MatcherType::OPTIONAL && child.matcher.IsStructural() &&
 				    !child.matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child.state)) {
 					child.state.rule = child.matcher.GetRule();
-					child_result = child.state.AllocateParseResult<OptionalParseResult>();
+					child_result = MakeEmptyOptionalResult(child.state);
 					continue;
 				}
 				if (!child.matcher.first_set.MightMatch(child.state)) {
