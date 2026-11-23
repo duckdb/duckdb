@@ -304,6 +304,8 @@ protected:
 	atomic<idx_t> allocation_size;
 	//! Whether updates widened the statistics; only a rewrite of the column makes them exact again
 	atomic<bool> stats_inexact;
+	//! The bound as of which a checkpoint wrote the base data: it holds every update committed below it
+	atomic<VisibilityBound> base_bound;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 

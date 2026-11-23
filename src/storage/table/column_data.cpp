@@ -62,6 +62,7 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
       updates(make_shared_ptr<ColumnUpdates>()), allocation_size(0), stats_inexact(false),
+      base_bound(VisibilityBound()),
       data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
       parent(parent_p) {
 	if (!parent) {
@@ -76,9 +77,12 @@ ColumnData::~ColumnData() {
 		updates->newest_column = nullptr;
 		return;
 	}
+	if (updates.use_count() != 2 || !updates->newest_column || !updates->segment) {
+		return;
+	}
 	try {
-		// the newest column may now be the only one holding the segment
-		updates->ClearIfLastHolder(guard, updates.use_count() - 1);
+		// the newest column now holds the segment alone
+		updates->segment->ClearIfUnused(updates->newest_column->base_bound);
 	} catch (...) {
 		// pinning the root entries can fail under memory pressure; the next checkpoint clears the segment then
 	}
@@ -139,18 +143,18 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 		D_ASSERT(!target.updates->segment && target.updates.use_count() == 1);
 		target.updates = updates;
 	}
-	// the target has every value as of the bound: once it alone holds the segment, the segment can be cleared
+	// the target has every value as of the bound: once it alone holds the segment, the segment can be cleared (set
+	// before the checkpoint is durable, which is safe: a failed checkpoint invalidates the whole database)
+	target.base_bound = visibility_bound;
 	updates->newest_column = &target;
 	auto &segment = updates->segment;
 	if (!segment) {
 		return;
 	}
-	// marked before the checkpoint is durable, which is safe: a failed checkpoint invalidates the whole database
-	segment->MarkCheckpointed(visibility_bound);
-	if (segment->CanBeCleared()) {
+	if (segment->CanBeCleared(visibility_bound)) {
 		// after a rewrite the old column still holds the segment and clears it when it goes away
-		if (&target == this) {
-			updates->ClearIfLastHolder(guard, updates.use_count());
+		if (&target == this && updates.use_count() == 1) {
+			segment->ClearIfUnused(visibility_bound);
 		}
 		return;
 	}
@@ -171,7 +175,8 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 
 bool ColumnData::HasChanges() const {
 	auto updates_ref = GetUpdates();
-	bool has_unserialized_updates = updates_ref && updates_ref->HasUnserializedChanges();
+	auto column_bound = base_bound.load();
+	bool has_unserialized_updates = updates_ref && updates_ref->HasUnserializedChanges(column_bound);
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
 		if (segment.GetSegmentType() == ColumnSegmentType::TRANSIENT) {
@@ -188,7 +193,7 @@ bool ColumnData::HasChanges() const {
 			return true;
 		}
 	}
-	if (stats_inexact && (!updates_ref || updates_ref->CanBeCleared())) {
+	if (stats_inexact && (!updates_ref || updates_ref->CanBeCleared(column_bound))) {
 		// a rewrite makes the statistics exact again, but only once the segment can be cleared along with it
 		return true;
 	}

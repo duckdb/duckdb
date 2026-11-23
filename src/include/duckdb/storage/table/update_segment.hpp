@@ -34,9 +34,6 @@ struct ColumnUpdates {
 	unique_ptr<UpdateSegment> segment;
 	//! The column a checkpoint last wrote the segment's values into; null once that column is gone
 	optional_ptr<ColumnData> newest_column;
-
-	//! Clears the segment if only the newest column holds it and nothing needs its versions anymore
-	void ClearIfLastHolder(const unique_lock<mutex> &guard, idx_t holders);
 };
 
 //! The updates to one column of a row group: per vector, a root with the newest values and a chain of older ones
@@ -57,14 +54,13 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
-	//! Whether a committed update in this segment still has to be written by a checkpoint
-	bool HasUnserializedChanges() const;
-	//! Whether nothing needs the contents anymore: no older versions remain and every committed update is checkpointed
-	bool CanBeCleared() const;
-	//! Drops the contents unless something still needs them; keeps the segment object, which undo entries point to
-	void ClearIfUnused();
+	//! Whether a committed update in this segment is missing from base data written as of the bound
+	bool HasUnserializedChanges(VisibilityBound base_bound) const;
+	//! Whether a column whose base data was written as of the bound no longer needs the contents
+	bool CanBeCleared(VisibilityBound base_bound) const;
+	//! Drops the contents unless the column still needs them; keeps the segment object, which undo entries point to
+	void ClearIfUnused(VisibilityBound base_bound);
 	void MarkCommitted(transaction_t commit_id);
-	void MarkCheckpointed(VisibilityBound visibility_bound);
 	//! The vectors with updates committed below the bound that take some of their old values from the base data
 	vector<idx_t> GetVectorsReadingBase(VisibilityBound visibility_bound);
 	//! Copies those updates with the old values from the base data, which a rewrite replaces
@@ -93,8 +89,8 @@ private:
 	vector<column_t> nested_column_path;
 	//! The buffer manager the root node allocates from
 	BufferManager &buffer_manager;
-	//! The newest commit id of an update on this segment that no checkpoint has written yet, or 0
-	atomic<transaction_t> newest_uncheckpointed_update_commit;
+	//! The newest commit id of an update on this segment, or 0
+	atomic<transaction_t> newest_commit;
 	//! The lock for the update segment
 	mutable StorageLock lock;
 	//! The root node (if any)
@@ -140,7 +136,7 @@ private:
 
 private:
 	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;
-	bool IsUnused(StorageLockKey &lock) const;
+	bool IsUnused(StorageLockKey &lock, VisibilityBound base_bound) const;
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index);
 	void CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vector_index, idx_t new_size);

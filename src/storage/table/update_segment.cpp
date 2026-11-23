@@ -23,8 +23,8 @@ static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(Physic
 static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
-      newest_uncheckpointed_update_commit(0), stats(column_data.type) {
+    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager), newest_commit(0),
+      stats(column_data.type) {
 	auto physical_type = type.InternalType();
 
 	// the WAL writer describes the updated column through the segment
@@ -2030,33 +2030,18 @@ void UpdateSegment::StoreBaseValues(VisibilityBound visibility_bound, idx_t vect
 //===--------------------------------------------------------------------===//
 // Checkpoint interaction
 //===--------------------------------------------------------------------===//
-bool UpdateSegment::HasUnserializedChanges() const {
-	return newest_uncheckpointed_update_commit.load() != 0;
+bool UpdateSegment::HasUnserializedChanges(VisibilityBound base_bound) const {
+	auto commit = newest_commit.load();
+	return commit != 0 && commit >= base_bound;
 }
 
 void UpdateSegment::MarkCommitted(transaction_t commit_id) {
 	// commits are serialized under the transaction lock, so commit ids only grow
-	newest_uncheckpointed_update_commit = commit_id;
+	newest_commit = commit_id;
 }
 
-void UpdateSegment::MarkCheckpointed(VisibilityBound visibility_bound) {
-	auto current = newest_uncheckpointed_update_commit.load();
-	if (current != 0 && current < visibility_bound) {
-		// a commit at or above the bound that races with this call keeps its id
-		newest_uncheckpointed_update_commit.compare_exchange_strong(current, 0);
-	}
-}
-
-void ColumnUpdates::ClearIfLastHolder(const unique_lock<mutex> &guard, idx_t holders) {
-	D_ASSERT(guard.owns_lock() && guard.mutex() == &lock);
-	if (holders != 1 || !newest_column || !segment) {
-		return;
-	}
-	segment->ClearIfUnused();
-}
-
-bool UpdateSegment::IsUnused(StorageLockKey &lock_key) const {
-	if (HasUnserializedChanges()) {
+bool UpdateSegment::IsUnused(StorageLockKey &lock_key, VisibilityBound base_bound) const {
+	if (HasUnserializedChanges(base_bound)) {
 		return false;
 	}
 	if (!root) {
@@ -2075,15 +2060,15 @@ bool UpdateSegment::IsUnused(StorageLockKey &lock_key) const {
 	return true;
 }
 
-bool UpdateSegment::CanBeCleared() const {
+bool UpdateSegment::CanBeCleared(VisibilityBound base_bound) const {
 	auto read_lock = lock.GetSharedLock();
-	return IsUnused(*read_lock);
+	return IsUnused(*read_lock, base_bound);
 }
 
-void UpdateSegment::ClearIfUnused() {
+void UpdateSegment::ClearIfUnused(VisibilityBound base_bound) {
 	// checked under the same lock that the clear holds, so no update can slip in between
 	auto write_lock = lock.GetExclusiveLock();
-	if (!IsUnused(*write_lock)) {
+	if (!IsUnused(*write_lock, base_bound)) {
 		return;
 	}
 	// results that scans filled from the string heaps keep them alive for as long as they need them
