@@ -184,7 +184,7 @@ void VectorArrayBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = nullptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,

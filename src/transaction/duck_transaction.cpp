@@ -306,7 +306,7 @@ ErrorData DuckTransaction::Commit(ClientContext &context, AttachedDatabase &db, 
 			bool sync_now = commit_info.active_transactions == ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 			commit_info.wal_sync_offset = commit_state->FlushCommit(commit_info.commit_id, sync_now);
 		}
-		drop_state.FinalizeCommit();
+		drop_state.FinalizeCommit(manager.Cast<DuckTransactionManager>());
 		return ErrorData();
 	} catch (std::exception &ex) {
 		// Record the error and run RevertCommit() outside this try-catch: RevertCommit() iterates the

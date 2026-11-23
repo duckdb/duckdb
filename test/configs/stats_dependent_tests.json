@@ -39,6 +39,7 @@
         "test/sql/storage/list_length_stats_nested_optimistic.test",
         "test/sql/optimizer/statistics/list_length_stats_propagation.test",
         "test/sql/optimizer/statistics/distinct_on_stats_propagation.test",
+        "test/sql/optimizer/statistics/timestamp_to_time_ns_stats.test",
         "test/sql/storage/list_length_stats_old_version.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/vacuum/test_analyze.test",
@@ -104,7 +105,9 @@
         "test/sql/types/geo/geography_stats.test",
         "test/issues/general/test_24298.test",
         "test/sql/optimizer/secure_view_statistics.test",
-        "test/sql/window/test_window_agg_stats_propagation.test"
+        "test/sql/window/test_window_agg_stats_propagation.test",
+        "test/optimizer/statistics/statistics_cast_time_of_day.test",
+        "test/parquet/parquet_schema_time_of_day_cast.test"
       ]
     }
   ]

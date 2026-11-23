@@ -28,7 +28,7 @@ public:
 			auto array_size = ArrayType::GetSize(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, array_size * capacity));
 			auto child_vector = make_uniq<Vector>(child_type, nullptr);
-			buffer = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
+			buffer = make_buffer<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {

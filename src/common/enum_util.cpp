@@ -170,6 +170,7 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -7085,6 +7086,30 @@ const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value) {
 template<>
 SuggestionState EnumUtil::FromString<SuggestionState>(const char *value) {
 	return static_cast<SuggestionState>(StringUtil::StringToEnum(GetSuggestionStateValues(), 15, "SuggestionState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSystemFileValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SystemFile::PROCESS_CGROUPS), "PROCESS_CGROUPS" },
+		{ static_cast<uint32_t>(SystemFile::PROCESS_CMDLINE), "PROCESS_CMDLINE" },
+		{ static_cast<uint32_t>(SystemFile::PROCESS_LOGINUID), "PROCESS_LOGINUID" },
+		{ static_cast<uint32_t>(SystemFile::CGROUP_V1_CPU_QUOTA), "CGROUP_V1_CPU_QUOTA" },
+		{ static_cast<uint32_t>(SystemFile::CGROUP_V1_CPU_PERIOD), "CGROUP_V1_CPU_PERIOD" },
+		{ static_cast<uint32_t>(SystemFile::CGROUP_V2_CPU_MAX), "CGROUP_V2_CPU_MAX" },
+		{ static_cast<uint32_t>(SystemFile::CGROUP_V1_MEMORY_LIMIT), "CGROUP_V1_MEMORY_LIMIT" },
+		{ static_cast<uint32_t>(SystemFile::CGROUP_V2_MEMORY_MAX), "CGROUP_V2_MEMORY_MAX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SystemFile>(SystemFile value) {
+	return StringUtil::EnumToString(GetSystemFileValues(), 8, "SystemFile", static_cast<uint32_t>(value));
+}
+
+template<>
+SystemFile EnumUtil::FromString<SystemFile>(const char *value) {
+	return static_cast<SystemFile>(StringUtil::StringToEnum(GetSystemFileValues(), 8, "SystemFile", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {

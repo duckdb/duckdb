@@ -497,8 +497,8 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 			child_mapping.column_index->SetType(local_column.type);
 			child_mapping.column_index->SetPushdownExtract();
 
-			mapping->child_mapping.emplace(MultiFileGlobalIndex(0), std::move(child_mapping.mapping));
-			child_mapping.mapping = std::move(mapping);
+			// The scan returns the extracted value in this slot, so keep the selected field's child mapping.
+			child_mapping.mapping->index = mapping->index;
 		}
 		return child_mapping;
 	}

@@ -458,7 +458,7 @@ public:
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
-	//! The returned value borrows the scratch buffer until the next call
+	//! The returned value borrows the scratch buffer until the next call, so it must be copied or converted first
 	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
 	                                      const string &separator, CSVEscapeMode escape_mode, bool doubled_quotes,
 	                                      idx_t units_before, vector<char> &scratch);

@@ -1,5 +1,6 @@
 #include "core_functions/scalar/blob_functions.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/function/encoding_function.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
@@ -102,12 +103,33 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
+unique_ptr<Expression> BindEncodeExpression(FunctionBindExpressionInput &input) {
+	return EncodingFunction::BindCall(input.context, input.children, true);
+}
+
+unique_ptr<Expression> BindDecodeExpression(FunctionBindExpressionInput &input) {
+	return EncodingFunction::BindCall(input.context, input.children, false);
+}
+
 } // namespace
 
-ScalarFunction EncodeFun::GetFunction() {
-	ScalarFunction func({}, LogicalType::BLOB, EncodeFunction);
-	func.GetSignature().AddParameter("string", LogicalType::VARCHAR);
-	return func;
+ScalarFunctionSet EncodeFun::GetFunctions() {
+	ScalarFunctionSet encode("encode");
+
+	ScalarFunction unary_function({}, LogicalType::BLOB, EncodeFunction);
+	unary_function.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+
+	// the encoding is bound to the function of the encoding in system.encodings
+	ScalarFunction binary_function({}, LogicalType::BLOB, nullptr);
+	binary_function.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("encoding", LogicalType::VARCHAR);
+	binary_function.SetBindExpressionCallback(BindEncodeExpression);
+	binary_function.SetFallible();
+
+	encode.AddFunction(unary_function);
+	encode.AddFunction(binary_function);
+	return encode;
 }
 
 ScalarFunctionSet DecodeFun::GetFunctions() {
@@ -120,6 +142,8 @@ ScalarFunctionSet DecodeFun::GetFunctions() {
 	binary_function.GetSignature()
 	    .AddParameter("blob", LogicalType::BLOB)
 	    .AddParameter("error_option", LogicalType::VARCHAR);
+
+	binary_function.SetBindExpressionCallback(BindDecodeExpression);
 
 	decode.AddFunction(unary_function);
 	decode.AddFunction(binary_function);

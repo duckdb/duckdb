@@ -242,3 +242,18 @@ statement error
 COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (NEW_LINE ['\n', '\r']);
 ----
 <REGEX>:.*single argument.*
+
+# an empty line whose line break starts a buffer does not shift the embedded quote position of the next row
+statement ok
+COPY (FROM (VALUES (repeat('x', 31)), (''), ('ab"c"d')) t(a)) TO '{TEST_DIR}/rule_empty_line_buffer_start.csv' (HEADER false, QUOTE '', ESCAPE '', NEW_LINE '\r\n');
+
+foreach buffer_size 32 2000000
+
+query T
+SELECT a FROM read_csv('{TEST_DIR}/rule_empty_line_buffer_start.csv', columns={'a': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', new_line='\r\n', buffer_size={buffer_size}, parallel=false);
+----
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NULL
+abc"d
+
+endloop

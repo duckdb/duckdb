@@ -31,6 +31,38 @@ handles:
       instance handle it will be used with via `[[attach_options_create]]`; destroy
       it via `[[attach_options_destroy]]`.
     cleanup_with: attach_options_destroy
+callbacks:
+  instance_init_callback:
+    description: |
+      Initializes an instance that `[[instance_open_shared]]` has just
+      created, before the instance is shared: calls for the same file wait
+      until it returns. It can, for instance, write GLOBAL settings that
+      cannot be given at startup, or create a connection and run SQL that sets
+      up the database.
+
+      `err` is a live error slot, never NULL. Populate it with
+      `[[error_info_set_code]]` / `[[error_info_set_text]]` to fail the
+      initialization; do not destroy it.
+
+      The callback must not throw or unwind across the boundary, and must not
+      open the same file through `[[instance_open_shared]]`, which would wait
+      for the callback to return.
+    parameters:
+      instance:
+        type: instance
+        description: |
+          Borrowed handle to the new instance, valid only for the duration of
+          the callback: do not destroy it. Connections created from it may
+          outlive the callback.
+      user_data:
+        type: void
+        indirection: 1
+        description: The `init_user_data` passed to `[[instance_open_shared]]`, untouched.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report a failed initialization.
+    return_type: void
 functions:
   instance_create:
     lifecycle:
@@ -140,10 +172,19 @@ functions:
       file meanwhile waits for it to be, rather than opening the file again
       while it is being closed.
 
+      `init`, when given, is called once with the instance this call creates,
+      before any other call can share it: calls for the same file wait until
+      it returns. It is not called when the call shares an existing instance.
+      When it reports an error, the instance is destroyed, the call fails with
+      that error, and the next call for the file creates an instance again.
+
       An existing instance is shared only when it was created with the same
-      startup options, compared as written: an option given under an alias,
-      or a value written differently, counts as a different configuration,
-      as for `duckdb_get_or_create_from_cache` in the V1 API. Otherwise
+      startup options, compared by the settings they give: both name the same
+      options, an alias counting as the option it stands for, and each value
+      is equal once converted to the option's type, with text compared
+      regardless of case, so that `threads=03` matches `threads=3` and
+      `access_mode=read_only` matches `access_mode=READ_ONLY`. The value of an
+      option DuckDB does not know is compared as written. Otherwise
       ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
       view opens a new in-memory instance on every call, which is never
       shared; a named in-memory database such as `:memory:name` is shared like
@@ -158,9 +199,10 @@ functions:
       change the instance for every handle to it.
 
       A client cannot compose this from the other functions: telling that two
-      paths name the same file as DuckDB resolves it, and waiting for an
+      paths name the same file as DuckDB resolves it, waiting for an
       instance whose last handle and connection were just destroyed to finish
-      closing its files, both need the engine.
+      closing its files, and initializing a new instance before another call
+      can share it, all need the engine.
     role: constructor
     belongs_to: instance
     parameters:
@@ -201,6 +243,13 @@ functions:
       option_count:
         type: idx
         description: "The number of startup options."
+      init:
+        type: instance_init_callback
+        description: "Optional. Initializes the instance when this call creates it. Pass NULL for none."
+      init_user_data:
+        type: void
+        indirection: 1
+        description: "Opaque pointer passed through to `init` untouched. May be NULL."
       out_instance:
         type: instance
         indirection: 1
