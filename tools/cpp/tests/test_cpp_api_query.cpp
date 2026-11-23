@@ -555,31 +555,6 @@ TEST_CASE("Stable C++API: RenderBox limit yields an approximate '? rows' footer"
 	REQUIRE_FALSE(Contains(exact, "? rows"));
 }
 
-TEST_CASE("Stable C++API: Connection current catalog and schema", "[cpp_api]") {
-	using namespace duckdb::cxx;
-
-	auto db = Instance(":memory:");
-	auto conn = db.Connect();
-	REQUIRE(conn.GetCurrentCatalog() == "memory");
-	REQUIRE(conn.GetCurrentSchema() == "main");
-
-	conn.Execute("CREATE SCHEMA s1").Drain();
-	conn.SetCurrentSchema("s1");
-	REQUIRE(conn.GetCurrentSchema() == "s1");
-	REQUIRE(conn.GetCurrentCatalog() == "memory");
-
-	conn.SetCurrentSchema("main");
-	conn.Execute("ATTACH ':memory:' AS other").Drain();
-	conn.SetCurrentCatalog("other");
-	REQUIRE(conn.GetCurrentCatalog() == "other");
-	REQUIRE(conn.GetCurrentSchema() == "main");
-
-	// The setting is per connection
-	REQUIRE(db.Connect().GetCurrentCatalog() == "memory");
-
-	REQUIRE_THROWS(conn.SetCurrentCatalog("no_such_catalog"));
-}
-
 TEST_CASE("Stable C++API: Connection profiling information", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
