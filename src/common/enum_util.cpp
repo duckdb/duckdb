@@ -6031,6 +6031,24 @@ ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value) {
 	return static_cast<ResultOrdering>(StringUtil::StringToEnum(GetResultOrderingValues(), 3, "ResultOrdering", value));
 }
 
+const StringUtil::EnumStringLiteral *GetRowChangeTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RowChangeType::DELETED), "DELETED" },
+		{ static_cast<uint32_t>(RowChangeType::APPENDED), "APPENDED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RowChangeType>(RowChangeType value) {
+	return StringUtil::EnumToString(GetRowChangeTypeValues(), 2, "RowChangeType", static_cast<uint32_t>(value));
+}
+
+template<>
+RowChangeType EnumUtil::FromString<RowChangeType>(const char *value) {
+	return static_cast<RowChangeType>(StringUtil::StringToEnum(GetRowChangeTypeValues(), 2, "RowChangeType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RowGroupAppendMode::APPEND_TO_EXISTING), "APPEND_TO_EXISTING" },
