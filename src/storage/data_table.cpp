@@ -403,13 +403,28 @@ bool DataTable::HasUniqueIndexes() const {
 }
 
 shared_ptr<IndexEntry> DataTable::AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template) {
-	// under the commit lock no commit is in progress: every later commit sees the entry
-	auto commit_lock = db.GetStorageManager().GetCommitLock();
 	auto &transaction_manager = DuckTransactionManager::Get(db);
-	// the transaction holds the checkpoint lock, so no checkpoint uses the deltas during the build
-	D_ASSERT(!transaction_manager.GetActiveCheckpoint().IsValid());
-	return info->indexes.AddBuildingIndex(index_template, transaction_manager.GetLastCommit(),
-	                                      transaction.GetTransactionId());
+	while (true) {
+		// under the commit lock no commit is in progress: every later commit sees the entry
+		auto commit_lock = db.GetStorageManager().GetCommitLock();
+		// an ALTER replaces the table while holding the append lock; never wait for it under the commit lock
+		unique_lock<mutex> table_lock(append_lock, std::try_to_lock);
+		if (!table_lock.owns_lock()) {
+			commit_lock.unlock();
+			lock_guard<mutex> wait_for_alter(append_lock);
+			continue;
+		}
+		if (!IsMainTable()) {
+			// the commits to the table that replaced this one cannot maintain an index on this one's columns
+			throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has "
+			                           "been %s by a different transaction",
+			                           GetTableName(), TableModification());
+		}
+		// the transaction holds the checkpoint lock, so no checkpoint uses the deltas during the build
+		D_ASSERT(!transaction_manager.GetActiveCheckpoint().IsValid());
+		return info->indexes.AddBuildingIndex(index_template, transaction_manager.GetLastCommit(),
+		                                      transaction.GetTransactionId());
+	}
 }
 
 //! The most changed rows that CREATE INDEX merges while holding the commit lock
