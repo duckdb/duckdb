@@ -74,8 +74,11 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 void LogCacheEvent(QueryContext context, DatabaseInstance &db, const CachingFileHandle &handle, const char *event,
                    idx_t bytes, idx_t location) {
 	auto client_context = context.GetContext();
+	auto opener = handle.GetOpener();
 	if (client_context) {
 		DUCKDB_LOG(*client_context, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	} else if (opener) {
+		DUCKDB_LOG(*opener, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
 	} else {
 		DUCKDB_LOG(db, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
 	}
@@ -576,6 +579,10 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 
 string CachingFileHandle::GetPath() const {
 	return path.path;
+}
+
+optional_ptr<FileOpener> CachingFileHandle::GetOpener() const {
+	return opener;
 }
 
 idx_t CachingFileHandle::GetFileSize() {
