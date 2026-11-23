@@ -1453,7 +1453,7 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, idx_t count, Sel
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
 		if (!update.validity.RowIsValid(update_idx)) {
-			// a row updated to NULL keeps its current value: a rewrite drops the values below NULLs
+			// a row updated to NULL needs an entry, so that older snapshots keep its value: a rewrite drops it
 			if (!original_validity.RowIsValid(sel_idx)) {
 				// already NULL: there is no value to keep
 				continue;
@@ -1503,85 +1503,6 @@ UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType 
 		return TemplatedGetEffectiveUpdates<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Keep current values
-//===--------------------------------------------------------------------===//
-template <class T>
-static T GetUpdateNullPadding() {
-	return T();
-}
-
-template <>
-string_t GetUpdateNullPadding() {
-	return string_t(uint32_t(0));
-}
-
-//! A row updated to NULL keeps its current value: a rewrite drops the values below NULLs
-template <class T>
-static void TemplatedKeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
-                                       const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
-	auto update_data = FlatVector::GetDataMutable<T>(update);
-	auto &update_validity = FlatVector::Validity(update);
-	auto base_values = FlatVector::GetData<T>(base_data);
-	auto &base_validity = FlatVector::Validity(base_data);
-	idx_t root_idx = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = sel.get_index(i);
-		if (update_validity.RowIsValid(idx)) {
-			continue;
-		}
-		auto id = UnsafeNumericCast<sel_t>(UnsafeNumericCast<idx_t>(ids[idx]) - vector_offset);
-		if (root_info) {
-			auto root_tuples = root_info->GetTuples();
-			while (root_idx < root_info->N && root_tuples[root_idx] < id) {
-				root_idx++;
-			}
-			if (root_idx < root_info->N && root_tuples[root_idx] == id) {
-				update_data[idx] = root_info->GetData<T>()[root_idx];
-				continue;
-			}
-		}
-		update_data[idx] = base_validity.RowIsValid(idx) ? base_values[idx] : GetUpdateNullPadding<T>();
-	}
-}
-
-static void KeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
-                              const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
-	switch (update.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		return TemplatedKeepCurrentValues<int8_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::INT16:
-		return TemplatedKeepCurrentValues<int16_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::INT32:
-		return TemplatedKeepCurrentValues<int32_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::INT64:
-		return TemplatedKeepCurrentValues<int64_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::UINT8:
-		return TemplatedKeepCurrentValues<uint8_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::UINT16:
-		return TemplatedKeepCurrentValues<uint16_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::UINT32:
-		return TemplatedKeepCurrentValues<uint32_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::UINT64:
-		return TemplatedKeepCurrentValues<uint64_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::INT128:
-		return TemplatedKeepCurrentValues<hugeint_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::UINT128:
-		return TemplatedKeepCurrentValues<uhugeint_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::FLOAT:
-		return TemplatedKeepCurrentValues<float>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::DOUBLE:
-		return TemplatedKeepCurrentValues<double>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::INTERVAL:
-		return TemplatedKeepCurrentValues<interval_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	case PhysicalType::VARCHAR:
-		return TemplatedKeepCurrentValues<string_t>(root_info, update, ids, count, sel, base_data, vector_offset);
-	default:
-		throw NotImplementedException("Unimplemented type for update segment");
 	}
 }
 
@@ -1695,7 +1616,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	// publishes them after the next update of the column, which must not see the values of a failed update
 	SegmentStatistics update_stats(type);
 	statistics_update_function(this, update_stats, update_format, count);
-	// rows updated to NULL take part too: they keep their current value
+	// rows updated to NULL take part too, so that older snapshots keep their values
 	SelectionVector sel;
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
@@ -1724,16 +1645,16 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		}
 	}
 	if (type.InternalType() != PhysicalType::BIT && !update_format.validity.CannotHaveNull()) {
+		// nothing reads the value below a NULL: store zeros, which are also a valid (empty) string
 		update_p.Flatten();
-		optional_ptr<UpdateInfo> root_info;
-		UndoBufferReference root_pin;
-		if (root && vector_index < root->info.size() && root->info[vector_index].IsSet()) {
-			root_pin = root->info[vector_index].Pin();
-			root_info = &UpdateInfo::Get(root_pin);
-			// the kept values can point into the string heap of the vector, which a compaction below replaces
-			AddStringHeapReference(*write_lock, vector_index, update_p);
+		auto &update_validity = FlatVector::Validity(update_p);
+		auto update_data = FlatVector::GetDataMutable(update_p);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			if (!update_validity.RowIsValid(idx)) {
+				memset(update_data + idx * type_size, 0, type_size);
+			}
 		}
-		KeepCurrentValues(root_info, update_p, ids, count, sel, base_data, vector_offset);
 		update_p.ToUnifiedFormat(update_format);
 	}
 	InitializeUpdateInfo(vector_index);
@@ -1925,6 +1846,16 @@ bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 //===--------------------------------------------------------------------===//
 // Store base values
 //===--------------------------------------------------------------------===//
+template <class T>
+static T GetUpdateNullPadding() {
+	return T();
+}
+
+template <>
+string_t GetUpdateNullPadding() {
+	return string_t(uint32_t(0));
+}
+
 //! Copies the update info, with the base value for every tuple that has no stored value
 template <class T, class GET_BASE>
 static void CopyWithBaseValues(UpdateInfo &source, UpdateInfo &target, GET_BASE &&get_base) {
