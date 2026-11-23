@@ -1,0 +1,64 @@
+# name: test/sql/aggregate/aggregates/dictionary_sum_order.test
+# description: Dictionary batches preserve scalar SUM order and checked overflow
+# group: [aggregates]
+
+load {TEST_DIR}/dictionary_sum_order.db
+
+statement ok
+SET threads=1
+
+statement ok
+SET disabled_optimizers='statistics_propagation'
+
+statement ok
+SET VARIABLE vector_size = current_setting('standard_vector_size')
+
+# The second vector starts with eight equal values and ends with distinct values.
+# Multiplying the checked inputs first would overflow, and adding a floating-point
+# subtotal would round differently.
+statement ok
+CREATE TABLE batched_sum(v BIGINT USING COMPRESSION RLE, f DOUBLE USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO batched_sum
+SELECT CASE WHEN i < getvariable('vector_size') - 1 THEN NULL
+            WHEN i = getvariable('vector_size') - 1 THEN '-9223372036854775808'::BIGINT
+            WHEN i < getvariable('vector_size') + 8 THEN 1152921504606846976::BIGINT
+            ELSE 0 END,
+       CASE WHEN i < getvariable('vector_size') - 1 THEN NULL
+            WHEN i = getvariable('vector_size') - 1 THEN 1e16
+            WHEN i < getvariable('vector_size') + 8 THEN 1
+            WHEN i = getvariable('vector_size') + 8 THEN -1e16
+            ELSE 0 END
+FROM range(getvariable('vector_size') + 10) t(i)
+
+statement ok
+CHECKPOINT
+
+# Under the native scan settings, the final ten rows form the mixed dictionary vector.
+query I
+SELECT current_setting('debug_force_fetch_row')
+    OR current_setting('default_block_size') <> 262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR (count(*) FILTER (WHERE vector_type(v) = 'DICTIONARY_VECTOR') = 10
+        AND count(*) FILTER (WHERE vector_type(f) = 'DICTIONARY_VECTOR') = 10)
+FROM batched_sum
+----
+true
+
+query II
+SELECT sum_no_overflow(v) = 0, sum(f) = 0 FROM batched_sum
+----
+1	1
+
+# Without the preceding negative value, the eighth addition must overflow.
+statement ok
+UPDATE batched_sum SET v=0 WHERE v='-9223372036854775808'::BIGINT
+
+statement ok
+CHECKPOINT
+
+statement error
+SELECT sum_no_overflow(v) FROM batched_sum
+----
+Overflow in sum_no_overflow

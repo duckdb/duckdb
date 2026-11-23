@@ -1,0 +1,34 @@
+# name: test/sql/storage/compression/rle/rle_null_placeholders.test
+# description: NULL-only RLE runs must not expose invalid decimal values to dictionary execution
+# group: [rle]
+
+load {TEST_DIR}/rle_null_placeholders.db
+
+statement ok
+SET force_compression='rle';
+
+statement ok
+CREATE TABLE decimals AS
+SELECT CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(4,0) END d4,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(9,0) END d9,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(18,0) END d18,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(38,0) END d38,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(9,2) END scaled
+FROM range(131070) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(DISTINCT column_name) FROM pragma_storage_info('decimals') WHERE compression='RLE';
+----
+5
+
+# Unary decimal negation cannot overflow for legal decimal values. It evaluates
+# whole dictionary children, including the unused placeholder of the leading NULL run.
+query IIIII
+SELECT sum(-d4), sum(-d9), sum(-d18), sum(-d38), sum(-scaled) FROM decimals;
+----
+-196581	-196581	-196581	-196581	-196581.00

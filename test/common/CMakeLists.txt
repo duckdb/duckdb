@@ -7,6 +7,7 @@ add_library_unity(
   test_managed_async_task_queue.cpp
   test_bloom_filter.cpp
   test_cast.cpp
+  test_clustered_aggregate.cpp
   test_checked_integer.cpp
   test_checksum.cpp
   test_dictionary_hash_cache.cpp

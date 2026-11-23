@@ -1,0 +1,167 @@
+# name: test/sql/aggregate/aggregates/dictionary_sum_batches.test
+# description: Dictionary SUM batches handle NULL prefixes, tails and mixed runs
+# group: [aggregates]
+
+load {TEST_DIR}/dictionary_sum_batches.db
+
+statement ok
+SET threads=1
+
+statement ok
+SET VARIABLE vector_size = current_setting('standard_vector_size')
+
+# Aligned and misaligned runs, with tails around the eight-row batch boundary.
+foreach run_length 3 8 37 64
+
+foreach tail 7 8 9
+
+statement ok
+CREATE VIEW expected AS
+SELECT (i // 8) % 4 AS g, v, CASE WHEN i < 16 THEN NULL ELSE v END AS null_prefix,
+       CASE WHEN i >= 8 THEN NULL ELSE v END AS null_tail,
+       CASE WHEN i % 33 = 0 THEN NULL ELSE v END AS sparse_nulls,
+       CASE WHEN i = 32 THEN NULL ELSE v END AS one_null,
+       CASE WHEN i % 10 != 0 THEN NULL ELSE v END AS dense_nulls,
+       NULL::BIGINT AS all_nulls
+FROM (SELECT i, ((i // {run_length}) % 5)::BIGINT AS v
+      FROM range(getvariable('vector_size') + {tail}) t(i))
+
+statement ok
+CREATE TABLE inputs(
+    g BIGINT,
+    v BIGINT USING COMPRESSION RLE,
+    null_prefix BIGINT USING COMPRESSION RLE,
+    null_tail BIGINT USING COMPRESSION RLE,
+    sparse_nulls BIGINT USING COMPRESSION RLE,
+    one_null BIGINT USING COMPRESSION RLE,
+    dense_nulls BIGINT USING COMPRESSION RLE,
+    all_nulls BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO inputs FROM expected
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT actual IS NOT DISTINCT FROM reference
+FROM (SELECT sum(v), sum(null_prefix), sum(null_tail), sum(sparse_nulls), sum(one_null),
+             sum(dense_nulls), sum(all_nulls) FROM inputs) actual,
+     (SELECT sum(v), sum(null_prefix), sum(null_tail), sum(sparse_nulls), sum(one_null),
+             sum(dense_nulls), sum(all_nulls) FROM expected) reference
+----
+true
+
+# Exercise the checked scalar accumulator as well as the statistics-selected one.
+query I
+SELECT actual IS NOT DISTINCT FROM reference
+FROM (SELECT sum_no_overflow(v), sum_no_overflow(null_prefix), sum_no_overflow(null_tail),
+             sum_no_overflow(sparse_nulls), sum_no_overflow(one_null), sum_no_overflow(dense_nulls),
+             sum_no_overflow(all_nulls)
+      FROM inputs) actual,
+     (SELECT sum_no_overflow(v), sum_no_overflow(null_prefix), sum_no_overflow(null_tail),
+             sum_no_overflow(sparse_nulls), sum_no_overflow(one_null), sum_no_overflow(dense_nulls),
+             sum_no_overflow(all_nulls)
+      FROM expected) reference
+----
+true
+
+# Exercise composed dictionary selections and flat grouped selections against
+# the same generated rows. Groups select discontiguous rows, and one column has
+# a single NULL in the flat validity mask as well as in the dictionary child.
+query I
+WITH actual AS (
+    SELECT g, sum_no_overflow(v), sum_no_overflow(null_prefix), sum_no_overflow(null_tail),
+           sum_no_overflow(sparse_nulls), sum_no_overflow(one_null), sum_no_overflow(dense_nulls),
+           sum_no_overflow(all_nulls)
+    FROM inputs GROUP BY g
+), reference AS (
+    SELECT g, sum_no_overflow(v), sum_no_overflow(null_prefix), sum_no_overflow(null_tail),
+           sum_no_overflow(sparse_nulls), sum_no_overflow(one_null), sum_no_overflow(dense_nulls),
+           sum_no_overflow(all_nulls)
+    FROM expected GROUP BY g
+)
+SELECT bool_and(actual IS NOT DISTINCT FROM reference)
+FROM actual FULL OUTER JOIN reference USING (g)
+----
+true
+
+statement ok
+DROP VIEW expected
+
+statement ok
+DROP TABLE inputs
+
+endloop
+
+endloop
+
+# The final non-NULL value makes the scan a dictionary. Selecting it away leaves
+# eight valid zeros followed by NULLs, so only the repeated prefix sets the SUM.
+statement ok
+CREATE TABLE prefix_only(i INTEGER, v BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO prefix_only
+SELECT i, CASE WHEN i < 8 THEN 0 WHEN i < getvariable('vector_size') - 1 THEN NULL ELSE 1 END
+FROM range(getvariable('vector_size')) t(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT current_setting('debug_force_fetch_row')
+    OR current_setting('default_block_size') <> 262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR count(*) FILTER (WHERE vector_type(v) = 'DICTIONARY_VECTOR') = getvariable('vector_size') - 1
+FROM prefix_only WHERE i < getvariable('vector_size') - 1
+----
+true
+
+query II
+SELECT sum(v), sum_no_overflow(v) FROM prefix_only WHERE i < getvariable('vector_size') - 1
+----
+0	0
+
+# With the zeros selected away too, the repeated NULL prefix must leave SUM unset.
+query I
+SELECT current_setting('debug_force_fetch_row')
+    OR current_setting('default_block_size') <> 262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR count(*) FILTER (WHERE vector_type(v) = 'DICTIONARY_VECTOR') = getvariable('vector_size') - 9
+FROM prefix_only WHERE i >= 8 AND i < getvariable('vector_size') - 1
+----
+true
+
+query II
+SELECT sum(v), sum_no_overflow(v) FROM prefix_only
+WHERE i >= 8 AND i < getvariable('vector_size') - 1
+----
+NULL	NULL
+
+# The first eight codes are mixed, so repeated-code batching cannot set the SUM.
+# Only the fully valid 32-row prefix contributes; the checked suffix is all NULL.
+statement ok
+CREATE TABLE valid_prefix(v BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO valid_prefix
+SELECT CASE WHEN i < 32 THEN (i // 4) % 2 ELSE NULL END
+FROM range(getvariable('vector_size')) t(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT current_setting('debug_force_fetch_row')
+    OR current_setting('default_block_size') <> 262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR count(*) FILTER (WHERE vector_type(v) = 'DICTIONARY_VECTOR') = getvariable('vector_size')
+FROM valid_prefix
+----
+true
+
+query II
+SELECT sum(v), sum_no_overflow(v) FROM valid_prefix
+----
+16	16
