@@ -18,8 +18,8 @@ namespace duckdb {
 struct DecodeFun {
 	static constexpr const char *Name = "decode";
 	static constexpr const char *Parameters = "blob,error_option";
-	static constexpr const char *Description = "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters.";
-	static constexpr const char *Example = "decode('\\xC3\\xBC'::BLOB)\002decode('\\xA0'::BLOB, 'replace')\002decode('\\xA0'::BLOB, 'ignore')";
+	static constexpr const char *Description = "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters. If the second argument is the name of an encoding (e.g. 'latin-1', see `system.encodings`), `blob` is decoded from that encoding instead.";
+	static constexpr const char *Example = "decode('\\xC3\\xBC'::BLOB)\002decode('\\xA0'::BLOB, 'replace')\002decode('\\xA0'::BLOB, 'ignore')\002decode('\\xFC'::BLOB, 'latin-1')";
 	static constexpr const char *Categories = "blob";
 
 	static ScalarFunctionSet GetFunctions();
@@ -27,12 +27,12 @@ struct DecodeFun {
 
 struct EncodeFun {
 	static constexpr const char *Name = "encode";
-	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding.";
-	static constexpr const char *Example = "encode('my_string_with_ü')";
+	static constexpr const char *Parameters = "string,encoding";
+	static constexpr const char *Description = "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding, or into the named encoding (e.g. 'latin-1', see `system.encodings`).";
+	static constexpr const char *Example = "encode('my_string_with_ü')\002encode('my_string_with_ü', 'latin-1')";
 	static constexpr const char *Categories = "blob";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct FromBase64Fun {

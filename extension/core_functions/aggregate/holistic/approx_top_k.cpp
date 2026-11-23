@@ -172,22 +172,8 @@ struct InternalApproxTopKState {
 		}
 		auto &value = values.back().get();
 		if (value.count > 0) {
-			// the capacity is reached - we need to replace an entry
-
-			// we use the filter as an early out
-			// based on the hash - we find a slot in the filter
-			// instead of monitoring the value immediately, we add to the slot in the filter
-			// ONLY when the value in the filter exceeds the current min value, we start monitoring the value
-			// this speeds up the algorithm as switching monitor values means we need to erase/insert in the hash table
-			auto &filter_value = filter[input.hash & filter_mask];
-			if (filter_value + increment < value.count) {
-				// if the filter has a lower count than the current min count
-				// we can skip adding this entry (for now)
-				filter_value += increment;
-				return;
-			}
-			// the filter exceeds the min value - start monitoring this value
-			// erase the existing entry from the lookup table (before CopyValue overwrites its hash and data)
+			// the capacity is reached - replace the entry with the lowest count
+			// erase it from the lookup table (before CopyValue overwrites its hash and data)
 			// and set the filter for the minimum value back to the current minimum value
 			filter[value.str_val.hash & filter_mask] = value.count;
 			Erase(value);
@@ -195,6 +181,22 @@ struct InternalApproxTopKState {
 		CopyValue(value, input, aggr_input.allocator);
 		Insert(value);
 		IncrementCount(value, increment);
+	}
+
+	//! Returns true if an unmonitored input is only counted in the filter
+	bool FilterInput(const ApproxTopKString &input) {
+		if (values.size() < capacity) {
+			return false;
+		}
+		// instead of monitoring the value immediately, we add to its slot in the filter
+		// ONLY when the filter slot reaches the current min count, we start monitoring the value
+		// this speeds up the algorithm as switching monitor values means we need to erase/insert in the hash table
+		auto &filter_value = filter[input.hash & filter_mask];
+		if (filter_value + 1 < values.back().get().count) {
+			filter_value++;
+			return true;
+		}
+		return false;
 	}
 
 	void IncrementCount(ApproxTopKValue &value, idx_t increment = 1) {
@@ -266,8 +268,8 @@ struct ApproxTopKOperation {
 		if (entry) {
 			// the input is monitored - increment the count
 			state.IncrementCount(*entry);
-		} else {
-			// the input is not monitored - replace the first entry with the current entry and increment
+		} else if (!state.FilterInput(topk_string)) {
+			// the input is not monitored and passes the filter - start monitoring it
 			state.InsertOrReplaceEntry(topk_string, aggr_input);
 		}
 	}
@@ -311,6 +313,11 @@ struct ApproxTopKOperation {
 			}
 			target.IncrementCount(val, increment);
 		}
+		// copy over the filter before evicting, so an evicted value sets its slot to its merged count
+		D_ASSERT(source.filter.size() == target.filter.size());
+		for (idx_t filter_idx = 0; filter_idx < source.filter.size(); filter_idx++) {
+			target.filter[filter_idx] += source.filter[filter_idx];
+		}
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
 		for (auto &source_entry : source.values) {
 			auto &source_val = source_entry.get();
@@ -336,11 +343,6 @@ struct ApproxTopKOperation {
 				increment = new_count;
 			}
 			target.InsertOrReplaceEntry(source_val.str_val, aggr_input, increment);
-		}
-		// copy over the filter
-		D_ASSERT(source.filter.size() == target.filter.size());
-		for (idx_t filter_idx = 0; filter_idx < source.filter.size(); filter_idx++) {
-			target.filter[filter_idx] += source.filter[filter_idx];
 		}
 		target.Verify();
 	}

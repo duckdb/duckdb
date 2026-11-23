@@ -49,6 +49,8 @@ Grammar extensions are not included in any of these benchmarks.
 | `ParserAoC` | All 25 Advent of Code 2024 query files, repeated twice | 50 | 1 |
 | `ParserStress` | One statement with an extreme instance of every expression shape the grammar treats differently | 7 | 1 |
 | `ParserValuesList` | One large `VALUES` list | 8 | 1 |
+| `ParserSetOperationChain` | One generated statement of about 100 KiB: a `UNION ALL` of 2000 small selects | 13 | 1 |
+| `ParserCTEChain` | One generated statement of about 30 KiB: 300 CTEs, each with a list literal and a lambda | 24 | 1 |
 | `ParserGrammarConstruction` | Construct and destroy the base grammar | 250 constructions | No SQL parsing |
 
 The batch sizes target roughly 300 ms using representative median timings. Corpus workloads round
@@ -59,6 +61,8 @@ joins, subqueries, aggregation, CTEs and window functions; Flummi stresses parsi
 one very large generated SQL statement with a recursive CTE.
 AoC adds varied algorithmic SQL with recursive CTEs, string processing, nested queries
 and embedded input strings. It measures parsing, not solving the puzzles.
+The set-operation and CTE chains are single statements of the kind applications generate:
+many small branches or CTEs rather than one deep expression.
 
 SQL sources, loaded in numeric query order:
 

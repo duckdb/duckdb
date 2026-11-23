@@ -1,0 +1,132 @@
+# name: test/optimizer/comparison_simplification_fractional_constant.test
+# description: Range comparisons of a numeric column with a more precise constant drop the cast on the column
+# group: [optimizer]
+
+statement ok
+CREATE TABLE ints AS SELECT * FROM (VALUES (2), (3), (4), (NULL)) v(i);
+
+# DECIMAL rounds half away from zero: 3.5 -> 4, 3.4 -> 3
+query II
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 3.5;
+----
+analyzed_plan	<REGEX>:.*Filters: i < 4.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 3.4;
+----
+analyzed_plan	<REGEX>:.*Filters: i <= 3.*
+
+# DOUBLE rounds half to even, so 2.5 rounds down to 2
+query II
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 2.5::DOUBLE;
+----
+analyzed_plan	<REGEX>:.*Filters: i <= 2.*
+
+query IIIIIIII
+SELECT
+	list(i ORDER BY i) FILTER (WHERE i < 3.5),
+	list(i ORDER BY i) FILTER (WHERE i <= 3.4),
+	list(i ORDER BY i) FILTER (WHERE i > 3.4),
+	list(i ORDER BY i) FILTER (WHERE i >= 3.5),
+	list(i ORDER BY i) FILTER (WHERE 3.5 > i),
+	list(i ORDER BY i) FILTER (WHERE 3.4 < i),
+	list(i ORDER BY i) FILTER (WHERE i < 2.5::DOUBLE),
+	list(i ORDER BY i) FILTER (WHERE 2.5::DOUBLE < i)
+FROM ints;
+----
+[2, 3]	[2, 3]	[4]	[4]	[2, 3]	[4]	[2]	[3, 4]
+
+# the rewritten comparison is pushed into the scan
+query I
+SELECT list(i ORDER BY i) FROM ints WHERE 3.5 > i;
+----
+[2, 3]
+
+# DECIMAL scale-down, DECIMAL -> DOUBLE and FLOAT -> DOUBLE
+statement ok
+CREATE TABLE fracs (d DECIMAL(5,2), f FLOAT);
+
+statement ok
+INSERT INTO fracs VALUES (0.01, 0.25), (0.02, 0.5), (NULL, NULL);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM fracs WHERE d < 0.015 AND d < 0.015::DOUBLE AND f < 0.3::DOUBLE;
+----
+analyzed_plan	<!REGEX>:.*CAST.*
+
+query IIIII
+SELECT
+	list(d ORDER BY d) FILTER (WHERE d < 0.015),
+	list(d ORDER BY d) FILTER (WHERE d > 0.014),
+	list(d ORDER BY d) FILTER (WHERE d < 0.015::DOUBLE),
+	list(f ORDER BY f) FILTER (WHERE f < 0.3::DOUBLE),
+	list(f ORDER BY f) FILTER (WHERE f >= 0.3::DOUBLE)
+FROM fracs;
+----
+[0.01]	[0.02]	[0.01]	[0.25]	[0.5]
+
+# a constant that rounds outside the column type keeps the cast, and still gives the right result
+statement ok
+CREATE TABLE tiny (t TINYINT);
+
+statement ok
+INSERT INTO tiny VALUES (-128), (0), (127);
+
+query II
+SELECT count(*) FILTER (WHERE t < 127.5), count(*) FILTER (WHERE t >= 127.4) FROM tiny;
+----
+3	0
+
+# FLOAT: +-1e-50 round to 0.0 and -0.0, 1e300 does not fit
+statement ok
+CREATE TABLE g (f FLOAT);
+
+statement ok
+INSERT INTO g VALUES (-1), ('-0.0'), (0), (1), ('nan');
+
+query II
+EXPLAIN ANALYZE SELECT * FROM g WHERE f < -1e-50;
+----
+analyzed_plan	<!REGEX>:.*CAST.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM g WHERE f < 1e300;
+----
+analyzed_plan	<REGEX>:.*CAST.*
+
+query IIIII
+SELECT
+	count(*) FILTER (WHERE f < -1e-50),
+	count(*) FILTER (WHERE -1e-50 <= f),
+	count(*) FILTER (WHERE f < 1e-50),
+	count(*) FILTER (WHERE f < 1e300),
+	count(*) FILTER (WHERE f < 'nan'::DOUBLE)
+FROM g;
+----
+1	4	3	4	4
+
+# casts that can map distinct values to the same floating value keep the cast
+statement ok
+CREATE TABLE w AS SELECT range::BIGINT AS bi FROM range(-5, 6);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM w WHERE bi < 2.5::DOUBLE;
+----
+analyzed_plan	<REGEX>:.*CAST.*
+
+# exact numeric casts that are order preserving: DECIMAL(4,0) -> INTEGER
+statement ok
+CREATE TABLE e (e DECIMAL(4,0));
+
+statement ok
+INSERT INTO e VALUES (-9999), (0), (9999);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM e WHERE e::INTEGER < 5;
+----
+analyzed_plan	<!REGEX>:.*CAST.*
+
+query II
+SELECT count(*) FILTER (WHERE e::INTEGER < 5), count(*) FILTER (WHERE e::INTEGER < 10000) FROM e;
+----
+2	3

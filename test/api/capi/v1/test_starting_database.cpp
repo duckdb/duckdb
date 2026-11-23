@@ -39,12 +39,12 @@ TEST_CASE("On Disk DB File Name Case Preserved", "[simplestartup]") {
 	// Check that file on disk is created in user-specified case
 	// independently whether FS is case-sensitive or not.
 	// FS access can be eventually changed to CAPI FS.
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	string work_dir = TestDirectoryPath();
 	std::vector<string> db_file_list = {"Test1.db", "TEST2.db", "TeSt3.db"};
 	for (const string &db_file : db_file_list) {
 		string db_path = TestJoinPath(work_dir, db_file);
-		fs->TryRemoveFile(db_path);
+		fs.TryRemoveFile(db_path);
 		{
 			duckdb_database database = nullptr;
 			REQUIRE(duckdb_open(db_path.c_str(), &database) == DuckDBSuccess);
@@ -55,7 +55,7 @@ TEST_CASE("On Disk DB File Name Case Preserved", "[simplestartup]") {
 			duckdb_close(&database);
 		}
 		bool found = false;
-		fs->ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
+		fs.ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
 			if (name == db_file) {
 				found = true;
 			}
@@ -93,9 +93,9 @@ TEST_CASE("On Disk DB File Name Case Preserved", "[simplestartup]") {
 			duckdb_disconnect(&conn);
 			duckdb_close(&database);
 			if (count == 0) {
-				fs->TryRemoveFile(db_path_lower);
+				fs.TryRemoveFile(db_path_lower);
 			}
 		}
-		fs->TryRemoveFile(db_path);
+		fs.TryRemoveFile(db_path);
 	}
 }

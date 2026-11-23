@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/parquet_filter_extracted_struct.test
+# description: Filters on a projected Parquet struct use the field positions within that struct
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE input AS
+SELECT i AS id, CASE WHEN i > 0 THEN {
+    'e': CASE WHEN i % 2 = 0 THEN [i] END,
+    'f': CASE WHEN i % 2 = 1 THEN i END
+} END AS d
+FROM range(5) t(i)
+
+statement ok
+COPY (SELECT id, {'a': 1, 'd': d} AS s FROM input) TO '{TEST_DIR}/extracted_struct_two.parquet'
+
+# The two fields are present on disjoint sets of rows with the same count.
+query II
+SELECT id, s.d FROM '{TEST_DIR}/extracted_struct_two.parquet'
+WHERE id > 0 AND s.d.e IS NOT NULL ORDER BY id
+----
+2	{'e': [2], 'f': NULL}
+4	{'e': [4], 'f': NULL}
+
+statement ok
+COPY (SELECT id, {'a': 1, 'b': 2, 'c': 3, 'd': d} AS s FROM input) TO '{TEST_DIR}/extracted_struct_four.parquet'
+
+# Moving d to the fourth outer position leaves its own fields in the same order.
+query I
+SELECT id FROM '{TEST_DIR}/extracted_struct_four.parquet'
+WHERE id > 0 AND s.d IS NOT NULL AND s.d.e IS NOT NULL ORDER BY id
+----
+2
+4

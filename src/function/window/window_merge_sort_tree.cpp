@@ -1,3 +1,5 @@
+#include "duckdb/function/window/window_collection.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -45,6 +47,14 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 		orders.emplace_back(order_type, order_by_type, std::move(unique_expr));
 		key_cols.emplace_back(key_cols.size());
 	}
+
+	vector<LogicalType> key_types;
+	for (auto key_col : key_cols) {
+		key_types.push_back(scan_types[key_col]);
+	}
+	auto key_type = WindowCollectionChunkScanner::PrefixStructType(key_types, key_types.size());
+	key_distinct_from = BoundComparisonExpression::CreateOnColumns(client, ExpressionType::COMPARE_DISTINCT_FROM,
+	                                                               key_type, 0, key_type, 1);
 
 	sort = make_uniq<Sort>(client, orders, scan_types, scan_cols);
 
@@ -112,7 +122,7 @@ void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context, I
 		break;
 	}
 	case WindowMergeSortStage::SORTED:
-		BuildLeaves();
+		BuildLeaves(context.client.GetContext());
 		break;
 	case WindowMergeSortStage::FINISH:
 		window_tree.Finished();
@@ -222,7 +232,7 @@ void WindowMergeSortTreeLocalState::Finalize(ExecutionContext &context, Interrup
 	while (window_tree.build_stage.load() != WindowMergeSortStage::FINISHED) {
 		//	A failed task never completes its stage, so the waiting threads
 		//	leave through the interrupt that the executor raises for the failure
-		context.client.InterruptCheck();
+		context.client.FastInterruptCheck();
 		if (window_tree.TryPrepareSortStage(*this)) {
 			ExecuteSortTask(context, interrupt);
 		} else {

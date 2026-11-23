@@ -34,8 +34,7 @@ public:
 	public:
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
-		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), hashes(LogicalType::HASH),
-		      addresses(LogicalType::POINTER) {
+		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.AggregateFunction();
 			bind_data = wexpr.BindInfo().get();
@@ -106,8 +105,6 @@ public:
 		unique_ptr<GroupedAggregateHashTable> distinct;
 		//! Filtered arguments for checking distinctness
 		DataChunk distinct_args;
-		//! Reusable hash vector
-		Vector hashes;
 		//! Rows that produced new distinct values
 		SelectionVector distinct_sel;
 		//! Pointers to groups in the hash table.
@@ -269,11 +266,8 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		auto &distinct_sel = aggr_state.distinct_sel;
 		if (filtered) {
 			// FindOrCreateGroups assumes non-empty input
-			auto &hashes = aggr_state.hashes;
-			distinct_args.Hash(hashes);
-
 			auto &addresses = aggr_state.addresses;
-			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, hashes, addresses, distinct_sel);
+			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, addresses, distinct_sel);
 		}
 
 		//	Translate the distinct selection from filtered row numbers
@@ -294,12 +288,13 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s, 1);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	// This doesn't work for STRUCTs because the SV
-	// is not copied to the children when you slice
+	// This doesn't work for STRUCTs and ARRAYs because
+	// slicing them does not keep a reference to the SV
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		const auto &col_vec = arg_cursor.data[col_idx];
-		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
+		const auto internal_type = col_vec.GetType().InternalType();
+		if (internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY) {
 			structs.emplace_back(col_idx);
 		} else {
 			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
@@ -311,10 +306,10 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	                                           aggr_state.arena_allocator);
 	for (idx_t i = 0; i < count; ++i) {
 		sel.set_index(0, i);
-		for (const auto struct_idx : structs) {
-			arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
-		}
 		if (filter_mask.RowIsValid(i) && distinct_mask.RowIsValid(i)) {
+			for (const auto struct_idx : structs) {
+				arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
+			}
 			aggregate.GetStateUpdateCallback()(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(),
 			                                   statev, 1);
 		}

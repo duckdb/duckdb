@@ -1,22 +1,30 @@
 #include "duckdb/execution/operator/filter/physical_top_key_filter.hpp"
 
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/sorting/topn_heap.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/operator/order/top_n_boundary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-PhysicalTopKeyFilter::PhysicalTopKeyFilter(PhysicalPlan &physical_plan, vector<LogicalType> types,
-                                           vector<BoundOrderByNode> orders_p, idx_t limit,
+PhysicalTopKeyFilter::PhysicalTopKeyFilter(PhysicalPlan &physical_plan, ClientContext &context,
+                                           vector<LogicalType> types, vector<BoundOrderByNode> orders_p, idx_t limit,
                                            shared_ptr<DynamicFilterData> dynamic_filter_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TOP_KEY_FILTER, std::move(types), estimated_cardinality),
       orders(std::move(orders_p)), limit(limit), dynamic_filter(std::move(dynamic_filter_p)) {
 	D_ASSERT(!orders.empty());
+	const auto key_count = orders.size();
+	for (idx_t key_idx = 0; key_idx < key_count; key_idx++) {
+		auto &type = orders[key_idx].expression->GetReturnType();
+		not_distinct_from.push_back(BoundComparisonExpression::CreateOnColumns(
+		    context, ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, key_idx, type, key_count + key_idx));
+	}
 }
 
 PhysicalTopKeyFilter::~PhysicalTopKeyFilter() {
@@ -28,7 +36,7 @@ PhysicalTopKeyFilter::~PhysicalTopKeyFilter() {
 //! The bound shared by the threads: the smallest of the largest keys of the full local sets
 class TopKeyFilterGlobalState : public GlobalOperatorState {
 public:
-	explicit TopKeyFilterGlobalState(const PhysicalTopKeyFilter &op) : boundary(op.orders, op.dynamic_filter.get()) {
+	explicit TopKeyFilterGlobalState(const PhysicalTopKeyFilter &op) : boundary(op.orders[0], op.dynamic_filter) {
 	}
 
 	TopNBoundaryValue boundary;
@@ -56,7 +64,8 @@ public:
 public:
 	TopKeyFilterState(ExecutionContext &context, const PhysicalTopKeyFilter &op)
 	    : op(op), executor(context.client),
-	      selector(BufferManager::GetBufferManager(context.client).GetBufferAllocator(), op.orders),
+	      selector(context.client, BufferManager::GetBufferManager(context.client).GetBufferAllocator(), op.orders,
+	               op.not_distinct_from),
 	      seen(SEEN_HASH_SLOTS, 0), hashes(LogicalType::HASH), pass_sel(STANDARD_VECTOR_SIZE),
 	      candidate_sel(STANDARD_VECTOR_SIZE), new_sel(STANDARD_VECTOR_SIZE) {
 		vector<LogicalType> key_types;
@@ -65,6 +74,7 @@ public:
 			executor.AddExpression(*order.expression);
 			modifiers.emplace_back(order.type, order.null_order);
 		}
+		hasher = make_uniq<ChunkHasher>(context.client, key_types);
 		auto &allocator = BufferManager::GetBufferManager(context.client).GetBufferAllocator();
 		key_chunk.Initialize(allocator, key_types);
 		local_max_values.Initialize(allocator, key_types);
@@ -85,6 +95,7 @@ public:
 	DataChunk local_max_values;
 	//! The hashes of keys that were offered to the set: a hit skips the sort key (a collision only skips an offer)
 	vector<hash_t> seen;
+	unique_ptr<ChunkHasher> hasher;
 	Vector hashes;
 	DataChunk candidates;
 	DataChunk sort_key_chunk;
@@ -131,7 +142,7 @@ public:
 			return;
 		}
 		// skip the keys that have been offered before
-		key_chunk.Hash(hashes);
+		hasher->Hash(key_chunk, hashes);
 		hashes.Flatten();
 		auto hash_data = FlatVector::GetData<hash_t>(hashes);
 		idx_t new_count = 0;

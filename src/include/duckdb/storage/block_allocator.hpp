@@ -86,6 +86,11 @@ public:
 	optional_idx GetAllocationShard(const_data_ptr_t pointer) const;
 	idx_t GetPoolShardCount() const;
 	idx_t GetLocalPoolShard() const;
+	idx_t GetFallbackShardCount() const;
+	//! Approximate cache locality by grouping adjacent CPUs in fours, wrapping at shard_count.
+	static idx_t GetLocalShard(idx_t shard_count);
+	static idx_t GetShardGroup(idx_t shard, idx_t shard_count);
+	static idx_t GetLocalShardGroup(idx_t shard_count);
 
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
@@ -109,8 +114,10 @@ private:
 	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t pool_size, idx_t shard_count);
 
 	//! The buffer allocator's huge-page backend keeps matching allocation and release ownership.
-	data_ptr_t AllocateHugeData(idx_t size) const;
-	void FreeHugeData(data_ptr_t pointer, idx_t size) const;
+	data_ptr_t AllocateHugeData(idx_t size, optional_idx &home) const;
+	void FreeHugeData(data_ptr_t pointer, idx_t size, optional_idx home) const;
+	data_ptr_t AllocateFallbackData(idx_t size) const;
+	void FreeFallbackData(data_ptr_t pointer, idx_t size, optional_idx home) const;
 
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
 	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };

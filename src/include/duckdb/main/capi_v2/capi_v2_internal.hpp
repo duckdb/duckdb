@@ -94,7 +94,7 @@ inline void SetStringOut(const char **out, idx_t *out_length, const Identifier &
 //! reads as all-empty entries.
 class string_view_array {
 public:
-	string_view_array(const char **ptrs, const idx_t *lengths, idx_t count)
+	string_view_array(const char *const *ptrs, const idx_t *lengths, idx_t count)
 	    : ptrs(ptrs), lengths(lengths), count(count) {
 	}
 
@@ -106,7 +106,7 @@ public:
 	std::string_view operator[](idx_t i) const;
 
 private:
-	const char **ptrs;
+	const char *const *ptrs;
 	const idx_t *lengths;
 	idx_t count;
 };
@@ -346,6 +346,8 @@ public:
 class CV2Instance {
 public:
 	CV2Instance(CV2Environment &env, DBConfig &startup_config);
+	//! A handle to a database shared through the environment's instance cache, see instance_open_shared.
+	CV2Instance(CV2Environment &env, shared_ptr<DuckDB> shared_database);
 
 	//! Attaches the database at `path` under `name` (derived from the path when empty), like ATTACH, optionally as
 	//! the default for new connections.
@@ -888,6 +890,17 @@ inline void InvokeTextSink(duckdb_v2_text_sink_fn sink, std::string_view text, v
 	CV2ErrorInfo info;
 	auto handle = Convert(&info);
 	sink(text.data(), text.size(), user_data, &handle);
+	if (info.HasError()) {
+		info.ThrowAsException();
+	}
+}
+
+//! Runs a callback taking an error slot, and throws what it reports.
+template <class FUNC>
+void InvokeWithErrorSlot(FUNC &&fn) {
+	CV2ErrorInfo info;
+	auto handle = Convert(&info);
+	fn(&handle);
 	if (info.HasError()) {
 		info.ThrowAsException();
 	}

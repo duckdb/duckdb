@@ -37,12 +37,15 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TOP_KEY_FILTER;
 
 public:
-	PhysicalTopKeyFilter(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
-	                     idx_t limit, shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
+	PhysicalTopKeyFilter(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	                     vector<BoundOrderByNode> orders, idx_t limit, shared_ptr<DynamicFilterData> dynamic_filter,
+	                     idx_t estimated_cardinality);
 	~PhysicalTopKeyFilter() override;
 
 	//! The keys and their order
 	vector<BoundOrderByNode> orders;
+	//! NOT DISTINCT FROM comparison of the boundary value for every key
+	vector<unique_ptr<Expression>> not_distinct_from;
 	//! The number of smallest distinct key tuples whose rows are guaranteed to pass. Not an upper bound of the number
 	//! of distinct key tuples in the output.
 	idx_t limit;

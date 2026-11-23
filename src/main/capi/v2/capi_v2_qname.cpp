@@ -42,7 +42,7 @@ DUCKDB_V2_ERROR duckdb_v2_qname_parse(const char *text, idx_t text_length, duckd
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_qname_create(const char **parts, const idx_t *parts_lengths, idx_t part_count,
+DUCKDB_V2_ERROR duckdb_v2_qname_create(const char *const *parts, const idx_t *parts_lengths, idx_t part_count,
                                        duckdb_v2_qname_handle *out_name, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out_name);
 	*out_name = nullptr;
