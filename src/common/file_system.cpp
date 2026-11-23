@@ -822,6 +822,11 @@ unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, uniq
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
+unique_ptr<FileHandle> FileSystem::WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+                                                  const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: WrapOpenedFile is not implemented!", GetName());
+}
+
 bool FileSystem::IsLocalFileSystem() const {
 	return false;
 }

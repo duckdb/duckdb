@@ -372,7 +372,8 @@ bool CachingFileSystemWrapper::IsManuallySet() {
 }
 
 bool CachingFileSystemWrapper::CanSeek() {
-	return underlying_file_system.CanSeek();
+	// cached files are read by offset
+	return true;
 }
 
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
@@ -390,6 +391,12 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
 	return underlying_file_system.OpenCompressedFile(context, std::move(handle), write);
+}
+
+unique_ptr<FileHandle> CachingFileSystemWrapper::WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+                                                                const FileOpenFlags &flags,
+                                                                optional_ptr<FileOpener> opener) {
+	return underlying_file_system.WrapOpenedFile(std::move(handle), file, flags, opener);
 }
 
 void CachingFileSystemWrapper::SetDisabledFileSystems(const vector<string> &names) {

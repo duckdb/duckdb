@@ -120,6 +120,9 @@ public:
 
 	DUCKDB_API unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                     bool write) override;
+	DUCKDB_API unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                                 const FileOpenFlags &flags,
+	                                                 optional_ptr<FileOpener> opener) override;
 
 	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names) override;
 	DUCKDB_API vector<string> GetDisabledFileSystems() override;
