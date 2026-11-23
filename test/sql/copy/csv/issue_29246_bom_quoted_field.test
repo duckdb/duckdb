@@ -1,0 +1,63 @@
+# name: test/sql/copy/csv/issue_29246_bom_quoted_field.test
+# description: UTF-8 BOM must be skipped before dialect detection, row skipping, and quoted values
+# group: [csv]
+
+# A quoted header field contains a comma immediately before its closing quote.
+# The BOM must not change the dialect or the number of columns.
+query TI
+SELECT Delimiter, array_length(Columns)
+FROM sniff_csv('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv');
+----
+,	2
+
+# Header detection and quoted value parsing with user-supplied column names.
+query TT
+SELECT * FROM read_csv('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv',
+  delim=',', quote='"', escape='"', header=true,
+  names=['a,', 'b'], all_varchar=true) ORDER BY 1;
+----
+1	2
+3	4
+
+# Explicitly skip the header using the row-skip scanner.
+query TT
+SELECT * FROM read_csv('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv',
+  delim=',', quote='"', escape='"', header=false, skip=1,
+  names=['a,', 'b'], all_varchar=true) ORDER BY 1;
+----
+1	2
+3	4
+
+# ignore_errors previously made every data row silently disappear.
+query I
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv',
+  delim=',', quote='"', escape='"', header=false, skip=1,
+  ignore_errors=true, names=['a,', 'b'], all_varchar=true);
+----
+2
+
+# Without header skipping, the quoted first column must be parsed as data.
+query TT
+SELECT * FROM read_csv('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv',
+  delim=',', quote='"', escape='"', header=false,
+  names=['a,', 'b'], all_varchar=true) ORDER BY 1;
+----
+1	2
+3	4
+a,	b
+
+# An ordinary file must continue to behave the same way.
+query TT
+SELECT * FROM read_csv('{DATA_DIR}/csv/issue_29246_plain_quoted_field.csv',
+  delim=',', quote='"', escape='"', header=true,
+  names=['a,', 'b'], all_varchar=true) ORDER BY 1;
+----
+1	2
+3	4
+
+# Automatic dialect detection should also handle a quoted header after a BOM.
+query II
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/issue_29246_bom_quoted_field.csv') ORDER BY 1;
+----
+1	2
+3	4
