@@ -41,23 +41,14 @@ public:
 	const transaction_t build_commit;
 
 public:
-	//! The last commit whose changes the built index holds
-	transaction_t GetAppliedCommit() const {
-		return applied_commit;
-	}
-
 	//! Adds rows that a commit appended or deleted, changed_rows of them in the range
 	void AddChanges(const IndexBuildRange &rows, idx_t changed_rows);
 	//! Takes the changes that the commits made since the last call
 	IndexBuildChanges TakeChanges();
-	//! Marks the changes up to and including this commit as applied
-	void SetAppliedCommit(transaction_t commit_id);
 	//! Sorts the ranges by start row and merges overlapping and adjacent ones
 	static void MergeRanges(vector<IndexBuildRange> &ranges);
 
 private:
-	//! The last commit whose changes the built index holds
-	transaction_t applied_commit;
 	//! The changes that the build has not taken yet, guarded by the commit lock
 	IndexBuildChanges changes;
 };

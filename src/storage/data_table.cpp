@@ -417,15 +417,6 @@ static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
 //! The most consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
-void DataTable::ApplyIndexBuildChanges(IndexBuild &build, BoundIndex &index, vector<IndexBuildRange> &ranges,
-                                       transaction_t commit_id) {
-	if (!ranges.empty()) {
-		row_groups->ApplyChangesToIndex(index, ranges, VisibilityBound::Through(build.GetAppliedCommit()),
-		                                VisibilityBound::Through(commit_id));
-	}
-	build.SetAppliedCommit(commit_id);
-}
-
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	// publish between commits: a commit reads the index list several times under the commit lock
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
@@ -444,6 +435,8 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		// the commit lock guards the changes of the build
 		auto changes = build->TakeChanges();
 		auto rows = changes.changed_rows;
+		// the last commit whose changes the built index holds
+		auto applied_commit = build->build_commit;
 		idx_t rounds = 0;
 		idx_t growing_rounds = 0;
 		// apply outside the commit lock until few enough changed rows are left
@@ -455,7 +448,9 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 				    GetTableName(), rows, rounds);
 			}
 			commit_lock.unlock();
-			ApplyIndexBuildChanges(*build, bound_index, changes.ranges, last_commit);
+			row_groups->ApplyChangesToIndex(bound_index, changes.ranges, VisibilityBound::Through(applied_commit),
+			                                VisibilityBound::Through(last_commit));
+			applied_commit = last_commit;
 			context.FastInterruptCheck();
 			commit_lock.lock();
 			last_commit = DuckTransactionManager::Get(db).GetLastCommit();
@@ -465,7 +460,8 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 			rows = rows_left;
 			rounds++;
 		}
-		ApplyIndexBuildChanges(*build, bound_index, changes.ranges, last_commit);
+		row_groups->ApplyChangesToIndex(bound_index, changes.ranges, VisibilityBound::Through(applied_commit),
+		                                VisibilityBound::Through(last_commit));
 		info->indexes.RemoveIndexBuild(*build);
 	}
 	if (!IsMainTable()) {

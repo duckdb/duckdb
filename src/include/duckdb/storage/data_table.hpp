@@ -30,7 +30,6 @@ class DuckTransaction;
 class Expression;
 class Index;
 class IndexBuild;
-struct IndexBuildRange;
 class BoundIndex;
 class OptimisticDataWriter;
 class RowGroup;
@@ -335,9 +334,6 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
-	//! Applies the changed rows of the commits up to commit_id to the index
-	void ApplyIndexBuildChanges(IndexBuild &build, BoundIndex &index, vector<IndexBuildRange> &ranges,
-	                            transaction_t commit_id);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
