@@ -298,8 +298,7 @@ public:
 		ProbeState();
 
 		Vector hashes;
-		//! For rows sent to the key compare: entries probed past the initial one, zeroed for every chunk
-		Vector probe_steps_v;
+		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		//! Rows that probe another entry, and rows that found their entry in the current round
 		SelectionVector rows_to_probe_sel;

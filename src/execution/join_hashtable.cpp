@@ -92,8 +92,8 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), hashes(LogicalType::HASH), probe_steps_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
-      rows_to_probe_sel(STANDARD_VECTOR_SIZE), rows_found_sel(STANDARD_VECTOR_SIZE),
+    : SharedState(), hashes(LogicalType::HASH), ht_offsets_and_salts_v(LogicalType::UBIGINT),
+      hashes_dense_v(LogicalType::HASH), rows_to_probe_sel(STANDARD_VECTOR_SIZE), rows_found_sel(STANDARD_VECTOR_SIZE),
       dense_entries(make_unsafe_uniq_array_uninitialized<ht_entry_t>(STANDARD_VECTOR_SIZE)),
       is_match_v(LogicalType::BOOLEAN), needs_next_v(LogicalType::BOOLEAN) {
 }
@@ -306,6 +306,11 @@ static inline const ht_entry_t &GetHTEntry(const ht_entry_t *entries, const hash
 	return entries[(hash_dense + steps) & bitmask];
 }
 
+//! The ht offset of that entry, with the salt of the hash
+static inline idx_t GetHTOffsetAndSalt(const hash_t hash_dense, const idx_t steps, const idx_t bitmask) {
+	return ((hash_dense + steps) & bitmask) | (hash_dense & ht_entry_t::SALT_MASK);
+}
+
 //! Per-row linear probing with branches
 template <bool USE_SALTS, bool HAS_SEL>
 static idx_t ProbeForPointersBranching(JoinHashTable::ProbeState &state, JoinHashTable &ht,
@@ -314,7 +319,7 @@ static idx_t ProbeForPointersBranching(JoinHashTable::ProbeState &state, JoinHas
 	const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 	const auto bitmask = ht.bitmask;
 	const auto pointers_result = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
-	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
+	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
 
 	idx_t compare_count = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -329,7 +334,7 @@ static idx_t ProbeForPointersBranching(JoinHashTable::ProbeState &state, JoinHas
 				const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 				state.keys_to_compare_sel.set_index(compare_count++, row_index);
 				pointers_result[row_index] = entry.GetPointerOrNull();
-				probe_steps[row_index] += steps;
+				ht_offsets_and_salts[row_index] = GetHTOffsetAndSalt(hash, steps, bitmask);
 				break;
 			}
 			steps++;
@@ -360,9 +365,9 @@ static idx_t ProbeForPointersBranchless(JoinHashTable::ProbeState &state, JoinHa
 		dense_entries[i] = *get_initial_entry(i);
 	}
 
-	// pointers and probe steps go to their row index, so rows outside the selection keep theirs
+	// pointers and ht offsets go to their row index, so rows outside the selection keep theirs
 	const auto pointers_result = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
-	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
+	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
 	const auto is_match = FlatVector::GetDataMutable<bool>(state.is_match_v);
 	const auto needs_next = FlatVector::GetDataMutable<bool>(state.needs_next_v);
 	for (idx_t i = 0; i < count; i++) {
@@ -396,13 +401,14 @@ static idx_t ProbeForPointersBranchless(JoinHashTable::ProbeState &state, JoinHa
 			state.rows_found_sel.AppendIf(found_count, dense_index, row_is_match);
 			state.rows_to_probe_sel.AppendIf(next_probe_count, dense_index, row_needs_next);
 		}
-		// only the rows that found their entry in this round need its pointer and probe steps
+		// only the rows that found their entry in this round need its pointer and ht offset
 		for (idx_t i = 0; i < found_count; i++) {
 			const auto dense_index = state.rows_found_sel.get_index(i);
 			const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, dense_index);
-			const auto entry = GetHTEntry(entries.get(), hashes_dense[dense_index], probe_round_idx, bitmask);
+			const auto hash = hashes_dense[dense_index];
+			const auto entry = GetHTEntry(entries.get(), hash, probe_round_idx, bitmask);
 			pointers_result[row_index] = entry.GetPointerOrNull();
-			probe_steps[row_index] += probe_round_idx;
+			ht_offsets_and_salts[row_index] = GetHTOffsetAndSalt(hash, probe_round_idx, bitmask);
 			is_match[dense_index] = true;
 		}
 		need_additional_probe_n = next_probe_count;
@@ -483,7 +489,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    Vector &hashes_v, optional_ptr<const SelectionVector> row_sel, idx_t &count,
                                    JoinHashTable &ht, unsafe_optional_ptr<ht_entry_t> entries,
                                    Vector &pointers_result_v, SelectionVector &match_sel, bool has_row_sel) {
-	// Densify the original hashes into salt and initial ht offset. Retries rebuild them from the probe steps.
+	// Densify the original hashes into salt and initial ht offset. Retries below already contain offsets and salt.
 	const auto input_count = count;
 	const auto bucket_shift = ht.GetBucketShift();
 	const auto bitmask = ht.bitmask;
@@ -499,9 +505,9 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	idx_t keys_no_match_count;
 	idx_t elements_to_probe_count = count;
 
-	// every row starts at its initial entry; the steps carry over to the probes after a key mismatch
-	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
-	memset(probe_steps, 0, sizeof(idx_t) * keys.size());
+	// the branch-free probe stores no ht offset for a row compared at its initial entry: that row keeps this value
+	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
+	std::fill_n(ht_offsets_and_salts, keys.size(), DConstants::INVALID_INDEX);
 	bool is_retry = false;
 	do {
 		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, pointers_result_v, row_sel,
@@ -528,16 +534,26 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		if (keys_no_match_count > 0) {
-			// For all the non-matches, continue probing one entry further, with the salt of the original hash
+			if (!is_retry) {
+				// rows compared at their initial entry get its offset from the original hash
+				auto hashes_unified = hashes_v.Values<hash_t>();
+				for (idx_t i = 0; i < keys_no_match_count; i++) {
+					const auto row_index = state.keys_no_match_sel.get_index(i);
+					if (ht_offsets_and_salts[row_index] == DConstants::INVALID_INDEX) {
+						const auto hash = hashes_unified[row_index].GetValue();
+						const auto initial_offset = (hash >> bucket_shift) & bitmask;
+						ht_offsets_and_salts[row_index] = (hash & ht_entry_t::SALT_MASK) | initial_offset;
+					}
+				}
+			}
+			// For all the non-matches, increment the offset to continue probing but keep the salt intact
 			const auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
-			auto hashes_unified = hashes_v.Values<hash_t>();
 			for (idx_t i = 0; i < keys_no_match_count; i++) {
 				const auto row_index = state.keys_no_match_sel.get_index(i);
-				const auto hash = hashes_unified[row_index].GetValue();
-				const auto initial_offset = (hash >> bucket_shift) & bitmask;
-				probe_steps[row_index] += 1;
-				const auto ht_offset = (initial_offset + probe_steps[row_index]) & bitmask;
-				hashes_dense[i] = (hash & ht_entry_t::SALT_MASK) | ht_offset; // populate dense again
+				auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
+				D_ASSERT(ht_offset_and_salt != DConstants::INVALID_INDEX);
+				IncrementAndWrap(ht_offset_and_salt, bitmask | ht_entry_t::SALT_MASK);
+				hashes_dense[i] = ht_offset_and_salt; // populate dense again
 			}
 		}
 
