@@ -354,6 +354,7 @@ void DuckTransaction::Cleanup(VisibilityBound lowest_visibility_bound) {
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::GetCheckpointLockForStatement() {
+	lock_guard<mutex> guard(lock_keys_lock);
 	if (checkpoint_lock) {
 		return nullptr;
 	}
@@ -361,6 +362,7 @@ unique_ptr<StorageLockKey> DuckTransaction::GetCheckpointLockForStatement() {
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {
+	lock_guard<mutex> guard(lock_keys_lock);
 	if (!checkpoint_lock) {
 		bool require_write_lock = false;
 		require_write_lock = require_write_lock || type.UpdateData();
@@ -387,6 +389,7 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
+	lock_guard<mutex> guard(lock_keys_lock);
 	if (!checkpoint_lock) {
 		return GetTransactionManager().TryGetCheckpointLock();
 	} else {

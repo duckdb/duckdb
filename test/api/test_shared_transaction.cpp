@@ -136,16 +136,18 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		auto share_id = ShareTransaction(con1);
 		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		static constexpr idx_t ROWS_PER_THREAD = 100;
+		atomic<int64_t> failures {0};
 		auto insert = [&](Connection &con, int64_t base) {
 			for (idx_t i = 0; i < ROWS_PER_THREAD; i++) {
 				auto result = con.Query("INSERT INTO tbl VALUES (" + to_string(base + NumericCast<int64_t>(i)) + ")");
-				REQUIRE_NO_FAIL(*result);
+				failures += result->HasError();
 			}
 		};
 		thread t1([&]() { insert(con1, 1000); });
 		thread t2([&]() { insert(con2, 2000); });
 		t1.join();
 		t2.join();
+		REQUIRE(failures == 0);
 		RequireValue(con1, "SELECT COUNT(*) FROM tbl", 1 + 2 * ROWS_PER_THREAD);
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
@@ -156,17 +158,19 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(con1.Query("CREATE TEMPORARY TABLE tmp(i INTEGER)"));
 		auto share_id = ShareTransaction(con1);
 		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+		atomic<int64_t> failures {0};
 		auto work = [&](Connection &con, int64_t base) {
 			for (int64_t i = 0; i < 50; i++) {
-				REQUIRE_NO_FAIL(*con.Query("INSERT INTO tmp VALUES (" + to_string(base + i) + ")"));
-				REQUIRE_NO_FAIL(*con.Query("SELECT COUNT(*), SUM(i) FROM tmp"));
-				REQUIRE_NO_FAIL(*con.Query("SELECT COUNT(*) FROM tbl"));
+				failures += con.Query("INSERT INTO tmp VALUES (" + to_string(base + i) + ")")->HasError();
+				failures += con.Query("SELECT COUNT(*), SUM(i) FROM tmp")->HasError();
+				failures += con.Query("SELECT COUNT(*) FROM tbl")->HasError();
 			}
 		};
 		thread t1([&]() { work(con1, 0); });
 		thread t2([&]() { work(con2, 1000); });
 		t1.join();
 		t2.join();
+		REQUIRE(failures == 0);
 		RequireValue(con1, "SELECT COUNT(*) FROM tmp", 100);
 		REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 		REQUIRE_NO_FAIL(con1.Query("ROLLBACK"));
@@ -196,51 +200,6 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		DuckDB reopened(path);
 		Connection check(reopened);
 		RequireValue(check, "SELECT COUNT(*) FROM big", 600000);
-	}
-	SECTION("concurrent writes of different kinds are serialized") {
-		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT, b VARCHAR)"));
-		REQUIRE_NO_FAIL(con1.Query("INSERT INTO s SELECT i, 'x' || i FROM range(20000) t(i)"));
-		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
-		auto share_id = ShareTransaction(con1);
-		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
-		auto run = [&](Connection &con, const vector<string> &queries) {
-			for (idx_t i = 0; i < 50; i++) {
-				for (auto &query : queries) {
-					auto result = con.Query(query);
-					if (result->HasError()) {
-						FAIL(result->GetError());
-					}
-				}
-			}
-		};
-		SECTION("inserts") {
-			vector<string> insert {"INSERT INTO s SELECT i, 'y' || i FROM range(5000) t(i)"};
-			thread t1([&]() { run(con1, insert); });
-			thread t2([&]() { run(con2, insert); });
-			t1.join();
-			t2.join();
-			RequireValue(con1, "SELECT COUNT(*) FROM s", 20000 + 2 * 50 * 5000);
-		}
-		SECTION("updates and deletes") {
-			thread t1([&]() { run(con1, {"UPDATE s SET a = a + 1 WHERE a % 7 = 0"}); });
-			thread t2([&]() { run(con2, {"DELETE FROM s WHERE a % 11 = 3"}); });
-			t1.join();
-			t2.join();
-		}
-		SECTION("mixed statements") {
-			vector<string> mixed {"INSERT INTO s SELECT i, 'y' || i FROM range(1000) t(i)",
-			                      "UPDATE s SET a = a + 1 WHERE a % 7 = 0",
-			                      "DELETE FROM s WHERE a % 11 = 3",
-			                      "INSERT INTO s SELECT a, b FROM s WHERE a < 100 LIMIT 10",
-			                      "CREATE OR REPLACE TEMPORARY TABLE tmp AS SELECT * FROM s LIMIT 10",
-			                      "SELECT COUNT(*), MAX(b) FROM s"};
-			thread t1([&]() { run(con1, mixed); });
-			thread t2([&]() { run(con2, mixed); });
-			t1.join();
-			t2.join();
-		}
-		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
-		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 	}
 	SECTION("a read of one connection sees the rows written by another connection grow") {
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT)"));

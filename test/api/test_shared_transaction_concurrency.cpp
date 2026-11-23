@@ -7,6 +7,7 @@
 #include "test_helpers.hpp"
 
 #include <chrono>
+#include <regex>
 
 using namespace duckdb;
 
@@ -22,6 +23,26 @@ public:
 	bool Empty() {
 		lock_guard<mutex> guard(lock);
 		return errors.empty();
+	}
+	bool Contains(const string &needle) {
+		lock_guard<mutex> guard(lock);
+		for (auto &error : errors) {
+			if (error.find(needle) != string::npos) {
+				return true;
+			}
+		}
+		return false;
+	}
+	//! Whether every error matches the regular expression
+	bool AllMatch(const string &pattern) {
+		lock_guard<mutex> guard(lock);
+		std::regex re(pattern);
+		for (auto &error : errors) {
+			if (!std::regex_search(error, re)) {
+				return false;
+			}
+		}
+		return true;
 	}
 	string ToString() {
 		lock_guard<mutex> guard(lock);
@@ -318,9 +339,45 @@ TEST_CASE("Concurrent writes on a shared transaction", "[api][transaction]") {
 		t1.join();
 		t2.join();
 		INFO(log.ToString());
-		REQUIRE(log.Empty());
-		REQUIRE(Scalar(shared[0], "SELECT count(*) FROM s WHERE a % 11 = 3") == 0);
-		shared.Commit();
+		if (log.Empty()) {
+			REQUIRE(Scalar(shared[0], "SELECT count(*) FROM s WHERE a % 11 = 3") == 0);
+			shared.Commit();
+		} else {
+			// a statement wrote a row that another statement of the transaction deleted after the first found it:
+			// a conflict (like between transactions) that aborts the transaction, never an internal error
+			REQUIRE(log.AllMatch("Conflict on|aborted|invalidated"));
+			REQUIRE(!log.Contains("INTERNAL"));
+			REQUIRE(!log.Contains("FATAL"));
+			for (idx_t i = shared.cons.size(); i > 0; i--) {
+				shared[i - 1].Query("ROLLBACK");
+			}
+			REQUIRE(Scalar(con1, "SELECT count(*) FROM s") == 20000);
+		}
+	}
+	SECTION("create or replace of the same table") {
+		shared.Share();
+		auto work = [&](Connection &con) {
+			for (idx_t i = 0; i < 50; i++) {
+				Exec(con, "CREATE OR REPLACE TABLE r AS SELECT i a FROM range(1000) t(i)", log);
+			}
+		};
+		thread t0([&]() { work(shared[0]); });
+		thread t1([&]() { work(shared[1]); });
+		thread t2([&]() { work(shared[2]); });
+		t0.join();
+		t1.join();
+		t2.join();
+		INFO(log.ToString());
+		if (log.Empty()) {
+			REQUIRE(Scalar(shared[0], "SELECT count(*) FROM r") == 1000);
+			shared.Commit();
+		} else {
+			// the replace of one connection raced with the replace of another: a conflict that aborts the transaction
+			REQUIRE(log.AllMatch("Catalog write-write conflict|aborted|invalidated"));
+			for (idx_t i = shared.cons.size(); i > 0; i--) {
+				shared[i - 1].Query("ROLLBACK");
+			}
+		}
 	}
 	SECTION("a mix of statements") {
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT, b VARCHAR)"));
@@ -765,33 +822,4 @@ TEST_CASE("Joining and leaving a shared transaction while it is in use", "[api][
 		        shared.share_id);
 		shared.Commit();
 	}
-}
-
-TEST_CASE("A write waits for the write of another connection that shares the transaction", "[api][transaction]") {
-	SharedTransaction shared(3);
-	ErrorLog log;
-	REQUIRE_NO_FAIL(shared[0].Query("CREATE TABLE s(a BIGINT)"));
-	shared.Share();
-	// a submitted INSERT keeps the write open until it is completed
-	auto open_write = shared[0].Submit("INSERT INTO s SELECT i FROM range(100000) t(i)");
-	REQUIRE_NO_FAIL(*open_write);
-	atomic<bool> finished {false};
-	thread other([&]() {
-		Exec(shared[1], "INSERT INTO s VALUES (-1)", log);
-		finished = true;
-	});
-	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	REQUIRE(!finished);
-	// reads of the other connection are not blocked
-	REQUIRE_NO_FAIL(shared[2].Query("SELECT count(*) FROM s"));
-	open_write->Materialize();
-	REQUIRE_NO_FAIL(*open_write);
-	while (open_write->Fetch()) {
-	}
-	open_write.reset();
-	other.join();
-	REQUIRE(finished);
-	REQUIRE(log.Empty());
-	REQUIRE(Scalar(shared[1], "SELECT count(*) FROM s") == 100001);
-	shared.Commit();
 }

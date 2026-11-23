@@ -199,7 +199,6 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
 	}
 	// discard the transaction that was started for this statement and continue in the shared one
-	EndWrite();
 	auto previous = TakeCurrentTransaction();
 	SetCurrentTransaction(source);
 	auto_commit = false;
@@ -218,23 +217,6 @@ void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
 	SetCurrentTransaction(nullptr);
 	active_query_id = MAXIMUM_QUERY_ID;
-}
-
-bool TransactionContext::BeginWrite() {
-	if (write_transaction || !current_transaction) {
-		return false;
-	}
-	current_transaction->BeginWrite();
-	write_transaction = current_transaction;
-	return true;
-}
-
-void TransactionContext::EndWrite() {
-	if (!write_transaction) {
-		return;
-	}
-	auto transaction = std::move(write_transaction);
-	transaction->EndWrite();
 }
 
 idx_t TransactionContext::GetActiveQuery() {

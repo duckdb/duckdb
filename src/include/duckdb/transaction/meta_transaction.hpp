@@ -17,7 +17,6 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/condition_variable.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -68,10 +67,6 @@ public:
 	string ShareTransaction();
 	//! The identifier under which the transaction was shared (empty if not shared)
 	string GetShareId();
-	//! Waits until no other participant executes a write, then starts executing one
-	void BeginWrite();
-	//! The participant finished executing its write
-	void EndWrite();
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
 	bool Join();
 	struct LeaveResult {
@@ -107,6 +102,7 @@ public:
 	bool IsReadOnly() const;
 	void ModifyDatabase(ClientContext &context, AttachedDatabase &db, DatabaseModificationType modification);
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
+		lock_guard<mutex> guard(modification_lock);
 		return modified_database;
 	}
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
@@ -126,6 +122,9 @@ private:
 	reference_map_t<AttachedDatabase, TransactionReference> transactions;
 	//! The set of referenced databases in invocation order.
 	vector<reference<AttachedDatabase>> all_transactions;
+	//! Guards modified_database and the read/write state of the transactions (connections that share this
+	//! transaction can modify concurrently)
+	mutex modification_lock;
 	//! The database we are modifying. We can only modify one database per meta transaction.
 	optional_ptr<AttachedDatabase> modified_database;
 	//! Whether the meta transaction is marked as read only.
@@ -142,10 +141,6 @@ private:
 	atomic<bool> finished;
 	//! Guards the participant state below
 	mutex shared_lock;
-	//! Participants execute their writes one at a time
-	mutex write_lock;
-	condition_variable write_cv;
-	bool write_active = false;
 	//! The number of connections participating in the transaction, starting with the one that created it
 	idx_t participants = 1;
 	//! Whether a participant voted to roll back
