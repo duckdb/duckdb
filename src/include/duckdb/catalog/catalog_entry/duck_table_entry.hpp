@@ -68,6 +68,8 @@ public:
 	//! An index of a not yet loaded extension is unbound, and an index that this transaction is still building is
 	//! pending (see IndexEntry::GetBindState).
 	vector<shared_ptr<IndexEntry>> GetIndexes(CatalogTransaction transaction) const;
+	//! Returns the indexes of this table that are committed below the bound, e.g. of a checkpoint.
+	vector<shared_ptr<IndexEntry>> GetIndexes(VisibilityBound bound) const;
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 

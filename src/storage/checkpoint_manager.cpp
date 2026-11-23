@@ -226,7 +226,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 #ifdef DEBUG
 //! The tables write the data of the index catalog entries that they find through the dependency manager, and the
 //! reader looks that data up by name: verify that the tables find every index catalog entry of the checkpoint.
-static void VerifyTableIndexes(const catalog_entry_vector_t &catalog_entries, CatalogTransaction transaction) {
+static void VerifyTableIndexes(const catalog_entry_vector_t &catalog_entries, VisibilityBound bound) {
 	idx_t index_entry_count = 0;
 	idx_t table_index_count = 0;
 	for (auto &entry : catalog_entries) {
@@ -234,7 +234,7 @@ static void VerifyTableIndexes(const catalog_entry_vector_t &catalog_entries, Ca
 			index_entry_count++;
 		} else if (entry.get().type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry.get().Cast<DuckTableEntry>();
-			table_index_count += table.GetIndexes(transaction).size() - table.GetConstraintIndexes().size();
+			table_index_count += table.GetIndexes(bound).size() - table.GetConstraintIndexes().size();
 		}
 	}
 	D_ASSERT(index_entry_count == table_index_count);
@@ -296,8 +296,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	catalog_entries = GetCatalogEntries(schemas, options.visibility_bound);
 	dependency_manager.ReorderEntries(catalog_entries, options.visibility_bound);
 #ifdef DEBUG
-	VerifyTableIndexes(catalog_entries,
-	                   CatalogTransaction(db.GetDatabase(), MAX_TRANSACTION_ID, options.visibility_bound));
+	VerifyTableIndexes(catalog_entries, options.visibility_bound);
 #endif
 
 	// write the actual data into the database

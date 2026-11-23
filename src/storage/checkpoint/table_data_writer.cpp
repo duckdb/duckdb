@@ -45,8 +45,7 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 
 vector<shared_ptr<IndexEntry>> TableDataWriter::GetIndexes() {
 	// The indexes of the constraints come first, in constraint order: the reader assigns them by position.
-	CatalogTransaction transaction(GetDatabase(), MAX_TRANSACTION_ID, GetCheckpointOptions().visibility_bound);
-	return table.GetIndexes(transaction);
+	return table.GetIndexes(GetCheckpointOptions().visibility_bound);
 }
 
 void TableDataWriter::AddPendingPublication(unique_ptr<PendingPublication> publication) {

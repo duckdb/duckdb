@@ -1432,6 +1432,11 @@ vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(CatalogTransaction tra
 	return result;
 }
 
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(VisibilityBound bound) const {
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, bound);
+	return GetIndexes(transaction);
+}
+
 void DuckTableEntry::OnDrop() {
 	storage->SetAsDropped();
 }
