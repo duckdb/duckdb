@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/main/os_util.hpp"
 

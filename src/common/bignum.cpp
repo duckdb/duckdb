@@ -905,10 +905,7 @@ void BignumArithmeticState::AccountWork(idx_t work) {
 	if (work_since_interrupt_check >= INTERRUPT_CHECK_INTERVAL) {
 		work_since_interrupt_check = 0;
 		// the calls are already a millisecond of work apart, so the deadline is read on every one of them
-		auto client_context = context->TryGetClientContext();
-		if (client_context) {
-			client_context->BlockingInterruptCheck();
-		}
+		context->InterruptCheck();
 	}
 }
 

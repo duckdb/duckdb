@@ -1,5 +1,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/hugeint.hpp"
@@ -125,27 +126,10 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 }
 
 string Hugeint::ToString(hugeint_t input) {
-	uint64_t remainder;
-	string result;
-	if (input == NumericLimits<hugeint_t>::Minimum()) {
-		return string(Hugeint::HUGEINT_MINIMUM_STRING);
-	}
-	bool negative = input.upper < 0;
-	if (negative) {
-		NegateInPlace(input);
-	}
-	while (true) {
-		if (!input.lower && !input.upper) {
-			break;
-		}
-		input = Hugeint::DivModPositive(input, 10, remainder);
-		result = string(1, UnsafeNumericCast<char>('0' + remainder)) + result; // NOLINT
-	}
-	if (result.empty()) {
-		// value is zero
-		return "0";
-	}
-	return negative ? "-" + result : result;
+	char buffer[NumericLimits<hugeint_t>::Digits() + 1];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatSigned(input, end);
+	return string(start, end);
 }
 
 //===--------------------------------------------------------------------===//
