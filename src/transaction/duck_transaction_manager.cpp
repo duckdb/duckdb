@@ -121,7 +121,7 @@ void DuckTransactionManager::ResetActiveCheckpoint() {
 	active_checkpoint = 0;
 }
 
-void DuckTransactionManager::SetStartingCheckpointContext(optional_ptr<ClientContext> context) {
+void DuckTransactionManager::SetStartingCheckpointContext(const void *context) {
 	lock_guard<mutex> lock(transaction_lock);
 	starting_checkpoint_context = context;
 }
@@ -302,7 +302,7 @@ bool DuckTransactionManager::HasUnsyncedCommits() {
 }
 
 DuckTransactionManager::DurableSnapshot
-DuckTransactionManager::GetDurableSnapshot(optional_ptr<ClientContext> context) {
+DuckTransactionManager::GetDurableSnapshot(const void *context) {
 	DurableSnapshot durable;
 	optional_ptr<DuckTransaction> first_unsynced;
 	for (auto &active_transaction : active_transactions) {
