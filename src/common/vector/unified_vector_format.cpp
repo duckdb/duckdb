@@ -1,7 +1,5 @@
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -10,23 +8,6 @@ void UnifiedVectorFormat::ThrowVectorTypeMismatch(PhysicalType expected) const {
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
-}
-
-void UnifiedVectorFormat::Borrow(const Vector &input, const Vector &result) {
-	const auto is_dictionary = input.GetVectorType() == VectorType::DICTIONARY_VECTOR;
-	const auto &source = is_dictionary ? DictionaryVector::Child(input) : input;
-	if (source.GetVectorType() != VectorType::FLAT_VECTOR ||
-	    input.GetBufferRef().get() == result.GetBufferRef().get() ||
-	    source.GetBufferRef().get() == result.GetBufferRef().get()) {
-		input.ToUnifiedFormat(*this);
-		return;
-	}
-	physical_type = input.GetType().InternalType();
-	data = FlatVector::GetData(source);
-	const auto &source_validity = FlatVector::Validity(source);
-	validity.Initialize(source_validity.GetData(), source_validity.Capacity());
-	owned_sel = SelectionVector();
-	sel = is_dictionary ? &DictionaryVector::SelVector(input) : FlatVector::IncrementalSelectionVector();
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept

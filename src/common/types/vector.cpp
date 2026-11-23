@@ -466,6 +466,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 
 void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
+	format.owned_sel = SelectionVector();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
@@ -473,6 +474,27 @@ void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		Flatten();
 	}
 	Buffer().ToUnifiedFormat(format);
+}
+
+void Vector::ToUnifiedFormatRetained(UnifiedVectorFormat &format) const {
+	ToUnifiedFormat(format);
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		format.owned_sel.Initialize(DictionaryVector::SelVector(*this));
+		format.sel = &format.owned_sel;
+		format.validity = FlatVector::Validity(DictionaryVector::Child(*this));
+	} else {
+		format.validity = Buffer().GetValidityMask();
+	}
+}
+
+void Vector::ToUnifiedFormat(UnifiedVectorFormat &format, const Vector &result) const {
+	if (GetBufferRef().get() == result.GetBufferRef().get() ||
+	    (GetVectorType() == VectorType::DICTIONARY_VECTOR &&
+	     DictionaryVector::Child(*this).GetBufferRef().get() == result.GetBufferRef().get())) {
+		ToUnifiedFormatRetained(format);
+	} else {
+		ToUnifiedFormat(format);
+	}
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t, RecursiveUnifiedVectorFormat &data) {

@@ -19,8 +19,6 @@
 
 namespace duckdb {
 
-class Vector;
-
 struct UnifiedVectorFormat {
 	DUCKDB_API UnifiedVectorFormat();
 	// disable copy constructors
@@ -29,11 +27,6 @@ struct UnifiedVectorFormat {
 	//! enable move constructors
 	DUCKDB_API UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept;
 	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
-
-	//! Borrow flat data, selection and validity for synchronous reads. The input must keep them alive and stable;
-	//! borrowed metadata must not escape into the result. Uses ToUnifiedFormat when input buffers alias the result
-	//! or require materialization. This does not make otherwise unsupported in-place operations safe.
-	DUCKDB_API void Borrow(const Vector &input, const Vector &result);
 
 	const SelectionVector *sel;
 	const_data_ptr_t data;
