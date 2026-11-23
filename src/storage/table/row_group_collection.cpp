@@ -58,9 +58,15 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 	bool any_index = false;
 	for (auto entry : table_info.GetIndexes().IndexEntries()) {
 		any_index = true;
-		const auto art = entry->TryGetReadHandle<ART>();
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			if (remap_indexes) {
+				remap_indexes->clear();
+			}
+			return false;
+		}
+		const auto art = entry->GetReadHandle<ART>();
 		// Remap regenerates keys from column values, which cannot reproduce legacy-encoded geometry keys.
-		if (!art || (*art)->HasLegacyGeometryKeys()) {
+		if (art->HasLegacyGeometryKeys()) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}

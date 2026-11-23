@@ -1113,8 +1113,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	auto &info = storage.GetDataTableInfo();
-	auto index_entries = info->GetIndexes().SnapshotIndexEntries();
-	if (index_entries.empty()) {
+	auto &indexes = info->GetIndexes();
+	if (indexes.Empty()) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -1142,10 +1142,16 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto &entry : index_entries) {
-		auto index = entry->TryGetReadHandle<ART>();
-		if (index && TryScanIndex(*index, column_list, input, filter_set, row_ids)) {
-			index_scan = true;
+	for (auto entry : indexes.IndexEntries()) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			continue;
+		}
+		{
+			auto index = entry->GetReadHandle<ART>();
+			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids);
+		}
+		if (index_scan) {
+			// found an index - break
 			break;
 		}
 	}

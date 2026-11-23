@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -40,10 +39,8 @@ class TableIndexList {
 public:
 	~TableIndexList();
 
-	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
+	//! Iterates over shared ownership of stable index entries while holding the entry-list lock in shared mode.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
-	//! Copies the index entries; entries may be retired once the lock is released.
-	vector<shared_ptr<IndexEntry>> SnapshotIndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Initializes the transaction-local delete and append indexes.
@@ -77,12 +74,12 @@ public:
 	}
 	//! Returns the number of index entries.
 	idx_t Count() const {
-		annotated_lock_guard lock(index_entries_lock);
+		annotated_shared_lock lock(index_entries_lock);
 		return index_entries.size();
 	}
 	//! Returns true, if there are unbound indexes.
 	bool HasUnbound() const {
-		annotated_lock_guard lock(index_entries_lock);
+		annotated_shared_lock lock(index_entries_lock);
 		return unbound_count != 0;
 	}
 	//! Returns true if an unbound index has buffered WAL operations.
@@ -116,7 +113,7 @@ public:
 		std::lock(lock, other_lock);
 		D_ASSERT(index_entries.empty());
 		index_entries = std::move(other.index_entries);
-		unbound_count = other.unbound_count.load();
+		unbound_count = other.unbound_count;
 		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
@@ -150,12 +147,12 @@ private:
 	template <class>
 	friend class TableIndexIterationHelper;
 
-	//! A lock to prevent any concurrent changes to the index entries.
-	mutable annotated_mutex index_entries_lock;
+	//! A shared lock to prevent concurrent changes to the index entries.
+	mutable annotated_shared_mutex index_entries_lock;
 	//! The index entries of the table.
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
-	//! Contains the number of unbound indexes. Only written while holding index_entries_lock.
-	atomic<idx_t> unbound_count {0};
+	//! Contains the number of unbound indexes.
+	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
 };
 
 template <class T>
@@ -164,7 +161,7 @@ public:
 	explicit TableIndexIterationHelper(const TableIndexList &index_list);
 
 private:
-	annotated_unique_lock<annotated_mutex> lock;
+	annotated_shared_lock<annotated_shared_mutex> lock;
 	const vector<shared_ptr<IndexEntry>> &index_entries;
 
 private:

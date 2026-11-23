@@ -71,11 +71,6 @@ TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries()
 	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
 }
 
-vector<shared_ptr<IndexEntry>> TableIndexList::SnapshotIndexEntries() const {
-	annotated_lock_guard lock(index_entries_lock);
-	return index_entries;
-}
-
 template <>
 shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const {
 	return index_entries->at(index.GetIndex());
@@ -364,9 +359,12 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
                           bool skip_mismatched_keys) {
-	// Early-out, if we have no unbound indexes.
-	if (unbound_count == 0) {
-		return;
+	{
+		// Early-out, if we have no unbound indexes.
+		annotated_shared_lock lock(index_entries_lock);
+		if (unbound_count == 0) {
+			return;
+		}
 	}
 
 	// Get the table from the catalog, so we can add it to the binder.
@@ -463,7 +461,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 shared_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
                                                            const ForeignKeyType fk_type) {
-	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		if (entry->IsForeignKeyIndex(fk_keys, fk_type)) {
 			return entry;
