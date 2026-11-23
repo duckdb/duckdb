@@ -103,7 +103,8 @@
         "test/sql/storage/prefetch/async_native_scan_read_ahead.test",
         "test/sql/storage/prefetch/scan_affinity_execution_order.test",
         "test/sql/storage/prefetch/prefetch_run_size_cap.test",
-        "test/sql/progress/test_verify_progress.test"
+        "test/sql/progress/test_verify_progress.test",
+        "test/parquet/parquet_schema_time_of_day_cast.test"
       ]
     },
     {
