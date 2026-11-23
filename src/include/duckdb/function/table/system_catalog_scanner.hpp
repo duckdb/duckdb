@@ -47,16 +47,25 @@ struct SystemCatalogScannerStats {
 	idx_t entries_scanned = 0;
 };
 
+//! Names of a function's identity columns; nullptr means the function has no such column. A column counts only when
+//! its declared type is the one the filters are evaluated against (VARCHAR for names, BIGINT for oids). The catalog
+//! and schema names default to the ones every system function uses; the entry columns default to none. Pointers must
+//! outlive the CreateBindData call (string literals in practice).
+struct SystemCatalogIdentityColumns {
+	const char *database_name = "database_name";
+	const char *database_oid = "database_oid";
+	const char *schema_name = "schema_name";
+	const char *schema_oid = "schema_oid";
+	const char *entry_name = nullptr;
+	const char *entry_oid = nullptr;
+};
+
 class SystemCatalogScanner {
 public:
-	//! Bind helper: locate the identity columns by name in `names`. A column counts only when its declared type is
-	//! the one the filters are evaluated against (VARCHAR for names, BIGINT for oids). `entry_name_column` and
-	//! `entry_oid_column` name the function's entry identity columns (e.g. "table_name", "table_oid"); pass nullptr
-	//! for a function without them. Always returns non-null bind data.
-	static unique_ptr<FunctionData> CreateBindData(const vector<Identifier> &names,
-	                                               const vector<LogicalType> &return_types,
-	                                               const char *entry_name_column = nullptr,
-	                                               const char *entry_oid_column = nullptr);
+	//! Bind helper: locate the identity columns by name in `names`. Always returns non-null bind data.
+	static unique_ptr<FunctionData>
+	CreateBindData(const vector<Identifier> &names, const vector<LogicalType> &return_types,
+	               const SystemCatalogIdentityColumns &columns = SystemCatalogIdentityColumns());
 	//! Init helper: the schemas that satisfy the pushed-down catalog and schema filters, in Catalog::GetAllSchemas
 	//! order. Without such filters this is exactly Catalog::GetAllSchemas(context).
 	static vector<reference<SchemaCatalogEntry>> GetSchemas(ClientContext &context, TableFunctionInitInput &input,

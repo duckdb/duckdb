@@ -11,6 +11,7 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -85,6 +86,8 @@ struct RepeatedStateValue {
 			return input * static_cast<float>(count);
 		} else if constexpr (std::is_same<T, hugeint_t>()) {
 			return Hugeint::Multiply(input, Hugeint::Convert(count));
+		} else if constexpr (std::is_same<T, uhugeint_t>()) {
+			return Uhugeint::Multiply(input, Uhugeint::Convert(count));
 		} else if constexpr (std::is_same<T, interval_t>()) {
 			const auto count64 = Cast::Operation<idx_t, int64_t>(count);
 			return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(input, count64);
@@ -140,6 +143,8 @@ template <class T>
 static inline void CombineSumStateValue(T &target, const T &source) {
 	if constexpr (std::is_same<T, hugeint_t>::value) {
 		target = Hugeint::Add(target, source);
+	} else if constexpr (std::is_same<T, uhugeint_t>::value) {
+		target = Uhugeint::Add(target, source);
 	} else {
 		target += source;
 	}
@@ -184,6 +189,18 @@ struct HugeintAdd {
 	template <class STATE, class T>
 	static void AddNumber(STATE &state, T input) {
 		state.value = Hugeint::Add(state.value, input);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		RepeatedStateValue::AddRepeated(state, input, count);
+	}
+};
+
+struct UhugeintAdd {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		state.value = Uhugeint::Add(state.value, input);
 	}
 
 	template <class STATE, class T>

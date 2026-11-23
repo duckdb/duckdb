@@ -176,7 +176,7 @@ MacroFunction &ExpressionBinder::UnfoldMacroExpression(FunctionExpression &funct
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 	binder.lambda_bindings = lambda_bindings;
 	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
-	                                                    positional_arguments, named_arguments, depth);
+	                                                    positional_arguments, named_arguments, depth, this);
 	if (!bind_result.error.empty()) {
 		throw BinderException(*expr, bind_result.error);
 	}
@@ -209,7 +209,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
 	// expanding nested macros can take a long time, allow the query to be interrupted
-	context.InterruptCheck();
+	context.FastInterruptCheck();
 
 	// unfold the macro expression
 	auto &member = UnfoldMacroExpression(function, macro_func, expr, depth);

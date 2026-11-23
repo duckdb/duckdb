@@ -107,6 +107,17 @@ TEST_CASE("Test Submitted Query API", "[api][.]") {
 	}
 }
 
+TEST_CASE("A completed submitted query can be read again", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = con.Submit("SELECT SUM(i) FROM range(1000) tbl(i)");
+	REQUIRE(!handle->HasError());
+	handle->Complete();
+	REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(499500)}));
+	REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(499500)}));
+}
+
 TEST_CASE("Abandoned submitted query must release the active query", "[api]") {
 	// A query submitted but never executed must not leak the active-query state (executor, plan,
 	// autocommit transaction). We observe the autocommit transaction it opens, which is created and

@@ -447,6 +447,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 		chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset);
 	}
 	ValidateColumnMetadata(row_group_num_rows, *chunk);
+	Schema().ValidateNullCount(*chunk, Reader().GetFileName().c_str());
 	group_rows_available = NumericCast<idx_t>(chunk->meta_data.num_values);
 }
 

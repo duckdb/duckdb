@@ -5,5 +5,5 @@
 statement error
 FROM read_csv('data/csv/encodings/utf16_odd_length.csv', encoding = 'utf-16', header = false);
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 

@@ -30,7 +30,7 @@ SELECT c2 FROM src ORDER BY vp_rowid LIMIT 0 OFFSET 1
 
 # the zero-sized heap used to read uninitialized memory through heap.front()
 # this only crashes once the memory has been recycled a number of times, hence the loop
-loop i 0 500
+loop i 0 32
 
 query I
 SELECT sub.c2

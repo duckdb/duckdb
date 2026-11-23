@@ -4,7 +4,6 @@ endif()
 add_subdirectory(extension)
 add_subdirectory(http)
 add_subdirectory(profiler)
-add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
 add_subdirectory(buffered_data)
@@ -22,7 +21,6 @@ add_library_unity(
   client_context_file_opener.cpp
   client_context.cpp
   client_context_execution.cpp
-  client_context_wrapper.cpp
   client_data.cpp
   client_verify.cpp
   connection_manager.cpp
@@ -47,7 +45,6 @@ add_library_unity(
   os_util.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
-  relation.cpp
   query_profiler.cpp
   query_result.cpp
   query_result_stream.cpp

@@ -14,7 +14,7 @@ namespace duckdb {
 namespace {
 
 template <class OP, class... ARGS>
-void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -332,7 +332,7 @@ void AggregateStateSerialization::SerializeStates(const AggregateStateLayout &la
 }
 
 void AggregateStateSerialization::SerializeStates(const BoundAggregateFunction &aggr,
-                                                  optional_ptr<FunctionData> bind_data,
+                                                  optional_ptr<const FunctionData> bind_data,
                                                   const AggregateStateLayout &layout, Vector &states, idx_t count,
                                                   Vector &result, ArenaAllocator &allocator, idx_t offset) {
 	if (aggr.HasExportAggregateStateCallback()) {

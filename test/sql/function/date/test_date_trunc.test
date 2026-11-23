@@ -327,3 +327,13 @@ query I
 from values ('2024-01-15 15:30:00'::timestamp) as a(t)
 where date_trunc('day', t) = '2024-01-15 12:30:00';
 ----
+
+# date_trunc on INTERVAL does not preserve the normalized interval ordering
+statement ok
+CREATE TABLE intervals AS SELECT * FROM (VALUES (INTERVAL '3 months'), (INTERVAL '2 months 40 days')) t(i);
+
+query I rowsort
+SELECT date_trunc('month', i) FROM intervals;
+----
+2 months
+3 months

@@ -48,7 +48,7 @@ class ExtensionEntriesTest(unittest.TestCase):
         extensions = set(loaded)
         keys = {key for key, value in self.original.functions.items() if value.extension in extensions}
         overloads = {
-            key: [self.generator["FunctionOverload"](key.name, key.type, (), self.generator["LogicalType"]("ANY"))]
+            key: [self.generator["FunctionOverload"](key.name, key.type, (), (), self.generator["LogicalType"]("ANY"))]
             for key in keys
         }
         for key, values in self.original.function_overloads.items():
@@ -101,7 +101,7 @@ class ExtensionEntriesTest(unittest.TestCase):
             if not self.loaded_extensions(sql):
                 return set(), {}
             overload = self.generator["FunctionOverload"](
-                new_function.name, new_function.type, (), self.generator["LogicalType"]("ANY")
+                new_function.name, new_function.type, (), (), self.generator["LogicalType"]("ANY")
             )
             return {new_function}, {new_function: [overload]}
 

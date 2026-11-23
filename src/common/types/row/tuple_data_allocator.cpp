@@ -222,25 +222,21 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		chunk_state.chunk_part_indices.clear();
 		idx_t offset = 0;
 		while (offset != append_count) {
+			unsafe_arena_ptr<TupleDataChunk> new_chunk;
 			if (chunks.empty() || chunks.back()->count == STANDARD_VECTOR_SIZE) {
-				chunks.push_back(stl_allocator->MakeUnsafePtr<TupleDataChunk>(*stl_allocator->Make<mutex>()));
+				new_chunk = stl_allocator->MakeUnsafePtr<TupleDataChunk>(*stl_allocator->Make<mutex>());
 			}
-			auto &chunk = *chunks.back();
+			auto &chunk = new_chunk ? *new_chunk : *chunks.back();
 
 			// Build the next part
 			auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-			auto &chunk_part = chunk.AddPart(
-			    segment, BuildChunkPart(segment, pin_state, chunk_state, append_offset + offset, next, chunk));
-			next = chunk_part.count;
+			auto part_ptr = BuildChunkPart(segment, pin_state, chunk_state, append_offset + offset, next, chunk);
+			next = part_ptr->count;
 
-			segment.count += next;
-			segment.data_size += chunk_part.count * layout.GetRowWidth();
-			if (!layout.AllConstant()) {
-				segment.data_size += chunk_part.total_heap_size;
-			}
-
+			// Zero the states before adding the chunk and counting the part, as counted rows are destroyed if a pin
+			// throws
 			if (layout.HasDestructor()) {
-				const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
+				const auto base_row_ptr = GetRowPointer(pin_state, *part_ptr);
 				for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
 					const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
 					auto &aggr_fun = layout.GetAggregates()[aggr_idx];
@@ -248,6 +244,16 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 						memset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0', aggr_fun.payload_size);
 					}
 				}
+			}
+
+			if (new_chunk) {
+				chunks.push_back(std::move(new_chunk));
+			}
+			auto &chunk_part = chunk.AddPart(segment, std::move(part_ptr));
+			segment.count += next;
+			segment.data_size += chunk_part.count * layout.GetRowWidth();
+			if (!layout.AllConstant()) {
+				segment.data_size += chunk_part.total_heap_size;
 			}
 
 			offset += next;

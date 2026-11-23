@@ -1,0 +1,53 @@
+# name: test/sql/attach/attach_detach_database_listing_race.test_slow
+# description: duckdb_databases() and pragma_database_size() racing a DETACH from another connection
+# group: [attach]
+
+concurrentloop i 0 8
+
+loop k 0 50
+
+# a listing still holding the detached database keeps its file in use
+onlyif i<4
+statement maybe
+ATTACH '{TEST_DIR}/listing_race_{i}.db' AS listing_race_{i}
+----
+Unique file handle conflict
+
+onlyif i<4
+statement maybe
+CREATE OR REPLACE TABLE listing_race_{i}.t AS SELECT range i FROM range(100)
+----
+does not exist
+
+onlyif i<4
+statement maybe
+DETACH listing_race_{i}
+----
+database not found
+
+onlyif i>=4
+statement ok
+SELECT count(*) FROM duckdb_databases()
+
+onlyif i>=4
+statement ok
+SELECT count(*) FROM pragma_database_size()
+
+endloop
+
+endloop
+
+loop i 0 4
+
+statement ok
+ATTACH '{TEST_DIR}/listing_race_{i}.db' AS listing_race_{i}
+
+query II
+SELECT count(*), sum(i) FROM listing_race_{i}.t
+----
+100	4950
+
+statement ok
+DETACH listing_race_{i}
+
+endloop
