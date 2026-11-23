@@ -764,6 +764,8 @@ typedef enum DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
 
 /* --- Struct forward declarations for allocator --- */
 
+typedef struct duckdb_v2_allocator_raw_functions duckdb_v2_allocator_raw_functions;
+
 /* --- Types for allocator --- */
 
 /*!
@@ -778,7 +780,46 @@ typedef struct _duckdb_v2_allocator {
 
 /* --- Function pointer typedefs for allocator --- */
 
+/*!
+ * Allocates `size` bytes aligned to `align` from the allocator behind `state`, or returns NULL when out of memory.
+ * `size` must be non-zero and `align` a power of two; neither is checked. Never throws.
+ */
+typedef void *(*duckdb_v2_allocator_raw_alloc_fn)(void *state, idx_t size, idx_t align);
+
+/*!
+ * Releases memory obtained through the same `duckdb_v2_allocator_raw_functions` or the allocator they came from, with
+ * the size and alignment it was allocated with. `ptr` must not be NULL. Never throws.
+ */
+typedef void (*duckdb_v2_allocator_raw_dealloc_fn)(void *state, void *ptr, idx_t size, idx_t align);
+
+/*!
+ * Resizes memory like `duckdb_v2_allocator_realloc()`, or returns NULL when out of memory, leaving `ptr` untouched.
+ * `ptr` must not be NULL, and `old_size` and `new_size` must be non-zero. Never throws.
+ */
+typedef void *(*duckdb_v2_allocator_raw_realloc_fn)(void *state, void *ptr, idx_t old_size, idx_t align,
+                                                    idx_t new_size);
+
 /* --- Functions for allocator --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the allocation functions behind an allocator, which allocate without argument checks or error reporting.
+ *
+ * Returns ERROR_INPUT_INVALID if `allocator` or `out_functions` is NULL.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator whose functions to retrieve. Must outlive every use of them.
+ * @param out_functions Receives the functions.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_get_raw_functions(duckdb_v2_allocator_handle allocator,
+                                                                   duckdb_v2_allocator_raw_functions *out_functions,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -981,6 +1022,29 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_realloc(duckdb_v2_allocator_han
 #endif
 
 /* --- Struct definitions for allocator --- */
+
+/*!
+ * The allocation functions behind an allocator, for callers that allocate on a hot path, e.g. a Rust global allocator.
+ * They skip the argument checks and error reporting of `duckdb_v2_allocator_alloc()` and friends: invalid arguments are
+ * undefined behavior, and failure is reported only as NULL. Memory may be freed or resized through either interface.
+ * Valid for as long as the allocator is.
+ */
+struct duckdb_v2_allocator_raw_functions {
+	//! Passed as the first argument of every function.
+	void *state;
+
+	//! Allocates uninitialized memory.
+	duckdb_v2_allocator_raw_alloc_fn alloc;
+
+	//! Allocates zeroed memory.
+	duckdb_v2_allocator_raw_alloc_fn alloc_zeroed;
+
+	//! Releases memory.
+	duckdb_v2_allocator_raw_dealloc_fn dealloc;
+
+	//! Resizes memory.
+	duckdb_v2_allocator_raw_realloc_fn realloc;
+};
 
 /* ============================================================================
  * MODULE: arena

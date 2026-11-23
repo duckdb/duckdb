@@ -1591,6 +1591,9 @@ typedef struct {
 	 const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
 	 idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
 	 duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_allocator_get_raw_functions)
+	(duckdb_v2_allocator_handle allocator, duckdb_v2_allocator_raw_functions *out_functions,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_allocator_register_extension)
 	(duckdb_v2_allocator_handle allocator, duckdb_v2_extension_handle extension, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
@@ -2313,6 +2316,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_allocator_destroy = duckdb_v2_allocator_destroy;
 	result.duckdb_v2_allocator_realloc = duckdb_v2_allocator_realloc;
 	result.duckdb_v2_instance_open_shared = duckdb_v2_instance_open_shared;
+	result.duckdb_v2_allocator_get_raw_functions = duckdb_v2_allocator_get_raw_functions;
 	result.duckdb_v2_allocator_register_extension = duckdb_v2_allocator_register_extension;
 	return result;
 }

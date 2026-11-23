@@ -816,49 +816,26 @@ inline auto Convert(CV2ErrorInfo *info) -> duckdb_v2_error_info_handle {
 	return reinterpret_cast<duckdb_v2_error_info_handle>(info);
 }
 
+// Report the exception currently being handled through the optional error slot and return its code. Must be called
+// from inside a catch block. Defined in capi_v2.cpp.
+auto ReportCaughtError(duckdb_v2_error_info_handle *err) noexcept -> DUCKDB_V2_ERROR;
+
 //! Invoke a function, and convert any exception into an error code + populate an optional error info handle.
 //! Nothing may escape across the C ABI, so rendering and reporting the error are themselves guarded: if either
 //! fails (allocation failure), the failure degrades to a bare error code with whatever detail could be produced.
 template <class T>
 DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) noexcept {
-	auto code = static_cast<DUCKDB_V2_ERROR>(DUCKDB_V2_ERROR_NONE);
-	auto text = string();
-	optional<string> raw_message;
-
 	try {
-		// Invoke the callback
 		callback();
 	} catch (...) {
-		RenderCaughtError(code, text, raw_message);
+		// Out of line, so the success path builds no error state.
+		return ReportCaughtError(err);
 	}
-
 	// Success leaves the slot untouched.
 	// The return code is authoritative, as allocating on every successful call is unnecessary overhead.
 	// A stale info from an earlier failure may therefore survive a later successful call, but that is ok.
 	// (because the caller checks the code not the slot, and reads *err only after a failing return)
-	if (code == DUCKDB_V2_ERROR_NONE) {
-		return code;
-	}
-
-	// Failure: report detail through the slot if the caller provided one.
-	if (err) {
-		if (!*err) {
-			// Allocate a new error info handle if not provided; if even that fails, the code alone reports it.
-			try {
-				*err = Convert(new CV2ErrorInfo());
-			} catch (const std::bad_alloc &) {
-				return DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
-			} catch (...) { // NOLINT(bugprone-empty-catch)
-				return code;
-			}
-		}
-		auto &out = *Convert(*err);
-		out.code = code;
-		out.message = std::move(text);
-		out.raw_message = std::move(raw_message);
-	}
-
-	return code;
+	return DUCKDB_V2_ERROR_NONE;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

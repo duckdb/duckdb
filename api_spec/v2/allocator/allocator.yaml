@@ -5,7 +5,123 @@ handles:
       An owned, thread-safe allocator. Free all allocations made through this handle before destroying it with
       `[[allocator_destroy]]`. Do not destroy it while another thread is using it.
 
+callbacks:
+  allocator_raw_alloc:
+    description: |
+      Allocates `size` bytes aligned to `align` from the allocator behind `state`, or returns NULL when out of memory.
+      `size` must be non-zero and `align` a power of two; neither is checked. Never throws.
+    return_type: void
+    return_pointer: 1
+    parameters:
+      state:
+        type: void
+        indirection: 1
+        description: The `state` of the `[[allocator_raw_functions]]` the function came with.
+      size:
+        type: idx
+        description: The number of bytes to allocate. Must be non-zero.
+      align:
+        type: idx
+        description: The alignment of the returned pointer in bytes. Must be a power of two.
+
+  allocator_raw_dealloc:
+    description: |
+      Releases memory obtained through the same `[[allocator_raw_functions]]` or the allocator they came from, with
+      the size and alignment it was allocated with. `ptr` must not be NULL. Never throws.
+    return_type: void
+    parameters:
+      state:
+        type: void
+        indirection: 1
+        description: The `state` of the `[[allocator_raw_functions]]` the function came with.
+      ptr:
+        type: void
+        indirection: 1
+        description: The memory to release.
+      size:
+        type: idx
+        description: The size `ptr` was allocated with.
+      align:
+        type: idx
+        description: The alignment `ptr` was allocated with.
+
+  allocator_raw_realloc:
+    description: |
+      Resizes memory like `[[allocator_realloc]]`, or returns NULL when out of memory, leaving `ptr` untouched. `ptr`
+      must not be NULL, and `old_size` and `new_size` must be non-zero. Never throws.
+    return_type: void
+    return_pointer: 1
+    parameters:
+      state:
+        type: void
+        indirection: 1
+        description: The `state` of the `[[allocator_raw_functions]]` the function came with.
+      ptr:
+        type: void
+        indirection: 1
+        description: The memory to resize.
+      old_size:
+        type: idx
+        description: The size `ptr` was allocated with.
+      align:
+        type: idx
+        description: The alignment `ptr` was allocated with, which the resized memory keeps.
+      new_size:
+        type: idx
+        description: The new size in bytes.
+
+structs:
+  allocator_raw_functions:
+    description: |
+      The allocation functions behind an allocator, for callers that allocate on a hot path, e.g. a Rust global
+      allocator. They skip the argument checks and error reporting of `[[allocator_alloc]]` and friends: invalid
+      arguments are undefined behavior, and failure is reported only as NULL. Memory may be freed or resized through
+      either interface. Valid for as long as the allocator is.
+    fields:
+      - name: state
+        type: void
+        pointer: 1
+        description: Passed as the first argument of every function.
+      - name: alloc
+        type: allocator_raw_alloc
+        description: Allocates uninitialized memory.
+      - name: alloc_zeroed
+        type: allocator_raw_alloc
+        description: Allocates zeroed memory.
+      - name: dealloc
+        type: allocator_raw_dealloc
+        description: Releases memory.
+      - name: realloc
+        type: allocator_raw_realloc
+        description: Resizes memory.
+
 functions:
+  allocator_get_raw_functions:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Retrieves the allocation functions behind an allocator, which allocate without argument checks or error
+      reporting.
+
+      Returns ERROR_INPUT_INVALID if `allocator` or `out_functions` is NULL.
+    role: method
+    belongs_to: allocator
+    parameters:
+      allocator:
+        type: allocator
+        description: The allocator whose functions to retrieve. Must outlive every use of them.
+      out_functions:
+        type: allocator_raw_functions
+        indirection: 1
+        kind: OUT
+        description: Receives the functions.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   allocator_create_with_extension:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-18" ]

@@ -2,9 +2,12 @@
 
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <thread>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // V2 allocator: an extension's allocator, its alloc / alloc_zeroed / dealloc / realloc, and how its memory is
@@ -357,6 +360,114 @@ TEST_CASE("V2: allocator reports out of memory", "[capi_v2][allocator]") {
 #endif
 
 //----------------------------------------------------------------------------------------------------------------------
+// Raw functions
+//----------------------------------------------------------------------------------------------------------------------
+
+duckdb_v2_allocator_raw_functions GetRawFunctions(duckdb_v2_allocator_handle allocator) {
+	duckdb_v2_allocator_raw_functions raw;
+	REQUIRE(duckdb_v2_allocator_get_raw_functions(allocator, &raw, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(raw.alloc);
+	REQUIRE(raw.alloc_zeroed);
+	REQUIRE(raw.dealloc);
+	REQUIRE(raw.realloc);
+	return raw;
+}
+
+TEST_CASE("V2: raw allocator functions honor size, alignment and zeroing", "[capi_v2][allocator]") {
+	AllocatorFixture fx;
+	auto raw = GetRawFunctions(fx.allocator);
+	auto baseline = ExtensionMemory(fx.db);
+	for (auto align : ALIGNMENTS) {
+		for (auto size : SIZES) {
+			auto ptr = raw.alloc(raw.state, size, align);
+			REQUIRE(ptr != nullptr);
+			REQUIRE(IsAligned(ptr, align));
+			FillPattern(ptr, size);
+
+			auto grown = raw.realloc(raw.state, ptr, size, align, size * 3);
+			REQUIRE(grown != nullptr);
+			REQUIRE(IsAligned(grown, align));
+			REQUIRE(HasPattern(grown, size));
+			auto shrunk = raw.realloc(raw.state, grown, size * 3, align, size);
+			REQUIRE(shrunk != nullptr);
+			REQUIRE(HasPattern(shrunk, size));
+			raw.dealloc(raw.state, shrunk, size, align);
+
+			auto zeroed = static_cast<uint8_t *>(raw.alloc_zeroed(raw.state, size, align));
+			REQUIRE(zeroed != nullptr);
+			REQUIRE(IsAligned(zeroed, align));
+			bool all_zero = true;
+			for (idx_t i = 0; i < size; i++) {
+				all_zero = all_zero && zeroed[i] == 0;
+			}
+			REQUIRE(all_zero);
+			raw.dealloc(raw.state, zeroed, size, align);
+		}
+	}
+	REQUIRE(ExtensionMemory(fx.db) == baseline);
+
+	// Memory moves freely between the raw functions and the checked API.
+	void *ptr = raw.alloc(raw.state, MIB, 8);
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(MIB));
+	void *out = nullptr;
+	REQUIRE(duckdb_v2_allocator_realloc(fx.allocator, ptr, MIB, 8, 2 * MIB, &out, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(2 * MIB));
+	raw.dealloc(raw.state, out, 2 * MIB, 8);
+	REQUIRE(ExtensionMemory(fx.db) == baseline);
+}
+
+#ifndef TEST_CAPI_V2_ALLOCATOR_ASAN
+TEST_CASE("V2: raw allocator functions report out of memory as NULL", "[capi_v2][allocator]") {
+	AllocatorFixture fx;
+	auto raw = GetRawFunctions(fx.allocator);
+	auto baseline = ExtensionMemory(fx.db);
+	for (idx_t huge_size : {idx_t(1) << 47, idx_t(1) << 62, ~idx_t(0)}) {
+		for (idx_t align : {idx_t(8), idx_t(4096)}) {
+			REQUIRE(raw.alloc(raw.state, huge_size, align) == nullptr);
+			REQUIRE(raw.alloc_zeroed(raw.state, huge_size, align) == nullptr);
+			auto original = raw.alloc(raw.state, 64, align);
+			FillPattern(original, 64);
+			REQUIRE(raw.realloc(raw.state, original, 64, align, huge_size) == nullptr);
+			REQUIRE(HasPattern(original, 64));
+			raw.dealloc(raw.state, original, 64, align);
+		}
+	}
+	REQUIRE(ExtensionMemory(fx.db) == baseline);
+}
+#endif
+
+TEST_CASE("V2: raw functions of a database allocator respect its memory limit", "[capi_v2][allocator]") {
+	EnvFixture fx;
+	auto &db = duckdb::capiv2::Convert(fx.instance)->GetDatabase();
+	REQUIRE_NO_FAIL(*duckdb::Connection(db).Query("SET memory_limit='16MiB'"));
+	duckdb_v2_allocator_handle allocator = nullptr;
+	REQUIRE(duckdb_v2_allocator_create_with_connection(fx.conn, &allocator, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto raw = GetRawFunctions(allocator);
+	auto baseline = ExtensionTagMemory(db);
+	REQUIRE(raw.alloc(raw.state, 32 * MIB, 8) == nullptr);
+	auto ptr = raw.alloc(raw.state, MIB, 8);
+	REQUIRE(ptr != nullptr);
+	FillPattern(ptr, MIB);
+	REQUIRE(ExtensionTagMemory(db) == baseline + int64_t(MIB));
+	REQUIRE(raw.realloc(raw.state, ptr, MIB, 8, 32 * MIB) == nullptr);
+	REQUIRE(HasPattern(ptr, MIB));
+	raw.dealloc(raw.state, ptr, MIB, 8);
+	REQUIRE(ExtensionTagMemory(db) == baseline);
+	REQUIRE(duckdb_v2_allocator_destroy(&allocator) == DUCKDB_V2_ERROR_NONE);
+}
+
+TEST_CASE("V2: allocator_get_raw_functions null args", "[capi_v2][allocator]") {
+	AllocatorFixture fx;
+	duckdb_v2_allocator_raw_functions raw;
+	REQUIRE(duckdb_v2_allocator_get_raw_functions(fx.allocator, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	memset(&raw, 0xff, sizeof(raw));
+	REQUIRE(duckdb_v2_allocator_get_raw_functions(nullptr, &raw, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(raw.state == nullptr);
+	REQUIRE(raw.alloc == nullptr);
+	REQUIRE(raw.realloc == nullptr);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Accounting
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -369,20 +480,25 @@ TEST_CASE("V2: allocator memory shows in duckdb_extension_memory()", "[capi_v2][
 	REQUIRE(duckdb_v2_allocator_alloc(fx.allocator, 3 * MIB, 8, &plain, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(3 * MIB));
 
-	// Over-aligned allocations are padded by their alignment.
+	// jemalloc aligns blocks itself; other allocators pad over-aligned blocks by their alignment.
+#ifdef DUCKDB_ENABLE_JEMALLOC
+	constexpr int64_t padding = 0;
+#else
+	constexpr int64_t padding = 4096;
+#endif
 	void *aligned = nullptr;
 	REQUIRE(duckdb_v2_allocator_alloc(fx.allocator, MIB, 4096, &aligned, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(4 * MIB + 4096));
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(4 * MIB) + padding);
 
 	// Small requests are rounded up to their alignment.
 	void *small = nullptr;
 	REQUIRE(duckdb_v2_allocator_alloc(fx.allocator, 1, 8, &small, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(4 * MIB + 4096 + 8));
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(4 * MIB + 8) + padding);
 
 	void *resized = nullptr;
 	REQUIRE(duckdb_v2_allocator_realloc(fx.allocator, plain, 3 * MIB, 8, MIB, &resized, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(2 * MIB + 4096 + 8));
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(2 * MIB + 8) + padding);
 
 	REQUIRE(duckdb_v2_allocator_dealloc(fx.allocator, resized, MIB, 8) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_allocator_dealloc(fx.allocator, aligned, MIB, 4096) == DUCKDB_V2_ERROR_NONE);
@@ -429,6 +545,50 @@ TEST_CASE("V2: extension allocators share a counter, not a database lifetime or 
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_allocator_destroy(&allocator) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(allocator == nullptr);
+}
+
+TEST_CASE("V2: the extension counter stays exact across threads", "[capi_v2][allocator]") {
+	AllocatorFixture fx;
+	auto baseline = ExtensionMemory(fx.db);
+	// More threads than the counter has per-thread slots, all alive at once, so some share the overflow counter.
+	constexpr idx_t THREAD_COUNT = 300;
+	constexpr idx_t BLOCK_SIZE = 4096;
+	std::vector<void *> blocks(THREAD_COUNT, nullptr);
+	std::mutex lock;
+	std::condition_variable all_allocated;
+	idx_t allocated = 0;
+	std::vector<std::thread> threads;
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
+		threads.emplace_back([&, i] {
+			duckdb_v2_allocator_alloc(fx.allocator, BLOCK_SIZE, 8, &blocks[i], nullptr);
+			std::unique_lock<std::mutex> guard(lock);
+			allocated++;
+			all_allocated.notify_all();
+			all_allocated.wait(guard, [&] { return allocated == THREAD_COUNT; });
+		});
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	for (auto block : blocks) {
+		REQUIRE(block != nullptr);
+	}
+	REQUIRE(ExtensionMemory(fx.db) == baseline + int64_t(THREAD_COUNT * BLOCK_SIZE));
+
+	// Freed on another thread than the one that allocated them, while new threads reuse the slots of exited ones.
+	threads.clear();
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
+		threads.emplace_back([&, i] {
+			void *scratch = nullptr;
+			duckdb_v2_allocator_alloc(fx.allocator, 100, 8, &scratch, nullptr);
+			duckdb_v2_allocator_dealloc(fx.allocator, blocks[(i + 1) % THREAD_COUNT], BLOCK_SIZE, 8);
+			duckdb_v2_allocator_dealloc(fx.allocator, scratch, 100, 8);
+		});
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	REQUIRE(ExtensionMemory(fx.db) == baseline);
 }
 
 TEST_CASE("V2: a static extension can attribute an existing allocator during load", "[capi_v2][allocator]") {

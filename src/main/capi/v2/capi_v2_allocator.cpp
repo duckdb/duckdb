@@ -9,7 +9,7 @@
 namespace duckdb {
 namespace capiv2 {
 
-Allocator *Convert(duckdb_v2_allocator_handle allocator) {
+inline Allocator *Convert(duckdb_v2_allocator_handle allocator) {
 	return reinterpret_cast<Allocator *>(allocator);
 }
 
@@ -25,45 +25,14 @@ void RegisterExtensionAllocator(Allocator &allocator, duckdb_v2_extension_handle
 }
 
 void CheckAlignment(idx_t align) {
-	if (align == 0 || !IsPowerOfTwo(align)) {
+	if (align == 0 || (align & (align - 1)) != 0) {
 		throw InvalidInputException("alignment must be a power of two, got %llu", align);
 	}
 }
 
-idx_t BackingSize(idx_t size, idx_t align) {
-	const auto limit = MinValue<idx_t>(Allocator::MAXIMUM_ALLOC_SIZE, NumericLimits<uintptr_t>::Maximum());
-	if (align >= limit || size >= limit - align) {
-		throw OutOfMemoryException("Failed to allocate block of %llu bytes aligned to %llu (bad allocation)", size,
-		                           align);
-	}
-	return align > alignof(std::max_align_t) ? size + align : MaxValue(size, align);
-}
-
-data_ptr_t ResizeAligned(Allocator &allocator, data_ptr_t ptr, idx_t old_size, idx_t align, idx_t size) {
+data_ptr_t Allocate(Allocator &allocator, idx_t size, idx_t align, bool zeroed) {
 	CheckAlignment(align);
-	const bool over_aligned = align > alignof(std::max_align_t);
-	auto backing = ptr && over_aligned ? Load<data_ptr_t>(ptr - sizeof(data_ptr_t)) : ptr;
-	if (!size) {
-		if (ptr) {
-			allocator.FreeData(backing, BackingSize(old_size, align));
-		}
-		return nullptr;
-	}
-	auto backing_size = BackingSize(size, align);
-	auto old_offset = ptr ? idx_t(ptr - backing) : 0;
-	backing = ptr ? allocator.ReallocateData(backing, BackingSize(old_size, align), backing_size)
-	              : allocator.AllocateData(backing_size);
-	if (!over_aligned) {
-		return backing;
-	}
-	// realloc preserves the backing bytes, but may move the payload to a different alignment offset.
-	auto address = reinterpret_cast<uintptr_t>(backing + sizeof(data_ptr_t));
-	auto aligned = reinterpret_cast<data_ptr_t>(AlignValue<uintptr_t>(address, align));
-	if (old_size && aligned != backing + old_offset) {
-		memmove(aligned, backing + old_offset, MinValue(size, old_size));
-	}
-	Store<data_ptr_t>(backing, aligned - sizeof(data_ptr_t));
-	return aligned;
+	return size ? ExtensionAllocator::Allocate(allocator, size, align, zeroed) : nullptr;
 }
 
 } // namespace
@@ -71,6 +40,22 @@ data_ptr_t ResizeAligned(Allocator &allocator, data_ptr_t ptr, idx_t old_size, i
 } // namespace duckdb
 
 using namespace duckdb::capiv2;
+
+DUCKDB_V2_ERROR duckdb_v2_allocator_get_raw_functions(duckdb_v2_allocator_handle allocator,
+                                                      duckdb_v2_allocator_raw_functions *out_functions,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_functions);
+	*out_functions = {};
+	DUCKDB_CHECK_ARG(allocator);
+	return WithErrorHandler(err, [&]() {
+		auto functions = duckdb::ExtensionAllocator::GetRawFunctions(*Convert(allocator));
+		out_functions->state = functions.state;
+		out_functions->alloc = functions.allocate;
+		out_functions->alloc_zeroed = functions.allocate_zeroed;
+		out_functions->dealloc = functions.free;
+		out_functions->realloc = functions.reallocate;
+	});
+}
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_extension(duckdb_v2_extension_handle extension,
                                                           duckdb_v2_allocator_handle *out_allocator,
@@ -128,23 +113,26 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_alloc(duckdb_v2_allocator_handle allocator, 
 	DUCKDB_CHECK_ARG(out_ptr);
 	*out_ptr = nullptr;
 	DUCKDB_CHECK_ARG(allocator);
-	return WithErrorHandler(err, [&]() { *out_ptr = ResizeAligned(*Convert(allocator), nullptr, 0, align, size); });
+	return WithErrorHandler(err, [&]() { *out_ptr = Allocate(*Convert(allocator), size, align, false); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_alloc_zeroed(duckdb_v2_allocator_handle allocator, idx_t size, idx_t align,
                                                  void **out_ptr, duckdb_v2_error_info_handle *err) {
-	auto rc = duckdb_v2_allocator_alloc(allocator, size, align, out_ptr, err);
-	if (rc == DUCKDB_V2_ERROR_NONE && size) {
-		memset(*out_ptr, 0, size);
-	}
-	return rc;
+	DUCKDB_CHECK_ARG(out_ptr);
+	*out_ptr = nullptr;
+	DUCKDB_CHECK_ARG(allocator);
+	return WithErrorHandler(err, [&]() { *out_ptr = Allocate(*Convert(allocator), size, align, true); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_dealloc(duckdb_v2_allocator_handle allocator, void *ptr, idx_t size, idx_t align) {
 	duckdb_v2_error_info_handle *err = nullptr;
 	DUCKDB_CHECK_ARG(allocator);
-	return WithErrorHandler(
-	    err, [&]() { ResizeAligned(*Convert(allocator), static_cast<duckdb::data_ptr_t>(ptr), size, align, 0); });
+	return WithErrorHandler(err, [&]() {
+		CheckAlignment(align);
+		if (ptr) {
+			duckdb::ExtensionAllocator::Free(*Convert(allocator), static_cast<duckdb::data_ptr_t>(ptr), size, align);
+		}
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_realloc(duckdb_v2_allocator_handle allocator, void *ptr, idx_t old_size,
@@ -157,6 +145,16 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_realloc(duckdb_v2_allocator_handle allocator
 		if ((ptr == nullptr) != (old_size == 0)) {
 			throw duckdb::InvalidInputException("ptr must be NULL exactly when old_size is 0");
 		}
-		*out_ptr = ResizeAligned(*Convert(allocator), static_cast<duckdb::data_ptr_t>(ptr), old_size, align, new_size);
+		CheckAlignment(align);
+		auto &target = *Convert(allocator);
+		auto block = static_cast<duckdb::data_ptr_t>(ptr);
+		if (!new_size) {
+			if (block) {
+				duckdb::ExtensionAllocator::Free(target, block, old_size, align);
+			}
+			return;
+		}
+		*out_ptr = block ? duckdb::ExtensionAllocator::Reallocate(target, block, old_size, align, new_size)
+		                 : duckdb::ExtensionAllocator::Allocate(target, new_size, align, false);
 	});
 }
