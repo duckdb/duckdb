@@ -78,11 +78,43 @@ static idx_t MergePartitionPrefix(const unsafe_array_ptr<const SORT_KEY> &keys,
 }
 
 template <class SORT_KEY>
+class MergePrefixCache {
+public:
+	MergePrefixCache(unsafe_array_ptr<SORT_KEY> keys_p, idx_t prefix) : keys(keys_p), original_part0(keys[0].part0) {
+		// Cache the first varying word in these private copies' shared inline prefix.
+		for (idx_t i = 0; i < keys.size(); i++) {
+			auto &key = keys[i];
+			D_ASSERT(key.part0 == original_part0 && key.GetHeapSize() >= prefix);
+			uint64_t word = 0;
+			memcpy(&word, key.GetData() + prefix, MinValue<idx_t>(sizeof(word), key.GetHeapSize() - prefix));
+			key.part0 = BSwapIfLE(word);
+		}
+	}
+
+	MergePrefixCache(const MergePrefixCache &) = delete;
+	MergePrefixCache &operator=(const MergePrefixCache &) = delete;
+
+	~MergePrefixCache() {
+		// Restore canonical keys before scanning or materializing them.
+		for (idx_t i = 0; i < keys.size(); i++) {
+			keys[i].part0 = original_part0;
+		}
+	}
+
+private:
+	unsafe_array_ptr<SORT_KEY> keys;
+	const uint64_t original_part0;
+};
+
+template <class SORT_KEY>
 struct MergePrefixLess {
 	explicit MergePrefixLess(idx_t prefix_p) : prefix(prefix_p) {
 	}
 
 	bool operator()(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+		if (lhs.part0 != rhs.part0) {
+			return lhs.part0 < rhs.part0;
+		}
 		const auto lhs_size = lhs.GetHeapSize();
 		const auto rhs_size = rhs.GetHeapSize();
 		D_ASSERT(lhs_size > SORT_KEY::INLINE_LENGTH && rhs_size > SORT_KEY::INLINE_LENGTH);
@@ -782,6 +814,8 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 			    unsafe_array_ptr<const SORT_KEY>(merged_partition_keys, merged_partition_count), run_boundaries);
 			if (prefix != 0) {
 				// Sorted endpoints establish this prefix for every key in each gathered fragment.
+				MergePrefixCache<SORT_KEY> cache(
+				    unsafe_array_ptr<SORT_KEY>(merged_partition_keys, merged_partition_count), prefix);
 				const MergePrefixLess<SORT_KEY> compare(prefix);
 				const auto prefix_fallback = [&](SORT_KEY *begin, SORT_KEY *end) {
 					duckdb_pdqsort::pdqsort_branchless(begin, end, compare);

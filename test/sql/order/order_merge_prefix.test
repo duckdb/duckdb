@@ -5,9 +5,14 @@
 statement ok
 SET threads=4;
 
+foreach prefix 32 600
+
 statement ok
-CREATE TABLE prefix_keys AS
-SELECT i, repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0') AS k
+SET debug_force_external=false;
+
+statement ok
+CREATE OR REPLACE TABLE prefix_keys AS
+SELECT i, repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0') AS k
 FROM range(8193) t(i);
 
 statement ok
@@ -17,7 +22,7 @@ PRAGMA verify_parallelism;
 query III
 SELECT count(*), sum(i),
        bool_and((prev_k IS NULL OR prev_k <= k) AND
-                k = repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
+                k = repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
 FROM (
     SELECT *, lag(k) OVER () AS prev_k
     FROM (SELECT * FROM prefix_keys ORDER BY k)
@@ -31,7 +36,7 @@ SET debug_force_external=true;
 query III
 SELECT count(*), sum(i),
        bool_and((prev_k IS NULL OR prev_k >= k) AND
-                k = repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
+                k = repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
 FROM (
     SELECT *, lag(k) OVER () AS prev_k
     FROM (SELECT * FROM prefix_keys ORDER BY k DESC)
@@ -41,7 +46,7 @@ FROM (
 
 # Equal keys and keys ending inside a shared prefix retain their ordinary order.
 statement ok
-CREATE TABLE prefix_lengths AS
+CREATE OR REPLACE TABLE prefix_lengths AS
 SELECT i, CASE WHEN i % 11 = 0 THEN NULL
               ELSE repeat('p', (i % 4) * 200) END AS k
 FROM prefix_keys;
@@ -65,3 +70,5 @@ FROM (
 );
 ----
 8193	true
+
+endloop
