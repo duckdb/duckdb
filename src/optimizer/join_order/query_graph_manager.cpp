@@ -4,6 +4,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -333,6 +334,25 @@ void QueryGraphManager::PreparePredicateModel(LogicalOperator &op) {
 	AddImpliedJoinKeys();
 }
 
+static bool IsSelectiveEqualityBinding(const RelationManager &relations, const ColumnBinding &binding) {
+	if (!binding.table_index.IsValid()) {
+		return false;
+	}
+	auto &stats = relations.GetRelation(JoinOrderUtil::GetBindingRelation(binding)).stats;
+	auto index = binding.column_index.GetIndex();
+	if (stats.unique_key.size() == 1 && stats.unique_key[0] == index) {
+		return true;
+	}
+	if (!stats.stats_initialized || index >= stats.columns.size()) {
+		return false;
+	}
+	auto &domain = stats.columns[index].current_domain;
+	if (domain.source == DistinctCountSource::HLL) {
+		return static_cast<double>(domain.distinct_count) * (1 + HyperLogLog::GetErrorRate()) >= stats.cardinality;
+	}
+	return domain.source == DistinctCountSource::EXACT && domain.distinct_count >= stats.cardinality;
+}
+
 void QueryGraphManager::AddImpliedJoinKeys() {
 	if (predicate_model.GetSelectivityPredicates().empty() || predicate_model.GetEqualityClasses().empty()) {
 		return;
@@ -347,7 +367,17 @@ void QueryGraphManager::AddImpliedJoinKeys() {
 			return;
 		}
 	}
-	for (auto &key : predicate_model.FindImpliedJoinKeys()) {
+	// A selective equality already limits matches on this pair, including when it is a different predicate.
+	reference_set_t<JoinRelationSet> covered_pairs;
+	for (auto &entry : predicate_model.GetGraphPredicates()) {
+		auto &predicate = entry.get();
+		if (predicate.GetSet().count == 2 && predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL &&
+		    (IsSelectiveEqualityBinding(relation_manager, predicate.GetEqualityBinding(true)) ||
+		     IsSelectiveEqualityBinding(relation_manager, predicate.GetEqualityBinding(false)))) {
+			covered_pairs.insert(predicate.GetSet());
+		}
+	}
+	for (auto &key : predicate_model.FindImpliedJoinKeys(std::move(covered_pairs))) {
 		auto &target = key.target.get();
 		auto filter = make_uniq<FilterInfo>(std::move(key.comparison), target.GetSet(), filters_and_bindings.size());
 		filter->SetLeftSet(target.GetLeftSet());

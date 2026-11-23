@@ -310,15 +310,14 @@ GetStrictEqualityColumns(const JoinEqualityClass &group) {
 	return columns;
 }
 
-vector<ImpliedJoinKey> JoinPredicateModel::FindImpliedJoinKeys() const {
+vector<ImpliedJoinKey> JoinPredicateModel::FindImpliedJoinKeys(reference_set_t<JoinRelationSet> covered_pairs) const {
 	vector<reference<const JoinPredicate>> candidates;
-	reference_set_t<JoinRelationSet> visited;
 	for (auto &entry : selectivity_predicates) {
 		auto &predicate = entry.get();
 		if (predicate.GetPredicateClass() == JoinPredicateClass::INNER_EQUALITY &&
 		    predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL && predicate.GetSet().count == 2 &&
 		    predicate.GetLeftSet().count == 1 && predicate.GetRightSet().count == 1 &&
-		    visited.insert(predicate.GetSet()).second) {
+		    covered_pairs.insert(predicate.GetSet()).second) {
 			candidates.push_back(predicate);
 		}
 	}

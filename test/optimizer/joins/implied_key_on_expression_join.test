@@ -2,15 +2,56 @@
 # description: A transitive integer key can accompany an expression join within an inner join region
 # group: [joins]
 
+statement ok
+CREATE TABLE sales AS
+SELECT g AS grp, p // 12 AS year, p % 12 AS moy, (g * 7 + p * 3 + i) % 50 AS price
+FROM range(4) a(g), range(14) b(p), range(8) c(i);
+
+statement ok
+CREATE VIEW monthly_total AS SELECT grp, year, moy, sum(price) AS total FROM sales GROUP BY ALL;
+
+statement ok
+CREATE VIEW monthly_max AS SELECT grp, year, moy, max(price) AS max_price FROM sales GROUP BY ALL;
+
+statement ok
+CREATE VIEW enriched AS
+SELECT grp, year, moy, total, max_price
+FROM sales JOIN monthly_total USING (grp, year, moy) JOIN monthly_max USING (grp, year, moy);
+
+statement ok
+CREATE VIEW ranked AS
+SELECT grp, year, moy, rn
+FROM enriched JOIN (
+  SELECT *, row_number() OVER (PARTITION BY grp ORDER BY year, moy) AS rn
+  FROM (SELECT DISTINCT * FROM enriched)
+) USING (grp, year, moy, total, max_price);
+
+statement ok
+CREATE VIEW ranked_neighbors AS
+SELECT count(*), sum(cur.grp * 100 + cur.rn), sum(lag.year * 100 + lag.moy)
+FROM ranked cur, ranked lag, ranked lead
+WHERE cur.rn = lag.rn + 1 AND cur.rn = lead.rn - 1 AND cur.grp = lag.grp AND cur.grp = lead.grp;
+
+query III
+FROM ranked_neighbors;
+----
+24576	3870720	135168
+
+# Both rank joins include the group key with the default optimizer pipeline.
+query II
+EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
+----
+physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
+
 # Leave the two original group equalities on the join graph.
 statement ok
 SET disabled_optimizers = 'filter_pushdown';
 
 statement ok
-CREATE TABLE a AS SELECT i % 8 AS ga, i AS xa FROM range(32) t(i);
+CREATE TABLE a AS SELECT i % 8 AS ga, i // 8 AS xa FROM range(32) t(i);
 
 statement ok
-CREATE TABLE b AS SELECT i % 8 AS gb, i + 1 AS xb FROM range(32) t(i);
+CREATE TABLE b AS SELECT i % 8 AS gb, i // 8 + 1 AS xb FROM range(32) t(i);
 
 statement ok
 CREATE TABLE c AS SELECT i % 8 AS gc FROM range(1024) t(i);
@@ -34,6 +75,25 @@ EXPLAIN (FORMAT JSON) SELECT * FROM a JOIN b ON xa = xb - 1 JOIN c ON ga = gc AN
 query II nosort implied_equals_explicit
 EXPLAIN (FORMAT JSON) SELECT * FROM a JOIN b ON xa = xb - 1 AND ga = gb JOIN c ON ga = gc AND gb = gc;
 ----
+
+# A selective expression join can use its existing key alone.
+statement ok
+CREATE TABLE keys AS SELECT i AS id, i + 1 AS next_id, i % 13 AS g, i % 17 AS h FROM range(4096) t(i);
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM keys a JOIN keys b ON a.id = b.next_id - 1
+JOIN keys c ON a.g = c.g AND b.g = c.g AND a.h = c.h AND b.h = c.h;
+----
+physical_plan	<REGEX>:.*"Conditions":\s*"[^"]*next_id[^"]*".*
+
+# A many-to-one expression loses the distinctness of its input column.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM keys a JOIN keys b ON a.id % 4 = b.next_id % 4
+JOIN keys c ON a.g = c.g AND b.g = c.g;
+----
+physical_plan	<REGEX>:.*"Conditions":\s*\[[^\]]*(next_id[^\]]*g = g|g = g[^\]]*next_id)[^\]]*\].*
 
 statement ok
 CREATE TABLE lhs(g INTEGER, r INTEGER);

@@ -133,7 +133,7 @@ public:
 	JoinPredicate &RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
 	                                 ColumnBinding left_equality_binding, ColumnBinding right_equality_binding);
 	void AddEqualityClass(JoinEqualityClass equality_class);
-	vector<ImpliedJoinKey> FindImpliedJoinKeys() const;
+	vector<ImpliedJoinKey> FindImpliedJoinKeys(reference_set_t<JoinRelationSet> covered_pairs) const;
 	void RegisterImpliedEquality(FilterInfo &filter, idx_t equality_class_index);
 	void AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index, ColumnBinding first_binding,
 	                                ColumnBinding second_binding);
