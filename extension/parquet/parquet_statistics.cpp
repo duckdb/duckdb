@@ -783,7 +783,10 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
-			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+			row_group_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+			if (parquet_stats.null_count > 0) {
+				row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
 		}
 	}
 	return row_group_stats;
