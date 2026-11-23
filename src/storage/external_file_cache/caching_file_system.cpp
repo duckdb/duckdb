@@ -53,7 +53,7 @@ BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t siz
 }
 
 // IO operation is performed to stat the file.
-CacheValidationInfo GetValidationInfo(BaseFileSystem &file_system, FileHandle &handle) {
+CacheValidationInfo GetValidationInfo(FileSystem &file_system, FileHandle &handle) {
 	auto stats = file_system.Stats(handle);
 	CacheValidationInfo result;
 	result.file_size = NumericCast<idx_t>(stats.file_size);
@@ -204,18 +204,15 @@ private:
 // CachingFileSystem
 //===----------------------------------------------------------------------===//
 
-CachingFileSystem::CachingFileSystem(BaseFileSystem &file_system_p, optional_ptr<FileOpener> file_system_opener_p,
-                                     DatabaseInstance &db_p)
-    : file_system(file_system_p), file_system_opener(file_system_opener_p), db(db_p),
-      external_file_cache(ExternalFileCache::Get(db)) {
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
 }
 
 CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	return CachingFileSystem(fs.GetFileSystem(), fs.GetOpener(), *context.db);
+	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
@@ -322,8 +319,7 @@ void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file) {
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
-    : context(context), file_system(caching_file_system_p.file_system),
-      file_system_opener(caching_file_system_p.file_system_opener), db(caching_file_system_p.db),
+    : context(context), file_system(caching_file_system_p.file_system), db(caching_file_system_p.db),
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p),
       validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetContext(), caching_file_system_p.db)),
@@ -372,8 +368,7 @@ shared_ptr<FileHandle> CachingFileHandle::TryGetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	FileSystem::VerifyCanOpenFile(file_system, file_system_opener, path.path, internal_flags);
-	file_handle = file_system.OpenFile(path, internal_flags, file_system_opener);
+	file_handle = file_system.OpenFile(path, internal_flags);
 	if (!file_handle) {
 		return nullptr;
 	}

@@ -269,10 +269,10 @@ public:
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
-                               vector<column_t> partitions)
+                               vector<column_t> partitions, optional_idx partition_limit)
     : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false),
-      partition_info(std::move(partitions)) {
+      partition_info(std::move(partitions)), partition_limit(partition_limit) {
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -315,9 +315,10 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &conte
 }
 
 PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
-                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
+                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+                               optional_idx partition_limit)
     : PhysicalWindow(physical_plan, context, std::move(types), std::move(select_list), estimated_cardinality,
-                     vector<column_t>()) {
+                     vector<column_t>(), partition_limit) {
 }
 
 unique_ptr<WindowExecutor> WindowExecutor::Factory(BoundWindowExpression &wexpr, ClientContext &client,
@@ -345,7 +346,8 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	}
 
 	sort_strategy = SortStrategy::Factory(client, wexpr.Partitions(), wexpr.OrderBy(), op.children[0].get().GetTypes(),
-	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality);
+	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality, false,
+	                                      op.partition_limit);
 	strategy_sink = sort_strategy->GetGlobalSinkState(client);
 }
 
@@ -1264,6 +1266,11 @@ InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

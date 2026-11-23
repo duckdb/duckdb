@@ -34,8 +34,7 @@ public:
 	public:
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
-		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), hashes(LogicalType::HASH),
-		      addresses(LogicalType::POINTER) {
+		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.AggregateFunction();
 			bind_data = wexpr.BindInfo().get();
@@ -106,8 +105,6 @@ public:
 		unique_ptr<GroupedAggregateHashTable> distinct;
 		//! Filtered arguments for checking distinctness
 		DataChunk distinct_args;
-		//! Reusable hash vector
-		Vector hashes;
 		//! Rows that produced new distinct values
 		SelectionVector distinct_sel;
 		//! Pointers to groups in the hash table.
@@ -269,11 +266,8 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		auto &distinct_sel = aggr_state.distinct_sel;
 		if (filtered) {
 			// FindOrCreateGroups assumes non-empty input
-			auto &hashes = aggr_state.hashes;
-			distinct_args.Hash(hashes);
-
 			auto &addresses = aggr_state.addresses;
-			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, hashes, addresses, distinct_sel);
+			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, addresses, distinct_sel);
 		}
 
 		//	Translate the distinct selection from filtered row numbers

@@ -9,7 +9,6 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/database.hpp"
@@ -178,8 +177,8 @@ BaseFileSystem &VirtualFileSystem::GetLocalFileSystem() {
 }
 
 optional_ptr<BaseFileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
-                                                                      const FileCompressionType &compression,
-                                                                      const string &filepath, bool for_writing) {
+                                                                          const FileCompressionType &compression,
+                                                                          const string &filepath, bool for_writing) {
 	auto resolved = compression;
 	// For auto-detection, check whether any registered compression filesystem can handle this file.
 	if (resolved.IsAutoDetect()) {
@@ -238,23 +237,18 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 
 	auto registry = file_system_registry.atomic_load();
 	auto &internal_filesystem = FindFileSystem(registry, file.path, opener);
-
-	// File handle gets created.
-	unique_ptr<FileHandle> file_handle = nullptr;
-
-	// Handle caching logic.
-	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
-		auto caching_filesystem =
-		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
-		// caching filesystem's lifecycle is extended inside of caching file handle.
-		file_handle = caching_filesystem->OpenFile(file, flags, opener);
-	} else {
-		file_handle = internal_filesystem.OpenFile(file, flags, opener);
-	}
+	auto file_handle = internal_filesystem.OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
+	flags.SetCompression(compression);
+	return WrapOpenedFile(std::move(file_handle), file, flags, opener);
+}
 
+unique_ptr<FileHandle> VirtualFileSystem::WrapOpenedFile(unique_ptr<FileHandle> file_handle, const OpenFileInfo &file,
+                                                         const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
+	const FileCompressionType compression = flags.Compression();
+	auto registry = file_system_registry.atomic_load();
 	try {
 		// Evaluate and apply compression option then.
 		QueryContext context;

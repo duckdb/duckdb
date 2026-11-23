@@ -60,10 +60,7 @@ public:
 public:
 	DUCKDB_API void VerifyCanAccessDirectory(const string &path);
 	DUCKDB_API void VerifyCanAccessFile(const string &path);
-	//! Checks that a file may be opened with the given opener (access configuration and extension files)
-	DUCKDB_API static void VerifyCanOpenFile(BaseFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
-	                                         const FileOpenFlags &flags);
-	static void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
+	void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
 		if (flags.OpenForWriting() && !flags.EnableExtensionInstall()) {
 			throw PermissionException(
 			    "File '%s' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for "
@@ -79,12 +76,9 @@ public:
 	//! "<name>.duckdb_extension.info" or "<name>.duckdb_extension.repo.json". Matching is on the file name only, so a
 	//! directory that happens to contain the marker does not reserve the files inside it
 	bool IsDuckDBExtensionName(const string &path) {
-		return IsDuckDBExtensionName(GetFileSystem(), GetOpener(), path);
-	}
-	static bool IsDuckDBExtensionName(BaseFileSystem &fs, optional_ptr<FileOpener> opener, const string &path) {
 		// match the canonical name case-insensitively: on the default macOS and Windows file systems a
 		// differently-cased name refers to the same file
-		auto name = StringUtil::Lower(fs.ExtractName(fs.CanonicalizePath(path, opener)));
+		auto name = StringUtil::Lower(GetFileSystem().ExtractName(CanonicalizePath(path)));
 		return StringUtil::EndsWith(name, ".duckdb_extension") || StringUtil::Contains(name, ".duckdb_extension.");
 	}
 
@@ -223,7 +217,8 @@ public:
 	}
 
 private:
-	static void VerifyCanAccessFileInternal(optional_ptr<FileOpener> opener, const string &path, FileType type);
+	void VerifyCanAccessFileInternal(const string &path, FileType type);
+	unique_ptr<FileHandle> OpenCachedFile(const OpenFileInfo &file, const FileOpenFlags &flags);
 };
 
 } // namespace duckdb

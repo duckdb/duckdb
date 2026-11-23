@@ -6,6 +6,7 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
 namespace duckdb {
 
@@ -18,8 +19,28 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags fl
 }
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags) {
-	VerifyCanOpenFile(GetFileSystem(), GetOpener(), file.path, flags);
-	return GetFileSystem().OpenFile(file, flags, GetOpener());
+	VerifyCanAccessFile(file.path);
+	if (IsDuckDBExtensionName(file.path)) {
+		VerifyCanAccessExtension(file.path, flags);
+	}
+	if (flags.GetCachingMode() == CachingMode::NO_CACHING) {
+		return GetFileSystem().OpenFile(file, flags, GetOpener());
+	}
+	return OpenCachedFile(file, flags);
+}
+
+unique_ptr<FileHandle> FileSystem::OpenCachedFile(const OpenFileInfo &file, const FileOpenFlags &flags) {
+	// the cache holds the file as stored, the file system applies the compression on top of it
+	auto raw_flags = flags;
+	raw_flags.SetCompression(FileCompressionType::UNCOMPRESSED);
+	raw_flags.SetCachingMode(CachingMode::NO_CACHING);
+
+	auto caching_file_system = make_shared_ptr<CachingFileSystemWrapper>(*this, flags.GetCachingMode());
+	auto handle = caching_file_system->OpenFile(file, raw_flags, GetOpener());
+	if (!handle) {
+		return nullptr;
+	}
+	return GetFileSystem().WrapOpenedFile(std::move(handle), file, flags, GetOpener());
 }
 
 unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
@@ -180,15 +201,8 @@ string FileSystem::ExpandPath(const string &path) {
 	return FileSystem::ExpandPath(path, GetOpener());
 }
 
-void FileSystem::VerifyCanOpenFile(BaseFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
-                                   const FileOpenFlags &flags) {
-	VerifyCanAccessFileInternal(opener, path, FileType::FILE_TYPE_REGULAR);
-	if (IsDuckDBExtensionName(fs, opener, path)) {
-		VerifyCanAccessExtension(path, flags);
-	}
-}
-
-void FileSystem::VerifyCanAccessFileInternal(optional_ptr<FileOpener> opener, const string &path, FileType type) {
+void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) {
+	auto opener = GetOpener();
 	if (!opener) {
 		return;
 	}
@@ -204,11 +218,11 @@ void FileSystem::VerifyCanAccessFileInternal(optional_ptr<FileOpener> opener, co
 }
 
 void FileSystem::VerifyCanAccessFile(const string &path) {
-	VerifyCanAccessFileInternal(GetOpener(), path, FileType::FILE_TYPE_REGULAR);
+	VerifyCanAccessFileInternal(path, FileType::FILE_TYPE_REGULAR);
 }
 
 void FileSystem::VerifyCanAccessDirectory(const string &path) {
-	VerifyCanAccessFileInternal(GetOpener(), path, FileType::FILE_TYPE_DIR);
+	VerifyCanAccessFileInternal(path, FileType::FILE_TYPE_DIR);
 }
 
 } // namespace duckdb

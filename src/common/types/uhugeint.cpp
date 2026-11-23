@@ -111,15 +111,13 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	}
 
 	// if any of these products are set to a non-zero value, there is always an overflow
-	if (products[2][1] || products[1][0] || products[2][0]) {
+	if (products[3][0] || products[3][1] || products[3][2] || products[2][0] || products[2][1] || products[1][0]) {
 		return false;
 	}
 
 	// if the high bits of any of these are set, there is always an overflow
-	if (products[1][1] & 0xffffffff00000000 || products[3][0] & 0xffffffff00000000 ||
-	    products[3][3] & 0xffffffff00000000 || products[3][2] & 0xffffffff00000000 ||
-	    products[3][1] & 0xffffffff00000000 || products[2][2] & 0xffffffff00000000 ||
-	    products[0][0] & 0xffffffff00000000) {
+	if (products[0][0] & 0xffffffff00000000 || products[1][1] & 0xffffffff00000000 ||
+	    products[2][2] & 0xffffffff00000000 || products[3][3] & 0xffffffff00000000) {
 		return false;
 	}
 
@@ -145,6 +143,11 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	third32 += fourth32 >> 32;
 	second32 += third32 >> 32;
 	first32 += second32 >> 32;
+
+	// check if the combination of the different products resulted in an overflow
+	if (first32 & 0xffffffff00000000) {
+		return false;
+	}
 
 	// remove carry from current digit
 	fourth32 &= 0xffffffff;

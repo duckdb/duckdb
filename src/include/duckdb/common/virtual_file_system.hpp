@@ -84,6 +84,9 @@ public:
 
 	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
 
+	unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                      const FileOpenFlags &flags, optional_ptr<FileOpener> opener) override;
+
 protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener) override;

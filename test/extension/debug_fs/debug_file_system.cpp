@@ -231,6 +231,17 @@ unique_ptr<FileHandle> DebugFileSystem::OpenCompressedFile(QueryContext context,
 	return make_uniq<DebugFileHandle>(*this, std::move(compressed));
 }
 
+unique_ptr<FileHandle> DebugFileSystem::WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+                                                       const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
+	// handles served from the external file cache are not ours
+	auto debug_handle = dynamic_cast<DebugFileHandle *>(handle.get());
+	if (!debug_handle) {
+		return inner_fs->WrapOpenedFile(std::move(handle), file, flags, opener);
+	}
+	auto wrapped = inner_fs->WrapOpenedFile(std::move(debug_handle->inner), file, flags, opener);
+	return make_uniq<DebugFileHandle>(*this, std::move(wrapped));
+}
+
 bool DebugFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	return inner_fs->DirectoryExists(directory, opener);
 }

@@ -50,10 +50,10 @@ private:
 //! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
 class CachingFileSystemWrapper : public BaseFileSystem, public enable_shared_from_this<CachingFileSystemWrapper> {
 public:
-	DUCKDB_API CachingFileSystemWrapper(BaseFileSystem &file_system, DatabaseInstance &db,
+	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
-	DUCKDB_API CachingFileSystemWrapper(BaseFileSystem &file_system, optional_ptr<FileOpener> file_opener,
-	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
+	//! The database is taken from the opener of the file system
+	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
 	DUCKDB_API std::string GetName() const override;
@@ -120,6 +120,9 @@ public:
 
 	DUCKDB_API unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                     bool write) override;
+	DUCKDB_API unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                                 const FileOpenFlags &flags,
+	                                                 optional_ptr<FileOpener> opener) override;
 
 	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names) override;
 	DUCKDB_API vector<string> GetDisabledFileSystems() override;

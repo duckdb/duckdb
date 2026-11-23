@@ -1,0 +1,19 @@
+# name: test/sql/optimizer/statistics/timestamp_to_time_ns_stats.test
+# description: CAST(TIMESTAMP_NS AS TIME_NS) wraps around midnight, so it must not propagate min/max statistics
+# group: [statistics]
+
+statement ok
+CREATE TABLE t AS SELECT ts::TIMESTAMP_NS AS ts FROM (VALUES
+	('2024-01-01 23:30:00'),
+	('2024-01-02 00:05:00'),
+	('2024-01-02 00:30:00')) v(ts);
+
+query II
+SELECT stats(ts)::VARCHAR, stats(CAST(ts AS TIME_NS))::VARCHAR FROM t LIMIT 1;
+----
+{'approx_unique': 3, 'has_no_null': true, 'has_null': false, 'max': '2024-01-02 00:30:00', 'min': '2024-01-01 23:30:00'}	{'has_no_null': true, 'has_null': true}
+
+query II
+SELECT min(CAST(ts AS TIME_NS)), max(CAST(ts AS TIME_NS)) FROM t;
+----
+00:05:00	23:30:00

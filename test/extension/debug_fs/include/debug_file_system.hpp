@@ -64,6 +64,8 @@ public:
 	bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;
 	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
+	unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                      const FileOpenFlags &flags, optional_ptr<FileOpener> opener) override;
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,

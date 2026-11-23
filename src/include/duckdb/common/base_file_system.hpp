@@ -349,6 +349,11 @@ public:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
 
+	//! Applies the compression (and pipe handling) of the flags to a handle that was opened uncompressed
+	DUCKDB_API virtual unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                                         const FileOpenFlags &flags,
+	                                                         optional_ptr<FileOpener> opener);
+
 	//! Whether this is a LocalFileSystem instance.
 	DUCKDB_API virtual bool IsLocalFileSystem() const;
 

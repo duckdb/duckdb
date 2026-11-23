@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -124,10 +124,8 @@ private:
 private:
 	QueryContext context;
 
-	//! The raw file system and its opener, held directly because the caching file system can be destroyed before this
-	//! handle
-	BaseFileSystem &file_system;
-	optional_ptr<FileOpener> file_system_opener;
+	//! The file system, held directly because the caching file system can be destroyed before this handle
+	FileSystem &file_system;
 	//! The DatabaseInstance
 	DatabaseInstance &db;
 	//! The DB external file cache
@@ -166,8 +164,7 @@ private:
 
 public:
 	// Notice, the provided [file_system] should be a raw, non-caching filesystem.
-	DUCKDB_API CachingFileSystem(BaseFileSystem &file_system, optional_ptr<FileOpener> file_system_opener,
-	                             DatabaseInstance &db);
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 
 public:
@@ -180,9 +177,8 @@ public:
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
-	//! The raw file system and the opener to use with it (client-specific so we can do, e.g., HTTPFS profiling)
-	BaseFileSystem &file_system;
-	optional_ptr<FileOpener> file_system_opener;
+	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
+	FileSystem &file_system;
 	//! The DatabaseInstance.
 	DatabaseInstance &db;
 	//! The External File Cache that caches the files
