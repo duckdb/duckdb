@@ -389,6 +389,27 @@ class ExtensionSyncTest(unittest.TestCase):
         )
         self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), revision)
 
+    def test_windows_patch_uses_git_distribution_for_each_git_layout(self):
+        git_root = self.root.resolve() / 'Git with spaces'
+        executable = git_root / 'usr/bin/patch.exe'
+        executable.parent.mkdir(parents=True)
+        executable.touch()
+        for layout in ('cmd/git.exe', 'bin/git.exe', 'mingw64/bin/git.exe'):
+            with self.subTest(layout=layout), patch.object(sync.sys, 'platform', 'win32'):
+                with patch.object(sync.shutil, 'which', return_value=str(git_root / layout)):
+                    self.assertEqual(sync.patch_executable(), str(executable))
+
+    def test_windows_patch_falls_back_when_git_has_no_bundled_patch(self):
+        for git_path in (None, str(self.root / 'git/bin/git.exe')):
+            with self.subTest(git_path=git_path), patch.object(sync.sys, 'platform', 'win32'):
+                with patch.object(sync.shutil, 'which', return_value=git_path):
+                    self.assertEqual(sync.patch_executable(), 'patch')
+
+    def test_posix_patch_respects_path(self):
+        with patch.object(sync.sys, 'platform', 'linux'), patch.object(sync.shutil, 'which') as which:
+            self.assertEqual(sync.patch_executable(), 'patch')
+        which.assert_not_called()
+
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_version_is_the_pin_under_patch_commits(self):
         os.environ.update(
