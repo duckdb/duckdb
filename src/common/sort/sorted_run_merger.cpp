@@ -8,6 +8,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/sort_key_prefix.hpp"
 #include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -76,35 +77,6 @@ static idx_t MergePartitionPrefix(const unsafe_array_ptr<const SORT_KEY> &keys,
 	}
 	return prefix;
 }
-
-template <class SORT_KEY>
-class MergePrefixCache {
-public:
-	MergePrefixCache(unsafe_array_ptr<SORT_KEY> keys_p, idx_t prefix) : keys(keys_p), original_part0(keys[0].part0) {
-		// Cache the first varying word in these private copies' shared inline prefix.
-		for (idx_t i = 0; i < keys.size(); i++) {
-			auto &key = keys[i];
-			D_ASSERT(key.part0 == original_part0 && key.GetHeapSize() >= prefix);
-			uint64_t word = 0;
-			memcpy(&word, key.GetData() + prefix, MinValue<idx_t>(sizeof(word), key.GetHeapSize() - prefix));
-			key.part0 = BSwapIfLE(word);
-		}
-	}
-
-	MergePrefixCache(const MergePrefixCache &) = delete;
-	MergePrefixCache &operator=(const MergePrefixCache &) = delete;
-
-	~MergePrefixCache() {
-		// Restore canonical keys before scanning or materializing them.
-		for (idx_t i = 0; i < keys.size(); i++) {
-			keys[i].part0 = original_part0;
-		}
-	}
-
-private:
-	unsafe_array_ptr<SORT_KEY> keys;
-	const uint64_t original_part0;
-};
 
 template <class SORT_KEY>
 struct MergePrefixLess {
@@ -814,8 +786,14 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 			    unsafe_array_ptr<const SORT_KEY>(merged_partition_keys, merged_partition_count), run_boundaries);
 			if (prefix != 0) {
 				// Sorted endpoints establish this prefix for every key in each gathered fragment.
-				MergePrefixCache<SORT_KEY> cache(
-				    unsafe_array_ptr<SORT_KEY>(merged_partition_keys, merged_partition_count), prefix);
+				const unsafe_array_ptr<SORT_KEY> keys(merged_partition_keys, merged_partition_count);
+				SortKeyPrefixScope<array_ptr_iterator<SORT_KEY>> prefix_scope(keys.begin(), keys.end());
+				for (auto &key : keys) {
+					D_ASSERT(key.GetHeapSize() >= prefix);
+					uint64_t word = 0;
+					memcpy(&word, key.GetData() + prefix, MinValue<idx_t>(sizeof(word), key.GetHeapSize() - prefix));
+					prefix_scope.Set(key, BSwapIfLE(word));
+				}
 				const MergePrefixLess<SORT_KEY> compare(prefix);
 				const auto prefix_fallback = [&](SORT_KEY *begin, SORT_KEY *end) {
 					duckdb_pdqsort::pdqsort_branchless(begin, end, compare);
