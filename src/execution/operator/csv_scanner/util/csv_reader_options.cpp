@@ -378,7 +378,7 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 	} else if (loption == "unterminated_quote") {
 		const auto mode = StringUtil::Lower(ParseString(value, loption));
 		if (mode == "error") {
-			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::ERROR);
+			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::THROW);
 		} else if (mode == "value") {
 			dialect_options.state_machine_options.unterminated_quote.Set(CSVUnterminatedQuote::VALUE);
 		} else if (mode == "null_at_line_end") {

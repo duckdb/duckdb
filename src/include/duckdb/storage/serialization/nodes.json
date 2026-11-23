@@ -1246,7 +1246,7 @@
         "name": "unterminated_quote",
         "property": "options.dialect_options.state_machine_options.unterminated_quote",
         "type": "CSVOption<CSVUnterminatedQuote>",
-        "default": "CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::ERROR)"
+        "default": "CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::THROW)"
       },
 
       {

@@ -37,7 +37,7 @@ enum class CSVEmbeddedQuotes : uint8_t {
 
 //! What a quote that never closes means
 enum class CSVUnterminatedQuote : uint8_t {
-	ERROR = 0,           // an unterminated quote is an error
+	THROW = 0,           // an unterminated quote is an error
 	VALUE = 1,           // the quote and the rest of its field read as a plain value
 	NULL_AT_LINE_END = 2 // the record ends at the line break and the open field reads as NULL
 };

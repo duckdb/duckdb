@@ -1180,7 +1180,7 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCSVUnterminatedQuoteValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CSVUnterminatedQuote::ERROR), "ERROR" },
+		{ static_cast<uint32_t>(CSVUnterminatedQuote::THROW), "THROW" },
 		{ static_cast<uint32_t>(CSVUnterminatedQuote::VALUE), "VALUE" },
 		{ static_cast<uint32_t>(CSVUnterminatedQuote::NULL_AT_LINE_END), "NULL_AT_LINE_END" }
 	};

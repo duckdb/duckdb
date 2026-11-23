@@ -734,7 +734,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED));
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
-		serializer.WritePropertyWithDefault<CSVOption<CSVUnterminatedQuote>>(146, "unterminated_quote", options.dialect_options.state_machine_options.unterminated_quote, CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::ERROR));
+		serializer.WritePropertyWithDefault<CSVOption<CSVUnterminatedQuote>>(146, "unterminated_quote", options.dialect_options.state_machine_options.unterminated_quote, CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::THROW));
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
 		serializer.WritePropertyWithDefault<CSVOption<CSVEmbeddedQuotes>>(149, "embedded_quotes", options.dialect_options.state_machine_options.embedded_quotes, CSVOption<CSVEmbeddedQuotes>(CSVEmbeddedQuotes::NONE));
@@ -834,7 +834,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.options.buffer_size_option);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::QUOTED));
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVUnterminatedQuote>>(146, "unterminated_quote", result.options.dialect_options.state_machine_options.unterminated_quote, CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::ERROR));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVUnterminatedQuote>>(146, "unterminated_quote", result.options.dialect_options.state_machine_options.unterminated_quote, CSVOption<CSVUnterminatedQuote>(CSVUnterminatedQuote::THROW));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEmbeddedQuotes>>(149, "embedded_quotes", result.options.dialect_options.state_machine_options.embedded_quotes, CSVOption<CSVEmbeddedQuotes>(CSVEmbeddedQuotes::NONE));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<idx_t>>(150, "new_line_terminators", result.options.dialect_options.state_machine_options.new_line_terminators, CSVOption<idx_t>(0));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(151, "ignore_extra_columns", result.options.ignore_extra_columns, CSVOption<bool>(false));

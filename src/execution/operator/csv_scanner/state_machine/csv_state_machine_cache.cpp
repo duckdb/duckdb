@@ -732,7 +732,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 				for (const bool lenient : {false, true}) {
 					// the lenient reading escapes outside quotes and accepts unescaped quotes and any line break
 					const auto escape_mode = lenient ? CSVEscapeMode::ANYWHERE : CSVEscapeMode::QUOTED;
-					const auto unterminated = lenient ? CSVUnterminatedQuote::VALUE : CSVUnterminatedQuote::ERROR;
+					const auto unterminated = lenient ? CSVUnterminatedQuote::VALUE : CSVUnterminatedQuote::THROW;
 					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_N,
 					        escape_mode, CSVEmbeddedQuotes::NONE, unterminated, static_cast<idx_t>(lenient ? 7 : 0),
 					        lenient});

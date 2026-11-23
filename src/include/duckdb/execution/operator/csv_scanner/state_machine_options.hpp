@@ -18,7 +18,7 @@ struct CSVStateMachineOptions {
 	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
 	                       NewLineIdentifier new_line_p, CSVOption<CSVEscapeMode> escape_mode_p = CSVEscapeMode::QUOTED,
 	                       CSVOption<CSVEmbeddedQuotes> embedded_quotes_p = CSVEmbeddedQuotes::NONE,
-	                       CSVOption<CSVUnterminatedQuote> unterminated_quote_p = CSVUnterminatedQuote::ERROR,
+	                       CSVOption<CSVUnterminatedQuote> unterminated_quote_p = CSVUnterminatedQuote::THROW,
 	                       CSVOption<idx_t> new_line_terminators_p = 0,
 	                       CSVOption<bool> allow_unescaped_quotes_p = false)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
@@ -40,7 +40,7 @@ struct CSVStateMachineOptions {
 	//! What a quote inside an unquoted field means
 	CSVOption<CSVEmbeddedQuotes> embedded_quotes = CSVEmbeddedQuotes::NONE;
 	//! What a quote that never closes means
-	CSVOption<CSVUnterminatedQuote> unterminated_quote = CSVUnterminatedQuote::ERROR;
+	CSVOption<CSVUnterminatedQuote> unterminated_quote = CSVUnterminatedQuote::THROW;
 	//! The record terminators the reading accepts, as bits for \n, \r and \r\n, with zero meaning new_line alone
 	CSVOption<idx_t> new_line_terminators = 0;
 	//! Content after a closing quote is tolerated rather than an error
