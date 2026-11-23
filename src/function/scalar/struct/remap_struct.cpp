@@ -419,6 +419,12 @@ struct RemapEntry {
 			// add to the map at this level only if it does not yet exist
 			auto result_entry = result.find(Identifier(default_target));
 			if (result_entry == result.end()) {
+				if (target_type.id() != LogicalTypeId::STRUCT) {
+					// the defaults of a LIST or MAP fill the entries of the source - without a source there are none
+					throw BinderException("Default value for %s is a struct, but the target type '%s' is not mapped "
+					                      "to a source - map it to a source or provide a default of the target type",
+					                      default_target, target_type.ToString());
+				}
 				result.emplace(default_target, std::move(remap));
 				result_entry = result.find(Identifier(default_target));
 				result_entry->second.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
