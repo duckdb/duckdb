@@ -352,7 +352,8 @@ bool CachingFileSystemWrapper::IsManuallySet() {
 }
 
 bool CachingFileSystemWrapper::CanSeek() {
-	return underlying_file_system.CanSeek();
+	// cached files are read by offset
+	return true;
 }
 
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
