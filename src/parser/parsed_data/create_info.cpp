@@ -32,7 +32,6 @@ DatabaseModificationType CreateInfo::GetModifications() const {
 		return DatabaseModificationType();
 	}
 	case CatalogType::INDEX_ENTRY:
-	case CatalogType::TRIGGER_ENTRY:
 		return DatabaseModificationType::CREATE_CATALOG_ENTRY;
 	case CatalogType::SCHEMA_ENTRY:
 		// replacing a schema drops the existing one
