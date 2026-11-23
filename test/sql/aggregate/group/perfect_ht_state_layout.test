@@ -41,6 +41,11 @@ EXPLAIN (FORMAT JSON) SELECT min(i ORDER BY i DESC) EXPORT_STATE FROM input GROU
 physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
 
 query II
+EXPLAIN (FORMAT JSON) SELECT min(i::VARCHAR ORDER BY i DESC) EXPORT_STATE FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
 EXPLAIN (FORMAT JSON) SELECT approx_count_distinct(i ORDER BY i DESC) EXPORT_STATE FROM input GROUP BY g
 ----
 physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
@@ -72,5 +77,15 @@ physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
 
 query II
 EXPLAIN (FORMAT JSON) SELECT max(i::VARCHAR) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min([i]), max({'v': i}) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i::VARCHAR) EXPORT_STATE, approx_count_distinct(i) EXPORT_STATE FROM input GROUP BY g
 ----
 physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*

@@ -244,15 +244,18 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		if (aggregate.IsDistinct() || !function.HasStateCombineCallback()) {
 			return false;
 		}
-		if (function.GetProperties().allow_perfect_hash) {
-			continue;
-		}
-		if (!function.HasGetStateTypeCallback() || function.HasStateDestructorCallback() ||
-		    function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback()) {
+		if (!function.HasGetStateTypeCallback() || function.HasStateDestructorCallback()) {
 			return false;
 		}
 		const auto layout = function.GetStateType(aggregate.BindInfo().get());
-		if (!layout.field.IsFixedSize(layout.type)) {
+		// Preserve min/max and fixed-size sketch fast paths, excluding sorted aggregate buffers.
+		const auto &name = function.GetName();
+		if (function.GetArguments().size() == 1 && layout.field.kind != AggregateFieldKind::LIST &&
+		    (name == "min" || name == "max" || name == "approx_count_distinct")) {
+			continue;
+		}
+		if (function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback() ||
+		    !layout.field.IsFixedSize(layout.type)) {
 			return false;
 		}
 	}

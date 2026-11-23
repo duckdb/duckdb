@@ -352,9 +352,6 @@ public:
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
 
-	//! Allow perfect hashing when a fixed-size native state cannot be established from its layout.
-	bool allow_perfect_hash = false;
-
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 

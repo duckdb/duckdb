@@ -408,8 +408,6 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	arguments = std::move(expr->GetChildrenMutable());
 
 	function.ReplaceImplementation(expr->Function());
-	// Keep the single-result min/max fast path, including variable-width values.
-	function.GetProperties().allow_perfect_hash = true;
 	return expr->BindInfo() ? expr->BindInfo()->Copy() : nullptr;
 }
 
