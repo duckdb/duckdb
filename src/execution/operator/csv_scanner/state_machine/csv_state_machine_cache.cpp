@@ -161,8 +161,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	                                                       new_line_id == NewLineIdentifier::NOT_SET;
 	const bool accepts_rn =
 	    new_line_terminators != 0 ? (new_line_terminators & 4) != 0 : new_line_id == NewLineIdentifier::CARRY_ON;
-	// the carriage return only opens the pair state when it cannot end a record alone
-	const bool pair_cr = accepts_rn && !accepts_r;
+	// the carriage return opens the pair state whenever \r\n ends a record, so its line feed never opens an empty line
+	const bool pair_cr = accepts_rn;
 	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.GetValue();
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
@@ -231,7 +231,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 		if (pair_cr) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
-		} else if (accepts_r || accepts_rn) {
+		} else if (accepts_r) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::INVALID;
@@ -240,7 +240,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			// the line feed closes a carriage return pair without opening a new record
 			if (pair_cr) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
-			} else if (accepts_n || accepts_rn) {
+			} else if (accepts_n) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			} else {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
@@ -328,13 +328,13 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::DELIMITER;
 	}
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-	    accepts_n || (accepts_rn && accepts_r) ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
+	    accepts_n ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
 	if (pair_cr) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
 		    CSVState::CARRIAGE_RETURN;
 	} else {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] =
-		    accepts_r || accepts_rn ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
+		    accepts_r ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
 	}
 	if (quote != '\0') {
 		transition_array[quote][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::QUOTED;
@@ -353,6 +353,16 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	    CSVState::RECORD_SEPARATOR;
 	transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
 	    accepts_r ? CSVState::CARRIAGE_RETURN : CSVState::INVALID;
+	if (accepts_r) {
+		// a carriage return of its own ends the record, so a delimiter right after it opens an empty value
+		if (multi_byte_delimiter) {
+			transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
+			    CSVState::DELIMITER_FIRST_BYTE;
+		} else {
+			transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
+			    CSVState::DELIMITER;
+		}
+	}
 
 	if (quote != '\0') {
 		transition_array[quote][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::QUOTED;
@@ -384,7 +394,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		    CSVState::CARRIAGE_RETURN;
 	} else {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED)] =
-		    accepts_r || accepts_rn ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
+		    accepts_r ? CSVState::RECORD_SEPARATOR : CSVState::INVALID;
 	}
 	if (multi_byte_delimiter) {
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::UNQUOTED)] =

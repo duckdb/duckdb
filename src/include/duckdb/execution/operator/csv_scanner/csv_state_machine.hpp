@@ -45,8 +45,10 @@ struct CSVStates {
 	}
 
 	inline bool EmptyLine() const {
-		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
-		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
+		// a carriage return right after a carriage return is an empty line too, the line feed closing the pair is not
+		return ((states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
+		        (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET)) ||
+		       (states[1] == CSVState::CARRIAGE_RETURN && states[0] == CSVState::CARRIAGE_RETURN);
 	}
 
 	inline bool IsDelimiterBytes() const {

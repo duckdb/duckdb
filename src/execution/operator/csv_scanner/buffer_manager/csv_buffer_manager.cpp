@@ -49,6 +49,44 @@ idx_t CSVBufferManager::KnownBufferSize(const idx_t buffer_idx) const {
 	return MinValue<idx_t>(buffer_size, file_size - buffer_start);
 }
 
+void CSVBufferManager::RememberTail(idx_t buffer_idx, CSVBufferHandle &handle) {
+	if (buffer_idx >= buffer_tails.size()) {
+		buffer_tails.resize(buffer_idx + 1);
+	}
+	if (buffer_tails[buffer_idx].empty() && handle.actual_size > 0) {
+		// the two runs of bytes the buffer ends in are kept whole, so that escapes before a line break keep their count
+		const char *bytes = handle.Ptr();
+		idx_t tail = 0;
+		for (idx_t runs = 0; runs < 2 && tail < handle.actual_size && tail < TAIL_CAP; runs++) {
+			const char byte = bytes[handle.actual_size - 1 - tail];
+			while (tail < handle.actual_size && tail < TAIL_CAP && bytes[handle.actual_size - 1 - tail] == byte) {
+				tail++;
+			}
+		}
+		tail = MinValue<idx_t>(tail + TAIL_BYTES, handle.actual_size);
+		buffer_tails[buffer_idx] = string(bytes + handle.actual_size - tail, tail);
+	}
+}
+
+bool CSVBufferManager::ByteBeforeBufferEnd(idx_t buffer_idx, idx_t distance, char &byte) {
+	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		{
+			lock_guard<mutex> parallel_lock(main_mutex);
+			if (buffer_idx < buffer_tails.size() && !buffer_tails[buffer_idx].empty()) {
+				const auto &tail = buffer_tails[buffer_idx];
+				if (tail.size() < distance) {
+					return false;
+				}
+				byte = tail[tail.size() - distance];
+				return true;
+			}
+		}
+		// the buffer was not handed out yet, its tail is kept once it is
+		GetBuffer(buffer_idx);
+	}
+	return false;
+}
+
 idx_t CSVBufferManager::GetBufferSize() const {
 	return buffer_size;
 }

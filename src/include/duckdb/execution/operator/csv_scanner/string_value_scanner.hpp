@@ -314,6 +314,8 @@ public:
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	//! Moves the start of the current line behind an empty line
 	void StartLineAfterEmptyLine();
+	//! Whether the carriage return the iterator is on opens a \r\n pair, assumed when it ends its buffer
+	bool CarriageReturnPair() const;
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();

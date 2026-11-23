@@ -25,6 +25,11 @@ namespace duckdb {
 
 constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 
+//! Whether a carriage return at buffer_pos ends the row on its own, a buffer end after it hides its line feed
+static bool LoneCarriageReturn(const char *buffer, const idx_t buffer_size, const idx_t buffer_pos) {
+	return buffer_pos + 1 < buffer_size && buffer[buffer_pos] == '\r' && buffer[buffer_pos + 1] != '\n';
+}
+
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
@@ -1023,8 +1028,7 @@ bool StringValueResult::AddRowInternal() {
 }
 
 void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
-	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
-	    states.states[1] != CSVState::RECORD_SEPARATOR) {
+	if (states.IsCarriageReturn() && !LoneCarriageReturn(buffer_ptr, buffer_size, buffer_pos)) {
 		last_position.buffer_pos = buffer_pos + 2;
 	} else {
 		last_position.buffer_pos = buffer_pos + 1;
@@ -1089,11 +1093,19 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	}
 }
 
+bool StringValueResult::CarriageReturnPair() const {
+	if (!states.IsCarriageReturn()) {
+		return false;
+	}
+	// the buffer of the result lags behind the iterator while a value that spans two buffers is read
+	auto &buffer = *buffer_handles.at(iterator.pos.buffer_idx);
+	return !LoneCarriageReturn(buffer.Ptr(), buffer.actual_size, iterator.pos.buffer_pos);
+}
+
 void StringValueResult::StartLineAfterEmptyLine() {
 	// The empty lines before a row are not part of its size: the next line starts at the last byte of this line break
 	idx_t line_break_pos = iterator.pos.buffer_pos;
-	if (states.IsCarriageReturn() &&
-	    state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (CarriageReturnPair()) {
 		line_break_pos++;
 	}
 	current_line_position.begin = current_line_position.end;
@@ -1103,8 +1115,7 @@ void StringValueResult::StartLineAfterEmptyLine() {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos + 1, result.buffer_size};
-	if (result.states.IsCarriageReturn() &&
-	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (result.CarriageReturnPair()) {
 		result.last_position.buffer_pos++;
 	}
 	result.StartLineAfterEmptyLine();
@@ -1404,11 +1415,16 @@ void StringValueScanner::ProcessExtraRow() {
 				lines_read++;
 				return;
 			}
-			lines_read++;
+			// the line feed closes the pair of the carriage return that ended the row
 			iterator.pos.buffer_pos++;
+			if (state_machine->transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::STANDARD)] ==
+			    CSVState::RECORD_SEPARATOR) {
+				// the row behind it is the next scanner's when a line feed of its own ends a row
+				return;
+			}
 			break;
 		case CSVState::CARRIAGE_RETURN:
-			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
+			if (states.states[0] != CSVState::RECORD_SEPARATOR && states.states[0] != CSVState::CARRIAGE_RETURN) {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
@@ -1636,8 +1652,10 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 }
 
 void StringValueScanner::ProcessOverBufferValue() {
+	// a carriage return that ended the previous buffer stays the current state, its line feed may start this one
+	const bool carriage_return_pending = states.IsCarriageReturn();
 	// Process first string
-	if (result.last_position.buffer_pos != previous_buffer_handle->actual_size) {
+	if (result.last_position.buffer_pos < previous_buffer_handle->actual_size) {
 		states.Initialize();
 	}
 
@@ -1676,15 +1694,66 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		j++;
 	}
-	if (over_buffer_string.empty() &&
-	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (over_buffer_string.empty() && carriage_return_pending) {
 		if (!iterator.IsBoundarySet()) {
 			// Skip the line feed of a \r\n that the buffer end split, a line feed of its own ends a line
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
 			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
-				iterator.pos.buffer_pos++;
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+				return;
 			}
 		} else {
+			const auto &transitions = state_machine->transition_array;
+			const bool line_feed_ends_row =
+			    transitions[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::STANDARD)] ==
+			    CSVState::RECORD_SEPARATOR;
+			const bool carriage_return_ends_row =
+			    transitions[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] ==
+			    CSVState::CARRIAGE_RETURN;
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				// the line feed closes the pair the buffer end split
+				const CSVStates before_line_feed = states;
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				const bool at_end = iterator.pos.buffer_pos >= cur_buffer_handle->actual_size;
+				if (line_feed_ends_row || at_end) {
+					// the rows behind it are the next scanner's
+					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+					return;
+				}
+				const bool empty_line_follows =
+				    buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' &&
+				    (carriage_return_ends_row || (iterator.pos.buffer_pos + 1 < cur_buffer_handle->actual_size &&
+				                                  buffer_handle_ptr[iterator.pos.buffer_pos + 1] == '\n'));
+				if (empty_line_follows) {
+					// an empty line behind the pair is read here, the next scanner starts behind the first row end
+					state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+					result.EmptyLine(result, iterator.pos.buffer_pos);
+					lines_read++;
+					iterator.pos.buffer_pos++;
+					if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+					    buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+						state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+					}
+					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+					return;
+				}
+				// anything else behind the pair is read as before, from the line feed on
+				states = before_line_feed;
+				iterator.pos.buffer_pos--;
+			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' && carriage_return_ends_row) {
+				// a carriage return right behind the one that ended the previous buffer is an empty line
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				lines_read++;
+				iterator.pos.buffer_pos++;
+				if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+				    buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+					state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+				}
+				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+				return;
+			}
 			idx_t pre_carry_pos = iterator.pos.buffer_pos;
 			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
 			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
@@ -1727,13 +1796,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		if (states.EmptyLine()) {
-			if (state_machine->dialect_options.num_cols == 1) {
-				break;
-			}
-			if (result.cur_col_id == 0) {
-				result.StartLineAfterEmptyLine();
-			}
-			continue;
+			// an empty line at the start of the buffer ends the value read over the buffers
+			break;
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
@@ -1764,12 +1828,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
-	// With a single column, a record separator read right after a state reset is an empty line only when it does not
-	// end an open row or comment
-	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
-	const bool empty_line = single_column_empty_line && result.cur_col_id == 0 && !result.comment;
+	// a record separator read right after a state reset is an empty line only when it does not end an open row or
+	// comment
+	const bool leading_empty_line = states.EmptyLine();
+	const bool empty_line = leading_empty_line && result.cur_col_id == 0 && !result.comment;
 	bool skip_value = false;
-	if (result.projecting_columns) {
+	if (result.projecting_columns && !leading_empty_line) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
 			result.cur_col_id++;
 			skip_value = true;
@@ -1878,9 +1942,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 			}
 		}
-		if (single_column_empty_line) {
+		if (leading_empty_line) {
 			if (empty_line) {
 				result.EmptyLine(result, iterator.pos.buffer_pos);
+				lines_read++;
 			}
 		} else if (!cast_errored && !states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
@@ -1895,6 +1960,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 	} else if (empty_line) {
 		result.EmptyLine(result, iterator.pos.buffer_pos);
+		lines_read++;
 	}
 
 	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
@@ -1918,7 +1984,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		result.added_last_line = true;
 	}
 	if (states.IsCarriageReturn() &&
-	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	    !LoneCarriageReturn(buffer_handle_ptr, cur_buffer_handle->actual_size, iterator.pos.buffer_pos)) {
 		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos + 1, result.buffer_size};
 	} else {
 		result.last_position = {iterator.pos.buffer_idx, ++iterator.pos.buffer_pos, result.buffer_size};
@@ -2063,10 +2129,23 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
 	bool first_column = true;
+	// a carriage return before the start is not a row end of this search
+	bool first_byte = true;
+	const auto carriage_return = static_cast<uint8_t>(CSVState::CARRIAGE_RETURN);
+	const bool lone_carriage_returns =
+	    state_machine_strict->transition_array[static_cast<uint8_t>('\r')][carriage_return] ==
+	    CSVState::CARRIAGE_RETURN;
 	const idx_t to_pos = current_iterator.GetEndPos();
 	skipper.SetBuffer(*cur_buffer_handle);
 	while (current_iterator.pos.buffer_pos < to_pos) {
 		state_machine_strict->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
+		if (lone_carriage_returns && !first_byte && current_state.WasState(CSVState::CARRIAGE_RETURN) &&
+		    !current_state.IsState(CSVState::RECORD_SEPARATOR) && !current_state.IsInvalid()) {
+			// a carriage return of its own ended the row, the byte after it starts the next line
+			current_iterator.pos.buffer_pos--;
+			return true;
+		}
+		first_byte = false;
 		if (current_state.IsState(CSVState::STANDARD) || current_state.IsState(CSVState::STANDARD_NEWLINE)) {
 			skipper.SkipToStop(state_machine_strict->transition_array.skip_standard, to_pos,
 			                   current_iterator.pos.buffer_pos);
@@ -2093,7 +2172,8 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 			return false;
 		}
 	}
-	return false;
+	// a carriage return as the last byte of the range ends the row where a lone carriage return is one
+	return lone_carriage_returns && !first_byte && current_state.IsState(CSVState::CARRIAGE_RETURN);
 }
 
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
@@ -2198,9 +2278,78 @@ void StringValueScanner::SetStart() {
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
 	}
+	const auto &transitions = state_machine_strict->transition_array;
+	auto unquoted_start = CSVState::STANDARD_NEWLINE;
+	if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+		// the escapes and the carriage return right before the start decide how its first byte reads, at a buffer
+		// start they ended the previous buffer
+		// the byte distance bytes before the start as a value, or unknown beyond the known bytes
+		constexpr int unknown = -1;
+		auto byte_before = [&](const idx_t distance) -> int {
+			if (iterator.pos.buffer_pos >= distance) {
+				return static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos - distance]);
+			}
+			char byte;
+			if (iterator.pos.buffer_idx == 0 ||
+			    !buffer_manager->ByteBeforeBufferEnd(iterator.pos.buffer_idx - 1, distance - iterator.pos.buffer_pos,
+			                                         byte)) {
+				return unknown;
+			}
+			return static_cast<uint8_t>(byte);
+		};
+		const auto &sm_options = state_machine_strict->state_machine_options;
+		const auto escape = sm_options.escape.GetValue();
+		const bool unquoted_escapes =
+		    sm_options.UnquotedEscapes() && escape != '\0' && escape != sm_options.quote.GetValue();
+		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
+		const auto unquoted_escape = static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE);
+		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
+		const bool after_carriage_return = leading_line_feed && byte_before(1) == static_cast<uint8_t>('\r');
+		// the escapes before the start or before its carriage return, an odd number escapes the byte behind them
+		const idx_t first = after_carriage_return ? 2 : 1;
+		idx_t escapes = 0;
+		while (unquoted_escapes && byte_before(first + escapes) == static_cast<uint8_t>(escape)) {
+			escapes++;
+		}
+		if (unquoted_escapes && byte_before(first + escapes) == unknown) {
+			// an escape run reaching beyond the known bytes counts as even
+			escapes = 0;
+		}
+		// the state those bytes leave an unquoted value in
+		CSVState before;
+		if (escapes % 2 == 1) {
+			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][unquoted_escape]
+			                               : CSVState::UNQUOTED_ESCAPE;
+		} else {
+			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+		}
+		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
+		switch (before) {
+		case CSVState::CARRIAGE_RETURN:
+			if (!ends_row) {
+				// the scanner before this one reads on past the pair, the search starts behind its line feed
+				iterator.pos.buffer_pos++;
+				unquoted_start = CSVState::RECORD_SEPARATOR;
+			} else {
+				unquoted_start = CSVState::CARRIAGE_RETURN;
+			}
+			break;
+		case CSVState::STANDARD:
+			if (leading_line_feed && ends_row) {
+				// the line feed ends the row of the scanner before this one or an empty line
+				unquoted_start = CSVState::STANDARD;
+			}
+			break;
+		case CSVState::INVALID:
+			break;
+		default:
+			unquoted_start = before;
+			break;
+		}
+	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
-	ValidRowInfo best_row = TryRow(CSVState::STANDARD_NEWLINE, iterator.pos.buffer_pos, iterator.GetEndPos());
+	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos());
 	// 2. We are in the middle of a quoted value
 	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		idx_t end_pos = iterator.GetEndPos();
@@ -2238,7 +2387,7 @@ void StringValueScanner::SetStart() {
 			iterator.done = true;
 		} else {
 			bool mock;
-			if (!SkipUntilState(CSVState::STANDARD_NEWLINE, CSVState::RECORD_SEPARATOR, iterator, mock)) {
+			if (!SkipUntilState(unquoted_start, CSVState::RECORD_SEPARATOR, iterator, mock)) {
 				iterator.CheckIfDone();
 			}
 		}

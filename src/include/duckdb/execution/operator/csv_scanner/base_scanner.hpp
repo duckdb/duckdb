@@ -721,7 +721,8 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::CARRIAGE_RETURN:
-				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
+				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET ||
+				    states.states[0] == CSVState::CARRIAGE_RETURN) {
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						bytes_read = iterator.pos.buffer_pos - start_pos;

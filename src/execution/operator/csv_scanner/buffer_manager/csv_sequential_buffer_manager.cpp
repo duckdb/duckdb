@@ -55,7 +55,9 @@ shared_ptr<CSVBufferHandle> CSVSequentialBufferManager::GetBuffer(const idx_t po
 		}
 	}
 	UnpinPrevious(pos);
-	return cached_buffers[pos]->Pin(*file_handle);
+	auto handle = cached_buffers[pos]->Pin(*file_handle);
+	RememberTail(pos, *handle);
+	return handle;
 }
 
 void CSVSequentialBufferManager::UnpinPrevious(const idx_t pos) {

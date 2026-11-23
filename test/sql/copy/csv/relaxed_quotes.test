@@ -131,3 +131,23 @@ FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote_mixed.csv', columns = {
 Pedro "the
 Pedro ""the"" legend
 Pedro "the
+
+# end_quote.csv with \r\n line breaks, as a Windows checkout has it, the pair being one terminator
+statement ok
+COPY (SELECT ('"Pedro "the" legend"' || chr(13) || chr(10)
+|| '"Pedro "the"')::BLOB) TO '{TEST_DIR}/end_quote_crlf.csv' (FORMAT BLOB)
+
+query I
+FROM read_csv('{TEST_DIR}/end_quote_crlf.csv', columns = {'a':'varchar'}, header = false, quote = '"',
+escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true,
+unterminated_quote='value')
+----
+Pedro "the" legend
+Pedro "the
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/end_quote_crlf.csv', columns = {'a':'varchar'}, header = false, quote = '"',
+escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true,
+unterminated_quote='value')
+----
+2

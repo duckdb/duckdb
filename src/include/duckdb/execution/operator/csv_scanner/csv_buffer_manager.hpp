@@ -63,6 +63,9 @@ public:
 	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
 	idx_t BufferCount() const;
+	//! A byte at the end of a buffer, distance 1 being its last byte, so that the scanner starting at the next buffer
+	//! can read its first bytes in context. False beyond the bytes kept
+	bool ByteBeforeBufferEnd(idx_t buffer_idx, idx_t distance, char &byte);
 
 	string GetFilePath() const;
 
@@ -75,8 +78,14 @@ public:
 protected:
 	//! The file this Buffer Manager refers to
 	const OpenFileInfo file;
+	//! Keeps the last bytes of a buffer when it is handed out
+	void RememberTail(idx_t buffer_idx, CSVBufferHandle &handle);
 	//! The cached buffers
 	vector<shared_ptr<CSVBuffer>> cached_buffers;
+	//! The last bytes of every buffer handed out, which outlive the buffers themselves
+	vector<string> buffer_tails;
+	static constexpr idx_t TAIL_BYTES = 8;
+	static constexpr idx_t TAIL_CAP = 4096;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
 	idx_t buffer_size;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.
