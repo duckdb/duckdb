@@ -156,9 +156,8 @@ functions:
         type: sql_statement
         description: The statement to execute. Borrowed and copied; not consumed. Destroy it with sql_statement_destroy.
       parameter_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: Optional. An array of parameter_count parameter names; a non-empty entry binds its value to the named parameter ($name, case-insensitive), an empty entry (NULL or zero length) keeps it positional ($1 = element 0). Pass NULL for all-positional binding. Named and positional parameters cannot be mixed within one statement.
       parameter_names_lengths:

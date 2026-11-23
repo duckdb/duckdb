@@ -23,7 +23,7 @@ struct ProcessUtil {
 	DUCKDB_API static bool ProcessIsRunning(int64_t pid);
 	//! Best-effort description of a process - its name, and its owner where we can get it - for
 	//! error messages. Empty when the platform cannot say.
-	DUCKDB_API static string GetProcessDescription(FileSystem &fs, int64_t pid);
+	DUCKDB_API static string GetProcessDescription(int64_t pid);
 };
 
 } // namespace duckdb

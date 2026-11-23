@@ -917,6 +917,71 @@ bool LogicalType::IsTemplated() const {
 	return TypeVisitor::Contains(*this, LogicalTypeId::TEMPLATE);
 }
 
+bool LogicalType::EqualValuesAreIdentical() const {
+	switch (id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::ENUM:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return StringType::GetCollation(*this).empty();
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructType::GetChildTypes(*this)) {
+			if (!child.second.EqualValuesAreIdentical()) {
+				return false;
+			}
+		}
+		return true;
+	case LogicalTypeId::LIST:
+		return ListType::GetChildType(*this).EqualValuesAreIdentical();
+	case LogicalTypeId::ARRAY:
+		return ArrayType::GetChildType(*this).EqualValuesAreIdentical();
+	default:
+		return false;
+	}
+}
+
+bool LogicalType::HasPhysicalType() const {
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.InternalType()) {
+		case PhysicalType::INVALID:
+			return true;
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
+			if (!type.HasParameters()) {
+				return true;
+			}
+			// the visitor does not look at the child types of a VARIANT, which are those of its storage layout
+			return type.id() == LogicalTypeId::VARIANT &&
+			       StructType::GetChildTypes(type) != StructType::GetChildTypes(LogicalType::VARIANT());
+		default:
+			return false;
+		}
+	});
+}
+
 bool LogicalType::SupportsRegularUpdate() const {
 	switch (id()) {
 	case LogicalTypeId::LIST:
@@ -1525,6 +1590,21 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<optional_ptr<const LogicalTypeInfo>>(101, "type_info", type_info);
 }
 
+//! Whether a type cannot be used without its type info (the info holds the child types / members)
+static bool RequiresTypeInfo(LogicalTypeId id) {
+	switch (id) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::ENUM:
+		return true;
+	default:
+		return false;
+	}
+}
+
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
 	deserializer.CheckAllowed(id);
@@ -1556,6 +1636,10 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	    !result.HasParameters()) {
 		throw SerializationException("Failed to deserialize type %s: type info %s does not match the type",
 		                             EnumUtil::ToString(id), EnumUtil::ToString(info_type));
+	}
+	if (RequiresTypeInfo(id) && !result.HasParameters()) {
+		// the child types of these types are looked up in the type info without checking that it is there
+		throw SerializationException("Failed to deserialize type %s: missing type info", EnumUtil::ToString(id));
 	}
 	if (Geometry::IsSpatialGeometryType(result)) {
 		// This is a legacy geometry type, deserialize as geometry

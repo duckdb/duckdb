@@ -2,12 +2,21 @@
 # rather than one per form. SHOW [ALL] EXTERNAL RESOURCES is a query (describe.gram), so it can be a subquery.
 ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / AttachToExternalResource / ConnectToExternalResource
 
-CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword StringLiteral AttachAlias? ExternalResourceCreationOptions?
-RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword StringLiteral AttachAlias? 'FROM' Expression
+CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword ExternalResourceType AttachAlias? ExternalResourceCreationOptions?
+RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword ExternalResourceType AttachAlias? 'FROM' Expression
 DestroyExternalResourceStmt <- 'DESTROY' ExternalResourceKeyword ColId
 
 # Syntax only: the keyword pair every singular form repeats.
 ExternalResourceKeyword <- 'EXTERNAL' 'RESOURCE'
+
+# The type of a resource, as the provider registered it: aws.s3tables.bucket. In quotes it is taken as written; spelled
+# bare it is folded to lowercase (TransformExternalResourceTypeName). A type with other characters in it, or one
+# spelled with spaces around the dots, goes in quotes.
+ExternalResourceType <- StringLiteral / ExternalResourceTypeName
+ExternalResourceTypeName <- BareName
+# A name spelled without quotes: a dotted name (DottedName, load.gram: labels separated by single dots, nothing in
+# between) or a plain word
+BareName <- DottedName / ColId
 
 # The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
 # distinct, and a statement can carry both.

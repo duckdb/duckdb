@@ -130,7 +130,7 @@ private:
 
 	//! Makes a reused result ready for the one-row generic path: like the constant path, a stale NULL does not survive
 	DUCKDB_API static void PrepareConstantResult(Vector &result);
-	DUCKDB_API static bool PrepareGenericResultValidity(const UnifiedVectorFormat *formats, idx_t format_count,
+	DUCKDB_API static bool PrepareGenericResultValidity(UnifiedVectorFormat *formats, idx_t format_count,
 	                                                    Vector &result, idx_t count, bool preserve_result_validity,
 	                                                    bool adds_nulls);
 

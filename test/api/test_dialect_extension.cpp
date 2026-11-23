@@ -80,6 +80,38 @@ TEST_CASE("Register and select a dialect extension", "[api][dialect_extension]")
 	REQUIRE(current_dialect->Collection().GetValue(0, 0) == Value("test"));
 }
 
+TEST_CASE("Leaving a dialect resets the compatibility mode it set", "[api][dialect_extension]") {
+	DBConfig config;
+	DialectExtension::Register(config, make_uniq<DialectExtension>("with_mode", DialectCompatibilityMode::SPARK));
+	DialectExtension::Register(config, make_uniq<DialectExtension>("without_mode"));
+
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	auto result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"SPARK"}));
+	REQUIRE_NO_FAIL(con.Query("RESET current_dialect"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = NULL"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'with_mode'"));
+	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'without_mode'"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"NONE"}));
+
+	// a mode the user set is kept when the dialect did not set one
+	REQUIRE_NO_FAIL(con.Query("SET dialect_compatibility_mode = 'SPARK'"));
+	REQUIRE_NO_FAIL(con.Query("RESET current_dialect"));
+	result = con.Query("SELECT current_setting('dialect_compatibility_mode')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"SPARK"}));
+}
+
 TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {
 	EmptyKeywordHelper helper;
 	Tokenizer default_tokenizer(helper);

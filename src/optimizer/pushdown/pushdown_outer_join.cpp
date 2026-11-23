@@ -1,7 +1,13 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
@@ -93,7 +99,7 @@ static bool ExprIsFunctionOnlyOf(const Expression &expr, const expression_set_t 
 //! is a join condition of the form `l = r` where `l` and `r` are join keys for
 //! the left and right table respectively, then pushdown `P(l)` to the left
 //! table, `P(r)` to the right table, and remove the original filter.
-static bool
+static void
 PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vector<JoinCondition> &join_conditions,
                                         const std::function<void(unique_ptr<Expression> filter)> &pushdown_left,
                                         const std::function<void(unique_ptr<Expression> filter)> &pushdown_right) {
@@ -116,10 +122,9 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 	}
 
 	if (join_cond_by_coalesced_join_keys.empty()) {
-		return false;
+		return;
 	}
 
-	bool has_applied_pushdown = false;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &filter = filters[i]->filter;
 		if (filter->IsVolatile() || filter->CanThrow()) {
@@ -164,38 +169,97 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 		pushdown_left(std::move(left_filter));
 		pushdown_right(std::move(right_filter));
 		filters.erase_at(i);
-		has_applied_pushdown = true;
 		i--;
 	}
+}
 
-	return has_applied_pushdown;
+static bool CanSplitOuterJoinFilters(LogicalOperator &join, const vector<unique_ptr<Filter>> &filters) {
+	for (auto &filter : filters) {
+		if (filter->filter->IsVolatile() || filter->filter->CanThrow()) {
+			return false;
+		}
+	}
+	bool can_split = true;
+	LogicalOperatorVisitor::EnumerateExpressions(join, [&](unique_ptr<Expression> *expr) {
+		if ((*expr)->IsVolatile() || ExpressionBarrier::Contains(**expr)) {
+			can_split = false;
+		}
+	});
+	return can_split;
+}
+
+static void PushDownComparisonFilters(vector<unique_ptr<Filter>> &filters, const unordered_set<TableIndex> &bindings,
+                                      vector<unique_ptr<Expression>> &child_filters) {
+	auto is_non_null_constant = [](const Expression &expr) {
+		return expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		       !expr.Cast<BoundConstantExpression>().GetValue().IsNull();
+	};
+	for (auto &filter_ptr : filters) {
+		auto &filter = *filter_ptr;
+		auto &expr = *filter.filter;
+		optional_ptr<const Expression> column;
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+			auto &between = expr.Cast<BoundFunctionExpression>();
+			if (!is_non_null_constant(BoundBetweenExpression::LowerBound(between)) ||
+			    !is_non_null_constant(BoundBetweenExpression::UpperBound(between))) {
+				continue;
+			}
+			column = BoundBetweenExpression::Input(between);
+		} else {
+			if (!BoundComparisonExpression::IsComparison(expr) ||
+			    expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+			    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				continue;
+			}
+			auto &comparison = expr.Cast<BoundFunctionExpression>();
+			auto &left = BoundComparisonExpression::Left(comparison);
+			auto &right = BoundComparisonExpression::Right(comparison);
+			const auto left_is_column = left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+			column = left_is_column ? left : right;
+			if (!is_non_null_constant(left_is_column ? right : left)) {
+				continue;
+			}
+		}
+		if (column->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &colref = column->Cast<BoundColumnRefExpression>();
+		if (colref.Depth() != 0 || !bindings.count(colref.Binding().table_index)) {
+			continue;
+		}
+		child_filters.push_back(std::move(filter.filter));
+		// Removing a match can create an unmatched row on the other side: reject its NULL-extended column.
+		filter.filter = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN,
+		                                                   column->Copy());
+		filter.ExtractBindings();
+	}
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<LogicalOperator> op,
                                                               unordered_set<TableIndex> &left_bindings,
                                                               unordered_set<TableIndex> &right_bindings) {
-	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	if (filters.empty() || (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	                        op->type != LogicalOperatorType::LOGICAL_ANY_JOIN)) {
 		return FinishPushdown(std::move(op));
 	}
 
-	auto &join = op->Cast<LogicalComparisonJoin>();
-	D_ASSERT(join.join_type == JoinType::OUTER);
+	D_ASSERT(op->Cast<LogicalJoin>().join_type == JoinType::OUTER);
 
-	FilterPushdown left_pushdown(optimizer, convert_mark_joins, projection_mode);
-	FilterPushdown right_pushdown(optimizer, convert_mark_joins, projection_mode);
-	auto has_applied_pushdown = PushDownFiltersOnCoalescedEqualJoinKeys(
-	    filters, join.conditions, [&](unique_ptr<Expression> filter) { left_pushdown.AddFilter(std::move(filter)); },
-	    [&](unique_ptr<Expression> filter) { right_pushdown.AddFilter(std::move(filter)); });
-
-	if (!has_applied_pushdown) {
-		return FinishPushdown(std::move(op));
+	const bool can_split = CanSplitOuterJoinFilters(*op, filters);
+	vector<unique_ptr<Expression>> left_filters, right_filters;
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		PushDownFiltersOnCoalescedEqualJoinKeys(
+		    filters, join.conditions, [&](unique_ptr<Expression> filter) { left_filters.push_back(std::move(filter)); },
+		    [&](unique_ptr<Expression> filter) { right_filters.push_back(std::move(filter)); });
 	}
-
-	left_pushdown.GenerateFilters();
-	right_pushdown.GenerateFilters();
-	left_pushdown.RewriteChild(*op, 0);
-	right_pushdown.RewriteChild(*op, 1);
-	return PushFinalFilters(std::move(op));
+	if (can_split) {
+		PushDownComparisonFilters(filters, left_bindings, left_filters);
+		PushDownComparisonFilters(filters, right_bindings, right_filters);
+	}
+	op->children[0] = AddLogicalFilter(std::move(op->children[0]), std::move(left_filters));
+	op->children[1] = AddLogicalFilter(std::move(op->children[1]), std::move(right_filters));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

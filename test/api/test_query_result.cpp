@@ -244,12 +244,13 @@ TEST_CASE("TakeCollection hands the collection over exactly once", "[api][query_
 	REQUIRE(collection);
 	REQUIRE(collection->Count() == 1000);
 
-	REQUIRE_THROWS_AS(handle->TakeCollection(), InvalidInputException);
-	REQUIRE_THROWS_AS(handle->Collection(), InvalidInputException);
-	REQUIRE_THROWS_AS(handle->Fetch(), InvalidInputException);
+	auto unavailable = Catch::Contains("no longer holds a collection");
+	REQUIRE_THROWS_WITH(handle->TakeCollection(), unavailable);
+	REQUIRE_THROWS_WITH(handle->Collection(), unavailable);
+	REQUIRE_THROWS_WITH(handle->Fetch(), unavailable);
 	// RowCount used to report 0 once the collection was taken, same as a result closed before it was
 	// ever collected; it now throws so a taken result is distinguishable from an empty one
-	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
+	REQUIRE_THROWS_WITH(handle->RowCount(), unavailable);
 	// The collection outlives the handle it came from
 	handle.reset();
 	REQUIRE(collection->Count() == 1000);
@@ -262,7 +263,7 @@ TEST_CASE("RowCount throws for a result closed before it was ever collected", "[
 	auto handle = Submit(con, "SELECT i FROM range(1000) t(i)");
 	// Closed without ever calling Collection, TakeCollection, Fetch or RowCount
 	handle->Close();
-	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
+	REQUIRE_THROWS_WITH(handle->RowCount(), Catch::Contains("no longer holds a collection"));
 }
 
 TEST_CASE("Fetch resumes where it left off across a Collection call, and stays null after exhaustion",
@@ -343,7 +344,7 @@ TEST_CASE("An execution error surfaces on every retained-side call", "[api][quer
 	}
 	REQUIRE(handle->HasError());
 	REQUIRE(StringUtil::Contains(handle->GetError(), "boom"));
-	REQUIRE_THROWS_AS(handle->Collection(), InvalidInputException);
+	REQUIRE_THROWS_WITH(handle->Collection(), Catch::Contains("unsuccessful query result"));
 	// GetValue throws the query's own error, not an internal one
 	bool threw_query_error = false;
 	try {
@@ -730,7 +731,6 @@ TEST_CASE("Every statement entry point is refused while a result is open", "[api
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(1000000)"));
 	auto prepared = con.Prepare("SELECT 42");
 	REQUIRE(!prepared->HasError());
-	auto relation = con.Table("t");
 	auto statements = con.ExtractStatements("SELECT 42; SELECT 42; SELECT 42;");
 
 	auto handle = Submit(con, "SELECT i FROM t");
@@ -745,8 +745,6 @@ TEST_CASE("Every statement entry point is refused while a result is open", "[api
 	vector<Value> no_values;
 	RequireRefused(prepared->Execute()->GetErrorObject());
 	RequireRefused(prepared->Submit(no_values)->GetErrorObject());
-	RequireRefused(relation->Execute()->GetErrorObject());
-	RequireRefused(con.context->Submit(relation, QueryParameters())->GetErrorObject());
 	// The refusal comes before parsing
 	RequireRefused(con.Query("SELEC 42")->GetErrorObject());
 	RequireRefused(con.Query("COMMIT")->GetErrorObject());

@@ -4,7 +4,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -476,51 +476,31 @@ void ValidityUncompressed::AlignedScan(unsafe_array_ptr<const validity_t> input,
 	}
 }
 
-void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                         idx_t result_offset) {
-	auto start = state.GetPositionInSegment();
+void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, ValidityMask &result_mask,
+                  idx_t result_offset, ScanVectorType scan_type) {
 	if (scan_count == 0) {
 		return;
 	}
+	auto start = state.GetPositionInSegment();
 	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
-
-	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-
 	auto input_data = ValidityScanData(scan_state.reader, start, scan_count);
 	D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
-	auto &result_mask = FlatVector::ValidityMutable(result);
 	auto input_start = start % ValidityMask::BITS_PER_VALUE;
-	ValidityUncompressed::UnalignedScan(input_data, input_start + scan_count, input_start, result_mask, result_offset,
-	                                    scan_count);
-}
-
-void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto start = state.GetPositionInSegment();
-	if (scan_count == 0) {
-		return;
-	}
-	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
-
-	result.Flatten();
-	if (start % ValidityMask::BITS_PER_VALUE == 0) {
-		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-
-		auto input_data = ValidityScanData(scan_state.reader, start, scan_count);
-		D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
-		auto &result_mask = FlatVector::ValidityMutable(result);
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR && input_start == 0) {
+		D_ASSERT(result_offset == 0);
 		ValidityUncompressed::AlignedScan(input_data, 0, result_mask, scan_count);
 	} else {
-		// unaligned scan: fall back to scan_partial which does bitshift tricks
-		ValidityScanPartial(segment, state, scan_count, result, 0);
+		ValidityUncompressed::UnalignedScan(input_data, input_start + scan_count, input_start, result_mask,
+		                                    result_offset, scan_count);
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                    const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType) {
+void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, ValidityMask &result_mask,
+                    const SelectionVector &sel, idx_t sel_count, idx_t result_offset) {
 	auto start = state.GetPositionInSegment();
 	if (sel_count == 0) {
 		return;
@@ -528,14 +508,9 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 	D_ASSERT(start <= segment.count && vector_count <= segment.count - start);
 	D_ASSERT(sel_count <= vector_count);
 
-	if (result_offset == 0) {
-		result.Flatten();
-	}
-
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto input_data = ValidityScanData(scan_state.reader, start, vector_count);
 	auto input_start = start % ValidityMask::BITS_PER_VALUE;
-	auto &result_mask = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto selected_index = sel.get_index(i);
 		D_ASSERT(selected_index < vector_count);
@@ -625,13 +600,15 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	CompressionFunction result(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
-	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
-	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           ValidityInitScan, ValidityScan, ValidityScanPartial, UncompressedFunctions::EmptySkip,
-	                           ValidityInitSegment, ValidityInitAppend, ValidityAppend, ValidityFinalizeAppend,
-	                           ValidityRevertAppend);
-	result.select = ValiditySelect;
+	CompressionFunction result(
+	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze, ValidityAnalyze,
+	    ValidityFinalAnalyze, UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
+	    UncompressedFunctions::FinalizeCompress, ValidityInitScan, ValidityColumnData::ScanValidity,
+	    ValidityColumnData::ScanPartialValidity, UncompressedFunctions::EmptySkip, ValidityInitSegment,
+	    ValidityInitAppend, ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
+	result.scan_validity = ValidityScan;
+	result.select_validity = ValiditySelect;
+	result.select = ValidityColumnData::SelectValidity;
 	result.zero_initialize_segments = false;
 	return result;
 }

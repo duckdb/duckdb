@@ -23,3 +23,22 @@ query I
 SELECT reservoir_quantile(x, 0.5) FROM range(10) t(x);
 ----
 4
+
+# the samples are those of BaseReservoirSampling
+query I
+SELECT reservoir_quantile(x, 0.5, 20) FROM range(100000) t(x);
+----
+47533
+
+# finalizing does not reorder the sample: a running window streams, and equals the aggregate over the whole prefix
+query II
+EXPLAIN SELECT reservoir_quantile(x, 0.5) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) t(x);
+----
+physical_plan	<REGEX>:.*Streaming Window.*
+
+query II
+SELECT r = (SELECT reservoir_quantile(x, 0.5, 20) FROM range(2000) t(x)), l = (SELECT reservoir_quantile(x, [0.25, 0.75], 20) FROM range(2000) t(x))
+FROM (SELECT x, reservoir_quantile(x, 0.5, 20) OVER w r, reservoir_quantile(x, [0.25, 0.75], 20) OVER w l FROM range(2000) t(x) WINDOW w AS (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))
+WHERE x = 1999;
+----
+true	true

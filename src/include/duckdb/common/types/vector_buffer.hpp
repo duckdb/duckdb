@@ -83,7 +83,7 @@ private:
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
-class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
+class VectorBuffer : public enable_buffer_from_this<VectorBuffer> {
 public:
 	explicit VectorBuffer(VectorType vector_type, VectorBufferType type, count_t count_p)
 	    : vector_type(vector_type), buffer_type(type), v_size(count_p) {

@@ -19,7 +19,7 @@ public:
 	WindowIndexTreeLocalState(ExecutionContext &context, WindowIndexTree &index_tree);
 
 	//! Process sorted leaf data
-	void BuildLeaves() override;
+	void BuildLeaves(Context &context) override;
 
 	//! The index tree we are building
 	WindowIndexTree &index_tree;

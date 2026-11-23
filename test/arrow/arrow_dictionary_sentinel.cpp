@@ -9,7 +9,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/relation.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -180,9 +181,11 @@ bool ScanColumnMatches(ArrowSchema &col_schema, ArrowArray &col_array, const str
 	}
 	// RunArrowComparison only checks that every scanned row is expected, so a scan that drops rows passes it.
 	ColumnStream counted(col_schema, col_array);
-	auto scanned = con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(counted.stream))
-	                   ->Aggregate("count(*)")
-	                   ->Execute();
+	auto count_select = ArrowTestHelper::ArrowScanSelect(ArrowTestHelper::ConstructArrowScan(counted.stream));
+	auto &count_node = count_select->node->Cast<SelectNode>();
+	count_node.select_list = Parser(*con.context).ParseExpressionList("count(*)");
+	count_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+	auto scanned = con.Query(std::move(count_select));
 	auto expected = con.Query("SELECT count(*) FROM (" + query + ")");
 	REQUIRE_NO_FAIL(*scanned);
 	REQUIRE_NO_FAIL(*expected);

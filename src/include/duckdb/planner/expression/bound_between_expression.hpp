@@ -16,8 +16,9 @@ class BoundFunctionExpression;
 //! The BoundBetweenExpression has been moved to a function expression
 //! This class exists only as a set of helper methods
 struct BoundBetweenExpression {
-	static unique_ptr<Expression> Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
-	                                     unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive);
+	static unique_ptr<Expression> Create(ClientContext &context, unique_ptr<Expression> input,
+	                                     unique_ptr<Expression> lower, unique_ptr<Expression> upper,
+	                                     bool lower_inclusive, bool upper_inclusive);
 
 	static bool LowerInclusive(const BoundFunctionExpression &between_expr);
 	static bool UpperInclusive(const BoundFunctionExpression &between_expr);

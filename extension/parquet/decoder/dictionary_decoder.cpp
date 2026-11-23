@@ -89,10 +89,27 @@ idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_
 	if (defines) {
 		D_ASSERT(can_have_nulls);
 		valid_count = 0;
-		for (idx_t i = 0; i < read_count; i++) {
+		const auto max_define = reader.MaxDefine();
+		const uint64_t valid_defines = max_define * UINT64_C(0x0101010101010101);
+		idx_t i = 0;
+		for (; max_define <= NumericLimits<uint8_t>::Maximum() && i + 8 <= read_count; i += 8) {
+			if (Load<uint64_t>(defines + result_offset + i) == valid_defines) {
+				for (idx_t j = 0; j < 8; j++) {
+					valid_sel.set_index(valid_count + j, i + j);
+				}
+				valid_count += 8;
+			} else {
+				for (idx_t j = 0; j < 8; j++) {
+					valid_sel.set_index(valid_count, i + j);
+					dictionary_selection_vector.set_index(i + j, dictionary_size);
+					valid_count += defines[result_offset + i + j] == max_define;
+				}
+			}
+		}
+		for (; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, dictionary_size);
-			valid_count += defines[result_offset + i] == reader.MaxDefine();
+			valid_count += defines[result_offset + i] == max_define;
 		}
 	}
 	return valid_count;

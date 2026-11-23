@@ -113,6 +113,7 @@ functions:
       schema:
         type: ArrowSchema
         indirection: 1
+        const: true
         description: The schema to resolve. Read, not consumed; the caller keeps ownership.
       batch_size:
         type: idx
@@ -292,9 +293,8 @@ functions:
         const: true
         description: An array of `count` column types. May be NULL only when `count` is 0.
       names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: |
           An array of `count` column names, parallel to `types`. Each name must be valid UTF-8.
@@ -462,9 +462,8 @@ functions:
         type: sql_statement
         description: The statement to execute. Not consumed.
       parameter_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: Optional. As in `[[statement_execute]]`.
       parameter_names_lengths:
@@ -509,9 +508,8 @@ functions:
         type: prepared_statement
         description: The prepared statement to execute. Not consumed.
       parameter_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: Optional. As in `[[prepared_statement_execute]]`.
       parameter_names_lengths:

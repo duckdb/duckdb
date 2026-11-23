@@ -1,0 +1,115 @@
+# name: test/sql/projection/expression_state_reuse.test
+# description: Reused selection and Boolean expressions preserves nested expression results
+# group: [projection]
+
+statement ok
+CREATE TABLE expression_inputs AS
+SELECT i, CASE WHEN i % 2 = 0 THEN NULL ELSE i END a,
+       CASE WHEN i % 3 = 0 THEN NULL ELSE i + 100 END b,
+       CASE WHEN i % 5 = 0 THEN NULL ELSE i + 200 END c
+FROM range(70003) t(i)
+
+query I
+SELECT count(*) FROM expression_inputs
+WHERE coalesce(a, coalesce(b, c), -1) IS DISTINCT FROM
+      CASE WHEN a IS NOT NULL THEN a WHEN b IS NOT NULL THEN b WHEN c IS NOT NULL THEN c ELSE -1 END
+----
+0
+
+query I
+WITH actual AS (
+    SELECT i FROM expression_inputs
+    WHERE (a > 100 OR (b < 300 AND c > 200)) AND (i % 7 = 0 OR i % 11 = 0)
+), expected AS (
+    SELECT i FROM expression_inputs
+    WHERE CASE WHEN a > 100 THEN true WHEN b < 300 THEN c > 200 ELSE false END
+      AND CASE WHEN i % 7 = 0 THEN true ELSE i % 11 = 0 END
+)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+    UNION ALL
+    (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+query I
+SELECT count(*) FROM expression_inputs
+WHERE coalesce(CASE WHEN a IS NULL THEN NULL ELSE [a] END, [b])
+      IS DISTINCT FROM CASE WHEN a IS NULL THEN [b] ELSE [a] END
+   OR coalesce(CASE WHEN a IS NULL THEN NULL ELSE {'v': a} END, {'v': b})
+      IS DISTINCT FROM {'v': coalesce(a, b)}
+----
+0
+
+query I
+SELECT count(*) FROM expression_inputs
+WHERE concat(a::VARCHAR, ':', b::VARCHAR, ':', c::VARCHAR) IS DISTINCT FROM
+      coalesce(a::VARCHAR, '') || ':' || coalesce(b::VARCHAR, '') || ':' || coalesce(c::VARCHAR, '')
+----
+0
+
+statement ok
+CREATE TABLE truth_inputs AS
+WITH inputs AS (SELECT * FROM (VALUES (true), (false), (NULL::BOOLEAN)) t(v))
+SELECT a.v a, b.v b, c.v c, d.v d
+FROM inputs a, inputs b, inputs c, inputs d, range(101)
+
+query I
+SELECT count(*) FROM (
+    SELECT *, (a OR b OR c OR d) actual_or, (a AND b AND c AND d) actual_and,
+        (CASE WHEN a THEN 1 ELSE 0 END + CASE WHEN b THEN 1 ELSE 0 END +
+         CASE WHEN c THEN 1 ELSE 0 END + CASE WHEN d THEN 1 ELSE 0 END) ntrue,
+        (CASE WHEN a IS NULL THEN 1 ELSE 0 END + CASE WHEN b IS NULL THEN 1 ELSE 0 END +
+         CASE WHEN c IS NULL THEN 1 ELSE 0 END + CASE WHEN d IS NULL THEN 1 ELSE 0 END) nnull
+    FROM truth_inputs
+) WHERE actual_or IS DISTINCT FROM CASE WHEN ntrue > 0 THEN true WHEN nnull > 0 THEN NULL ELSE false END
+     OR actual_and IS DISTINCT FROM CASE WHEN ntrue + nnull < 4 THEN false WHEN nnull > 0 THEN NULL ELSE true END
+----
+0
+
+foreach name list_concat list_cat array_concat array_cat
+
+query I
+SELECT {name}() = ''
+----
+true
+
+endloop
+
+statement ok
+PRAGMA disable_optimizer
+
+foreach name list_concat list_cat array_concat array_cat
+
+query I
+SELECT {name}() = ''
+----
+true
+
+endloop
+
+statement ok
+PRAGMA enable_optimizer
+
+# TRY reuses the same expression states when retrying failing rows individually.
+query I
+SELECT count(*) FROM expression_inputs
+WHERE TRY(coalesce(a, ('invalid-' || i::VARCHAR)::BIGINT, b)) IS DISTINCT FROM a
+----
+0
+
+query I
+SELECT count(*) FROM expression_inputs
+WHERE list_transform([a, b, c], lambda x: coalesce(x, i)) IS DISTINCT FROM
+      [CASE WHEN a IS NULL THEN i ELSE a END,
+       CASE WHEN b IS NULL THEN i ELSE b END,
+       CASE WHEN c IS NULL THEN i ELSE c END]
+----
+0
+
+statement ok
+DROP TABLE truth_inputs
+
+statement ok
+DROP TABLE expression_inputs
