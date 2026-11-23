@@ -164,7 +164,7 @@ void VectorListBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = data_ptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {

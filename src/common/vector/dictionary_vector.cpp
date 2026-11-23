@@ -65,8 +65,7 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 }
 
 void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
-	format.owned_sel.Initialize(sel_vector);
-	format.sel = &format.owned_sel;
+	format.sel = &sel_vector;
 
 	auto &child = entry->data;
 	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
@@ -74,7 +73,8 @@ void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		entry->data.Flatten();
 	}
 	format.data = FlatVector::GetData(entry->data);
-	format.validity = FlatVector::Validity(entry->data);
+	const auto &validity = FlatVector::Validity(entry->data);
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,

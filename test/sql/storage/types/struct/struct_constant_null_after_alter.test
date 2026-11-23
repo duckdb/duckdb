@@ -1,0 +1,49 @@
+# name: test/sql/storage/types/struct/struct_constant_null_after_alter.test
+# description: Scan a struct whose constant NULL segment is followed by rows appended after an ALTER
+# group: [struct]
+
+load {TEST_DIR}/struct_constant_null_after_alter.db
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE t(id BIGINT, s STRUCT(a TINYINT, b INT));
+
+statement ok
+INSERT INTO t SELECT i, CASE WHEN i >= 122880 THEN NULL ELSE {'a': 1, 'b': 2} END FROM range(140000) r(i);
+
+statement ok
+CHECKPOINT
+
+statement ok
+ALTER TABLE t ADD COLUMN y INT;
+
+statement ok
+INSERT INTO t VALUES (-1, {'a': 3, 'b': 4}, 1);
+
+query I
+SELECT list(s) FILTER (WHERE id = -1) FROM t
+----
+[{'a': 3, 'b': 4}]
+
+statement ok
+CREATE TABLE u(id BIGINT, v UNION(n INTEGER, s VARCHAR));
+
+statement ok
+INSERT INTO u SELECT i, CASE WHEN i >= 122880 THEN NULL ELSE union_value(n := 1)::UNION(n INTEGER, s VARCHAR) END
+FROM range(140000) r(i);
+
+statement ok
+CHECKPOINT
+
+statement ok
+ALTER TABLE u ADD COLUMN y INT;
+
+statement ok
+INSERT INTO u VALUES (-1, union_value(s := 'hello')::UNION(n INTEGER, s VARCHAR), 1);
+
+query II
+SELECT max(CASE WHEN id = -1 THEN v::VARCHAR END), max(CASE WHEN id = -1 THEN union_tag(v)::VARCHAR END) FROM u
+----
+hello	s

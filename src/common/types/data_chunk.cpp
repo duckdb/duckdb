@@ -430,25 +430,6 @@ unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 	return unified_data;
 }
 
-void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	auto hash_count = size();
-	VectorOperations::Hash(data[0], result, hash_count);
-	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], hash_count);
-	}
-}
-
-void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	D_ASSERT(!column_ids.empty());
-	auto hash_count = size();
-	VectorOperations::Hash(data[column_ids[0]], result, hash_count);
-	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], hash_count);
-	}
-}
-
 void DataChunk::Verify(ClientContext &context) {
 	Verify(DatabaseInstance::GetDatabase(context));
 }

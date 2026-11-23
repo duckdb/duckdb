@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/main/statement_iterator.hpp"
@@ -950,6 +951,34 @@ TEST_CASE("Test an extracted EXECUTE plan still has types after an optimization 
 	const auto query_plan = con.ExtractPlan("EXECUTE test");
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
+}
+
+TEST_CASE("Test destroying an extracted read_duckdb plan inside its transaction", "[api]") {
+	auto db_path = TestCreatePath("extract_plan_read_duckdb.db");
+	TestDeleteFile(db_path);
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "' AS source"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE source.t AS SELECT range AS i FROM range(10)"));
+	REQUIRE_NO_FAIL(con.Query("DETACH source"));
+
+	// the plan holds the reader that attached the database file while binding - destroying the plan detaches the file
+	const auto query = "SELECT * FROM read_duckdb('" + db_path + "')";
+	auto &db_manager = DatabaseManager::Get(*con.context);
+	const auto database_count = db_manager.GetDatabases().size();
+	for (auto commit : {true, false}) {
+		REQUIRE_NOTHROW(con.BeginTransaction());
+		auto plan = con.ExtractPlan(query);
+		REQUIRE(db_manager.GetDatabases().size() == database_count + 1);
+		plan.reset();
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+		if (commit) {
+			REQUIRE_NOTHROW(con.Commit());
+		} else {
+			REQUIRE_NOTHROW(con.Rollback());
+		}
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+	}
 }
 
 static bool HasFlippedDelimJoin(const LogicalOperator &op) {

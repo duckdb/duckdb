@@ -17,6 +17,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -53,6 +54,8 @@ public:
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
 	DataChunk group_chunk;
+	//! Executes the hash table's hash expression over the groups
+	unique_ptr<ExpressionExecutor> hash_executor;
 	optional_ptr<const GroupedAggregateHashTable> owner;
 	bool initialized = false;
 };
@@ -189,6 +192,10 @@ private:
 	void ZeroTrailingRegion(Vector &row_locations, idx_t count) const;
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
+	//! "hash(#0, #1, ...)" over the groups
+	unique_ptr<Expression> hash_expression;
+	//! Hash the groups into hashes, with the executor of the given probe state
+	void HashGroups(DataChunk &groups, AggregateHTProbeState &probe_state, Vector &hashes) const;
 
 	struct AggregateDictionaryState {
 		AggregateDictionaryState();

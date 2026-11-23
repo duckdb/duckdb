@@ -532,6 +532,23 @@ OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Non-Standard Interface
 //===--------------------------------------------------------------------===//
+void Sort::SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t count,
+                           idx_t variable_data_size) const {
+	auto &sink = gstate.Cast<SortGlobalSinkState>();
+	D_ASSERT(sink.sunk_tuples == 0);
+	// key and payload rows, variable-size data and merge buffer, as SizeInBytesForSorting measures them
+	const auto key_width = key_layout->GetRowWidth();
+	auto expected_size = count * (key_width + payload_layout->GetRowWidth()) + variable_data_size +
+	                     SortMergeBuffer::MaximumSize(count, key_width);
+	auto &state = *sink.temporary_memory_state;
+	// only lower the reservation: a larger sort keeps the default minimum and grows on demand
+	expected_size = MinValue(expected_size, state.GetMinimumReservation());
+	if (expected_size == 0) {
+		return;
+	}
+	state.SetRemainingSizeAndUpdateReservation(context.GetContext(), expected_size);
+}
+
 SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
 
