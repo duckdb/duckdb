@@ -593,6 +593,24 @@ void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 	deltas.MarkWritten(checkpoint_id);
 }
 
+void IndexEntry::MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas) {
+	// remove first: a key that moved to another row must not look like a duplicate
+	for (const auto type :
+	     {IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+		auto &delta = type == IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT ? deltas.removed : deltas.added;
+		if (!delta) {
+			continue;
+		}
+		auto error = index.MergeCheckpointDelta(type, *delta, IndexAppendMode::DEFAULT);
+		if (error.HasError()) {
+			if (error.Type() == ExceptionType::CONSTRAINT) {
+				throw ConstraintException("Data contains duplicates on indexed column(s)");
+			}
+			error.Throw();
+		}
+	}
+}
+
 IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(building);
@@ -680,7 +698,8 @@ ErrorData IndexDeltas::MergeCheckpointDeltas(BoundIndex &index) {
 		if (!delta) {
 			continue;
 		}
-		auto error = index.MergeCheckpointDelta(type, *delta);
+		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
+		auto error = index.MergeCheckpointDelta(type, *delta, IndexAppendMode::INSERT_DUPLICATES);
 		if (error.HasError()) {
 			return error;
 		}

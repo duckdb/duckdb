@@ -161,7 +161,7 @@ public:
 
 protected:
 	unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const override;
-	ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index) override;
+	ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index, IndexAppendMode append_mode) override;
 
 public:
 	//! ART key generation.

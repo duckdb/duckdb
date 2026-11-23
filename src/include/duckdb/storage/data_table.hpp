@@ -306,8 +306,9 @@ public:
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 	//! Applies the commits made during the build to the index, then makes it usable in the index list.
+	//! Without a building entry, fails if a commit changed the table after plan_commit.
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
-	                                idx_t index_oid, ConstraintCheckMode check_mode);
+	                                idx_t index_oid, ConstraintCheckMode check_mode, transaction_t plan_commit);
 	//! Starts building an index in place: later commits change the deltas of its entry
 	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 

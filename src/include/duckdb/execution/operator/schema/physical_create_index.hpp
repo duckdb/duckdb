@@ -47,6 +47,8 @@ public:
 	unique_ptr<IndexBuildBindData> bind_data;
 	//! Alter table information for adding indexes.
 	unique_ptr<AlterTableInfo> alter_table_info;
+	//! The last commit before the plan was created
+	transaction_t plan_commit = 0;
 
 	//! Types of the indexed columns.
 	vector<LogicalType> indexed_column_types;

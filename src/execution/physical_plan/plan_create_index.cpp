@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -16,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -24,6 +24,8 @@ static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCrea
 	auto &cindex = plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
 	                                              std::move(op.unbound_expressions), op.estimated_cardinality,
 	                                              index_type, std::move(bind_data), std::move(op.alter_table_info));
+	// before the scan starts: a build without deltas fails if a later commit changes the table
+	cindex.plan_commit = DuckTransactionManager::Get(op.table.catalog.GetAttached()).GetLastCommit();
 
 	cindex.children.push_back(prev);
 	return cindex;
@@ -32,7 +34,7 @@ static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCrea
 //! An empty index for the scan to start the build from, for indexes that commits can change while they are built
 static shared_ptr<const BoundIndex> CreateIndexTemplate(ClientContext &context, LogicalCreateIndex &op,
                                                         const IndexType &index_type) {
-	if (index_type.create_plan || index_type.name != ART::TYPE_NAME) {
+	if (index_type.create_plan || !index_type.create_instance) {
 		return nullptr;
 	}
 	auto &table = op.table.Cast<DuckTableEntry>();
@@ -45,7 +47,12 @@ static shared_ptr<const BoundIndex> CreateIndexTemplate(ClientContext &context, 
 	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::NONE,
 	                       op.info->GetIndexName(), storage_ids, op.unbound_expressions, storage_info,
 	                       op.info->options);
-	return shared_ptr<const BoundIndex>(index_type.create_instance(input));
+	auto index = index_type.create_instance(input);
+	if (!index || !index->SupportsDeltaIndexes()) {
+		// without deltas, the build fails if the table changes while it runs
+		return nullptr;
+	}
+	return shared_ptr<const BoundIndex>(std::move(index));
 }
 
 static PhysicalOperator &AddFilter(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev) {

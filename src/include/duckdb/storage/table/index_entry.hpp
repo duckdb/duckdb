@@ -195,6 +195,8 @@ public:
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Takes the changes that commits made to the building entry since the last take
 	IndexBuildDeltas TakeBuildDeltas();
+	//! Merges the taken changes into the built index, checking its constraint
+	static void MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas);
 	//! Replaces the empty index of the building entry with the built index, which readers can then use
 	void FinishBuild(unique_ptr<BoundIndex> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Adds only the transaction-local delete index.

@@ -167,7 +167,8 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock.
 	void Vacuum() DUCKDB_EXCLUDES(lock);
 
-	//! Whether or not the index supports the creation of delta indexes
+	//! Whether or not the index supports the creation of delta indexes. Such indexes receive concurrent changes in
+	//! deltas during a checkpoint, and while CREATE INDEX builds them.
 	virtual bool SupportsDeltaIndexes() const;
 
 	//! Returns the in-memory usage of the index. The index lock must be held
@@ -221,8 +222,8 @@ protected:
 
 	//! Creates an empty physical copy with the requested constraint type.
 	virtual unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const;
-	//! Merges a checkpoint delta into this index.
-	virtual ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index);
+	//! Merges a delta into this index, appending the added rows with the append mode.
+	virtual ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index, IndexAppendMode append_mode);
 
 	//! Lock used for any changes to the index
 	mutable annotated_mutex lock;

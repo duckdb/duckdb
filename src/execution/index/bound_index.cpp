@@ -183,7 +183,7 @@ unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(IndexConstraintType) const {
 	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
 }
 
-ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &) {
+ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &, IndexAppendMode) {
 	throw InternalException("BoundIndex::MergeCheckpointDelta is not supported for this index type");
 }
 

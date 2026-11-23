@@ -1579,14 +1579,14 @@ ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode
 	return InsertMerge(state, source_index, append_mode);
 }
 
-ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta_index) {
+ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta_index,
+                                    const IndexAppendMode append_mode) {
 	switch (type) {
 	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
 		RemovalMerge(delta_index);
 		return ErrorData();
 	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
-		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
-		return InsertMerge(delta_index, IndexAppendMode::INSERT_DUPLICATES);
+		return InsertMerge(delta_index, append_mode);
 	default:
 		throw InternalException("Unsupported ART checkpoint delta type");
 	}

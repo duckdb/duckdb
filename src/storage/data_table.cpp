@@ -441,27 +441,9 @@ void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT, last_commit);
 }
 
-//! Merges the changes that commits made during the build into the built index
-static void MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas) {
-	auto &art = index.Cast<ART>();
-	// remove first: a key that moved to another row must not look like a duplicate
-	if (deltas.removed) {
-		art.RemovalMerge(*deltas.removed);
-	}
-	if (deltas.added) {
-		auto error = art.InsertMerge(*deltas.added, IndexAppendMode::DEFAULT);
-		if (error.HasError()) {
-			if (error.Type() == ExceptionType::CONSTRAINT) {
-				throw ConstraintException("Data contains duplicates on indexed column(s)");
-			}
-			error.Throw();
-		}
-	}
-}
-
 shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
                                            unique_ptr<BoundIndex> index, idx_t index_oid,
-                                           ConstraintCheckMode check_mode) {
+                                           ConstraintCheckMode check_mode, transaction_t plan_commit) {
 	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
 	auto &transaction_manager = DuckTransactionManager::Get(db);
@@ -471,6 +453,12 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 			throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has "
 			                           "been %s by a different transaction",
 			                           GetTableName(), TableModification());
+		}
+		if (info->GetLastChangeCommit() > plan_commit) {
+			// without deltas, the build cannot apply the commits made after its scan started
+			throw TransactionException("Transaction conflict: table %s was changed while CREATE INDEX built %s, which "
+			                           "cannot apply concurrent changes. Retry the CREATE INDEX",
+			                           GetTableName(), index->GetIndexName());
 		}
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
@@ -487,7 +475,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 			    GetTableName(), deltas.changed_rows, rounds);
 		}
 		commit_lock.unlock();
-		MergeBuildDeltas(*index, deltas);
+		IndexEntry::MergeBuildDeltas(*index, deltas);
 		context.FastInterruptCheck();
 		commit_lock.lock();
 		auto next = entry->TakeBuildDeltas();
@@ -495,7 +483,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		deltas = std::move(next);
 		rounds++;
 	}
-	MergeBuildDeltas(*index, deltas);
+	IndexEntry::MergeBuildDeltas(*index, deltas);
 	if (index->IsPrimary() && deltas.has_null_keys) {
 		throw ConstraintException("NOT NULL constraint failed: %s", index->GetIndexName());
 	}
@@ -1349,6 +1337,7 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
+	info->SetLastChangeCommit(commit_id);
 	row_groups->CommitAppend(commit_id, row_start, count);
 }
 
