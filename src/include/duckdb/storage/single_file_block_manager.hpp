@@ -16,6 +16,8 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -119,7 +121,9 @@ public:
 	//! Write the block to disk.
 	void Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) override;
+	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
+	                 transaction_t lowest_active_start) override;
+	void ReuseFreedBlocks(transaction_t lowest_active_start) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
@@ -203,6 +207,13 @@ private:
 	bool BlockIsFreeListed(block_id_t block_id);
 
 private:
+	//! What a header freed: blocks, and metadata blocks as a mask per storage block
+	struct FreedByHeader {
+		vector<block_id_t> blocks;
+		unordered_map<block_id_t, idx_t> metadata_blocks;
+	};
+
+private:
 	AttachedDatabase &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
 	uint8_t active_header;
@@ -224,6 +235,12 @@ private:
 	unordered_map<block_id_t, uint32_t> multi_use_blocks;
 	//! The list of blocks that are no longer in-use, but cannot be re-used until the next checkpoint
 	unordered_set<block_id_t> modified_blocks;
+	//! The list of blocks that a header freed, but cannot yet be re-used because an older transaction may read them
+	unordered_set<block_id_t> free_blocks_pending_reuse;
+	//! What the headers freed, by the start time before which a transaction may still read it
+	map<transaction_t, FreedByHeader> pending_reuse_batches;
+	//! The lowest stamp in pending_reuse_batches, MAX_TRANSACTION_ID if it is empty: readable without the lock
+	atomic<transaction_t> lowest_pending_reuse_stamp {MAX_TRANSACTION_ID};
 	//! The current meta block id
 	idx_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
