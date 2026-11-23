@@ -408,8 +408,8 @@ shared_ptr<IndexEntry> DataTable::AddBuildingIndex(DuckTransaction &transaction,
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	// the transaction holds the checkpoint lock, so no checkpoint uses the deltas during the build
 	D_ASSERT(!transaction_manager.GetActiveCheckpoint().IsValid());
-	return info->indexes.AddBuildingIndex(index_template.CreateEmptyCopy(IndexConstraintType::NONE),
-	                                      transaction_manager.GetLastCommit(), transaction.GetTransactionId());
+	return info->indexes.AddBuildingIndex(index_template, transaction_manager.GetLastCommit(),
+	                                      transaction.GetTransactionId());
 }
 
 //! The most changed rows that CREATE INDEX merges while holding the commit lock

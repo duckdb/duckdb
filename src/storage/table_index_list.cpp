@@ -103,10 +103,10 @@ shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t i
 	return index_entry;
 }
 
-shared_ptr<IndexEntry> TableIndexList::AddBuildingIndex(unique_ptr<BoundIndex> empty_index, transaction_t build_commit,
+shared_ptr<IndexEntry> TableIndexList::AddBuildingIndex(const BoundIndex &index_template, transaction_t build_commit,
                                                         transaction_t build_transaction) {
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(empty_index), build_commit, build_transaction);
+	auto index_entry = make_shared_ptr<IndexEntry>(index_template, build_commit, build_transaction);
 	index_entries.push_back(index_entry);
 	return index_entry;
 }

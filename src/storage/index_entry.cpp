@@ -25,11 +25,10 @@ IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p, const Const
 	}
 }
 
-IndexEntry::IndexEntry(unique_ptr<BoundIndex> empty_index, transaction_t build_commit,
-                       transaction_t build_transaction_p)
+IndexEntry::IndexEntry(const BoundIndex &index_template, transaction_t build_commit, transaction_t build_transaction_p)
     : bind_state(IndexBindState::BOUND), index_oid(DConstants::INVALID_INDEX), last_commit(build_commit),
-      owned_index(std::move(empty_index)), check_mode(ConstraintCheckMode::DEFAULT), building(true),
-      build_transaction(build_transaction_p) {
+      owned_index(index_template.CreateEmptyCopy(IndexConstraintType::NONE)), check_mode(ConstraintCheckMode::DEFAULT),
+      building(true), build_transaction(build_transaction_p) {
 	D_ASSERT(owned_index->GetConstraintType() == IndexConstraintType::NONE);
 	D_ASSERT(owned_index->Cast<BoundIndex>().SupportsDeltaIndexes());
 }

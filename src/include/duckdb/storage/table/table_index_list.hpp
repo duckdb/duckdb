@@ -45,7 +45,7 @@ public:
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode,
 	                                transaction_t last_commit = 0);
 	//! Adds an entry for an index that the transaction builds; the commit lock must be held.
-	shared_ptr<IndexEntry> AddBuildingIndex(unique_ptr<BoundIndex> empty_index, transaction_t build_commit,
+	shared_ptr<IndexEntry> AddBuildingIndex(const BoundIndex &index_template, transaction_t build_commit,
 	                                        transaction_t build_transaction);
 	//! Returns the entry of the index that the transaction builds, if any.
 	shared_ptr<IndexEntry> FindBuildingIndex(transaction_t build_transaction) const;

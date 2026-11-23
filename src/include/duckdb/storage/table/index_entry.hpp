@@ -127,8 +127,8 @@ struct IndexBuildDeltas {
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
 	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode, transaction_t last_commit);
-	//! Creates a building entry: commits route their changes to its deltas, and readers skip it
-	IndexEntry(unique_ptr<BoundIndex> empty_index, transaction_t build_commit, transaction_t build_transaction);
+	//! Creates a building entry with an empty copy of the index: commits change its deltas, and readers skip it
+	IndexEntry(const BoundIndex &index_template, transaction_t build_commit, transaction_t build_transaction);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
