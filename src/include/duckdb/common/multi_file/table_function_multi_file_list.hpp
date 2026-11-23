@@ -21,7 +21,8 @@ namespace duckdb {
 //! The function is run outside of a pipeline, so it cannot have a local state
 class TableFunctionMultiFileList : public LazyMultiFileList {
 public:
-	//! Look up the table function in the catalog, bind it over the given inputs and list the files it produces
+	//! Look up the built-in table function in the system catalog, bind it over the given inputs and list the files it
+	//! produces
 	TableFunctionMultiFileList(ClientContext &context, const Identifier &function_name, vector<Value> inputs,
 	                           named_argument_map_t named_parameters = named_argument_map_t());
 	~TableFunctionMultiFileList() override;

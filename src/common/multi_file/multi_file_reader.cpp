@@ -224,42 +224,14 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	return files;
 }
 
-//! A file list that expands the globs with the glob table function. Files that are given together with
-//! the options to open them with are passed as file structs, which are listed as-is instead of being globbed
-static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, const vector<OpenFileInfo> &files,
+//! A file list that expands the globs with the glob table function
+static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, const vector<string> &paths,
                                                     const FileGlobInput &glob_input) {
-	bool has_open_options = false;
-	for (auto &file : files) {
-		if (file.extended_info) {
-			has_open_options = true;
-			break;
-		}
-	}
 	vector<Value> globs;
-	for (auto &file : files) {
-		if (!has_open_options) {
-			globs.emplace_back(file.path);
-			continue;
-		}
-		Value entry(file.path);
-		if (file.extended_info) {
-			// a struct even without options - an entry with open options is never globbed
-			vector<string> names;
-			for (auto &option : file.extended_info->options) {
-				names.push_back(option.first);
-			}
-			std::sort(names.begin(), names.end());
-			child_list_t<Value> children;
-			children.emplace_back(OpenFileInfo::PATH_FIELD, Value(file.path));
-			for (auto &name : names) {
-				children.emplace_back(name, file.extended_info->options.at(name));
-			}
-			entry = Value::STRUCT(std::move(children));
-		}
-		globs.push_back(entry.DefaultCastAs(LogicalType::VARIANT()));
+	for (auto &path : paths) {
+		globs.emplace_back(path);
 	}
-	auto glob_type = has_open_options ? LogicalType::VARIANT() : LogicalType::VARCHAR;
-	vector<Value> inputs {Value::LIST(glob_type, std::move(globs))};
+	vector<Value> inputs {Value::LIST(LogicalType::VARCHAR, std::move(globs))};
 	named_argument_map_t named_parameters;
 	named_parameters["full_file_info"] = Value::BOOLEAN(true);
 	named_parameters["allow_empty"] = Value::BOOLEAN(glob_input.AllowsEmpty());
@@ -270,9 +242,74 @@ static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, cons
 	                                             std::move(named_parameters));
 }
 
+namespace {
+
+//! Lists the files given together with the options to open them with as-is, and expands each run of the other
+//! entries with the glob table function, keeping the order of the entries
+class OpenOptionsMultiFileList : public LazyMultiFileList {
+public:
+	OpenOptionsMultiFileList(ClientContext &context_p, vector<OpenFileInfo> files_p, FileGlobInput glob_input_p)
+	    : LazyMultiFileList(&context_p.GetContext()), context(context_p), files(std::move(files_p)),
+	      glob_input(std::move(glob_input_p)) {
+	}
+
+	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files) const override {
+		vector<OpenFileInfo> result;
+		for (auto &file : files) {
+			if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
+				break;
+			}
+			result.push_back(file);
+		}
+		return result;
+	}
+
+protected:
+	bool ExpandNextPath() const override {
+		if (!glob_list) {
+			if (current_file >= files.size()) {
+				return false;
+			}
+			auto &file = files[current_file];
+			if (file.extended_info) {
+				// an entry with open options is never globbed
+				expanded_files.push_back(file);
+				current_file++;
+				return true;
+			}
+			vector<string> globs;
+			while (current_file < files.size() && !files[current_file].extended_info) {
+				globs.push_back(files[current_file].path);
+				current_file++;
+			}
+			glob_list = CreateGlobFileList(context, globs, glob_input);
+			glob_list->InitializeScan(glob_scan);
+		}
+		OpenFileInfo file;
+		if (!glob_list->Scan(glob_scan, file)) {
+			glob_list.reset();
+			return true;
+		}
+		expanded_files.push_back(std::move(file));
+		return true;
+	}
+
+private:
+	ClientContext &context;
+	const vector<OpenFileInfo> files;
+	const FileGlobInput glob_input;
+	//! The next entry of files to list or glob
+	mutable idx_t current_file = 0;
+	//! The glob over the current run of entries without open options
+	mutable unique_ptr<MultiFileList> glob_list;
+	mutable MultiFileListScanData glob_scan;
+};
+
+} // namespace
+
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
-	auto res = CreateGlobFileList(context, vector<OpenFileInfo>(paths.begin(), paths.end()), glob_input);
+	auto res = CreateGlobFileList(context, paths, glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -297,7 +334,7 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 		}
 		return CreateFileList(context, paths, glob_input);
 	}
-	auto res = CreateGlobFileList(context, files, glob_input);
+	auto res = make_uniq<OpenOptionsMultiFileList>(context, std::move(files), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

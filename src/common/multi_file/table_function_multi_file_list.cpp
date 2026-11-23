@@ -41,8 +41,10 @@ static vector<OpenFileInfo> GetInputFiles(const vector<Value> &inputs, const Ide
 TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p, const Identifier &function_name,
                                                        vector<Value> inputs, named_argument_map_t named_parameters)
     : LazyMultiFileList(&context_p.GetContext()), context(context_p) {
-	auto &entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
-	    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), function_name));
+	// resolved fully qualified in the system catalog, so a macro of the same name in the search path is never used
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<TableFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
 	vector<LogicalType> input_types;
 	for (auto &input : inputs) {
 		input_types.push_back(input.type());
