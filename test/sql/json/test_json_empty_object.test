@@ -31,6 +31,20 @@ select a from '{TEST_DIR}/my.json'
 ----
 {}
 
+statement ok
+copy (select '{"o": {}, "l": []}') to '{TEST_DIR}/containers.json' (FORMAT CSV, quote '', header 0)
+
+query II
+select typeof(o), typeof(l) from '{TEST_DIR}/containers.json'
+----
+MAP(VARCHAR, "NULL")	"NULL"[]
+
+# without map inference there is no empty STRUCT, so the empty object degrades to "NULL"
+query II
+select typeof(o), typeof(l) from read_json('{TEST_DIR}/containers.json', map_inference_threshold=-1)
+----
+"NULL"	"NULL"[]
+
 # can't force it to have an empty struct
 statement error
 select * from read_json('{TEST_DIR}/my.json', columns={a: 'STRUCT()'})
