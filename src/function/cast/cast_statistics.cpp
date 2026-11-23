@@ -162,7 +162,8 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 	// for time/timestamps/dates - there are various limitations on what we can propagate
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:

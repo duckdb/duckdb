@@ -25,9 +25,10 @@ public:
 	                                        const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                                        const vector<unique_ptr<BaseStatistics>> &partitions_stats,
 	                                        const OperatorPartitionInfo &partition_info, idx_t estimated_cardinality,
-	                                        bool require_payload = false);
+	                                        bool require_payload = false,
+	                                        optional_idx partition_limit = optional_idx());
 
-	explicit SortStrategy(const Types &input_types);
+	explicit SortStrategy(const Types &input_types, optional_idx partition_limit = optional_idx());
 	virtual ~SortStrategy() = default;
 
 public:
@@ -88,6 +89,8 @@ public:
 	vector<column_t> scan_ids;
 	//! Key columns in the sorted output. Needed for prefix computations.
 	vector<column_t> sort_ids;
+	//! The maximum number of rows in a partition
+	optional_idx partition_limit;
 };
 
 } // namespace duckdb

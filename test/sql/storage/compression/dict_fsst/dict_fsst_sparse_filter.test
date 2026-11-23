@@ -1,0 +1,117 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_sparse_filter.test
+# description: Sparse DICT_FSST filtering preserves logical types, NULLs, and row positions
+# group: [dict_fsst]
+
+require vector_size 2048
+
+load {TEST_DIR}/dict_fsst_sparse_filter.db readwrite v2.0.0
+
+foreach divisor 1 2
+
+statement ok
+SET force_compression='dict_fsst'
+
+statement ok
+CREATE VIEW expected_{divisor} AS
+SELECT i, CASE WHEN {divisor} = 2 AND i % 17 = 1 THEN NULL
+               ELSE ('https://example.com/orders/' || md5((i // {divisor})::VARCHAR) ||
+                     repeat('/special requests packages regular accounts', 4) ||
+                     repeat('x', (i // {divisor}) % 5))::BLOB
+          END AS b
+FROM range(20003) t(i)
+
+statement ok
+CREATE TABLE strings_{divisor} AS TABLE expected_{divisor}
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('strings_{divisor}', include_segment_info=true)
+WHERE column_name = 'b' AND compression = 'DICT_FSST'
+  AND segment_info LIKE CASE WHEN {divisor} = 1 THEN 'FSST_ONLY:%' ELSE 'DICT_FSST:%' END
+----
+true
+
+# The dense case covers dictionary caching and the full-scan fallback.
+query I
+WITH actual AS (
+    SELECT i, b FROM strings_{divisor} WHERE coalesce(octet_length(b), 233) >= 233
+), expected AS (
+    SELECT i, b FROM expected_{divisor} WHERE coalesce(octet_length(b), 233) >= 233
+)
+SELECT count(*) FROM (
+    (TABLE actual EXCEPT ALL TABLE expected)
+    UNION ALL
+    (TABLE expected EXCEPT ALL TABLE actual)
+) differences
+----
+0
+
+# Deletions guarantee a sparse incoming selection, independent of filter ordering.
+statement ok
+DELETE FROM strings_{divisor} WHERE i % 128 <> 1
+
+# Selected payloads retain their BLOB type, including the final partial vector.
+query I
+WITH actual AS (
+    SELECT i, b FROM strings_{divisor}
+), expected AS (
+    SELECT i, b FROM expected_{divisor} WHERE i % 128 = 1
+)
+SELECT count(*) FROM (
+    (TABLE actual EXCEPT ALL TABLE expected)
+    UNION ALL
+    (TABLE expected EXCEPT ALL TABLE actual)
+) differences
+----
+0
+
+# Generic expression filtering must receive a BLOB vector and preserve NULLs.
+query I
+WITH actual AS (
+    SELECT i, b FROM strings_{divisor} WHERE coalesce(octet_length(b), 233) >= 233
+), expected AS (
+    SELECT i, b FROM expected_{divisor}
+    WHERE i % 128 = 1 AND coalesce(octet_length(b), 233) >= 233
+)
+SELECT count(*) FROM (
+    (TABLE actual EXCEPT ALL TABLE expected)
+    UNION ALL
+    (TABLE expected EXCEPT ALL TABLE actual)
+) differences
+----
+0
+
+query I
+WITH actual AS (
+    SELECT i, b FROM strings_{divisor} WHERE b IS NULL
+), expected AS (
+    SELECT i, b FROM expected_{divisor} WHERE i % 128 = 1 AND b IS NULL
+)
+SELECT count(*) FROM (
+    (TABLE actual EXCEPT ALL TABLE expected)
+    UNION ALL
+    (TABLE expected EXCEPT ALL TABLE actual)
+) differences
+----
+0
+
+# No survivors must not leave stale rows in the selection.
+query I
+SELECT count(*) FROM strings_{divisor} WHERE md5(b) = '00000000000000000000000000000000'
+----
+0
+
+# Updated values take the existing generic fallback.
+statement ok
+UPDATE strings_{divisor} SET b = 'updated'::BLOB WHERE i = 1
+
+query IT
+SELECT i, b FROM strings_{divisor} WHERE b = 'updated'::BLOB
+----
+1	updated
+
+endloop

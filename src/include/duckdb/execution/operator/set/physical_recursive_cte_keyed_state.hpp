@@ -201,6 +201,7 @@ private:
 
 	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
 	vector<AggregateObject> payload_aggregate_objects;
+	unique_ptr<ChunkHasher> preaggregation_hasher;
 	Vector preaggregation_hashes;
 	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
 };

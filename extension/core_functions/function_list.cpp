@@ -205,7 +205,6 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(GreatestCommonDivisorFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(GroupConcatFun),
 	DUCKDB_SCALAR_FUNCTION(HammingFun),
-	DUCKDB_SCALAR_FUNCTION(HashFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HexFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(HistogramFun),
 	DUCKDB_AGGREGATE_FUNCTION(HistogramExactFun),
