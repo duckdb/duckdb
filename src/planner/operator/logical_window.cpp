@@ -33,4 +33,14 @@ string LogicalWindow::GetName() const {
 	return LogicalOperator::GetName();
 }
 
+InsertionOrderPreservingMap<string> LogicalWindow::ParamsToString() const {
+	auto result = LogicalOperator::ParamsToString();
+
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
+	return result;
+}
+
 } // namespace duckdb
