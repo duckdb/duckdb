@@ -5,10 +5,11 @@
 statement ok
 CREATE TABLE t(a BIGINT, b BIGINT);
 
+# the inserting commits append to an index
 statement ok
 CREATE INDEX idx_a ON t(a);
 
-# thread 0 creates and drops idx_b on b, thread 1 commits 100,000-row inserts (autocommit), 10 times each
+# thread 0 creates and drops idx_b, thread 1 commits 100,000-row inserts
 concurrentloop threadid 0 2
 
 loop i 0 10
@@ -17,10 +18,10 @@ onlyif threadid=0
 statement ok
 CREATE INDEX idx_b ON t(b);
 
-# the lookup through idx_b finds the rows committed while it was built
+# idx_b holds the rows committed while it was built
 onlyif threadid=0
 query I
-SELECT (SELECT count(*) FROM t WHERE b = 77) = (SELECT count(*) FROM t WHERE b = 77 AND hash(b) IS NOT NULL);
+SELECT (SELECT count(*) FROM t WHERE b = 77) = (SELECT count(*) FILTER (WHERE b = 77) FROM t);
 ----
 true
 

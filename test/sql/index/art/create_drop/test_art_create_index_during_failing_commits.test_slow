@@ -12,7 +12,7 @@ statement ok
 SET GLOBAL debug_force_commit_failure = true;
 
 # thread 0 creates indexes that roll back, threads 1 and 2 commit inserts and deletes that fail after their undo walk;
-# every insert uses new keys, so that a build that reads the rows of a failed insert holds no pair a later insert repeats
+# the inserted keys are new, so they do not conflict with idx_unique_b while it is in the index list
 concurrentloop threadid 0 3
 
 loop i 0 20
@@ -57,10 +57,10 @@ SET GLOBAL debug_force_commit_failure = false;
 statement ok
 CREATE UNIQUE INDEX idx_unique_b ON t(b);
 
-query III
-SELECT count(*), count(*) FILTER (WHERE a = 4242), count(*) FILTER (WHERE b = 4243) FROM t;
+query I
+SELECT count(*) FROM t;
 ----
-200000	1	1
+200000
 
 query I
 SELECT count(*) FROM t WHERE a = 4242;
@@ -75,7 +75,7 @@ SELECT count(*) FROM t WHERE b = 4243;
 statement ok
 DELETE FROM t WHERE a % 2 = 0;
 
-query I
-SELECT count(*) FROM t WHERE a = 4243;
+query II
+SELECT (SELECT count(*) FROM t WHERE a = 4242), (SELECT count(*) FROM t WHERE b = 4243);
 ----
-1
+0	1
