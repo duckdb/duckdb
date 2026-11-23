@@ -76,7 +76,7 @@ void ActiveCheckpointWrapper::Begin(CheckpointOptions &options) {
 		struct CheckpointContextScope {
 			DuckTransactionManager &tm;
 			CheckpointContextScope(DuckTransactionManager &tm_p, ClientContext &ctx) : tm(tm_p) {
-				tm.SetStartingCheckpointContext(&ctx);
+				tm.SetStartingCheckpointContext(&ctx.GetContext());
 			}
 			~CheckpointContextScope() {
 				tm.SetStartingCheckpointContext(nullptr);
