@@ -130,7 +130,7 @@ private:
 
 	//! Makes a reused result ready for the one-row generic path: like the constant path, a stale NULL does not survive
 	DUCKDB_API static void PrepareConstantResult(Vector &result);
-	DUCKDB_API static bool PrepareGenericResultValidity(const UnifiedVectorFormat *formats, idx_t format_count,
+	DUCKDB_API static bool PrepareGenericResultValidity(UnifiedVectorFormat *formats, idx_t format_count,
 	                                                    Vector &result, idx_t count, bool preserve_result_validity,
 	                                                    bool adds_nulls);
 
@@ -339,7 +339,7 @@ private:
 		constexpr idx_t N = sizeof...(ARGS);
 		std::array<UnifiedVectorFormat, N> formats;
 		for (idx_t i = 0; i < N; i++) {
-			inputs[i].get().ToUnifiedFormat(formats[i], result);
+			inputs[i].get().ToUnifiedFormat(formats[i]);
 		}
 		auto input_data = std::make_tuple(UnifiedVectorFormat::GetData<ARGS>(formats[Is])...);
 		result.SetVectorType(VectorType::FLAT_VECTOR);

@@ -83,7 +83,7 @@ void TemplatedLoopHash(const Vector &input, Vector &result, const SelectionVecto
 		FlatVector::SetSize(result, count_t(count));
 
 		UnifiedVectorFormat idata;
-		source.ToUnifiedFormat(idata, result);
+		source.ToUnifiedFormat(idata);
 		if constexpr (INPUT_IS_ALREADY_HASH) {
 			idata.sel = &DictionaryVector::SelVector(input);
 		}
@@ -431,7 +431,7 @@ void TemplatedLoopCombineHash(const Vector &input, Vector &hashes, const Selecti
 		*hash_data = CombineHashScalar(*hash_data, other_hash);
 	} else {
 		UnifiedVectorFormat idata;
-		source.ToUnifiedFormat(idata, hashes);
+		source.ToUnifiedFormat(idata);
 		if constexpr (INPUT_IS_ALREADY_HASH) {
 			idata.sel = source.GetVectorType() == VectorType::CONSTANT_VECTOR
 			                ? ConstantVector::ZeroSelectionVector(input.size(), idata.owned_sel)

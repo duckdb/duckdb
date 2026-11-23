@@ -476,27 +476,6 @@ void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	Buffer().ToUnifiedFormat(format);
 }
 
-void Vector::ToUnifiedFormatRetained(UnifiedVectorFormat &format) const {
-	ToUnifiedFormat(format);
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		format.owned_sel.Initialize(DictionaryVector::SelVector(*this));
-		format.sel = &format.owned_sel;
-		format.validity = FlatVector::Validity(DictionaryVector::Child(*this));
-	} else {
-		format.validity = Buffer().GetValidityMask();
-	}
-}
-
-void Vector::ToUnifiedFormat(UnifiedVectorFormat &format, const Vector &result) const {
-	if (GetBufferRef().get() == result.GetBufferRef().get() ||
-	    (GetVectorType() == VectorType::DICTIONARY_VECTOR &&
-	     DictionaryVector::Child(*this).GetBufferRef().get() == result.GetBufferRef().get())) {
-		ToUnifiedFormatRetained(format);
-	} else {
-		ToUnifiedFormat(format);
-	}
-}
-
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t, RecursiveUnifiedVectorFormat &data) {
 	RecursiveToUnifiedFormat(input, data);
 }
