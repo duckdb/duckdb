@@ -541,17 +541,15 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, c
 	Initialize(count);
 
 	if (order_insensitive) {
-		//	First pass: aggregate the segment tree nodes with sharing
+		// Shared states must contain only tree nodes, before either set of leaves is added.
 		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
-
-		//	Second pass: aggregate the ragged leaves
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::FULL);
-	} else {
-		//	Evaluate leaves in order
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::LEFT);
-		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::RIGHT);
 	}
+	// Process each side in a separate pass so the cursor does not seek between both frame ends for every row.
+	EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::LEFT);
+	if (!order_insensitive) {
+		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
+	}
+	EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::RIGHT);
 }
 
 void WindowSegmentTreePart::Initialize(idx_t count) {
