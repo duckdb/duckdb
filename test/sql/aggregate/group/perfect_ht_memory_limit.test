@@ -15,12 +15,17 @@ statement ok
 SET max_temp_directory_size='0B'
 
 statement ok
-CREATE TABLE t AS SELECT i::UTINYINT AS g, i FROM range(16) t(i)
+CREATE TABLE t AS SELECT (i // 2048)::UTINYINT AS g, i FROM range(16 * 2048) t(i)
+
+# Generate one wide string per group, spaced 2048 rows apart.
+statement ok
+CREATE VIEW input_strings AS
+SELECT g, CASE WHEN i % 2048 = 0 THEN repeat('x', 2000000) || g::VARCHAR END AS v FROM t
 
 # Single-result string minima can retain a wide value per group on either path.
 statement ok
 CREATE VIEW totals AS SELECT count(*) AS groups, sum(length(v)) AS bytes
-FROM (SELECT min(repeat('x', 2000000) || i::VARCHAR) AS v FROM t GROUP BY g) grouped
+FROM (SELECT min(v) AS v FROM input_strings GROUP BY g) grouped
 
 foreach threshold 0 12
 
@@ -41,6 +46,12 @@ query II
 EXPLAIN (FORMAT JSON) SELECT * FROM totals
 ----
 physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+# Reading all sixteen strings fits in 16 MB.
+query II
+SELECT count(v), sum(length(v)) FROM input_strings
+----
+16	32000022
 
 # The sixteen minima retain 32 MB of strings.
 statement error
