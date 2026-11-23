@@ -88,7 +88,7 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().DirectoryExists(directory, GetOpener());
+		return FindFileSystem(directory).DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
@@ -100,7 +100,7 @@ public:
 		}
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().CreateDirectoryExtended(directory, options, GetOpener());
+		return FindFileSystem(directory).CreateDirectoryExtended(directory, options, GetOpener());
 	}
 	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override {
 		CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
@@ -113,7 +113,7 @@ public:
 	                             optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().RemoveDirectoryExtended(directory, options, GetOpener());
+		return FindFileSystem(directory).RemoveDirectoryExtended(directory, options, GetOpener());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
@@ -127,7 +127,7 @@ public:
 			    "extensions'",
 			    source, target);
 		}
-		GetFileSystem().MoveFile(source, target, GetOpener());
+		FindFileSystem(source).MoveFile(source, target, GetOpener());
 	}
 
 	bool DirectoryExists(const string &directory) {
@@ -178,47 +178,51 @@ public:
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
-		return GetFileSystem().FileExists(filename, GetOpener());
+		return FindFileSystem(filename).FileExists(filename, GetOpener());
 	}
 
 	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
-		return GetFileSystem().GetStatsIfExists(file, GetOpener());
+		return FindFileSystem(file.path).GetStatsIfExists(file, GetOpener());
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().IsPipe(filename, GetOpener());
+		return FindFileSystem(filename).IsPipe(filename, GetOpener());
 	}
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
-		GetFileSystem().RemoveFile(filename, GetOpener());
+		FindFileSystem(filename).RemoveFile(filename, GetOpener());
 	}
 
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
-		return GetFileSystem().TryRemoveFile(filename, GetOpener());
+		return FindFileSystem(filename).TryRemoveFile(filename, GetOpener());
 	}
 
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		reference_map_t<FileSystem, vector<string>> files_by_fs;
 		for (const auto &filename : filenames) {
 			VerifyCanAccessFile(filename);
+			files_by_fs[FindFileSystem(filename)].push_back(filename);
 		}
-		GetFileSystem().RemoveFiles(filenames, GetOpener());
+		for (auto &entry : files_by_fs) {
+			entry.first.get().RemoveFiles(entry.second, GetOpener());
+		}
 	}
 
 	string PathSeparator(const string &path) override {
-		return GetFileSystem().PathSeparator(path);
+		return GetFileSystem().FindFileSystem(path, nullptr).PathSeparator(path);
 	}
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, GetOpener());
+		return FindFileSystem(path).Glob(path, GetOpener().get());
 	}
 
 	std::string GetName() const override {
@@ -250,7 +254,7 @@ protected:
 	                       optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().ListFiles(directory, callback, GetOpener());
+		return FindFileSystem(directory).ListFiles(directory, callback, GetOpener());
 	}
 
 	bool SupportsListFilesExtended() const override {
@@ -266,10 +270,14 @@ protected:
 
 	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().CanonicalizePath(path_p, GetOpener());
+		return FindFileSystem(path_p).CanonicalizePath(path_p, GetOpener());
 	}
 
 private:
+	//! The file system that handles the path
+	FileSystem &FindFileSystem(const string &path) {
+		return GetFileSystem().FindFileSystem(path, GetOpener());
+	}
 	void VerifyCanAccessFileInternal(const string &path, FileType type);
 };
 

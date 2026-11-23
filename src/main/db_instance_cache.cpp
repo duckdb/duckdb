@@ -27,7 +27,7 @@ static string GetDBAbsolutePath(const string &database_p, VirtualFileSystem &fs)
 		return database;
 	}
 	// canonicalize the path
-	return fs.CanonicalizePath(database, nullptr);
+	return fs.FindFileSystem(database, nullptr).CanonicalizePath(database, nullptr);
 }
 
 static string GetCacheKey(const string &database_p, const DBConfig &config) {

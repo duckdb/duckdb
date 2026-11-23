@@ -235,7 +235,7 @@ void LogManager::SetLogSinkInternal(DatabaseInstance &db, LogConfig &new_config,
 	}
 
 	if (sink_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
-		if (DBConfig::GetConfig(db).file_system->SubSystemIsDisabled("LocalFileSystem")) {
+		if (VirtualFileSystem::Get(db).SubSystemIsDisabled("LocalFileSystem")) {
 			throw InvalidConfigurationException("Can not enable file logging with the LocalFileSystem disabled");
 		}
 	}

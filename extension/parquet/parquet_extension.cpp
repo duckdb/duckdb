@@ -1086,7 +1086,7 @@ static unique_ptr<FunctionData> ParquetCopyFromBind(ClientContext &context, Copy
 
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
-	DBConfig::GetConfig(db_instance).file_system->RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet"));
 	scan_fun.SetName("read_parquet");

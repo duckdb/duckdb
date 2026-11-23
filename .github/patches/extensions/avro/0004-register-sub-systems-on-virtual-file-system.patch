@@ -7,7 +7,7 @@ index 3448e15..368f5a3 100644
  		Require(!con.Query("LOAD avro")->HasError(), "Could not load avro");
  		Require(!con.Query("SET threads=1")->HasError(), "Could not set threads");
 -		FileSystem::GetFileSystem(*con.context).RegisterSubSystem(make_uniq<FaultFileSystem>(faults));
-+		DBConfig::GetConfig(*con.context).file_system->RegisterSubSystem(make_uniq<FaultFileSystem>(faults));
++		VirtualFileSystem::Get(*con.context).RegisterSubSystem(make_uniq<FaultFileSystem>(faults));
  		for (int attempt = 0; attempt < 3; attempt++) {
  			faults.writes = 0;
  			auto result = con.Query("COPY (SELECT 42 a) TO 'avrofault://test.avro' "

@@ -59,8 +59,7 @@ public:
 	}
 
 	VirtualFileSystem &GetFileSystem() const override {
-		auto &config = DBConfig::GetConfig(db);
-		return *config.file_system;
+		return VirtualFileSystem::Get(db);
 	}
 	optional_ptr<FileOpener> GetOpener() const override {
 		return &database_opener;

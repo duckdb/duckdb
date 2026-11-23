@@ -164,6 +164,14 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
+VirtualFileSystem &VirtualFileSystem::Get(DatabaseInstance &db) {
+	return *db.config.file_system;
+}
+
+VirtualFileSystem &VirtualFileSystem::Get(ClientContext &context) {
+	return Get(*context.db);
+}
+
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
@@ -474,12 +482,12 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(db_p.config.file_system->CreateLocalView()), database_opener(db_p) {
+    : db(db_p), local_fs(VirtualFileSystem::Get(db_p).CreateLocalView()), database_opener(db_p) {
 }
 
 VirtualFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
 	auto local_name = local_fs->GetDefaultFileSystem().GetName();
-	if (db.config.file_system->SubSystemIsDisabled(local_name)) {
+	if (VirtualFileSystem::Get(db).SubSystemIsDisabled(local_name)) {
 		throw PermissionException("File system %s has been disabled by configuration", local_name);
 	}
 	return *local_fs;

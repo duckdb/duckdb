@@ -137,14 +137,6 @@ unique_ptr<VirtualFileSystem> VirtualFileSystem::CreateLocalView() {
 	return make_uniq<VirtualFileSystem>(make_uniq<LocalFileSystem>());
 }
 
-unique_ptr<MemoryMappedFile> VirtualFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-                                                              const MMapOptions &options,
-                                                              optional_ptr<FileOpener> opener) {
-	auto registry = file_system_registry.atomic_load();
-	auto &internal_filesystem = FindFileSystem(registry, path.path, opener);
-	return internal_filesystem.MemoryMapFile(path, flags, options, opener);
-}
-
 FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
 	auto &fs = *file_system_registry->default_fs->file_system;
 	if (SubSystemIsDisabled(fs.GetName())) {
@@ -289,77 +281,6 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const OpenFileInfo &file, Fil
 		std::rethrow_exception(error);
 	}
 	return file_handle;
-}
-
-optional<FileMetadata> VirtualFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(file.path, opener).GetStatsIfExists(file, opener);
-}
-
-// need to look up correct fs for this
-bool VirtualFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).DirectoryExists(directory, opener);
-}
-bool VirtualFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                                optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).CreateDirectoryExtended(directory, options, opener);
-}
-
-bool VirtualFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                                optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).RemoveDirectoryExtended(directory, options, opener);
-}
-
-bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-                                  optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).ListFiles(directory, callback, opener);
-}
-
-void VirtualFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	FindFileSystem(source, opener).MoveFile(source, target, opener);
-}
-
-bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).FileExists(filename, opener);
-}
-
-bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).IsPipe(filename, opener);
-}
-
-void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	FindFileSystem(filename, opener).RemoveFile(filename, opener);
-}
-
-bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).TryRemoveFile(filename, opener);
-}
-
-void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
-	reference_map_t<FileSystem, vector<string>> files_by_fs;
-	for (const auto &filename : filenames) {
-		auto &fs = FindFileSystem(filename, opener);
-		files_by_fs[fs].push_back(filename);
-	}
-	for (auto &entry : files_by_fs) {
-		entry.first.get().RemoveFiles(entry.second, opener);
-	}
-}
-
-string VirtualFileSystem::PathSeparator(const string &path) {
-	return FindFileSystem(path, nullptr).PathSeparator(path);
-}
-
-string VirtualFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path_p, opener).CanonicalizePath(path_p, opener);
-}
-
-unique_ptr<MultiFileList> VirtualFileSystem::Glob(const string &path, const FileGlobInput &input,
-                                                  optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path, opener).Glob(path, input, opener);
-}
-
-vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path, opener).Glob(path, opener.get());
 }
 
 void VirtualFileSystem::DecorateDefaultFileSystem(const std::function<unique_ptr<FileSystem>(FileSystem &)> &decorate) {

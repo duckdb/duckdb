@@ -16,9 +16,8 @@
 namespace duckdb {
 struct FileSystemRegistry;
 struct FileSystemHandle;
-class MemoryMappedFile;
-class MultiFileList;
-struct FileGlobInput;
+class DatabaseInstance;
+class ClientContext;
 
 //! The root of the file systems of a database: it picks the file system that handles a path from the registered
 //! protocol handlers, applies compression and pipes on top, and holds the registry of the file systems and their
@@ -29,32 +28,15 @@ public:
 	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
 	~VirtualFileSystem();
 
+	//! The root file system of a database
+	DUCKDB_API static VirtualFileSystem &Get(DatabaseInstance &db);
+	DUCKDB_API static VirtualFileSystem &Get(ClientContext &context);
+
+	//! Opens a file with the file system that handles the path, and applies compression and pipes on top of it
 	unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, FileOpenFlags flags, optional_ptr<FileOpener> opener);
-	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options, optional_ptr<FileOpener> opener);
-
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener);
-
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener);
-	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener);
-	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener);
-
-	bool ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	               optional_ptr<FileOpener> opener);
-	unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener);
-	vector<OpenFileInfo> Glob(const string &path, optional_ptr<FileOpener> opener);
-
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener);
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener);
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener);
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener);
-	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener);
-	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener);
-
-	string PathSeparator(const string &path);
-	string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener);
+	//! The file system that handles a path: a registered sub-system, or the default file system. Throws if it is
+	//! disabled. Loads the extension that provides the file system if there is one.
+	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> opener);
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs);
 	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
@@ -80,7 +62,6 @@ public:
 private:
 	explicit VirtualFileSystem(shared_ptr<FileSystemHandle> default_file_system);
 
-	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
 	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
 	                           optional_ptr<FileOpener> file_opener);
 	optional_ptr<FileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);

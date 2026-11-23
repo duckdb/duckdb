@@ -16,14 +16,14 @@ unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo 
 	if (IsDuckDBExtensionName(path.path)) {
 		VerifyCanAccessExtension(path.path, flags);
 	}
-	return GetFileSystem().MemoryMapFile(path, flags, options, GetOpener());
+	return FindFileSystem(path.path).MemoryMapFile(path, flags, options, GetOpener());
 }
 
 unique_ptr<MultiFileList> OpenerFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
                                                               optional_ptr<FileOpener> opener) {
 	VerifyNoOpener(opener);
 	VerifyCanAccessFile(path);
-	return GetFileSystem().Glob(path, input, GetOpener());
+	return FindFileSystem(path).Glob(path, input, GetOpener());
 }
 
 void OpenerFileSystem::VerifyNoOpener(optional_ptr<FileOpener> opener) {
