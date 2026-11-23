@@ -403,89 +403,10 @@ public:
 	    void_t_helper<decltype(OP::template UpdateClusteredLocal<INPUT, LOCAL>(
 	        std::declval<LOCAL &>(), std::declval<const INPUT &>(), std::declval<idx_t>()))>> : std::true_type {};
 
-	struct SingleInvalidIndex {
-		idx_t index;
-
-		bool RowIsValidUnsafe(idx_t row) const {
-			return row != index;
-		}
-	};
-
-	static optional_idx TryGetSingleInvalidIndex(const ValidityMask &mask, idx_t count) {
-		const auto entry_count = mask.GetAllocationSize() / sizeof(validity_t);
-		// Amortize inspecting the mask over enough selected rows.
-		if (entry_count > count / 4) {
-			return optional_idx();
-		}
-		const auto last_entry_bits = mask.Capacity() % ValidityMask::BITS_PER_VALUE;
-		optional_idx result;
-		for (idx_t i = 0; i < entry_count; i++) {
-			auto invalid = ~mask.GetValidityEntry(i);
-			if (!invalid) {
-				continue;
-			}
-			if (i + 1 == entry_count && last_entry_bits != 0) {
-				// Padding outside the mask's capacity does not describe any input row.
-				invalid &= ValidityMask::EntryWithValidBits(last_entry_bits);
-			}
-			if (!invalid) {
-				continue;
-			}
-			if (result.IsValid() || (invalid & (invalid - 1))) {
-				return optional_idx();
-			}
-			result = i * ValidityMask::BITS_PER_VALUE + CountZeros<validity_t>::Trailing(invalid);
-		}
-		return result;
-	}
-
-	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class OP, class VALIDITY>
-	static inline bool UpdateUnaryClusteredSelected(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
-	                                                const VALIDITY &mask, const sel_t *sel) {
-		bool saw_value = !CHECK_VALIDITY && count != 0;
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel[i];
-			if constexpr (CHECK_VALIDITY) {
-				if (!mask.RowIsValidUnsafe(idx)) {
-					continue;
-				}
-				saw_value = true;
-			}
-			OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[idx]);
-		}
-		return saw_value;
-	}
-
 	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class OP>
 	static inline bool UpdateUnaryClusteredOpt(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
 	                                           const ValidityMask &mask, const sel_t *sel = nullptr,
 	                                           const SelectionVector *isel = nullptr) {
-		if constexpr (CHECK_VALIDITY) {
-			if (sel && !isel) {
-				const auto invalid_index = TryGetSingleInvalidIndex(mask, count);
-				if (invalid_index.IsValid()) {
-					// Consume fully valid batches, then use the checked loop for the remaining rows.
-					// Stopping at the first batch containing NULL bounds the extra work for frequent NULLs.
-					static constexpr idx_t BATCH_SIZE = 32;
-					const auto full_count = count - count % BATCH_SIZE;
-					idx_t offset = 0;
-					for (; offset < full_count; offset += BATCH_SIZE) {
-						bool has_null = false;
-						for (idx_t i = 0; i < BATCH_SIZE; i++) {
-							has_null |= sel[offset + i] == invalid_index.GetIndex();
-						}
-						if (has_null) {
-							break;
-						}
-						UpdateUnaryClusteredSelected<false, LOCAL_TYPE, INPUT_TYPE, OP>(vals, local, BATCH_SIZE, mask,
-						                                                                sel + offset);
-					}
-					const auto saw_value = UpdateUnaryClusteredSelected<true, LOCAL_TYPE, INPUT_TYPE, OP>(
-					    vals, local, count - offset, SingleInvalidIndex {invalid_index.GetIndex()}, sel + offset);
-					return offset != 0 || saw_value;
-				}
-			}
-		}
 		bool saw_value = !CHECK_VALIDITY && count != 0;
 		if (isel) {
 			if (sel) {
@@ -512,8 +433,16 @@ public:
 				}
 			}
 		} else if (sel) {
-			return UpdateUnaryClusteredSelected<CHECK_VALIDITY, LOCAL_TYPE, INPUT_TYPE, OP>(vals, local, count, mask,
-			                                                                                sel);
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = sel[i];
+				if constexpr (CHECK_VALIDITY) {
+					if (!mask.RowIsValidUnsafe(idx)) {
+						continue;
+					}
+					saw_value = true;
+				}
+				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[idx]);
+			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				if constexpr (CHECK_VALIDITY) {
@@ -526,40 +455,6 @@ public:
 			}
 		}
 		return saw_value;
-	}
-
-	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class OP>
-	static inline bool UpdateUnaryClusteredDictionary(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
-	                                                  const ValidityMask &mask, const sel_t *sel) {
-		static constexpr idx_t BATCH_SIZE = 8;
-		const auto full_count = count - count % BATCH_SIZE;
-		idx_t offset = 0;
-		bool prefix_saw_value = false;
-		// Consume only the equal-code prefix, bounding extra work at the first mixed batch.
-		for (; offset < full_count; offset += BATCH_SIZE) {
-			const auto index = sel[offset];
-			bool same = true;
-			for (idx_t i = 1; i < BATCH_SIZE; i++) {
-				same &= sel[offset + i] == index;
-			}
-			if (!same) {
-				break;
-			}
-			if constexpr (CHECK_VALIDITY) {
-				if (!mask.RowIsValidUnsafe(index)) {
-					continue;
-				}
-			}
-			const auto value = vals[index];
-			// Keep the scalar update order, including checked and floating-point additions.
-			for (idx_t i = 0; i < BATCH_SIZE; i++) {
-				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, value);
-			}
-			prefix_saw_value = true;
-		}
-		const auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, LOCAL_TYPE, INPUT_TYPE, OP>(
-		    vals, local, count - offset, mask, sel + offset);
-		return prefix_saw_value || saw_value;
 	}
 
 	template <class LOCAL_TYPE, class INPUT_TYPE, class OP>
@@ -626,7 +521,7 @@ public:
 				local_type local;
 				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
 				auto run_count = run.count;
-				auto saw_value = UpdateUnaryClusteredDictionary<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
+				auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
 				    vals, local, run_count, validity, cluster_iter + pos);
 				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 				pos += run_count;

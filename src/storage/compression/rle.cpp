@@ -475,12 +475,18 @@ struct RLEScanState : public SegmentScanState {
 		}
 	}
 
+	bool ShouldUseDictionary(idx_t scan_count, idx_t sel_count) const {
+		// Sparse selection can remove the repetition that makes a dictionary useful.
+		return double(sel_count) * double(segment_count) >
+		       2.0 * double(scan_count) * (double(layout.GetEntryCapacity()) + 1.0);
+	}
+
 	bool EnsureDictionary(const LogicalType &type) {
-		static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
+		static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = DEFAULT_STANDARD_VECTOR_SIZE;
 		if (dictionary) {
 			return true;
 		}
-		// Keep the dictionary within the hash aggregation/probing limit and avoid poorly compressed segments.
+		// Keep emitted dictionaries within a default-sized vector and avoid poorly compressed segments.
 		const auto capacity = layout.GetEntryCapacity();
 		if (capacity + 1 >= MAX_DICTIONARY_SIZE_THRESHOLD || (capacity + 1) * 2 >= segment_count) {
 			return false;
@@ -578,24 +584,61 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 }
 
 template <class T>
+static void RLEFillRun(T *data, idx_t count, T value) {
+	if (count < 4) {
+		for (idx_t i = 0; i < count; i++) {
+			data[i] = value;
+		}
+		return;
+	}
+	for (idx_t i = 0; i + 4 < count; i += 4) {
+		data[i] = value;
+		data[i + 1] = value;
+		data[i + 2] = value;
+		data[i + 3] = value;
+	}
+	// Overlap the last block to avoid a scalar tail.
+	data[count - 4] = value;
+	data[count - 3] = value;
+	data[count - 2] = value;
+	data[count - 1] = value;
+}
+
+template <class T, class OUTPUT_TYPE, class VALUE_OP>
+static void RLEScanValues(RLEScanState<T> &scan_state, OUTPUT_TYPE *result_data, idx_t scan_count, idx_t result_offset,
+                          VALUE_OP make_value) {
+	const idx_t result_end = result_offset + scan_count;
+	auto entry_pos = scan_state.entry_pos;
+	auto position_in_entry = scan_state.position_in_entry;
+	while (result_offset < result_end) {
+		// An empty run writes nothing and advances below, so this loop need not skip it separately.
+		auto run = scan_state.layout.GetValidatedRun(entry_pos);
+		auto run_count = run.length - position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		const auto element = make_value(run.value, entry_pos);
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			RLEFillRun(result_data + result_offset, remaining_scan_count, element);
+			position_in_entry += remaining_scan_count;
+			break;
+		}
+
+		RLEFillRun(result_data + result_offset, run_count, element);
+
+		result_offset += run_count;
+		entry_pos++;
+		position_in_entry = 0;
+	}
+	scan_state.entry_pos = entry_pos;
+	scan_state.position_in_entry = position_in_entry;
+}
+
+template <class T>
 static bool TryRLEScanDictionary(RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
 	if (!scan_state.EnsureDictionary(result.GetType())) {
 		return false;
 	}
 	auto &sel = scan_state.GetDictionarySelection(scan_count);
-	idx_t offset = 0;
-	while (offset < scan_count) {
-		const auto run = scan_state.GetCurrentRun();
-		const auto count = MinValue<idx_t>(run.length - scan_state.position_in_entry, scan_count - offset);
-		for (idx_t i = 0; i < count; i++) {
-			sel.set_index(offset + i, scan_state.entry_pos);
-		}
-		offset += count;
-		scan_state.position_in_entry += count;
-		if (scan_state.ExhaustedRun(run.length)) {
-			scan_state.ForwardToNextRun();
-		}
-	}
+	RLEScanValues(scan_state, sel.data(), scan_count, 0, [](T, idx_t run) { return UnsafeNumericCast<sel_t>(run); });
 	scan_state.EmitDictionary(result, scan_count);
 	return true;
 }
@@ -619,35 +662,8 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 		return;
 	}
 
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-
-	const idx_t result_end = result_offset + scan_count;
-	auto entry_pos = scan_state.entry_pos;
-	auto position_in_entry = scan_state.position_in_entry;
-	while (result_offset < result_end) {
-		// An empty run writes nothing and advances below, so this loop need not skip it separately.
-		auto run = scan_state.layout.GetValidatedRun(entry_pos);
-		auto run_count = run.length - position_in_entry;
-		idx_t remaining_scan_count = result_end - result_offset;
-		T element = run.value;
-		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
-			for (idx_t i = 0; i < remaining_scan_count; i++) {
-				result_data[result_offset + i] = element;
-			}
-			position_in_entry += remaining_scan_count;
-			break;
-		}
-
-		for (idx_t i = 0; i < run_count; i++) {
-			result_data[result_offset + i] = element;
-		}
-
-		result_offset += run_count;
-		entry_pos++;
-		position_in_entry = 0;
-	}
-	scan_state.entry_pos = entry_pos;
-	scan_state.position_in_entry = position_in_entry;
+	RLEScanValues(scan_state, FlatVector::GetDataMutable<T>(result), scan_count, result_offset,
+	              [](T value, idx_t) { return value; });
 }
 
 template <class T>
@@ -679,20 +695,6 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
-	// Sparse selection can remove the repetition that makes a dictionary useful.
-	const auto dictionary_capacity = scan_state.layout.GetEntryCapacity();
-	const bool use_dictionary = double(sel_count) * double(scan_state.segment_count) >
-	                            2.0 * double(vector_count) * (double(dictionary_capacity) + 1.0);
-	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR && use_dictionary &&
-	    scan_state.EnsureDictionary(result.GetType())) {
-		auto &dictionary_sel = scan_state.GetDictionarySelection(sel_count);
-		idx_t index = 0;
-		scan_state.VisitSelectedRows(vector_count, sel, sel_count,
-		                             [&](idx_t, idx_t run, T) { dictionary_sel.set_index(index++, run); });
-		scan_state.EmitDictionary(result, sel_count);
-		return;
-	}
-
 	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
 	// Keep the current run until the selection advances past it.
@@ -720,12 +722,57 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-template <class T, class WRITE_OP>
-static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T> run_values, idx_t vector_count,
-                          SelectionVector &sel, idx_t &sel_count, WRITE_OP write_result) {
+template <class T>
+void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
+               idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	D_ASSERT(sel_count <= vector_count);
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+	const auto run_count = scan_state.layout.ValidateAllRuns();
+	if (sel_count == 0) {
+		scan_state.SkipInternal(vector_count);
+		return;
+	}
+	const auto run_values = scan_state.layout.GetRunValues(run_count);
+	const auto has_dictionary = scan_state.EnsureDictionary(result.GetType());
+	if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
+		if (has_dictionary) {
+			auto &values = scan_state.dictionary->data;
+			scan_state.filter_cache = filter_state.CreateCache(values, values.size());
+		} else {
+			Vector values(result.GetType(), run_count);
+			scan_state.CopyRunValues(values, run_count);
+			FlatVector::SetSize(values, count_t(run_count));
+			scan_state.filter_cache = filter_state.CreateCache(values, run_count);
+		}
+	}
+	if (scan_state.filter_cache->CanSkipAll()) {
+		scan_state.SkipInternal(vector_count);
+		sel_count = 0;
+		return;
+	}
+	const bool use_dictionary = has_dictionary && scan_state.ShouldUseDictionary(vector_count, sel_count);
+	if (scan_state.filter_cache->CanAcceptAll() && (!has_dictionary || use_dictionary)) {
+		SelectionVector no_values;
+		scan_state.filter_cache->Filter(no_values, sel, sel_count);
+		RLEScan<T>(segment, state, vector_count, result);
+		return;
+	}
+	const auto current_run = scan_state.GetCurrentRun();
+	if (CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
+		scan_state.filter_cache->FilterConstant(scan_state.entry_pos, sel_count);
+		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
+		return;
+	}
+	if (use_dictionary) {
+		TryRLEScanDictionary(scan_state, vector_count, result);
+		scan_state.filter_cache->Filter(DictionaryVector::SelVector(result), sel, sel_count);
+		return;
+	}
 	if (!sel.IsSet()) {
 		if (const auto matches = scan_state.filter_cache->GetPureMask()) {
 			auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			auto writer = FlatVector::ScatterWriter<T>(result);
 			idx_t offset = 0;
 			idx_t accepted_rows = 0;
 			while (offset < vector_count) {
@@ -734,7 +781,7 @@ static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T>
 				if (offset < sel_count && (*matches)[scan_state.entry_pos]) {
 					const auto end = offset + MinValue<idx_t>(count, sel_count - offset);
 					for (idx_t row = offset; row < end; row++) {
-						write_result(row, scan_state.entry_pos, run.value);
+						writer[row] = run.value;
 						selected_rows.set_index(accepted_rows++, row);
 					}
 				}
@@ -777,6 +824,8 @@ static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T>
 		    array_ptr<const idx_t>(scan_state.run_row_counts.data(), scan_state.run_row_counts.size()), selected_runs,
 		    selected_run_count);
 		auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto writer = FlatVector::ScatterWriter<T>(result);
 		idx_t accepted_rows = 0;
 		for (idx_t i = 0; i < selected_run_count; i++) {
 			const auto run = selected_runs.get_index(i);
@@ -784,7 +833,7 @@ static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T>
 			const auto start = scan_state.run_offsets[run];
 			const auto count = scan_state.run_row_counts[run];
 			for (idx_t row = start; row < start + count; row++) {
-				write_result(row, scan_state.run_indices.get_index(run), value);
+				writer[row] = value;
 				selected_rows.set_index(accepted_rows++, row);
 			}
 		}
@@ -794,12 +843,14 @@ static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T>
 		sel_count = accepted_rows;
 		return;
 	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto writer = FlatVector::ScatterWriter<T>(result);
 	if (const auto matches = scan_state.filter_cache->GetPureMask()) {
 		auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
 		idx_t accepted_rows = 0;
 		scan_state.VisitSelectedRows(vector_count, sel, sel_count, [&](idx_t row, idx_t run, T value) {
 			if ((*matches)[run]) {
-				write_result(row, run, value);
+				writer[row] = value;
 				selected_rows.set_index(accepted_rows++, row);
 			}
 		});
@@ -817,66 +868,7 @@ static void RLEFilterRows(RLEScanState<T> &scan_state, unsafe_array_ptr<const T>
 	scan_state.filter_cache->Filter(scan_state.run_indices, sel, sel_count);
 	for (idx_t i = 0; i < sel_count; i++) {
 		const auto row = sel.get_index(i);
-		const auto run = scan_state.run_indices.get_index(row);
-		write_result(row, run, run_values[run]);
-	}
-}
-
-template <class T>
-void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
-               idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
-	D_ASSERT(sel_count <= vector_count);
-	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
-	const auto run_count = scan_state.layout.ValidateAllRuns();
-	if (sel_count == 0) {
-		scan_state.SkipInternal(vector_count);
-		return;
-	}
-	const auto run_values = scan_state.layout.GetRunValues(run_count);
-	const auto use_dictionary = scan_state.EnsureDictionary(result.GetType());
-	if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
-		if (use_dictionary) {
-			auto &values = scan_state.dictionary->data;
-			scan_state.filter_cache = filter_state.CreateCache(values, values.size());
-		} else {
-			Vector values(result.GetType(), run_count);
-			scan_state.CopyRunValues(values, run_count);
-			FlatVector::SetSize(values, count_t(run_count));
-			scan_state.filter_cache = filter_state.CreateCache(values, run_count);
-		}
-	}
-	if (scan_state.filter_cache->CanSkipAll()) {
-		scan_state.SkipInternal(vector_count);
-		sel_count = 0;
-		return;
-	}
-	if (scan_state.filter_cache->CanAcceptAll()) {
-		SelectionVector no_values;
-		scan_state.filter_cache->Filter(no_values, sel, sel_count);
-		RLEScan<T>(segment, state, vector_count, result);
-		return;
-	}
-	const auto current_run = scan_state.GetCurrentRun();
-	if (CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
-		scan_state.filter_cache->FilterConstant(scan_state.entry_pos, sel_count);
-		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
-		return;
-	}
-	if (use_dictionary) {
-		auto &dictionary_sel = scan_state.GetDictionarySelection(vector_count);
-		// Unselected rows must also reference valid dictionary indices until the result is sliced.
-		memset(dictionary_sel.data(), 0, vector_count * sizeof(sel_t));
-		RLEFilterRows(scan_state, run_values, vector_count, sel, sel_count,
-		              [&](idx_t row, idx_t run, T) { dictionary_sel.set_index(row, run); });
-		if (sel_count == 0) {
-			return;
-		}
-		scan_state.EmitDictionary(result, vector_count);
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto writer = FlatVector::ScatterWriter<T>(result);
-		RLEFilterRows(scan_state, run_values, vector_count, sel, sel_count,
-		              [&](idx_t row, idx_t, T value) { writer[row] = value; });
+		writer[row] = run_values[scan_state.run_indices.get_index(row)];
 	}
 }
 

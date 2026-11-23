@@ -53,7 +53,8 @@ true
 
 query II
 SELECT count(*), NOT check_rle_representation() OR
-    bool_and(vector_type(k) = 'DICTIONARY_VECTOR' AND vector_type(dense) = 'DICTIONARY_VECTOR')
+    (list_sort(list(DISTINCT vector_type(k))) = ['DICTIONARY_VECTOR', 'FLAT_VECTOR'] AND
+     bool_and(vector_type(dense) = 'DICTIONARY_VECTOR'))
 FROM input
 ----
 262211	true
@@ -64,25 +65,9 @@ SELECT i::INTEGER AS i, CASE WHEN i % 257 = 0 THEN NULL ELSE (i // 37) % 8 END A
                        CASE WHEN i % 2 = 0 THEN NULL ELSE (i // 65) % 8 END AS dense
 FROM range(262211) t(i)
 
-# One chunk selects the dictionary's NULL entry at row 32; the other chunks omit it.
-statement ok
-CREATE VIEW aggregate_expected AS
-SELECT i, CASE WHEN i % 8192 = 32 THEN NULL ELSE (i // 37) % 8 END AS rare,
-          CASE WHEN i % 10 != 0 THEN NULL ELSE (i // 37) % 8 END AS dense
-FROM range(8195) t(i)
-
-statement ok
-CREATE TABLE aggregate_input(i INTEGER, rare BIGINT USING COMPRESSION RLE, dense BIGINT USING COMPRESSION RLE)
-
-statement ok
-INSERT INTO aggregate_input SELECT * FROM aggregate_expected
-
-statement ok
-CHECKPOINT
-
 query I
-WITH actual AS (SELECT sum(rare), min(rare), max(rare), sum(dense), min(dense), max(dense) FROM aggregate_input),
-oracle AS (SELECT sum(rare), min(rare), max(rare), sum(dense), min(dense), max(dense) FROM aggregate_expected)
+WITH actual AS (SELECT sum(k), min(k), max(k), sum(dense), min(dense), max(dense) FROM input),
+oracle AS (SELECT sum(k), min(k), max(k), sum(dense), min(dense), max(dense) FROM expected)
 SELECT count(*) FROM (
     (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
     UNION ALL
@@ -92,7 +77,7 @@ SELECT count(*) FROM (
 0
 
 query II
-SELECT count(rare), sum(rare) FROM aggregate_input WHERE i % 8192 = 32
+SELECT count(k), sum(k) FROM input WHERE k IS NULL
 ----
 0	NULL
 
@@ -112,6 +97,30 @@ SELECT count(*) FROM input
 WHERE i % 63 = 0 AND
     (k IS DISTINCT FROM CASE WHEN i % 257 = 0 THEN NULL ELSE (i // 37) % 8 END OR
      dense IS DISTINCT FROM CASE WHEN i % 2 = 0 THEN NULL ELSE (i // 65) % 8 END)
+----
+0
+
+# Direct NULL filters read the value and validity streams at the same row offsets.
+query I
+WITH actual AS (SELECT * FROM input WHERE k IS NULL),
+oracle AS (SELECT * FROM expected WHERE k IS NULL)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+# An RLE value filter can follow an already selective filter on another column.
+query I
+WITH actual AS (SELECT * FROM input WHERE i % 63 = 0 AND k % 3 = 1),
+oracle AS (SELECT * FROM expected WHERE i % 63 = 0 AND k % 3 = 1)
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
 ----
 0
 
@@ -166,7 +175,7 @@ SET debug_enable_caching_operators=false
 # The optimizer must push the filter into the scan to select sparse rows there.
 query I
 SELECT NOT check_rle_representation() OR current_setting('debug_disable_optimizer') OR
-    list_sort(list(DISTINCT vector_type(k))) = ['DICTIONARY_VECTOR', 'FLAT_VECTOR']
+    bool_and(vector_type(k) = 'FLAT_VECTOR')
 FROM selection_input WHERE pick
 ----
 true

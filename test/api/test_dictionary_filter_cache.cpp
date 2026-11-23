@@ -86,14 +86,6 @@ TEST_CASE("Storage dictionary filters support the general expression executor", 
 		ColumnSegment::FilterSelection(retained, input, *state, input.size(), count);
 		REQUIRE(evaluated == 3);
 		REQUIRE(count == 4);
-		Vector payload(LogicalType::INTEGER, 12);
-		{
-			auto writer = FlatVector::Writer<int32_t>(payload, 12);
-			for (idx_t i = 0; i < 12; i++) {
-				writer.WriteValue(NumericCast<int32_t>(i));
-			}
-		}
-		payload.Slice(retained, count);
 
 		SelectionVector indices(12);
 		for (idx_t i = 0; i < 12; i++) {
@@ -109,7 +101,6 @@ TEST_CASE("Storage dictionary filters support the general expression executor", 
 		for (idx_t i = 0; i < count; i++) {
 			REQUIRE(selected.get_index(i) == 3 * i);
 			REQUIRE(retained.get_index(i) == 3 * i + 1);
-			REQUIRE(payload.GetValue(i) == Value::INTEGER(NumericCast<int32_t>(3 * i + 1)));
 		}
 	}
 

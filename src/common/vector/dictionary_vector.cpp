@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/bit_utils.hpp"
-#include "duckdb/common/bitset.hpp"
 
 namespace duckdb {
 
@@ -257,30 +256,17 @@ void DictionaryVector::ApplyValidity(Vector &vector, const ValidityMask &mask) {
 	}
 	unsafe_array_ptr<sel_t> target(SelVector(vector).data(), count);
 	const auto null_code = NumericCast<sel_t>(null_index);
-	auto apply_invalid = [&](idx_t entry_idx, validity_t invalid, idx_t entry_count) {
+	auto apply_invalid = [&](idx_t entry_idx, validity_t invalid) {
 		const auto start = entry_idx * ValidityMask::BITS_PER_VALUE;
-		if (bitset<ValidityMask::BITS_PER_VALUE>(invalid).count() > entry_count * 3 / 4) {
-			// Match the mask width to selection entries so dense remapping can be vectorized.
-			static constexpr idx_t BATCH_SIZE = sizeof(sel_t) * 8;
-			for (idx_t offset = 0; offset < entry_count; offset += BATCH_SIZE) {
-				const auto bits = static_cast<sel_t>(invalid >> offset);
-				const auto batch_count = MinValue<idx_t>(BATCH_SIZE, entry_count - offset);
-				for (idx_t i = 0; i < batch_count; i++) {
-					auto &entry = target[start + offset + i];
-					entry = bits & (sel_t(1) << i) ? null_code : entry;
-				}
-			}
-			return;
-		}
 		while (invalid) {
 			target[start + CountZeros<validity_t>::Trailing(invalid)] = null_code;
 			invalid &= invalid - 1;
 		}
 	};
 	for (idx_t entry_idx = first_invalid; entry_idx < full_entry_count; entry_idx++) {
-		apply_invalid(entry_idx, ~validity[entry_idx], ValidityMask::BITS_PER_VALUE);
+		apply_invalid(entry_idx, ~validity[entry_idx]);
 	}
-	apply_invalid(full_entry_count, tail_invalid, tail_count);
+	apply_invalid(full_entry_count, tail_invalid);
 }
 
 bool DictionaryBuffer::TrySerialize(Serializer &serializer, const LogicalType &type,
