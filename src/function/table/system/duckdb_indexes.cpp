@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_catalog_scanner.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -14,6 +15,7 @@ struct DuckDBIndexesData : public GlobalTableFunctionState {
 
 	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
+	SystemCatalogScannerStats stats;
 };
 
 static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -60,18 +62,18 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return nullptr;
+	// table_name and table_oid describe the index's parent table, not the index, so they are not identity columns
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "index_name";
+	columns.entry_oid = "index_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBIndexesData>();
 
-	// scan all the schemas for tables and collect them
-	auto schemas = Catalog::GetAllSchemas(context);
-	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::INDEX_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
-	};
+	// collect the indexes that survive the pushed-down filters
+	result->entries = SystemCatalogScanner::GetEntries(context, input, CatalogType::INDEX_ENTRY, result->stats);
 	return std::move(result);
 }
 
@@ -157,8 +159,15 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 	}
 }
 
+static void DuckDBIndexesGetMetrics(TableFunctionGetMetricsInput &input) {
+	SystemCatalogScanner::ReportMetrics(input, input.global_state->Cast<DuckDBIndexesData>().stats);
+}
+
 void DuckDBIndexesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_indexes", {}, DuckDBIndexesFunction, DuckDBIndexesBind, DuckDBIndexesInit));
+	TableFunction indexes("duckdb_indexes", {}, DuckDBIndexesFunction, DuckDBIndexesBind, DuckDBIndexesInit);
+	SystemCatalogScanner::RegisterPushdown(indexes);
+	indexes.get_metrics = DuckDBIndexesGetMetrics;
+	set.AddFunction(indexes);
 }
 
 } // namespace duckdb

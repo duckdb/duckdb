@@ -17,11 +17,19 @@ static void ApplyOptions(const optional<vector<GenericCopyOption>> &options, Ext
 	PEGTransformerFactory::CollectGenericOptions(*options, stmt.options, "EXTERNAL RESOURCE");
 }
 
+//! A resource type spelled without quotes, as a dotted name (aws.s3tables.bucket) or a plain word, is folded to
+//! lowercase: types are registered in lowercase and looked up by their exact name. A type in single quotes is taken as
+//! written, for one with other characters in it ('aws:cloudformation:quack-on-ec2', 'quack@local') or in another case.
+string PEGTransformerFactory::TransformExternalResourceTypeName(PEGTransformer &transformer,
+                                                                const Identifier &bare_name) {
+	return StringUtil::Lower(bare_name.GetIdentifierName());
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExternalResourceStmt(
-    PEGTransformer &transformer, const string &string_literal, const optional<Identifier> &attach_alias,
+    PEGTransformer &transformer, const string &external_resource_type, const optional<Identifier> &attach_alias,
     const optional<vector<GenericCopyOption>> &external_resource_creation_options) {
 	auto result = make_uniq<ExternalResourceStatement>(ExternalResourceOperation::CREATE);
-	result->type = string_literal;
+	result->type = external_resource_type;
 	if (attach_alias) {
 		result->name = Identifier(*attach_alias);
 	}
@@ -29,12 +37,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExternalResourceS
 	return std::move(result);
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformRegisterExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
-                                                             const optional<Identifier> &attach_alias,
-                                                             unique_ptr<ParsedExpression> expression) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRegisterExternalResourceStmt(
+    PEGTransformer &transformer, const string &external_resource_type, const optional<Identifier> &attach_alias,
+    unique_ptr<ParsedExpression> expression) {
 	auto result = make_uniq<ExternalResourceStatement>(ExternalResourceOperation::REGISTER);
-	result->type = string_literal;
+	result->type = external_resource_type;
 	if (attach_alias) {
 		result->name = Identifier(*attach_alias);
 	}
@@ -62,17 +69,30 @@ static void AddNamedArgument(vector<FunctionArgument> &children, const string &n
 unique_ptr<QueryNode>
 PEGTransformerFactory::TransformShowExternalResources(PEGTransformer &transformer, const ShowType &show_rule,
                                                       const bool &has_result,
-                                                      optional<Identifier> show_external_resources_type) {
+                                                      optional<string> show_external_resources_type) {
 	vector<FunctionArgument> children;
 	if (has_result) {
 		AddNamedArgument(children, "discover", ConstantExpression::Boolean(true));
 	}
 	if (show_external_resources_type) {
-		auto type = ConstantExpression::String(show_external_resources_type->GetIdentifierName());
+		auto type = ConstantExpression::String(*show_external_resources_type);
 		AddNamedArgument(children, "type", std::move(type));
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	table_function->function = make_uniq<FunctionExpression>("duckdb_external_resources", std::move(children));
+
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_function);
+	return std::move(select_node);
+}
+
+// SHOW EXTERNAL RESOURCE TYPES -> SELECT * FROM duckdb_external_resource_types()
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowExternalResourceTypes(PEGTransformer &transformer,
+                                                                                const ShowType &show_rule) {
+	auto table_function = make_uniq<TableFunctionRef>();
+	table_function->function =
+	    make_uniq<FunctionExpression>("duckdb_external_resource_types", vector<FunctionArgument>());
 
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());

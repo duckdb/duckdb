@@ -58,7 +58,17 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
+	//! Whether the result is the same over the input with or without repeated rows: every aggregate is DISTINCT, or
+	//! a function that neither depends on how often a value occurs nor on the order of its input (min, max, bool_and,
+	//! bool_or, ...), nothing is volatile and no aggregate state is exported
+	bool IgnoresDuplicates() const;
+
 	const Expression &GetExpression(ColumnBinding binding) const;
+
+	//! Whether the rows of `op` are unique in the columns `keys`: the keys are traced through projections and filters
+	//! to an aggregate with one full grouping set whose groups are all among the keys (or to an aggregate without
+	//! groups, which emits one row).
+	static bool KeysAreUnique(LogicalOperator &op, vector<ColumnBinding> keys);
 	const Expression &GetGroupExpression(ProjectionIndex group_index) const;
 
 protected:

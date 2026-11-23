@@ -276,12 +276,7 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 		}
 	}
-	auto result = QualifiedName::FromCatalogSchema(std::move(catalog), std::move(schema_path), resolved.Name());
-	auto catalog_entry = Catalog::GetCatalogEntry(retriever, result.Catalog());
-	if (catalog_entry) {
-		catalog_entry->CheckNestedSchemaSupport(result, CatalogType::TABLE_ENTRY);
-	}
-	return result;
+	return QualifiedName::FromCatalogSchema(std::move(catalog), std::move(schema_path), resolved.Name());
 }
 
 QualifiedName Binder::BindTableName(const QualifiedName &name) {

@@ -234,7 +234,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
-	const auto limit = CanOptimize(*op);
+	const auto limit = CanOptimize(*op, context);
 	if (!limit.IsValid()) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
@@ -544,16 +544,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
-class ColumnReferenceExtractor : public BaseColumnPruner {
-public:
-	static column_binding_map_t<ReferencedColumn> GetReferences(unique_ptr<Expression> *expression) {
-		ColumnReferenceExtractor extractor;
-		extractor.VisitExpression(expression);
-		return extractor.column_references;
-	}
-};
-
-optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
+optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientContext &client) {
 	const optional_idx cant_optimize;
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return cant_optimize;
@@ -659,7 +650,7 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (child.get().type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return cant_optimize;
 	}
-	const auto &window = child.get().Cast<LogicalWindow>();
+	auto &window = child.get().Cast<LogicalWindow>();
 	if (window.window_index != filter_col_idx) {
 		return cant_optimize;
 	}
@@ -687,11 +678,39 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window_expr.OrderBy().size() != 1) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].type != OrderType::DESCENDING &&
-	    window_expr.OrderBy()[0].type != OrderType::ASCENDING) {
+
+	const auto &order = window_expr.OrderBy()[0];
+	if (order.type != OrderType::DESCENDING && order.type != OrderType::ASCENDING) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].null_order != OrderByNullType::NULLS_LAST) {
+	if (order.null_order != OrderByNullType::NULLS_LAST) {
+		return cant_optimize;
+	}
+
+	// 	Window fusion works better than TopN for certain cases
+
+	//	Fusion does not yet support partitioning
+	if (!window_expr.Partitions().empty()) {
+		return can_optimize;
+	}
+
+	//	Fusion is better for non-numeric keys
+	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
+		return cant_optimize;
+	}
+
+	//	Fusion is better for large ranges
+	if (can_optimize.GetIndex() > 5000) {
+		return cant_optimize;
+	}
+
+	//	TopN is better for k == 1
+	if (can_optimize.GetIndex() == 1) {
+		return can_optimize;
+	}
+
+	//	TopN is better for small cardinalities
+	if (op.EstimateCardinality(client) > 400000) {
 		return cant_optimize;
 	}
 
@@ -1056,31 +1075,23 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			if (lidxs.size() != 1 || ridxs.size() != 1) {
 				return false;
 			}
-			auto left_idx = lidxs[0];
-			auto right_idx = ridxs[0];
+			const column_binding_set_t left_bindings(left_column_bindings.begin(), left_column_bindings.end());
+			const column_binding_set_t right_bindings(right_column_bindings.begin(), right_column_bindings.end());
 
 			bool all_left_replaceable = true;
 			bool all_right_replaceable = true;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto &projection = projections[i];
-				if (projection.table_index != left_idx && projection.table_index != right_idx) {
+			for (const auto &projection : projections) {
+				const bool is_left = left_bindings.find(projection) != left_bindings.end();
+				if (!is_left && right_bindings.find(projection) == right_bindings.end()) {
 					return false;
 				}
-				if (projection.table_index == left_idx && projection.column_index >= left_column_bindings.size()) {
-					return false;
+				if (replaceable_bindings.find(projection) != replaceable_bindings.end()) {
+					continue;
 				}
-				if (projection.table_index == right_idx && projection.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection.table_index == left_idx
-				                           ? left_column_bindings[projection.column_index]
-				                           : right_column_bindings[projection.column_index];
-				if (replaceable_bindings.find(column_binding) == replaceable_bindings.end()) {
-					if (column_binding.table_index == left_idx) {
-						all_left_replaceable = false;
-					} else {
-						all_right_replaceable = false;
-					}
+				if (is_left) {
+					all_left_replaceable = false;
+				} else {
+					all_right_replaceable = false;
 				}
 			}
 
@@ -1089,25 +1100,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				return false;
 			}
 
-			TableIndex replace_table_idx = all_right_replaceable ? right_idx : left_idx;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto projection_idx = projections[i];
-				if (projection_idx.table_index != left_idx && projection_idx.table_index != right_idx) {
-					return false;
-				}
-				if (projection_idx.table_index == left_idx &&
-				    projection_idx.column_index >= left_column_bindings.size()) {
-					return false;
-				}
-				if (projection_idx.table_index == right_idx &&
-				    projection_idx.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection_idx.table_index == left_idx
-				                           ? left_column_bindings[projection_idx.column_index]
-				                           : right_column_bindings[projection_idx.column_index];
-				if (column_binding.table_index == replace_table_idx) {
-					projections[i] = replaceable_bindings[column_binding];
+			const auto &replace_bindings = all_right_replaceable ? right_bindings : left_bindings;
+			for (auto &projection : projections) {
+				if (replace_bindings.find(projection) != replace_bindings.end()) {
+					projection = replaceable_bindings[projection];
 				}
 			}
 

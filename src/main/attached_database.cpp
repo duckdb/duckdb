@@ -207,10 +207,21 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	// FIXME: Theoretically, we should catch all places higher up the call stack where the
-	// FIXME: shared pointer goes out of scope and we need to invoke a checkpoint.
-	// FIXME: However, for now, we keep this to avoid unintentional behavior / oversights.
-	Close(DatabaseCloseAction::TRY_CHECKPOINT);
+	if (!is_closed && is_detached) {
+		// a reference held outside of a transaction outlived the detach
+		auto action = Exception::UncaughtException() ? DatabaseCloseAction::SKIP_CHECKPOINT : detach_close_action;
+		try {
+			Close(action);
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in ~AttachedDatabase():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} catch (...) { // NOLINT
+		}
+	}
+	D_ASSERT(is_closed || Exception::UncaughtException());
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -267,7 +278,7 @@ Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSyste
 	return Identifier(name);
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+DatabaseCloseAction AttachedDatabase::GetDetachCloseAction(ClientContext &context) {
 	auto close_action = DatabaseCloseAction::CHECKPOINT;
 	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
 	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
@@ -277,7 +288,24 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	} else if (!Settings::Get<CheckpointOnShutdownSetting>(context)) {
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	}
+	return close_action;
+}
 
+void AttachedDatabase::MarkDetached(DatabaseCloseAction close_action) {
+	lock_guard<mutex> guard(*close_lock);
+	if (is_detached) {
+		return;
+	}
+	is_detached = true;
+	detach_close_action = close_action;
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+	InvokeCloseIfLastReference(attached_db, GetDetachCloseAction(context));
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
+                                                  DatabaseCloseAction close_action) {
 	auto close_lock = attached_db->close_lock;
 	{
 		lock_guard<mutex> guard(*close_lock);
@@ -286,6 +314,9 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			return;
 		}
 		attached_db->is_closing = true;
+		if (attached_db->is_detached) {
+			close_action = attached_db->detach_close_action;
+		}
 	}
 	// use_count() is a relaxed load, so it doesn't order accesses through references dropped without close_lock.
 	// Dropping a copy does (acq_rel decrement, never reaching zero); a fence would too, but TSan ignores fences.

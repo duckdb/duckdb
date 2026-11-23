@@ -999,3 +999,31 @@ FROM (VALUES ('2026-07-01 09:59:59.999999533'::TIMESTAMP_NS),
 2026-07-01 09:32:06.999999533	9	32	6	6	6999999	999999533
 2026-07-01 09:32:06.999999499	9	32	6	6	6999999	999999499
 
+
+# date parts of a TIMESTAMP_NS are not rounded through TIMESTAMP
+query II
+SELECT year(t), date_part('year', t)
+FROM (VALUES ('1969-12-31 23:59:59.999999999'::TIMESTAMP_NS)) v(t);
+----
+1969	1969
+
+query II
+SELECT dayofyear(t), date_part('doy', t)
+FROM (VALUES ('1969-12-31 23:59:59.999999999'::TIMESTAMP_NS)) v(t);
+----
+365	365
+
+# the statistics of a TIMESTAMP_NS column are in nanoseconds
+statement ok
+CREATE TABLE ns_hours AS SELECT TIMESTAMP_NS '2020-06-01 00:00:00' + INTERVAL (i) HOUR AS t FROM range(1000) r(i);
+
+query III
+SELECT count(*) FILTER (date_part('year', t) = 2020), count(*) FILTER (extract(month FROM t) = 6), count(*) FILTER (year(t) = 2020)
+FROM ns_hours;
+----
+1000	720	1000
+
+query I
+SELECT count(*) FROM ns_hours WHERE date_part('year', t) = 2020;
+----
+1000

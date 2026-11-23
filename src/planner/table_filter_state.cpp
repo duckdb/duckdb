@@ -1,6 +1,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/optimizer/expression_heuristics.hpp"
 
 namespace duckdb {
 
@@ -666,18 +668,23 @@ protected:
 
 	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t> row_counts, SelectionVector &sel,
 	                        idx_t &count) override {
-		const auto before_rows = CountRunRows(row_counts, sel, count);
-		if (before_rows == 0) {
+		if (!stats.get().IsActive()) {
+			for (idx_t i = 0; i < count; i++) {
+				if (row_counts[sel.get_index(i)] != 0) {
+					stats.get().Update(0, 0);
+					break;
+				}
+			}
 			return;
 		}
-		if (!stats.get().IsActive()) {
-			stats.get().Update(0, 0);
+		const auto before_rows = CountRunRows(row_counts, sel, count);
+		if (before_rows == 0) {
 			return;
 		}
 		const auto before_count = count;
 		const auto had_selection = sel.IsSet();
 		child->FilterRuns(values, row_counts, sel, count);
-		const auto accepted_rows = CountRunRows(row_counts, sel, count);
+		const auto accepted_rows = count == before_count ? before_rows : CountRunRows(row_counts, sel, count);
 		stats.get().Update(accepted_rows, before_rows);
 		if (!had_selection && !KeepOptionalSelection(stats.get(), accepted_rows, before_rows)) {
 			sel = SelectionVector();
@@ -705,7 +712,8 @@ unique_ptr<TableFilterCache> SelectivityOptionalFilterExecutor::CreateCache(Vect
 class BloomFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	BloomFilterExecutor(const BloomFilterFunctionData &data, bool inside_selectivity_optional)
-	    : filter(data.filter), filters_null_values(data.filters_null_values), hashes(LogicalType::HASH) {
+	    : filter(data.filter), locality(data.locality), filters_null_values(data.filters_null_values),
+	      hashes(LogicalType::HASH) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
 			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
 			                                                                    data.selectivity_threshold);
@@ -768,18 +776,19 @@ public:
 
 private:
 	idx_t ProbeBloomFilter(optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count) {
+		const auto view = GetBloomFilterReadView(*filter, locality);
 		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			const auto hash = *ConstantVector::GetData<hash_t>(hashes);
-			return filter->LookupOne(hash) ? approved_tuple_count : 0;
+			return view.LookupOne(hash) ? approved_tuple_count : 0;
 		}
 		if (hashes.GetVectorType() != VectorType::FLAT_VECTOR) {
 			hashes.Flatten();
 		}
 		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 		if (sel) {
-			return filter->LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
+			return view.LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
 		}
-		return filter->LookupHashes(hashes, bloom_sel, approved_tuple_count);
+		return view.LookupHashes(hashes, bloom_sel, approved_tuple_count);
 	}
 
 	idx_t AddNullsToBloomSelection(SelectionVector &sel, Vector &vector, idx_t bloom_count,
@@ -848,6 +857,7 @@ private:
 	}
 
 	shared_ptr<const BloomFilter> filter;
+	BloomFilterReadLocality locality;
 	bool filters_null_values;
 	Vector hashes;
 	SelectionVector bloom_sel;
@@ -1122,15 +1132,28 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expressi
 			return nullptr;
 		}
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		struct FilterCost {
+			unique_ptr<ExpressionFilterExecutor> executor;
+			idx_t cost;
+		};
+		vector<FilterCost> filters;
+		const auto is_and = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
 		for (auto &child_expr : conjunction.GetChildren()) {
 			auto child_executor = TryCreateFastExecutor(*child_expr, inside_selectivity_optional);
 			if (!child_executor) {
 				return nullptr;
 			}
-			children.push_back(std::move(child_executor));
+			filters.push_back({std::move(child_executor), is_and ? ExpressionHeuristics::Cost(*child_expr) : 0});
 		}
-		if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		if (is_and) {
+			std::stable_sort(filters.begin(), filters.end(),
+			                 [](const FilterCost &left, const FilterCost &right) { return left.cost < right.cost; });
+		}
+		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		for (auto &filter : filters) {
+			children.push_back(std::move(filter.executor));
+		}
+		if (is_and) {
 			return make_uniq<ConjunctionAndFilterExecutor>(std::move(children));
 		}
 		return make_uniq<ConjunctionOrFilterExecutor>(std::move(children));

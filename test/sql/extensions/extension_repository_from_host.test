@@ -87,6 +87,93 @@ CREATE OR REPLACE EXTENSION REPOSITORY pointing.example WITH PREFIX '' USING PUB
 statement ok
 DROP EXTENSION REPOSITORY 'pointing.example'
 
+# A host with '-' in it is spelled without quotes too, wherever a repository is named; case does not matter.
+statement ok
+CREATE EXTENSION REPOSITORY my-pointing.example WITH PREFIX '{TEST_DIR}/repo' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+query I
+SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+my-pointing.example
+
+statement error
+INSTALL nonexistent_extension FROM my-pointing.example
+----
+<REGEX>:IO Error.*
+
+statement ok
+CREATE EXTENSION REPOSITORY IF NOT EXISTS My-Pointing.EXAMPLE
+
+# the whole dashed, dotted name reaches the manager as one name: it fails on the fetch, naming the host it reached for.
+# The hosts DuckDB's own repositories live on are spelled this way (community-extensions.duckdb.org); a misspelling of
+# it here, so that the statement keeps failing once that host serves its metadata file and httpfs is at hand
+statement error
+CREATE EXTENSION REPOSITORY community-extensionz.duckdb.org
+----
+<REGEX>:(Missing Extension|IO) Error.*community-extensionz\.duckdb\.org.*
+
+statement error
+CREATE EXTENSION REPOSITORY s3-like.my-pointing.example
+----
+<REGEX>:(Missing Extension|IO) Error.*s3-like\.my-pointing\.example.*
+
+# two dashes in a row start a comment: unquoted, 'xn--bcher-kva.example' reads as the single word 'xn', which is not a
+# host (as 'xn.com--anything' reads as 'xn.com': a comment ends the statement, as anywhere in SQL). Quoted, the name is
+# whole, and a punycode label ('xn--...') is a host label: this one reaches for the host
+statement error
+CREATE EXTENSION REPOSITORY xn--bcher-kva.example
+----
+<REGEX>:Invalid Input Error.*'xn' is not a host name.*
+
+statement error
+CREATE EXTENSION REPOSITORY 'xn--bcher-kva.example'
+----
+<REGEX>:(Missing Extension|IO) Error.*xn--bcher-kva\.example.*
+
+# two dashes anywhere else are not a host label
+statement error
+CREATE EXTENSION REPOSITORY 'my--site.example'
+----
+<REGEX>:Invalid Input Error.*'my--site.example' is not a host name.*
+
+# a dotted name is ASCII words: a name with other letters reaches the manager, which refuses it as a name and points at
+# the punycode spelling
+statement error
+CREATE EXTENSION REPOSITORY münchen.de
+----
+<REGEX>:Invalid Input Error.*Invalid extension repository name 'münchen.de'.*punycode form, 'xn--...', in quotes.*
+
+# quoted parts are not a dotted name; a name with such parts goes in quotes as a whole
+statement error
+CREATE EXTENSION REPOSITORY "my-site".com
+----
+<REGEX>:Parser Error.*
+
+# the parts of an unquoted host must touch: with a space in between it is not a host
+statement error
+CREATE EXTENSION REPOSITORY my - pointing.example
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE EXTENSION REPOSITORY my-pointing .example
+----
+<REGEX>:Parser Error.*
+
+# and no label may start or end with '-'
+statement error
+CREATE EXTENSION REPOSITORY -my.example
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE EXTENSION REPOSITORY my-.example
+----
+<REGEX>:Parser Error.*
+
+statement ok
+DROP EXTENSION REPOSITORY my-pointing.example
+
 # A host reached over https needs httpfs: the error when it is not there is checked in
 # extension_repository_from_host_no_httpfs.test, which only runs where httpfs is neither loaded nor autoloadable.
 
@@ -101,6 +188,17 @@ statement error
 CREATE EXTENSION REPOSITORY '10.0.0.5'
 ----
 <REGEX>:Invalid Input Error.*is not a host name.*
+
+# an IP literal is a dotted name to the parser, quoted or not, and still not a host to the manager
+statement error
+CREATE EXTENSION REPOSITORY 127.0.0.1
+----
+<REGEX>:Invalid Input Error.*'127.0.0.1' is not a host name.*
+
+statement error
+INSTALL nonexistent_extension FROM 127.0.0.1
+----
+<REGEX>:Binder Error.*'127.0.0.1' is not a known repository name.*
 
 statement error
 CREATE EXTENSION REPOSITORY localhost
@@ -156,7 +254,7 @@ SET allow_extension_repositories='hosts_only'
 statement error
 CREATE EXTENSION REPOSITORY other WITH PREFIX '{TEST_DIR}/repo'
 ----
-<REGEX>:Permission Error.*by prefix is not permitted.*hosts_only.*
+<REGEX>:Permission Error.*Cannot create extension repository 'other'.*allow_extension_repositories is 'hosts_only'.*Consider creating the repository by its host.*Check the docs: https://duckdb.org/docs/stable/extensions/extension_repositories.*
 
 # the repository added by prefix is distrusted: installing from it is refused before anything is fetched
 statement error
