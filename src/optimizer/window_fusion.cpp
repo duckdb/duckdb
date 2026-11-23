@@ -231,7 +231,6 @@ unique_ptr<LogicalOperator> WindowFusion::OptimizeInternal(unique_ptr<LogicalOpe
 	}
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child.get().Cast<LogicalWindow>();
-	auto &wexpr = window.expressions[0]->Cast<BoundWindowExpression>();
 
 	//	Add the limit to the child Window
 	window.partition_limit = partition_limit;
