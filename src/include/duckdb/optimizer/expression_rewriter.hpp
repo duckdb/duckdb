@@ -43,13 +43,12 @@ private:
 	static vector<unique_ptr<Rule>> CreateDefaultRules(ExpressionRewriter &rewriter);
 
 	//! Apply a set of rules to a specific expression
-	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
+	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<unique_ptr<Rule>> &rules,
 	                                         unique_ptr<Expression> expr, bool &changes_made, bool is_root = false);
 
 	//! The set of rules as known by the Expression Rewriter
 	vector<unique_ptr<Rule>> rules;
 	optional_ptr<LogicalOperator> op;
-	vector<reference<Rule>> to_apply_rules;
 };
 
 } // namespace duckdb

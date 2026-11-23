@@ -95,18 +95,18 @@ struct RewriteFrame {
 	bool children_visited;
 };
 
-static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<reference<Rule>> &rules,
+static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<unique_ptr<Rule>> &rules,
                                         unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
 		vector<reference<Expression>> bindings;
-		if (rule.get().root->Match(*expr, bindings)) {
+		if (rule->root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
 			auto alias = expr->GetAlias();
 #ifdef D_ASSERT_IS_ENABLED
 			auto return_type = expr->GetReturnType();
 #endif
-			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
+			auto result = rule->Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				D_ASSERT(result->GetReturnType() != return_type ||
 				         result->GetReturnType().EqualsIncludingCollation(return_type));
@@ -132,7 +132,7 @@ static void CollectChildren(Expression &expr, vector<reference<unique_ptr<Expres
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { children.push_back(child); });
 }
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<unique_ptr<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	vector<RewriteFrame> stack;
 	vector<reference<unique_ptr<Expression>>> children;
@@ -181,11 +181,6 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	this->op = &op;
 
-	to_apply_rules.clear();
-	for (auto &rule : GetRules()) {
-		to_apply_rules.push_back(*rule);
-	}
-
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
 		// For FILTER we want to ensure we always visit the split predicates
 		// Rewrites can add more predicates, so we need to loop
@@ -204,7 +199,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
 	bool changes_made = false;
-	*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, std::move(*expression), changes_made, true);
+	*expression = ExpressionRewriter::ApplyRules(*op, GetRules(), std::move(*expression), changes_made, true);
 }
 
 ClientContext &Rule::GetContext() const {
