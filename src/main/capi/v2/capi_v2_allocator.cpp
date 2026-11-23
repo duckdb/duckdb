@@ -21,7 +21,7 @@ namespace {
 
 void RegisterExtensionAllocator(Allocator &allocator, duckdb_v2_extension_handle extension) {
 	auto &name = GetExtensionLoader(extension).GetRegisteredExtensionName();
-	ExtensionAllocator::Register(allocator, ExtensionHelper::GetExtensionName(name.GetIdentifierName()));
+	CApiAllocator::Register(allocator, ExtensionHelper::GetExtensionName(name.GetIdentifierName()));
 }
 
 void CheckAlignment(idx_t align) {
@@ -32,7 +32,7 @@ void CheckAlignment(idx_t align) {
 
 data_ptr_t Allocate(Allocator &allocator, idx_t size, idx_t align, bool zeroed) {
 	CheckAlignment(align);
-	return size ? ExtensionAllocator::Allocate(allocator, size, align, zeroed) : nullptr;
+	return size ? CApiAllocator::Allocate(allocator, size, align, zeroed) : nullptr;
 }
 
 } // namespace
@@ -48,7 +48,7 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_get_raw_functions(duckdb_v2_allocator_handle
 	*out_functions = {};
 	DUCKDB_CHECK_ARG(allocator);
 	return WithErrorHandler(err, [&]() {
-		auto functions = duckdb::ExtensionAllocator::GetRawFunctions(*Convert(allocator));
+		auto functions = duckdb::CApiAllocator::GetRawFunctions(*Convert(allocator));
 		out_functions->state = functions.state;
 		out_functions->alloc = functions.allocate;
 		out_functions->alloc_zeroed = functions.allocate_zeroed;
@@ -63,7 +63,7 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_extension(duckdb_v2_extension_ha
 	DUCKDB_CHECK_ARG(out_allocator);
 	*out_allocator = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto allocator = duckdb::ExtensionAllocator::Create();
+		auto allocator = duckdb::CApiAllocator::Create();
 		if (extension) {
 			RegisterExtensionAllocator(*allocator, extension);
 		}
@@ -86,7 +86,7 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_connection(duckdb_v2_connection_
 	*out_allocator = nullptr;
 	DUCKDB_CHECK_ARG(conn);
 	return WithErrorHandler(
-	    err, [&]() { *out_allocator = Convert(duckdb::ExtensionAllocator::Create(*Convert(conn)->context->db)); });
+	    err, [&]() { *out_allocator = Convert(duckdb::CApiAllocator::Create(*Convert(conn)->context->db)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_context(duckdb_v2_context_handle context,
@@ -96,7 +96,7 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_context(duckdb_v2_context_handle
 	*out_allocator = nullptr;
 	DUCKDB_CHECK_ARG(context);
 	return WithErrorHandler(
-	    err, [&]() { *out_allocator = Convert(duckdb::ExtensionAllocator::Create(*Convert(context)->context.db)); });
+	    err, [&]() { *out_allocator = Convert(duckdb::CApiAllocator::Create(*Convert(context)->context.db)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_allocator_destroy(duckdb_v2_allocator_handle *allocator) {
@@ -130,7 +130,7 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_dealloc(duckdb_v2_allocator_handle allocator
 	return WithErrorHandler(err, [&]() {
 		CheckAlignment(align);
 		if (ptr) {
-			duckdb::ExtensionAllocator::Free(*Convert(allocator), static_cast<duckdb::data_ptr_t>(ptr), size, align);
+			duckdb::CApiAllocator::Free(*Convert(allocator), static_cast<duckdb::data_ptr_t>(ptr), size, align);
 		}
 	});
 }
@@ -150,11 +150,11 @@ DUCKDB_V2_ERROR duckdb_v2_allocator_realloc(duckdb_v2_allocator_handle allocator
 		auto block = static_cast<duckdb::data_ptr_t>(ptr);
 		if (!new_size) {
 			if (block) {
-				duckdb::ExtensionAllocator::Free(target, block, old_size, align);
+				duckdb::CApiAllocator::Free(target, block, old_size, align);
 			}
 			return;
 		}
-		*out_ptr = block ? duckdb::ExtensionAllocator::Reallocate(target, block, old_size, align, new_size)
-		                 : duckdb::ExtensionAllocator::Allocate(target, new_size, align, false);
+		*out_ptr = block ? duckdb::CApiAllocator::Reallocate(target, block, old_size, align, new_size)
+		                 : duckdb::CApiAllocator::Allocate(target, new_size, align, false);
 	});
 }

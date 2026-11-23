@@ -14,12 +14,12 @@ namespace duckdb {
 
 // Hidden, so that the C API calls it directly instead of through the PLT.
 #if defined(__GNUC__) || defined(__clang__)
-#define DUCKDB_EXTENSION_ALLOCATOR_HIDDEN __attribute__((visibility("hidden")))
+#define DUCKDB_CAPI_ALLOCATOR_HIDDEN __attribute__((visibility("hidden")))
 #else
-#define DUCKDB_EXTENSION_ALLOCATOR_HIDDEN
+#define DUCKDB_CAPI_ALLOCATOR_HIDDEN
 #endif
 
-struct DUCKDB_EXTENSION_ALLOCATOR_HIDDEN ExtensionAllocator {
+struct DUCKDB_CAPI_ALLOCATOR_HIDDEN CApiAllocator {
 	static unique_ptr<Allocator> Create();
 	static unique_ptr<Allocator> Create(DatabaseInstance &db);
 	static void Register(Allocator &allocator, const string &extension_name);

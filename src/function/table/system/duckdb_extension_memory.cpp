@@ -33,7 +33,7 @@ static unique_ptr<GlobalTableFunctionState> DuckDBExtensionMemoryInit(ClientCont
 	for (auto &name : manager.GetExtensions()) {
 		auto info = manager.GetExtensionInfo(name);
 		if (info && info->is_loaded) {
-			auto usage = ExtensionAllocator::GetUsage(info->orig_ext_name);
+			auto usage = CApiAllocator::GetUsage(info->orig_ext_name);
 			if (usage.IsValid()) {
 				result->entries.push_back({name, usage.GetIndex()});
 			}

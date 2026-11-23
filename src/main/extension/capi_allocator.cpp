@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <new>
 
 #ifdef DUCKDB_ENABLE_JEMALLOC
 #include "jemalloc/jemalloc.h"
@@ -31,10 +32,8 @@ class ThreadIndexRegistry {
 public:
 	optional_idx Acquire() {
 		lock_guard<mutex> guard(lock);
-		if (!free_indices.empty()) {
-			auto index = free_indices.back();
-			free_indices.pop_back();
-			return index;
+		if (free_count > 0) {
+			return free_indices[--free_count];
 		}
 		if (next_index < SLOT_COUNT) {
 			return next_index++;
@@ -44,23 +43,24 @@ public:
 
 	void Release(idx_t index) {
 		lock_guard<mutex> guard(lock);
-		free_indices.push_back(index);
+		free_indices[free_count++] = index;
 	}
 
 	static ThreadIndexRegistry &Get() {
-		// Leaked on purpose: memory may still be freed while static destructors run.
-		static auto *registry = new ThreadIndexRegistry();
+		// Never destroyed, since memory may still be freed while static destructors run. Built in static storage
+		// rather than on the heap, so nothing leaks.
+		alignas(ThreadIndexRegistry) static unsigned char storage[sizeof(ThreadIndexRegistry)];
+		static auto *registry = new (storage) ThreadIndexRegistry();
 		return *registry;
 	}
 
 private:
-	ThreadIndexRegistry() {
-		// Release runs in thread-local destructors, and must not fail by allocating.
-		free_indices.reserve(SLOT_COUNT);
-	}
+	ThreadIndexRegistry() = default;
 
 	mutex lock;
-	vector<idx_t> free_indices;
+	//! Indices of exited threads, so that Release, which runs in thread-local destructors, never allocates.
+	idx_t free_indices[SLOT_COUNT];
+	idx_t free_count = 0;
 	idx_t next_index = 0;
 };
 
@@ -416,7 +416,7 @@ ScopedAllocatorData &GetData(Allocator &allocator) {
 struct CheckedRawFunctions {
 	static void *Allocate(void *state, idx_t size, idx_t alignment) noexcept {
 		try {
-			return ExtensionAllocator::Allocate(*static_cast<Allocator *>(state), size, alignment, false);
+			return CApiAllocator::Allocate(*static_cast<Allocator *>(state), size, alignment, false);
 		} catch (...) {
 			return nullptr;
 		}
@@ -424,7 +424,7 @@ struct CheckedRawFunctions {
 
 	static void *AllocateZeroed(void *state, idx_t size, idx_t alignment) noexcept {
 		try {
-			return ExtensionAllocator::Allocate(*static_cast<Allocator *>(state), size, alignment, true);
+			return CApiAllocator::Allocate(*static_cast<Allocator *>(state), size, alignment, true);
 		} catch (...) {
 			return nullptr;
 		}
@@ -432,16 +432,15 @@ struct CheckedRawFunctions {
 
 	static void Free(void *state, void *pointer, idx_t size, idx_t alignment) noexcept {
 		try {
-			ExtensionAllocator::Free(*static_cast<Allocator *>(state), static_cast<data_ptr_t>(pointer), size,
-			                         alignment);
+			CApiAllocator::Free(*static_cast<Allocator *>(state), static_cast<data_ptr_t>(pointer), size, alignment);
 		} catch (...) { // NOLINT(bugprone-empty-catch)
 		}
 	}
 
 	static void *Reallocate(void *state, void *pointer, idx_t old_size, idx_t alignment, idx_t new_size) noexcept {
 		try {
-			return ExtensionAllocator::Reallocate(*static_cast<Allocator *>(state), static_cast<data_ptr_t>(pointer),
-			                                      old_size, alignment, new_size);
+			return CApiAllocator::Reallocate(*static_cast<Allocator *>(state), static_cast<data_ptr_t>(pointer),
+			                                 old_size, alignment, new_size);
 		} catch (...) {
 			return nullptr;
 		}
@@ -450,21 +449,21 @@ struct CheckedRawFunctions {
 
 } // namespace
 
-unique_ptr<Allocator> ExtensionAllocator::Create() {
+unique_ptr<Allocator> CApiAllocator::Create() {
 	return make_uniq<Allocator>(ExtensionAllocatorData::Allocate, ExtensionAllocatorData::Free,
 	                            ExtensionAllocatorData::Reallocate, make_uniq<ExtensionAllocatorData>());
 }
 
-unique_ptr<Allocator> ExtensionAllocator::Create(DatabaseInstance &db) {
+unique_ptr<Allocator> CApiAllocator::Create(DatabaseInstance &db) {
 	return make_uniq<Allocator>(DatabaseAllocatorData::Allocate, DatabaseAllocatorData::Free,
 	                            DatabaseAllocatorData::Reallocate, make_uniq<DatabaseAllocatorData>(db));
 }
 
-void ExtensionAllocator::Register(Allocator &allocator, const string &extension_name) {
+void CApiAllocator::Register(Allocator &allocator, const string &extension_name) {
 	allocator.GetPrivateData()->Cast<ScopedAllocatorData>().Register(extension_name);
 }
 
-optional_idx ExtensionAllocator::GetUsage(const string &extension_name) {
+optional_idx CApiAllocator::GetUsage(const string &extension_name) {
 	auto registry = ExtensionCounters::Get();
 	lock_guard<mutex> guard(registry->lock);
 	auto it = registry->by_name.find(extension_name);
@@ -479,7 +478,7 @@ optional_idx ExtensionAllocator::GetUsage(const string &extension_name) {
 	return NumericCast<idx_t>(MaxValue<int64_t>(total, 0));
 }
 
-data_ptr_t ExtensionAllocator::Allocate(Allocator &allocator, idx_t size, idx_t alignment, bool zeroed) {
+data_ptr_t CApiAllocator::Allocate(Allocator &allocator, idx_t size, idx_t alignment, bool zeroed) {
 #ifdef DUCKDB_ENABLE_JEMALLOC
 	auto &data = GetData(allocator);
 	if (data.process_global) {
@@ -489,7 +488,7 @@ data_ptr_t ExtensionAllocator::Allocate(Allocator &allocator, idx_t size, idx_t 
 	return PaddedAllocation::Allocate(allocator, size, alignment, zeroed);
 }
 
-void ExtensionAllocator::Free(Allocator &allocator, data_ptr_t pointer, idx_t size, idx_t alignment) {
+void CApiAllocator::Free(Allocator &allocator, data_ptr_t pointer, idx_t size, idx_t alignment) {
 #ifdef DUCKDB_ENABLE_JEMALLOC
 	auto &data = GetData(allocator);
 	if (data.process_global) {
@@ -499,8 +498,8 @@ void ExtensionAllocator::Free(Allocator &allocator, data_ptr_t pointer, idx_t si
 	PaddedAllocation::Free(allocator, pointer, size, alignment);
 }
 
-data_ptr_t ExtensionAllocator::Reallocate(Allocator &allocator, data_ptr_t pointer, idx_t old_size, idx_t alignment,
-                                          idx_t new_size) {
+data_ptr_t CApiAllocator::Reallocate(Allocator &allocator, data_ptr_t pointer, idx_t old_size, idx_t alignment,
+                                     idx_t new_size) {
 #ifdef DUCKDB_ENABLE_JEMALLOC
 	auto &data = GetData(allocator);
 	if (data.process_global) {
@@ -511,7 +510,7 @@ data_ptr_t ExtensionAllocator::Reallocate(Allocator &allocator, data_ptr_t point
 	return PaddedAllocation::Reallocate(allocator, pointer, old_size, alignment, new_size);
 }
 
-ExtensionAllocator::RawFunctions ExtensionAllocator::GetRawFunctions(Allocator &allocator) {
+CApiAllocator::RawFunctions CApiAllocator::GetRawFunctions(Allocator &allocator) {
 #ifdef DUCKDB_ENABLE_JEMALLOC
 	auto &data = GetData(allocator);
 	if (data.process_global) {
