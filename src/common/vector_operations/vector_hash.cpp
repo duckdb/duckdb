@@ -511,12 +511,55 @@ void CombineHashTypeSwitch(Vector &hashes, const Vector &input, const SelectionV
 	}
 }
 
+template <bool HAS_RSEL, bool FIRST_HASH>
+void HashCachedDictionary(const Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
+	const auto &cached = DictionaryVector::GetCachedHashes(input);
+	const auto &sel = DictionaryVector::SelVector(input);
+	if (cached.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		Vector input_hashes(cached, sel, count);
+		if (FIRST_HASH) {
+			TemplatedLoopHash<HAS_RSEL, hash_t, true>(input_hashes, result, rsel, count);
+		} else {
+			TemplatedLoopCombineHash<HAS_RSEL, hash_t, true>(input_hashes, result, rsel, count);
+		}
+		return;
+	}
+	if (!sel.IsSet()) {
+		if (FIRST_HASH) {
+			TemplatedLoopHash<HAS_RSEL, hash_t, true>(cached, result, rsel, count);
+		} else {
+			TemplatedLoopCombineHash<HAS_RSEL, hash_t, true>(cached, result, rsel, count);
+		}
+		return;
+	}
+
+	// The input keeps its cached hashes alive; slicing them into a temporary vector would share their buffer again.
+	D_ASSERT(cached.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto data = FlatVector::GetData<hash_t>(cached);
+	const auto &validity = FlatVector::Validity(cached);
+	if (FIRST_HASH) {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::SetSize(result, count_t(count));
+		TightLoopHash<HAS_RSEL, true, hash_t, true>(data, FlatVector::GetDataMutable<hash_t>(result), rsel, count, &sel,
+		                                            validity);
+	} else if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const auto constant_hash = *ConstantVector::GetData<hash_t>(result);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::SetSize(result, count_t(count));
+		TightLoopCombineHashConstant<HAS_RSEL, hash_t, true>(
+		    data, constant_hash, FlatVector::GetDataMutable<hash_t>(result), rsel, count, &sel, validity);
+	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		TightLoopCombineHash<HAS_RSEL, true, hash_t, true>(data, FlatVector::GetDataMutable<hash_t>(result), rsel,
+		                                                   count, &sel, validity);
+	}
+}
+
 } // namespace
 
 void VectorOperations::Hash(const Vector &input, Vector &result, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
-		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
-		TemplatedLoopHash<false, hash_t, true>(input_hashes, result, nullptr, count);
+		HashCachedDictionary<false, true>(input, result, nullptr, count);
 	} else {
 		HashTypeSwitch<false>(input, result, nullptr, count);
 	}
@@ -524,8 +567,7 @@ void VectorOperations::Hash(const Vector &input, Vector &result, idx_t count) {
 
 void VectorOperations::Hash(const Vector &input, Vector &result, const SelectionVector &sel, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
-		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
-		TemplatedLoopHash<true, hash_t, true>(input_hashes, result, &sel, count);
+		HashCachedDictionary<true, true>(input, result, &sel, count);
 	} else {
 		HashTypeSwitch<true>(input, result, &sel, count);
 	}
@@ -537,8 +579,7 @@ void VectorOperations::Hash(const Vector &input, Vector &result) {
 
 void VectorOperations::CombineHash(Vector &hashes, const Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
-		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
-		TemplatedLoopCombineHash<false, hash_t, true>(input_hashes, hashes, nullptr, count);
+		HashCachedDictionary<false, false>(input, hashes, nullptr, count);
 	} else {
 		CombineHashTypeSwitch<false>(hashes, input, nullptr, count);
 	}
@@ -556,8 +597,7 @@ void VectorOperations::CombineHash(Vector &hashes, const Vector &input) {
 
 void VectorOperations::CombineHash(Vector &hashes, const Vector &input, const SelectionVector &rsel, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
-		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
-		TemplatedLoopCombineHash<true, hash_t, true>(input_hashes, hashes, &rsel, count);
+		HashCachedDictionary<true, false>(input, hashes, &rsel, count);
 	} else {
 		CombineHashTypeSwitch<true>(hashes, input, &rsel, count);
 	}
