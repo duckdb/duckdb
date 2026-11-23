@@ -330,6 +330,34 @@ void QueryGraphManager::PreparePredicateModel(LogicalOperator &op) {
 	BindFilterEndpoints();
 	// Build the predicate model after BindFilterEndpoints so that left_binding/right_binding are populated.
 	BuildPredicateModel();
+	AddImpliedJoinKeys();
+}
+
+void QueryGraphManager::AddImpliedJoinKeys() {
+	if (predicate_model.GetSelectivityPredicates().empty() || predicate_model.GetEqualityClasses().empty()) {
+		return;
+	}
+	for (auto &op : join_operators) {
+		if (op->type != JoinOrderOperatorType::INNER && op->type != JoinOrderOperatorType::CROSS_PRODUCT) {
+			return;
+		}
+	}
+	for (auto &filter : filters_and_bindings) {
+		if (filter->must_remain_filter || filter->must_remain_at_root) {
+			return;
+		}
+	}
+	for (auto &key : predicate_model.FindImpliedJoinKeys()) {
+		auto &target = key.target.get();
+		auto filter = make_uniq<FilterInfo>(std::move(key.comparison), target.GetSet(), filters_and_bindings.size());
+		filter->SetLeftSet(target.GetLeftSet());
+		filter->SetRightSet(target.GetRightSet());
+		auto &comparison = filter->filter->Cast<BoundFunctionExpression>();
+		GetEquivalenceBinding(BoundComparisonExpression::Left(comparison), filter->left_binding);
+		GetEquivalenceBinding(BoundComparisonExpression::Right(comparison), filter->right_binding);
+		predicate_model.RegisterImpliedEquality(*filter, key.equality_class_index);
+		filters_and_bindings.push_back(std::move(filter));
+	}
 }
 
 optional<RelationStats> QueryGraphManager::CombineRelationStats(const vector<ColumnBinding> &bindings,

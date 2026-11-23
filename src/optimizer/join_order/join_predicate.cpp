@@ -236,12 +236,16 @@ idx_t JoinEqualityGroups::GetGroup(const ColumnBinding &binding) {
 
 void RelationPairEqualitySummary::AddEquality(idx_t equality_class_index, ColumnBinding first_binding,
                                               ColumnBinding second_binding) {
-	if (std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(), equality_class_index) ==
-	    direct_equality_class_indices.end()) {
+	if (!ContainsClass(equality_class_index)) {
 		direct_equality_class_indices.push_back(equality_class_index);
 	}
 	first_relation_bindings.insert(first_binding);
 	second_relation_bindings.insert(second_binding);
+}
+
+bool RelationPairEqualitySummary::ContainsClass(idx_t equality_class_index) const {
+	return std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(),
+	                 equality_class_index) != direct_equality_class_indices.end();
 }
 
 bool RelationPairEqualitySummary::HasDirectCompositeEquality() const {
@@ -282,6 +286,85 @@ void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 		equality_join_predicates.push_back(edge.predicate);
 	}
 	equality_classes.push_back(std::move(equality_class));
+}
+
+static unordered_map<RelationIndex, reference<const Expression>>
+GetStrictEqualityColumns(const JoinEqualityClass &group) {
+	unordered_map<RelationIndex, reference<const Expression>> columns;
+	for (auto &edge : group.edges) {
+		auto &predicate = edge.predicate.get();
+		if (predicate.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			return {};
+		}
+		auto &comparison = predicate.GetFilter().filter->Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		if (left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsIntegral() ||
+		    left.GetReturnType() != right.GetReturnType()) {
+			return {};
+		}
+		columns.emplace(edge.left_relation, left);
+		columns.emplace(edge.right_relation, right);
+	}
+	return columns;
+}
+
+vector<ImpliedJoinKey> JoinPredicateModel::FindImpliedJoinKeys() const {
+	vector<reference<const JoinPredicate>> candidates;
+	reference_set_t<JoinRelationSet> visited;
+	for (auto &entry : selectivity_predicates) {
+		auto &predicate = entry.get();
+		if (predicate.GetPredicateClass() == JoinPredicateClass::INNER_EQUALITY &&
+		    predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL && predicate.GetSet().count == 2 &&
+		    predicate.GetLeftSet().count == 1 && predicate.GetRightSet().count == 1 &&
+		    visited.insert(predicate.GetSet()).second) {
+			candidates.push_back(predicate);
+		}
+	}
+	vector<ImpliedJoinKey> result;
+	if (candidates.empty()) {
+		return result;
+	}
+	for (auto &group : equality_classes) {
+		if (group.relations.size() < 3) {
+			continue;
+		}
+		// A costing class may also contain casts or null-safe equalities.
+		auto columns = GetStrictEqualityColumns(group);
+		if (columns.empty()) {
+			continue;
+		}
+		for (auto &entry : candidates) {
+			auto &target = entry.get();
+			auto left = columns.find(target.GetLeftSet().relations[0]);
+			auto right = columns.find(target.GetRightSet().relations[0]);
+			if (left == columns.end() || right == columns.end()) {
+				continue;
+			}
+			auto direct = GetDirectEqualityPair(target.GetSet());
+			if (direct && direct->ContainsClass(group.index)) {
+				continue;
+			}
+			auto key = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, left->second.get().Copy(),
+			                                             right->second.get().Copy());
+			result.push_back({group.index, target, std::move(key)});
+		}
+	}
+	return result;
+}
+
+void JoinPredicateModel::RegisterImpliedEquality(FilterInfo &filter, idx_t equality_class_index) {
+	auto &predicate =
+	    RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, filter.left_binding, filter.right_binding);
+	D_ASSERT(predicate.CanBuildEqualityClosure());
+	// Price the key in its original class; the direct-pair summaries describe the input predicates.
+	predicate.SetEqualityClassIndex(equality_class_index);
+	auto &group = equality_classes[equality_class_index];
+	group.edges.emplace_back(predicate, JoinOrderUtil::GetBindingRelation(filter.left_binding),
+	                         JoinOrderUtil::GetBindingRelation(filter.right_binding), filter.left_binding,
+	                         filter.right_binding);
+	equality_join_predicates.push_back(predicate);
 }
 
 void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,

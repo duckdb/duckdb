@@ -1,0 +1,81 @@
+# name: test/optimizer/joins/implied_key_on_expression_join.test
+# description: A transitive integer key can accompany an expression join within an inner join region
+# group: [joins]
+
+# Leave the two original group equalities on the join graph.
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+statement ok
+CREATE TABLE a AS SELECT i % 8 AS ga, i AS xa FROM range(32) t(i);
+
+statement ok
+CREATE TABLE b AS SELECT i % 8 AS gb, i + 1 AS xb FROM range(32) t(i);
+
+statement ok
+CREATE TABLE c AS SELECT i % 8 AS gc FROM range(1024) t(i);
+
+# The computed edge can use ga = gb, even though the SQL spells its proof through c.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM a JOIN b ON xa = xb - 1 JOIN c ON ga = gc AND gb = gc;
+----
+physical_plan	<REGEX>:.*"Conditions":\s*\[\s*("[^"]*xa[^"]*",\s*"(ga = gb|gb = ga)"|"(ga = gb|gb = ga)",\s*"[^"]*xa[^"]*")\s*\].*
+
+query I
+SELECT count(*) FROM a JOIN b ON xa = xb - 1 JOIN c ON ga = gc AND gb = gc;
+----
+4096
+
+# The explicit key yields the same plan and estimates as its inferred counterpart.
+query II nosort implied_equals_explicit
+EXPLAIN (FORMAT JSON) SELECT * FROM a JOIN b ON xa = xb - 1 JOIN c ON ga = gc AND gb = gc;
+----
+
+query II nosort implied_equals_explicit
+EXPLAIN (FORMAT JSON) SELECT * FROM a JOIN b ON xa = xb - 1 AND ga = gb JOIN c ON ga = gc AND gb = gc;
+----
+
+statement ok
+CREATE TABLE lhs(g INTEGER, r INTEGER);
+
+statement ok
+INSERT INTO lhs VALUES (1, 2), (2, 2), (NULL, 2);
+
+statement ok
+CREATE TABLE rhs AS SELECT g, r - 1 AS r FROM lhs;
+
+statement ok
+CREATE TABLE bridge(g INTEGER);
+
+statement ok
+INSERT INTO bridge VALUES (1), (2), (2), (NULL);
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 JOIN bridge c ON a.g = c.g AND b.g = c.g;
+----
+3
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 JOIN bridge c ON a.g = c.g;
+----
+9
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1
+JOIN bridge c ON a.g IS NOT DISTINCT FROM c.g AND b.g IS NOT DISTINCT FROM c.g;
+----
+4
+
+query I
+SELECT count(*) FROM lhs a JOIN rhs b ON a.r = b.r + 1 LEFT JOIN bridge c ON a.g = c.g AND b.g = c.g;
+----
+10
+
+# Distinct BIGINTs can compare equal after a lossy cast.
+query I
+SELECT count(*)
+FROM (VALUES (9007199254740992::BIGINT, 2)) a(g, r)
+JOIN (VALUES (9007199254740993::BIGINT, 1)) b(g, r) ON a.r = b.r + 1
+JOIN (VALUES (9007199254740992::DOUBLE)) c(g) ON a.g::DOUBLE = c.g AND b.g::DOUBLE = c.g;
+----
+1
