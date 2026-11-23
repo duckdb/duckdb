@@ -71,4 +71,18 @@ FROM (
 ----
 8193	true
 
+# Materialized keys must compare correctly against a separate, small sorted run.
+statement ok
+SET prefer_range_joins=true;
+
+query I
+SELECT count(*)
+FROM prefix_keys l
+JOIN (
+    SELECT repeat('p', {prefix}) || lpad(i::VARCHAR, 4, '0') AS k
+    FROM range(0, 8193, 1024) t(i)
+) r ON l.k < r.k;
+----
+36864
+
 endloop
