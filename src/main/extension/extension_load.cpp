@@ -858,7 +858,9 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
                                                     const string &repository_name, bool core_only,
                                                     ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
 	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
-	auto loaded_path = fs.CanonicalizePath(extension_init_result.filename);
+	const auto &filename = extension_init_result.filename;
+	// Resolving a remote filesystem here can autoload the extension we are still initializing.
+	auto loaded_path = FileSystem::IsRemoteFile(filename) ? filename : fs.CanonicalizePath(filename);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
