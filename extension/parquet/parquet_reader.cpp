@@ -264,8 +264,31 @@ static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file
 	return file_handle.CanSeek() && !disable_prefetch;
 }
 
-//! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model
-static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReaderScanState &state) {
+//! The coalescing gap for a row group of [group_span] bytes while the cost model has measured nothing. The default gap
+//! suits a local disk, but makes each column chunk of a row group in a file off disk a request of its own, and a handle
+//! measures nothing before its first reads, so the one row group of a small file always gets it. A row group no larger
+//! than a cache block, which the external file cache would fetch in one request but does not serve here, coalesces
+//! gaps of up to UNMEASURED_REMOTE_COLUMN_GAP instead.
+static void WidenUnmeasuredRemoteGap(ClientContext &context, ParquetReaderScanState &state, idx_t group_span,
+                                     uint64_t &gap) {
+	auto &handle = *state.file_handle;
+	if (group_span == 0 || handle.OnDiskFile() || handle.ReadsAreCached()) {
+		return;
+	}
+	uint64_t max_block_size = 0;
+	context.TryGetCurrentSetting("external_file_cache_remote_max_block_size", max_block_size);
+	if (group_span > max_block_size) {
+		return;
+	}
+	// no two ranges of the row group are further apart than its span
+	const auto widened = MinValue<uint64_t>(group_span, ParquetReaderPrefetchConfig::UNMEASURED_REMOTE_COLUMN_GAP);
+	gap = MaxValue<uint64_t>(gap, widened);
+}
+
+//! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model, for a row
+//! group of [group_span] bytes (0 when not known)
+static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReaderScanState &state,
+                                           idx_t group_span = 0) {
 	uint64_t gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
 	if (!state.prefetch_mode) {
 		return gap;
@@ -280,7 +303,10 @@ static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReader
 	if (state.file_handle->TryGetNetworkThroughput(estimate)) {
 		state.cost_model_state.RefineFromEstimate(estimate);
 	}
-	state.cost_model_state.TryGetColumnGapSize(gap);
+	if (state.cost_model_state.TryGetColumnGapSize(gap)) {
+		return gap;
+	}
+	WidenUnmeasuredRemoteGap(context, state, group_span, gap);
 	return gap;
 }
 
@@ -2864,7 +2890,7 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	state.filter_head_count = 0;
 
 	if (state.prefetch_mode) {
-		trans.SetAcceptedColumnGap(DetermineAcceptedColumnGap(context, state));
+		trans.SetAcceptedColumnGap(DetermineAcceptedColumnGap(context, state, GetGroupSpan(state)));
 	}
 
 	// TODO: only need this if we have a deletion vector?

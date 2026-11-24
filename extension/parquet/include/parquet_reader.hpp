@@ -106,6 +106,10 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double PREFETCH_FILTER_MINIMUM_MATCH_RATIO = 0.9;
 	//! Before observing matches, only speculate on filter columns that are cheap to read
 	static constexpr double FIRST_GROUP_PREFETCH_MAXIMUM_FILTER_SCAN = 0.05;
+	//! Before the cost model has measured the network, the largest gap coalesced in a small row group of a file off
+	//! local disk that the external file cache does not serve: a merge then adds at most this many bytes to save a
+	//! request, which pays whenever a stream moves that much in a request's round trip (about 9 MB/s at 30 ms)
+	static constexpr uint64_t UNMEASURED_REMOTE_COLUMN_GAP = 256ULL << 10;
 };
 
 enum class ParquetPrefetchStrategy : uint8_t {
