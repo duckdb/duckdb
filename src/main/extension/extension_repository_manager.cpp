@@ -585,6 +585,13 @@ ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db, opti
 		    ResolutionFailure(caller, name_p), name,
 		    ResolutionHint(caller, "\nUse `WITH PREFIX '<url>'` to name the repository's location directly"));
 	}
+	// reading the host is an external access: refused up front, as LOAD refuses, rather than as a read error from
+	// the file system once the request is attempted
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
+		throw PermissionException("%s: reading the host's metadata file is an external access, which is disabled "
+		                          "through configuration (enable_external_access)",
+		                          ResolutionFailure(caller, name));
+	}
 	ExtensionRepositoryResolution resolution;
 	resolution.host = name;
 
