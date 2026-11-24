@@ -175,8 +175,8 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	                   Vector &result, idx_t row_idx) {
 		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
 
-		auto &state = *reinterpret_cast<STATE *>(l_state);
-		auto gstate = reinterpret_cast<const STATE *>(g_state);
+		auto &state = STATE::Get(l_state);
+		auto gstate = STATE::Get(g_state);
 
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
@@ -283,8 +283,9 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(mad_window)
-	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
-	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
+	fun.SetInitWindowStateCallback(QuantileWindowState<INPUT_TYPE>::Init);
+	fun.SetWindowBatchCallback(OP::template Window<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE, TARGET_TYPE>);
+	fun.SetWindowInitCallback(OP::template WindowInit<QuantileWindowState<INPUT_TYPE>, INPUT_TYPE>);
 #endif
 	return fun;
 }

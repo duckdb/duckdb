@@ -1004,3 +1004,15 @@ SELECT count(*) FROM (
 ) WHERE a != b OR c != d;
 ----
 0
+
+# holistic aggregates are not streamed, every row would finalize all values so far
+query TT
+EXPLAIN SELECT median(i::VARCHAR) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# nor are combined holistic states
+query TT
+EXPLAIN SELECT combine_aggr(to_aggregate_state([i], 'median', ['BIGINT'])) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*

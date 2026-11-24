@@ -75,11 +75,6 @@ struct QuantileOperation {
 		return aggr_input_data.function.GetArguments()[0];
 	}
 
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &) {
-		state.~STATE();
-	}
-
 	template <class STATE, class INPUT_TYPE>
 	static void WindowInit(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
 	                       data_ptr_t g_state) {
@@ -99,7 +94,7 @@ struct QuantileOperation {
 		}
 
 		//	Build the tree
-		auto &state = *reinterpret_cast<STATE *>(g_state);
+		auto &state = STATE::Get(g_state);
 		auto &window_state = state.GetOrCreateWindowState();
 		window_state.qst = make_uniq<QuantileSortTree>(aggr_input_data, partition);
 	}
@@ -132,12 +127,10 @@ struct QuantileOperation {
 //! update callback is handed it along with the input and simply does not read it
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
-	AggregateFunction fun({}, result_type, AggregateFunction::StateSize<STATE>,
-	                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-	                      ListUpdateFunction<true>, ListCombineFunction<OP>,
-	                      AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
-	                      AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	AggregateFunction fun(
+	    {}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	    ListUpdateFunction<true>, ListCombineFunction<OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind());
 	fun.GetSignature().AddParameter("x", input_type);
 	fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<typename STATE::InputType>::Init);
 	return fun;
@@ -319,11 +312,28 @@ struct WindowQuantileState {
 template <typename INPUT_TYPE>
 struct QuantileState : ListAggState {
 	using InputType = INPUT_TYPE;
+};
+
+//! The state of the custom window callbacks
+template <typename INPUT_TYPE>
+struct QuantileWindowState : FunctionLocalState {
 	using CursorType = QuantileCursor<INPUT_TYPE>;
 
-	// Window Quantile State (only used for window execution)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
+
+	static unique_ptr<FunctionLocalState> Init(AggregateStateInput &) {
+		return make_uniq<QuantileWindowState>();
+	}
+	static QuantileWindowState &Get(data_ptr_t state) {
+		return reinterpret_cast<FunctionLocalState *>(state)->Cast<QuantileWindowState>();
+	}
+	static const QuantileWindowState *Get(const_data_ptr_t state) {
+		if (!state) {
+			return nullptr;
+		}
+		return &reinterpret_cast<const FunctionLocalState *>(state)->Cast<QuantileWindowState>();
+	}
 
 	bool HasTree() const {
 		return window_state && window_state->HasTree();
@@ -417,13 +427,7 @@ template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
 AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	auto &function = input.function;
 	AggregateStateLayout layout;
-	if (function.ReturnsExportedState()) {
-		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
-		// its return type IS the state type already
-		layout.type = function.GetReturnType();
-	} else {
-		layout.type = LogicalType::LIST(function.GetArguments()[0]);
-	}
+	layout.type = LogicalType::LIST(function.GetArguments()[0]);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
 	// NULL inputs are never buffered, so the finalize assumes all values are valid
