@@ -140,6 +140,10 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	if (range_offset(wexpr.WindowStart()) || range_offset(wexpr.WindowEnd())) {
 		return;
 	}
+	//	FILL interpolates along the ORDER BY value, so it needs the key as well - unless it brings its own ordering.
+	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_FILL && wexpr.ArgOrders().empty()) {
+		return;
+	}
 	if (!partition_bys.empty() && order_bys.size() == 1) {
 		vector<reference<Expression>> refs;
 		for (auto &arg : partition_bys) {
