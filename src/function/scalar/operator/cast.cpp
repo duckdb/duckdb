@@ -69,21 +69,11 @@ public:
 
 void CastFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &cast_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &cast_data = cast_expr.BindInfo()->Cast<CastFunctionData>();
 	auto lstate = ExecuteFunctionState::GetFunctionState(state);
-
-	auto &source = args.data[0];
-	idx_t count = args.size();
 
 	// Constant inputs are handled by the generic function executor (cardinality is reduced to 1). NULL handling is
 	// marked SPECIAL_HANDLING so that constant NULL inputs still reach the cast (required for e.g. UNION targets).
-	string error_message;
-	auto error_ref = cast_data.try_cast ? &error_message : nullptr;
-	CastParameters parameters(cast_data.bound_cast.GetCastData(), false, error_ref, lstate);
-	parameters.query_location = cast_expr.GetQueryLocation();
-	parameters.cast_source = &BoundCastExpression::Child(cast_expr);
-	parameters.cast_target = cast_expr;
-	cast_data.bound_cast.Cast(source, result, count, parameters);
+	BoundCastExpression::ExecuteCast(cast_expr, args.data[0], result, args.size(), lstate);
 }
 
 static unique_ptr<FunctionLocalState> CastInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
@@ -242,6 +232,18 @@ unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctio
 		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result;
+}
+
+void BoundCastExpression::ExecuteCast(const BoundFunctionExpression &cast_expr, Vector &source, Vector &result,
+                                      idx_t count, optional_ptr<FunctionLocalState> local_state) {
+	auto &cast_data = cast_expr.BindInfo()->Cast<CastFunctionData>();
+	string error_message;
+	auto error_ref = cast_data.try_cast ? &error_message : nullptr;
+	CastParameters parameters(cast_data.bound_cast.GetCastData(), false, error_ref, local_state);
+	parameters.query_location = cast_expr.GetQueryLocation();
+	parameters.cast_source = &Child(cast_expr);
+	parameters.cast_target = cast_expr;
+	cast_data.bound_cast.Cast(source, result, count, parameters);
 }
 
 } // namespace duckdb
