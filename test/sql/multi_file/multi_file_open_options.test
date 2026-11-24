@@ -286,7 +286,7 @@ SELECT * FROM read_single_csv_file({'filename': '{TEST_DIR}/open_options.csv', '
 ----
 42	hello
 
-# an open option without a VARIANT representation is passed through untouched
+# an open option of any type is passed through untouched
 query I
 SELECT count(*) FROM read_text([{'filename': '{TEST_DIR}/open_options.csv', 'some_extension_option': make_type('INTEGER')}])
 ----
