@@ -62,24 +62,34 @@ void CSVBufferManager::ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine)
 
 void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle &handle) {
 	shared_ptr<CSVStateMachine> state_machine;
+	CSVBufferEnd previous;
+	bool stored = false;
 	{
 		lock_guard<mutex> parallel_lock(main_mutex);
-		if (!buffer_end_state_machine || (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read)) {
+		if (!buffer_end_state_machine) {
 			return;
+		}
+		if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read) {
+			if (buffer_ends[buffer_idx].exact) {
+				return;
+			}
+			stored = true;
+		}
+		if (buffer_idx > 0 && buffer_idx - 1 < buffer_ends.size()) {
+			previous = buffer_ends[buffer_idx - 1];
 		}
 		state_machine = buffer_end_state_machine;
 	}
-	auto buffer_end = ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine);
-	if (!buffer_end.exact && buffer_idx > 0) {
-		// a buffer without a line start is read on from the end of the buffer before, when that end is read already
-		CSVBufferEnd previous;
-		{
-			lock_guard<mutex> parallel_lock(main_mutex);
-			if (buffer_idx - 1 < buffer_ends.size()) {
-				previous = buffer_ends[buffer_idx - 1];
-			}
+	// a buffer without a line start of its own is read on from the end of the buffer before, once that one is exact
+	CSVBufferEnd buffer_end;
+	if (stored) {
+		if (!previous.exact) {
+			return;
 		}
-		if (previous.exact) {
+		buffer_end = ReadBufferEnd(handle.Ptr(), 0, handle.actual_size, previous.state, *state_machine);
+	} else {
+		buffer_end = ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine);
+		if (!buffer_end.exact && previous.exact) {
 			buffer_end = ReadBufferEnd(handle.Ptr(), 0, handle.actual_size, previous.state, *state_machine);
 		}
 	}
@@ -92,6 +102,7 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 
 bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) {
 	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		bool previous_read = buffer_idx == 0;
 		{
 			lock_guard<mutex> parallel_lock(main_mutex);
 			if (!buffer_end_state_machine) {
@@ -99,10 +110,16 @@ bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) 
 			}
 			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read) {
 				buffer_end = buffer_ends[buffer_idx];
-				return true;
+				if (buffer_end.exact || attempt > 0) {
+					return true;
+				}
 			}
+			previous_read = previous_read || (buffer_idx - 1 < buffer_ends.size() && buffer_ends[buffer_idx - 1].read);
 		}
-		// the buffer was not handed out yet, its end is read once it is
+		// the buffer is handed out to read its end, which may need the end of the buffer before, read the same way
+		if (!previous_read) {
+			GetBuffer(buffer_idx - 1);
+		}
 		GetBuffer(buffer_idx);
 	}
 	return false;
