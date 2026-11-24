@@ -353,18 +353,18 @@ static bool IsSelectiveEqualityBinding(const RelationManager &relations, const C
 	return domain.source == DistinctCountSource::EXACT && domain.distinct_count >= stats.cardinality;
 }
 
-void QueryGraphManager::AddImpliedJoinKeys() {
+vector<reference<const JoinPredicate>> QueryGraphManager::GetImpliedJoinKeyTargets() const {
 	if (predicate_model.GetSelectivityPredicates().empty() || predicate_model.GetEqualityClasses().empty()) {
-		return;
+		return {};
 	}
 	for (auto &op : join_operators) {
 		if (op->type != JoinOrderOperatorType::INNER && op->type != JoinOrderOperatorType::CROSS_PRODUCT) {
-			return;
+			return {};
 		}
 	}
 	for (auto &filter : filters_and_bindings) {
 		if (filter->must_remain_filter || filter->must_remain_at_root) {
-			return;
+			return {};
 		}
 	}
 	// A selective equality already limits matches on this pair, including when it is a different predicate.
@@ -377,16 +377,76 @@ void QueryGraphManager::AddImpliedJoinKeys() {
 			covered_pairs.insert(predicate.GetSet());
 		}
 	}
-	for (auto &key : predicate_model.FindImpliedJoinKeys(std::move(covered_pairs))) {
-		auto &target = key.target.get();
-		auto filter = make_uniq<FilterInfo>(std::move(key.comparison), target.GetSet(), filters_and_bindings.size());
-		filter->SetLeftSet(target.GetLeftSet());
-		filter->SetRightSet(target.GetRightSet());
-		auto &comparison = filter->filter->Cast<BoundFunctionExpression>();
-		GetEquivalenceBinding(BoundComparisonExpression::Left(comparison), filter->left_binding);
-		GetEquivalenceBinding(BoundComparisonExpression::Right(comparison), filter->right_binding);
-		predicate_model.RegisterImpliedEquality(*filter, key.equality_class_index);
-		filters_and_bindings.push_back(std::move(filter));
+	vector<reference<const JoinPredicate>> candidates;
+	for (auto &entry : predicate_model.GetSelectivityPredicates()) {
+		auto &predicate = entry.get();
+		if (predicate.GetPredicateClass() == JoinPredicateClass::INNER_EQUALITY &&
+		    predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL && predicate.GetSet().count == 2 &&
+		    predicate.GetLeftSet().count == 1 && predicate.GetRightSet().count == 1 &&
+		    covered_pairs.insert(predicate.GetSet()).second) {
+			candidates.push_back(predicate);
+		}
+	}
+	return candidates;
+}
+
+static unordered_map<RelationIndex, reference<const Expression>>
+GetStrictEqualityColumns(const JoinEqualityClass &group) {
+	unordered_map<RelationIndex, reference<const Expression>> columns;
+	for (auto &edge : group.edges) {
+		auto &predicate = edge.predicate.get();
+		if (predicate.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			return {};
+		}
+		auto &comparison = predicate.GetFilter().filter->Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		if (left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsIntegral() ||
+		    left.GetReturnType() != right.GetReturnType()) {
+			return {};
+		}
+		columns.emplace(edge.left_relation, left);
+		columns.emplace(edge.right_relation, right);
+	}
+	return columns;
+}
+
+void QueryGraphManager::AddImpliedJoinKeys() {
+	auto candidates = GetImpliedJoinKeyTargets();
+	if (candidates.empty()) {
+		return;
+	}
+	for (auto &group : predicate_model.GetEqualityClasses()) {
+		if (group.relations.size() < 3) {
+			continue;
+		}
+		// A costing class may also contain casts or null-safe equalities.
+		auto columns = GetStrictEqualityColumns(group);
+		if (columns.empty()) {
+			continue;
+		}
+		for (auto &entry : candidates) {
+			auto &target = entry.get();
+			auto left = columns.find(target.GetLeftSet().relations[0]);
+			auto right = columns.find(target.GetRightSet().relations[0]);
+			if (left == columns.end() || right == columns.end()) {
+				continue;
+			}
+			auto direct = predicate_model.GetDirectEqualityPair(target.GetSet());
+			if (direct && direct->ContainsClass(group.index)) {
+				continue;
+			}
+			auto key = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, left->second.get().Copy(),
+			                                             right->second.get().Copy());
+			auto filter = make_uniq<FilterInfo>(std::move(key), target.GetSet(), filters_and_bindings.size());
+			filter->SetLeftSet(target.GetLeftSet());
+			filter->SetRightSet(target.GetRightSet());
+			GetEquivalenceBinding(left->second.get(), filter->left_binding);
+			GetEquivalenceBinding(right->second.get(), filter->right_binding);
+			predicate_model.RegisterImpliedEquality(*filter, group.index);
+			filters_and_bindings.push_back(std::move(filter));
+		}
 	}
 }
 
