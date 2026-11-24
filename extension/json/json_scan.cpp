@@ -426,6 +426,8 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
 	transform_options.key_match = options.case_insensitive_keys ? JSONKeyMatch::CASE_INSENSITIVE : JSONKeyMatch::EXACT;
 	transform_options.date_format_map = json_data.date_format_map.get();
+	transform_options.format_node =
+	    json_data.date_format_map ? json_data.date_format_map->GetDetectedFormats() : nullptr;
 	transform_options.delay_error = true;
 	// the readers of this scan parse numbers as text when a column is a DECIMAL (JSONReader::read_flag)
 	transform_options.numbers_as_raw = JSONCommon::NumbersAsRaw(options.sql_type_list);
@@ -483,8 +485,11 @@ static bool TransformGeoJSONFeatures(yyjson_val *values[], yyjson_alc *alc, cons
 			auto &val = values[i];
 			property_values[i] = val && unsafe_yyjson_is_obj(val) ? yyjson_obj_get(val, "properties") : nullptr;
 		}
+		const auto prev_format_node = transform_options.format_node;
+		transform_options.format_node = prev_format_node ? prev_format_node->GetChild("properties") : nullptr;
 		success = JSONTransform::TransformObject(property_values.data(), alc, count, property_names, property_vectors,
 		                                         transform_options, property_indices, false);
+		transform_options.format_node = prev_format_node;
 	}
 	return success;
 }

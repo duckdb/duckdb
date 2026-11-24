@@ -18,6 +18,7 @@
 namespace duckdb {
 
 struct DateFormatMap;
+struct DateFormatNode;
 class JSONReader;
 
 //! Options for error handling while transforming JSON
@@ -45,6 +46,8 @@ public:
 	bool numbers_as_raw = false;
 	//! Date format used for parsing (can be NULL)
 	optional_ptr<const DateFormatMap> date_format_map = nullptr;
+	//! Per-node detected date/timestamp format during scan traversal (can be NULL)
+	optional_ptr<const DateFormatNode> format_node = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "json_geojson.hpp"
+#include "json_reader_options.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -443,11 +444,25 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
                                                   const Vector &result_vector, MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 
+	auto &desc = descriptions[0];
 	const auto type = result_vector.GetType().id();
-	auto i = date_format_map.NumberOfFormats(type);
-	for (; i != 0; i--) {
+	auto it = desc.candidate_formats.find(type);
+	if (it == desc.candidate_formats.end()) {
+		const auto format_count = date_format_map.NumberOfFormats(type);
+		vector<idx_t> initial_formats;
+		initial_formats.reserve(format_count);
+		for (idx_t i = 0; i < format_count; i++) {
+			initial_formats.push_back(i);
+		}
+		it = desc.candidate_formats.emplace(type, std::move(initial_formats)).first;
+	}
+
+	auto &surviving = it->second;
+	vector<idx_t> next_surviving;
+	next_surviving.reserve(surviving.size());
+	for (const auto format_idx : surviving) {
 		StrpTimeFormat format;
-		if (!date_format_map.GetFormatAtIndex(type, i - 1, format)) {
+		if (!date_format_map.GetFormatAtIndex(type, format_idx, format)) {
 			continue;
 		}
 
@@ -464,11 +479,11 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		if (success) {
-			return true;
+			next_surviving.push_back(format_idx);
 		}
 	}
-
-	return false;
+	surviving = std::move(next_surviving);
+	return !surviving.empty();
 }
 
 JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p, const bool case_insensitive_keys)
@@ -481,6 +496,7 @@ static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStruct
 	std::swap(a.key_map, b.key_map);
 	std::swap(a.children, b.children);
 	std::swap(a.candidate_types, b.candidate_types);
+	std::swap(a.candidate_formats, b.candidate_formats);
 	std::swap(a.has_large_ubigint, b.has_large_ubigint);
 	std::swap(a.timestamp_offset_state, b.timestamp_offset_state);
 }
@@ -636,6 +652,30 @@ static void MergeNodeObject(JSONStructureNode &merged, const JSONStructureDescri
 	}
 }
 
+static bool MergeCandidateFormats(JSONStructureDescription &merged_desc, const JSONStructureDescription &child_desc,
+                                  const LogicalTypeId type) {
+	auto child_it = child_desc.candidate_formats.find(type);
+	if (child_it == child_desc.candidate_formats.end()) {
+		return true;
+	}
+	auto merged_it = merged_desc.candidate_formats.find(type);
+	if (merged_it == merged_desc.candidate_formats.end()) {
+		merged_desc.candidate_formats.emplace(type, child_it->second);
+		return !child_it->second.empty();
+	}
+	vector<idx_t> intersected;
+	for (const auto idx : merged_it->second) {
+		for (const auto child_idx : child_it->second) {
+			if (idx == child_idx) {
+				intersected.push_back(idx);
+				break;
+			}
+		}
+	}
+	merged_it->second = std::move(intersected);
+	return !merged_it->second.empty();
+}
+
 static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescription &child_desc,
                          const bool node_initialized) {
 	D_ASSERT(child_desc.type != LogicalTypeId::LIST && child_desc.type != LogicalTypeId::STRUCT);
@@ -656,10 +696,17 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
 	}
 	if (!merged.initialized) {
 		merged_desc.candidate_types = child_desc.candidate_types;
+		merged_desc.candidate_formats = child_desc.candidate_formats;
 	} else if (merged_desc.candidate_types.empty() != child_desc.candidate_types.empty() // both empty or neither empty
 	           || (!merged_desc.candidate_types.empty() &&
 	               merged_desc.candidate_types.back() != child_desc.candidate_types.back())) { // non-empty: check type
 		merged_desc.candidate_types.clear(); // Not the same, default to VARCHAR
+	} else if (!merged_desc.candidate_types.empty()) {
+		const auto active_type = merged_desc.candidate_types.back();
+		if ((active_type == LogicalTypeId::DATE || active_type == LogicalTypeId::TIMESTAMP) &&
+		    !MergeCandidateFormats(merged_desc, child_desc, active_type)) {
+			merged_desc.candidate_types.clear(); // No single format fits all values → VARCHAR
+		}
 	}
 
 	merged.initialized = true;
@@ -916,6 +963,90 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	default:
 		return desc.type;
 	}
+}
+
+static unique_ptr<DateFormatNode> ExtractDateFormatsInternal(const JSONStructureNode &node, const LogicalType &type) {
+	if (node.descriptions.size() != 1) {
+		return nullptr;
+	}
+	const auto &desc = node.descriptions[0];
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		if (desc.type != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		const auto &child_types = StructType::GetChildTypes(type);
+		if (child_types.size() != desc.children.size()) {
+			return nullptr;
+		}
+		unique_ptr<DateFormatNode> result;
+		for (idx_t i = 0; i < desc.children.size(); i++) {
+			auto child_fmt = ExtractDateFormatsInternal(desc.children[i], child_types[i].second);
+			if (!child_fmt) {
+				continue;
+			}
+			if (!result) {
+				result = make_uniq<DateFormatNode>(node.case_insensitive_keys);
+			}
+			D_ASSERT(desc.children[i].key);
+			result->SetChild(*desc.children[i].key, std::move(child_fmt));
+		}
+		return result;
+	}
+	case LogicalTypeId::MAP: {
+		if (desc.type != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		auto merged = JSONStructureNode::EmptyLike(node);
+		for (const auto &child : desc.children) {
+			JSONStructure::MergeNodes(merged, child);
+		}
+		auto value_fmt = ExtractDateFormatsInternal(merged, MapType::ValueType(type));
+		if (!value_fmt) {
+			return nullptr;
+		}
+		auto result = make_uniq<DateFormatNode>(node.case_insensitive_keys);
+		result->child = std::move(value_fmt);
+		return result;
+	}
+	case LogicalTypeId::LIST: {
+		if (desc.type != LogicalTypeId::LIST || desc.children.size() != 1) {
+			return nullptr;
+		}
+		auto child_fmt = ExtractDateFormatsInternal(desc.children[0], ListType::GetChildType(type));
+		if (!child_fmt) {
+			return nullptr;
+		}
+		auto result = make_uniq<DateFormatNode>(node.case_insensitive_keys);
+		result->child = std::move(child_fmt);
+		return result;
+	}
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP: {
+		if (desc.type != LogicalTypeId::VARCHAR) {
+			return nullptr;
+		}
+		auto it = desc.candidate_formats.find(type.id());
+		if (it == desc.candidate_formats.end() || it->second.empty()) {
+			return nullptr;
+		}
+		auto result = make_uniq<DateFormatNode>(node.case_insensitive_keys);
+		const auto format_idx = it->second.back();
+		if (type.id() == LogicalTypeId::DATE) {
+			result->date_format_idx = format_idx;
+		} else {
+			result->timestamp_format_idx = format_idx;
+		}
+		return result;
+	}
+	default:
+		return nullptr;
+	}
+}
+
+shared_ptr<const DateFormatNode> JSONStructure::ExtractDateFormats(const JSONStructureNode &node,
+                                                                   const LogicalType &type) {
+	return shared_ptr<const DateFormatNode>(ExtractDateFormatsInternal(node, type));
 }
 
 } // namespace duckdb

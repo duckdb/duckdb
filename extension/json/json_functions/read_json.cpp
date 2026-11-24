@@ -289,10 +289,13 @@ unique_ptr<JSONStructureNode> JSONScan::DetectStructure(ClientContext &context, 
 
 void JSONScan::StructureToColumns(ClientContext &context, JSONReaderOptions &options, const JSONStructureNode &node,
                                   vector<JSONFeatureColumn> &feature_columns, vector<LogicalType> &return_types,
-                                  vector<Identifier> &names) {
+                                  vector<Identifier> &names, optional_ptr<DateFormatMap> date_format_map) {
 	// Convert structure to logical type
 	auto type = JSONStructure::StructureToType(context, node, options.max_depth, options.field_appearance_threshold,
 	                                           options.map_inference_threshold);
+	if (date_format_map) {
+		date_format_map->SetDetectedFormats(JSONStructure::ExtractDateFormats(node, type));
+	}
 
 	// Auto-detect record type
 	if (options.record_type == JSONRecordType::AUTO_DETECT) {
@@ -347,7 +350,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &json_data, const
                           vector<Identifier> &names) {
 	json_data.record_type_auto_detected = json_data.options.record_type == JSONRecordType::AUTO_DETECT;
 	auto node = DetectStructure(context, json_data, files, sampled_readers);
-	StructureToColumns(context, json_data.options, *node, json_data.feature_columns, return_types, names);
+	StructureToColumns(context, json_data.options, *node, json_data.feature_columns, return_types, names,
+	                   json_data.date_format_map.get());
 	if (json_data.keep_structure) {
 		// keep the structure around so it can be combined with the structures of other files later on
 		json_data.structure = std::move(node);
