@@ -2260,8 +2260,18 @@ bool StringValueScanner::BytesBeforeStart(CSVBufferEnd &before_start) const {
 	if (buffer_pos == 0) {
 		return buffer_idx > 0 && buffer_manager->GetBufferEnd(buffer_idx - 1, before_start) && before_start.known;
 	}
-	before_start = CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, buffer_pos, buffer_idx == 0, *state_machine);
+	if (buffer_manager->GetRangeStart(buffer_idx, buffer_pos, before_start)) {
+		before_start.last_byte = buffer_handle_ptr[buffer_pos - 1];
+		return true;
+	}
+	before_start = CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, buffer_pos,
+	                                               buffer_manager->ScanStartIn(buffer_idx), *state_machine);
 	if (!before_start.exact && buffer_idx > 0) {
+		if (!before_start.known && buffer_manager->GetRangeStart(buffer_idx, buffer_pos, before_start, true)) {
+			// escapes that settle nothing, the buffer is read on from an exact end before it
+			before_start.last_byte = buffer_handle_ptr[buffer_pos - 1];
+			return true;
+		}
 		// the line of the bytes starts in the buffer before, they are read on from its end
 		CSVBufferEnd previous;
 		if (buffer_manager->GetBufferEnd(buffer_idx - 1, previous) && previous.exact) {
