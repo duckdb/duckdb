@@ -100,6 +100,9 @@ private:
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
 	                                             unordered_set<TableIndex> &left_bindings,
 	                                             unordered_set<TableIndex> &right_bindings);
+	bool FilterRemovesNull(const Expression &expr, const unordered_set<TableIndex> &nullable_bindings);
+	//! Restrict grouped input to keys matching at least one of the payload-producing LEFT joins
+	unique_ptr<LogicalOperator> PushdownJoinDependentMembership(unique_ptr<LogicalOperator> op);
 
 	// Pushdown an outer join
 	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op,

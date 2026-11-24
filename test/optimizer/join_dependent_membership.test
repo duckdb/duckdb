@@ -1,0 +1,188 @@
+# name: test/optimizer/join_dependent_membership.test
+# description: Necessary membership across LEFT joins filters whole groups
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE sales(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO sales VALUES
+    (1,10,5), (1,10,7), (2,20,3), (2,20,4), (3,30,9),
+    (4,40,11), (5,50,13), (7,70,17), (8,80,19), (9,NULL,6);
+
+statement ok
+CREATE TABLE web(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO web VALUES (1,10,2), (3,30,1), (3,30,2), (5,51,3), (7,70,0), (8,80,-4), (9,NULL,5);
+
+statement ok
+CREATE TABLE catalog(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO catalog VALUES (2,20,4), (3,30,5), (6,50,6);
+
+statement ok
+CREATE VIEW s AS SELECT k, j, sum(qty) AS qty FROM sales GROUP BY k, j;
+
+statement ok
+CREATE VIEW w AS SELECT k, j, sum(qty) AS qty FROM web GROUP BY k, j;
+
+statement ok
+CREATE VIEW c AS SELECT k, j, sum(qty) AS qty FROM catalog GROUP BY k, j;
+
+# B-only, C-only, both, neither, full-key cross pairs, and nonpositive payloads.
+# Multiple input rows in each retained group must all contribute to its aggregate.
+query IIIII rowsort
+SELECT s.k, s.j, s.qty, w.qty, c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12	2	NULL
+2	20	7	NULL	4
+3	30	9	3	5
+
+query II
+EXPLAIN SELECT s.k, s.j, s.qty, w.qty, c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*membership_source.*Join Type: SEMI.*
+
+# RHS keys can mix group and aggregate bindings with overlapping column indexes.
+query II rowsort
+SELECT s.k,s.qty
+FROM s LEFT JOIN (SELECT min(k) k,j,sum(qty) qty FROM web GROUP BY j) b
+ON s.k=b.k AND s.j=b.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+# The original payload joins must still multiply rows for duplicate RHS keys.
+query IIII rowsort
+SELECT s.k, s.qty, b.qty, c.qty
+FROM s LEFT JOIN (SELECT k,j,qty FROM web) b ON s.k=b.k AND s.j=b.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12	2	NULL
+2	7	NULL	4
+3	9	1	5
+3	9	2	5
+
+query III rowsort
+SELECT s.k, s.j, s.qty
+FROM s LEFT JOIN w ON s.k IS NOT DISTINCT FROM w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.k IS NOT DISTINCT FROM c.k AND s.j IS NOT DISTINCT FROM c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12
+2	20	7
+3	30	9
+9	NULL	6
+
+# The proof also applies to predicates that do not have a syntactic OR.
+query II rowsort
+SELECT s.k, s.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)+coalesce(c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+# Unknown matches are necessary only if all-NULL RHS outputs fail the predicate.
+query I rowsort
+SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)=0 OR coalesce(c.qty,0)=0;
+----
+1
+2
+4
+5
+7
+8
+9
+
+query II
+EXPLAIN SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)=0 OR coalesce(c.qty,0)=0;
+----
+physical_plan	<!REGEX>:.*membership_source.*
+
+# Existing shared CTEs retain their producer/reader restrictions.
+query II rowsort
+WITH wb AS MATERIALIZED (SELECT * FROM w WHERE k<3)
+SELECT s.k, s.qty FROM s LEFT JOIN wb ON s.k=wb.k AND s.j=wb.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(wb.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+# A wrapper around a group output may distinguish values GROUP BY considers equal.
+statement ok
+CREATE TABLE signed_zero(k DOUBLE, qty INTEGER);
+
+statement ok
+INSERT INTO signed_zero VALUES ('-0.0',3), ('0.0',4);
+
+statement ok
+CREATE TABLE negative_sign(k BOOLEAN, qty INTEGER);
+
+statement ok
+INSERT INTO negative_sign VALUES (true,1);
+
+# A retained group contributes 7; filtering individual signed zeros would contribute 3.
+query I
+SELECT coalesce(sum(a.qty),0)%7
+FROM (SELECT signbit(k) AS negative,qty FROM (SELECT k,sum(qty) qty FROM signed_zero GROUP BY k)) a
+LEFT JOIN (SELECT k,qty FROM negative_sign) b ON a.negative=b.k
+LEFT JOIN (SELECT k,qty FROM negative_sign) c ON a.negative=c.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+0
+
+statement ok
+PREPARE membership AS
+SELECT sum(s.qty) FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+
+query I
+EXECUTE membership;
+----
+28
+
+query I
+EXECUTE membership;
+----
+28
+
+# Grouping expressions outside the join key must still be evaluated.
+statement ok
+CREATE TABLE throwing_groups(k INTEGER, txt VARCHAR, qty INTEGER);
+
+statement ok
+INSERT INTO throwing_groups VALUES (1,'7',5),(4,'invalid',6);
+
+statement error
+SELECT a.k,a.qty
+FROM (SELECT k,sum(qty) qty FROM throwing_groups GROUP BY k,CAST(txt AS BIGINT)) a
+LEFT JOIN w ON a.k=w.k
+LEFT JOIN c ON a.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+Could not convert string 'invalid' to INT64
