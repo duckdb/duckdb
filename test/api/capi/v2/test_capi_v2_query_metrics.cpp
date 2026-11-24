@@ -275,6 +275,35 @@ TEST_CASE("V2 profiling information: renders the profile of the last query", "[c
 	REQUIRE_FALSE(configured.text.empty());
 	REQUIRE(configured.text == tree.text);
 
+	// A later query replaces the profile
+	REQUIRE(RunSql(fx.conn, "SELECT range FROM range(3) ORDER BY range DESC") == DUCKDB_V2_ERROR_NONE);
+	TextSinkTarget second;
+	REQUIRE(render("json", second) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(second.text.find("ORDER_BY") != std::string::npos);
+	REQUIRE(second.text.find("UNGROUPED_AGGREGATE") == std::string::npos);
+
+	// The profiler keeps the last profile while profiling is disabled: enabled again, it still renders the last
+	// profiled query until another one finishes
+	REQUIRE(duckdb_v2_connection_enable_profiling(fx.conn, false, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, METRICS_PROFILED_QUERY) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_enable_profiling(fx.conn, true, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TextSinkTarget kept;
+	REQUIRE(render("json", kept) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(kept.text.find("ORDER_BY") != std::string::npos);
+	REQUIRE(kept.text.find("UNGROUPED_AGGREGATE") == std::string::npos);
+
+	// The empty format follows a configured format other than no_output
+	auto output_path = TestCreatePath("profiling_information.json");
+	REQUIRE(RunSql(fx.conn, "SET profiling_output = '" + output_path + "'") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "SET enable_profiling = 'json'") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, METRICS_PROFILED_QUERY) == DUCKDB_V2_ERROR_NONE);
+	TextSinkTarget configured_json;
+	TextSinkTarget explicit_json;
+	REQUIRE(render("", configured_json) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(render("json", explicit_json) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(configured_json.text.find("UNGROUPED_AGGREGATE") != std::string::npos);
+	REQUIRE(configured_json.text == explicit_json.text);
+
 	// A format that does not exist
 	TextSinkTarget unknown;
 	duckdb_v2_error_info_handle err = nullptr;

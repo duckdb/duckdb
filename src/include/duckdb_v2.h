@@ -4834,7 +4834,8 @@ typedef struct _duckdb_v2_query_metrics_node {
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Takes a snapshot of the metrics of the last query the connection finished.
+ * Takes a snapshot of the metrics of the last query the connection profiled, which is not necessarily the last query it
+ * ran: see `duckdb_v2_connection_get_profiling_information()`.
  *
  * The snapshot is owned by the caller and does not change afterwards. It holds the metrics DuckDB's profiling
  * configuration gathered: without profiling enabled, the root node carries no metrics and has no children. A snapshot
@@ -4881,7 +4882,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_enable_profiling(duckdb_v2_con
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Renders the profile of the last query the connection finished.
+ * Renders the profile of the last query the connection profiled.
+ *
+ * That is not necessarily the last query the connection ran: the profiler keeps the last profile while profiling is
+ * disabled. After profiling is enabled again, and until the next query finishes, the profile is still that of the last
+ * query run while profiling was enabled.
  *
  * The same profile `duckdb_v2_connection_get_query_metrics()` takes a snapshot of, as the text DuckDB's profiler prints
  * for it: the query, its metrics and its operator tree. The text is delivered through `sink` in a single call.
