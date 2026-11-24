@@ -336,12 +336,13 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 } // namespace
 
 void AggregateStateSerialization::DeserializeStates(const BoundAggregateFunction &aggr,
+                                                    optional_ptr<const FunctionData> bind_data,
                                                     const AggregateStateLayout &layout, const Vector &input_vec,
                                                     idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator,
                                                     StateMemoryOwnership ownership) {
 	if (aggr.HasImportAggregateStateCallback()) {
 		// the aggregate explicitly deserializes its own states, copying all variable size data
-		AggregateImportInputData import_input(layout, input_vec, dest_buffer, allocator);
+		AggregateImportInputData import_input(layout, input_vec, dest_buffer, allocator, bind_data);
 		aggr.GetImportAggregateStateCallback()(import_input);
 		return;
 	}

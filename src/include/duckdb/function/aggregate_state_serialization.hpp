@@ -39,9 +39,9 @@ struct AggregateStateSerialization {
 	//! Deserialize `count` rows of `input` into consecutive packed states in `dest_buffer`.
 	//! With OWNED ownership, all variable size state data is allocated from `allocator`;
 	//! with BORROWED ownership, primitive string values may point into `input`.
-	static void DeserializeStates(const BoundAggregateFunction &aggr, const AggregateStateLayout &layout,
-	                              const Vector &input, idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator,
-	                              StateMemoryOwnership ownership);
+	static void DeserializeStates(const BoundAggregateFunction &aggr, optional_ptr<const FunctionData> bind_data,
+	                              const AggregateStateLayout &layout, const Vector &input, idx_t count,
+	                              data_ptr_t dest_buffer, ArenaAllocator &allocator, StateMemoryOwnership ownership);
 };
 
 } // namespace duckdb

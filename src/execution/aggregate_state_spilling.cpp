@@ -221,7 +221,7 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
 				state_address_data[i] = state_buffer.get() + i * state_size;
 				aggr.function.GetStateInitCallback()(state_input, &state_address_data[i], 1);
 			}
-			AggregateStateSerialization::DeserializeStates(aggr.function, state_layout,
+			AggregateStateSerialization::DeserializeStates(aggr.function, aggr.GetFunctionData(), state_layout,
 			                                               exported_chunk.data[column_count + aggr_idx], count,
 			                                               state_buffer.get(), allocator, StateMemoryOwnership::OWNED);
 			for (idx_t i = 0; i < count; i++) {

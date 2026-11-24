@@ -145,8 +145,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		state_vec_writer.WriteValue(state_ptr);
 	}
 
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
-	                                               local_state.state_buffer.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[0],
+	                                               count, local_state.state_buffer.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
 
 	AggregateFinalizeInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
@@ -197,11 +197,11 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 
 	// Deserialize both inputs — null rows are skipped by LoadOp, keeping the initialized empty state
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
-	                                               local_state.state_buffer0.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[0],
+	                                               count, local_state.state_buffer0.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
-	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[1], count,
-	                                               local_state.state_buffer1.get(), local_state.allocator,
+	AggregateStateSerialization::DeserializeStates(bind_data.aggr, bind_data.bind_data.get(), layout, input.data[1],
+	                                               count, local_state.state_buffer1.get(), local_state.allocator,
 	                                               StateMemoryOwnership::BORROWED);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
@@ -555,8 +555,9 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	}
 	auto &source_allocator = scratch ? *scratch : aggr_input_data.allocator;
 	try {
-		AggregateStateSerialization::DeserializeStates(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(),
-		                                               source_allocator, StateMemoryOwnership::BORROWED);
+		AggregateStateSerialization::DeserializeStates(underlying_aggr, bind_data.bind_data.get(), layout, inputs[0],
+		                                               count, temp_state_buf.get(), source_allocator,
+		                                               StateMemoryOwnership::BORROWED);
 		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (input_count == 2) {
