@@ -55,9 +55,10 @@ void ExtensionRepositoryUrlFunction(DataChunk &args, ExpressionState &state, Vec
 } // namespace
 
 ScalarFunction ExtensionRepositoryUrl::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::VARCHAR, ExtensionRepositoryUrlFunction,
-	                        ExtensionRepositoryUrlBind, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID),
-	                        FunctionStability::VOLATILE);
+	// the parameter is declared by name: duckdb_functions() lists signatures, and an undeclared one shows as col0
+	ScalarFunction function({FunctionParameter(Identifier("host"), LogicalType::VARCHAR)}, LogicalType::VARCHAR,
+	                        ExtensionRepositoryUrlFunction, ExtensionRepositoryUrlBind, nullptr, nullptr,
+	                        LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 	// a name that is not a host, a host that cannot be reached or a file that is not what it should be are all errors
 	// of the call, raised while it runs
 	function.SetFallible();

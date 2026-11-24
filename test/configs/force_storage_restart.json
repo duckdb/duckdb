@@ -204,7 +204,8 @@
     {
       "reason": "A temporary secret must still be there at the next statement, which a restart in between prevents.",
       "paths": [
-        "test/sql/extensions/extension_repository_from_host_httpfs.test"
+        "test/sql/extensions/extension_repository_from_host_httpfs.test",
+        "test/sql/extensions/extension_repository_url_httpfs.test"
       ]
     }
   ]
