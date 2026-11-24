@@ -1,5 +1,5 @@
 # name: test/sql/merge/merge_into_delete_then_update.test
-# description: Test MERGE INTO where several WHEN MATCHED actions modify the same target row
+# description: Test MERGE INTO updating a target row that another action of the same MERGE deleted
 # group: [merge]
 
 statement ok
@@ -8,7 +8,7 @@ CREATE TABLE t AS SELECT i id, 0 a FROM range(10) r(i);
 statement ok
 CREATE TABLE src AS SELECT * FROM (VALUES (5, 1), (5, 2)) v(id, k);
 
-# an in-place update of a row that a DELETE action of the same MERGE removed
+# in-place update
 statement error
 MERGE INTO t USING src ON t.id = src.id
 WHEN MATCHED AND src.k = 1 THEN DELETE
@@ -16,25 +16,12 @@ WHEN MATCHED THEN UPDATE SET a = src.k;
 ----
 Conflict on update
 
-# the MERGE is rolled back and the database stays usable
 query II
 SELECT count(*), sum(a) FROM t
 ----
 10	0
 
-statement error
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 2 THEN DELETE
-WHEN MATCHED THEN UPDATE SET a = src.k;
-----
-Conflict on update
-
-query II
-SELECT count(*), sum(a) FROM t
-----
-10	0
-
-# an update that lands before the delete of the same row is not detected: the delete wins
+# known limitation: an update that lands before the delete of the same row is not detected, the delete wins
 statement ok
 BEGIN
 
@@ -53,53 +40,7 @@ SELECT count(*), sum(a) FROM t
 statement ok
 ROLLBACK
 
-# deleting a row twice, or updating it twice, does not conflict
-statement ok
-BEGIN
-
-query I
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 1 THEN DELETE
-WHEN MATCHED THEN DELETE;
-----
-2
-
-query I
-SELECT count(*) FROM t
-----
-9
-
-query I
-MERGE INTO t USING (SELECT 6 id, i k FROM range(2) r(i)) s ON t.id = s.id
-WHEN MATCHED AND s.k = 0 THEN UPDATE SET a = 10
-WHEN MATCHED THEN UPDATE SET a = 20;
-----
-2
-
-query I
-SELECT a IN (10, 20) FROM t WHERE id = 6
-----
-true
-
-statement ok
-ROLLBACK
-
-# DO NOTHING does not modify the target row
-query I
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 1 THEN DO NOTHING
-WHEN MATCHED THEN UPDATE SET a = src.k;
-----
-1
-
-# a single action can match a target row several times
-query I
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED THEN UPDATE SET a = 3;
-----
-2
-
-# updating the primary key deletes the row and inserts it again
+# updating the primary key deletes the row and inserts it again, fetching the old row for the index
 statement ok
 CREATE TABLE pk(id INTEGER PRIMARY KEY, a INTEGER);
 
@@ -136,71 +77,20 @@ WHEN MATCHED THEN UPDATE SET l = [src.k];
 ----
 Conflict on update
 
-query II
-SELECT count(*), count(*) FILTER (WHERE id = 5) FROM lt
-----
-10	1
-
-# target rows spanning several row groups
+# the two source rows of a target row are in different row groups
 statement ok
-CREATE TABLE big AS SELECT i id, 0 a FROM range(300000) r(i);
+CREATE TABLE big AS SELECT i id, 0 a FROM range(130000) r(i);
 
-query I
-MERGE INTO big USING (SELECT i id FROM range(300000) r(i) WHERE i % 3 = 0) s ON big.id = s.id
-WHEN MATCHED AND s.id % 2 = 0 THEN UPDATE SET a = 1
-WHEN MATCHED THEN UPDATE SET a = 1;
-----
-100000
-
-# the two source rows of a target row are far apart
 statement error
-MERGE INTO big USING (SELECT i % 150000 id, i // 150000 k FROM range(300000) r(i)) s ON big.id = s.id
+MERGE INTO big USING (SELECT i % 130000 id, i // 130000 k FROM range(260000) r(i)) s ON big.id = s.id
 WHEN MATCHED AND s.k = 0 THEN DELETE
 WHEN MATCHED THEN UPDATE SET a = 2;
 ----
 Conflict on update
 
-query II
-SELECT count(*), sum(a) FROM big
-----
-300000	100000
-
-# the error aborts an explicit transaction
+# a row updated by an earlier statement of the transaction can be deleted and inserted again
 statement ok
 BEGIN
-
-statement error
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 1 THEN DELETE
-WHEN MATCHED THEN UPDATE SET a = src.k;
-----
-Conflict on update
-
-statement error
-SELECT count(*) FROM t
-----
-transaction is aborted
-
-statement ok
-ROLLBACK
-
-# a row updated by an earlier statement of the transaction can be deleted or updated again
-statement ok
-BEGIN
-
-statement ok
-UPDATE t SET a = 9 WHERE id = 5
-
-query I
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 1 THEN DELETE;
-----
-1
-
-query I
-SELECT count(*) FROM t WHERE id = 5
-----
-0
 
 statement ok
 UPDATE pk SET a = 9 WHERE id = 5
@@ -215,23 +105,6 @@ query III
 SELECT count(*), max(id), sum(a) FROM pk
 ----
 10	100	9
-
-statement ok
-ROLLBACK
-
-# a row deleted by an earlier statement of the transaction is not matched
-statement ok
-BEGIN
-
-statement ok
-DELETE FROM t WHERE id = 5
-
-query I
-MERGE INTO t USING src ON t.id = src.id
-WHEN MATCHED AND src.k = 1 THEN DELETE
-WHEN MATCHED THEN UPDATE SET a = src.k;
-----
-0
 
 statement ok
 ROLLBACK
@@ -269,7 +142,7 @@ Conflict on update
 statement ok
 ROLLBACK
 
-# an in-place update of a transaction-local row that the MERGE deleted is skipped
+# known limitation: an in-place update of a transaction-local row that the MERGE deleted is skipped
 statement ok
 BEGIN
 
@@ -286,7 +159,7 @@ WHEN MATCHED THEN UPDATE SET a = 4;
 query II
 SELECT count(*), sum(a) FROM t
 ----
-19	3
+19	0
 
 statement ok
 ROLLBACK

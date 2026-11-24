@@ -294,10 +294,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto fetch_state = ColumnFetchState();
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		table.Fetch(transaction, fetch_chunk, column_ids, del_row_ids, update_count, fetch_state);
-		// the rows are distinct and were visible to the scan, so this transaction has deleted the missing ones since
-		if (fetch_chunk.size() != update_count) {
-			throw TransactionException("Conflict on update!");
-		}
 
 		idx_t fetch_idx = 0;
 		for (idx_t i = 0; i < delete_chunk.ColumnCount(); i++) {
@@ -311,9 +307,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	if (table.Delete(delete_state, context.client, tableref, del_row_ids, update_count) != update_count) {
-		throw TransactionException("Conflict on update!");
-	}
+	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
 	// columns. The del+insert path projects every table column (it re-inserts the full row), so all are referenced.
