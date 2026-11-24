@@ -100,7 +100,10 @@ void Leaf::TransformToNested(ART &art, NodePtr &node_ptr) {
 		current_ptr = leaf.next_leaf_ptr;
 	}
 
-	root_ptr.SetGateStatus(GateStatus::GATE_SET);
+	// v1.1 could write deprecated leaves with a single row ID, which become an inlined leaf without a gate.
+	if (root_ptr.GetType() != NType::LEAF_INLINED) {
+		root_ptr.SetGateStatus(GateStatus::GATE_SET);
+	}
 	DeprecatedFree(art, node_ptr);
 	node_ptr = root_ptr;
 }
