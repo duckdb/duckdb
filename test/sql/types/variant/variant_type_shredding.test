@@ -8,13 +8,9 @@ statement ok
 SET variant_minimum_shredding_size = 0;
 
 statement ok
-CREATE TABLE t(v VARIANT);
-
-statement ok
-INSERT INTO t SELECT make_type('INTEGER')::VARIANT FROM range(3000);
-
-statement ok
-INSERT INTO t VALUES (NULL), (42);
+CREATE TABLE t AS
+SELECT CASE WHEN i = 0 THEN NULL WHEN i = 1 THEN 42::VARIANT ELSE make_type('INTEGER')::VARIANT END v
+FROM range(3002) t(i);
 
 statement ok
 CHECKPOINT;
