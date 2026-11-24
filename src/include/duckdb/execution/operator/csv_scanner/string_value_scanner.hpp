@@ -520,12 +520,13 @@ private:
 	void SetStart();
 	//! How the bytes before the start read on, false when that is not known
 	bool BytesBeforeStart(CSVBufferEnd &before_start) const;
-	//! From a given initial state, it skips until we reach the until_state
-	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
-	                    bool &quoted) const;
+	//! From a given initial state, it skips until we reach the until_state, through a broken row when the initial
+	//! state is exact
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator, bool &quoted,
+	                    bool exact = false) const;
 	//! If the current row we found is valid
 	bool IsRowValid(CSVIterator &current_iterator) const;
-	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos, bool exact = false) const;
 	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;

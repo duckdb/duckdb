@@ -374,6 +374,26 @@ parallel = false)
 ----
 3	1
 
+# a range starting right behind a closing quote on the data that breaks the row, the rows behind it are read
+statement ok
+COPY (SELECT encode(repeat('p', 12) || chr(10) || '"a"x\"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_unquoted_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_unquoted_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_unquoted_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true,
+parallel = false)
+----
+3	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

@@ -2125,7 +2125,7 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 }
 
 bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
-                                        bool &quoted) const {
+                                        bool &quoted, bool exact) const {
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
 	bool first_column = true;
@@ -2168,7 +2168,8 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 		if (current_state.IsState(until_state)) {
 			return true;
 		}
-		if (current_state.IsState(CSVState::INVALID)) {
+		if (current_state.IsState(CSVState::INVALID) && !exact) {
+			// from an exact state the row itself is broken, the scanner before reads on to its end as well
 			return false;
 		}
 	}
@@ -2233,12 +2234,12 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 	return true;
 }
 
-ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const {
+ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos, bool exact) const {
 	auto current_iterator = iterator;
 	current_iterator.SetStart(start_pos);
 	current_iterator.SetEnd(end_pos);
 	bool quoted = false;
-	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR, current_iterator, quoted)) {
+	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR, current_iterator, quoted, exact)) {
 		auto iterator_start = current_iterator;
 		idx_t current_pos = current_iterator.pos.buffer_pos;
 		current_iterator.SetEnd(iterator.GetEndPos());
@@ -2359,7 +2360,7 @@ void StringValueScanner::SetStart() {
 	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
-	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos());
+	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos(), exact_start);
 	// 2. We are in the middle of a quoted value, a search from an exact state needs no guess
 	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' && !exact_start) {
 		idx_t end_pos = iterator.GetEndPos();
@@ -2398,7 +2399,7 @@ void StringValueScanner::SetStart() {
 			iterator.done = true;
 		} else {
 			bool mock;
-			if (!SkipUntilState(unquoted_start, CSVState::RECORD_SEPARATOR, iterator, mock)) {
+			if (!SkipUntilState(unquoted_start, CSVState::RECORD_SEPARATOR, iterator, mock, exact_start)) {
 				iterator.CheckIfDone();
 			}
 		}
