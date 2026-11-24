@@ -77,6 +77,30 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
+void PipelineExecutor::FlushProfile() {
+	if (profile_flushed) {
+		return;
+	}
+	profile_flushed = true;
+	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
+	if (!source_profiling_finalized && local_source_state && global_source_state) {
+		source_profiling_finalized = true;
+		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
+	}
+	// flush all query profiler info
+	for (idx_t i = 0; i < intermediate_states.size(); i++) {
+		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
+	}
+	pipeline.executor.Flush(thread);
+}
+
+void PipelineExecutor::FlushUnfinishedProfile() {
+	if (finalized) {
+		return;
+	}
+	FlushProfile();
+}
+
 void PipelineExecutor::Reset() {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
@@ -92,6 +116,7 @@ void PipelineExecutor::Reset() {
 	external_batch_initialized = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
+	profile_flushed = false;
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
 	should_flush_current_idx = true;
 	unsampled_progress_rows = 0;
@@ -716,16 +741,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 		progress_verifier->OnEarlyExit(pipeline);
 	}
 
-	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
-	if (!source_profiling_finalized && local_source_state && global_source_state) {
-		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
-	}
-
-	// flush all query profiler info
-	for (idx_t i = 0; i < intermediate_states.size(); i++) {
-		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
-	}
-	pipeline.executor.Flush(thread);
+	FlushProfile();
 
 	return PipelineExecuteResult::FINISHED;
 }
