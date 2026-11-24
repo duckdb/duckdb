@@ -57,4 +57,64 @@ query I nosort cfold6
 EXPLAIN SELECT 7
 ----
 
+# casts of constants are folded
+query II
+EXPLAIN SELECT '2020-01-01'::DATE
+----
+logical_opt	<!REGEX>:.*CAST\(.*
+
+query I
+SELECT '2020-01-01'::DATE
+----
+2020-01-01
+
+# a failing TRY_CAST folds to NULL
+query II
+EXPLAIN SELECT TRY_CAST('abc' AS INTEGER)
+----
+logical_opt	<!REGEX>:.*CAST\(.*
+
+query I
+SELECT TRY_CAST('abc' AS INTEGER)
+----
+NULL
+
+# casts of NULL to a UNION run the cast instead of short-circuiting the NULL
+query II
+EXPLAIN SELECT NULL::UNION(a INTEGER, b VARCHAR)
+----
+logical_opt	<!REGEX>:.*CAST\(.*
+
+query IIII
+SELECT u IS NULL, typeof(u), union_tag(u), u FROM (SELECT NULL::UNION(a INTEGER, b VARCHAR) AS u)
+----
+true	UNION(a INTEGER, b VARCHAR)	NULL	NULL
+
+# casts with a local state are folded as well
+query II
+EXPLAIN SELECT [1, 2]::VARCHAR[]
+----
+logical_opt	<!REGEX>:.*CAST\(.*
+
+query I
+SELECT [1, 2]::VARCHAR[]
+----
+[1, 2]
+
+# a failing cast is left in the plan, and only throws if it is evaluated
+query II
+EXPLAIN SELECT 'abc'::INTEGER
+----
+logical_opt	<REGEX>:.*CAST\(.*
+
+statement error
+SELECT 'abc'::INTEGER
+----
+<REGEX>:Conversion Error:.*Could not convert string 'abc' to INT32.*
+
+query I
+SELECT CASE WHEN false THEN 'abc'::INTEGER END
+----
+NULL
+
 

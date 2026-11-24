@@ -33,7 +33,7 @@ static unique_ptr<Expression> FoldConstantCast(const BoundFunctionExpression &ca
 		return make_uniq<BoundConstantExpression>(Value(target_type));
 	}
 	Vector source(input, count_t(1));
-	Vector result(target_type, count_t(1));
+	Vector result(target_type, 1);
 	try {
 		BoundCastExpression::ExecuteCast(cast_expr, source, result, 1, nullptr);
 	} catch (InternalException &ex) {
