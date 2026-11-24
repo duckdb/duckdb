@@ -1,0 +1,86 @@
+diff --git a/src/catalog/rest/storage/authorization/oauth2.cpp b/src/catalog/rest/storage/authorization/oauth2.cpp
+index 55bb01871..4f83a2f3b 100644
+--- a/src/catalog/rest/storage/authorization/oauth2.cpp
++++ b/src/catalog/rest/storage/authorization/oauth2.cpp
+@@ -504,7 +504,7 @@ unique_ptr<HTTPResponse> OAuth2Authorization::Request(RequestType request_type,
+ 		headers.Insert(entry.first, entry.second);
+ 	}
+ 	if (!bearer_token.empty()) {
+-		headers["Authorization"] = StringUtil::Format("Bearer %s", bearer_token);
++		headers.Set("Authorization", StringUtil::Format("Bearer %s", bearer_token));
+ 	}
+ 
+ 	auto response = APIUtils::Request(request_type, context, endpoint_builder, headers, data);
+@@ -524,7 +524,7 @@ unique_ptr<HTTPResponse> OAuth2Authorization::Request(RequestType request_type,
+ 		}
+ 		// Lock released before retry -- avoid serializing catalog requests
+ 		if (should_retry) {
+-			headers["Authorization"] = StringUtil::Format("Bearer %s", bearer_token);
++			headers.Set("Authorization", StringUtil::Format("Bearer %s", bearer_token));
+ 			response = APIUtils::Request(request_type, context, endpoint_builder, headers, data);
+ 		}
+ 	}
+diff --git a/src/catalog/rest/storage/aws.cpp b/src/catalog/rest/storage/aws.cpp
+index 07c0e4ad4..d057d5db1 100644
+--- a/src/catalog/rest/storage/aws.cpp
++++ b/src/catalog/rest/storage/aws.cpp
+@@ -161,7 +161,7 @@ unique_ptr<HTTPResponse> AWSInput::Request(RequestType request_type, ClientConte
+ 
+ 	HTTPHeaders res(db);
+ 
+-	res["host"] = authority;
++	res.Set("host", authority);
+ 	// If access key is not set, we don't set the headers at all to allow accessing public files through s3 urls
+ 
+ 	string payload_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; // Empty payload hash
+@@ -177,24 +177,21 @@ unique_ptr<HTTPResponse> AWSInput::Request(RequestType request_type, ClientConte
+ 	string date_now = StrfTimeFormat::Format(timestamp, "%Y%m%d");
+ 	string datetime_now = StrfTimeFormat::Format(timestamp, "%Y%m%dT%H%M%SZ");
+ 
+-	res["x-amz-date"] = datetime_now;
+-	res["x-amz-content-sha256"] = payload_hash;
++	res.Set("x-amz-date", datetime_now);
++	res.Set("x-amz-content-sha256", payload_hash);
+ 	if (session_token.length() > 0) {
+-		res["x-amz-security-token"] = session_token;
++		res.Set("x-amz-security-token", session_token);
+ 	}
+ 	string content_type;
+ 	if (headers.HasHeader("Content-Type")) {
+ 		content_type = headers.GetHeaderValue("Content-Type");
+ 	}
+-	if (!content_type.empty()) {
+-		res["Content-Type"] = content_type;
+-	}
+ 	string signed_headers = "";
+ 	hash_bytes canonical_request_hash;
+ 	hash_str canonical_request_hash_str;
+ 	if (content_type.length() > 0) {
+ 		signed_headers += "content-type;";
+-		res["Content-Type"] = content_type;
++		res.Set("Content-Type", content_type);
+ 	}
+ 	signed_headers += "host;x-amz-content-sha256;x-amz-date";
+ 	if (session_token.length() > 0) {
+@@ -206,7 +203,7 @@ unique_ptr<HTTPResponse> AWSInput::Request(RequestType request_type, ClientConte
+ 	}
+ 	if (!access_delegation.empty()) {
+ 		signed_headers += ";x-iceberg-access-delegation";
+-		res["X-Iceberg-Access-Delegation"] = access_delegation;
++		res.Set("X-Iceberg-Access-Delegation", access_delegation);
+ 	}
+ 
+ 	string url_encoded_path = CanonicalPath();
+@@ -255,9 +252,9 @@ unique_ptr<HTTPResponse> AWSInput::Request(RequestType request_type, ClientConte
+ 	hmac256(string_to_sign, signing_key, signature);
+ 	hex256(signature, signature_str);
+ 
+-	res["Authorization"] = "AWS4-HMAC-SHA256 Credential=" + key_id + "/" + date_now + "/" + region + "/" + service +
+-	                       "/aws4_request, SignedHeaders=" + signed_headers +
+-	                       ", Signature=" + string((char *)signature_str, sizeof(hash_str));
++	res.Set("Authorization", "AWS4-HMAC-SHA256 Credential=" + key_id + "/" + date_now + "/" + region + "/" + service +
++	                             "/aws4_request, SignedHeaders=" + signed_headers +
++	                             ", Signature=" + string((char *)signature_str, sizeof(hash_str)));
+ 
+ 	string request_url = URL();
+ 	auto session = db.config.GetHTTPTransportManager().CreateSession(context, request_url);
