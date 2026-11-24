@@ -27,11 +27,15 @@ statement ok
 INSERT INTO s SELECT i, 'v' || i, {threadid} FROM range(250000) t(i)
 
 # scans of the table run while the other connections write their row groups
+loop k 0 10
+
 statement ok
 SELECT count(*), max(b) FROM s
 
 statement ok
 SELECT * FROM s WHERE a = 77 LIMIT 3
+
+endloop
 
 query I
 SELECT count(*) >= 250000 * ({r} + 1) FROM s WHERE thread = {threadid}
