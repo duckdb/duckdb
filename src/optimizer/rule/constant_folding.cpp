@@ -42,7 +42,9 @@ static unique_ptr<Expression> FoldConstantCast(const BoundFunctionExpression &ca
 		// leave the cast in the plan, so that it throws if it is evaluated
 		return nullptr;
 	}
-	return make_uniq<BoundConstantExpression>(result.GetValue(0).WithType(target_type));
+	auto result_value = result.GetValue(0);
+	D_ASSERT(result_value.type().InternalType() == target_type.InternalType());
+	return make_uniq<BoundConstantExpression>(result_value.WithType(target_type));
 }
 
 unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
