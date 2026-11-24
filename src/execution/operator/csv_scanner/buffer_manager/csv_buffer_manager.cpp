@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_sequential_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_random_access_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
@@ -49,42 +50,124 @@ idx_t CSVBufferManager::KnownBufferSize(const idx_t buffer_idx) const {
 	return MinValue<idx_t>(buffer_size, file_size - buffer_start);
 }
 
-void CSVBufferManager::RememberTail(idx_t buffer_idx, CSVBufferHandle &handle) {
-	if (buffer_idx >= buffer_tails.size()) {
-		buffer_tails.resize(buffer_idx + 1);
+void CSVBufferManager::ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine, idx_t max_line_size) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (buffer_end_state_machine &&
+	    !(buffer_end_state_machine->state_machine_options == state_machine->state_machine_options)) {
+		// the ends read with another dialect are read again
+		buffer_ends.clear();
 	}
-	if (buffer_tails[buffer_idx].empty() && handle.actual_size > 0) {
-		// the two runs of bytes the buffer ends in are kept whole, so that escapes before a line break keep their count
-		const char *bytes = handle.Ptr();
-		idx_t tail = 0;
-		for (idx_t runs = 0; runs < 2 && tail < handle.actual_size && tail < TAIL_CAP; runs++) {
-			const char byte = bytes[handle.actual_size - 1 - tail];
-			while (tail < handle.actual_size && tail < TAIL_CAP && bytes[handle.actual_size - 1 - tail] == byte) {
-				tail++;
-			}
-		}
-		tail = MinValue<idx_t>(tail + TAIL_BYTES, handle.actual_size);
-		buffer_tails[buffer_idx] = string(bytes + handle.actual_size - tail, tail);
-	}
+	buffer_end_state_machine = std::move(state_machine);
+	buffer_end_max_line_size = max_line_size;
 }
 
-bool CSVBufferManager::ByteBeforeBufferEnd(idx_t buffer_idx, idx_t distance, char &byte) {
+void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle &handle) {
+	shared_ptr<CSVStateMachine> state_machine;
+	idx_t max_line_size;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (!buffer_end_state_machine ||
+		    (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].escape != CSVBufferEndEscape::NOT_READ)) {
+			return;
+		}
+		state_machine = buffer_end_state_machine;
+		max_line_size = buffer_end_max_line_size;
+	}
+	const auto buffer_end =
+	    ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine, max_line_size);
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (buffer_idx >= buffer_ends.size()) {
+		buffer_ends.resize(buffer_idx + 1);
+	}
+	buffer_ends[buffer_idx] = buffer_end;
+}
+
+bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) {
 	for (idx_t attempt = 0; attempt < 2; attempt++) {
 		{
 			lock_guard<mutex> parallel_lock(main_mutex);
-			if (buffer_idx < buffer_tails.size() && !buffer_tails[buffer_idx].empty()) {
-				const auto &tail = buffer_tails[buffer_idx];
-				if (tail.size() < distance) {
-					return false;
-				}
-				byte = tail[tail.size() - distance];
+			if (!buffer_end_state_machine) {
+				return false;
+			}
+			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].escape != CSVBufferEndEscape::NOT_READ) {
+				buffer_end = buffer_ends[buffer_idx];
 				return true;
 			}
 		}
-		// the buffer was not handed out yet, its tail is kept once it is
+		// the buffer was not handed out yet, its end is read once it is
 		GetBuffer(buffer_idx);
 	}
 	return false;
+}
+
+CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size, const bool file_start,
+                                             const CSVStateMachine &state_machine, const idx_t max_line_size) {
+	CSVBufferEnd result;
+	result.escape = CSVBufferEndEscape::NONE;
+	if (size == 0) {
+		return result;
+	}
+	result.last_byte = bytes[size - 1];
+	const auto &options = state_machine.state_machine_options;
+	const char escape = options.escape.GetValue();
+	if (!options.UnquotedEscapes() || escape == '\0' || escape == options.quote.GetValue()) {
+		return result;
+	}
+	// the escapes that matter end the bytes or precede their carriage return
+	const idx_t run_end = result.last_byte == '\r' ? size - 1 : size;
+	if (run_end == 0 || bytes[run_end - 1] != escape) {
+		return result;
+	}
+	// the line of those escapes is read from a line break that an even run of escapes precedes, which surely ends a
+	// line, a line break behind an odd run only does inside a comment, and reading on from the sure one settles that
+	const auto &transitions = state_machine.transition_array;
+	const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
+	auto ends_line = [&](const char byte) {
+		if (byte != '\n' && byte != '\r') {
+			return false;
+		}
+		const auto next = transitions[static_cast<uint8_t>(byte)][standard];
+		return next == CSVState::RECORD_SEPARATOR || next == CSVState::CARRIAGE_RETURN;
+	};
+	idx_t pos = run_end;
+	idx_t line_bytes = 0;
+	bool line_break_found = false;
+	while (pos > 0) {
+		pos--;
+		if (!ends_line(bytes[pos])) {
+			if (++line_bytes > max_line_size) {
+				result.escape = CSVBufferEndEscape::UNKNOWN;
+				return result;
+			}
+			continue;
+		}
+		line_bytes = 0;
+		idx_t escapes = 0;
+		while (escapes < pos && bytes[pos - 1 - escapes] == escape) {
+			escapes++;
+		}
+		if (escapes % 2 == 0 && (escapes < pos || file_start)) {
+			line_break_found = true;
+			break;
+		}
+		// the escapes before this line break are read as part of its line
+		pos -= escapes;
+	}
+	if (!line_break_found && !file_start) {
+		result.escape = CSVBufferEndEscape::UNKNOWN;
+		return result;
+	}
+	CSVStates states;
+	states.Initialize(line_break_found ? CSVState::STANDARD : CSVState::NOT_SET);
+	for (idx_t i = pos; i < size; i++) {
+		state_machine.Transition(states, bytes[i]);
+	}
+	if (states.IsState(CSVState::UNQUOTED_ESCAPE)) {
+		result.escape = CSVBufferEndEscape::ESCAPED;
+	} else if (states.IsState(CSVState::ESCAPED_RETURN)) {
+		result.escape = CSVBufferEndEscape::ESCAPED_RETURN;
+	}
+	return result;
 }
 
 idx_t CSVBufferManager::GetBufferSize() const {

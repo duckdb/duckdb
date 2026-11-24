@@ -2253,6 +2253,18 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 	        quoted};
 }
 
+bool StringValueScanner::BytesBeforeStart(CSVBufferEnd &before_start) const {
+	if (iterator.pos.buffer_pos > 0) {
+		before_start =
+		    CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, iterator.pos.buffer_pos, iterator.pos.buffer_idx == 0,
+		                                    *state_machine, state_machine->options.maximum_line_size.GetValue());
+	} else if (iterator.pos.buffer_idx == 0 ||
+	           !buffer_manager->GetBufferEnd(iterator.pos.buffer_idx - 1, before_start)) {
+		return false;
+	}
+	return before_start.escape != CSVBufferEndEscape::UNKNOWN;
+}
+
 void StringValueScanner::SetStart() {
 	start_pos = iterator.GetGlobalCurrentPos();
 	if (iterator.first_one) {
@@ -2280,48 +2292,29 @@ void StringValueScanner::SetStart() {
 	}
 	const auto &transitions = state_machine_strict->transition_array;
 	auto unquoted_start = CSVState::STANDARD_NEWLINE;
-	if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+	CSVBufferEnd before_start;
+	if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size && BytesBeforeStart(before_start)) {
 		// the escapes and the carriage return right before the start decide how its first byte reads, at a buffer
 		// start they ended the previous buffer
-		// the byte distance bytes before the start as a value, or unknown beyond the known bytes
-		constexpr int unknown = -1;
-		auto byte_before = [&](const idx_t distance) -> int {
-			if (iterator.pos.buffer_pos >= distance) {
-				return static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos - distance]);
-			}
-			char byte;
-			if (iterator.pos.buffer_idx == 0 ||
-			    !buffer_manager->ByteBeforeBufferEnd(iterator.pos.buffer_idx - 1, distance - iterator.pos.buffer_pos,
-			                                         byte)) {
-				return unknown;
-			}
-			return static_cast<uint8_t>(byte);
-		};
-		const auto &sm_options = state_machine_strict->state_machine_options;
-		const auto escape = sm_options.escape.GetValue();
-		const bool unquoted_escapes =
-		    sm_options.UnquotedEscapes() && escape != '\0' && escape != sm_options.quote.GetValue();
 		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
 		const auto unquoted_escape = static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE);
 		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
-		const bool after_carriage_return = leading_line_feed && byte_before(1) == static_cast<uint8_t>('\r');
-		// the escapes before the start or before its carriage return, an odd number escapes the byte behind them
-		const idx_t first = after_carriage_return ? 2 : 1;
-		idx_t escapes = 0;
-		while (unquoted_escapes && byte_before(first + escapes) == static_cast<uint8_t>(escape)) {
-			escapes++;
-		}
-		if (unquoted_escapes && byte_before(first + escapes) == unknown) {
-			// an escape run reaching beyond the known bytes counts as even
-			escapes = 0;
-		}
+		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
 		// the state those bytes leave an unquoted value in
 		CSVState before;
-		if (escapes % 2 == 1) {
-			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][unquoted_escape]
-			                               : CSVState::UNQUOTED_ESCAPE;
-		} else {
+		switch (before_start.escape) {
+		case CSVBufferEndEscape::ESCAPED:
+			before = CSVState::UNQUOTED_ESCAPE;
+			break;
+		case CSVBufferEndEscape::ESCAPED_RETURN:
+			// the state of the scanner before this one, whose rules read the line feed as data
+			before = after_carriage_return
+			             ? state_machine->transition_array[static_cast<uint8_t>('\r')][unquoted_escape]
+			             : CSVState::STANDARD;
+			break;
+		default:
 			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+			break;
 		}
 		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
 		switch (before) {

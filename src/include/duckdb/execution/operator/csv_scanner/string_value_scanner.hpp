@@ -518,6 +518,8 @@ private:
 	//! -------- Functions used to figure out where lines start ---------!//
 	//! Main function, sets the correct start
 	void SetStart();
+	//! How the bytes before the start read on, false when that is not known
+	bool BytesBeforeStart(CSVBufferEnd &before_start) const;
 	//! From a given initial state, it skips until we reach the until_state
 	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
 	                    bool &quoted) const;

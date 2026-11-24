@@ -23,6 +23,22 @@ enum class CSVBufferResidency : uint8_t {
 	END_OF_FILE //! The buffer position lies past the end of the file
 };
 
+//! How the escapes ending a buffer read on into the next one
+enum class CSVBufferEndEscape : uint8_t {
+	NOT_READ,       //! The buffer end was not read yet
+	NONE,           //! The next byte reads on its own, also behind escapes inside a comment
+	ESCAPED,        //! An unquoted escape ends the buffer and escapes the next byte
+	ESCAPED_RETURN, //! An escaped carriage return ends the buffer, a line feed behind it continues the value
+	UNKNOWN         //! The line of the trailing escapes starts before the buffer or exceeds the maximum line size
+};
+
+//! What a scanner starting behind a buffer end needs to know about the bytes before it
+struct CSVBufferEnd {
+	//! The last byte, 0 when there are no bytes
+	char last_byte = '\0';
+	CSVBufferEndEscape escape = CSVBufferEndEscape::NOT_READ;
+};
+
 //! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
 //! When parsing, buffer are not cached and just returned.
 //! A CSV Buffer Manager is created for each separate CSV File.
@@ -63,9 +79,13 @@ public:
 	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
 	idx_t BufferCount() const;
-	//! A byte at the end of a buffer, distance 1 being its last byte, so that the scanner starting at the next buffer
-	//! can read its first bytes in context. False beyond the bytes kept
-	bool ByteBeforeBufferEnd(idx_t buffer_idx, idx_t distance, char &byte);
+	//! Reads how every buffer handed out from now on ends, for the scanners that start behind a buffer end
+	void ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine, idx_t max_line_size);
+	//! The end of a buffer as read when it was handed out, false while buffer ends are not read
+	bool GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end);
+	//! How the bytes before size read on, file_start when the bytes start the file
+	static CSVBufferEnd ScanBufferEnd(const char *bytes, idx_t size, bool file_start,
+	                                  const CSVStateMachine &state_machine, idx_t max_line_size);
 
 	string GetFilePath() const;
 
@@ -78,14 +98,15 @@ public:
 protected:
 	//! The file this Buffer Manager refers to
 	const OpenFileInfo file;
-	//! Keeps the last bytes of a buffer when it is handed out
-	void RememberTail(idx_t buffer_idx, CSVBufferHandle &handle);
+	//! Reads the end of a buffer when it is handed out, without holding the mutex
+	void RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle &handle);
 	//! The cached buffers
 	vector<shared_ptr<CSVBuffer>> cached_buffers;
-	//! The last bytes of every buffer handed out, which outlive the buffers themselves
-	vector<string> buffer_tails;
-	static constexpr idx_t TAIL_BYTES = 8;
-	static constexpr idx_t TAIL_CAP = 4096;
+	//! The ends of the buffers handed out, which outlive the buffers themselves
+	vector<CSVBufferEnd> buffer_ends;
+	//! The state machine the buffer ends are read with, unset while they are not read
+	shared_ptr<CSVStateMachine> buffer_end_state_machine;
+	idx_t buffer_end_max_line_size = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
 	idx_t buffer_size;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.
