@@ -198,8 +198,8 @@ public:
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	ReplacementScanList replacement_scans;
 
-	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
-	//! RamFS or something similar). Never null: defaults to a VirtualFileSystem.
+	//! The root of the file systems. Never null. Custom file systems are registered on it as sub-systems, or passed as
+	//! its default file system.
 	unique_ptr<VirtualFileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;

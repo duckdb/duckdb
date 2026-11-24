@@ -23,35 +23,36 @@ class ClientContext;
 //! compression. It is not a FileSystem itself: the files it opens belong to the file system that handled them.
 class VirtualFileSystem {
 public:
-	VirtualFileSystem();
-	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
-	~VirtualFileSystem();
+	DUCKDB_API VirtualFileSystem();
+	DUCKDB_API explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
+	DUCKDB_API ~VirtualFileSystem();
 
 	//! The root file system of a database
 	DUCKDB_API static VirtualFileSystem &Get(DatabaseInstance &db);
 	DUCKDB_API static VirtualFileSystem &Get(ClientContext &context);
 
 	//! Opens a file with the file system that handles the path, and applies compression and pipes on top of it
-	unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, FileOpenFlags flags, optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+	                                           optional_ptr<FileOpener> opener);
 	//! The file system that handles a path: a registered sub-system, or the default file system. Throws if it is
 	//! disabled. Loads the extension that provides the file system if there is one.
-	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> opener);
+	DUCKDB_API FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> opener);
 
-	void RegisterSubSystem(unique_ptr<FileSystem> fs);
-	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
-	void UnregisterSubSystem(const string &name);
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name);
-	vector<string> ListSubSystems();
+	DUCKDB_API void RegisterSubSystem(unique_ptr<FileSystem> fs);
+	DUCKDB_API void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
+	DUCKDB_API void UnregisterSubSystem(const string &name);
+	DUCKDB_API unique_ptr<FileSystem> ExtractSubSystem(const string &name);
+	DUCKDB_API vector<string> ListSubSystems();
 
-	void SetDisabledFileSystems(const vector<string> &names);
-	vector<string> GetDisabledFileSystems();
-	bool SubSystemIsDisabled(const string &name);
-	bool IsDisabledForPath(const string &path);
+	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names);
+	DUCKDB_API vector<string> GetDisabledFileSystems();
+	DUCKDB_API bool SubSystemIsDisabled(const string &name);
+	DUCKDB_API bool IsDisabledForPath(const string &path);
 
 	//! The file system of paths no sub-system handles. Does not check whether it is disabled.
-	FileSystem &GetDefaultFileSystem();
+	DUCKDB_API FileSystem &GetDefaultFileSystem();
 
-	std::string GetName() const;
+	DUCKDB_API std::string GetName() const;
 
 private:
 	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
