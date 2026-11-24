@@ -261,6 +261,7 @@ struct ProviderStats {
 	DUCKDB_V2_CRYPTO_MODE last_mode = DUCKDB_V2_CRYPTO_MODE_ENCRYPT;
 	DUCKDB_V2_CRYPTO_CIPHER last_cipher = DUCKDB_V2_CRYPTO_CIPHER_AES_GCM;
 	idx_t last_aad_length = 0;
+	std::vector<idx_t> iv_lengths;
 	bool fail_init = false;
 	bool *destroyed = nullptr;
 };
@@ -291,10 +292,11 @@ void XorCreate(void *user_data, DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO
 	*stream = xor_stream;
 }
 
-void XorInit(void *user_data, void *stream, const uint8_t *iv, idx_t, const uint8_t *, idx_t aad_length,
+void XorInit(void *user_data, void *stream, const uint8_t *iv, idx_t iv_length, const uint8_t *, idx_t aad_length,
              duckdb_v2_error_info_handle *err) {
 	auto &stats = *static_cast<ProviderStats *>(user_data);
 	stats.last_aad_length = aad_length;
+	stats.iv_lengths.push_back(iv_length);
 	if (stats.fail_init) {
 		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
 		return;
@@ -352,7 +354,7 @@ void FixedRandom(void *user_data, uint8_t *out, idx_t length, duckdb_v2_error_in
 }
 
 duckdb_v2_crypto_provider_handle MakeProvider(duckdb_v2_factory_handle factory, ProviderStats *stats,
-                                              bool with_aes = true) {
+                                              bool with_aes = true, bool with_random = true) {
 	duckdb_v2_crypto_provider_handle provider = nullptr;
 	REQUIRE(duckdb_v2_crypto_provider_create(factory, &provider, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_opaque data = {stats, DestroyStats, nullptr};
@@ -374,7 +376,9 @@ duckdb_v2_crypto_provider_handle MakeProvider(duckdb_v2_factory_handle factory, 
 	DUCKDB_V2_CRYPTO_HASH_FUNCTION hmacs[] = {DUCKDB_V2_CRYPTO_HASH_SHA1};
 	REQUIRE(duckdb_v2_crypto_provider_set_hmac_callback(provider, FixedHmac, hmacs, 1, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_provider_set_random_callback(provider, FixedRandom, nullptr) == DUCKDB_V2_ERROR_NONE);
+	if (with_random) {
+		REQUIRE(duckdb_v2_crypto_provider_set_random_callback(provider, FixedRandom, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
 	return provider;
 }
 
@@ -472,15 +476,68 @@ TEST_CASE("V2 crypto provider: misuse and callback failures", "[capi_v2][crypto]
 	               ToBytes("hello"), out, tag) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(stats->creates == 1);
 	REQUIRE(stats->destroys == 1);
+
+	// After the provider fails, the cipher rejects every further call.
+	stats->fail_init = false;
+	duckdb_v2_crypto_cipher_handle cipher = nullptr;
+	REQUIRE(duckdb_v2_crypto_cipher_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_DECRYPT,
+	                                       KEY_128.data(), KEY_128.size(), &cipher, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_init(cipher, iv.data(), iv.size(), nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
+	uint8_t in[16] = {}, buffer[16];
+	idx_t written = 0;
+	REQUIRE(duckdb_v2_crypto_cipher_update(cipher, in, 16, buffer, 16, &written, nullptr) == DUCKDB_V2_ERROR_NONE);
+	Bytes bad_tag(16, 0);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(cipher, bad_tag.data(), 16, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_crypto_cipher_update(cipher, in, 16, buffer, 16, &written, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(written == 0);
+	Bytes good_tag(16, 0xAB);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(cipher, good_tag.data(), 16, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_cipher_destroy(&cipher);
+	REQUIRE(stats->destroys == stats->creates);
+}
+
+TEST_CASE("V2 crypto provider: encrypted databases run on the provider", "[capi_v2][crypto]") {
+	EnvFixture fx;
+	auto stats = new ProviderStats();
+	auto provider = MakeProvider(fx.factory, stats);
+	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_provider_destroy(&provider);
+
+	// The legacy v0 format hands the provider 16-byte GCM IVs, the current one 12-byte IVs.
+	for (auto version : {std::string("v0"), std::string("v1")}) {
+		auto path = duckdb::TestCreatePath("v2_crypto_provider_" + version + ".db");
+		auto attach = "ATTACH '" + path + "' AS enc (ENCRYPTION_KEY 'k', ENCRYPTION_CIPHER 'GCM', " +
+		              "debug_encryption_version '" + version + "')";
+		stats->iv_lengths.clear();
+		auto random_calls = stats->random_calls;
+		REQUIRE(RunSql(fx.conn, attach) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "CREATE TABLE enc.t AS SELECT range i FROM range(1000)") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "CHECKPOINT enc") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "DETACH enc") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(stats->random_calls > random_calls);
+		REQUIRE_FALSE(stats->iv_lengths.empty());
+		idx_t expected_iv_length = version == "v0" ? 16 : 12;
+		for (auto iv_length : stats->iv_lengths) {
+			REQUIRE(iv_length == expected_iv_length);
+		}
+
+		// and the database reads back through the provider
+		REQUIRE(RunSql(fx.conn, attach) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "SELECT sum(i) FROM enc.t") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "DETACH enc") == DUCKDB_V2_ERROR_NONE);
+	}
 }
 
 TEST_CASE("V2 crypto provider: registration rules", "[capi_v2][crypto]") {
 	EnvFixture fx;
 
-	// The AES callbacks are required.
+	// The AES and random callbacks are required.
 	auto incomplete = MakeProvider(fx.factory, new ProviderStats(), false);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, incomplete, nullptr) != DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_crypto_provider_destroy(&incomplete);
+	auto no_random = MakeProvider(fx.factory, new ProviderStats(), true, false);
+	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, no_random, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_provider_destroy(&no_random);
 
 	// A provider belongs to the instance of its factory.
 	EnvFixture other;

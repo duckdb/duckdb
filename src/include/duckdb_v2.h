@@ -2318,6 +2318,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_init(duckdb_v2_crypto_ciphe
 /*!
  * Processes the next chunk of the stream.
  *
+ * Once an update or finalize fails in the provider, the cipher rejects every further call and can only be destroyed.
  * `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the
  * plaintext must not be trusted before `duckdb_v2_crypto_cipher_finalize()` succeeds.
  *
@@ -2344,7 +2345,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_update(duckdb_v2_crypto_cip
  * Completes the stream.
  *
  * GCM encryption: writes the 16-byte authentication tag into `tag`. GCM decryption: verifies the 16-byte `tag`, failing
- * with an input error when it does not match. CTR: `tag` must be null and `tag_length` 0.
+ * with an input error when it does not match, after which the cipher can only be destroyed. CTR: `tag` must be null and
+ * `tag_length` 0.
  *
  * history:
  * - unstable: v2.0.0
@@ -2437,6 +2439,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_create_callbac
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the callback that starts a cipher stream.
+ *
+ * The callback must accept 16-byte GCM IVs: encrypted databases in the legacy v0 format use them, unlike
+ * `duckdb_v2_crypto_cipher_init()`, which takes 12.
  *
  * history:
  * - unstable: v2.0.0
@@ -2550,7 +2555,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_callback(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Sets the random bytes callback. Optional: DuckDB's built-in implementation is used when unset.
+ * Sets the random bytes callback. Required before registration: DuckDB generates the IVs and salts of encrypted writes
+ * with it.
  *
  * history:
  * - unstable: v2.0.0
@@ -2571,9 +2577,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_random_callback(
  * Registers the provider as the instance's crypto provider, used by encrypted databases, Parquet encryption and the
  * primitives above.
  *
- * Requires the cipher callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the
- * provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it.
- * The caller still owns the handle and must destroy it with `duckdb_v2_crypto_provider_destroy()`.
+ * Requires the cipher and random bytes callbacks. Register before the instance uses its crypto provider; see the module
+ * notes. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the provider was created
+ * through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it. The caller still owns
+ * the handle and must destroy it with `duckdb_v2_crypto_provider_destroy()`.
  *
  * history:
  * - unstable: v2.0.0

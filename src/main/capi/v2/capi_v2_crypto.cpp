@@ -1,6 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb::capiv2 {
@@ -54,9 +55,8 @@ struct CV2CryptoCallbacks {
 class CV2ProviderEncryptionState final : public EncryptionState {
 public:
 	CV2ProviderEncryptionState(unique_ptr<EncryptionStateMetadata> metadata, const CV2CryptoCallbacks &callbacks,
-	                           shared_ptr<CV2UserData> user_data, shared_ptr<EncryptionState> fallback)
-	    : EncryptionState(std::move(metadata)), callbacks(callbacks), user_data(std::move(user_data)),
-	      fallback(std::move(fallback)) {
+	                           shared_ptr<CV2UserData> user_data)
+	    : EncryptionState(std::move(metadata)), callbacks(callbacks), user_data(std::move(user_data)) {
 	}
 
 	~CV2ProviderEncryptionState() override {
@@ -94,10 +94,6 @@ public:
 	}
 
 	void GenerateRandomData(data_ptr_t data, idx_t len) override {
-		if (!callbacks.random) {
-			fallback->GenerateRandomData(data, len);
-			return;
-		}
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) { callbacks.random(GetUserData(), data, len, err); });
 	}
 
@@ -129,12 +125,10 @@ private:
 private:
 	CV2CryptoCallbacks callbacks;
 	shared_ptr<CV2UserData> user_data;
-	//! The built-in state, for what the provider does not implement
-	shared_ptr<EncryptionState> fallback;
 	void *stream = nullptr;
 };
 
-//! The crypto provider supplied through the C API. Hashing, HMAC and random bytes fall back to the built-in provider.
+//! The crypto provider supplied through the C API. Hashing and HMAC fall back to the built-in provider.
 class CV2EncryptionUtil final : public EncryptionUtil {
 public:
 	CV2EncryptionUtil(const CV2CryptoCallbacks &callbacks, shared_ptr<CV2UserData> user_data,
@@ -143,14 +137,18 @@ public:
 	}
 
 	shared_ptr<EncryptionState> CreateEncryptionState(unique_ptr<EncryptionStateMetadata> metadata) const override {
-		auto fallback_state = fallback->CreateEncryptionState(
-		    make_uniq<EncryptionStateMetadata>(metadata->GetCipher(), metadata->GetKeyLen(), metadata->GetVersion()));
-		return make_shared_ptr<CV2ProviderEncryptionState>(std::move(metadata), callbacks, user_data,
-		                                                   std::move(fallback_state));
+		return make_shared_ptr<CV2ProviderEncryptionState>(std::move(metadata), callbacks, user_data);
+	}
+
+	unique_ptr<CryptoHashState> CreateHashState(CryptoHashFunction function) const override {
+		if (!ServesHash(function)) {
+			return fallback->CreateHashState(function);
+		}
+		return EncryptionUtil::CreateHashState(function);
 	}
 
 	void Hash(CryptoHashFunction function, const_data_ptr_t input, idx_t input_len, data_ptr_t output) const override {
-		if (!callbacks.hash || !(callbacks.hash_functions & HashFunctionBit(function))) {
+		if (!ServesHash(function)) {
 			fallback->Hash(function, input, input_len, output);
 			return;
 		}
@@ -173,8 +171,7 @@ public:
 	}
 
 	bool SupportsHash(CryptoHashFunction function) const override {
-		return (callbacks.hash && (callbacks.hash_functions & HashFunctionBit(function))) ||
-		       fallback->SupportsHash(function);
+		return ServesHash(function) || fallback->SupportsHash(function);
 	}
 
 	bool SupportsHmac(CryptoHashFunction function) const override {
@@ -185,6 +182,10 @@ public:
 private:
 	void *GetUserData() const {
 		return user_data ? user_data->GetData() : nullptr;
+	}
+
+	bool ServesHash(CryptoHashFunction function) const {
+		return callbacks.hash && (callbacks.hash_functions & HashFunctionBit(function));
 	}
 
 private:
@@ -204,6 +205,11 @@ public:
 		    !callbacks.cipher_finalize) {
 			throw InvalidInputException("The cipher callbacks must be set for the crypto provider.");
 		}
+		if (!callbacks.random) {
+			throw InvalidInputException("The random callback must be set for the crypto provider.");
+		}
+		static mutex registration_lock;
+		lock_guard<mutex> guard(registration_lock);
 		auto &config = DBConfig::GetConfig(target);
 		if (config.encryption_util) {
 			throw InvalidInputException("A crypto provider is already registered on this database.");
@@ -267,6 +273,7 @@ public:
 	}
 
 	void Init(const uint8_t *iv, idx_t iv_length, const uint8_t *aad, idx_t aad_length) {
+		CheckNotFailed();
 		if (initialized) {
 			throw InvalidInputException("The cipher has already been initialized");
 		}
@@ -282,11 +289,13 @@ public:
 		EncryptionNonce nonce(cipher, EncryptionTypes::EncryptionVersion::V0_1);
 		memcpy(nonce.data(), iv, iv_length);
 		auto key_ptr = const_data_ptr_cast(key.data());
-		if (mode == DUCKDB_V2_CRYPTO_MODE_ENCRYPT) {
-			state->InitializeEncryption(nonce, key_ptr, aad, aad_length);
-		} else {
-			state->InitializeDecryption(nonce, key_ptr, aad, aad_length);
-		}
+		RunBackend([&]() {
+			if (mode == DUCKDB_V2_CRYPTO_MODE_ENCRYPT) {
+				state->InitializeEncryption(nonce, key_ptr, aad, aad_length);
+			} else {
+				state->InitializeDecryption(nonce, key_ptr, aad, aad_length);
+			}
+		});
 		initialized = true;
 	}
 
@@ -295,7 +304,9 @@ public:
 		if (out_capacity < in_length) {
 			throw Exception(ExceptionType::OBJECT_SIZE, "out_capacity must be at least in_length");
 		}
-		return state->Process(in, in_length, out, out_capacity);
+		idx_t written = 0;
+		RunBackend([&]() { written = state->Process(in, in_length, out, out_capacity); });
+		return written;
 	}
 
 	void Finalize(uint8_t *tag, idx_t tag_length) {
@@ -307,12 +318,30 @@ public:
 		}
 		// ciphers may flush a final block, which for these stream modes is always empty
 		data_t scratch[32];
-		state->Finalize(scratch, sizeof(scratch), tag, tag_length);
+		RunBackend([&]() { state->Finalize(scratch, sizeof(scratch), tag, tag_length); });
 		finalized = true;
 	}
 
 private:
+	//! Runs a backend call: once one fails, the cipher rejects every further call
+	template <class FUNC>
+	void RunBackend(FUNC &&func) {
+		try {
+			func();
+		} catch (...) {
+			failed = true;
+			throw;
+		}
+	}
+
+	void CheckNotFailed() const {
+		if (failed) {
+			throw InvalidInputException("The cipher failed and can only be destroyed");
+		}
+	}
+
 	void CheckActive() const {
+		CheckNotFailed();
 		if (!initialized) {
 			throw InvalidInputException("The cipher has not been initialized");
 		}
@@ -328,6 +357,7 @@ private:
 	shared_ptr<EncryptionState> state;
 	bool initialized = false;
 	bool finalized = false;
+	bool failed = false;
 };
 
 static auto Convert(duckdb_v2_crypto_cipher_handle stream) -> CV2Cipher * {
