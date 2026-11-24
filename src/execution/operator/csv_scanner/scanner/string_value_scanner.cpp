@@ -2336,8 +2336,10 @@ void StringValueScanner::SetStart() {
 			}
 			break;
 		case CSVState::STANDARD:
-			if (leading_line_feed && ends_row) {
-				// the line feed ends the row of the scanner before this one or an empty line
+			if ((leading_line_feed && ends_row) || (exact_start && before_start.state == CSVState::STANDARD)) {
+				// the line feed ends the row of the scanner before this one or an empty line, or the bytes before the
+				// start end inside a value, where a line start rule such as the inert escape of quotes_only does not
+				// hold
 				unquoted_start = CSVState::STANDARD;
 			}
 			break;

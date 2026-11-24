@@ -316,6 +316,25 @@ embedded_quotes = 'toggle', new_line = '\n', buffer_size = 16, max_line_size = 1
 ----
 3	1
 
+# a range starting inside a value on an escape under quotes_only, where an escape at a field start is inert
+statement ok
+COPY (SELECT encode('ppppppp' || chr(10) || 'aaaaaaaa\"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_quotes_only_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_quotes_only_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+4	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_quotes_only_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\',
+escape_mode = 'quotes_only', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+4	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')
