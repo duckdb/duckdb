@@ -348,6 +348,20 @@ bool GroupByTopKey::TryMatch(LogicalOperator &op, TopKeyMatch &match) {
 	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER) {
 		return false;
 	}
+	// the groups after the bound are incomplete until the Top-N drops them, and the projections and the ORDER BY are
+	// evaluated on them first: an expression that can throw (sum(v)::TINYINT) must not see their partial aggregates
+	for (auto &projection : projections) {
+		for (auto &expr : projection.get().expressions) {
+			if (expr->CanThrow()) {
+				return false;
+			}
+		}
+	}
+	for (auto &order : topn.orders) {
+		if (order.expression->CanThrow()) {
+			return false;
+		}
+	}
 	// the longest prefix of the ORDER BY that consists of keys over the group keys
 	for (auto &order : topn.orders) {
 		unique_ptr<Expression> key;

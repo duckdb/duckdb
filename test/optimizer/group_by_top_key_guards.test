@@ -30,6 +30,11 @@ INSERT INTO ty SELECT
 statement ok
 CREATE TABLE w AS SELECT ((i * 37) % 1000)::BIGINT * 10000000000 AS k, i AS v FROM range(5000) r(i);
 
+# every complete group sums to 0: the groups of k = 2 get 1,024 rows of +1 in the first chunk and the -1 rows that
+# cancel them two chunks later, after the smaller keys 1 and 0 have tightened the bound
+statement ok
+CREATE TABLE cancellation AS SELECT CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k, i % 2 AS other_key, CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 1 WHEN i < 4096 THEN 0 ELSE -1 END AS v FROM range(6145) r(i);
+
 statement ok
 SET explain_output = 'optimized_only';
 
@@ -301,6 +306,31 @@ SELECT k, c FROM (SELECT k1 + (random() > 2)::INTEGER k, count(*) c FROM t GROUP
 1	5
 2	5
 
+# a projection expression between the TOP_N and the aggregate that can throw: the groups after the bound are
+# incomplete until the Top-N drops them, and the expression is evaluated on their partial aggregates first (a cast
+# of a group key cannot see a wrong value, but is declined all the same)
+query II
+EXPLAIN SELECT k1, sum(v)::TINYINT FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1::TINYINT k, count(*) c FROM t WHERE k1 < 100 GROUP BY k1 ORDER BY k LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+# an ORDER BY expression that can throw after the key prefix (with one group key the suffix would be dropped as
+# redundant before this rule runs); a plain aggregate after the key keeps the filter
+query II
+EXPLAIN SELECT k1, k2, sum(v) FROM t GROUP BY k1, k2 ORDER BY k1, sum(v)::TINYINT, k2 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, k2, sum(v) FROM t GROUP BY k1, k2 ORDER BY k1, sum(v) DESC, k2 LIMIT 3
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
 # ---------------------------------------------------------------------------------------------------------------
 # RESULT: the same rows with the rule disabled and enabled
 # ---------------------------------------------------------------------------------------------------------------
@@ -375,6 +405,17 @@ statement error
 SELECT k1::TINYINT k, count(*) c FROM t GROUP BY k1 ORDER BY k LIMIT 3
 ----
 Conversion Error
+
+# a cast of an aggregate in the ORDER BY: a group that a filter had cut off would carry a partial sum of 1,024
+query III
+SELECT k, other_key, sum(v) FROM cancellation GROUP BY k, other_key ORDER BY k, sum(v)::TINYINT, other_key LIMIT 1
+----
+0	0	0
+
+query III
+SELECT k, other_key, sum(v) FROM cancellation GROUP BY k, other_key ORDER BY k, sum(v) DESC, other_key LIMIT 1
+----
+0	0	0
 
 # empty input
 query II
@@ -554,7 +595,7 @@ EXPLAIN SELECT u, count(*) FROM ty GROUP BY u ORDER BY u DESC LIMIT 2
 logical_opt	<REGEX>:.*Top Key Filter.*
 
 query II
-EXPLAIN SELECT k1::TINYINT k, count(*) c FROM t WHERE k1 < 100 GROUP BY k1 ORDER BY k LIMIT 3
+EXPLAIN SELECT k, other_key, sum(v) FROM cancellation GROUP BY k, other_key ORDER BY k, sum(v) DESC, other_key LIMIT 1
 ----
 logical_opt	<REGEX>:.*Top Key Filter.*
 
@@ -591,3 +632,27 @@ query III
 SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k DESC LIMIT 1
 ----
 19999	1	0
+
+# ---------------------------------------------------------------------------------------------------------------
+# Clustered input: the filter stays effective across its effectiveness window
+# ---------------------------------------------------------------------------------------------------------------
+
+# 20 keys that arrive in runs of one chunk each. The first chunk sets the bound (the key 0, whose hash is 0), and
+# every later chunk of a larger key is rejected as a whole. Those chunks count for the effectiveness check as well,
+# so the filter keeps rejecting past its window of 100 chunks: 74 of the 1,465 chunks pass and one group is built
+require vector_size 2048
+
+query II
+EXPLAIN ANALYZE SELECT (i // 2048) % 20 AS k, sum(i) FROM range(3000000) r(i) GROUP BY k ORDER BY k LIMIT 1
+----
+analyzed_plan	<REGEX>:.*Hash Group By[^╭]* 1 row .*Top Key Filter[^╭]*Limit: 1 [^╭]* 151,552 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT (i // 2048) % 20 AS k, sum(i) FROM range(1000000) r(i) GROUP BY k ORDER BY k LIMIT 1
+----
+analyzed_plan	<REGEX>:.*Hash Group By[^╭]* 1 row .*Top Key Filter[^╭]*Limit: 1 [^╭]* 51,200 rows.*
+
+query II
+SELECT (i // 2048) % 20 AS k, sum(i) FROM range(3000000) r(i) GROUP BY k ORDER BY k LIMIT 1
+----
+0	226731415552
