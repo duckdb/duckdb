@@ -1,0 +1,37 @@
+# name: test/sql/storage/checkpoint_after_detach.test
+# description: checkpoint() of a detached database must re-bind and error, not use a dangling pointer (issue #26053)
+# group: [storage]
+
+statement ok
+ATTACH '{TEST_DIR}/checkpoint_after_detach.db' AS mydb;
+
+statement ok
+PREPARE s AS SELECT * FROM checkpoint('mydb');
+
+statement ok
+PREPARE fs AS SELECT * FROM force_checkpoint('mydb');
+
+statement ok
+DETACH mydb;
+
+statement error
+EXECUTE s;
+----
+<REGEX>:.*mydb.*(not attached|not found).*
+
+statement error
+EXECUTE fs;
+----
+<REGEX>:.*mydb.*(not attached|not found).*
+
+# re-attaching the database makes the prepared statement work again
+statement ok
+ATTACH '{TEST_DIR}/checkpoint_after_detach.db' AS mydb;
+
+query I
+EXECUTE s;
+----
+
+query I
+EXECUTE fs;
+----

@@ -5,6 +5,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,10 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	}
 	if (db->IsSystem() || db->IsTemporary()) {
 		throw BinderException("Cannot checkpoint database %s: it does not have storage", db->GetName());
+	}
+	// The bind data embeds a pointer to the attached database: a prepared statement must re-bind on every execution
+	if (input.binder) {
+		input.binder->SetAlwaysRequireRebind();
 	}
 	return make_uniq<CheckpointBindData>(db);
 }
