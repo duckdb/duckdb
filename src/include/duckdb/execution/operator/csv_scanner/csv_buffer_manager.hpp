@@ -11,6 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 
 namespace duckdb {
 class CSVBuffer;
@@ -23,20 +24,16 @@ enum class CSVBufferResidency : uint8_t {
 	END_OF_FILE //! The buffer position lies past the end of the file
 };
 
-//! How the escapes ending a buffer read on into the next one
-enum class CSVBufferEndEscape : uint8_t {
-	NOT_READ,       //! The buffer end was not read yet
-	NONE,           //! The next byte reads on its own, also behind escapes inside a comment
-	ESCAPED,        //! An unquoted escape ends the buffer and escapes the next byte
-	ESCAPED_RETURN, //! An escaped carriage return ends the buffer, a line feed behind it continues the value
-	UNKNOWN         //! The line of the trailing escapes starts before the buffer
-};
-
 //! What a scanner starting behind a buffer end needs to know about the bytes before it
 struct CSVBufferEnd {
 	//! The last byte, 0 when there are no bytes
 	char last_byte = '\0';
-	CSVBufferEndEscape escape = CSVBufferEndEscape::NOT_READ;
+	//! The state the bytes leave the state machine in
+	CSVState state = CSVState::STANDARD;
+	//! False when the line of the last bytes starts before them, which leaves their state unknown
+	bool known = false;
+	//! Whether the end was read
+	bool read = false;
 };
 
 //! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
@@ -85,6 +82,9 @@ public:
 	bool GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end);
 	//! How the bytes before size read on, file_start when the bytes start the file
 	static CSVBufferEnd ScanBufferEnd(const char *bytes, idx_t size, bool file_start,
+	                                  const CSVStateMachine &state_machine);
+	//! How the bytes from `from` before size read on, read from the state before them
+	static CSVBufferEnd ReadBufferEnd(const char *bytes, idx_t from, idx_t size, CSVState state,
 	                                  const CSVStateMachine &state_machine);
 
 	string GetFilePath() const;

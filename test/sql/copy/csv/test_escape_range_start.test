@@ -164,6 +164,25 @@ comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, p
 ----
 6	1
 
+# a comment line that starts in the buffer before, ending in escapes right before a range inside the next one
+statement ok
+COPY (SELECT repeat('p' || chr(10), 30) || '#' || repeat('c', 17) || '\\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_buffers.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffers.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4)
+----
+32	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffers.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, parallel = false)
+----
+32	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

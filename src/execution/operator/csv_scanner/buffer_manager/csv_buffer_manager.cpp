@@ -64,8 +64,7 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 	shared_ptr<CSVStateMachine> state_machine;
 	{
 		lock_guard<mutex> parallel_lock(main_mutex);
-		if (!buffer_end_state_machine ||
-		    (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].escape != CSVBufferEndEscape::NOT_READ)) {
+		if (!buffer_end_state_machine || (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read)) {
 			return;
 		}
 		state_machine = buffer_end_state_machine;
@@ -85,7 +84,7 @@ bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) 
 			if (!buffer_end_state_machine) {
 				return false;
 			}
-			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].escape != CSVBufferEndEscape::NOT_READ) {
+			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read) {
 				buffer_end = buffer_ends[buffer_idx];
 				return true;
 			}
@@ -98,24 +97,18 @@ bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) 
 
 CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size, const bool file_start,
                                              const CSVStateMachine &state_machine) {
-	CSVBufferEnd result;
-	result.escape = CSVBufferEndEscape::NONE;
-	if (size == 0) {
-		return result;
-	}
-	result.last_byte = bytes[size - 1];
 	const auto &options = state_machine.state_machine_options;
 	const char escape = options.escape.GetValue();
 	if (!options.UnquotedEscapes() || escape == '\0' || escape == options.quote.GetValue()) {
+		// without unquoted escapes the start search needs no more than the last byte
+		CSVBufferEnd result;
+		result.last_byte = size > 0 ? bytes[size - 1] : '\0';
+		result.known = true;
+		result.read = true;
 		return result;
 	}
-	// the escapes that matter end the bytes or precede their carriage return
-	const idx_t run_end = result.last_byte == '\r' ? size - 1 : size;
-	if (run_end == 0 || bytes[run_end - 1] != escape) {
-		return result;
-	}
-	// the line of those escapes is read from a line break that an even run of escapes precedes, which surely ends a
-	// line, a line break behind an odd run only does inside a comment, and reading on from the sure one settles that
+	// the bytes are read from a line break that an even run of escapes precedes, which surely ends a line, a line
+	// break behind an odd run only does inside a comment, and reading on from the sure one settles that
 	const auto &transitions = state_machine.transition_array;
 	const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
 	const bool pair_cr = transitions[static_cast<uint8_t>('\r')][standard] == CSVState::CARRIAGE_RETURN;
@@ -126,8 +119,7 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 		const auto next = transitions[static_cast<uint8_t>(byte)][standard];
 		return next == CSVState::RECORD_SEPARATOR || next == CSVState::CARRIAGE_RETURN;
 	};
-	idx_t pos = run_end;
-	bool line_break_found = false;
+	idx_t pos = size;
 	while (pos > 0) {
 		pos--;
 		if (!ends_line(bytes[pos])) {
@@ -142,26 +134,32 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 			escapes++;
 		}
 		if (escapes % 2 == 0 && (escapes < pos || file_start)) {
-			line_break_found = true;
-			break;
+			return ReadBufferEnd(bytes, pos, size, CSVState::STANDARD, state_machine);
 		}
 		// the escapes before this line break are read as part of its line
 		pos -= escapes;
 	}
-	if (!line_break_found && !file_start) {
-		result.escape = CSVBufferEndEscape::UNKNOWN;
-		return result;
+	if (file_start) {
+		return ReadBufferEnd(bytes, 0, size, CSVState::NOT_SET, state_machine);
 	}
+	CSVBufferEnd result;
+	result.last_byte = size > 0 ? bytes[size - 1] : '\0';
+	result.read = true;
+	return result;
+}
+
+CSVBufferEnd CSVBufferManager::ReadBufferEnd(const char *bytes, const idx_t from, const idx_t size,
+                                             const CSVState state, const CSVStateMachine &state_machine) {
 	CSVStates states;
-	states.Initialize(line_break_found ? CSVState::STANDARD : CSVState::NOT_SET);
-	for (idx_t i = pos; i < size; i++) {
+	states.Initialize(state);
+	for (idx_t i = from; i < size; i++) {
 		state_machine.Transition(states, bytes[i]);
 	}
-	if (states.IsState(CSVState::UNQUOTED_ESCAPE)) {
-		result.escape = CSVBufferEndEscape::ESCAPED;
-	} else if (states.IsState(CSVState::ESCAPED_RETURN)) {
-		result.escape = CSVBufferEndEscape::ESCAPED_RETURN;
-	}
+	CSVBufferEnd result;
+	result.last_byte = size > 0 ? bytes[size - 1] : '\0';
+	result.state = states.states[1];
+	result.known = true;
+	result.read = true;
 	return result;
 }
 
