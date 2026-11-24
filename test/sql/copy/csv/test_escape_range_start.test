@@ -240,6 +240,25 @@ comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel =
 ----
 1	0
 
+# an escaped carriage return inside a quoted value right before a buffer end, its line feed is data
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaa\' || chr(13) || chr(10) || 'x"'))
+TO '{TEST_DIR}/escape_quoted_cr.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quoted_cr.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16)
+----
+2	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quoted_cr.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16, parallel = false)
+----
+2	0
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

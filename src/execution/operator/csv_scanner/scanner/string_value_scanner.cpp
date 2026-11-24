@@ -2312,13 +2312,13 @@ void StringValueScanner::SetStart() {
 		case CSVState::ESCAPED_RETURN:
 		case CSVState::FIELD_START:
 		case CSVState::COMMENT:
-			// the escape rules of these states read the first byte, a comment keeps its escapes inert
-			before = before_start.state;
-			break;
+		case CSVState::QUOTED:
+		case CSVState::QUOTED_NEW_LINE:
+		case CSVState::QUOTED_NO_FIELD:
 		case CSVState::ESCAPE:
 		case CSVState::ESCAPE_NO_FIELD:
-			// an escape inside quotes escapes the first byte as well
-			before = CSVState::UNQUOTED_ESCAPE;
+			// the rules of these states read the first byte, escapes are inert in a comment, line breaks data in quotes
+			before = before_start.state;
 			break;
 		default:
 			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
