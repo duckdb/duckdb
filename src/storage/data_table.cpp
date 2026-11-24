@@ -414,9 +414,8 @@ unique_lock<mutex> DataTable::LockMainTableForIndex(unique_lock<mutex> &table_lo
 		}
 		if (!IsMainTable()) {
 			// the commits to the table that replaced this one cannot maintain an index on this one's columns
-			throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has "
-			                           "been %s by a different transaction",
-			                           GetTableName(), TableModification());
+			throw TransactionException(
+			    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 		}
 		return commit_lock;
 	}
@@ -499,9 +498,8 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		throw ConstraintException("NOT NULL constraint failed: %s", index->GetIndexName());
 	}
 	if (!IsMainTable()) {
-		throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has been "
-		                           "%s by a different transaction",
-		                           GetTableName(), TableModification());
+		throw TransactionException(
+		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
 	entry->FinishBuild(std::move(index), index_oid, check_mode);
 	return entry;
