@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -77,7 +78,12 @@ public:
 	OptimisticDataWriter optimistic_writer;
 
 	//! Whether or not the storage was dropped
-	bool is_dropped = false;
+	atomic<bool> is_dropped {false};
+
+	//! Serializes the appends and merges into the primary collection
+	StorageLock append_lock;
+	//! Shared by the users of the primary collection, exclusive while its row groups are replaced by a flush
+	StorageLock flush_lock;
 
 public:
 	//! Initialize a scan; the context of the scanning query is used for pushed down casts and zonemap checks

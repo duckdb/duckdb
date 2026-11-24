@@ -235,6 +235,49 @@ def test_estimate_on_stderr(shell):
     result.check_stderr("estimate: ~2000000 rows read (range ~2000000)\n")
     result.check_stderr("estimate: ~2000010 rows read (t ~2000000, range ~10), ~1 rows returned")
 
+def test_estimate_table_in_out_functions(shell):
+    # table in-out functions (summary, correlated LATERAL) are scans too
+    test = (
+        agent_shell(shell)
+        .statement("CREATE TABLE t AS SELECT range AS i FROM range(2000000)")
+        .statement("SELECT count(*) FROM summary((SELECT * FROM t))")
+        .statement("SELECT sum(x) FROM range(2000000) AS o(i), LATERAL range(i, i + 1) AS r(x)")
+    )
+    result = test.run()
+    result.check_stderr("estimate: ~4000000 rows read (summary ~2000000, t ~2000000), ~1 rows returned")
+    result.check_stderr("estimate: ~4000000 rows read (range ~2000000, range ~2000000), ~1 rows returned")
+
+@pytest.mark.parametrize("explain_output", ["physical_only", "optimized_only", "all"])
+def test_estimate_independent_of_explain_output(shell, explain_output):
+    # the estimate is planned internally, so settings that change what EXPLAIN shows do not affect it
+    test = (
+        agent_shell(shell)
+        .statement(f"SET explain_output = '{explain_output}'")
+        .statement("SELECT sum(range) FROM range(2000000)")
+    )
+    result = test.run()
+    result.check_stderr("estimate: ~2000000 rows read (range ~2000000), ~1 rows returned")
+
+def test_estimate_not_logged_or_profiled(shell):
+    # the estimate is not a query: it adds no query log entry and no profile
+    test = (
+        agent_shell(shell)
+        .statement("CALL enable_logging('QueryLog', storage = 'memory')")
+        .statement("SELECT sum(range) FROM range(2000000)")
+        .statement("CALL disable_logging()")
+        .statement("SELECT string_agg(message, ' >> ' ORDER BY timestamp) FROM duckdb_logs WHERE type = 'QueryLog'")
+        .statement("SET profiling_coverage = 'all'")
+        .statement("SET enable_profiling = 'json'")
+        .statement("SELECT sum(range) FROM range(2000000)")
+    )
+    result = test.run()
+    # exactly the statements' own log entries, with no entry for the estimate
+    result.check_stdout("| SELECT sum(range) FROM range(2000000); >> CALL disable_logging(); |")
+    # exactly one profile, for the final SELECT
+    output = result.stdout + result.stderr
+    assert output.count('"sql":') == 1
+    assert '"sql": "SELECT sum(range) FROM range(2000000);"' in output
+
 def test_no_estimate_for_small_reads(shell):
     # the line is there to decide whether to wait; a small read is noise
     test = agent_shell(shell).statement("SELECT count(*) FROM range(100000)")

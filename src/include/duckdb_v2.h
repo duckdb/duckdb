@@ -4834,7 +4834,8 @@ typedef struct _duckdb_v2_query_metrics_node {
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Takes a snapshot of the metrics of the last query the connection finished.
+ * Takes a snapshot of the metrics of the last query the connection profiled, which is not necessarily the last query it
+ * ran: see `duckdb_v2_connection_get_profiling_information()`.
  *
  * The snapshot is owned by the caller and does not change afterwards. It holds the metrics DuckDB's profiling
  * configuration gathered: without profiling enabled, the root node carries no metrics and has no children. A snapshot
@@ -4877,6 +4878,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_query_metrics(duckdb_v2_co
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_enable_profiling(duckdb_v2_connection_handle conn, bool enabled,
                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Renders the profile of the last query the connection profiled.
+ *
+ * That is not necessarily the last query the connection ran: the profiler keeps the last profile while profiling is
+ * disabled. After profiling is enabled again, and until the next query finishes, the profile is still that of the last
+ * query run while profiling was enabled.
+ *
+ * The same profile `duckdb_v2_connection_get_query_metrics()` takes a snapshot of, as the text DuckDB's profiler prints
+ * for it: the query, its metrics and its operator tree. The text is delivered through `sink` in a single call.
+ *
+ * `format` names the profiler format: `json`, `text`, `query_tree`, `query_tree_optimizer`, `html`, `graphviz`, `yaml`,
+ * `mermaid` or `no_output`, which renders nothing. An empty `format` selects the connection's configured format (the
+ * `enable_profiling` option), or a query tree when that is `no_output`. An unknown format fails with
+ * `ERROR_INPUT_INVALID`.
+ *
+ * Without profiling enabled there is no profile: the text is the profiler's own note that profiling is disabled.
+ *
+ * Fails with `ERROR_RESOURCE_IN_USE` while a query is running on the connection, i.e. while a result of it has not yet
+ * been drained or destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to render the profile of.
+ * @param format The profiler format name. Empty selects the configured format, or a query tree when that is
+ * `no_output`.
+ * @param format_length The length of `format` in bytes. `format` need not be null-terminated and may be NULL only when
+ * this is 0.
+ * @param sink Receives the rendered profile in a single call. Borrowed for the duration of that call; see text_sink for
+ * the full contract.
+ * @param user_data Opaque pointer passed through to sink untouched. May be NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_profiling_information(duckdb_v2_connection_handle conn,
+                                                                            const char *format, idx_t format_length,
+                                                                            duckdb_v2_text_sink_fn sink,
+                                                                            void *user_data,
+                                                                            duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

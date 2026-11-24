@@ -36,7 +36,7 @@ static bool ColumnBindingIsvalid(const ColumnBinding &column_binding) {
 }
 
 static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column_binding) {
-	if (expr.IsVolatile()) {
+	if (expr.IsVolatile() || expr.CanThrow()) {
 		return false;
 	}
 
@@ -83,47 +83,61 @@ static void ExtractDisjunctedPredicates(Expression &expression,
 	}
 }
 
-static column_binding_map_t<vector<reference<Expression>>> GetDisjunctedPredicateMap(Expression &expression) {
+//! The predicates one disjunct has on a column all hold together
+static unique_ptr<Expression> CombineConjuncts(const vector<reference<Expression>> &predicates) {
+	D_ASSERT(!predicates.empty());
+	vector<unique_ptr<Expression>> children;
+	for (auto &predicate : predicates) {
+		auto copy = predicate.get().Copy();
+		bool found = false;
+		for (auto &child : children) {
+			found = found || child->Equals(*copy);
+		}
+		if (!found) {
+			children.push_back(std::move(copy));
+		}
+	}
+	return BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(children));
+}
+
+//! For every column that each disjunct restricts, the distinct restrictions the disjuncts place on it
+static column_binding_map_t<vector<unique_ptr<Expression>>> GetDisjunctedPredicateMap(Expression &expression) {
 	vector<reference<Expression>> disjuncted_children;
 	ExtractDisjunctedPredicates(expression, disjuncted_children);
 	D_ASSERT(disjuncted_children.size() > 1);
 
-	// Extract predicates of the first child
-	auto &first_child = disjuncted_children[0].get();
-	D_ASSERT(!ExpressionIsDisjunction(first_child));
-	column_binding_map_t<vector<reference<Expression>>> remaining_binding_map;
-	ExtractDisjunctedPredicates(first_child, remaining_binding_map);
-
-	for (idx_t child_idx = 1; child_idx < disjuncted_children.size(); child_idx++) {
+	column_binding_map_t<vector<unique_ptr<Expression>>> result;
+	for (idx_t child_idx = 0; child_idx < disjuncted_children.size(); child_idx++) {
 		auto &child = disjuncted_children[child_idx].get();
 		D_ASSERT(!ExpressionIsDisjunction(child));
 		column_binding_map_t<vector<reference<Expression>>> child_binding_map;
 		ExtractDisjunctedPredicates(child, child_binding_map);
 
-		// Bindings must appear in both maps to be considered for predicate factoring
-		for (auto it = remaining_binding_map.begin(); it != remaining_binding_map.end();) {
+		if (child_idx == 0) {
+			for (auto &entry : child_binding_map) {
+				result[entry.first].push_back(CombineConjuncts(entry.second));
+			}
+			continue;
+		}
+		// Bindings must appear in every disjunct to be considered for predicate factoring
+		for (auto it = result.begin(); it != result.end();) {
 			auto child_it = child_binding_map.find(it->first);
 			if (child_it == child_binding_map.end()) {
-				it = remaining_binding_map.erase(it);
-			} else {
-				for (auto &new_predicate : child_it->second) {
-					bool found = false;
-					for (auto &existing_predicate : it->second) {
-						if (new_predicate.get().Equals(existing_predicate.get())) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						it->second.push_back(new_predicate.get());
-					}
-				}
-				it++;
+				it = result.erase(it);
+				continue;
 			}
+			auto restriction = CombineConjuncts(child_it->second);
+			bool found = false;
+			for (auto &existing : it->second) {
+				found = found || restriction->Equals(*existing);
+			}
+			if (!found) {
+				it->second.push_back(std::move(restriction));
+			}
+			it++;
 		}
 	}
-
-	return remaining_binding_map;
+	return result;
 }
 
 unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -145,7 +159,7 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 	}
 
 	// Extract map from single column binding to expression it is contained in
-	const auto binding_map = GetDisjunctedPredicateMap(bindings[0].get());
+	auto binding_map = GetDisjunctedPredicateMap(bindings[0].get());
 	if (binding_map.empty()) {
 		return nullptr; // None qualify
 	}
@@ -155,16 +169,8 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 		D_ASSERT(!entry.second.empty());
 
 		// Create disjunction on single-column predicates
-		unique_ptr<Expression> column_filter;
-		for (auto &expr : entry.second) {
-			if (!column_filter) {
-				column_filter = expr.get().Copy();
-			} else {
-				auto new_disjunction = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_OR, std::move(column_filter), expr.get().Copy());
-				column_filter = std::move(new_disjunction);
-			}
-		}
+		auto column_filter =
+		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(entry.second));
 
 		// Conjunct each single-column predicate together
 		if (!derived_filter) {

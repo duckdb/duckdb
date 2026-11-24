@@ -7,6 +7,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -100,6 +101,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 		if (!semi_children.empty()) {
 			terminator_offset = semi_children[0].get().GetOffset();
 		}
+	}
+
+	if (options.match_only) {
+		auto start = stmt_opt.GetResult().GetOffset().GetIndex();
+		idx_t end_index = terminator_offset.IsValid() ? terminator_offset.GetIndex() : token_iterator.EndOffset();
+		auto statement = make_uniq<PassthroughStatement>();
+		statement->stmt_location = QueryLocation(start, end_index - start);
+		return std::move(statement);
 	}
 
 	ArenaAllocator transformer_allocator(allocator, PARSER_ARENA_INITIAL_CAPACITY);
