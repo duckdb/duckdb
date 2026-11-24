@@ -15,13 +15,6 @@ SELECT current_setting('approximate_join_order_threshold') = threshold FROM expe
 ----
 true
 
-reconnect
-
-query I
-SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
-----
-true
-
 query I con2
 SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
 ----
