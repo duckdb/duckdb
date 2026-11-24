@@ -283,20 +283,21 @@ SELECT * FROM t WHERE EXISTS (SELECT 1 FROM a WHERE a.k = t.k) OR EXISTS (SELECT
 logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
 
 # Native nested equality treats tuple members differently from top-level NULLs.
+# Keep TUPLE columns temporary because v1 storage cannot persist them.
 statement ok
-CREATE TABLE tuple_probe(id INTEGER, k TUPLE(INTEGER, INTEGER));
+CREATE TEMP TABLE tuple_probe(id INTEGER, k TUPLE(INTEGER, INTEGER));
 
 statement ok
 INSERT INTO tuple_probe VALUES (1, row(1, NULL)), (2, row(1, 2)), (3, NULL), (4, row(NULL, 2)), (5, row(3, 4));
 
 statement ok
-CREATE TABLE tuple_a(k TUPLE(INTEGER, INTEGER));
+CREATE TEMP TABLE tuple_a(k TUPLE(INTEGER, INTEGER));
 
 statement ok
 INSERT INTO tuple_a VALUES (row(1, NULL)), (row(NULL, 2)), (NULL);
 
 statement ok
-CREATE TABLE tuple_b(k TUPLE(INTEGER, INTEGER));
+CREATE TEMP TABLE tuple_b(k TUPLE(INTEGER, INTEGER));
 
 statement ok
 INSERT INTO tuple_b VALUES (row(3, 4)), (row(3, 4));
@@ -312,6 +313,11 @@ query II
 EXPLAIN SELECT id FROM tuple_probe WHERE k IN (SELECT k FROM tuple_a) OR k IN (SELECT k FROM tuple_b);
 ----
 logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+statement ok
+DROP TABLE tuple_probe;
+DROP TABLE tuple_a;
+DROP TABLE tuple_b;
 
 statement ok
 CREATE TABLE union_probe(id INTEGER, k UNION(i INTEGER, s VARCHAR));
