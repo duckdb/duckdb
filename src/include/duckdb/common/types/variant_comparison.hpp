@@ -33,7 +33,6 @@ enum class VariantComparisonType : uint8_t {
 	GEOMETRY,
 	GEOGRAPHY,
 	BITSTRING,
-	TYPE,
 	ARRAY,
 	OBJECT,
 	//! VARIANT_NULL ranks last so a nested NULL element orders after all non-null values, matching the

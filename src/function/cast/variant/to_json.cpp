@@ -137,11 +137,6 @@ struct JSONConverterBase {
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
 
-	static yyjson_mut_val *VisitType(const string_t &str, yyjson_mut_doc *doc) {
-		auto val_str = Value::TYPE(str).ToString();
-		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
-	}
-
 	template <typename T>
 	static yyjson_mut_val *VisitDecimal(T val, uint32_t width, uint32_t scale, yyjson_mut_doc *doc) {
 		string val_str;

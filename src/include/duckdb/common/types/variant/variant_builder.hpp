@@ -334,7 +334,6 @@ struct VariantBuilder {
 		case LogicalTypeId::BIT:
 		case LogicalTypeId::GEOMETRY:
 		case LogicalTypeId::GEOGRAPHY:
-		case LogicalTypeId::TYPE:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
 				variant_type = VariantLogicalType::BLOB;
@@ -346,8 +345,6 @@ struct VariantBuilder {
 				variant_type = VariantLogicalType::GEOMETRY;
 			} else if (type_id == LogicalTypeId::GEOGRAPHY) {
 				variant_type = VariantLogicalType::GEOGRAPHY;
-			} else if (type_id == LogicalTypeId::TYPE) {
-				variant_type = VariantLogicalType::TYPE;
 			} else {
 				variant_type = VariantLogicalType::VARCHAR;
 			}
@@ -482,8 +479,7 @@ struct VariantBuilder {
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::GEOMETRY:
-		case VariantLogicalType::GEOGRAPHY:
-		case VariantLogicalType::TYPE: {
+		case VariantLogicalType::GEOGRAPHY: {
 			auto str = it.GetString();
 			VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(str.GetSize()));
 			VariantBuilderAppendBytes(blob, const_data_ptr_cast(str.GetData()), str.GetSize());

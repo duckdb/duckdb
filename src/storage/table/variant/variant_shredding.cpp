@@ -79,8 +79,6 @@ struct VariantStatsVisitor {
 	}
 	static void VisitBitstring(const string_t &bits, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
-	static void VisitType(const string_t &type, VariantShreddingStats &stats, idx_t stats_column_index) {
-	}
 
 	template <typename T>
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantShreddingStats &stats,
@@ -445,10 +443,6 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
 		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL) && !column.decimal_consistent) {
 			//! Can't shred on DECIMAL, not consistent
-			continue;
-		}
-		if (i == static_cast<uint8_t>(VariantLogicalType::TYPE)) {
-			//! TYPE values are only stored unshredded
 			continue;
 		}
 		idx_t count = column.type_counts[i] + null_count;
