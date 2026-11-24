@@ -440,10 +440,14 @@ LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
 void LocalStorage::InitializeScan(const QueryContext &context, DataTable &table, CollectionScanState &state,
                                   optional_ptr<TableFilterSet> table_filters) {
 	auto storage = table_manager.GetStorage(table);
-	if (storage == nullptr || storage->GetCollection().GetTotalRows() == 0) {
+	if (storage == nullptr) {
 		return;
 	}
-	state.local_row_groups_lock = storage->LockShared();
+	auto row_groups_lock = storage->LockShared();
+	if (storage->GetCollection().GetTotalRows() == 0) {
+		return;
+	}
+	state.local_row_groups_lock = std::move(row_groups_lock);
 	storage->InitializeScan(context, state, table_filters);
 }
 
@@ -458,6 +462,7 @@ void LocalStorage::InitializeParallelScan(DataTable &table, ParallelCollectionSc
 		state.vector_index = 0;
 		state.current_row_group = nullptr;
 	} else {
+		auto flush_key = storage->LockShared();
 		storage->GetCollection().InitializeParallelScan(state);
 	}
 }
@@ -786,6 +791,7 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 	if (!storage) {
 		return 0;
 	}
+	auto flush_key = storage->LockShared();
 	return storage->GetCollection().GetTotalRows() - storage->deleted_rows;
 }
 
