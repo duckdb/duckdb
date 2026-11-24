@@ -81,6 +81,8 @@ public:
 
 	//! Whether or not the storage was dropped
 	atomic<bool> is_dropped {false};
+	//! Whether an ALTER replaced the storage: statements that were waiting for its locks must not use it
+	atomic<bool> retired {false};
 
 	//! Serializes the appends and merges into the primary collection
 	StorageLock append_lock;
@@ -88,6 +90,11 @@ public:
 	StorageLock flush_lock;
 
 public:
+	//! Takes the optimistic collections over to the storage of the altered table
+	vector<unique_ptr<OptimisticWriteCollection>> TakeOptimisticCollections();
+	//! Locks to use the primary collection (throw if an ALTER replaced the storage in the meantime)
+	unique_ptr<StorageLockKey> LockShared();
+	unique_ptr<StorageLockKey> LockAppend();
 	//! Initialize a scan; the context of the scanning query is used for pushed down casts and zonemap checks
 	void InitializeScan(const QueryContext &context, CollectionScanState &state,
 	                    optional_ptr<TableFilterSet> table_filters = nullptr);
@@ -233,9 +240,6 @@ public:
 	TableIndexList &GetIndexes(Context &context, DataTable &table);
 	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
-	//! Throws if the table has transaction-local changes and the transaction is shared: other connections can be
-	//! using the local storage, which an ALTER moves to the new version of the table
-	void VerifyAlter(ClientContext &context, DataTable &table);
 	void VerifyNewConstraint(Context &context, DataTable &parent, const BoundConstraint &constraint);
 
 	DuckTransaction &GetTransaction() const {
@@ -248,11 +252,22 @@ public:
 	}
 
 private:
+	//! The locks that are held while the storage of an altered table is replaced
+	struct LocalStorageAlterLocks {
+		unique_ptr<StorageLockKey> append_key;
+		unique_ptr<StorageLockKey> flush_key;
+	};
+
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 	bool synced_flushed_blocks = false;
+	//! The storages that were replaced by an ALTER: statements of other connections can still be waiting for them
+	mutex retired_storages_lock;
+	vector<shared_ptr<LocalTableStorage>> retired_storages;
 
 private:
+	//! Removes the storage of the table from the manager and marks it as retired. Throws if it is in use
+	shared_ptr<LocalTableStorage> RetireStorage(DataTable &old_dt, LocalStorageAlterLocks &locks);
 	//! Flushes the local rows into the shared table and indexes; invalidates the database if they cannot be restored
 	void Flush(Context &context, DataTable &table, LocalTableStorage &storage,
 	           optional_ptr<StorageCommitState> commit_state);
