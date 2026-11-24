@@ -21,7 +21,14 @@ INSERT INTO integers VALUES (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 
 statement ok
 INSERT INTO integers (i1) VALUES (NULL);
 
-loop i 0 100
+query I
+SELECT CASE WHEN vals[1] IS NULL THEN list_count(vals) = 0 ELSE vals = range(vals[1], vals[1] + 100) END FROM (SELECT [*COLUMNS(*)] AS vals FROM integers)
+----
+true
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers
@@ -41,7 +48,14 @@ endloop
 
 restart
 
-loop i 0 100
+query I
+SELECT CASE WHEN vals[1] IS NULL THEN list_count(vals) = 0 ELSE vals = range(vals[1], vals[1] + 100) END FROM (SELECT [*COLUMNS(*)] AS vals FROM integers)
+----
+true
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers

@@ -2257,8 +2257,8 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
-	duckdb::LocalFileSystem lfs;
-	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	auto canonical_file = lfs.CanonicalizePath(file);
 	if (!active_read_files.insert(canonical_file).second) {
 		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
 		return false;
@@ -3166,14 +3166,9 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
-}
-
 string ShellState::GetDefaultDuckDBRC() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	return lfs.JoinPath(lfs.GetHomeDirectory(), ".duckdbrc");
 }
 
 MetadataResult ShellState::FormatSQL(string &sql) {
@@ -3579,6 +3574,27 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 	}
 }
 
+//! Runs the estimate of a statement inside a transaction: the one the user started, or one that is rolled back again
+struct EstimateTransaction {
+	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
+		if (started) {
+			con.BeginTransaction();
+		}
+	}
+	~EstimateTransaction() {
+		if (!started) {
+			return;
+		}
+		try {
+			con.Rollback();
+		} catch (...) { // NOLINT: the statement itself reports what is wrong with the connection
+		}
+	}
+
+	duckdb::Connection &con;
+	bool started;
+};
+
 void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
 	case duckdb::StatementType::SELECT_STATEMENT:
@@ -3594,6 +3610,9 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 	}
 	try {
 		auto &context = *conn->context;
+		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
+		// extract it, read the estimates and destroy it inside one transaction
+		EstimateTransaction transaction(*conn);
 		auto plan = context.ExtractPlan(sql);
 		vector<ScanEstimate> scans;
 		CollectScanEstimates(context, *plan, scans);
@@ -3907,7 +3926,7 @@ int RunShell(int argc, const char **argv) {
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
-				zHome = GetHomeDirectory() + "/.duckdb_history";
+				zHome = duckdb::FileSystem::GetLocal(*data.db->instance).GetHomeDirectory() + "/.duckdb_history";
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {

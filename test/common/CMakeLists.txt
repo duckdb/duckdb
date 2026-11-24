@@ -13,12 +13,15 @@ add_library_unity(
   test_vector_hash.cpp
   test_column_data_allocator.cpp
   test_cow_ptr.cpp
+  test_encode_truncated_utf8.cpp
+  test_buffer_ptr.cpp
   test_column_data_compact.cpp
   test_file_buffer_handle_group.cpp
   test_file_system.cpp
   test_fsst.cpp
   test_gzip_file_system.cpp
   test_geometry_extent.cpp
+  test_hashed_sort.cpp
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_expression_executor.cpp
@@ -26,6 +29,7 @@ add_library_unity(
   test_hugeint_constexpr.cpp
   test_http_transport_manager.cpp
   test_http_retry_budget.cpp
+  test_httplib_download.cpp
   test_httplib_header_length.cpp
   test_httplib_sigpipe.cpp
   test_list_stats.cpp
@@ -70,6 +74,7 @@ add_library_unity(
   test_variant_cast.cpp
   test_variant_size.cpp
   test_vector_buffer_validity.cpp
+  test_wide_decimal_cast.cpp
   test_lazy_vector.cpp
   test_musl_stack_size.cpp)
 

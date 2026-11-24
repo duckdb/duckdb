@@ -133,11 +133,11 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast parse result of type %s to type %s for rule %s",
-			                        ParseResultToString(TARGET::TYPE), ParseResultToString(type), Name());
+			ThrowCastError(TARGET::TYPE);
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
+	DUCKDB_API void ThrowCastError(ParseResultType target) const;
 
 	optional_ptr<const CompiledGrammarRule> rule;
 	ParseResultType type;
@@ -496,15 +496,105 @@ public:
 	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p, optional_idx offset,
 	                                  optional_idx length = optional_idx())
 	    : ParseResult(TYPE, offset, length), result(std::move(string_p)), string_type(string_type_p) {
+		if (string_type == SpecialStringCharacter::ESCAPE_STRING) {
+			result = DecodeEscapeString();
+		}
 	}
 
 	string GetRawString() const {
 		return result;
 	}
 
+	string DecodeEscapeString() const {
+		string escaped_result;
+		escaped_result.reserve(result.size());
+
+		for (size_t i = 0; i < result.size(); ++i) {
+			if (result[i] == '\\' && i + 1 < result.size()) {
+				i++;
+				switch (result[i]) {
+				case 'b':
+					escaped_result += '\b';
+					break;
+				case 'f':
+					escaped_result += '\f';
+					break;
+				case '0':
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+				case '5':
+				case '6':
+				case '7': {
+					size_t oct_start = i;
+					size_t oct_end = oct_start + 1;
+					while (oct_end < result.size() && oct_end - oct_start < 3 && result[oct_end] >= '0' &&
+					       result[oct_end] <= '7') {
+						oct_end++;
+					}
+					string oct_str = result.substr(oct_start, oct_end - oct_start);
+					escaped_result += static_cast<char>(strtoul(oct_str.c_str(), nullptr, 8));
+					i = oct_end - 1;
+					break;
+				}
+				case 'x': {
+					size_t hex_start = i + 1;
+					size_t hex_end = hex_start;
+					while (hex_end < result.size() && hex_end - hex_start < 2 &&
+					       StringUtil::CharacterIsHex(result[hex_end])) {
+						hex_end++;
+					}
+					if (hex_end > hex_start) {
+						string hex_str = result.substr(hex_start, hex_end - hex_start);
+						escaped_result += static_cast<char>(strtoul(hex_str.c_str(), nullptr, 16));
+						i = hex_end - 1;
+					} else {
+						escaped_result += 'x';
+					}
+					break;
+				}
+				case 'n':
+					escaped_result += '\n';
+					break;
+				case 't':
+					escaped_result += '\t';
+					break;
+				case 'r':
+					escaped_result += '\r';
+					break;
+				case '\\':
+					escaped_result += '\\';
+					break;
+				case '\'':
+					escaped_result += '\'';
+					break;
+				default:
+					escaped_result += result[i];
+					break;
+				}
+			} else {
+				escaped_result += result[i];
+			}
+		}
+		if (escaped_result.find('\0') != string::npos) {
+			throw ParserException("Null character not permitted in escape string literal");
+		}
+		UnicodeInvalidReason reason;
+		size_t pos;
+		auto utf_validity = Utf8Proc::Analyze(escaped_result.c_str(), escaped_result.size(), &reason, &pos);
+		if (utf_validity == UnicodeType::INVALID) {
+			const char *reason_str =
+			    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte mismatch" : "invalid unicode codepoint";
+			throw ParserException("Invalid UTF-8 in escape string literal at byte offset %d: %s", pos, reason_str);
+		}
+		return escaped_result;
+	}
+
 	virtual unique_ptr<ParsedExpression> ToExpression() {
 		switch (string_type) {
 		case SpecialStringCharacter::STANDARD:
+		case SpecialStringCharacter::ESCAPE_STRING:
 			return ConstantExpression::String(result);
 		case SpecialStringCharacter::NATIONAL_STRING:
 			return make_uniq<CastExpression>(LogicalType::VARCHAR, ConstantExpression::String(result));
@@ -513,90 +603,6 @@ public:
 			return ConstantExpression::Hex(result);
 		case SpecialStringCharacter::BIT_STRING:
 			return ConstantExpression::Bit(result);
-		case SpecialStringCharacter::ESCAPE_STRING:
-			string escaped_result;
-			escaped_result.reserve(result.size());
-
-			for (size_t i = 0; i < result.size(); ++i) {
-				if (result[i] == '\\' && i + 1 < result.size()) {
-					i++;
-					switch (result[i]) {
-					case 'b':
-						escaped_result += '\b';
-						break;
-					case 'f':
-						escaped_result += '\f';
-						break;
-					case '0':
-					case '1':
-					case '2':
-					case '3':
-					case '4':
-					case '5':
-					case '6':
-					case '7': {
-						size_t oct_start = i;
-						size_t oct_end = oct_start + 1;
-						while (oct_end < result.size() && oct_end - oct_start < 3 && result[oct_end] >= '0' &&
-						       result[oct_end] <= '7') {
-							oct_end++;
-						}
-						string oct_str = result.substr(oct_start, oct_end - oct_start);
-						escaped_result += static_cast<char>(strtoul(oct_str.c_str(), nullptr, 8));
-						i = oct_end - 1;
-						break;
-					}
-					case 'x': {
-						size_t hex_start = i + 1;
-						size_t hex_end = hex_start;
-						while (hex_end < result.size() && hex_end - hex_start < 2 &&
-						       StringUtil::CharacterIsHex(result[hex_end])) {
-							hex_end++;
-						}
-						if (hex_end > hex_start) {
-							string hex_str = result.substr(hex_start, hex_end - hex_start);
-							escaped_result += static_cast<char>(strtoul(hex_str.c_str(), nullptr, 16));
-							i = hex_end - 1;
-						} else {
-							escaped_result += 'x';
-						}
-						break;
-					}
-					case 'n':
-						escaped_result += '\n';
-						break;
-					case 't':
-						escaped_result += '\t';
-						break;
-					case 'r':
-						escaped_result += '\r';
-						break;
-					case '\\':
-						escaped_result += '\\';
-						break;
-					case '\'':
-						escaped_result += '\'';
-						break;
-					default:
-						escaped_result += result[i];
-						break;
-					}
-				} else {
-					escaped_result += result[i];
-				}
-			}
-			if (escaped_result.find('\0') != string::npos) {
-				throw ParserException("Null character not permitted in escape string literal");
-			}
-			UnicodeInvalidReason reason;
-			size_t pos;
-			auto utf_validity = Utf8Proc::Analyze(escaped_result.c_str(), escaped_result.size(), &reason, &pos);
-			if (utf_validity == UnicodeType::INVALID) {
-				const char *reason_str =
-				    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte mismatch" : "invalid unicode codepoint";
-				throw ParserException("Invalid UTF-8 in escape string literal at byte offset %d: %s", pos, reason_str);
-			}
-			return ConstantExpression::String(escaped_result);
 		}
 		return ConstantExpression::String(result);
 	}

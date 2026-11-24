@@ -355,6 +355,8 @@ public:
 	      duck_table(bind_data.table.Cast<DuckTableEntry>()), tx(DuckTransaction::Get(context, duck_table.catalog)),
 	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()),
 	      progress(MaxValue<idx_t>(1, context.db->NumberOfThreads())) {
+		// Persisted row groups can be smaller than the configured target size.
+		max_threads = MaxValue(max_threads, total_row_groups_to_scan);
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
@@ -562,7 +564,7 @@ public:
 			return PersistentScanResult::YIELD;
 		}
 		// the prepared vector was filtered out entirely, go the next vector
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		return PersistentScanResult::NEXT_VECTOR;
 	}
 
@@ -669,7 +671,6 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		{
@@ -727,7 +728,7 @@ public:
 			}
 
 			// Before looping back, check if we are interrupted
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 		} while (true);
 	}
 

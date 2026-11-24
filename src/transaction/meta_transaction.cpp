@@ -12,7 +12,7 @@ namespace duckdb {
 
 MetaTransaction::MetaTransaction(DatabaseInstance &db, timestamp_t start_timestamp_p, transaction_t transaction_id_p)
     : start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p), transaction_validity(db),
-      active_query(MAXIMUM_QUERY_ID), modified_database(nullptr), is_read_only(false) {
+      modified_database(nullptr), is_read_only(false) {
 }
 
 MetaTransaction::~MetaTransaction() = default;
@@ -62,8 +62,7 @@ Transaction &MetaTransaction::GetTransaction(ClientContext &context, AttachedDat
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
-		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction.active_query = active_query.load();
+		auto &new_transaction = db.GetTransactionManager().StartTransaction(context.GetContext(), *this);
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
@@ -78,7 +77,6 @@ Transaction &MetaTransaction::GetTransaction(ClientContext &context, AttachedDat
 
 		return new_transaction;
 	} else {
-		D_ASSERT(entry->second.transaction.active_query == active_query);
 		return entry->second.transaction;
 	}
 }
@@ -100,6 +98,7 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 }
 
 void MetaTransaction::SetReadOnly() {
+	lock_guard<mutex> guard(modification_lock);
 	if (modified_database) {
 		throw InternalException("Cannot set MetaTransaction to read only - modifications have already been made");
 	}
@@ -151,7 +150,7 @@ ErrorData MetaTransaction::Commit(ClientContext &context) {
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
 				// Rollback due to previous error.
-				transaction_manager.RollbackTransaction(transaction);
+				transaction_manager.RollbackTransaction(context, transaction);
 				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
@@ -162,7 +161,7 @@ ErrorData MetaTransaction::Commit(ClientContext &context) {
 	return error;
 }
 
-void MetaTransaction::Rollback() {
+void MetaTransaction::Rollback(ClientContext &context) {
 	// Rollback all transactions in reverse order.
 	ErrorData error;
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
@@ -180,7 +179,7 @@ void MetaTransaction::Rollback() {
 		}
 		try {
 			auto &transaction = transaction_ref.transaction;
-			transaction_manager.RollbackTransaction(transaction);
+			transaction_manager.RollbackTransaction(context, transaction);
 		} catch (std::exception &ex) {
 			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 		}
@@ -197,18 +196,6 @@ void MetaTransaction::Finalize(ClientContext &context) {
 		// If the use count is down to one, then we already detached the database.
 		// That means new transactions can no longer obtain a shared pointer to it.
 		AttachedDatabase::InvokeCloseIfLastReference(database.second, context);
-	}
-}
-
-idx_t MetaTransaction::GetActiveQuery() {
-	return active_query;
-}
-
-void MetaTransaction::SetActiveQuery(transaction_t query_number) {
-	lock_guard<mutex> guard(lock);
-	active_query = query_number;
-	for (auto &entry : transactions) {
-		entry.second.transaction.active_query = query_number;
 	}
 }
 
@@ -256,6 +243,7 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 
 void MetaTransaction::ModifyDatabase(ClientContext &context, AttachedDatabase &db,
                                      DatabaseModificationType modification) {
+	lock_guard<mutex> guard(modification_lock);
 	// Temporary objects are private to the connection, so a read-only transaction may still write them
 	if (IsReadOnly() && !db.IsTemporary()) {
 		throw TransactionException("Cannot write to database %s - transaction is launched in read-only mode",

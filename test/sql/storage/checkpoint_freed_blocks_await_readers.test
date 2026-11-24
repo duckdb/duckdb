@@ -1,0 +1,89 @@
+# name: test/sql/storage/checkpoint_freed_blocks_await_readers.test
+# description: Blocks a checkpoint frees are reused only once the transactions that started before it have ended
+# group: [storage]
+
+# a restart between the statements checkpoints without the readers
+require skip_reload
+
+load {TEST_DIR}/checkpoint_freed_blocks_await_readers.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CREATE TABLE t AS SELECT i, 'string ' || i AS s FROM range(100000) t(i);
+
+statement ok
+CHECKPOINT
+
+statement ok
+UPDATE t SET s = s || 'x'
+
+# two readers that started before the checkpoint
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM t WHERE s LIKE '%x'
+----
+100000
+
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+100000
+
+# rewriting the updated column frees the blocks it replaces
+statement ok con2
+CHECKPOINT
+
+query I con2
+SELECT free_blocks FROM pragma_database_size()
+----
+0
+
+query I con1
+SELECT COUNT(*) FROM t WHERE s LIKE '%x'
+----
+100000
+
+statement ok con1
+COMMIT
+
+# the other reader still holds the blocks back
+query I con2
+SELECT free_blocks FROM pragma_database_size()
+----
+0
+
+statement ok con3
+ROLLBACK
+
+query I con2
+SELECT free_blocks > 0 FROM pragma_database_size()
+----
+true
+
+restart
+
+statement ok
+SET debug_verify_blocks=true
+
+query I
+SELECT free_blocks > 0 FROM pragma_database_size()
+----
+true
+
+query II
+SELECT COUNT(*), COUNT(*) FILTER (s LIKE '%x') FROM t
+----
+100000	100000
+
+statement ok
+CHECKPOINT

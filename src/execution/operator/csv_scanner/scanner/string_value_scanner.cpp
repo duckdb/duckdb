@@ -225,11 +225,8 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 		result.first_line_is_comment = true;
 	}
 	result.comment = false;
-	if (result.state_machine.dialect_options.state_machine_options.new_line.GetValue() != NewLineIdentifier::CARRY_ON) {
-		result.last_position.buffer_pos = buffer_pos + 1;
-	} else {
-		result.last_position.buffer_pos = buffer_pos + 2;
-	}
+	// The next line starts behind the line break that ended the comment
+	result.SetLastPositionAfterNewline(buffer_pos);
 	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
 	                                   result.buffer_size};
 	result.current_line_position.begin = result.current_line_position.end;
@@ -1023,6 +1020,17 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	}
 }
 
+void StringValueResult::StartLineAfterEmptyLine() {
+	// The empty lines before a row are not part of its size: the next line starts at the last byte of this line break
+	idx_t line_break_pos = iterator.pos.buffer_pos;
+	if (states.IsCarriageReturn() &&
+	    state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		line_break_pos++;
+	}
+	current_line_position.begin = current_line_position.end;
+	current_line_position.end = {iterator.pos.buffer_idx, line_break_pos, buffer_size};
+}
+
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos + 1, result.buffer_size};
@@ -1030,6 +1038,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position.buffer_pos++;
 	}
+	result.StartLineAfterEmptyLine();
 	if (result.number_of_columns == 1) {
 		bool empty_is_null = false;
 		for (idx_t i = 0; i < result.null_str_count && !empty_is_null; i++) {
@@ -1484,7 +1493,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		if (!iterator.IsBoundarySet()) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+			// Skip the line feed of a \r\n that the buffer end split, a line feed of its own ends a line
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
+			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
 				iterator.pos.buffer_pos++;
 			}
 		} else {
@@ -1533,6 +1544,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 			if (state_machine->dialect_options.num_cols == 1) {
 				break;
 			}
+			if (result.cur_col_id == 0) {
+				result.StartLineAfterEmptyLine();
+			}
 			continue;
 		}
 		if (states.NewRow() || states.NewValue()) {
@@ -1559,6 +1573,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// the file ended inside a quoted value: record that before the value itself is added
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
+	// With a single column, a record separator read right after a state reset is an empty line only when it does not
+	// end an open row or comment
+	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
+	const bool empty_line = single_column_empty_line && result.cur_col_id == 0 && !result.comment;
 	bool skip_value = false;
 	if (result.projecting_columns) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
@@ -1648,8 +1666,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 			}
 		}
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
+		if (single_column_empty_line) {
+			if (empty_line) {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+			}
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
@@ -1661,16 +1681,14 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 			result.AddValueToVector(value.GetData(), value_size, true);
 		}
-	} else {
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
-		}
+	} else if (empty_line) {
+		result.EmptyLine(result, iterator.pos.buffer_pos);
 	}
 
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
-		} else {
+		} else if (!empty_line) {
 			result.AddRowInternal();
 		}
 		lines_read++;
