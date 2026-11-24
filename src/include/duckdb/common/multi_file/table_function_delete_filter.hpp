@@ -15,9 +15,9 @@ namespace duckdb {
 class ClientContext;
 
 //! Delete filter described by the open options of a file in a file list:
-//!  delete_query  SQL query that returns the deleted row positions of the file in a "pos" column
-//!  scan_rows     LIST of row positions - only these rows are produced (the inverse of the deletes)
-//!  max_row_count rows at or past this position are not part of the file
+//!  delete_query      SQL query that returns the deleted row positions of the file in a "pos" column
+//!  scan_deleted_rows when true, only the rows of the delete query are produced (the inverse of the deletes)
+//!  max_row_count     rows at or past this position are not part of the file
 class TableFunctionDeleteFilter : public DeleteFilter {
 public:
 	//! Create the filter for a file - returns nullptr if its options do not describe any deletes
@@ -33,9 +33,8 @@ private:
 private:
 	//! Sorted, distinct positions of the deleted rows
 	vector<idx_t> deleted_rows;
-	//! When set, only these (sorted) positions are produced
-	vector<idx_t> scan_rows;
-	bool has_scan_rows = false;
+	//! Produce the rows of the delete query instead of the other rows
+	bool scan_deleted_rows = false;
 	optional_idx max_row_count;
 };
 

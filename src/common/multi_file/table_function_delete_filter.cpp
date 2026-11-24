@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-static const char *SCAN_ROWS_OPTION = "scan_rows";
+static const char *SCAN_DELETED_OPTION = "scan_deleted_rows";
 static const char *DELETE_QUERY_OPTION = "delete_query";
 static const char *MAX_ROW_COUNT_OPTION = "max_row_count";
 
@@ -21,7 +21,7 @@ static bool HasOption(const OpenFileInfo &file, const char *name) {
 }
 
 bool TableFunctionDeleteFilter::HasDeleteOptions(const OpenFileInfo &file) {
-	return file.extended_info && (HasOption(file, DELETE_QUERY_OPTION) || HasOption(file, SCAN_ROWS_OPTION) ||
+	return file.extended_info && (HasOption(file, DELETE_QUERY_OPTION) || HasOption(file, SCAN_DELETED_OPTION) ||
 	                              HasOption(file, MAX_ROW_COUNT_OPTION));
 }
 
@@ -35,12 +35,10 @@ unique_ptr<DeleteFilter> TableFunctionDeleteFilter::TryCreate(ClientContext &con
 	if (file.extended_info->TryGetOption(MAX_ROW_COUNT_OPTION, value)) {
 		result->max_row_count = value;
 	}
-	if (HasOption(file, SCAN_ROWS_OPTION)) {
-		result->has_scan_rows = true;
-		for (auto &position : ListValue::GetChildren(options.at(SCAN_ROWS_OPTION))) {
-			result->scan_rows.push_back(UBigIntValue::Get(position.DefaultCastAs(LogicalType::UBIGINT)));
-		}
-		sort(result->scan_rows.begin(), result->scan_rows.end());
+	file.extended_info->TryGetOption(SCAN_DELETED_OPTION, result->scan_deleted_rows);
+	if (result->scan_deleted_rows && !HasOption(file, DELETE_QUERY_OPTION)) {
+		throw InvalidInputException("Option \"%s\" of file %s requires a \"%s\"", SCAN_DELETED_OPTION, file.path,
+		                            DELETE_QUERY_OPTION);
 	}
 	if (HasOption(file, DELETE_QUERY_OPTION)) {
 		result->AddDeletes(context, StringValue::Get(options.at(DELETE_QUERY_OPTION)), file.path);
@@ -89,15 +87,13 @@ idx_t TableFunctionDeleteFilter::Filter(row_t start_row_index, idx_t count, Sele
 		}
 		count = MinValue<idx_t>(max_count - start, count);
 	}
-	if (has_scan_rows) {
-		// only the listed rows are produced - and those that are not deleted
-		auto scan_entry = std::lower_bound(scan_rows.begin(), scan_rows.end(), start);
+	if (scan_deleted_rows) {
+		// only the rows of the delete query are produced
+		auto scan_entry = std::lower_bound(deleted_rows.begin(), deleted_rows.end(), start);
 		idx_t result_count = 0;
 		result_sel.Initialize(STANDARD_VECTOR_SIZE);
-		for (; scan_entry != scan_rows.end() && *scan_entry < start + count; scan_entry++) {
-			if (!std::binary_search(deleted_rows.begin(), deleted_rows.end(), *scan_entry)) {
-				result_sel.set_index(result_count++, *scan_entry - start);
-			}
+		for (; scan_entry != deleted_rows.end() && *scan_entry < start + count; scan_entry++) {
+			result_sel.set_index(result_count++, *scan_entry - start);
 		}
 		return result_count;
 	}

@@ -109,22 +109,40 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 ----
 must return a "pos" column
 
-# only the listed rows are scanned
+# scan the rows of the delete query instead of the other rows
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5]}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([7, 2, 5, 2]) AS pos', 'scan_deleted_rows': true}])
 ----
 2
 5
 7
 
-# rows that are also deleted are not produced
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5], 'delete_query': 'SELECT 5::BIGINT AS pos'}])
-----
-2
-7
-
-query I
-SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [1, 2, 3]}])
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/delete_options_del.parquet'')', 'scan_deleted_rows': true}])
 ----
 3
+
+# the rows of the query at or past max_row_count are not part of the file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([1, 4, 8]) AS pos', 'scan_deleted_rows': true, 'max_row_count': 5::UBIGINT}])
+----
+1
+4
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT 3::BIGINT AS pos', 'scan_deleted_rows': false}])
+----
+0
+1
+2
+4
+5
+6
+7
+8
+9
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_deleted_rows': true}])
+----
+requires a "delete_query"
