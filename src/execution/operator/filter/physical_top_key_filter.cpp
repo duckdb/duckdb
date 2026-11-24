@@ -150,7 +150,8 @@ public:
 			const auto row = candidates_sel ? candidates_sel->get_index(i) : i;
 			const auto hash = hash_data[row];
 			auto &slot = seen[hash & (SEEN_HASH_SLOTS - 1)];
-			if (slot == hash) {
+			// an empty slot is 0, as is the hash of an integer 0: a zero hash is never remembered
+			if (hash != 0 && slot == hash) {
 				continue;
 			}
 			slot = hash;
@@ -242,12 +243,10 @@ OperatorResultType PhysicalTopKeyFilter::Execute(ExecutionContext &context, Data
 		pass_count =
 		    state.selector.Select(state.key_chunk, state.selector.BoundaryValues(), nullptr, count,
 		                          TopNBoundaryTies::INCLUDE, TopNBoundaryRowOrder::INPUT_ORDER, state.pass_sel);
-		if (pass_count == 0) {
-			return OperatorResultType::NEED_MORE_INPUT;
-		}
 		if (!dynamic_filter && !warming_up) {
 			// without a dynamic filter in the scans this operator sees every row: if too many of them pass, the
-			// filter costs more than the aggregate saves. Passing every row is always correct.
+			// filter costs more than the aggregate saves. Passing every row is always correct. Every compared chunk
+			// counts, also one that is rejected as a whole (clustered input).
 			state.checked_rows += count;
 			state.passed_rows += pass_count;
 			if (state.checked_rows >= TopKeyFilterState::INEFFECTIVE_CHECK_ROWS) {
@@ -256,6 +255,9 @@ OperatorResultType PhysicalTopKeyFilter::Execute(ExecutionContext &context, Data
 				state.checked_rows = 0;
 				state.passed_rows = 0;
 			}
+		}
+		if (pass_count == 0) {
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 	}
 	const auto filtered = pass_count < count;
