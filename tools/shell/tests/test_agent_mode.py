@@ -265,14 +265,18 @@ def test_estimate_not_logged_or_profiled(shell):
         .statement("CALL enable_logging('QueryLog', storage = 'memory')")
         .statement("SELECT sum(range) FROM range(2000000)")
         .statement("CALL disable_logging()")
-        .statement("SELECT count(*) FILTER (WHERE message = '') FROM duckdb_logs WHERE type = 'QueryLog'")
+        .statement("SELECT string_agg(message, ' >> ' ORDER BY timestamp) FROM duckdb_logs WHERE type = 'QueryLog'")
         .statement("SET profiling_coverage = 'all'")
         .statement("SET enable_profiling = 'json'")
         .statement("SELECT sum(range) FROM range(2000000)")
     )
     result = test.run()
-    result.check_stdout("| 0 |")
-    assert '"sql": ""' not in result.stdout + result.stderr
+    # exactly the statements' own log entries, with no entry for the estimate
+    result.check_stdout("| SELECT sum(range) FROM range(2000000); >> CALL disable_logging(); |")
+    # exactly one profile, for the final SELECT
+    output = result.stdout + result.stderr
+    assert output.count('"sql":') == 1
+    assert '"sql": "SELECT sum(range) FROM range(2000000);"' in output
 
 def test_no_estimate_for_small_reads(shell):
     # the line is there to decide whether to wait; a small read is noise
