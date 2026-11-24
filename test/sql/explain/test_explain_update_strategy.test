@@ -1,0 +1,150 @@
+# name: test/sql/explain/test_explain_update_strategy.test
+# description: EXPLAIN shows whether an UPDATE runs in place or as a DELETE + INSERT
+# group: [explain]
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER, s VARCHAR, tags INTEGER[]);
+
+statement ok
+INSERT INTO t SELECT i, i, 's' || i, [i] FROM range(10) r(i);
+
+statement ok
+CREATE INDEX t_s_idx ON t(s);
+
+# a non-indexed scalar column is updated in place
+query II
+EXPLAIN UPDATE t SET v = v + 1 WHERE id = 1
+----
+physical_plan	<REGEX>:.*Table: .*\.t .*Strategy: In Place.*
+
+# an indexed SET column
+query II
+EXPLAIN UPDATE t SET s = 'x' WHERE id = 1
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+query II
+EXPLAIN UPDATE t SET id = id + 100 WHERE id = 1
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+# a LIST column cannot be updated in place
+query II
+EXPLAIN UPDATE t SET tags = [7] WHERE id = 1
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+# RETURNING adds every column to the SET list, including the indexed ones
+query II
+EXPLAIN UPDATE t SET v = v + 1 WHERE id = 1 RETURNING v
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+# the strategy is also in EXPLAIN ANALYZE
+query II
+EXPLAIN ANALYZE UPDATE t SET v = v + 1 WHERE id = 1
+----
+analyzed_plan	<REGEX>:.*Strategy: In Place.*
+
+query II
+EXPLAIN ANALYZE UPDATE t SET tags = [7] WHERE id = 1
+----
+analyzed_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+# a CHECK over two columns adds both to every UPDATE, so an index on one of them affects all UPDATEs
+statement ok
+CREATE TABLE c (id INTEGER PRIMARY KEY, v INTEGER, w INTEGER, CHECK (v >= id));
+
+statement ok
+INSERT INTO c SELECT i, i, i FROM range(5) r(i);
+
+query II
+EXPLAIN UPDATE c SET w = w + 1 WHERE id = 1
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+statement ok
+CREATE TABLE c_no_index (id INTEGER, v INTEGER, w INTEGER, CHECK (v >= id));
+
+query II
+EXPLAIN UPDATE c_no_index SET w = w + 1 WHERE id = 1
+----
+physical_plan	<REGEX>:.*Strategy: In Place.*
+
+# the debug setting forces DELETE + INSERT
+statement ok
+CREATE TABLE u (a INTEGER, b INTEGER);
+
+query II
+EXPLAIN UPDATE u SET a = a + 1
+----
+physical_plan	<REGEX>:.*Strategy: In Place.*
+
+statement ok
+SET debug_force_update_to_del_and_insert = true;
+
+query II
+EXPLAIN UPDATE u SET a = a + 1
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+statement ok
+RESET debug_force_update_to_del_and_insert;
+
+# the table name includes its schema
+statement ok
+CREATE SCHEMA other;
+
+statement ok
+CREATE TABLE other.t (a INTEGER);
+
+query II
+EXPLAIN UPDATE other.t SET a = a + 1
+----
+physical_plan	<REGEX>:.*Table: .*other\.t .*Strategy: In Place.*
+
+# each MERGE UPDATE clause shows its own strategy, in clause order
+statement ok
+CREATE TABLE src (id INTEGER, v INTEGER, s VARCHAR, tags INTEGER[]);
+
+query II
+EXPLAIN MERGE INTO t USING src ON t.id = src.id WHEN MATCHED THEN UPDATE SET v = src.v
+----
+physical_plan	<REGEX>:.*Strategy: In Place.*
+
+query II
+EXPLAIN MERGE INTO t USING src ON t.id = src.id WHEN MATCHED THEN UPDATE
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+query II
+EXPLAIN (FORMAT JSON) MERGE INTO t USING src ON t.id = src.id
+    WHEN MATCHED AND t.v > 5 THEN UPDATE SET tags = src.tags
+    WHEN MATCHED THEN UPDATE SET v = src.v
+----
+physical_plan	<REGEX>:.*"name": "UPDATE".*"Strategy": "Delete \+ Insert".*"name": "UPDATE".*"Strategy": "In Place".*
+
+# ON CONFLICT DO UPDATE
+query II
+EXPLAIN INSERT INTO t VALUES (3, 300, 's3', [3]) ON CONFLICT (id) DO UPDATE SET v = excluded.v
+----
+physical_plan	<REGEX>:.*Strategy: In Place.*
+
+query II
+EXPLAIN INSERT INTO t VALUES (3, 300, 's3', [3]) ON CONFLICT (id) DO UPDATE SET tags = excluded.tags
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+# INSERT OR REPLACE updates every column outside the conflict target
+query II
+EXPLAIN INSERT OR REPLACE INTO t VALUES (3, 300, 's3', [3])
+----
+physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+
+statement ok
+CREATE TABLE p (id INTEGER PRIMARY KEY, v INTEGER);
+
+query II
+EXPLAIN INSERT OR REPLACE INTO p VALUES (1, 1)
+----
+physical_plan	<REGEX>:.*Strategy: In Place.*
