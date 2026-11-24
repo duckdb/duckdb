@@ -2310,8 +2310,7 @@ void StringValueScanner::SetStart() {
 		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
 		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
 		if (exact_start && !after_carriage_return) {
-			// the exact state the bytes before the start left starts the search, which reads the first bytes by its
-			// rules, behind a line feed or at the file start the row end state, where a quote or a comment byte opens
+			// the search starts in the exact state, a row start as the row end state
 			switch (before_start.state) {
 			case CSVState::RECORD_SEPARATOR:
 			case CSVState::NOT_SET:
