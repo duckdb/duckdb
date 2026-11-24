@@ -132,6 +132,8 @@ typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, co
                                          const SubFrames *subframes_per_row, idx_t count, Vector &result,
                                          idx_t row_idx);
 
+//! Creates the state the custom window callbacks run on, in place of an aggregate state (optional)
+typedef unique_ptr<FunctionLocalState> (*aggregate_init_window_state_t)(AggregateStateInput &input);
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
                                     data_ptr_t g_state);
@@ -254,6 +256,10 @@ public:
 	aggregate_window_batch_t GetWindowBatchCallback() const { return window_batch; }
 	void SetWindowBatchCallback(aggregate_window_batch_t callback) { window_batch = callback; }
 
+	bool HasInitWindowStateCallback() const { return init_window_state != nullptr; }
+	aggregate_init_window_state_t GetInitWindowStateCallback() const { return init_window_state; }
+	void SetInitWindowStateCallback(aggregate_init_window_state_t callback) { init_window_state = callback; }
+
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
 	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
@@ -306,6 +312,8 @@ public:
 	aggregate_wininit_t window_init = nullptr;
 	//! Batched windowed aggregate function (may be null; preferred when set)
 	aggregate_window_batch_t window_batch = nullptr;
+	//! Creates the state of the custom window callbacks (may be null, then they run on an aggregate state)
+	aggregate_init_window_state_t init_window_state = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind = nullptr;
@@ -468,6 +476,10 @@ public: // Callbacks
 	auto HasWindowBatchCallback() const -> bool { return callbacks.window_batch != nullptr; }
 	auto GetWindowBatchCallback() const -> aggregate_window_batch_t { return callbacks.window_batch; }
 	auto SetWindowBatchCallback(aggregate_window_batch_t callback) -> void { callbacks.window_batch = callback; }
+
+	bool HasInitWindowStateCallback() const { return callbacks.init_window_state != nullptr; }
+	aggregate_init_window_state_t GetInitWindowStateCallback() const { return callbacks.init_window_state; }
+	void SetInitWindowStateCallback(aggregate_init_window_state_t callback) { callbacks.init_window_state = callback; }
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> aggregate_statistics_t { return callbacks.statistics; }

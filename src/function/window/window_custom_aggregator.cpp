@@ -42,11 +42,17 @@ public:
 	                                 const WindowExcludeMode exclude_mode);
 	~WindowCustomAggregatorLocalState() override;
 
+	data_ptr_t GetState() {
+		return window_state ? reinterpret_cast<data_ptr_t>(window_state.get()) : state.data();
+	}
+
 public:
 	//! The aggregate function
 	const AggregateObject aggr;
 	//! Data pointer that contains a single state, shared by all the custom evaluators
 	vector<data_t> state;
+	//! The state of the custom window callbacks, if the aggregate creates its own
+	unique_ptr<FunctionLocalState> window_state;
 	//! Reused result state container for the window functions
 	Vector statef;
 	//! The frame boundaries, used for the window functions
@@ -81,14 +87,19 @@ WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionCont
       statef(Value::POINTER(CastPointerToValue(state.data())), count_t(1)), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
 	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
-	data_ptr_t state_ptr = state.data();
-	aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
+	if (aggr.function.HasInitWindowStateCallback()) {
+		window_state = aggr.function.GetInitWindowStateCallback()(state_input);
+		D_ASSERT(window_state);
+	} else {
+		data_ptr_t state_ptr = state.data();
+		aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
+	}
 
 	InitSubFrames(frames, exclude_mode);
 }
 
 WindowCustomAggregatorLocalState::~WindowCustomAggregatorLocalState() {
-	if (aggr.function.HasStateDestructorCallback()) {
+	if (!window_state && aggr.function.HasStateDestructorCallback()) {
 		AggregateInputData aggr_input_data(aggr, allocator);
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, 1);
 	}
@@ -128,7 +139,7 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, CollectionPtr c
 		                               sink.interrupt_state);
 
 		AggregateInputData aggr_input_data(aggr, gcstate.allocator);
-		aggr.function.GetWindowInitCallback()(aggr_input_data, partition, gcstate.state.data());
+		aggr.function.GetWindowInitCallback()(aggr_input_data, partition, gcstate.GetState());
 	}
 
 	++gcsink.finalized;
@@ -147,7 +158,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	auto &gcsink = sink.global_state.Cast<WindowCustomAggregatorGlobalState>();
 	if (gcsink.glstate) {
 		auto &gcstate = gcsink.glstate->Cast<WindowCustomAggregatorLocalState>();
-		gstate_p = gcstate.state.data();
+		gstate_p = gcstate.GetState();
 	}
 
 	auto collection = gcsink.collection;
@@ -168,7 +179,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 		all_frames.reserve(count);
 		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) { all_frames.push_back(frames); });
 		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
-		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(),
+		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.GetState(),
 		                                       all_frames.data(), count, result, row_idx);
 		return;
 	}
@@ -176,8 +187,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
-		aggr.function.GetWindowCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(), frames, result,
-		                                  i);
+		aggr.function.GetWindowCallback()(aggr_input_data, partition, gstate_p, lcstate.GetState(), frames, result, i);
 	});
 }
 

@@ -100,7 +100,7 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
 	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&
 	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
-	       import_aggregate_state == rhs.import_aggregate_state;
+	       import_aggregate_state == rhs.import_aggregate_state && init_window_state == rhs.init_window_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
