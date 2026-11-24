@@ -1722,6 +1722,9 @@ typedef struct {
 	 const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
 	 idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
 	 duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
+	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
+	 void *user_data, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3920,6 +3923,9 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_instance_open_shared duckdb_ext_api.duckdb_v2_instance_open_shared
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_get_profiling_information duckdb_ext_api.duckdb_v2_connection_get_profiling_information
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
