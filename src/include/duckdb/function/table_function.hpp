@@ -268,6 +268,8 @@ struct GetPartitionStatsInput {
 
 	const BoundTableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
+	//! Whether an upper bound on the row count of each partition suffices
+	bool approximate_count = false;
 };
 
 struct TableFunctionGetBindInfoInput {

@@ -2075,12 +2075,22 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p)
-	    : row_group(std::move(row_group_p)), is_exact(is_exact_p) {
+	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p,
+	                                 unique_ptr<TransactionData> transaction_p = nullptr)
+	    : row_group(std::move(row_group_p)), is_exact(is_exact_p), transaction(std::move(transaction_p)) {
 	}
 
 	shared_ptr<RowGroup> row_group;
 	const bool is_exact;
+	//! Set when the visible rows were not counted up front
+	unique_ptr<TransactionData> transaction;
+
+	optional_idx GetVisibleRowCount() override {
+		if (!transaction) {
+			return optional_idx();
+		}
+		return row_group->GetVisibleRowCount(*transaction);
+	}
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		return row_group->GetStatistics(storage_index);
@@ -2095,7 +2105,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction,
+                                                bool approximate_count) {
 	auto &row_group_ref = row_group.GetNode();
 
 	PartitionStatistics result;
@@ -2105,6 +2116,14 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 		result.count_type = CountType::COUNT_APPROXIMATE;
 		result.partition_row_group =
 		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		return result;
+	}
+	if (approximate_count) {
+		// an upper bound: the visible rows are counted only for the partitions the caller asks about
+		result.count = row_group_ref.count;
+		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(
+		    row_group.ReferenceNode(), /*is_exact_p=*/false, make_uniq<TransactionData>(transaction));
 		return result;
 	}
 

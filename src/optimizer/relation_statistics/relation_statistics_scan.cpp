@@ -433,6 +433,7 @@ static optional_idx ZonemapFilterBound(LogicalGet &get, ClientContext &context,
 	}
 
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
+	input.approximate_count = true;
 	auto partitions = get.function.get_partition_stats(context, input);
 	if (partitions.empty() || partitions.size() > ZONEMAP_MAX_ROW_GROUPS) {
 		return optional_idx();
@@ -461,7 +462,9 @@ static optional_idx ZonemapFilterBound(LogicalGet &get, ClientContext &context,
 		if (skipped) {
 			continue;
 		}
-		matching_rows += partition.count;
+		auto visible_rows =
+		    partition.partition_row_group ? partition.partition_row_group->GetVisibleRowCount() : optional_idx();
+		matching_rows += visible_rows.IsValid() ? visible_rows.GetIndex() : partition.count;
 		if (matching_rows >= estimate) {
 			// the bound only grows from here on: it cannot improve on the estimate, so the remaining row groups
 			// need not be read
