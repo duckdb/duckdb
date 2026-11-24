@@ -22,6 +22,7 @@ public:
 	explicit VariantPathBindData();
 	explicit VariantPathBindData(const string &input_path);
 	explicit VariantPathBindData(const vector<string> &input_paths);
+	explicit VariantPathBindData(int64_t index);
 	VariantPathBindData(const VariantPathBindData &other) = default;
 
 public:

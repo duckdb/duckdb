@@ -1095,10 +1095,23 @@ public:
 	/// metrics. Unstable API.
 	auto EnableProfiling(bool enabled = true) -> void;
 
-	/// Takes a snapshot of the metrics of the last query this connection finished. What it holds is decided by the
-	/// profiling configuration, e.g. `SET enable_profiling = 'no_output'`. Unstable API.
-	/// @throws Exception While a result on this connection is still live.
+	/// Takes a snapshot of the metrics of the last query this connection profiled, which is not necessarily the last
+	/// query it ran: see GetProfilingInformation. What it holds is decided by the profiling configuration, e.g.
+	/// `SET enable_profiling = 'no_output'`. Unstable API.
+	/// @throws Exception While a result on this connection has not been drained or destroyed.
 	auto GetQueryMetrics() const -> QueryMetrics;
+
+	/// Renders the profile of the last query this connection profiled, as the text the profiler prints for it. The
+	/// profiler keeps that profile while profiling is disabled, so after profiling is enabled again it describes the
+	/// last query run while profiling was enabled until the next query finishes. What it holds is decided by the
+	/// profiling configuration, e.g. `SET enable_profiling = 'json'`; without profiling it is the profiler's note that
+	/// profiling is disabled. Unstable API.
+	/// @param format The profiler format name: "json", "text", "query_tree", "query_tree_optimizer", "html",
+	/// "graphviz", "yaml", "mermaid" or "no_output", which renders nothing. Empty selects the configured format, or a
+	/// query tree when that is "no_output".
+	/// @throws Exception For an unknown format, or while a result on this connection has not been drained or
+	/// destroyed.
+	auto GetProfilingInformation(std::string_view format = {}) const -> std::string;
 
 	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
 	/// @param statement The statement to prepare.

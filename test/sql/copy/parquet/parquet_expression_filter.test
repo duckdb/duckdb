@@ -32,3 +32,20 @@ SELECT COUNT(*) FROM parq
 WHERE least(str, 'thisisalongstring50') = str AND str >= 'thisisalongstring2000' AND str <= 'thisisalongstring4000'
 ----
 44460
+
+# Keep a dense selection when another filtered column uses decoded dictionaries.
+query I
+SELECT
+    (SELECT count(*) FROM parq WHERE i >= 33333 AND least(str, 'thisisalongstring50') = str)
+    =
+    (SELECT count(*) FROM tbl WHERE i >= 33333 AND least(str, 'thisisalongstring50') = str)
+----
+true
+
+query I
+SELECT
+    (SELECT sum(i) FROM parq WHERE i >= 33333 AND least(str, 'thisisalongstring50') = str)
+    =
+    (SELECT sum(i) FROM tbl WHERE i >= 33333 AND least(str, 'thisisalongstring50') = str)
+----
+true
