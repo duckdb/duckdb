@@ -90,6 +90,10 @@ struct ColumnMapper {
 	virtual ~ColumnMapper() = default;
 	virtual unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const = 0;
 	virtual MultiFileLocalIndex Find(const MultiFileColumnDefinition &column) const = 0;
+	//! Find the element of a LIST among the children of the list
+	virtual MultiFileLocalIndex FindListChild(const MultiFileColumnDefinition &column) const {
+		return Find(column);
+	}
 	virtual unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
 	                                                    bool is_root) const = 0;
 	virtual idx_t MapCount() const = 0;
@@ -168,6 +172,14 @@ struct NameMapper : public ColumnMapper {
 			return MultiFileLocalIndex();
 		}
 		return entry->second;
+	}
+	MultiFileLocalIndex FindListChild(const MultiFileColumnDefinition &column) const override {
+		if (name_map.size() != 1) {
+			return Find(column);
+		}
+		// A LIST has exactly one child, and a file names it after its repeated group ("list", "array", "bag", ...).
+		// That name is not part of the logical schema, so the single child is the element whatever it is called.
+		return MultiFileLocalIndex(0);
 	}
 	unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
 	                                            bool is_root) const override {
@@ -249,6 +261,13 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
                                  const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
                                  MultiFileLocalIndex top_level_index = MultiFileLocalIndex());
 
+//! Map a global column to the local column the mapper found for it (invalid if the file does not have it)
+static ColumnMapResult MapColumnToLocal(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                                        const ColumnIndex &global_index,
+                                        const vector<MultiFileColumnDefinition> &local_columns,
+                                        const ColumnMapper &mapper, MultiFileLocalIndex local_idx,
+                                        MultiFileLocalIndex top_level_index = MultiFileLocalIndex());
+
 static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                      const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                      const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -289,7 +308,8 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 
 	ColumnMapResult child_map;
 	if (is_selected) {
-		child_map = MapColumn(context, global_child, global_child_index.get(), local_column.children, *nested_mapper);
+		child_map = MapColumnToLocal(context, global_child, global_child_index.get(), local_column.children,
+		                             *nested_mapper, nested_mapper->FindListChild(global_child));
 	} else {
 		// column is not relevant for the query - push a NULL value
 		child_map.default_value = make_uniq<BoundConstantExpression>(Value(global_child.type));
@@ -306,8 +326,8 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 
 	ColumnMapResult result;
 	result.local_column = local_column;
-	if (!column_mapping.empty()) {
-		// we have column mappings at this level - construct the struct
+	if (!column_mapping.empty() || !is_root) {
+		// A nested source still supplies the list entries when the element comes from a default.
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
@@ -385,8 +405,8 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		    global_column.children.size());
 	}
 
+	// the single child is the repeated group of the map, which most files call "key_value" and some "map"
 	D_ASSERT(local_column.children.size() == 1);
-	D_ASSERT(local_column.children[0].name == "key_value");
 	auto &local_key_value = local_column.children[0];
 
 	auto nested_mapper = mapper.Create(local_key_value.children);
@@ -435,8 +455,8 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 	ColumnMapResult result;
 	result.local_column = local_column;
-	if (!column_mapping.empty()) {
-		// we have column mappings at this level - construct the struct
+	if (!column_mapping.empty() || !is_root) {
+		// A nested source still supplies the map entries when the key and value come from defaults.
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
@@ -582,9 +602,17 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
                                  const ColumnIndex &global_index,
                                  const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
                                  MultiFileLocalIndex top_level_index) {
+	return MapColumnToLocal(context, global_column, global_index, local_columns, mapper, mapper.Find(global_column),
+	                        top_level_index);
+}
+
+static ColumnMapResult MapColumnToLocal(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                                        const ColumnIndex &global_index,
+                                        const vector<MultiFileColumnDefinition> &local_columns,
+                                        const ColumnMapper &mapper, MultiFileLocalIndex local_idx,
+                                        MultiFileLocalIndex top_level_index) {
 	bool is_root = top_level_index.IsValid();
 	ColumnMapResult result;
-	auto local_idx = mapper.Find(global_column);
 	if (!local_idx.IsValid()) {
 		// entry not present in map, use default value
 		result.default_value = mapper.GetDefaultExpression(context, global_column, is_root);
