@@ -1,0 +1,69 @@
+# name: test/optimizer/projection_pullup_join_region.test
+# description: Keep projections that would expose too many inputs to the join order optimizer
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT i AS k, i % 7 AS v FROM range(50) r(i);
+
+statement ok
+CREATE VIEW v1 AS SELECT a.k, a.v FROM t a JOIN t b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v2 AS SELECT a.k, a.v FROM v1 a JOIN v1 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v3 AS SELECT a.k, a.v FROM v2 a JOIN v2 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v4 AS SELECT a.k, a.v FROM v3 a JOIN v3 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v5 AS SELECT a.k, a.v FROM v4 a JOIN v4 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v17 AS SELECT a.k, a.v FROM v4 a JOIN t b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW vvolatile AS SELECT k, v FROM v4 WHERE random() >= 0;
+
+# Isolate the projections kept by projection pullup.
+statement ok
+SET disabled_optimizers = 'compressed_materialization,common_subplan';
+
+statement ok
+SET explain_output = 'optimized_only';
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v3;
+----
+logical_opt	<!REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+# A region of 16 inputs still fits the limit.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v4;
+----
+logical_opt	<!REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+# An additional input takes the combined region over the limit.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v17;
+----
+logical_opt	<REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+# A volatile filter isolates the 16-input region from the join above it.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM vvolatile a JOIN v1 b ON a.k = b.k AND a.v = b.v;
+----
+logical_opt	<!REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+# Both view branches fit on their own. Expanding both would expose 32 inputs.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v5;
+----
+logical_opt	<REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+statement ok
+SET approximate_join_order_threshold = 2;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v4;
+----
+logical_opt	<!REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM v5;
+----
+logical_opt	<REGEX>:[\s\S]*"name": "COMPARISON_JOIN"[\s\S]*"name": "PROJECTION"[\s\S]*
+
+query III
+SELECT count(*), sum(k), sum(v) FROM v5;
+----
+50	1225	147

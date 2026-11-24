@@ -53,6 +53,9 @@ public:
 public:
 	idx_t NumRelations();
 
+	//! Whether an operator can be traversed when counting inputs to an inner-join region.
+	static bool CanExpandInnerJoinRegion(const LogicalOperator &op);
+
 	bool ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
 	                          vector<reference<LogicalOperator>> &filter_operators,
 	                          optional_ptr<LogicalOperator> parent = nullptr);

@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -8,6 +9,46 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
+
+static idx_t CountJoinRegionInputs(const LogicalOperator &root, const LogicalProjection &projection, idx_t limit) {
+	vector<reference<const LogicalOperator>> pending {root};
+	idx_t inputs = 0;
+	while (!pending.empty()) {
+		// Every pending subtree contributes at least one input.
+		if (pending.size() >= limit - inputs) {
+			return limit;
+		}
+		const auto &op = pending.back().get();
+		pending.pop_back();
+		if (&op == &projection || RelationManager::CanExpandInnerJoinRegion(op)) {
+			for (const auto &child : op.children) {
+				pending.emplace_back(*child);
+			}
+		} else {
+			inputs++;
+		}
+	}
+	return inputs;
+}
+
+static bool WouldExpandJoinRegionTooFar(const LogicalProjection &projection,
+                                        const vector<reference<LogicalOperator>> &parents) {
+	static constexpr idx_t MAX_JOIN_REGION_INPUTS = 16;
+	if (CountJoinRegionInputs(*projection.children[0], projection, 2) == 1) {
+		return false;
+	}
+	optional_ptr<const LogicalOperator> region;
+	for (idx_t i = parents.size(); i > 0; i--) {
+		const auto &parent = parents[i - 1].get();
+		if (!RelationManager::CanExpandInnerJoinRegion(parent)) {
+			break;
+		}
+		if (parent.children.size() == 2) {
+			region = parent;
+		}
+	}
+	return region && CountJoinRegionInputs(*region, projection, MAX_JOIN_REGION_INPUTS + 1) > MAX_JOIN_REGION_INPUTS;
+}
 
 void ProjectionPullup::PopParents(const LogicalOperator &op) {
 	// pop back elements until the last operator in the stack is THIS operator
@@ -378,6 +419,12 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 				return;
 			}
 			if (all_column_refs) {
+				if (WouldExpandJoinRegionTooFar(proj, parents)) {
+					// Keep this projection as the binding boundary for the smaller join region below it.
+					ProjectionPullup child_pullup(optimizer, op);
+					child_pullup.Optimize(proj.children[0]);
+					return;
+				}
 				RemoveProjection(op, proj, proj_bindings);
 				return;
 			}

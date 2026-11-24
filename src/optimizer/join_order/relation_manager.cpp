@@ -395,7 +395,11 @@ static bool ContainsRecurringCTERef(const LogicalOperator &op) {
 	return false;
 }
 
-static bool JoinIsReorderable(LogicalOperator &op) {
+static bool CanTraverseUnaryOperator(const LogicalOperator &op) {
+	return op.children.size() == 1 && !OperatorNeedsRelation(op.type) && !OperatorIsNonReorderable(op);
+}
+
+static bool JoinIsReorderable(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
 	}
@@ -445,6 +449,16 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		}
 	}
 	return false;
+}
+
+bool RelationManager::CanExpandInnerJoinRegion(const LogicalOperator &op) {
+	if (CanTraverseUnaryOperator(op)) {
+		return true;
+	}
+	return (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
+	        (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	         op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER)) &&
+	       JoinIsReorderable(op);
 }
 
 static bool IsProjectedRecursiveCTERef(const LogicalOperator &op, const JoinOrderOptimizer &optimizer) {
@@ -574,7 +588,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 	vector<reference<LogicalOperator>> unary_filters;
 	// pass through single child operators (but never past a non-reorderable op such as a DML node, which
 	// must be preserved as its own relation rather than skipped over and dropped during reconstruction)
-	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type) && !OperatorIsNonReorderable(*op)) {
+	while (CanTraverseUnaryOperator(*op)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			unary_filters.push_back(*op);
 		}
