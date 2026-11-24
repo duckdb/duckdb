@@ -268,7 +268,9 @@ struct GetPartitionStatsInput {
 
 	const BoundTableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
-	//! Whether an upper bound on the row count of each partition suffices
+	//! Whether an upper bound on the row count of each partition suffices. The count is then COUNT_APPROXIMATE and
+	//! MinMaxIsExact() is false; PartitionRowGroup::GetVisibleRowCount() gives the exact count on demand, so the
+	//! result must not outlive the current transaction
 	bool approximate_count = false;
 };
 
