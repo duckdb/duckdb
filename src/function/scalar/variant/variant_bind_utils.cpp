@@ -80,13 +80,13 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 	const auto &return_type = path_expr.GetReturnType();
 	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST &&
 	    return_type.id() != LogicalTypeId::BIGINT) {
-		throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+		throw BinderException("%s expects the second argument to be of type VARCHAR, VARCHAR[] or BIGINT, not %s",
 		                      function_name, return_type.ToString());
 	}
 	if (return_type.id() == LogicalTypeId::LIST) {
 		const auto child_type_id = ListType::GetChildType(return_type).id();
 		if (child_type_id != LogicalTypeId::VARCHAR && child_type_id != LogicalTypeId::SQLNULL) {
-			throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+			throw BinderException("%s expects the second argument to be of type VARCHAR, VARCHAR[] or BIGINT, not %s",
 			                      function_name, return_type.ToString());
 		}
 	}
