@@ -15,12 +15,9 @@ namespace duckdb {
 class ClientContext;
 
 //! Delete filter described by the open options of a file in a file list:
-//!  deleted_rows           LIST of row positions that are deleted from the file
-//!  delete_query          SQL query that returns more deleted positions as "pos" (BIGINT) and, optionally, the
-//!                         snapshot that deleted each of them as "snapshot_id"
-//!  delete_snapshot_filter only deletions with a snapshot id <= this value apply (delete_query with snapshot ids)
-//!  scan_rows              LIST of row positions - only these rows are produced (the inverse of deleted_rows)
-//!  max_row_count          rows at or past this position are not part of the file
+//!  delete_query  SQL query that returns the deleted row positions of the file in a "pos" column
+//!  scan_rows     LIST of row positions - only these rows are produced (the inverse of the deletes)
+//!  max_row_count rows at or past this position are not part of the file
 class TableFunctionDeleteFilter : public DeleteFilter {
 public:
 	//! Create the filter for a file - returns nullptr if its options do not describe any deletes
@@ -34,13 +31,11 @@ private:
 	void AddDeletes(ClientContext &context, const string &query, const string &path);
 
 private:
-	//! Sorted positions of the deleted rows, and (optionally) the snapshot that deleted each of them
+	//! Sorted, distinct positions of the deleted rows
 	vector<idx_t> deleted_rows;
-	vector<idx_t> snapshot_ids;
 	//! When set, only these (sorted) positions are produced
 	vector<idx_t> scan_rows;
 	bool has_scan_rows = false;
-	optional_idx snapshot_filter;
 	optional_idx max_row_count;
 };
 

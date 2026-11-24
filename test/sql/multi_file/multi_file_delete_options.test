@@ -13,9 +13,9 @@ COPY (SELECT 'x' file_path, pos FROM (VALUES (2::BIGINT), (5), (9)) t(pos)) TO '
 statement ok
 COPY (SELECT 'x' file_path, pos, snapshot_id AS _ducklake_internal_snapshot_id FROM (VALUES (1::BIGINT, 1::BIGINT), (4, 3), (7, 5)) t(pos, snapshot_id)) TO '{TEST_DIR}/delete_options_del_snap.parquet'
 
-# deleted positions given inline
+# deleted positions given by a query
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [0, 3, 4]}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([0, 3, 4]) AS pos'}])
 ----
 1
 2
@@ -27,7 +27,7 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 
 # unsorted and duplicate positions
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [8, 1, 8]}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([8, 1, 8]) AS pos'}])
 ----
 0
 2
@@ -56,9 +56,9 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 7
 8
 
-# a delete file with snapshot ids only applies up to the snapshot filter
+# a delete file with snapshot ids, filtered to a snapshot by the query
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos, _ducklake_internal_snapshot_id AS snapshot_id FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'')', 'delete_snapshot_filter': 3}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'') WHERE _ducklake_internal_snapshot_id <= 3'}])
 ----
 0
 2
@@ -69,9 +69,21 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 8
 9
 
+# deletes from several sources
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'') WHERE _ducklake_internal_snapshot_id <= 3 UNION ALL SELECT 9::BIGINT'}])
+----
+0
+2
+3
+5
+6
+7
+8
+
 # counts are not answered from the metadata of the file
 query I
-SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [1, 2]}])
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([1, 2]) AS pos'}])
 ----
 8
 
@@ -81,10 +93,21 @@ SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.
 ----
 10
 
+# a query without deletes
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT 0::BIGINT AS pos WHERE false'}])
+----
+10
+
 statement error
 SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/does_not_exist.parquet'')'}])
 ----
 Failed to read the deletes of file
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT 42 AS something_else'}])
+----
+must return a "pos" column
 
 # only the listed rows are scanned
 query I
@@ -96,7 +119,7 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 
 # rows that are also deleted are not produced
 query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5], 'deleted_rows': [5]}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5], 'delete_query': 'SELECT 5::BIGINT AS pos'}])
 ----
 2
 7
@@ -105,32 +128,3 @@ query I
 SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [1, 2, 3]}])
 ----
 3
-
-# the deletes can be any query
-query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT unnest([1, 4, 8])::BIGINT AS pos'}])
-----
-0
-2
-3
-5
-6
-7
-9
-
-statement error
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT 42 AS something_else'}])
-----
-must return a "pos" column
-
-# listed deletes apply in every snapshot - the rows of the delete file keep their own snapshots
-query I
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_query': 'SELECT pos, _ducklake_internal_snapshot_id AS snapshot_id FROM read_parquet(''{TEST_DIR}/delete_options_del_snap.parquet'')', 'delete_snapshot_filter': 3, 'deleted_rows': [9]}])
-----
-0
-2
-3
-5
-6
-7
-8
