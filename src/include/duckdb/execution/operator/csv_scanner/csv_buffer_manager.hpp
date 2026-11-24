@@ -102,6 +102,8 @@ protected:
 	const OpenFileInfo file;
 	//! Reads the end of a buffer when it is handed out, without holding the mutex
 	void RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle &handle);
+	//! Hands the buffer and those before it without an exact end out in order, so that their ends are read on
+	void ReadBufferEndsUpTo(idx_t buffer_idx);
 	//! The cached buffers
 	vector<shared_ptr<CSVBuffer>> cached_buffers;
 	//! The ends of the buffers handed out, which outlive the buffers themselves

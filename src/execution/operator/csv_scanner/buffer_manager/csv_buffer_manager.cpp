@@ -97,12 +97,13 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 	if (buffer_idx >= buffer_ends.size()) {
 		buffer_ends.resize(buffer_idx + 1);
 	}
-	buffer_ends[buffer_idx] = buffer_end;
+	if (!buffer_ends[buffer_idx].exact || buffer_end.exact) {
+		buffer_ends[buffer_idx] = buffer_end;
+	}
 }
 
 bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) {
 	for (idx_t attempt = 0; attempt < 2; attempt++) {
-		bool previous_read = buffer_idx == 0;
 		{
 			lock_guard<mutex> parallel_lock(main_mutex);
 			if (!buffer_end_state_machine) {
@@ -110,19 +111,45 @@ bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) 
 			}
 			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read) {
 				buffer_end = buffer_ends[buffer_idx];
-				if (buffer_end.exact || attempt > 0) {
+				// an end that does not settle the next byte is read again behind the ends before it, by a buffer
+				// manager that can hand its buffers out again
+				if (buffer_end.known || attempt > 0 || !HasKnownBufferRanges()) {
 					return true;
 				}
+			} else if (attempt > 0) {
+				return false;
 			}
-			previous_read = previous_read || (buffer_idx - 1 < buffer_ends.size() && buffer_ends[buffer_idx - 1].read);
 		}
-		// the buffer is handed out to read its end, which may need the end of the buffer before, read the same way
-		if (!previous_read) {
-			GetBuffer(buffer_idx - 1);
+		if (HasKnownBufferRanges()) {
+			ReadBufferEndsUpTo(buffer_idx);
+		} else {
+			// the buffer was not handed out yet, its end is read once it is
+			GetBuffer(buffer_idx);
 		}
-		GetBuffer(buffer_idx);
 	}
 	return false;
+}
+
+void CSVBufferManager::ReadBufferEndsUpTo(idx_t buffer_idx) {
+	// the buffers before it whose end was read without a line start, and the first one not handed out yet, are
+	// handed out in order, so that every end is read on from the one before
+	idx_t first = buffer_idx;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		while (first > 0) {
+			const bool read = first - 1 < buffer_ends.size() && buffer_ends[first - 1].read;
+			if (read && buffer_ends[first - 1].exact) {
+				break;
+			}
+			first--;
+			if (!read) {
+				break;
+			}
+		}
+	}
+	for (idx_t idx = first; idx <= buffer_idx; idx++) {
+		GetBuffer(idx);
+	}
 }
 
 CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size, const bool file_start,
