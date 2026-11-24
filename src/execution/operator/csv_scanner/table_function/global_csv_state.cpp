@@ -112,8 +112,7 @@ bool CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr, CSVLocalSta
 		current_boundary.SetCurrentBoundaryToPosition(single_threaded, current_file.options);
 		if (!single_threaded) {
 			// the scanners starting behind a buffer end read their first bytes in its context
-			current_file.buffer_manager->ReadBufferEnds(current_file.state_machine,
-			                                            current_file.options.maximum_line_size.GetValue());
+			current_file.buffer_manager->ReadBufferEnds(current_file.state_machine);
 		}
 		current_buffer_in_use =
 		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());

@@ -126,6 +126,44 @@ comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel =
 ----
 7	1
 
+# an escaped pair, whose line feed is not a line break, before a quote inside the value and the next buffer
+statement ok
+COPY (SELECT encode('pppppp' || chr(10) || 'ab\' || chr(13) || chr(10) || '"cd\' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_pair_quote.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_pair_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_pair_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	0
+
+# a comment line longer than max_line_size, which comments may be, ending in an even run before a range start
+statement ok
+COPY (SELECT 'p' || chr(10) || 'p' || chr(10) || 'p' || chr(10) || '#ccccccc\\' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10)) TO '{TEST_DIR}/escape_long_comment.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_long_comment.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_long_comment.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, parallel = false)
+----
+6	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

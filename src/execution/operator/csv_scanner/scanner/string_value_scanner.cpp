@@ -2255,9 +2255,8 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 
 bool StringValueScanner::BytesBeforeStart(CSVBufferEnd &before_start) const {
 	if (iterator.pos.buffer_pos > 0) {
-		before_start =
-		    CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, iterator.pos.buffer_pos, iterator.pos.buffer_idx == 0,
-		                                    *state_machine, state_machine->options.maximum_line_size.GetValue());
+		before_start = CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, iterator.pos.buffer_pos,
+		                                               iterator.pos.buffer_idx == 0, *state_machine);
 	} else if (iterator.pos.buffer_idx == 0 ||
 	           !buffer_manager->GetBufferEnd(iterator.pos.buffer_idx - 1, before_start)) {
 		return false;

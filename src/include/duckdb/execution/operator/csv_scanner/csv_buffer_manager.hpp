@@ -29,7 +29,7 @@ enum class CSVBufferEndEscape : uint8_t {
 	NONE,           //! The next byte reads on its own, also behind escapes inside a comment
 	ESCAPED,        //! An unquoted escape ends the buffer and escapes the next byte
 	ESCAPED_RETURN, //! An escaped carriage return ends the buffer, a line feed behind it continues the value
-	UNKNOWN         //! The line of the trailing escapes starts before the buffer or exceeds the maximum line size
+	UNKNOWN         //! The line of the trailing escapes starts before the buffer
 };
 
 //! What a scanner starting behind a buffer end needs to know about the bytes before it
@@ -80,12 +80,12 @@ public:
 	//! Returns the number of buffers in the cached_buffers cache
 	idx_t BufferCount() const;
 	//! Reads how every buffer handed out from now on ends, for the scanners that start behind a buffer end
-	void ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine, idx_t max_line_size);
+	void ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine);
 	//! The end of a buffer as read when it was handed out, false while buffer ends are not read
 	bool GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end);
 	//! How the bytes before size read on, file_start when the bytes start the file
 	static CSVBufferEnd ScanBufferEnd(const char *bytes, idx_t size, bool file_start,
-	                                  const CSVStateMachine &state_machine, idx_t max_line_size);
+	                                  const CSVStateMachine &state_machine);
 
 	string GetFilePath() const;
 
@@ -106,7 +106,6 @@ protected:
 	vector<CSVBufferEnd> buffer_ends;
 	//! The state machine the buffer ends are read with, unset while they are not read
 	shared_ptr<CSVStateMachine> buffer_end_state_machine;
-	idx_t buffer_end_max_line_size = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
 	idx_t buffer_size;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.

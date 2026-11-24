@@ -50,7 +50,7 @@ idx_t CSVBufferManager::KnownBufferSize(const idx_t buffer_idx) const {
 	return MinValue<idx_t>(buffer_size, file_size - buffer_start);
 }
 
-void CSVBufferManager::ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine, idx_t max_line_size) {
+void CSVBufferManager::ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (buffer_end_state_machine &&
 	    !(buffer_end_state_machine->state_machine_options == state_machine->state_machine_options)) {
@@ -58,12 +58,10 @@ void CSVBufferManager::ReadBufferEnds(shared_ptr<CSVStateMachine> state_machine,
 		buffer_ends.clear();
 	}
 	buffer_end_state_machine = std::move(state_machine);
-	buffer_end_max_line_size = max_line_size;
 }
 
 void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle &handle) {
 	shared_ptr<CSVStateMachine> state_machine;
-	idx_t max_line_size;
 	{
 		lock_guard<mutex> parallel_lock(main_mutex);
 		if (!buffer_end_state_machine ||
@@ -71,10 +69,8 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 			return;
 		}
 		state_machine = buffer_end_state_machine;
-		max_line_size = buffer_end_max_line_size;
 	}
-	const auto buffer_end =
-	    ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine, max_line_size);
+	const auto buffer_end = ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine);
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (buffer_idx >= buffer_ends.size()) {
 		buffer_ends.resize(buffer_idx + 1);
@@ -101,7 +97,7 @@ bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) 
 }
 
 CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size, const bool file_start,
-                                             const CSVStateMachine &state_machine, const idx_t max_line_size) {
+                                             const CSVStateMachine &state_machine) {
 	CSVBufferEnd result;
 	result.escape = CSVBufferEndEscape::NONE;
 	if (size == 0) {
@@ -122,6 +118,7 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 	// line, a line break behind an odd run only does inside a comment, and reading on from the sure one settles that
 	const auto &transitions = state_machine.transition_array;
 	const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
+	const bool pair_cr = transitions[static_cast<uint8_t>('\r')][standard] == CSVState::CARRIAGE_RETURN;
 	auto ends_line = [&](const char byte) {
 		if (byte != '\n' && byte != '\r') {
 			return false;
@@ -130,18 +127,16 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 		return next == CSVState::RECORD_SEPARATOR || next == CSVState::CARRIAGE_RETURN;
 	};
 	idx_t pos = run_end;
-	idx_t line_bytes = 0;
 	bool line_break_found = false;
 	while (pos > 0) {
 		pos--;
 		if (!ends_line(bytes[pos])) {
-			if (++line_bytes > max_line_size) {
-				result.escape = CSVBufferEndEscape::UNKNOWN;
-				return result;
-			}
 			continue;
 		}
-		line_bytes = 0;
+		// the escapes before the line break, before the carriage return of a pair, which they escape as a whole
+		if (pair_cr && bytes[pos] == '\n' && pos > 0 && bytes[pos - 1] == '\r') {
+			pos--;
+		}
 		idx_t escapes = 0;
 		while (escapes < pos && bytes[pos - 1 - escapes] == escape) {
 			escapes++;
