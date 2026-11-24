@@ -2298,10 +2298,12 @@ void StringValueScanner::SetStart() {
 	}
 	const auto &transitions = state_machine_strict->transition_array;
 	auto unquoted_start = CSVState::STANDARD_NEWLINE;
+	bool exact_start = false;
 	CSVBufferEnd before_start;
 	if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size && BytesBeforeStart(before_start)) {
 		// the escapes and the carriage return right before the start decide how its first byte reads, at a buffer
 		// start they ended the previous buffer
+		exact_start = before_start.exact;
 		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
 		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
 		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
@@ -2351,8 +2353,9 @@ void StringValueScanner::SetStart() {
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
 	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos());
-	// 2. We are in the middle of a quoted value
-	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	// 2. We are in the middle of a quoted value, a search from an exact state that found a row needs no guess
+	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' &&
+	    !(exact_start && best_row.is_valid)) {
 		idx_t end_pos = iterator.GetEndPos();
 		if (best_row.is_valid && best_row.end_buffer_idx == iterator.pos.buffer_idx) {
 			// If we got a valid row from the standard state, we limit our search up to that.

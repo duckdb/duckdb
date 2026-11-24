@@ -259,6 +259,25 @@ new_line = ['\n', '\r\n'], buffer_size = 16, max_line_size = 16, parallel = fals
 ----
 2	0
 
+# an escape right before a buffer end escaping the quote behind it, the search from that state needs no quoted guess
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaaa\"' || chr(10) || 'x"' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_quote_split.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+3	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	0
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')
