@@ -55,7 +55,7 @@ protected:
 		if (count == 0 || match_count == value_count) {
 			return;
 		}
-		if (result.Capacity() < count || result.sel_data().use_count() > 1) {
+		if (!result.IsSet() || result.Capacity() < count) {
 			result.Initialize(count);
 		}
 		idx_t accepted = 0;
@@ -70,7 +70,8 @@ protected:
 			}
 		}
 		if (accepted != count) {
-			sel.Initialize(result);
+			// Transfer ownership so later filters cannot overwrite a retained selection.
+			sel = std::move(result);
 		}
 		count = accepted;
 	}

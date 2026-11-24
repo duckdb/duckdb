@@ -495,8 +495,6 @@ TEST_CASE("RLE filtering preserves selections retained by dictionary results",
 	}
 	auto &retained_selection = DictionaryVector::SelVector(retained);
 	REQUIRE(retained_selection.Capacity() >= batch_size);
-	// Only the scan state and the dictionary result still own this selection.
-	REQUIRE(retained_selection.sel_data().use_count() == 2);
 	auto check_retained = [&]() {
 		REQUIRE(retained.size() == half_batch);
 		for (idx_t row = 0; row < half_batch; row++) {
@@ -516,8 +514,6 @@ TEST_CASE("RLE filtering preserves selections retained by dictionary results",
 	for (idx_t row = 0; row < batch_size; row++) {
 		REQUIRE(second.GetValue(row) == Value::INTEGER(row < half_batch ? 3 : 4));
 	}
-	// Capacity was sufficient: the scan replaced its selection because it was shared.
-	REQUIRE(retained_selection.sel_data().use_count() == 1);
 	check_retained();
 }
 
