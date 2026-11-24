@@ -135,21 +135,20 @@ bool CSVBufferManager::LookupBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_en
 }
 
 void CSVBufferManager::ReadBufferEndsUpTo(idx_t buffer_idx) {
-	// the buffers before it whose end was read without a line start, and the first one not handed out yet, are
-	// handed out in order, so that every end is read on from the one before
+	// back to a buffer with an exact end, handing out those not handed out yet, then forwards again, so that every
+	// end behind it is read on from the one before
 	idx_t first = buffer_idx;
-	{
-		lock_guard<mutex> parallel_lock(main_mutex);
-		while (first > 0) {
-			const bool read = first - 1 < buffer_ends.size() && buffer_ends[first - 1].read;
-			if (read && buffer_ends[first - 1].exact) {
-				break;
-			}
-			first--;
-			if (!read) {
-				break;
-			}
+	while (first > 0) {
+		CSVBufferEnd previous;
+		bool read = LookupBufferEnd(first - 1, previous);
+		if (!read) {
+			GetBuffer(first - 1);
+			read = LookupBufferEnd(first - 1, previous);
 		}
+		if (read && previous.exact) {
+			break;
+		}
+		first--;
 	}
 	for (idx_t idx = first; idx <= buffer_idx; idx++) {
 		GetBuffer(idx);
