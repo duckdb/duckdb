@@ -532,6 +532,8 @@ struct AggregateStateLayout {
 	unordered_map<idx_t, Value> constant_parameters;
 	//! Checks the imported states for invariants the fields cannot express (e.g. between fields)
 	aggregate_validate_state_t validate_state = nullptr;
+	//! Whether the states hold memory in the aggregate arena that the field layout does not show (e.g. a heap)
+	bool uses_arena = false;
 };
 
 } // namespace duckdb

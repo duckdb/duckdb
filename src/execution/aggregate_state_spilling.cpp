@@ -64,7 +64,7 @@ unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(c
 	// only layouts whose states can reference the arena benefit from spilling
 	bool arena_backed = false;
 	for (auto &state_layout : plan->state_layouts) {
-		if (FieldHasArenaReferences(state_layout.type, state_layout.field)) {
+		if (state_layout.uses_arena || FieldHasArenaReferences(state_layout.type, state_layout.field)) {
 			arena_backed = true;
 			break;
 		}
