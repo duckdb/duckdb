@@ -275,15 +275,19 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<Identifier> table_names;
 		vector<TableColumnType> table_categories;
 
-		vector<LogicalType> return_types;
-		vector<Identifier> return_names;
-		for (auto &col : table.GetColumns().Logical()) {
+		auto &columns = table.GetColumns();
+		table_types.reserve(columns.LogicalColumnCount());
+		table_names.reserve(columns.LogicalColumnCount());
+		for (auto &col : columns.Logical()) {
 			table_types.push_back(col.Type());
 			table_names.emplace_back(col.Name());
-			return_types.push_back(col.Type());
-			return_names.emplace_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		auto return_types = table_types;
+		auto return_names = table_names;
+		// the ColumnList of a table already deduplicates its column names
+		if (!ref.column_name_alias.empty()) {
+			table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		}
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {

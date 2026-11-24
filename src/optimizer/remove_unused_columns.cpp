@@ -516,6 +516,7 @@ static bool IsDuplicateCondition(const vector<JoinCondition> &conditions, const 
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	const bool analyze = mode == RemoveUnusedColumnsMode::ANALYZE;
 	auto &op = *op_ref;
+	vector<pair<ColumnBinding, idx_t>> join_key_replacements;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = op.Cast<LogicalWindow>();
@@ -618,7 +619,8 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// we can replace any references to the RHS (Y) to references to the LHS (X)
 		// this reduces the amount of columns we need to extract from the join hash table
 		// (except in the case of floating point numbers which have +0 and -0, equal but different).
-		for (auto &cond : comp_join.conditions) {
+		for (idx_t condition_idx = 0; condition_idx < comp_join.conditions.size(); condition_idx++) {
+			auto &cond = comp_join.conditions[condition_idx];
 			if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 				continue;
 			}
@@ -648,6 +650,15 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 				auto &colref_slot = entry.get();
 				colref_slot = colref_slot->Cast<BoundColumnRefExpression>().WithBinding(lhs_binding);
 				AddBinding(colref_slot);
+			}
+			join_key_replacements.emplace_back(rhs_col.Binding(), condition_idx);
+			if (!comp_join.left_projection_map.empty()) {
+				auto index =
+				    ColumnBindingLayout(comp_join.children[0]->GetColumnBindings()).GetProjectionIndex(lhs_binding);
+				auto &projection_map = comp_join.left_projection_map;
+				if (std::find(projection_map.begin(), projection_map.end(), index) == projection_map.end()) {
+					projection_map.push_back(index);
+				}
 			}
 			column_references.erase(rhs_col.Binding());
 		}
@@ -1009,6 +1020,13 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	VisitPrunableChildren(op);
+
+	// Join conditions track child rewrites, including further key substitution and column renumbering.
+	for (auto &replacement : join_key_replacements) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		auto &lhs = join.conditions[replacement.second].GetLHS().Cast<BoundColumnRefExpression>();
+		root.projection_map_replacements[replacement.first] = {lhs.Binding()};
+	}
 
 	if (!analyze &&
 	    (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||

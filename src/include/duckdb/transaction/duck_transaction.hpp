@@ -126,6 +126,8 @@ private:
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
+	//! Guards checkpoint_lock and vacuum_lock (statements of the transaction can run concurrently)
+	mutex lock_keys_lock;
 	//! Lock that prevents checkpoints from starting
 	unique_ptr<StorageLockKey> checkpoint_lock;
 	//! Lock that prevents vacuums from starting

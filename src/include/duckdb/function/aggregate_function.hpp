@@ -933,6 +933,10 @@ public:
 	const LogicalType &GetLogicalReturnType() const {
 		return logical_return_type;
 	}
+	//! Whether EXPORT_STATE replaced the return type
+	bool ReturnsExportedState() const {
+		return GetReturnType().IsAggregateState() && GetReturnType() != logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -978,7 +982,7 @@ inline AggregateStateLayout AggregateFunction::StructStateLayout(AggregateLayout
 	using ST = typename STATE::STATE_TYPE;
 	auto &bound = input.function;
 	AggregateStateLayout layout;
-	if (bound.GetReturnType().IsAggregateState()) {
+	if (bound.ReturnsExportedState()) {
 		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
 		// its return type IS the state type already
 		layout.type = bound.GetReturnType();

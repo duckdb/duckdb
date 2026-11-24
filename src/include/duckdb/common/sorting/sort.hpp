@@ -106,6 +106,9 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
+	//! Before the first Sink, lower the reservation to the estimated sorting size, capped at the default minimum
+	void SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t count, idx_t variable_data_size) const;
+
 	SourceResultType MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const;
 	unique_ptr<ColumnDataCollection> GetColumnData(OperatorSourceInput &input) const;
 

@@ -40,7 +40,8 @@ unique_ptr<SortStrategy> SortStrategy::Factory(ClientContext &client,
                                                const OperatorPartitionInfo &partition_info, idx_t estimated_cardinality,
                                                bool require_payload, optional_idx partition_limit) {
 	if (partition_info.RequiresPartitionColumns()) {
-		return make_uniq<PartitionedSort>(client, order_bys, payload_types, partition_info, require_payload);
+		return make_uniq<PartitionedSort>(client, order_bys, payload_types, partition_info, require_payload,
+		                                  partition_limit);
 	} else if (!partition_bys.empty()) {
 		return make_uniq<HashedSort>(client, partition_bys, order_bys, payload_types, partitions_stats,
 		                             estimated_cardinality, require_payload);

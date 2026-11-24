@@ -94,7 +94,7 @@ WHERE x < 10;
 ----
 288
 
-# Ordinary filter pushdown still moves computed predicates below unrelated projection expressions
+# Ordinary filter pushdown also splits throwing inputs from unrelated projection expressions
 query II
 EXPLAIN SELECT sum(length(payload))
 FROM (
@@ -103,7 +103,7 @@ FROM (
 ) sq
 WHERE x < 10;
 ----
-logical_opt	<REGEX>:(?s).*Expressions: payload.*Expressions: \(i \+ 1\) < 10.*Range.*
+logical_opt	<REGEX>:(?s).*Expressions: payload.*Expressions: x < 10.*Expressions: x, i.*Range.*
 
 # Preserve NULLs and duplicates while splitting a computed projection
 statement ok

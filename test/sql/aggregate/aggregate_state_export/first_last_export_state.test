@@ -167,3 +167,16 @@ SELECT finalize(combine(
     to_aggregate_state(NULL::STRUCT(value INTEGER), 'first', ['INTEGER'])));
 ----
 NULL
+
+# aggregates over AGGREGATE_STATE inputs, grouped by a non-integer key
+statement ok
+CREATE TABLE agg_states AS SELECT i, i % 2 g, avg(i // 3) EXPORT_STATE s, count(i) EXPORT_STATE c FROM range(7) t(i) GROUP BY i ORDER BY i;
+
+query IIIIIIIIIII
+SELECT g, finalize(first(s)), finalize(last(s)), finalize(any_value(s)), finalize(arg_max(s, i)),
+    finalize(arg_min(s, i)), finalize(mode(s)), finalize(first(DISTINCT s)), finalize(finalize(first(s) EXPORT_STATE)),
+    finalize(finalize(quantile_disc(s, 0.5) EXPORT_STATE)), finalize(first(c))
+FROM agg_states GROUP BY g::VARCHAR, g ORDER BY g;
+----
+0	0.0	2.0	0.0	2.0	0.0	0.0	0.0	0.0	0.0	1
+1	0.0	1.0	0.0	1.0	0.0	1.0	0.0	0.0	1.0	1

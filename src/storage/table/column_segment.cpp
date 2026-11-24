@@ -506,6 +506,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
+	if (state.TryFilterDictionary(sel, vector, approved_tuple_count)) {
+		return approved_tuple_count;
+	}
 	if (state.fast_executor &&
 	    (scan_count <= STANDARD_VECTOR_SIZE || (vector.GetVectorType() == VectorType::FLAT_VECTOR &&
 	                                            !vector.GetType().IsNested() && scan_count <= vector.size()))) {

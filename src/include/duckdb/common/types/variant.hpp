@@ -40,7 +40,7 @@ public:
 	}
 	explicit VariantPathComponent(const string &key) : lookup_mode(VariantChildLookupMode::BY_KEY), key(key) {
 	}
-	explicit VariantPathComponent(uint32_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
+	explicit VariantPathComponent(int64_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
 	}
 
 	bool operator==(const VariantPathComponent &other) const {
@@ -63,7 +63,8 @@ public:
 public:
 	VariantChildLookupMode lookup_mode;
 	string key;
-	uint32_t index;
+	//! 0-based, negative indexes count from the end of the array
+	int64_t index;
 };
 
 struct VariantNestedData {

@@ -111,6 +111,22 @@ DUCKDB_V2_ERROR duckdb_v2_connection_get_query_metrics(duckdb_v2_connection_hand
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_connection_get_profiling_information(duckdb_v2_connection_handle conn, const char *format,
+                                                               idx_t format_length, duckdb_v2_text_sink_fn sink,
+                                                               void *user_data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(sink);
+	DUCKDB_CHECK_STR_ARG(format, format_length);
+	return WithErrorHandler(err, [&]() {
+		auto &connection = *Convert(conn);
+		connection.context->VerifyNoOpenResult();
+		std::string format_name(Convert(format, format_length));
+		auto print_format =
+		    format_name.empty() ? duckdb::ProfilerPrintFormat::Default() : duckdb::ProfilerPrintFormat(format_name);
+		InvokeTextSink(sink, connection.GetProfilingInformation(print_format), user_data);
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_connection_enable_profiling(duckdb_v2_connection_handle conn, bool enabled,
                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);

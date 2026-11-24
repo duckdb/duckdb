@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,17 @@ static void ScanValidityMask(ColumnSegment &segment, Vector &result, idx_t count
 				ConstantVector::SetNull(result, count_t(count));
 				return;
 			}
+		}
+		if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			validity_t entries[ValidityMask::STANDARD_ENTRY_COUNT] = {};
+			ValidityMask mask(entries, STANDARD_VECTOR_SIZE);
+			if (count > STANDARD_VECTOR_SIZE) {
+				mask.Initialize(count);
+			}
+			mask.SetAllValid(count);
+			scan(mask);
+			DictionaryVector::ApplyValidity(result, mask);
+			return;
 		}
 		result.Flatten();
 	}
