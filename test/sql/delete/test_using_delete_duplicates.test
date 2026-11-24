@@ -2,6 +2,10 @@
 # description: Test USING deletion with duplicates
 # group: [delete]
 
+# results below depend on scan order; small row groups (e.g. STANDARD_VECTOR_SIZE=2) would otherwise scan in parallel
+statement ok
+SET threads=1
+
 statement ok
 create table integers as select * from generate_series(0, 9, 1);
 
