@@ -20,6 +20,12 @@ LLVM_TOOLS = ["clang-cl", "llvm-lib", "lld-link", "llvm-readobj", "llvm-objcopy"
 CMAKE_TOOLS = ["cmake", "ninja", *LLVM_TOOLS]
 
 
+def static_export_hook():
+    source = (ROOT / "src/CMakeLists.txt").read_text()
+    first = source.index("if(", source.index("duckdb_make_native_lto_archive(duckdb_static)"))
+    return source[first : source.index("\n#\n# FIXME", first)]
+
+
 def non_export_directives(archive):
     result = subprocess.run(["llvm-readobj", "--coff-directives", str(archive)], check=True, capture_output=True)
     return Counter(
@@ -193,6 +199,40 @@ __declspec(dllexport) int extension_init(void) { return weak_symbol; }
             self.assertEqual(list(root.glob("duckdb-exports-*")), [])
 
 
+@unittest.skipUnless(shutil.which("cmake"), "Requires CMake")
+class WindowsStaticExportConfigureTests(unittest.TestCase):
+    def test_missing_llvm_does_not_require_python(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.20)\n"
+                "project(fixture NONE)\n"
+                "set(WIN32 TRUE)\n"
+                "set(MSVC TRUE)\n"
+                "set(Python3_FOUND FALSE)\n"
+                "option(WINDOWS_STATIC_LIBRARY_EXPORTS \"Keep exports\" OFF)\n"
+                + static_export_hook()
+                + "\nif(TARGET duckdb_static_no_exports)\n"
+                '  message(FATAL_ERROR "Unexpected filtered archive without LLVM")\n'
+                "endif()\n"
+            )
+            result = subprocess.run(
+                [
+                    "cmake",
+                    "-S",
+                    str(root),
+                    "-B",
+                    str(root / "build"),
+                    "-DLLVM_AR_EXECUTABLE=OFF",
+                    "-DLLVM_OBJCOPY_EXECUTABLE=OFF",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("keeping core exports in Windows extensions", result.stdout)
+
+
 @unittest.skipUnless(
     all(shutil.which(tool) for tool in CMAKE_TOOLS), "Requires CMake, Ninja and the LLVM Windows tools"
 )
@@ -206,9 +246,7 @@ class WindowsStaticExtensionLinkTests(unittest.TestCase):
                 self.check_archive_loadables(triple, platform)
 
     def check_archive_loadables(self, triple, platform):
-        source = (ROOT / "src/CMakeLists.txt").read_text()
-        first = source.index("if(", source.index("duckdb_make_native_lto_archive(duckdb_static)"))
-        hook = source[first : source.index("\n#\n# FIXME", first)]
+        hook = static_export_hook()
         tools = (ROOT / "extension/extension_build_tools.cmake").read_text()
         functions = "\n".join(
             re.search(r"^function\(" + name + r"\b.*?^endfunction\(\)", tools, re.M | re.S).group()
@@ -312,18 +350,22 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
 
             build = root / "build"
             original = None
-            for keep, static, prebuilt in [
-                ("ON", "ON", False),
-                ("OFF", "ON", False),
-                ("ON", "ON", False),
-                ("OFF", "ON", False),
-                ("ON", "ON", True),
-                ("OFF", "ON", True),
-                ("ON", "OFF", False),
-                ("OFF", "OFF", False),
+            for keep, static, prebuilt, ar, objcopy in [
+                ("ON", "ON", False, True, True),
+                ("OFF", "ON", False, True, True),
+                ("ON", "ON", False, True, True),
+                ("OFF", "ON", False, True, True),
+                ("OFF", "ON", False, False, True),
+                ("OFF", "ON", False, True, False),
+                ("OFF", "ON", False, False, False),
+                ("OFF", "ON", False, True, True),
+                ("ON", "ON", True, True, True),
+                ("OFF", "ON", True, True, True),
+                ("ON", "OFF", False, True, True),
+                ("OFF", "OFF", False, True, True),
             ]:
-                with self.subTest(exports=keep, static=static, prebuilt=prebuilt):
-                    run(
+                with self.subTest(exports=keep, static=static, prebuilt=prebuilt, ar=ar, objcopy=objcopy):
+                    configured = run(
                         "cmake",
                         "-S",
                         str(root),
@@ -338,7 +380,13 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
                         f"-DWINDOWS_STATIC_LIBRARY_EXPORTS={keep}",
                         f"-DEXTENSION_STATIC_BUILD={static}",
                         f"-DDUCKDB_EXTENSION_FIXTURE_PREBUILT_PATH={root / 'prebuilt.lib' if prebuilt else ''}",
+                        f"-DLLVM_AR_EXECUTABLE={shutil.which('llvm-ar') if ar else 'OFF'}",
+                        f"-DLLVM_OBJCOPY_EXECUTABLE={shutil.which('llvm-objcopy') if objcopy else 'OFF'}",
                     )
+                    stripped = keep == "OFF" and ar and objcopy
+                    if keep == "OFF" and not stripped:
+                        self.assertIn("keeping core exports in Windows extensions", configured)
+                    self.assertIn(f"WINDOWS_STATIC_LIBRARY_EXPORTS:BOOL={keep}", (build / "CMakeCache.txt").read_text())
                     run("cmake", "--build", str(build))
                     archive = build / "duckdb_static.lib"
                     obj = build / "CMakeFiles/core_objects.dir/core.c.obj"
@@ -361,7 +409,7 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
                     self.assertIn("Name: unused_function", dll)
                     self.assertIn("Name: unused_data", dll)
                     self.assertIn("Name: fixture_duckdb_cpp_init", extension)
-                    exported = keep == "ON" and static == "ON"
+                    exported = not stripped and static == "ON"
                     self.assertEqual("Name: unused_function" in extension, exported)
                     self.assertEqual("Name: unused_data" in extension, exported)
                     dependency = (build / "extension-core.txt").read_text()
@@ -370,7 +418,7 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
                     else:
                         self.assertEqual(dependency, "duckdb_static" if exported else "duckdb_static_no_exports")
                     self.assertEqual((build / "host-core.txt").read_text(), "duckdb_static")
-                    if keep == "OFF" and static == "ON":
+                    if stripped and static == "ON":
                         self.assertGreater((build / "host.dll").stat().st_size - extension_path.stat().st_size, 30000)
                     direct_path = build / "extension/direct/direct.duckdb_extension"
                     direct = run("llvm-readobj", "--coff-exports", str(direct_path))
