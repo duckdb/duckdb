@@ -33,12 +33,6 @@ DatabaseModificationType CreateInfo::GetModifications() const {
 	}
 	case CatalogType::INDEX_ENTRY:
 		return DatabaseModificationType::CREATE_CATALOG_ENTRY;
-	case CatalogType::SCHEMA_ENTRY:
-		// replacing a schema drops the existing one
-		if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-			return DatabaseModificationType::CREATE_CATALOG_ENTRY;
-		}
-		return DatabaseModificationType();
 	default:
 		return DatabaseModificationType();
 	}

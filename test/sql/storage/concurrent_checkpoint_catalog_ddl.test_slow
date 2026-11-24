@@ -245,6 +245,9 @@ CREATE TABLE u (i INTEGER)
 statement ok
 CREATE TABLE pk_ref (i INTEGER PRIMARY KEY)
 
+statement ok
+CREATE SCHEMA empty_s
+
 statement ok con1
 BEGIN TRANSACTION
 
@@ -504,7 +507,8 @@ Cannot CHECKPOINT
 statement ok con1
 ROLLBACK
 
-# creating or replacing a table without indexes does not keep them from running
+# creating or replacing a table without indexes does not keep them from running, nor does replacing a schema,
+# which drops the existing one without CASCADE: only an empty one
 statement ok con1
 BEGIN TRANSACTION
 
@@ -513,6 +517,9 @@ CREATE TABLE x (i INTEGER)
 
 statement ok con1
 CREATE OR REPLACE TABLE u (i INTEGER)
+
+statement ok con1
+CREATE OR REPLACE SCHEMA empty_s
 
 statement ok
 INSERT INTO t2 VALUES (1, 1)
