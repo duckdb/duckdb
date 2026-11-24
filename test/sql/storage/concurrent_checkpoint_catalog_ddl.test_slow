@@ -405,7 +405,7 @@ statement ok con1
 BEGIN TRANSACTION
 
 statement ok con1
-CREATE OR REPLACE TABLE u (i INTEGER)
+CREATE OR REPLACE TABLE pk_ref (i INTEGER)
 
 statement ok
 INSERT INTO t2 VALUES (1, 1)
@@ -504,12 +504,15 @@ Cannot CHECKPOINT
 statement ok con1
 ROLLBACK
 
-# creating a table without indexes does not keep them from running
+# creating or replacing a table without indexes does not keep them from running
 statement ok con1
 BEGIN TRANSACTION
 
 statement ok con1
 CREATE TABLE x (i INTEGER)
+
+statement ok con1
+CREATE OR REPLACE TABLE u (i INTEGER)
 
 statement ok
 INSERT INTO t2 VALUES (1, 1)

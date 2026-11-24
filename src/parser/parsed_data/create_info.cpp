@@ -21,8 +21,8 @@ DatabaseModificationType CreateInfo::GetModifications() const {
 	switch (type) {
 	case CatalogType::TABLE_ENTRY: {
 		auto &table_info = Cast<CreateTableInfo>();
-		// FIXME: temporary, until tables with indexes and replacing a table run alongside checkpoints as well
-		if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT || HasIndexConstraint(table_info)) {
+		// FIXME: temporary, until tables with indexes run alongside checkpoints as well
+		if (HasIndexConstraint(table_info)) {
 			return DatabaseModificationType::CREATE_CATALOG_ENTRY;
 		}
 		// no checkpoint lock, but like INSERT ... SELECT, CREATE TABLE AS keeps checkpoints from vacuuming meanwhile

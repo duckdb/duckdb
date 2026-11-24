@@ -19,7 +19,7 @@ public:
 	static constexpr idx_t UPDATE_DATA = 1ULL << 2ULL;
 	//! An ALTER TABLE that may change table storage: not renames, defaults, DROP NOT NULL or comments
 	static constexpr idx_t ALTER_TABLE = 1ULL << 3ULL;
-	//! Creating a table with indexes, replacing a table or schema, or COPY FROM DATABASE
+	//! Creating or replacing a table with indexes, replacing a schema, or COPY FROM DATABASE
 	static constexpr idx_t CREATE_CATALOG_ENTRY = 1ULL << 4ULL;
 	//! Dropping an index or a table with indexes, or anything with CASCADE
 	static constexpr idx_t DROP_CATALOG_ENTRY = 1ULL << 5ULL;

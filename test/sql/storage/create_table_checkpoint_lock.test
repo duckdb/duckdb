@@ -1,5 +1,5 @@
 # name: test/sql/storage/create_table_checkpoint_lock.test
-# description: CREATE TABLE AS with rows written to blocks before its commit, across checkpoints that run meanwhile
+# description: CREATE TABLE AS and CREATE OR REPLACE TABLE with rows written to blocks before the commit, across checkpoints
 # group: [storage]
 
 require skip_reload
@@ -56,12 +56,25 @@ DROP TABLE created_and_dropped
 statement ok con1
 COMMIT
 
-# committed after a checkpoint wrote its header, which lists the blocks of the rows as free
+# committed after a checkpoint wrote its header, which lists the blocks of their rows as free
+statement ok
+CREATE TABLE replaced AS SELECT i, 'old' || i AS s FROM range(300000) t(i)
+
+statement ok
+CHECKPOINT
+
 statement ok con1
 BEGIN TRANSACTION
 
 statement ok con1
 CREATE TABLE ctas AS SELECT i, 's' || i AS s FROM range(300000) t(i)
+
+# the checkpoint still writes the table that this replaces
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+CREATE OR REPLACE TABLE replaced AS SELECT i, 'new' || i AS s FROM range(200000) t(i)
 
 statement ok
 INSERT INTO tick VALUES (3)
@@ -70,6 +83,9 @@ statement ok
 CHECKPOINT
 
 statement ok con1
+COMMIT
+
+statement ok con2
 COMMIT
 
 # WAL replay claims these blocks again
@@ -85,6 +101,7 @@ query I
 SELECT table_name FROM duckdb_tables() ORDER BY ALL
 ----
 ctas
+replaced
 tick
 
 query III
@@ -92,12 +109,50 @@ SELECT COUNT(*), SUM(i), MAX(s) FROM ctas
 ----
 300000	44999850000	s99999
 
+query III
+SELECT COUNT(*), SUM(i), MIN(s) FROM replaced
+----
+200000	19999900000	new0
+
 statement ok
 INSERT INTO tick VALUES (4)
 
 # the checkpoint accounts for every block
 statement ok
 CHECKPOINT
+
+# an index that is committed after the replace statement: the replace cannot commit
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE OR REPLACE TABLE replaced (i INTEGER)
+
+statement ok
+CREATE INDEX replaced_i ON replaced(i)
+
+statement error con1
+COMMIT
+----
+a dependency was created after the transaction started
+
+# the table has an index now: replacing it holds a checkpoint back
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE OR REPLACE TABLE replaced (i INTEGER)
+
+statement ok
+INSERT INTO tick VALUES (5)
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
 
 # an open transaction with CREATE TABLE AS keeps a checkpoint from vacuuming, as an insert does
 statement ok
