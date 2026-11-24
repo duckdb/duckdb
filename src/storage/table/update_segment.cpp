@@ -630,19 +630,19 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 
 void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
 	D_ASSERT(count > 0);
-	if (!root) {
-		return;
-	}
 	D_ASSERT(start_row <= column_data.count);
 	D_ASSERT(start_row + count <= column_data.count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto lock_handle = lock.GetSharedLock();
+	if (!root) {
+		return;
+	}
 
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
-	auto lock_handle = lock.GetSharedLock();
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
@@ -772,11 +772,14 @@ static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType ty
 
 void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel,
                               idx_t fetch_count, Vector &result, idx_t result_offset) {
-	if (fetch_count == 0 || !root) {
+	if (fetch_count == 0) {
 		return;
 	}
 
 	auto lock_handle = lock.GetSharedLock();
+	if (!root) {
+		return;
+	}
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
 		if (offset > column_data.count) {
