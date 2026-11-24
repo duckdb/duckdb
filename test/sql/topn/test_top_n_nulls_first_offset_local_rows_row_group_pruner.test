@@ -1,0 +1,144 @@
+# name: test/sql/topn/test_top_n_nulls_first_offset_local_rows_row_group_pruner.test
+# description: Offset pruning of NULL-only row groups keeps the rows that the transaction appended
+# group: [topn]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Alternative verify disables the offset pruning in the optimizer rule
+require no_alternative_verify
+
+load {TEST_DIR}/top_n_nulls_first_offset_local_rows_row_group_pruner_main.duckdb
+
+# Set this after load so pruning counts do not depend on parallel scheduling.
+statement ok
+SET threads TO 1
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_nulls_first_offset_local_rows_row_group_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# Row groups 0 and 1 hold only NULL values
+statement ok
+CREATE TABLE db.t AS SELECT i AS id, CASE WHEN i < 4096 THEN NULL ELSE i END AS k FROM range(6144) r(i)
+
+statement ok
+CREATE TABLE db.p AS SELECT i AS id, i AS k FROM range(6144) r(i)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_nulls_first_offset_local_rows_row_group_pruner_data.duckdb' AS db
+
+statement ok
+SET threads TO 1
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO db.t SELECT 100000 + i, NULL FROM range(100) r(i)
+
+query I
+SELECT count(*) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 2048)
+----
+4196
+
+query I
+SELECT count(*) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST LIMIT 5000 OFFSET 2048)
+----
+4196
+
+query II
+SELECT count(*), count(k) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 100)
+----
+6144	2048
+
+# Two sort keys order the NULL rows of the table and of the transaction together
+query II
+SELECT k, id FROM db.t ORDER BY k NULLS FIRST, id LIMIT 3 OFFSET 2048
+----
+NULL	2048
+NULL	2049
+NULL	2050
+
+query II
+SELECT k, id FROM db.t ORDER BY k NULLS FIRST, id LIMIT 3 OFFSET 4094
+----
+NULL	4094
+NULL	4095
+NULL	100000
+
+statement ok
+ROLLBACK
+
+# The transaction appends more NULL rows than the offset
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO db.t SELECT 100000 + i, NULL FROM range(6144) r(i)
+
+query I
+SELECT count(*) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 3000)
+----
+9288
+
+query I
+SELECT count(*) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 4096)
+----
+8192
+
+statement ok
+ROLLBACK
+
+# The transaction appends rows that sort before all rows of the table
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO db.p SELECT 100000 + i, -i - 1 FROM range(3000) r(i)
+
+query IIII
+SELECT count(*), min(k), max(k), sum(k) FROM (SELECT k FROM db.p ORDER BY k OFFSET 2048)
+----
+7096	-952	6143	18417668
+
+query IIII
+SELECT count(*), min(k), max(k), sum(k) FROM (SELECT k FROM db.p ORDER BY k DESC OFFSET 2048)
+----
+7096	-3000	4095	3885060
+
+statement ok
+ROLLBACK
+
+# An in-memory table with the default row group size
+statement ok
+ATTACH ':memory:' AS mem
+
+statement ok
+CREATE TABLE mem.t AS SELECT i AS id, CASE WHEN i < 245760 THEN NULL ELSE i END AS k FROM range(368640) r(i)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO mem.t SELECT 1000000 + i, NULL FROM range(100) r(i)
+
+query I
+SELECT count(*) FROM (SELECT k FROM mem.t ORDER BY k NULLS FIRST OFFSET 122880)
+----
+245860
+
+statement ok
+ROLLBACK
+
+# Without local rows the NULL-only row group is still skipped
+query II
+EXPLAIN ANALYZE SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 2048
+----
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
+
+query I
+SELECT count(*) FROM (SELECT k FROM db.t ORDER BY k NULLS FIRST OFFSET 2048)
+----
+4096
