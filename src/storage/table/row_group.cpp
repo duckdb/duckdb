@@ -5,6 +5,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -2076,14 +2077,14 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p,
-	                                 unique_ptr<TransactionData> transaction_p = nullptr)
-	    : row_group(std::move(row_group_p)), is_exact(is_exact_p), transaction(std::move(transaction_p)) {
+	                                 optional<TransactionData> transaction_p = {})
+	    : row_group(std::move(row_group_p)), is_exact(is_exact_p), transaction(transaction_p) {
 	}
 
 	shared_ptr<RowGroup> row_group;
 	const bool is_exact;
 	//! Set when the visible rows were not counted up front
-	unique_ptr<TransactionData> transaction;
+	optional<TransactionData> transaction;
 
 	optional_idx GetVisibleRowCount() override {
 		if (!transaction) {
@@ -2123,7 +2124,7 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
 		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(
-		    row_group.ReferenceNode(), /*is_exact_p=*/false, make_uniq<TransactionData>(transaction));
+		    row_group.ReferenceNode(), /*is_exact_p=*/false, transaction);
 		return result;
 	}
 
