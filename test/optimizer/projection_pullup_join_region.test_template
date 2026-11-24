@@ -1,0 +1,9 @@
+statement ok
+CREATE TABLE t AS SELECT i AS k, i % 7 AS v FROM range(50) r(i);
+
+statement ok
+CREATE VIEW v1 AS SELECT a.k, a.v FROM t a JOIN t b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v2 AS SELECT a.k, a.v FROM v1 a JOIN v1 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v3 AS SELECT a.k, a.v FROM v2 a JOIN v2 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v4 AS SELECT a.k, a.v FROM v3 a JOIN v3 b ON a.k = b.k AND a.v = b.v;
+CREATE VIEW v5 AS SELECT a.k, a.v FROM v4 a JOIN v4 b ON a.k = b.k AND a.v = b.v;

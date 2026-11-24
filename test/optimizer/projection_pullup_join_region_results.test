@@ -1,0 +1,16 @@
+# name: test/optimizer/projection_pullup_join_region_results.test
+# description: Check nested join results across optimizer configurations
+# group: [optimizer]
+
+include test/optimizer/projection_pullup_join_region.test_template
+
+statement ok
+SET disabled_optimizers = 'compressed_materialization,common_subplan';
+
+statement ok
+SET approximate_join_order_threshold = 2;
+
+query III
+SELECT count(*), sum(k), sum(v) FROM v5;
+----
+50	1225	147
