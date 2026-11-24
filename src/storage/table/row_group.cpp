@@ -2077,7 +2077,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p,
-	                                 optional<TransactionData> transaction_p = {})
+	                                 optional<TransactionData> transaction_p)
 	    : row_group(std::move(row_group_p)), is_exact(is_exact_p), transaction(transaction_p) {
 	}
 
@@ -2115,16 +2115,16 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	if (row_group_ref.HasUnloadedDeletes()) {
 		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group =
-		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(
+		    row_group.ReferenceNode(), /*is_exact_p=*/false, optional<TransactionData>());
 		return result;
 	}
 	if (approximate_count) {
 		// an upper bound: the visible rows are counted only for the partitions the caller asks about
 		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(
-		    row_group.ReferenceNode(), /*is_exact_p=*/false, transaction);
+		result.partition_row_group =
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false, transaction);
 		return result;
 	}
 
@@ -2138,7 +2138,8 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	}
 	result.count_type = has_uncommitted_changes ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
 	const bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
+	result.partition_row_group =
+	    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact, optional<TransactionData>());
 
 	return result;
 }

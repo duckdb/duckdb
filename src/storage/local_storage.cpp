@@ -753,7 +753,7 @@ vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table, Tr
 	if (!storage) {
 		return vector<PartitionStatistics>();
 	}
-	return storage->GetCollection().GetPartitionStats(transaction);
+	return storage->GetCollection().GetPartitionStats(transaction, false);
 }
 
 void LocalStorage::DropTable(DataTable &table) {

@@ -305,7 +305,7 @@ public:
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 
 	//! Returns a list of the partition stats
-	vector<PartitionStatistics> GetPartitionStats(ClientContext &context, bool approximate_count = false);
+	vector<PartitionStatistics> GetPartitionStats(ClientContext &context, bool approximate_count);
 
 private:
 	optional_idx NextParallelScanInternal(ClientContext &context, ParallelTableScanState &state,
