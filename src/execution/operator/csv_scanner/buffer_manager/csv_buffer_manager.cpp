@@ -103,31 +103,35 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 }
 
 bool CSVBufferManager::GetBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) {
-	for (idx_t attempt = 0; attempt < 2; attempt++) {
-		{
-			lock_guard<mutex> parallel_lock(main_mutex);
-			if (!buffer_end_state_machine) {
-				return false;
-			}
-			if (buffer_idx < buffer_ends.size() && buffer_ends[buffer_idx].read) {
-				buffer_end = buffer_ends[buffer_idx];
-				// an end that does not settle the next byte is read again behind the ends before it, by a buffer
-				// manager that can hand its buffers out again
-				if (buffer_end.known || attempt > 0 || !HasKnownBufferRanges()) {
-					return true;
-				}
-			} else if (attempt > 0) {
-				return false;
-			}
-		}
-		if (HasKnownBufferRanges()) {
-			ReadBufferEndsUpTo(buffer_idx);
-		} else {
-			// the buffer was not handed out yet, its end is read once it is
-			GetBuffer(buffer_idx);
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (!buffer_end_state_machine) {
+			return false;
 		}
 	}
-	return false;
+	if (!LookupBufferEnd(buffer_idx, buffer_end)) {
+		// the buffer was not handed out yet, its end is read once it is
+		GetBuffer(buffer_idx);
+		if (!LookupBufferEnd(buffer_idx, buffer_end)) {
+			return false;
+		}
+	}
+	if (!buffer_end.known && HasKnownBufferRanges()) {
+		// an end that does not settle the next byte is read again behind the ends before it, by a buffer manager
+		// that can hand its buffers out again
+		ReadBufferEndsUpTo(buffer_idx);
+		LookupBufferEnd(buffer_idx, buffer_end);
+	}
+	return true;
+}
+
+bool CSVBufferManager::LookupBufferEnd(idx_t buffer_idx, CSVBufferEnd &buffer_end) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (buffer_idx >= buffer_ends.size() || !buffer_ends[buffer_idx].read) {
+		return false;
+	}
+	buffer_end = buffer_ends[buffer_idx];
+	return true;
 }
 
 void CSVBufferManager::ReadBufferEndsUpTo(idx_t buffer_idx) {
