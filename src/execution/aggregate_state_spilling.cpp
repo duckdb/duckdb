@@ -51,15 +51,19 @@ unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(c
 			return nullptr;
 		}
 		AggregateStateLayout state_layout;
+		optional_ptr<const BoundAggregateFunction> serializer = aggr.function;
+		optional_ptr<const FunctionData> serializer_bind_data = aggr.GetFunctionData();
 		if (aggr.function.HasGetStateTypeCallback()) {
 			state_layout = aggr.function.GetStateType(aggr.GetFunctionData());
-		} else if (!ExportAggregateFunction::TryGetCombinedStateLayout(aggr.function, aggr.GetFunctionData(),
-		                                                               state_layout)) {
+		} else if (!ExportAggregateFunction::TryGetCombinedStateLayout(
+		               aggr.function, aggr.GetFunctionData(), state_layout, serializer, serializer_bind_data)) {
 			// the aggregate cannot describe its state, and it is not a combine_aggr over states that can: the
 			// states combine_aggr accumulates have the layout of the aggregate that exported them
 			return nullptr;
 		}
 		plan->state_layouts.push_back(std::move(state_layout));
+		plan->serializers.push_back(serializer);
+		plan->serializer_bind_data.push_back(serializer_bind_data);
 	}
 	// only layouts whose states can reference the arena benefit from spilling
 	bool arena_backed = false;
@@ -121,7 +125,8 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 				state_address_data[i] = row_locations[i] + aggr_offset;
 			}
 			auto &result = exported_chunk.data[column_count + aggr_idx];
-			AggregateStateSerialization::SerializeStates(aggr.function, aggr.GetFunctionData(), state_layouts[aggr_idx],
+			AggregateStateSerialization::SerializeStates(*plan.serializers[aggr_idx],
+			                                             plan.serializer_bind_data[aggr_idx], state_layouts[aggr_idx],
 			                                             state_addresses, count, result, allocator, 0);
 			aggr_offset += aggr.payload_size;
 		}
@@ -221,7 +226,8 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
 				state_address_data[i] = state_buffer.get() + i * state_size;
 				aggr.function.GetStateInitCallback()(state_input, &state_address_data[i], 1);
 			}
-			AggregateStateSerialization::DeserializeStates(aggr.function, aggr.GetFunctionData(), state_layout,
+			AggregateStateSerialization::DeserializeStates(*plan.serializers[aggr_idx],
+			                                               plan.serializer_bind_data[aggr_idx], state_layout,
 			                                               exported_chunk.data[column_count + aggr_idx], count,
 			                                               state_buffer.get(), allocator, StateMemoryOwnership::OWNED);
 			for (idx_t i = 0; i < count; i++) {

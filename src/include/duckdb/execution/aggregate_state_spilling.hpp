@@ -22,6 +22,9 @@ class ClientContext;
 //! of the spillable columnar representation (the group columns and hash, then one column per state)
 struct AggregateStateSpillPlan {
 	vector<AggregateStateLayout> state_layouts;
+	//! The function (and its bind data) that serializes each state: for combine_aggr, the aggregate it combines
+	vector<optional_ptr<const BoundAggregateFunction>> serializers;
+	vector<optional_ptr<const FunctionData>> serializer_bind_data;
 	vector<LogicalType> exported_types;
 };
 

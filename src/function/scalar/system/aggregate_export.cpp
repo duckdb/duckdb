@@ -944,18 +944,20 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 
 bool ExportAggregateFunction::TryGetCombinedStateLayout(const BoundAggregateFunction &function,
                                                         optional_ptr<const FunctionData> bind_data,
-                                                        AggregateStateLayout &layout) {
+                                                        AggregateStateLayout &layout,
+                                                        optional_ptr<const BoundAggregateFunction> &combined_function,
+                                                        optional_ptr<const FunctionData> &combined_bind_data) {
 	if (!bind_data || function.GetStateCombineCallback() != CombineAggrStateCombine) {
 		return false;
 	}
 	auto &combine_data = bind_data->Cast<ExportAggregateBindData>();
 	auto &aggr = combine_data.aggr;
-	// states with explicit export / import callbacks are not described by their field layout alone
-	if (!aggr.HasGetStateTypeCallback() || aggr.HasExportAggregateStateCallback() ||
-	    aggr.HasImportAggregateStateCallback()) {
+	if (!aggr.HasGetStateTypeCallback()) {
 		return false;
 	}
 	layout = aggr.GetStateType(combine_data.bind_data.get());
+	combined_function = aggr;
+	combined_bind_data = combine_data.bind_data.get();
 	return true;
 }
 
