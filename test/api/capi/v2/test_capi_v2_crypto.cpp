@@ -82,7 +82,13 @@ std::string Hmac(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCT
 	return ToHex(mac, length);
 }
 
-// Selects the built-in provider for writing, as there is no secure provider in the test binary.
+//! Whether the instance has a secure provider already, e.g. httpfs when it is linked into the test binary
+bool HasSecureProvider(duckdb_v2_instance_handle instance) {
+	uint8_t byte;
+	return duckdb_v2_crypto_random_bytes(instance, &byte, 1, nullptr) == DUCKDB_V2_ERROR_NONE;
+}
+
+// Selects the built-in provider for writing, for when there is no secure provider in the test binary.
 void AllowBuiltInWrites(EnvFixture &fx) {
 	REQUIRE(RunSql(fx.conn, "SET force_mbedtls_unsafe = true") == DUCKDB_V2_ERROR_NONE);
 }
@@ -238,9 +244,11 @@ TEST_CASE("V2 crypto: invalid AES usage is reported", "[capi_v2][crypto]") {
 
 	// Without a secure provider, encrypting fails but decrypting works.
 	EnvFixture other;
-	REQUIRE(duckdb_v2_crypto_cipher_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM,
-	                                       DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128.data(), KEY_128.size(), &stream,
-	                                       nullptr) != DUCKDB_V2_ERROR_NONE);
+	if (!HasSecureProvider(other.instance)) {
+		REQUIRE(duckdb_v2_crypto_cipher_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM,
+		                                       DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128.data(), KEY_128.size(), &stream,
+		                                       nullptr) != DUCKDB_V2_ERROR_NONE);
+	}
 	REQUIRE(duckdb_v2_crypto_cipher_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM,
 	                                       DUCKDB_V2_CRYPTO_MODE_DECRYPT, KEY_128.data(), KEY_128.size(), &stream,
 	                                       nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -386,6 +394,10 @@ duckdb_v2_crypto_provider_handle MakeProvider(duckdb_v2_factory_handle factory, 
 
 TEST_CASE("V2 crypto provider: the primitives run on a registered provider", "[capi_v2][crypto]") {
 	EnvFixture fx;
+	if (HasSecureProvider(fx.instance)) {
+		// another provider, e.g. httpfs, already owns the slot
+		return;
+	}
 	auto stats = new ProviderStats();
 	auto provider = MakeProvider(fx.factory, stats);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -437,6 +449,10 @@ TEST_CASE("V2 crypto provider: the primitives run on a registered provider", "[c
 
 TEST_CASE("V2 crypto provider: force_mbedtls_unsafe overrides the registered provider", "[capi_v2][crypto]") {
 	EnvFixture fx;
+	if (HasSecureProvider(fx.instance)) {
+		// another provider, e.g. httpfs, already owns the slot
+		return;
+	}
 	auto stats = new ProviderStats();
 	auto provider = MakeProvider(fx.factory, stats);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -458,6 +474,10 @@ TEST_CASE("V2 crypto provider: force_mbedtls_unsafe overrides the registered pro
 
 TEST_CASE("V2 crypto provider: misuse and callback failures", "[capi_v2][crypto]") {
 	EnvFixture fx;
+	if (HasSecureProvider(fx.instance)) {
+		// another provider, e.g. httpfs, already owns the slot
+		return;
+	}
 	auto stats = new ProviderStats();
 	auto provider = MakeProvider(fx.factory, stats);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -498,6 +518,10 @@ TEST_CASE("V2 crypto provider: misuse and callback failures", "[capi_v2][crypto]
 
 TEST_CASE("V2 crypto provider: encrypted databases run on the provider", "[capi_v2][crypto]") {
 	EnvFixture fx;
+	if (HasSecureProvider(fx.instance)) {
+		// another provider, e.g. httpfs, already owns the slot
+		return;
+	}
 	auto stats = new ProviderStats();
 	auto provider = MakeProvider(fx.factory, stats);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -523,13 +547,21 @@ TEST_CASE("V2 crypto provider: encrypted databases run on the provider", "[capi_
 
 		// and the database reads back through the provider
 		REQUIRE(RunSql(fx.conn, attach) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(RunSql(fx.conn, "SELECT sum(i) FROM enc.t") == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_result_handle result = nullptr;
+		REQUIRE(Query(fx.conn, "SELECT s FROM (SELECT sum(i) s FROM enc.t) WHERE s = 499500", &result) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(DrainRowCount(result) == 1);
+		duckdb_v2_result_destroy(&result);
 		REQUIRE(RunSql(fx.conn, "DETACH enc") == DUCKDB_V2_ERROR_NONE);
 	}
 }
 
 TEST_CASE("V2 crypto provider: registration rules", "[capi_v2][crypto]") {
 	EnvFixture fx;
+	if (HasSecureProvider(fx.instance)) {
+		// another provider, e.g. httpfs, already owns the slot
+		return;
+	}
 
 	// The AES and random callbacks are required.
 	auto incomplete = MakeProvider(fx.factory, new ProviderStats(), false);
