@@ -1,0 +1,93 @@
+# name: test/sql/storage/delete/checkpoint_delete_mask.test
+# description: Checkpoint partially deleted vectors that are stored as a delete mask
+# group: [delete]
+
+load {TEST_DIR}/checkpoint_delete_mask.db
+
+# the second vector holds only 952 rows
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(3000) t(i);
+
+query I
+DELETE FROM tbl WHERE i % 3 = 0
+----
+1000
+
+# sparse masks: few deleted rows in the first vector, few alive rows in the second
+statement ok
+CREATE TABLE sparse AS SELECT i FROM range(4096) t(i);
+
+query I
+DELETE FROM sparse WHERE (i < 2048 AND i % 100 = 0) OR (i >= 2048 AND i % 100 <> 0)
+----
+2049
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT COUNT(*), SUM(i), MIN(i) FROM tbl
+----
+2000	3000000	1
+
+query III
+SELECT COUNT(*), SUM(i), MIN(i) FROM sparse
+----
+2047	2136128	1
+
+# rows appended to the partially filled vector must not load as deleted
+statement ok
+INSERT INTO tbl SELECT i FROM range(3000, 5000) t(i);
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT COUNT(*), SUM(i), MIN(i) FROM tbl
+----
+4000	10999000	1
+
+# the delete loads the masks from disk - the checkpoint rewrites the untouched first vector from its mask
+query I
+DELETE FROM tbl WHERE i = 3500
+----
+1
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT COUNT(*), SUM(i), MIN(i) FROM tbl
+----
+3999	10995500	1
+
+# a checkpoint must not write uncommitted deletes, both in loaded masks and in the vector without deletes
+statement ok con1
+BEGIN
+
+query I con1
+DELETE FROM tbl WHERE (i < 2048 AND i % 3 = 1) OR i >= 4900
+----
+783
+
+statement ok con2
+CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+restart
+
+query III
+SELECT COUNT(*), SUM(i), MIN(i) FROM tbl
+----
+3999	10995500	1
