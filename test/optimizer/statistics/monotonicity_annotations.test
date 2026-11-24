@@ -139,3 +139,79 @@ query I
 SELECT count(*) FROM b WHERE date_trunc('century', x::DATE) < DATE '0001-01-01';
 ----
 2
+
+# ICU date_sub counts whole calendar months, so a later start can give a smaller difference
+statement ok
+CREATE TABLE ms AS SELECT * FROM (VALUES (TIMESTAMPTZ '2023-11-29 23:00:00+00'), (TIMESTAMPTZ '2023-11-29 23:30:00+00'), (TIMESTAMPTZ '2023-11-30 00:00:00+00')) t(x);
+
+query I
+SELECT date_sub('month', x, TIMESTAMPTZ '2024-02-29 23:00:00+00') FROM ms ORDER BY x;
+----
+3
+2
+3
+
+query I
+SELECT count(*) FROM ms WHERE date_sub('month', x, TIMESTAMPTZ '2024-02-29 23:00:00+00') = 2;
+----
+1
+
+query I
+SELECT count(*) FROM ms WHERE date_sub('month', x, TIMESTAMPTZ '2024-02-29 23:00:00+00') < 3;
+----
+1
+
+query I
+SELECT count(*) FROM ms WHERE date_sub('quarter', x, TIMESTAMPTZ '2024-02-29 23:00:00+00') = 0;
+----
+1
+
+# ICU date_sub counts local days, which repeat when the clocks go back
+statement ok
+SET TimeZone='America/New_York';
+
+statement ok
+CREATE TABLE ds AS SELECT * FROM (VALUES (TIMESTAMPTZ '2023-11-05 01:40:00-04'), (TIMESTAMPTZ '2023-11-05 01:00:00-05'), (TIMESTAMPTZ '2023-11-05 02:00:00-05')) t(x);
+
+query I
+SELECT count(*) FROM ds WHERE date_sub('day', x, TIMESTAMPTZ '2023-11-06 01:30:00-05') = 1;
+----
+1
+
+# ICU date_diff truncates to the local hour first, which moves backwards when the clocks go back two hours
+statement ok
+SET TimeZone='Antarctica/Troll';
+
+statement ok
+CREATE TABLE dd AS SELECT * FROM (VALUES (TIMESTAMPTZ '2023-10-29 00:55:00+00'), (TIMESTAMPTZ '2023-10-29 01:00:00+00'), (TIMESTAMPTZ '2023-10-29 02:00:00+00')) t(x);
+
+query I
+SELECT date_diff('hour', TIMESTAMPTZ '2023-10-28 22:00:00+00', x) FROM dd ORDER BY x;
+----
+4
+3
+4
+
+query I
+SELECT count(*) FROM dd WHERE date_diff('hour', TIMESTAMPTZ '2023-10-28 22:00:00+00', x) = 3;
+----
+1
+
+# truncating to the local day moves backwards where the clocks went back across midnight
+statement ok
+SET TimeZone='America/St_Johns';
+
+statement ok
+CREATE TABLE sj AS SELECT * FROM (VALUES (TIMESTAMPTZ '1987-10-25 02:30:00+00'), (TIMESTAMPTZ '1987-10-25 02:45:00+00'), (TIMESTAMPTZ '1987-10-26 12:00:00+00')) t(x);
+
+query I
+SELECT date_diff('day', TIMESTAMPTZ '1987-10-23 12:00:00+00', x) FROM sj ORDER BY x;
+----
+2
+1
+3
+
+query I
+SELECT count(*) FROM sj WHERE date_diff('day', TIMESTAMPTZ '1987-10-23 12:00:00+00', x) = 1;
+----
+1
