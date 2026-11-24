@@ -1,3 +1,4 @@
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -217,6 +218,13 @@ static idx_t ValidityEntryCount(idx_t count) {
 	return count / ValidityMask::BITS_PER_VALUE + (count % ValidityMask::BITS_PER_VALUE != 0);
 }
 
+//! Scans read the entries of the validity mask of a segment while appends set bits in the same entries of the
+//! rows that are not visible to the scan yet: both sides access the entries atomically
+static validity_t LoadValidityEntry(const validity_t &entry) {
+	static_assert(sizeof(atomic<validity_t>) == sizeof(validity_t), "atomic validity entries must not have overhead");
+	return reinterpret_cast<const atomic<validity_t> &>(entry).load(std::memory_order_relaxed);
+}
+
 static unsafe_array_ptr<const validity_t> ValidityScanData(const CompressionSegmentReader &reader, idx_t start,
                                                            idx_t scan_count) {
 	D_ASSERT(scan_count > 0);
@@ -269,7 +277,7 @@ void ValidityUncompressed::UnalignedScan(unsafe_array_ptr<const validity_t> inpu
 	// the bitwise ops we use below don't work if the vector size is too small
 	for (idx_t i = 0; i < scan_count; i++) {
 		idx_t source_idx = input_start + i;
-		if (!ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
+		if (!ValidityMask::RowIsValid(LoadValidityEntry(input[source_idx / ValidityMask::BITS_PER_VALUE]),
 		                              source_idx % ValidityMask::BITS_PER_VALUE)) {
 			if (result_mask.CannotHaveNull()) {
 				result_mask.Initialize();
@@ -325,7 +333,7 @@ void ValidityUncompressed::UnalignedScan(unsafe_array_ptr<const validity_t> inpu
 	// now start the bit games
 	idx_t pos = 0;
 	while (pos < scan_count) {
-		validity_t input_mask = input[input_entry];
+		validity_t input_mask = LoadValidityEntry(input[input_entry]);
 		idx_t bits_left = scan_count - pos;
 
 		// these are bits left within the current entries (possibly extra than what we need).
@@ -425,7 +433,7 @@ void ValidityUncompressed::UnalignedScan(unsafe_array_ptr<const validity_t> inpu
 	for (idx_t i = 0; i < scan_count; i++) {
 		bool original_valid = debug_original_result.RowIsValid(i);
 		idx_t source_idx = input_start + i;
-		bool input_valid = ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
+		bool input_valid = ValidityMask::RowIsValid(LoadValidityEntry(input[source_idx / ValidityMask::BITS_PER_VALUE]),
 		                                            source_idx % ValidityMask::BITS_PER_VALUE);
 		bool result_valid = result_mask.RowIsValid(result_offset + i);
 		D_ASSERT(result_valid == (original_valid && input_valid));
@@ -464,7 +472,7 @@ void ValidityUncompressed::AlignedScan(unsafe_array_ptr<const validity_t> input,
 	D_ASSERT(start_offset <= input.size());
 	D_ASSERT(entry_scan_count <= input.size() - start_offset);
 	for (idx_t i = 0; i < entry_scan_count; i++) {
-		auto input_entry = input[start_offset + i];
+		auto input_entry = LoadValidityEntry(input[start_offset + i]);
 		if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			continue;
 		}
@@ -515,7 +523,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 		auto selected_index = sel.get_index(i);
 		D_ASSERT(selected_index < vector_count);
 		auto source_idx = input_start + selected_index;
-		auto entry = input_data[source_idx / ValidityMask::BITS_PER_VALUE];
+		auto entry = LoadValidityEntry(input_data[source_idx / ValidityMask::BITS_PER_VALUE]);
 		if (!ValidityMask::RowIsValid(entry, source_idx % ValidityMask::BITS_PER_VALUE)) {
 			result_mask.SetInvalid(result_offset + i);
 		}
@@ -553,17 +561,33 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		return append_count;
 	}
 
-	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.GetDataMutable() + segment.GetBlockOffset()),
-	                  max_tuples);
+	auto entries = reinterpret_cast<validity_t *>(append_state.handle.GetDataMutable() + segment.GetBlockOffset());
+	// the bits of one entry are cleared together: concurrent scans read the entries atomically
+	idx_t current_entry = 0;
+	validity_t invalid_bits = 0;
+	auto flush_entry = [&]() {
+		if (invalid_bits) {
+			reinterpret_cast<atomic<validity_t> &>(entries[current_entry])
+			    .fetch_and(~invalid_bits, std::memory_order_relaxed);
+			invalid_bits = 0;
+		}
+	};
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
-			mask.SetInvalidUnsafe(segment.count + i);
+			auto row = segment.count + i;
+			auto entry = row / ValidityMask::BITS_PER_VALUE;
+			if (entry != current_entry) {
+				flush_entry();
+				current_entry = entry;
+			}
+			invalid_bits |= validity_t(1) << (row % ValidityMask::BITS_PER_VALUE);
 			validity_stats.SetHasNullFast();
 		} else {
 			validity_stats.SetHasNoNullFast();
 		}
 	}
+	flush_entry();
 	segment.count += append_count;
 	return append_count;
 }
