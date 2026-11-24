@@ -110,6 +110,36 @@ struct HeapEntry<string_t> {
 	}
 };
 
+//! Grows a heap's slot array towards its capacity: doubling, then straight to the capacity once it exceeds
+//! capacity / grow_to_capacity_divisor. A larger divisor abandons fewer arrays in heaps that fill up, but
+//! over-allocates more in heaps that stay small.
+template <class ENTRY>
+ENTRY *GrowHeap(ArenaAllocator &allocator, ENTRY *heap, idx_t &allocated_capacity, const idx_t capacity,
+                const idx_t required, const idx_t grow_to_capacity_divisor) {
+	D_ASSERT(allocated_capacity < required && required <= capacity);
+	const auto old_allocated_capacity = allocated_capacity;
+	if (allocated_capacity == 0) {
+		allocated_capacity = 1;
+	} else if (allocated_capacity > capacity / grow_to_capacity_divisor) {
+		allocated_capacity = capacity;
+	} else {
+		if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(2), allocated_capacity)) {
+			throw OutOfRangeException("Overflow of 'allocated_capacity' in GrowHeap");
+		}
+	}
+	allocated_capacity = MaxValue(allocated_capacity, required);
+
+	const auto old_size = old_allocated_capacity * sizeof(ENTRY);
+	idx_t new_size;
+	if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(sizeof(ENTRY)), new_size)) {
+		throw OutOfRangeException("Overflow of 'new_size' in GrowHeap");
+	}
+	auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
+	                : allocator.AllocateAligned(new_size);
+	memset(ptr + old_size, 0, new_size - old_size);
+	return reinterpret_cast<ENTRY *>(ptr);
+}
+
 template <class T, class T_COMPARATOR>
 class UnaryAggregateHeap {
 public:
@@ -121,9 +151,8 @@ public:
 
 	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		auto ptr = allocator.AllocateAligned(capacity * sizeof(HeapEntry<T>));
-		memset(ptr, 0, capacity * sizeof(HeapEntry<T>));
-		heap = reinterpret_cast<HeapEntry<T> *>(ptr);
+		allocated_capacity = 0;
+		heap = nullptr;
 		size = 0;
 	}
 
@@ -142,6 +171,9 @@ public:
 
 		// If the heap is not full, insert the value into a new slot
 		if (size < capacity) {
+			if (size == allocated_capacity) {
+				heap = GrowHeap(allocator, heap, allocated_capacity, capacity, size + 1, GROW_TO_CAPACITY_DIVISOR);
+			}
 			heap[size++].Assign(allocator, value);
 			std::push_heap(heap, heap + size, Compare);
 		}
@@ -185,9 +217,13 @@ private:
 		return T_COMPARATOR::Operation(left.value, right.value);
 	}
 
-	idx_t capacity;
-	HeapEntry<T> *heap;
-	idx_t size;
+	//! Take all n slots once the heap holds more than n / 32: fewer abandoned arrays in heaps that fill up
+	static constexpr idx_t GROW_TO_CAPACITY_DIVISOR = 32;
+
+	idx_t capacity = 0;
+	idx_t allocated_capacity = 0;
+	HeapEntry<T> *heap = nullptr;
+	idx_t size = 0;
 };
 
 struct List {
@@ -230,7 +266,7 @@ public:
 		// If the heap is not full, insert the value into a new slot
 		if (size < capacity) {
 			if (size == allocated_capacity) {
-				Grow(allocator);
+				heap = GrowHeap(allocator, heap, allocated_capacity, capacity, size + 1, GROW_TO_CAPACITY_DIVISOR);
 			}
 			heap[size].first.Assign(allocator, key);
 			heap[size].second.Assign(allocator, value);
@@ -274,33 +310,12 @@ public:
 	}
 
 private:
-	void Grow(ArenaAllocator &allocator) {
-		D_ASSERT(allocated_capacity < capacity);
-		const auto old_allocated_capacity = allocated_capacity;
-		if (allocated_capacity == 0) {
-			allocated_capacity = 1;
-		} else if (allocated_capacity > capacity / 2) {
-			allocated_capacity = capacity;
-		} else {
-			if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(2), allocated_capacity)) {
-				throw OutOfRangeException("Overflow of 'allocated_capacity' in BinaryAggregateHeap::Grow");
-			}
-		}
-
-		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
-		idx_t new_size;
-		if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(sizeof(STORAGE_TYPE)), new_size)) {
-			throw OutOfRangeException("Overflow of 'new_size' in BinaryAggregateHeap::Grow");
-		}
-		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
-		                : allocator.AllocateAligned(new_size);
-		memset(ptr + old_size, 0, new_size - old_size);
-		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
-	}
-
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
+
+	//! Take all n slots past n / 2; an earlier jump makes sparse arg_max heaps several times larger
+	static constexpr idx_t GROW_TO_CAPACITY_DIVISOR = 2;
 
 	idx_t capacity = 0;
 	idx_t allocated_capacity = 0;
