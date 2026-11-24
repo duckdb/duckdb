@@ -711,6 +711,26 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 	} else {
 		EmptyConversionPayloadFromVariant empty_payload;
 		switch (target_type.id()) {
+		case LogicalTypeId::SQLNULL: {
+			// only a NULL value can be represented by the NULL type
+			auto &variant = conversion_data.variant;
+			auto &result_validity = FlatVector::ValidityMutable(result);
+			bool all_valid = true;
+			for (idx_t i = 0; i < count; i++) {
+				auto row_index = row.IsValid() ? row.GetIndex() : i;
+				bool is_null = !variant.RowIsValid(row_index) || !result_validity.RowIsValid(offset + i);
+				if (!is_null) {
+					auto type_id = variant.GetTypeId(row_index, sel[i]);
+					is_null = type_id == VariantLogicalType::VARIANT_NULL;
+					if (!is_null && error.empty()) {
+						error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+					}
+				}
+				all_valid = all_valid && is_null;
+				result_validity.SetInvalid(offset + i);
+			}
+			return all_valid;
+		}
 		case LogicalTypeId::BOOLEAN:
 			return CastVariantToPrimitive<VariantBooleanConversion>(conversion_data, result, sel, offset, count, row,
 			                                                        empty_payload);
