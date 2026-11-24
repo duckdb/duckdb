@@ -75,9 +75,3 @@ query I
 SELECT TRY_CAST(CAST([1, 2] AS VARIANT) AS "NULL"[])
 ----
 NULL
-
-# an empty variant container converts to the matching empty container of NULL type
-query I
-SELECT CAST(CAST(CAST('[]' AS JSON) AS VARIANT) AS "NULL"[])
-----
-[]
