@@ -167,18 +167,16 @@ private:
 		return false;
 	}
 
-	//! Finds the next haystack entry with the key, whose value is only read once the key is found
+	//! Finds the next haystack entry with the key
 	bool NextCandidate(const string_t &key, VariantNode &haystack_child) {
 		const auto haystack_count = haystack_entries.GetRawCount();
 		for (; candidates_tried < haystack_count; candidates_tried++) {
-			const auto position = CandidatePosition(haystack_count);
-			if (haystack_entries.RawKey(position) != key) {
+			const auto haystack_entry = haystack_entries.RawEntry(CandidatePosition(haystack_count));
+			if (haystack_entry.value.IsMissing() || haystack_entry.key != key) {
 				continue;
 			}
-			haystack_child = haystack_entries.RawValue(position);
-			if (!haystack_child.IsMissing()) {
-				return true;
-			}
+			haystack_child = haystack_entry.value;
+			return true;
 		}
 		return false;
 	}
@@ -327,7 +325,7 @@ private:
 
 	bool NextEntryValue(VariantNode &child) {
 		while (next_index < entries->GetRawCount()) {
-			child = entries->RawValue(next_index++);
+			child = entries->RawEntry(next_index++).value;
 			// Shredded values may have missing object keys for a given row
 			if (!child.IsMissing()) {
 				return true;

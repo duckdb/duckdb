@@ -342,10 +342,6 @@ public:
 	}
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
-	//! The key of the entry at the given raw position
-	string_t RawKey(idx_t raw_pos) const;
-	//! The value of the entry at the given raw position, which is missing if the row does not have the field
-	VariantNode RawValue(idx_t raw_pos) const;
 
 private:
 	//! The end position in the iteration space

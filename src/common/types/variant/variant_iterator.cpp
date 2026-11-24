@@ -560,31 +560,6 @@ VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
 	return VariantObjectEntry {unshredded.GetKey(row, key_idx), VariantNode::MakeUnshredded(state_ref, row, value_idx)};
 }
 
-string_t VariantObjectIterator::RawKey(idx_t raw_pos) const {
-	auto &unshredded = state.get().unshredded;
-	if (!shredded) {
-		return unshredded.GetKey(row, unshredded.GetKeysIndex(row, base + raw_pos));
-	}
-	if (raw_pos < typed_field_count) {
-		auto &name = StructType::GetChildTypes(content->logical_type)[raw_pos].first;
-		return string_t(name.c_str(), NumericCast<uint32_t>(name.size()));
-	}
-	return unshredded.GetKey(row, unshredded.GetKeysIndex(row, overlay_base + (raw_pos - typed_field_count)));
-}
-
-VariantNode VariantObjectIterator::RawValue(idx_t raw_pos) const {
-	auto &state_ref = state.get();
-	auto &unshredded = state_ref.unshredded;
-	if (!shredded) {
-		return VariantNode::MakeUnshredded(state_ref, row, unshredded.GetValuesIndex(row, base + raw_pos));
-	}
-	if (raw_pos < typed_field_count) {
-		return VariantNode::ResolveShredded(state_ref, content->children[raw_pos], shredded_index, row);
-	}
-	auto child_idx = overlay_base + (raw_pos - typed_field_count);
-	return VariantNode::MakeUnshredded(state_ref, row, unshredded.GetValuesIndex(row, child_idx));
-}
-
 void VariantObjectIterator::Iterator::Load() {
 	if (parent.order == VariantIterationOrder::LEXICOGRAPHIC) {
 		//! Iterate the pre-sorted entries (missing fields were already filtered out)
