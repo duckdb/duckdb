@@ -281,7 +281,7 @@ void ValidityMask::Write(WriteStream &writer, idx_t count) {
 		writer.Write<uint32_t>(NumericCast<uint32_t>(MinValue(valid_values, invalid_values)));
 		for (idx_t entry_idx = 0; entry_idx < EntryCount(count); entry_idx++) {
 			auto entry = GetValidityEntry(entry_idx);
-			uint64_t bits = serialize_valid ? entry : ~entry;
+			validity_t bits = serialize_valid ? entry : ~entry;
 			while (bits) {
 				auto i = entry_idx * BITS_PER_VALUE + CountZeros<uint64_t>::Trailing(bits);
 				if (i >= count) {

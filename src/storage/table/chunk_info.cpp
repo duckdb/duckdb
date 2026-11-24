@@ -994,6 +994,13 @@ void ChunkVectorInfo::Write(WriteStream &writer, VisibilityBound visibility_boun
 	idx_t count;
 	if (use_deleted_mask) {
 		count = row_count - deleted_mask.CountValid(row_count);
+#ifdef DEBUG
+		SelectionVector verify_sel(STANDARD_VECTOR_SIZE);
+		D_ASSERT(GetSelVector(transaction, verify_sel, row_count) == count);
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(!deleted_mask.RowIsValid(verify_sel.get_index(i)));
+		}
+#endif
 	} else {
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		count = GetSelVector(transaction, sel, row_count);
