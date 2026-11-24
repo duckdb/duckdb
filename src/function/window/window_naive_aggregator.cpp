@@ -406,6 +406,9 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	if (aggr.function.HasStateDestructorCallback()) {
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
 		allocator.FreeAll();
+	} else if (aggr.function.IsHolistic()) {
+		// holistic finalizers copy their results out of the arena
+		allocator.FreeAll();
 	}
 	live_count = 0;
 }
