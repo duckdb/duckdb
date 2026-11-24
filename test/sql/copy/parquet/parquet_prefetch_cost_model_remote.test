@@ -24,13 +24,15 @@ SELECT count(*)
 FROM read_parquet('http://blobs.duckdb.org/data/train-services-window-self-join-benchmark.parquet') t(c0, c1)
 WHERE c1 > 500000
 
-# The first row group is sized from the default, before enough network samples have been measured
+# The first row group is read before any network sample. It is no larger than a cache block and the cache (off here)
+# does not serve it, so instead of the 16 KiB default it coalesces gaps of up to its span: 97,368 bytes, under the
+# 256 KiB cap
 query I
 SELECT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%train-services%' AND row_group_id = 0
 ----
-16384
+97368
 
 query I
 SELECT count(*)
