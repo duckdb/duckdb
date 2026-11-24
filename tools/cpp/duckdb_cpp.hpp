@@ -1100,6 +1100,15 @@ public:
 	/// @throws Exception While a result on this connection is still live.
 	auto GetQueryMetrics() const -> QueryMetrics;
 
+	/// Renders the profile of the last query this connection finished, as the text the profiler prints for it. What it
+	/// holds is decided by the profiling configuration, e.g. `SET enable_profiling = 'json'`; without profiling it is
+	/// the profiler's note that profiling is disabled. Unstable API.
+	/// @param format The profiler format name: "json", "text", "query_tree", "query_tree_optimizer", "html",
+	/// "graphviz", "yaml", "mermaid" or "no_output", which renders nothing. Empty selects the configured format, or a
+	/// query tree when that is "no_output".
+	/// @throws Exception For an unknown format, or while a result on this connection is still live.
+	auto GetProfilingInformation(std::string_view format = {}) const -> std::string;
+
 	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
 	/// @param statement The statement to prepare.
 	/// @param require_cacheable When true, fail rather than return a statement whose plan is re-bound on every
@@ -1115,12 +1124,6 @@ public:
 
 	/// Reads how far the running query has come. Callable from any thread.
 	auto GetQueryProgress() const -> QueryProgress;
-
-	/// Renders the profiling output of the last query. Only populated while profiling is enabled with the
-	/// `enable_profiling` setting.
-	/// @param format The profiler format name, such as "json", "text", "html", "graphviz" or "mermaid"; empty for the
-	/// default.
-	auto GetProfilingInformation(std::string_view format = {}) const -> std::string;
 
 	/// Wraps a connection handle owned by someone else.
 	/// @param opaque The borrowed handle; must be a connection handle of the DuckDB C API.
@@ -1265,13 +1268,29 @@ public:
 	/// @param path The database file, or ":memory:" / the empty string for a new in-memory database, which is never
 	/// shared.
 	/// @param options The options that can only be chosen at startup. An instance that is already open is shared only
-	/// when it was created with the same options, written the same way.
+	/// when it was created with options that give the same settings: an alias counts as its option, and a value
+	/// counts as equal once converted to the option's type, text regardless of case.
 	/// @throws Exception When the file is open in an instance created with other options, or attached to an instance
 	/// that is not shared.
 	static auto OpenShared(const std::string &path, const StartupOptions &options = {}) -> Instance;
 
 	/// `OpenShared` through `env`, which must outlive the instance.
 	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// Initializes an instance that `OpenShared` has just created. The instance is borrowed for the duration of the
+	/// call, and must not be moved from: configure it, or connect to it and run SQL.
+	using InitCallback = std::function<void(Instance &instance)>;
+
+	/// `OpenShared`, calling `init` when this call creates the instance, before another call can share it: calls for
+	/// the same file wait for `init` to return. When `init` throws, the instance is destroyed and the exception
+	/// propagates; the next call for the file creates an instance again. `init` is not called when the call shares
+	/// an existing instance, and must not open the same file with `OpenShared`.
+	static auto OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+	    -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance, calling `init` when this call creates it.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+	                       const InitCallback &init) -> Instance;
 
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
@@ -3731,6 +3750,9 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> ScalarFunction &;
+	/// Sets the schema of the system catalog the function is registered in, for example `encodings`. Without it the
+	/// function is registered in the default schema. The schema must exist when the function is registered.
+	auto SetSchema(const std::string &schema) & -> ScalarFunction &;
 	/// The documentation of this overload, borrowed for in-place mutation.
 	auto GetDocs() -> FunctionDocs;
 

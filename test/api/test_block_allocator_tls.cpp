@@ -1854,7 +1854,7 @@ private:
 } // namespace
 
 TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active size classes",
-          "[api][allocation_cache]") {
+          "[api][allocation_cache][.]") {
 	constexpr idx_t SIZE = 512 * 1024;
 	constexpr idx_t COUNT = 40;
 	atomic<idx_t> live_bytes {0};
@@ -2080,7 +2080,7 @@ TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and
 	CHECK_NOTHROW(db.reset());
 }
 
-TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator][.]") {
 	DBConfig config;
 	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(2));
 	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
@@ -2220,6 +2220,20 @@ TEST_CASE("BlockAllocator preserves failed discards without spinning and can ret
 	allocator.FreeData(live_second, BLOCK_SIZE);
 }
 
+//! The process's locked memory (VmLck) in KiB
+static idx_t LockedMemoryKiB() {
+	std::ifstream status("/proc/self/status");
+	std::string line;
+	while (std::getline(status, line)) {
+		unsigned long long locked;
+		if (std::sscanf(line.c_str(), "VmLck: %llu kB", &locked) == 1) {
+			return idx_t(locked);
+		}
+	}
+	FAIL("VmLck missing from /proc/self/status");
+	return 0;
+}
+
 TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][block_allocator]") {
 	DBConfig config;
 	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
@@ -2231,17 +2245,17 @@ TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][bl
 	auto &allocator = BlockAllocator::Get(*db->instance);
 	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
 	block[0] = 42;
+	const auto locked_before = LockedMemoryKiB();
 	if (syscall(SYS_mlock, block, 1) != 0) {
 		WARN("Cannot lock a page to exercise unmapping during shutdown");
 		allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
 		return;
 	}
+	CHECK(LockedMemoryKiB() > locked_before);
 	allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
-	// Unmapping the pool during destruction also releases the page lock.
+	// Unmapping the pool releases the lock; the address itself may be reused by a later mapping (e.g. ASan's)
 	CHECK_NOTHROW(db.reset());
-	unsigned char residency;
-	CHECK(mincore(block, 1, &residency) == -1);
-	CHECK(errno == ENOMEM);
+	CHECK(LockedMemoryKiB() == locked_before);
 }
 #endif
 #endif
@@ -2285,7 +2299,8 @@ TEST_CASE("BlockAllocator destruction is safe before thread exit and during allo
 }
 #endif
 
-TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes", "[api][allocation_cache]") {
+TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes",
+          "[api][allocation_cache][.]") {
 	if (sizeof(void *) != 8) {
 		return;
 	}
@@ -2396,7 +2411,7 @@ TEST_CASE("BlockAllocator prefers local touched backing after mixed frees",
 	CHECK(allocator.GetCachedMemory() == 0);
 }
 
-TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality]") {
+TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality][.]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t POOL_BLOCKS = 257;
 	constexpr idx_t OLD_SIZE = 512 * 1024;

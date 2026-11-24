@@ -518,7 +518,7 @@ static void GetHivePartitionValuesTypeSwitch(const Vector &input, vector<HivePar
 void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	const auto count = input.size();
 
-	input.Hash(group_by_columns, hashes_v);
+	hasher.Hash(input, hashes_v);
 	hashes_v.Flatten();
 
 	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
@@ -554,7 +554,7 @@ HivePartitionedColumnData::HivePartitionedColumnData(ClientContext &context, vec
                                                      shared_ptr<GlobalHivePartitionState> global_state)
     : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
       global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
-      hashes_v(LogicalType::HASH) {
+      hasher(context, this->types, group_by_columns), hashes_v(LogicalType::HASH) {
 	InitializeKeys();
 	CreateAllocator();
 }

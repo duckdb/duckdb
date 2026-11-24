@@ -609,6 +609,34 @@ auto Instance::OpenShared(const std::string &path, const StartupOptions &options
 }
 
 auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(env, path, options, nullptr);
+}
+
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+    -> Instance {
+	return OpenShared(Environment::Default(), path, options, init);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+                          const InitCallback &init) -> Instance {
+	duckdb_v2_instance_init_callback_fn init_fn = nullptr;
+	// a copy, as the callback's user data is not const
+	InitCallback init_copy = init;
+	if (init_copy) {
+		init_fn = [](duckdb_v2_instance_handle created, void *user_data, duckdb_v2_error_info_handle *err) {
+			WithExceptionGuard(err, [&]() {
+				// borrowed: released rather than destroyed when the callback returns
+				Instance borrowed(static_cast<void *>(created));
+				try {
+					(*static_cast<InitCallback *>(user_data))(borrowed);
+				} catch (...) {
+					borrowed.release();
+					throw;
+				}
+				borrowed.release();
+			});
+		};
+	}
 	auto pairs = StartupOptionPairs(options);
 	StringArrays names(pairs.size());
 	StringArrays values(pairs.size());
@@ -619,7 +647,8 @@ auto Instance::OpenShared(Environment &env, const std::string &path, const Start
 	auto path_str = ToStr(path);
 	duckdb_v2_instance_handle instance = nullptr;
 	CheckedAPICall(duckdb_v2_instance_open_shared, env.handle(), path_str.data(), path_str.size(), names.ptrs(),
-	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), &instance);
+	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), init_fn,
+	               init_fn ? static_cast<void *>(&init_copy) : nullptr, &instance);
 	return Instance(instance);
 }
 
@@ -1221,24 +1250,6 @@ auto Connection::GetQueryProgress() const -> Connection::QueryProgress {
 	return progress;
 }
 
-namespace {
-// Collects the text a text sink delivers
-void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
-	WithExceptionGuard(err, [&] {
-		if (text && text_length) {
-			static_cast<std::string *>(user_data)->append(text, text_length);
-		}
-	});
-}
-} // namespace
-
-auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
-	std::string out;
-	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
-	               &out);
-	return out;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 // Context
 //----------------------------------------------------------------------------------------------------------------------
@@ -1755,6 +1766,24 @@ auto Connection::GetQueryMetrics() const -> QueryMetrics {
 	duckdb_v2_query_metrics_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_connection_get_query_metrics, handle(), &_h);
 	return detail::HandleFactory::Make<QueryMetrics>(_h);
+}
+
+namespace {
+// Collects the text a text sink delivers
+void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
+	WithExceptionGuard(err, [&] {
+		if (text && text_length) {
+			static_cast<std::string *>(user_data)->append(text, text_length);
+		}
+	});
+}
+} // namespace
+
+auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
+	               &out);
+	return out;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3366,6 +3395,12 @@ auto ScalarFunction::Create(Factory &factory) -> ScalarFunction {
 auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), view.data(), view.size());
+	return *this;
+}
+
+auto ScalarFunction::SetSchema(const std::string &schema) & -> ScalarFunction & {
+	auto view = ToStr(schema);
+	CheckedAPICall(duckdb_v2_scalar_function_set_schema, handle(), view.data(), view.size());
 	return *this;
 }
 

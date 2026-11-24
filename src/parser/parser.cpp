@@ -3,7 +3,6 @@
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
@@ -11,9 +10,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/query_node/update_query_node.hpp"
-#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -756,22 +752,6 @@ unique_ptr<ParsedExpression> Parser::ParseSingleExpression(const string &express
 	return std::move(expressions[0]);
 }
 
-GroupByNode Parser::ParseGroupByList(const string &group_by) {
-	// construct a mock SELECT query with our group_by expressions
-	string mock_query = StringUtil::Format("SELECT 42 GROUP BY %s", group_by);
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the result
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException("Expected a single SELECT statement");
-	}
-	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
-	auto &select_node = select.node->Cast<SelectNode>();
-	return std::move(select_node.groups);
-}
-
 vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
@@ -791,44 +771,6 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 	}
 	auto &order = select_node.modifiers[0]->Cast<OrderModifier>();
 	return std::move(order.orders);
-}
-
-void Parser::ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
-                             vector<unique_ptr<ParsedExpression>> &expressions) {
-	// construct a mock query
-	string mock_query = "UPDATE tbl SET " + update_list;
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
-		throw ParserException("Expected a single UPDATE statement");
-	}
-	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = update.node->set_info->columns;
-	expressions = std::move(update.node->set_info->expressions);
-}
-
-vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list) {
-	// construct a mock query
-	string mock_query = "VALUES " + value_list;
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException("Expected a single SELECT statement");
-	}
-	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw ParserException("Expected a single SELECT node");
-	}
-	auto &select_node = select.node->Cast<SelectNode>();
-	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
-		throw ParserException("Expected a single VALUES statement");
-	}
-	auto &values_list = select_node.from_table->Cast<ExpressionListRef>();
-	return std::move(values_list.values);
 }
 
 ColumnList Parser::ParseColumnList(const string &column_list) {

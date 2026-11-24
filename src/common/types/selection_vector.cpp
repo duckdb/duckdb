@@ -17,8 +17,6 @@ SelectionData::SelectionData(idx_t count) {
 #endif
 }
 
-SelectionData::~SelectionData() = default;
-
 namespace {
 struct BooleanSelectionTable {
 	sel_t positions[256][8] {};

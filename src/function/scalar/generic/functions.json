@@ -19,7 +19,8 @@
         "parameters": "message",
         "description": "Throws the given error message",
         "example": "error('access_mode')",
-        "type": "scalar_function"
+        "type": "scalar_function",
+        "extra_functions": ["static bool IsError(const BoundScalarFunction &function);"]
     },
     {
         "name": "has_error",
@@ -56,6 +57,14 @@
         "parameters": "lambda,arg1,...",
         "description": "Invokes a lambda function with the given arguments",
         "example": "invoke(x -> x + 1, 5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "hash",
+        "parameters": "value",
+        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.",
+        "example": "hash('\uD83E\uDD86')",
+        "categories": ["string"],
         "type": "scalar_function"
     }
 ]

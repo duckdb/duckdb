@@ -148,7 +148,7 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorStringBuffer>(offset_ptr, count);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 
@@ -158,7 +158,7 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::ConstantSliceInternal(const Logical
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	result->SetVectorSize(count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 

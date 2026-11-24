@@ -1,0 +1,15 @@
+# name: test/sql/aggregate/aggregates/minmax_n_interval.test
+# description: N-variant min/max on INTERVAL follow the normalized INTERVAL order
+# group: [aggregates]
+
+# 1 month is 30 days
+query II
+SELECT max(x, 2), min(x, 2) FROM (VALUES (INTERVAL 1 MONTH), (INTERVAL 31 DAY), (NULL)) v(x)
+----
+[31 days, 1 month]	[1 month, 31 days]
+
+# 1 day is 24 hours
+query II
+SELECT max(x, 1), min(x, 1) FROM (VALUES (INTERVAL 25 HOUR), (INTERVAL 1 DAY)) v(x)
+----
+['25:00:00']	[1 day]

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/buffer_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -33,8 +34,6 @@ struct string_t; // NOLINT: mimic std casing
 
 template <class T>
 using child_list_t = vector<std::pair<Identifier, T>>;
-template <class T>
-using buffer_ptr = shared_ptr<T>;
 
 template <class... Args>
 struct VectorStructType;
@@ -44,11 +43,6 @@ struct VectorListType;
 
 //! Marker type selecting the VARIANT specialization of VectorIterator (see variant_iterator.hpp)
 struct VectorVariantType;
-
-template <class T, typename... ARGS>
-buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
-	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
-}
 
 struct list_entry_t { // NOLINT: mimic std casing
 	list_entry_t() = default;

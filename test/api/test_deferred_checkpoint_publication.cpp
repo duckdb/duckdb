@@ -334,7 +334,7 @@ TEST_CASE("Full checkpoint defers remapped collections under vacuum exclusion", 
 	RequireScalar(con, "SELECT sum(v) FROM b", 324960);
 }
 
-TEST_CASE("SQL index maintenance waits for checkpoint publication", "[api][storage][checkpoint]") {
+TEST_CASE("SQL index maintenance waits for checkpoint publication", "[api][storage][checkpoint][.]") {
 	const string operation = GENERATE("VACUUM", "ANALYZE");
 	const bool concurrent_checkpoint = GENERATE(false, true);
 	CAPTURE(operation, concurrent_checkpoint);

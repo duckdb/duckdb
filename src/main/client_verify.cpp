@@ -88,10 +88,6 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		}
 		ReplaceStatement(statement, statement->Copy());
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
-		if (statement->type == StatementType::RELATION_STATEMENT) {
-			// reparsing not supported for relation statements
-			return;
-		}
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
 		Parser parser(*this, IdentifierCaseMode::PRESERVE_CASE);

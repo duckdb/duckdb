@@ -6,6 +6,7 @@ add_library_unity(
   error.cpp
   getvariable.cpp
   has_error.cpp
+  hash.cpp
   invoke.cpp
   try_rethrow.cpp)
 

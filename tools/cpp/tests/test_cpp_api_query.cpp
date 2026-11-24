@@ -554,17 +554,3 @@ TEST_CASE("Stable C++API: RenderBox limit yields an approximate '? rows' footer"
 	auto exact = conn.Execute("SELECT i FROM range(21) t(i)").RenderBox();
 	REQUIRE_FALSE(Contains(exact, "? rows"));
 }
-
-TEST_CASE("Stable C++API: Connection profiling information", "[cpp_api]") {
-	using namespace duckdb::cxx;
-
-	auto db = Instance(":memory:");
-	auto conn = db.Connect();
-	conn.Execute("PRAGMA enable_profiling = 'json'").Drain();
-	conn.Execute("SET profiling_output = '" + duckdb::TestCreatePath("cpp_api_profile.json") + "'").Drain();
-	conn.Execute("SELECT 42").Drain();
-
-	auto json = conn.GetProfilingInformation("json");
-	REQUIRE(json.find("RESULT_COLLECTOR") != std::string::npos);
-	REQUIRE(!conn.GetProfilingInformation().empty());
-}

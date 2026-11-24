@@ -2406,6 +2406,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		        'db_schema_tables': []
 		    },
 		    {
+		        'db_schema_name': encodings,
+		        'db_schema_tables': []
+		    },
+		    {
 		        'db_schema_name': information_schema,
 		        'db_schema_tables': []
 		    },

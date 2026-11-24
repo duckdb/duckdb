@@ -1,8 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
-#include "duckdb/main/query_profiler.hpp"
-
-using namespace duckdb;
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance, duckdb_v2_connection_handle *out_conn,
@@ -57,23 +54,5 @@ DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle co
 		*out_percentage = progress.GetPercentage();
 		*out_rows_processed = progress.GetRowsProcessed();
 		*out_total_rows_to_process = progress.GetTotalRowsToProcess();
-	});
-}
-
-// ---------------------------------------------------------------------------
-// Profiling
-// ---------------------------------------------------------------------------
-
-DUCKDB_V2_ERROR duckdb_v2_connection_get_profiling_information(duckdb_v2_connection_handle conn, const char *format,
-                                                               idx_t format_length, duckdb_v2_text_sink_fn sink,
-                                                               void *user_data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(sink);
-	DUCKDB_CHECK_STR_ARG(format, format_length);
-	return WithErrorHandler(err, [&]() {
-		std::string format_name(Convert(format, format_length));
-		ProfilerPrintFormat print_format =
-		    format_name.empty() ? ProfilerPrintFormat::Default() : ProfilerPrintFormat(format_name);
-		InvokeTextSink(sink, Convert(conn)->GetProfilingInformation(print_format), user_data);
 	});
 }

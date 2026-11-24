@@ -463,9 +463,10 @@ RecursiveCTEKeyedState::RecursiveCTEKeyedState(ClientContext &context, const Phy
 	}
 	for (auto &spec : op.partial_key_index_specs) {
 		partial_key_indexes.push_back(
-		    make_uniq<RecursiveCTEPartialKeyIndex>(Allocator::Get(context), op.hash_key_types, spec.Indices()));
+		    make_uniq<RecursiveCTEPartialKeyIndex>(context, op.hash_key_types, spec.Indices()));
 	}
 	if (op.keyed.can_preaggregate) {
+		preaggregation_hasher = make_uniq<ChunkHasher>(context, op.hash_key_types);
 		preaggregation_hashes.Initialize();
 	}
 	distinct_rows.Initialize(Allocator::DefaultAllocator(), op.hash_key_types);
@@ -606,7 +607,8 @@ enum class RecursiveCTELocalPreaggregationDecision : uint8_t { DEFER, PREAGGREGA
 class RecursiveCTELocalPreaggregationState {
 public:
 	RecursiveCTELocalPreaggregationState(ClientContext &context_p, const PhysicalRecursiveCTE &op_p)
-	    : context(context_p), op(op_p), extractor(context, op), hashes(LogicalType::HASH) {
+	    : context(context_p), op(op_p), extractor(context, op), hashes(LogicalType::HASH),
+	      hasher(context, op.hash_key_types) {
 		for (auto &payload_aggregate : op.payload_aggregates) {
 			auto &bound_aggregate = payload_aggregate->Cast<BoundAggregateExpression>();
 			aggregates.emplace_back(bound_aggregate);
@@ -624,7 +626,7 @@ public:
 		candidates.InitializeScan(scan_state);
 		while (candidates.Scan(scan_state, input)) {
 			extractor.ExtractKeys(input, keys);
-			keys.Hash(hashes);
+			hasher.Hash(keys, hashes);
 			cardinality.Update(hashes);
 		}
 		const auto distinct_upper_bound =
@@ -671,6 +673,7 @@ private:
 	DataChunk payload;
 	DataChunk input;
 	Vector hashes;
+	ChunkHasher hasher;
 	HyperLogLog cardinality;
 	idx_t sampled_candidate_count = 0;
 };
@@ -794,7 +797,7 @@ bool RecursiveCTEKeyedState::ShouldPreaggregateUsingKeyUpdates(idx_t candidate_c
 	intermediate_table.InitializeScan(sample_scan_state);
 	while (intermediate_table.Scan(sample_scan_state, update_rows)) {
 		extractor.ExtractKeys(update_rows, distinct_rows);
-		distinct_rows.Hash(preaggregation_hashes);
+		preaggregation_hasher->Hash(distinct_rows, preaggregation_hashes);
 		key_cardinality.Update(preaggregation_hashes);
 		const auto distinct_upper_bound =
 		    LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(key_cardinality.Count()));

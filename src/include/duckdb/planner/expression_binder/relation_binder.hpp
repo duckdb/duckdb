@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! The relation binder is a binder used to bind expressions in the relation API
+//! The relation binder binds expressions that may not contain aggregates, DEFAULT, subqueries or window functions
 class RelationBinder : public ExpressionBinder {
 public:
 	RelationBinder(Binder &binder, ClientContext &context, string op);

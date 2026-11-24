@@ -1,0 +1,185 @@
+# name: test/parquet/parquet_schema_time_of_day_cast.test
+# description: Filters on a timestamp column that the schema parameter reads as a time of day
+# group: [parquet]
+
+require parquet
+
+# the views are temporary, older versions cannot bind a TIME_NS in a view left in the database
+
+# 8 row groups of four hours each, from the day before 1970 into the day after
+statement ok
+COPY (
+	SELECT CASE WHEN i % 64 = 63 THEN NULL ELSE make_timestamp_ns(-86400000000000 + i * 7000000000) END AS ns, i::INTEGER AS i,
+		TIME '00:00:00' + INTERVAL (i * 5) SECOND AS t
+	FROM range(16384) r(i)
+) TO '{TEMP_DIR}/time_of_day_ns.parquet' (ROW_GROUP_SIZE 2048);
+
+statement ok
+COPY (
+	SELECT CASE WHEN i % 64 = 63 THEN NULL ELSE make_timestamp_ns(-86400000000000 + i * 7000000000)::TIMESTAMP END AS us
+	FROM range(16384) r(i)
+) TO '{TEMP_DIR}/time_of_day_us.parquet' (ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*) FROM parquet_metadata('{TEMP_DIR}/time_of_day_ns.parquet') WHERE path_in_schema = 'ns';
+----
+8
+
+statement ok
+CREATE TEMPORARY VIEW ns_as_time_ns AS FROM read_parquet('{TEMP_DIR}/time_of_day_ns.parquet',
+	schema = MAP {'ns': {name: 'x', type: 'TIME_NS', default_value: NULL}});
+
+statement ok
+CREATE TEMPORARY VIEW ns_as_time AS FROM read_parquet('{TEMP_DIR}/time_of_day_ns.parquet',
+	schema = MAP {'ns': {name: 'x', type: 'TIME', default_value: NULL}});
+
+statement ok
+CREATE TEMPORARY VIEW us_as_time AS FROM read_parquet('{TEMP_DIR}/time_of_day_us.parquet',
+	schema = MAP {'us': {name: 'x', type: 'TIME', default_value: NULL}});
+
+statement ok
+CREATE TEMPORARY VIEW us_as_timetz AS FROM read_parquet('{TEMP_DIR}/time_of_day_us.parquet',
+	schema = MAP {'us': {name: 'x', type: 'TIMETZ', default_value: NULL}});
+
+foreach view,type ns_as_time_ns,TIME_NS ns_as_time,TIME us_as_time,TIME
+
+# the first minute of both days
+query I
+SELECT count(*) FROM {view} WHERE x < {type} '00:01:00';
+----
+17
+
+# ten minutes of the last hour of the first day
+query I
+SELECT count(*) FROM {view} WHERE x BETWEEN {type} '23:00:00' AND {type} '23:10:00';
+----
+84
+
+query I
+SELECT count(*) FROM {view} WHERE x >= {type} '23:10:00';
+----
+422
+
+query I
+SELECT count(*) FROM {view} WHERE x IS NULL;
+----
+256
+
+endloop
+
+query I
+SELECT count(*) FROM us_as_timetz WHERE x < TIMETZ '00:01:00+00';
+----
+17
+
+query I
+SELECT count(*) FROM us_as_timetz WHERE x BETWEEN TIMETZ '23:00:00+00' AND TIMETZ '23:10:00+00';
+----
+84
+
+# no row group is skipped on the time of day
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+query I
+SELECT max(x) FROM ns_as_time_ns WHERE x < TIME_NS '00:01:00';
+----
+00:00:56
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' GROUP BY event ORDER BY event;
+----
+ReadRowGroup	8
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# row groups that each begin and end at a midnight: the casts of the bounds of every row group are equal
+statement ok
+COPY (
+	SELECT us, (us::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns
+	FROM (SELECT make_timestamp(1577836800000000 + (i // 2048) * 86400000000 +
+		CASE WHEN i % 2048 = 2047 THEN 86400000000 ELSE (i % 2048) * 42000000 END) AS us FROM range(16384) r(i))
+) TO '{TEMP_DIR}/time_of_day_midnights.parquet' (ROW_GROUP_SIZE 2048);
+
+foreach column us tzns
+
+statement ok
+CREATE OR REPLACE TEMPORARY VIEW midnights_as_timetz AS FROM read_parquet('{TEMP_DIR}/time_of_day_midnights.parquet',
+	schema = MAP {'{column}': {name: 'x', type: 'TIMETZ', default_value: NULL}});
+
+query I
+SELECT count(*) FROM midnights_as_timetz WHERE x > TIMETZ '12:00:00+00';
+----
+8144
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+query I
+SELECT count(*) FROM midnights_as_timetz WHERE x = TIMETZ '00:00:42+00';
+----
+8
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' GROUP BY event ORDER BY event;
+----
+ReadRowGroup	8
+
+statement ok
+CALL truncate_duckdb_logs();
+
+endloop
+
+# a column read with a monotone cast still skips row groups: t reaches 20:00:00 in the last one
+statement ok
+CREATE TEMPORARY VIEW t_as_time_ns AS FROM read_parquet('{TEMP_DIR}/time_of_day_ns.parquet',
+	schema = MAP {'t': {name: 'x', type: 'TIME_NS', default_value: NULL}});
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+query II
+SELECT count(*), min(x) FROM t_as_time_ns WHERE x > TIME_NS '20:00:00.000000001';
+----
+1983	20:00:05
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' GROUP BY event ORDER BY event;
+----
+ReadRowGroup	1
+SkipRowGroup	7
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# as does a widening integer cast
+statement ok
+CREATE TEMPORARY VIEW i_as_bigint AS FROM read_parquet('{TEMP_DIR}/time_of_day_ns.parquet',
+	schema = MAP {'i': {name: 'x', type: 'BIGINT', default_value: NULL}});
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+query II
+SELECT count(*), min(x) FROM i_as_bigint WHERE x > 16000;
+----
+383	16001
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' GROUP BY event ORDER BY event;
+----
+ReadRowGroup	1
+SkipRowGroup	7

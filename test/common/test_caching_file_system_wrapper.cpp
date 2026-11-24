@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "caching_test_utils.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "test_helpers.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
@@ -413,16 +414,16 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 
 	// Create a test directory
 	auto test_dir = TestCreatePath("test_list_dir");
-	auto local_fs = FileSystem::CreateLocal();
-	local_fs->CreateDirectory(test_dir);
+	auto &local_fs = TestLocalFileSystem();
+	local_fs.CreateDirectory(test_dir);
 
 	// Create several test files in the directory.
 	vector<string> expected_files = {"file1.txt", "file2.txt", "file3.txt", "file4.txt"};
 	vector<string> file_paths;
 	for (const auto &filename : expected_files) {
-		auto file_path = local_fs->JoinPath(test_dir, filename);
+		auto file_path = local_fs.JoinPath(test_dir, filename);
 		file_paths.push_back(file_path);
-		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		auto handle = local_fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 		const string content = "Test content for " + filename;
 		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), /*location=*/0);
 		handle->Sync();
@@ -445,9 +446,9 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 	}
 
 	for (const auto &file_path : file_paths) {
-		local_fs->TryRemoveFile(file_path);
+		local_fs.TryRemoveFile(file_path);
 	}
-	local_fs->RemoveDirectory(test_dir);
+	local_fs.RemoveDirectory(test_dir);
 }
 
 TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system][caching]") {
@@ -1063,7 +1064,7 @@ TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NO
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 
 	auto missing_path = TestCreatePath("test_caching_missing_file.bin");
-	FileSystem::CreateLocal()->TryRemoveFile(missing_path);
+	TestLocalFileSystem().TryRemoveFile(missing_path);
 
 	auto validate = GENERATE(true, false);
 	OpenFileInfo file_info(missing_path);
