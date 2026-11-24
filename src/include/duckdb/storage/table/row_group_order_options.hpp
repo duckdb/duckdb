@@ -38,6 +38,11 @@ struct RowGroupOrderOptions {
 	const idx_t row_group_offset;
 	const idx_t leading_null_group_offset;
 
+	//! Options for the scan of transaction-local rows: the pruned offsets count only persisted row groups
+	RowGroupOrderOptions WithoutOffsetPruning() const {
+		return RowGroupOrderOptions(column_idx, order_by, order_type, null_order, column_type, row_limit);
+	}
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<RowGroupOrderOptions> Deserialize(Deserializer &deserializer);
 };
