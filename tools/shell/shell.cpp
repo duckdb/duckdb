@@ -59,8 +59,10 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -1122,7 +1124,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			if (agent_mode_active) {
-				PrintQueryEstimate(zStmtSql, *statement);
+				PrintQueryEstimate(*statement);
 			}
 
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
@@ -3558,6 +3560,7 @@ struct ScanEstimate {
 	idx_t rows;
 };
 
+//! Collect the scans of a plan: the table and table function scans that read data
 static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::LogicalOperator &op,
                                  vector<ScanEstimate> &scans) {
 	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
@@ -3574,7 +3577,7 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 	}
 }
 
-//! Runs the estimate of a statement inside a transaction: the one the user started, or one that is rolled back again
+//! Runs the estimate in a transaction of its own unless the connection already has one, and rolls it back
 struct EstimateTransaction {
 	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
 		if (started) {
@@ -3595,7 +3598,7 @@ struct EstimateTransaction {
 	bool started;
 };
 
-void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
+void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
 	case duckdb::StatementType::SELECT_STATEMENT:
 	case duckdb::StatementType::INSERT_STATEMENT:
@@ -3611,11 +3614,20 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 	try {
 		auto &context = *conn->context;
 		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
-		// extract it, read the estimates and destroy it inside one transaction
+		// plan, read the estimates and destroy the plan inside one transaction
 		EstimateTransaction transaction(*conn);
-		auto plan = context.ExtractPlan(sql);
+		// planned directly rather than through a query, so neither settings that change EXPLAIN output nor the query
+		// log or the profiler see the estimate
 		vector<ScanEstimate> scans;
-		CollectScanEstimates(context, *plan, scans);
+		idx_t rows_returned = 0;
+		context.RunFunctionInTransaction([&]() {
+			duckdb::Planner planner(context);
+			planner.CreatePlan(statement.Copy());
+			duckdb::Optimizer optimizer(*planner.binder, context);
+			auto plan = optimizer.Optimize(std::move(planner.plan));
+			CollectScanEstimates(context, *plan, scans);
+			rows_returned = plan->EstimateCardinality(context);
+		});
 		if (scans.empty()) {
 			// e.g. a plain CREATE TABLE - not worth a line
 			return;
@@ -3644,7 +3656,7 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 		string line =
 		    StringUtil::Format("estimate: ~%llu rows read (%s)", total_rows, StringUtil::Join(scan_texts, ", "));
 		if (statement.type == duckdb::StatementType::SELECT_STATEMENT) {
-			line += StringUtil::Format(", ~%llu rows returned", plan->EstimateCardinality(context));
+			line += StringUtil::Format(", ~%llu rows returned", rows_returned);
 		}
 		PrintF(PrintOutput::STDERR, "%s\n", line);
 	} catch (std::exception &) {
