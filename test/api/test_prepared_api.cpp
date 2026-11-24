@@ -1,5 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
+#include "duckdb/main/client_config.hpp"
 
 using namespace duckdb;
 
@@ -651,4 +654,83 @@ TEST_CASE("Test prepared statements with extension that can request a rebind", "
 
 	// SetVariableStatement
 	REQUIRE_NO_FAIL(con.Prepare("SET VARIABLE test_var = ?")->Execute(42));
+}
+
+// The result sink a statement is collected with, recorded by a result collector hook that defers to the default one
+static ResultOrdering RecordedOrdering(Connection &con, const std::function<void()> &run) {
+	ResultOrdering ordering = ResultOrdering::UNORDERED;
+	auto &config = ClientConfig::GetConfig(*con.context);
+	config.get_result_collector = [&](ClientContext &context, PreparedStatementData &data) {
+		auto collector = PhysicalResultCollector::GetResultCollector(context, data);
+		ordering = collector->Cast<PhysicalResultSink>().ordering;
+		return collector;
+	};
+	run();
+	config.get_result_collector = nullptr;
+	return ordering;
+}
+
+// The rows of the first column, which must be BIGINT, fetched chunk by chunk
+static vector<int64_t> FetchBigints(QueryResult &result) {
+	vector<int64_t> values;
+	while (auto chunk = result.Fetch()) {
+		auto data = FlatVector::GetData<int64_t>(chunk->data[0]);
+		for (idx_t i = 0; i < chunk->size(); i++) {
+			values.push_back(data[i]);
+		}
+	}
+	return values;
+}
+
+TEST_CASE("A prepared statement collects an order-preserving result in parallel", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads = 4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range AS i FROM range(2000000)"));
+	const string sql = "SELECT i FROM t WHERE i % 7 <> 3";
+
+	// the same statement, run directly, is the reference: batch-index ordered, in insertion order
+	duckdb::unique_ptr<QueryResult> direct;
+	REQUIRE(RecordedOrdering(con, [&]() { direct = con.Query(sql); }) == ResultOrdering::BATCH_INDEX_ORDERED);
+	REQUIRE_NO_FAIL(*direct);
+	auto expected = FetchBigints(*direct);
+	REQUIRE(expected.size() > 1000000);
+
+	// prepared and executed through the API (an EXECUTE): the same sink and the same rows, in the same order
+	auto prepared = con.Prepare(sql);
+	REQUIRE(!prepared->HasError());
+	duckdb::unique_ptr<QueryResult> executed;
+	REQUIRE(RecordedOrdering(con, [&]() { executed = prepared->Execute(); }) == ResultOrdering::BATCH_INDEX_ORDERED);
+	REQUIRE_NO_FAIL(*executed);
+	REQUIRE(FetchBigints(*executed) == expected);
+
+	// the SQL EXECUTE of a PREPARE
+	REQUIRE_NO_FAIL(con.Query("PREPARE q AS " + sql));
+	duckdb::unique_ptr<QueryResult> sql_executed;
+	REQUIRE(RecordedOrdering(con, [&]() { sql_executed = con.Query("EXECUTE q"); }) ==
+	        ResultOrdering::BATCH_INDEX_ORDERED);
+	REQUIRE_NO_FAIL(*sql_executed);
+	REQUIRE(FetchBigints(*sql_executed) == expected);
+}
+
+TEST_CASE("A prepared ORDER BY keeps its order", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads = 4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT (hash(range) >> 1)::BIGINT AS i FROM range(2000000)"));
+	auto prepared = con.Prepare("SELECT i FROM t ORDER BY i DESC");
+	REQUIRE(!prepared->HasError());
+	auto result = prepared->Execute();
+	REQUIRE_NO_FAIL(*result);
+	auto values = FetchBigints(*result);
+	REQUIRE(values.size() == 2000000);
+	REQUIRE(std::is_sorted(values.rbegin(), values.rend()));
+
+	// with insertion order off, the ORDER BY still decides the order
+	REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order = false"));
+	result = prepared->Execute();
+	REQUIRE_NO_FAIL(*result);
+	values = FetchBigints(*result);
+	REQUIRE(values.size() == 2000000);
+	REQUIRE(std::is_sorted(values.rbegin(), values.rend()));
 }
