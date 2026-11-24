@@ -690,8 +690,9 @@ void LocalStorage::Flush(Context &context, DataTable &table, LocalTableStorage &
 				throw IOException("Forced flush append failure (debug_force_flush_append_failure)");
 			}
 			// table_entry is set through the append path (InitializeAppend/Append/LocalMerge/Alter)
-			D_ASSERT(storage.table_entry);
-			transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
+			auto table_entry = storage.table_entry.load();
+			D_ASSERT(table_entry);
+			transaction.PushAppend(*table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 		}
 	} catch (std::exception &ex) {
 		// the shared table or indexes may be partially modified: no checkpoint may persist them

@@ -1,0 +1,79 @@
+# name: test/sql/transactions/join_transaction_concurrent_insert.test_slow
+# description: Many connections join one transaction and append to the same tables at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl (thread INTEGER, i INTEGER, s VARCHAR, l INTEGER[]);
+
+statement ok
+CREATE TEMPORARY TABLE tmp (thread INTEGER, i INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+loop i 0 50
+
+statement ok
+INSERT INTO tbl SELECT {threadid}, {i} * 100 + range, 'string-' || range::VARCHAR, [range, {i}] FROM range(100)
+
+statement ok
+INSERT INTO tmp SELECT {threadid}, range FROM range(10)
+
+# a scan of the shared table sees at least what this connection appended itself
+query I
+SELECT count(*) >= ({i} + 1) * 100 FROM tbl WHERE thread = {threadid}
+----
+true
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+# the main connection is the last one to leave: all the appends become visible at once
+query I
+SELECT count(*) FROM tbl
+----
+40000
+
+statement ok
+COMMIT
+
+query IIII
+SELECT count(*), count(DISTINCT thread), sum(i), sum(length(s)) FROM tbl
+----
+40000	8	99980000	356000
+
+query II
+SELECT thread, count(*) FROM tbl GROUP BY thread ORDER BY thread
+----
+0	5000
+1	5000
+2	5000
+3	5000
+4	5000
+5	5000
+6	5000
+7	5000
+
+query I
+SELECT sum(l[1] + l[2]) FROM tbl
+----
+2960000
+
+query II
+SELECT count(*), sum(i) FROM tmp
+----
+4000	18000

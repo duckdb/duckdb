@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -57,8 +58,9 @@ public:
 	reference<DataTable> table_ref;
 	//! The DuckTableEntry visible to this transaction that references table_ref.
 	//! Updated through the append path (InitializeAppend, Append, LocalMerge) and
-	//! propagated from parent storage on ALTER operations.
-	optional_ptr<DuckTableEntry> table_entry;
+	//! propagated from parent storage on ALTER operations. Atomic: connections that share a transaction set it
+	//! concurrently.
+	atomic<optional_ptr<DuckTableEntry>> table_entry;
 
 	Allocator &allocator;
 	//! The main row group collection.
