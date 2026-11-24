@@ -118,6 +118,9 @@ void VariantNormalizer::VisitGeography(const string_t &geog, VariantNormalizerSt
 void VariantNormalizer::VisitBitstring(const string_t &bits, VariantNormalizerState &state) {
 	return VisitString(bits, state);
 }
+void VariantNormalizer::VisitType(const string_t &type, VariantNormalizerState &state) {
+	return VisitString(type, state);
+}
 
 void VariantNormalizer::VisitArray(const UnifiedVariantVectorData &variant, idx_t row,
                                    const VariantNestedData &nested_data, idx_t depth, VariantNormalizerState &state) {

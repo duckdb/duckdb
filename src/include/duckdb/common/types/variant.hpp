@@ -162,6 +162,7 @@ enum class VariantLogicalType : uint8_t {
 	GEOMETRY = 33,
 	TIMESTAMP_NANOS_TZ = 34,
 	GEOGRAPHY = 35,
+	TYPE = 36,
 	ENUM_SIZE /* always kept as last item of the enum */
 };
 

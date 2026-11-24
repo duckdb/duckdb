@@ -117,6 +117,9 @@ struct VariantToVariantSizeAnalyzer {
 	static uint32_t VisitBitstring(const string_t &bits, AnalyzeState &state) {
 		return VisitString(bits, state);
 	}
+	static uint32_t VisitType(const string_t &type, AnalyzeState &state) {
+		return VisitString(type, state);
+	}
 
 	template <typename T>
 	static uint32_t VisitDecimal(T val, uint32_t width, uint32_t scale, AnalyzeState &state) {
@@ -227,6 +230,9 @@ struct VariantToVariantDataWriter {
 	}
 	static void VisitBitstring(const string_t &bits, WriteState &state) {
 		return VisitString(bits, state);
+	}
+	static void VisitType(const string_t &type, WriteState &state) {
+		return VisitString(type, state);
 	}
 
 	template <typename T>

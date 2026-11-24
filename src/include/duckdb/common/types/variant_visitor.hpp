@@ -93,6 +93,7 @@ public:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
 		case VariantLogicalType::GEOGRAPHY:
+		case VariantLogicalType::TYPE:
 			return VisitString(type_id, variant, row, values_idx, std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(variant, row, values_idx, std::forward<Args>(args)...);
@@ -181,6 +182,7 @@ public:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
 		case VariantLogicalType::GEOGRAPHY:
+		case VariantLogicalType::TYPE:
 			return VisitString(type_id, node.GetString(), std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(node, std::forward<Args>(args)...);
@@ -326,6 +328,9 @@ private:
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(decoded_string, std::forward<Args>(args)...);
 		}
+		if (type_id == VariantLogicalType::TYPE) {
+			return Visitor::VisitType(decoded_string, std::forward<Args>(args)...);
+		}
 		throw InternalException("String-backed variant type (%s) not handled", EnumUtil::ToString(type_id));
 	}
 
@@ -348,6 +353,9 @@ private:
 		}
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(value, std::forward<Args>(args)...);
+		}
+		if (type_id == VariantLogicalType::TYPE) {
+			return Visitor::VisitType(value, std::forward<Args>(args)...);
 		}
 		throw InternalException("String-backed variant type (%s) not handled", EnumUtil::ToString(type_id));
 	}

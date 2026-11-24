@@ -72,6 +72,7 @@ struct VariantNormalizer {
 	static void VisitGeometry(const string_t &geom, VariantNormalizerState &state);
 	static void VisitGeography(const string_t &geog, VariantNormalizerState &state);
 	static void VisitBitstring(const string_t &bits, VariantNormalizerState &state);
+	static void VisitType(const string_t &type, VariantNormalizerState &state);
 
 	template <typename T>
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantNormalizerState &state) {

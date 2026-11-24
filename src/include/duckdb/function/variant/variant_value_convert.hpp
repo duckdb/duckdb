@@ -92,6 +92,9 @@ struct ValueConverter {
 	static Value VisitBitstring(const string_t &str) {
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
+	static Value VisitType(const string_t &str) {
+		return Value::TYPE(str);
+	}
 
 	template <typename T>
 	static Value VisitDecimal(T val, uint32_t width, uint32_t scale) {

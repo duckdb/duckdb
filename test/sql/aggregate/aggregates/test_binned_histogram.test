@@ -359,16 +359,16 @@ SELECT histogram(1, [1::VARIANT])
 ----
 {1=1}
 
-# conversions the unified VARIANT type does not support keep failing at runtime
-statement error
+# TYPE values unify with VARIANT bins too, and order after numbers
+query I
 SELECT histogram(get_type(1), [1::VARIANT])
 ----
-<REGEX>:.*Conversion Error.*TYPE -> VARIANT.*
+{1=0}
 
-statement error
+query I
 SELECT histogram(v, b) FROM (VALUES (1::VARIANT, [get_type(1)])) t(v, b)
 ----
-<REGEX>:.*Conversion Error.*TYPE -> VARIANT.*
+{INTEGER=1}
 
 # array bins of the matching size still work
 query I

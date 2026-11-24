@@ -7676,6 +7676,7 @@ const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
 		{ static_cast<uint32_t>(VariantLogicalType::GEOMETRY), "GEOMETRY" },
 		{ static_cast<uint32_t>(VariantLogicalType::TIMESTAMP_NANOS_TZ), "TIMESTAMP_NANOS_TZ" },
 		{ static_cast<uint32_t>(VariantLogicalType::GEOGRAPHY), "GEOGRAPHY" },
+		{ static_cast<uint32_t>(VariantLogicalType::TYPE), "TYPE" },
 		{ static_cast<uint32_t>(VariantLogicalType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;
