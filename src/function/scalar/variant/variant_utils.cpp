@@ -127,7 +127,8 @@ void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 		}
 		auto &nested_data_entry = nested_data[i];
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			auto child_idx = component.index;
+			D_ASSERT(component.index >= 0);
+			auto child_idx = static_cast<idx_t>(component.index);
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
 				res_validity.SetInvalid(i);

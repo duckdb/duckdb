@@ -58,12 +58,32 @@ void VariantPathFunction::ExecuteVariant(DataChunk &input, const ExpressionState
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<VariantPathBindData>();
 	const auto path_type_id = input.data[1].GetType().id();
-	if (path_type_id == LogicalTypeId::VARCHAR) {
-		ExecuteVariantUnary(variant_vec, info.paths[0], result, count, keep);
+	if (path_type_id == LogicalTypeId::LIST) {
+		ExecuteVariantMany(variant_vec, info.paths, result, count, keep);
 		return;
 	}
-	D_ASSERT(path_type_id == LogicalTypeId::LIST);
-	ExecuteVariantMany(variant_vec, info.paths, result, count, keep);
+	D_ASSERT(path_type_id == LogicalTypeId::VARCHAR || path_type_id == LogicalTypeId::BIGINT);
+	ExecuteVariantUnary(variant_vec, info.paths[0], result, count, keep);
+}
+
+optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node, int64_t index) {
+	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != VariantLogicalType::ARRAY) {
+		return {};
+	}
+	const auto elements = node.GetArrayChildren();
+	const auto length = elements.size();
+	if (index >= 0) {
+		if (static_cast<idx_t>(index) >= length) {
+			return {};
+		}
+		return elements[static_cast<idx_t>(index)];
+	}
+	// -(index + 1) cannot overflow for the minimum int64_t
+	const auto from_end = static_cast<idx_t>(-(index + 1));
+	if (from_end >= length) {
+		return {};
+	}
+	return elements[length - 1 - from_end];
 }
 
 void VariantPathFunction::ExecuteVariantUnary(const Vector &input, const vector<VariantPathComponent> &path,

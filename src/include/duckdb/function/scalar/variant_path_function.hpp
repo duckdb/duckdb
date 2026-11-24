@@ -63,8 +63,9 @@ struct VariantPathFunction {
 	}
 
 	//! Executes scalar VARIANT functions that return the VARIANT value selected by an optional constant path argument.
-	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR) or f(VARIANT, VARCHAR[]), and returns VARIANT, or
-	//! VARIANT[] for a list of paths. Missing values, and values for which `keep` returns false, are written as NULL.
+	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR), f(VARIANT, VARCHAR[]) or f(VARIANT, BIGINT), and
+	//! returns VARIANT, or VARIANT[] for a list of paths. Missing values, and values for which `keep` returns false,
+	//! are written as NULL.
 	static void ExecuteVariant(DataChunk &input, const ExpressionState &state, Vector &result,
 	                           variant_node_filter_t keep);
 
@@ -121,15 +122,25 @@ private:
 	static void ExecuteVariantMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths,
 	                               Vector &result, idx_t count, variant_node_filter_t keep);
 
+	//! Returns the element at a 0-based index of an ARRAY, negative indexes count from the end. Returns nullopt if the
+	//! node is not an ARRAY or the index is out of range.
+	static optional<VariantNode> ResolveIndex(const VariantNode &node, int64_t index);
+
 	//! Walks the VARIANT using a path, which may be either (partially) shredded or unshredded. Returns nullopt if the
 	//! path is missing in the VARIANT, and the present value with VariantNode otherwise.
 	static optional<VariantNode> ResolvePath(VariantNode node, const vector<VariantPathComponent> &path) {
 		for (const auto &component : path) {
-			if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-				throw InternalException("Path indexes are not supported for this function");
-			}
 			if (node.IsNull() || node.IsMissing()) {
 				return {};
+			}
+
+			if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+				auto element = ResolveIndex(node, component.index);
+				if (!element) {
+					return {};
+				}
+				node = *element;
+				continue;
 			}
 
 			if (node.GetTypeId() != VariantLogicalType::OBJECT) {
