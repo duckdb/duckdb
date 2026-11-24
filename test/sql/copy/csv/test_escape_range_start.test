@@ -278,6 +278,44 @@ new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
 ----
 3	0
 
+# the same split with the quoted value closing at the end of the file, no row behind it for the next range
+statement ok
+COPY (SELECT encode('pppp' || chr(10) || '"aaaaaaaaa\"' || chr(10) || 'x"')) TO '{TEST_DIR}/escape_quote_eof.csv'
+(FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_eof.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+2	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_quote_eof.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+2	0
+
+# a quote inside a field that toggles the quote state right before a buffer end
+statement ok
+COPY (SELECT encode('pppppppppppp' || chr(10) || 'aa"' || chr(10) || 'x""' || chr(10) || 'z"' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_field_quote.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_field_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'y') FROM read_csv('{TEST_DIR}/escape_field_quote.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+3	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

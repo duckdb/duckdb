@@ -2310,20 +2310,18 @@ void StringValueScanner::SetStart() {
 		// the state those bytes leave an unquoted value in
 		CSVState before;
 		switch (before_start.state) {
-		case CSVState::UNQUOTED_ESCAPE:
-		case CSVState::ESCAPED_RETURN:
-		case CSVState::FIELD_START:
-		case CSVState::COMMENT:
-		case CSVState::QUOTED:
-		case CSVState::QUOTED_NEW_LINE:
-		case CSVState::QUOTED_NO_FIELD:
-		case CSVState::ESCAPE:
-		case CSVState::ESCAPE_NO_FIELD:
-			// the rules of these states read the first byte, escapes are inert in a comment, line breaks data in quotes
-			before = before_start.state;
+		case CSVState::STANDARD:
+		case CSVState::STANDARD_NEWLINE:
+		case CSVState::RECORD_SEPARATOR:
+		case CSVState::CARRIAGE_RETURN:
+		case CSVState::NOT_SET:
+		case CSVState::INVALID:
+			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
 			break;
 		default:
-			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+			// the rules of the state before the start read its first bytes, escapes inert in a comment, line breaks
+			// data inside quotes, a quote inside a field as the embedded quote rule reads it
+			before = before_start.state;
 			break;
 		}
 		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
@@ -2353,9 +2351,8 @@ void StringValueScanner::SetStart() {
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
 	ValidRowInfo best_row = TryRow(unquoted_start, iterator.pos.buffer_pos, iterator.GetEndPos());
-	// 2. We are in the middle of a quoted value, a search from an exact state that found a row needs no guess
-	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' &&
-	    !(exact_start && best_row.is_valid)) {
+	// 2. We are in the middle of a quoted value, a search from an exact state needs no guess
+	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' && !exact_start) {
 		idx_t end_pos = iterator.GetEndPos();
 		if (best_row.is_valid && best_row.end_buffer_idx == iterator.pos.buffer_idx) {
 			// If we got a valid row from the standard state, we limit our search up to that.
@@ -2373,7 +2370,8 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	// 3. We are in an escaped value
-	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (!best_row.is_valid && !exact_start &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
 		if (escape_row.is_valid) {
 			best_row = escape_row;
