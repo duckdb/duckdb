@@ -386,6 +386,22 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 	}
 }
 
+void DuckTransaction::SetIndexScanStart(DataTableInfo &info, idx_t change_count) {
+	lock_guard<mutex> l(index_scan_lock);
+	index_scan_starts[info] = change_count;
+}
+
+optional_idx DuckTransaction::TakeIndexScanStart(DataTableInfo &info) {
+	lock_guard<mutex> l(index_scan_lock);
+	auto entry = index_scan_starts.find(info);
+	if (entry == index_scan_starts.end()) {
+		return optional_idx();
+	}
+	auto change_count = entry->second;
+	index_scan_starts.erase(entry);
+	return change_count;
+}
+
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 	if (!checkpoint_lock) {
 		return GetTransactionManager().TryGetCheckpointLock();

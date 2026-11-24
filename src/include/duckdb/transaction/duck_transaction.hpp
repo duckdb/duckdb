@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class CommitDropState;
+class DataTableInfo;
 class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
@@ -115,6 +116,11 @@ public:
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 
+	//! Records the change count of a table when a CREATE INDEX scan without deltas starts on it
+	void SetIndexScanStart(DataTableInfo &info, idx_t change_count);
+	//! Returns and forgets the change count recorded for the table, if any
+	optional_idx TakeIndexScanStart(DataTableInfo &info);
+
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
 	}
@@ -133,6 +139,10 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Lock for accessing index_scan_starts
+	mutex index_scan_lock;
+	//! The change count of each table when a CREATE INDEX scan without deltas started on it
+	reference_map_t<DataTableInfo, idx_t> index_scan_starts;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
 };

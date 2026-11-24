@@ -440,28 +440,24 @@ static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
 //! The most consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
-idx_t DataTable::AddIndexScan() {
+void DataTable::AddIndexScan(DuckTransaction &transaction) {
 	// under the commit lock no commit is in progress: every row the scan can read was counted before its start
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
-	return info->AddIndexScan();
+	transaction.SetIndexScanStart(*info, info->GetChangeCount());
 }
 
-void DataTable::VerifyNoChangesDuringIndexScan(const Index &index) {
-	if (info->ChangedDuringIndexScan()) {
+void DataTable::VerifyNoChangesDuringIndexScan(DuckTransaction &transaction, const Index &index) {
+	auto start_change_count = transaction.TakeIndexScanStart(*info);
+	if (!start_change_count.IsValid()) {
+		throw TransactionException("CREATE INDEX %s on table %s did not scan the table", index.GetIndexName(),
+		                           GetTableName());
+	}
+	if (info->GetChangeCount() != start_change_count.GetIndex()) {
 		// without deltas, the build cannot apply the commits made after its scan started
 		throw TransactionException("Transaction conflict: table %s was changed while CREATE INDEX built %s, which "
 		                           "cannot apply concurrent changes. Retry the CREATE INDEX",
 		                           GetTableName(), index.GetIndexName());
 	}
-}
-
-void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
-	// publish between commits: a commit reads the index list several times under the commit lock
-	unique_lock<mutex> table_lock;
-	auto commit_lock = LockMainTableForIndex(table_lock);
-	VerifyNoChangesDuringIndexScan(*index);
-	auto last_commit = DuckTransactionManager::Get(db).GetLastCommit();
-	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT, last_commit);
 }
 
 shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
@@ -473,7 +469,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		// an ALTER while the index was not yet in the index list did not see it
 		unique_lock<mutex> table_lock;
 		auto commit_lock = LockMainTableForIndex(table_lock);
-		VerifyNoChangesDuringIndexScan(*index);
+		VerifyNoChangesDuringIndexScan(transaction, *index);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
@@ -582,25 +578,6 @@ Identifier DataTableInfo::GetSchemaName() {
 
 const vector<Identifier> &DataTableInfo::GetSchemaPath() const {
 	return schema_path;
-}
-
-idx_t DataTableInfo::AddIndexScan() {
-	lock_guard<mutex> l(index_scan_lock);
-	idx_t start_change_count = change_count;
-	index_scan_starts.insert(start_change_count);
-	return start_change_count;
-}
-
-void DataTableInfo::RemoveIndexScan(idx_t start_change_count) {
-	lock_guard<mutex> l(index_scan_lock);
-	auto entry = index_scan_starts.find(start_change_count);
-	D_ASSERT(entry != index_scan_starts.end());
-	index_scan_starts.erase(entry);
-}
-
-bool DataTableInfo::ChangedDuringIndexScan() {
-	lock_guard<mutex> l(index_scan_lock);
-	return !index_scan_starts.empty() && change_count > *index_scan_starts.begin();
 }
 
 Identifier DataTableInfo::GetTableName() {

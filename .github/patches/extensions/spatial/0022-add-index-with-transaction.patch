@@ -1,0 +1,22 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+index 9e641bf..9e815e3 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/common/exception/transaction_exception.hpp"
+ #include "duckdb/storage/storage_manager.hpp"
+ #include "duckdb/storage/table_io_manager.hpp"
++#include "duckdb/transaction/duck_transaction.hpp"
+ #include "duckdb/parallel/base_pipeline_event.hpp"
+ #include "duckdb/planner/logical_operator.hpp"
+ 
+@@ -300,7 +301,8 @@ static void AddIndexToCatalog(ClientContext &context, CreateRTreeIndexGlobalStat
+ 	duck_index.initial_index_size = gstate.rtree->Cast<BoundIndex>().GetInMemorySize();
+ 
+ 	// Finally add it to storage
+-	storage.AddIndex(std::move(gstate.rtree), duck_index.oid);
++	auto &transaction = DuckTransaction::Get(context, storage.db);
++	storage.AddIndex(context, transaction, std::move(gstate.rtree), duck_index.oid, ConstraintCheckMode::DEFAULT);
+ }
+ 
+ class RTreeIndexConstructionEvent final : public BasePipelineEvent {

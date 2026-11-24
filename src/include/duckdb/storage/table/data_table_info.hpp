@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 
@@ -62,11 +61,9 @@ public:
 	void AddChange() {
 		++change_count;
 	}
-	//! Records a running CREATE INDEX scan without deltas, returns the change count at its start
-	idx_t AddIndexScan();
-	void RemoveIndexScan(idx_t start_change_count);
-	//! Whether the table changed after the oldest running CREATE INDEX scan without deltas started
-	bool ChangedDuringIndexScan();
+	idx_t GetChangeCount() const {
+		return change_count;
+	}
 
 private:
 	//! The database instance of the table
@@ -89,10 +86,6 @@ private:
 	optional_idx checkpoint_row_group_count;
 	//! See AddChange()
 	atomic<idx_t> change_count {0};
-	//! Lock for index_scan_starts
-	mutex index_scan_lock;
-	//! The change counts at the start of the running CREATE INDEX scans without deltas
-	multiset<idx_t> index_scan_starts;
 };
 
 } // namespace duckdb

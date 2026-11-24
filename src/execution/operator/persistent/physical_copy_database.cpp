@@ -85,7 +85,9 @@ SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context
 		storage_info.options.emplace("v1_0_0_storage", false);
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), std::move(storage_info),
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());
-		data_table.AddIndex(std::move(unbound_index), index_entry->oid);
+		// the table was created by this transaction: no other transaction commits to it
+		data_table.GetDataTableInfo()->GetIndexes().AddIndex(std::move(unbound_index), index_entry->oid,
+		                                                     ConstraintCheckMode::DEFAULT);
 
 		// We add unbound indexes, so we immediately bind them.
 		// Otherwise, WAL serialization fails due to unbound indexes.
