@@ -482,15 +482,22 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(VirtualFileSystem::Get(db_p).CreateLocalView()), database_opener(db_p) {
+    : file_system(VirtualFileSystem::Get(db_p)), database_opener(db_p) {
+	if (!file_system.GetDefaultFileSystem().IsLocalFileSystem()) {
+		owned_file_system = make_uniq<LocalFileSystem>();
+	}
 }
 
 VirtualFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto local_name = local_fs->GetDefaultFileSystem().GetName();
-	if (VirtualFileSystem::Get(db).SubSystemIsDisabled(local_name)) {
-		throw PermissionException("File system %s has been disabled by configuration", local_name);
+	return file_system;
+}
+
+optional_ptr<FileSystem> LocalDatabaseFileSystem::GetFixedFileSystem() const {
+	auto &local_fs = owned_file_system ? *owned_file_system : file_system.GetDefaultFileSystem();
+	if (file_system.SubSystemIsDisabled(local_fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
-	return *local_fs;
+	return local_fs;
 }
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {

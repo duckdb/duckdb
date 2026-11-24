@@ -15,7 +15,6 @@
 
 namespace duckdb {
 struct FileSystemRegistry;
-struct FileSystemHandle;
 class DatabaseInstance;
 class ClientContext;
 
@@ -49,19 +48,12 @@ public:
 	bool SubSystemIsDisabled(const string &name);
 	bool IsDisabledForPath(const string &path);
 
+	//! The file system of paths no sub-system handles. Does not check whether it is disabled.
 	FileSystem &GetDefaultFileSystem();
-	//! Replaces the default file system by the result of the function, which receives the current one. The current one
-	//! stays alive for as long as this VirtualFileSystem does. Only valid before the file system is in use.
-	void DecorateDefaultFileSystem(const std::function<unique_ptr<FileSystem>(FileSystem &)> &decorate);
-	//! A VirtualFileSystem for local paths only: it shares the default file system if that is local, and has its own
-	//! local file system otherwise
-	unique_ptr<VirtualFileSystem> CreateLocalView();
 
 	std::string GetName() const;
 
 private:
-	explicit VirtualFileSystem(shared_ptr<FileSystemHandle> default_file_system);
-
 	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
 	                           optional_ptr<FileOpener> file_opener);
 	optional_ptr<FileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
@@ -75,8 +67,6 @@ private:
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
 	vector<unique_ptr<FileSystem>> unregistered_file_systems;
-	//! Default file systems that were replaced by a decorated one
-	vector<shared_ptr<FileSystemHandle>> decorated_file_systems;
 };
 
 } // namespace duckdb

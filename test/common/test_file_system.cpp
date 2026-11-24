@@ -53,7 +53,7 @@ public:
 	    : file_system(file_system_p), opener(opener_p) {
 	}
 
-public:
+private:
 	VirtualFileSystem &GetFileSystem() const override {
 		return file_system;
 	}

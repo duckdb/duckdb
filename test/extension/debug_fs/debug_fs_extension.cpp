@@ -1,6 +1,7 @@
 #include "debug_fs_extension.hpp"
 
 #include "debug_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -9,7 +10,7 @@ namespace duckdb {
 
 namespace {
 
-//! Non-owning handle to the DebugFileSystem, ownership lies in DBConfig.
+//! Non-owning handle to the DebugFileSystem, ownership lies in the VirtualFileSystem.
 class DebugFileSystemCacheEntry : public ObjectCacheEntry {
 public:
 	explicit DebugFileSystemCacheEntry(DebugFileSystem &fs) : debug_fs(fs) {
@@ -38,14 +39,9 @@ void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
 	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>("instance")) {
 		return;
 	}
-	auto &config = DBConfig::GetConfig(db);
-	optional_ptr<DebugFileSystem> debug_fs_ptr;
-	config.file_system->DecorateDefaultFileSystem([&](FileSystem &default_fs) {
-		auto debug_fs = make_uniq<DebugFileSystem>(default_fs, db);
-		debug_fs_ptr = debug_fs.get();
-		return unique_ptr<FileSystem>(std::move(debug_fs));
-	});
-	auto &debug_fs = *debug_fs_ptr;
+	auto debug_fs_p = make_uniq<DebugFileSystem>(db);
+	auto &debug_fs = *debug_fs_p;
+	VirtualFileSystem::Get(db).RegisterSubSystem(std::move(debug_fs_p));
 	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>("instance",
 	                                                   make_shared_ptr<DebugFileSystemCacheEntry>(debug_fs));
 }

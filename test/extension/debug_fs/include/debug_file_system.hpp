@@ -21,7 +21,7 @@ class DatabaseInstance;
 class DebugFileSystem;
 
 struct DebugFileHandle : public FileHandle {
-	DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p);
+	DebugFileHandle(DebugFileSystem &fs, string path, unique_ptr<FileHandle> inner_p);
 	void Close() override;
 	bool CanSeek() override;
 	idx_t GetProgress() override;
@@ -29,11 +29,13 @@ struct DebugFileHandle : public FileHandle {
 	unique_ptr<FileHandle> inner;
 };
 
-//! Wraps a FileSystem and injects configurable latency on open/read/write.
+//! Handles "debugfs://<local path>": forwards to the local file system and injects configurable latency on
+//! open/read/write.
 class DebugFileSystem : public FileSystem {
 public:
-	//! The inner file system has to outlive this one
-	DebugFileSystem(FileSystem &inner_fs, DatabaseInstance &db);
+	explicit DebugFileSystem(DatabaseInstance &db);
+
+	static constexpr const char *PATH_PREFIX = "debugfs://";
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
@@ -47,6 +49,7 @@ public:
 
 	string GetName() const override;
 	bool IsLocalFileSystem() const override;
+	bool CanHandleFile(const string &fpath) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
@@ -82,8 +85,6 @@ public:
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 	string PathSeparator(const string &path) override;
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-	string GetHomeDirectory() override;
-	string ExpandPath(const string &path) override;
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
 	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
 
@@ -109,8 +110,12 @@ private:
 	// Random engine is initialized lazily on first IO operation, so users could set the random seed for reproduction.
 	void ApplyDelay();
 	void EnsureRandomEngineInitialized();
+	//! The local path of a "debugfs://" path
+	static string ToInner(const string &path);
+	static OpenFileInfo ToInner(const OpenFileInfo &file);
+	static string FromInner(const string &path);
 
-	FileSystem &inner_fs;
+	unique_ptr<FileSystem> inner_fs;
 	DatabaseInstance &db;
 	annotated_mutex random_engine_lock;
 	unique_ptr<RandomEngine> random_engine DUCKDB_GUARDED_BY(random_engine_lock);

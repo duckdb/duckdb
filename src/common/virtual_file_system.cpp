@@ -33,8 +33,6 @@ struct FileSystemRegistry {
 	explicit FileSystemRegistry(unique_ptr<FileSystem> fs)
 	    : default_fs(make_shared_ptr<FileSystemHandle>(std::move(fs))) {
 	}
-	explicit FileSystemRegistry(shared_ptr<FileSystemHandle> fs) : default_fs(std::move(fs)) {
-	}
 
 	vector<shared_ptr<FileSystemHandle>> sub_systems;
 	const shared_ptr<FileSystemHandle> default_fs;
@@ -121,28 +119,12 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
 	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
 }
 
-VirtualFileSystem::VirtualFileSystem(shared_ptr<FileSystemHandle> default_file_system)
-    : file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(default_file_system))) {
-	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
-}
-
 VirtualFileSystem::~VirtualFileSystem() {
 }
 
-unique_ptr<VirtualFileSystem> VirtualFileSystem::CreateLocalView() {
-	auto registry = file_system_registry.atomic_load();
-	if (registry->default_fs->file_system->IsLocalFileSystem()) {
-		return unique_ptr<VirtualFileSystem>(new VirtualFileSystem(registry->default_fs));
-	}
-	return make_uniq<VirtualFileSystem>(make_uniq<LocalFileSystem>());
-}
-
 FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
-	auto &fs = *file_system_registry->default_fs->file_system;
-	if (SubSystemIsDisabled(fs.GetName())) {
-		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
-	}
-	return fs;
+	auto registry = file_system_registry.atomic_load();
+	return *registry->default_fs->file_system;
 }
 
 //! The part of a path whose extension names its compression: a URL's path without its host, query or fragment, or a
@@ -281,18 +263,6 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const OpenFileInfo &file, Fil
 		std::rethrow_exception(error);
 	}
 	return file_handle;
-}
-
-void VirtualFileSystem::DecorateDefaultFileSystem(const std::function<unique_ptr<FileSystem>(FileSystem &)> &decorate) {
-	const lock_guard<mutex> guard(registry_lock);
-	auto old_registry = file_system_registry;
-	auto decorated = decorate(*old_registry->default_fs->file_system);
-	auto new_registry = make_shared_ptr<FileSystemRegistry>(std::move(decorated));
-	new_registry->sub_systems = old_registry->sub_systems;
-	new_registry->disabled_file_systems = old_registry->disabled_file_systems;
-	new_registry->compressed_fs = old_registry->compressed_fs;
-	decorated_file_systems.push_back(old_registry->default_fs);
-	file_system_registry.atomic_store(new_registry);
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {

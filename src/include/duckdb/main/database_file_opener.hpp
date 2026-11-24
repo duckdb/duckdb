@@ -58,6 +58,7 @@ public:
 	explicit DatabaseFileSystem(DatabaseInstance &db_p) : db(db_p), database_opener(db_p) {
 	}
 
+private:
 	VirtualFileSystem &GetFileSystem() const override {
 		return VirtualFileSystem::Get(db);
 	}
@@ -65,7 +66,6 @@ public:
 		return &database_opener;
 	}
 
-private:
 	DatabaseInstance &db;
 	mutable DatabaseFileOpener database_opener;
 };
@@ -74,15 +74,17 @@ class LocalDatabaseFileSystem : public OpenerFileSystem {
 public:
 	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p);
 
+private:
 	VirtualFileSystem &GetFileSystem() const override;
 	optional_ptr<FileOpener> GetOpener() const override {
 		return &database_opener;
 	}
+	//! Every path is local: the default file system if it is local, otherwise the owned local file system
+	optional_ptr<FileSystem> GetFixedFileSystem() const override;
 
-private:
-	DatabaseInstance &db;
-	//! A file system that only has the local file system, so every path is local
-	unique_ptr<VirtualFileSystem> local_fs;
+	VirtualFileSystem &file_system;
+	//! Only set if the default file system is not local
+	unique_ptr<FileSystem> owned_file_system;
 	mutable DatabaseFileOpener database_opener;
 };
 

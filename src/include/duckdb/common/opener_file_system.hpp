@@ -17,9 +17,6 @@ class MultiFileList;
 // The OpenerFileSystem is wrapper for a file system that pushes an appropriate FileOpener into the various API calls
 class OpenerFileSystem : public FileSystem {
 public:
-	virtual VirtualFileSystem &GetFileSystem() const = 0;
-	virtual optional_ptr<FileOpener> GetOpener() const = 0;
-
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);
 	void VerifyCanAccessFile(const string &path);
@@ -216,7 +213,9 @@ public:
 	}
 
 	string PathSeparator(const string &path) override {
-		return GetFileSystem().FindFileSystem(path, nullptr).PathSeparator(path);
+		auto fixed_fs = GetFixedFileSystem();
+		auto &fs = fixed_fs ? *fixed_fs : GetFileSystem().FindFileSystem(path, nullptr);
+		return fs.PathSeparator(path);
 	}
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
@@ -226,7 +225,8 @@ public:
 	}
 
 	std::string GetName() const override {
-		return "OpenerFileSystem - " + GetFileSystem().GetName();
+		auto fixed_fs = GetFixedFileSystem();
+		return "OpenerFileSystem - " + (fixed_fs ? fixed_fs->GetName() : GetFileSystem().GetName());
 	}
 
 protected:
@@ -236,6 +236,10 @@ protected:
 		VerifyCanAccessFile(file.path);
 		if (IsDuckDBExtensionName(file.path)) {
 			VerifyCanAccessExtension(file.path, flags);
+		}
+		auto fixed_fs = GetFixedFileSystem();
+		if (fixed_fs) {
+			return fixed_fs->OpenFile(file, flags, GetOpener());
 		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
@@ -274,8 +278,20 @@ protected:
 	}
 
 private:
+	//! The root that picks the file system of a path
+	virtual VirtualFileSystem &GetFileSystem() const = 0;
+	virtual optional_ptr<FileOpener> GetOpener() const = 0;
+	//! If set, every path goes to this file system instead of the one the root picks
+	virtual optional_ptr<FileSystem> GetFixedFileSystem() const {
+		return nullptr;
+	}
+
 	//! The file system that handles the path
 	FileSystem &FindFileSystem(const string &path) {
+		auto fixed_fs = GetFixedFileSystem();
+		if (fixed_fs) {
+			return *fixed_fs;
+		}
 		return GetFileSystem().FindFileSystem(path, GetOpener());
 	}
 	void VerifyCanAccessFileInternal(const string &path, FileType type);

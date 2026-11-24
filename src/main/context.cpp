@@ -24,6 +24,7 @@ public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
+private:
 	VirtualFileSystem &GetFileSystem() const override {
 		return VirtualFileSystem::Get(context);
 	}
@@ -32,7 +33,6 @@ public:
 		return context.GetContext().TryGetFileOpener();
 	}
 
-private:
 	ClientContext &context;
 };
 
