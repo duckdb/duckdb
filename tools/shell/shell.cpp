@@ -59,7 +59,10 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
-#include "duckdb/common/json_document.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -3557,39 +3560,43 @@ struct ScanEstimate {
 	idx_t rows;
 };
 
-//! Read the "Estimated Cardinality" of an EXPLAIN (FORMAT JSON) plan node
-static bool TryGetEstimatedCardinality(const duckdb::JSONValue &node, idx_t &rows) {
-	auto cardinality = node.GetMember("extra_info").GetMember("Estimated Cardinality");
-	if (!cardinality.IsString()) {
-		return false;
-	}
-	auto text = cardinality.GetString();
-	if (text.empty() || !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; })) {
-		return false;
-	}
-	rows = std::stoull(text);
-	return true;
-}
-
-//! Collect the scans of an EXPLAIN (FORMAT JSON) plan node: the table and table function scans that read data
-static void CollectScanEstimates(const duckdb::JSONValue &node, vector<ScanEstimate> &scans) {
-	auto extra_info = node.GetMember("extra_info");
-	auto table = extra_info.GetMember("Table");
-	auto function = extra_info.GetMember("Function");
-	idx_t rows;
-	if ((table.IsString() || function.IsString()) && TryGetEstimatedCardinality(node, rows)) {
+//! Collect the scans of a plan: the table and table function scans that read data
+static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::LogicalOperator &op,
+                                 vector<ScanEstimate> &scans) {
+	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<duckdb::LogicalGet>();
 		ScanEstimate scan;
-		if (table.IsString()) {
-			auto components = duckdb::QualifiedName::ParseComponents(table.GetString());
-			scan.name = components.empty() ? table.GetString() : components.back().GetIdentifierName();
-		} else {
-			scan.name = StringUtil::Lower(function.GetString());
-		}
-		scan.rows = rows;
+		auto table = get.GetTable();
+		scan.name =
+		    table ? table->name.GetIdentifierName() : StringUtil::Lower(get.function.GetName().GetIdentifierName());
+		scan.rows = get.EstimateCardinality(context);
 		scans.push_back(std::move(scan));
 	}
-	node.GetMember("children").IterateArray([&](duckdb::JSONValue child) { CollectScanEstimates(child, scans); });
+	for (auto &child : op.children) {
+		CollectScanEstimates(context, *child, scans);
+	}
 }
+
+//! Runs the estimate in a transaction of its own unless the connection already has one, and rolls it back
+struct EstimateTransaction {
+	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
+		if (started) {
+			con.BeginTransaction();
+		}
+	}
+	~EstimateTransaction() {
+		if (!started) {
+			return;
+		}
+		try {
+			con.Rollback();
+		} catch (...) { // NOLINT: the statement itself reports what is wrong with the connection
+		}
+	}
+
+	duckdb::Connection &con;
+	bool started;
+};
 
 void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
@@ -3605,30 +3612,22 @@ void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 		return;
 	}
 	try {
-		auto explain = duckdb::make_uniq<duckdb::ExplainStatement>(
-		    statement.Copy(), duckdb::ExplainType::EXPLAIN_STANDARD, duckdb::ProfilerPrintFormat::JSON());
-		auto result = conn->Query(std::move(explain));
-		if (result->HasError()) {
-			// planning failed - the real execution reports the error
-			return;
-		}
-		auto &collection = result->Collection();
-		if (collection.Count() == 0 || collection.ColumnCount() < 2) {
-			return;
-		}
-		auto plan_json = collection.GetRows().GetValue(1, 0).ToString();
-		auto document = duckdb::JSONDocument::Parse(plan_json.c_str(), plan_json.size());
-		duckdb::JSONValue plan;
-		document->GetRoot().IterateArray([&](duckdb::JSONValue root) {
-			if (!plan.IsValid()) {
-				plan = root;
-			}
-		});
-		if (!plan.IsValid()) {
-			return;
-		}
+		auto &context = *conn->context;
+		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
+		// plan, read the estimates and destroy the plan inside one transaction
+		EstimateTransaction transaction(*conn);
+		// planned directly rather than through a query, so neither settings that change EXPLAIN output nor the query
+		// log or the profiler see the estimate
 		vector<ScanEstimate> scans;
-		CollectScanEstimates(plan, scans);
+		idx_t rows_returned = 0;
+		context.RunFunctionInTransaction([&]() {
+			duckdb::Planner planner(context);
+			planner.CreatePlan(statement.Copy());
+			duckdb::Optimizer optimizer(*planner.binder, context);
+			auto plan = optimizer.Optimize(std::move(planner.plan));
+			CollectScanEstimates(context, *plan, scans);
+			rows_returned = plan->EstimateCardinality(context);
+		});
 		if (scans.empty()) {
 			// e.g. a plain CREATE TABLE - not worth a line
 			return;
@@ -3656,14 +3655,12 @@ void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 		}
 		string line =
 		    StringUtil::Format("estimate: ~%llu rows read (%s)", total_rows, StringUtil::Join(scan_texts, ", "));
-		idx_t rows_returned;
-		if (statement.type == duckdb::StatementType::SELECT_STATEMENT &&
-		    TryGetEstimatedCardinality(plan, rows_returned)) {
+		if (statement.type == duckdb::StatementType::SELECT_STATEMENT) {
 			line += StringUtil::Format(", ~%llu rows returned", rows_returned);
 		}
 		PrintF(PrintOutput::STDERR, "%s\n", line);
 	} catch (std::exception &) {
-		// planning failed or the plan was unreadable - the real execution reports any error
+		// planning failed - the real execution reports the error
 	}
 }
 
