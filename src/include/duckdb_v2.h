@@ -3874,6 +3874,20 @@ typedef struct _duckdb_v2_attach_options {
 
 /* --- Function pointer typedefs for instance --- */
 
+/*!
+ * Initializes an instance that `duckdb_v2_instance_open_shared()` has just created, before the instance is shared:
+ * calls for the same file wait until it returns. It can, for instance, write GLOBAL settings that cannot be given at
+ * startup, or create a connection and run SQL that sets up the database.
+ *
+ * `err` is a live error slot, never NULL. Populate it with `duckdb_v2_error_info_set_code()` /
+ * `duckdb_v2_error_info_set_text()` to fail the initialization; do not destroy it.
+ *
+ * The callback must not throw or unwind across the boundary, and must not open the same file through
+ * `duckdb_v2_instance_open_shared()`, which would wait for the callback to return.
+ */
+typedef void (*duckdb_v2_instance_init_callback_fn)(duckdb_v2_instance_handle instance, void *user_data,
+                                                    duckdb_v2_error_info_handle *err);
+
 /* --- Functions for instance --- */
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3949,12 +3963,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * `duckdb_v2_instance_destroy()`; the instance is destroyed once the last handle and the last connection on it are, and
  * a call for the same file meanwhile waits for it to be, rather than opening the file again while it is being closed.
  *
- * An existing instance is shared only when it was created with the same startup options, compared as written: an option
- * given under an alias, or a value written differently, counts as a different configuration, as for
- * `duckdb_get_or_create_from_cache` in the V1 API. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
- * view opens a new in-memory instance on every call, which is never shared; a named in-memory database such as
- * `:memory:name` is shared like a file. The startup options are those of `duckdb_v2_instance_create_with_options()`,
- * with the same restrictions.
+ * `init`, when given, is called once with the instance this call creates, before any other call can share it: calls for
+ * the same file wait until it returns. It is not called when the call shares an existing instance. When it reports an
+ * error, the instance is destroyed, the call fails with that error, and the next call for the file creates an instance
+ * again.
+ *
+ * An existing instance is shared only when it was created with the same startup options, compared by the settings they
+ * give: both name the same options, an alias counting as the option it stands for, and each value is equal once
+ * converted to the option's type, with text compared regardless of case, so that `threads=03` matches `threads=3` and
+ * `access_mode=read_only` matches `access_mode=READ_ONLY`. The value of an option DuckDB does not know is compared as
+ * written. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty view opens a new in-memory instance on
+ * every call, which is never shared; a named in-memory database such as `:memory:name` is shared like a file. The
+ * startup options are those of `duckdb_v2_instance_create_with_options()`, with the same restrictions.
  *
  * A file that an instance of the environment attached with `duckdb_v2_instance_attach()` is not shared, and opening it
  * returns an error like a second `duckdb_v2_instance_attach()` would; nor can a file opened here be attached to another
@@ -3962,8 +3982,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * shared handle change the instance for every handle to it.
  *
  * A client cannot compose this from the other functions: telling that two paths name the same file as DuckDB resolves
- * it, and waiting for an instance whose last handle and connection were just destroyed to finish closing its files,
- * both need the engine.
+ * it, waiting for an instance whose last handle and connection were just destroyed to finish closing its files, and
+ * initializing a new instance before another call can share it, all need the engine.
  *
  * history:
  * - unstable: v2.0.0
@@ -3981,6 +4001,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * @param option_values_lengths Byte lengths of the entries in `option_values`; element i is the length of
  * `option_values[i]`. May be NULL only when `option_values` is NULL.
  * @param option_count The number of startup options.
+ * @param init Optional. Initializes the instance when this call creates it. Pass NULL for none.
+ * @param init_user_data Opaque pointer passed through to `init` untouched. May be NULL.
  * @param out_instance Receives a new handle to the shared instance.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -3989,7 +4011,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
     duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
     const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
-    idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+    idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
+    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -4316,6 +4339,251 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_log(duckdb_v2_connection_handl
 #endif
 
 /* --- Struct definitions for logging --- */
+
+/* ============================================================================
+ * MODULE: object cache
+ * ============================================================================ */
+
+/* --- Enums for object cache --- */
+
+/* --- Struct forward declarations for object cache --- */
+
+/* --- Types for object cache --- */
+
+/*!
+ * A borrowed opaque handle to the object cache of an instance. Obtained from `duckdb_v2_instance_get_object_cache()` or
+ * `duckdb_v2_context_get_object_cache()`, valid for as long as the instance is, and never destroyed by the caller.
+ */
+typedef struct _duckdb_v2_object_cache {
+	void *internal_ptr;
+} * duckdb_v2_object_cache_handle;
+
+/*!
+ * An owned opaque handle to an entry of an object cache. Obtained from `duckdb_v2_object_cache_get()` or
+ * `duckdb_v2_object_cache_get_or_create()`, and destroyed with `duckdb_v2_object_cache_entry_destroy()`. Holding the
+ * handle keeps the entry's data alive, but not in the cache: the cache may still evict, replace or delete the entry
+ * meanwhile, and the data is only destroyed once the last handle is. Only entries in the cache count against the memory
+ * limit: data that is held through a handle after its entry was evicted, replaced or deleted no longer does.
+ */
+typedef struct _duckdb_v2_object_cache_entry {
+	void *internal_ptr;
+} * duckdb_v2_object_cache_entry_handle;
+
+/* --- Constants for object cache --- */
+
+/* --- Function pointer typedefs for object cache --- */
+
+/*!
+ * Creates the data of a cache entry that does not exist yet.
+ *
+ * Runs outside the cache lock, while other calls creating the same entry on the same instance wait for it: it must not
+ * use the object cache itself. Calls for other keys, or on other instances, do not wait. A failure reported through
+ * `err` leaves the entry uncreated and fails the call, as does a `size_bytes` above the cache capacity; the waiting
+ * calls then retry, running their own create callback.
+ */
+typedef void (*duckdb_v2_object_cache_create_callback_fn)(void *user_data, duckdb_v2_opaque *data, idx_t *size_bytes,
+                                                          duckdb_v2_error_info_handle *err);
+
+/* --- Functions for object cache --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the object cache of an instance.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance to take the object cache from.
+ * @param cache Receives the borrowed object cache.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_object_cache(duckdb_v2_instance_handle instance,
+                                                                 duckdb_v2_object_cache_handle *cache,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the object cache of the instance a context belongs to.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context to take the object cache from.
+ * @param cache Receives the borrowed object cache.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_object_cache(duckdb_v2_context_handle context,
+                                                                duckdb_v2_object_cache_handle *cache,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Puts an entry into the cache, replacing the entry of the same type and key, if any.
+ *
+ * Entries are looked up by type and key together, so a key only has to be unique within its type. Name types after the
+ * extension, e.g. `my_extension.footer`, as the cache is shared by everything on the instance.
+ *
+ * The opaque handle bundles the data with an optional destructor, invoked once the entry is gone from the cache and
+ * nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run on any
+ * thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0 pins the
+ * entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it evictable: the
+ * cache counts it against the memory limit while it is in the cache, and may drop it, least recently used first, when
+ * memory is needed, also while it is held. Sizes above the cache capacity are rejected.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to put the entry into.
+ * @param type The type of the entry. Borrowed and copied.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param data Opaque handle bundling the data pointer plus an optional destructor. Owned by the cache from here on,
+ * even if the call fails.
+ * @param size_bytes The approximate memory the data takes up, or 0 to pin the entry.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_put(duckdb_v2_object_cache_handle cache, const char *type,
+                                                        idx_t type_length, const char *key, idx_t key_length,
+                                                        duckdb_v2_opaque *data, idx_t size_bytes,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks an entry up, marking it as recently used.
+ *
+ * `entry` receives null if the cache has no entry of the type under the key, because there never was one or it was
+ * evicted. Otherwise the caller owns it, and must destroy it via `duckdb_v2_object_cache_entry_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to look the entry up in.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param entry Receives the entry, or null if there is none. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get(duckdb_v2_object_cache_handle cache, const char *type,
+                                                        idx_t type_length, const char *key, idx_t key_length,
+                                                        duckdb_v2_object_cache_entry_handle *entry,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks an entry up, creating it first with the create callback if there is none.
+ *
+ * Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others wait
+ * for it and receive its result. If that creation fails, the call that ran it fails, and each waiting call tries again
+ * with its own create callback. Calls for other keys never wait for a creation. The entry is returned as
+ * `duckdb_v2_object_cache_get()` does, owned by the caller. Fails if the key holds an entry that was not created
+ * through this API.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to look the entry up in.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param create Creates the data of the entry if there is none yet.
+ * @param create_user_data Handed to the create callback. Borrowed for the duration of the call.
+ * @param entry Receives the entry. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get_or_create(duckdb_v2_object_cache_handle cache, const char *type,
+                                                                  idx_t type_length, const char *key, idx_t key_length,
+                                                                  duckdb_v2_object_cache_create_callback_fn create,
+                                                                  void *create_user_data,
+                                                                  duckdb_v2_object_cache_entry_handle *entry,
+                                                                  duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Deletes an entry from the cache. Deleting an entry that is not there is not an error.
+ *
+ * Holders of the entry keep its data until they destroy their handle, but from here on it no longer counts against the
+ * memory limit.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param cache The cache to delete the entry from.
+ * @param type The type of the entry. Borrowed for the duration of the call.
+ * @param type_length The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param key The key of the entry. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_delete(duckdb_v2_object_cache_handle cache, const char *type,
+                                                           idx_t type_length, const char *key, idx_t key_length,
+                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the data pointer of an entry, valid for as long as the entry handle is.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param entry The entry to take the data of.
+ * @param data Receives the data pointer.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_entry_get_data(duckdb_v2_object_cache_entry_handle entry,
+                                                                   void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the entry handle, releasing its hold on the data. Always succeeds. On success the handle is set to null.
+ * Safe to call on an already-null slot.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param entry The entry handle to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_entry_destroy(duckdb_v2_object_cache_entry_handle *entry);
+#endif
+
+/* --- Struct definitions for object cache --- */
 
 /* ============================================================================
  * MODULE: qname
@@ -4874,6 +5142,825 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_schema_destroy(duckdb_v2_schema_handle *s
 #endif
 
 /* --- Struct definitions for schema --- */
+
+/* ============================================================================
+ * MODULE: secret
+ * ============================================================================ */
+
+/* --- Enums for secret --- */
+
+/*!
+ * A string property of a secret, next to its keys. Set with `duckdb_v2_secret_set_property()` and read with
+ * `duckdb_v2_secret_get_property()`.
+ */
+typedef enum DUCKDB_V2_SECRET_PROPERTY {
+	//! The secret type, e.g. `s3`.
+	DUCKDB_V2_SECRET_PROPERTY_TYPE = 0,
+
+	//! The provider the secret is created with, e.g. `config`.
+	DUCKDB_V2_SECRET_PROPERTY_PROVIDER = 1,
+
+	/*!
+	 * The name of the secret. A secret created without one is named `__default_<type>`, as by `CREATE SECRET`; only a
+	 * secret built with `duckdb_v2_secret_create()` and not named yet reads back empty.
+	 */
+	DUCKDB_V2_SECRET_PROPERTY_NAME = 2,
+
+	//! The name of the storage the secret lives in, e.g. `memory` or `local_file`. Empty when DuckDB chooses.
+	DUCKDB_V2_SECRET_PROPERTY_STORAGE = 3,
+
+	/*!
+	 * Where the secret lives, as one of `default` (DuckDB chooses, following the secret settings), `temporary` (in
+	 * memory for the lifetime of the instance), `persistent` (written to disk) or `transaction` (in memory for the
+	 * lifetime of the current transaction, for credentials a catalog hands out with a query). Matched
+	 * case-insensitively; read back in lower case.
+	 */
+	DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE = 4,
+	DUCKDB_V2_SECRET_PROPERTY_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_SECRET_PROPERTY;
+
+//! What creating a secret does when a secret of the same name already exists.
+typedef enum DUCKDB_V2_SECRET_ON_CONFLICT {
+	//! Fail, as a plain `CREATE SECRET` does.
+	DUCKDB_V2_SECRET_ON_CONFLICT_ERROR = 0,
+
+	//! Keep the existing secret and succeed, as `CREATE SECRET IF NOT EXISTS` does.
+	DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE = 1,
+
+	//! Replace the existing secret, as `CREATE OR REPLACE SECRET` does.
+	DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE = 2,
+	DUCKDB_V2_SECRET_ON_CONFLICT_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_SECRET_ON_CONFLICT;
+
+/* --- Struct forward declarations for secret --- */
+
+/* --- Types for secret --- */
+
+/*!
+ * An owned opaque handle to a secret function being built: one provider of a secret type. Created with
+ * `duckdb_v2_secret_function_create()`, configured with the setters (e.g. `duckdb_v2_secret_function_set_provider()`,
+ * `duckdb_v2_secret_function_add_named_parameter()`, `duckdb_v2_secret_function_set_create_callback()`), made available
+ * with `duckdb_v2_connection_register_secret_function()` or `duckdb_v2_extension_register_secret_function()`, and
+ * destroyed with `duckdb_v2_secret_function_destroy()`.
+ */
+typedef struct _duckdb_v2_secret_function {
+	void *internal_ptr;
+} * duckdb_v2_secret_function_handle;
+
+/*!
+ * A handle to a key/value secret. Owned when built with `duckdb_v2_secret_create()` or returned by
+ * `duckdb_v2_context_lookup_secret()`, `duckdb_v2_context_get_secret_by_name()`, `duckdb_v2_context_create_secret()` or
+ * their `connection_*` equivalents (`duckdb_v2_connection_lookup_secret()`,
+ * `duckdb_v2_connection_get_secret_by_name()`, `duckdb_v2_connection_create_secret()`): the caller destroys it with
+ * `duckdb_v2_secret_destroy()` and may change it with the setters, which never affects a stored secret. Borrowed when
+ * received by a create callback, valid only for the duration of the call: the `input` is read-only, describing the
+ * `CREATE SECRET` statement with its options as keys, and the `output` is the secret to fill, with its properties and
+ * scope already set from the statement.
+ */
+typedef struct _duckdb_v2_secret {
+	void *internal_ptr;
+} * duckdb_v2_secret_handle;
+
+/* --- Constants for secret --- */
+
+/* --- Function pointer typedefs for secret --- */
+
+typedef void (*duckdb_v2_secret_create_callback_fn)(duckdb_v2_secret_handle input, duckdb_v2_secret_handle output,
+                                                    void *user_data, duckdb_v2_context_handle context,
+                                                    duckdb_v2_error_info_handle *err);
+
+/* --- Functions for secret --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a new secret function through a factory.
+ *
+ * The function starts out empty: configure it with the setters, then make it available with
+ * `duckdb_v2_connection_register_secret_function()` or `duckdb_v2_extension_register_secret_function()`. The caller
+ * owns the returned handle and must destroy it with `duckdb_v2_secret_function_destroy()`, also after registration.
+ *
+ * The function can only be registered on the instance the factory belongs to.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the secret function through.
+ * @param function On success, receives the newly created secret function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_create(duckdb_v2_factory_handle factory,
+                                                              duckdb_v2_secret_function_handle *function,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the secret type the function creates secrets of, as `CREATE SECRET (TYPE ...)` and
+ * `duckdb_v2_context_lookup_secret()` name it.
+ *
+ * The name is borrowed and copied. Matched case-insensitively. A type must be set before registration.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to set the type of.
+ * @param type The name of the secret type.
+ * @param type_length The length of `type` in bytes. `type` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_type(duckdb_v2_secret_function_handle function,
+                                                                const char *type, idx_t type_length,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the provider the function implements, as `CREATE SECRET (TYPE ..., PROVIDER <provider>)` names it. Common
+ * providers are `config`, which builds the secret from the named parameters alone, and `credential_chain`, which looks
+ * the values up in the environment.
+ *
+ * The provider is borrowed and copied. Matched case-insensitively. A provider must be set before registration.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to set the provider of.
+ * @param provider The provider to set.
+ * @param provider_length The length of `provider` in bytes. `provider` must be valid UTF-8, need not be
+ * null-terminated, and may be NULL only when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_provider(duckdb_v2_secret_function_handle function,
+                                                                    const char *provider, idx_t provider_length,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the function is the default provider of its type: the one `CREATE SECRET (TYPE <type>)` uses when the
+ * statement names no provider. Defaults to false.
+ *
+ * A type without a default provider requires every statement to name its provider. Only the function that defines the
+ * type, the first one registered for it, can be the default: registering a later function of an existing type with this
+ * set fails.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to configure.
+ * @param is_default Whether the function is the default provider of its type.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_default(duckdb_v2_secret_function_handle function,
+                                                                   bool is_default, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Declares a named parameter `CREATE SECRET` accepts for this provider, e.g. `region`.
+ *
+ * A value the user gives is cast to the declared type before the create callback sees it, and a parameter the function
+ * does not declare is rejected. Names are matched case-insensitively. Declaring the same name twice replaces the type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to add the parameter to.
+ * @param name The name of the parameter. Borrowed and copied.
+ * @param name_length The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param type The type of the parameter. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_add_named_parameter(duckdb_v2_secret_function_handle function,
+                                                                           const char *name, idx_t name_length,
+                                                                           duckdb_v2_logical_type_handle type,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the create callback of the secret function, invoked for every `CREATE SECRET` that resolves to its type and
+ * provider.
+ *
+ * The callback receives the statement as a read-only secret and fills a secret with the result, see
+ * `duckdb_v2_secret_create_callback_fn`. It runs on the thread running the statement, with a transaction active. A
+ * create callback must be set before registration.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to set the callback of.
+ * @param callback The create callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_create_callback(duckdb_v2_secret_function_handle function,
+                                                                           duckdb_v2_secret_create_callback_fn callback,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets arbitrary user data on the secret function.
+ *
+ * Associates an opaque pointer with the function, handed to its create callback. The opaque handle bundles the pointer
+ * with an optional destructor, invoked when the data is no longer needed: once the secret function handle is destroyed
+ * and, if it was registered, the instance is too.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_user_data(duckdb_v2_secret_function_handle function,
+                                                                     duckdb_v2_opaque *data,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Registers the secret function on the connection's instance, visible to every connection.
+ *
+ * Registration is not transactional: it takes effect at once, also inside an explicit transaction, and a rollback does
+ * not undo it. Registration requires a type, a provider and a create callback, defines the type if it is new, and fails
+ * with `ERROR_INPUT_INVALID` when a function for the same type and provider already exists, or when the function is the
+ * default provider of a type that exists already. A type an extension of DuckDB's defines (e.g. `s3` of httpfs) is not
+ * defined here: registration loads that extension, autoloading it if enabled, and fails with `ERROR_INPUT_INVALID` (or
+ * the autoload error) when it cannot. The secret function must have been created through a factory of the same
+ * instance. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_secret_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to register on.
+ * @param function The secret function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_secret_function(duckdb_v2_connection_handle conn,
+                                                                           duckdb_v2_secret_function_handle function,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Registers the secret function on the loading extension's instance, visible to every connection. A type it defines is
+ * attributed to the extension in `duckdb_secret_types()`; this does not make DuckDB load the extension when a statement
+ * names the type.
+ *
+ * Use this from the extension's load callback. Otherwise as `duckdb_v2_connection_register_secret_function()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The secret function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_secret_function(duckdb_v2_extension_handle extension,
+                                                                          duckdb_v2_secret_function_handle function,
+                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the secret function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The secret function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_destroy(duckdb_v2_secret_function_handle *function);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a new, empty secret through a factory, to fill in and hand to `duckdb_v2_context_create_secret()`.
+ *
+ * The secret starts out with no properties set, no scope and no keys. The caller owns the returned handle and must
+ * destroy it with `duckdb_v2_secret_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the secret through.
+ * @param secret On success, receives the newly created secret. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_create(duckdb_v2_factory_handle factory, duckdb_v2_secret_handle *secret,
+                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets a string property of the secret, see `SECRET_PROPERTY`. The type is required to create the secret; the provider
+ * defaults to the default provider of the type, the name to one DuckDB chooses, the storage and persist type to what
+ * DuckDB chooses.
+ *
+ * The value is borrowed and copied. An invalid persist type fails with `ERROR_INPUT_INVALID`. Fails with
+ * `ERROR_INPUT_INVALID` on a read-only secret and on the secret a create callback fills, whose properties are fixed by
+ * the statement.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param property The property to set.
+ * @param value The value to set.
+ * @param value_length The length of `value` in bytes. `value` must be valid UTF-8, need not be null-terminated, and may
+ * be NULL only when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_set_property(duckdb_v2_secret_handle secret,
+                                                           DUCKDB_V2_SECRET_PROPERTY property, const char *value,
+                                                           idx_t value_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Adds a scope to the secret: a path prefix, e.g. `s3://bucket/dir`, the secret applies to. A lookup for a path picks
+ * the secret whose scope is the longest prefix of the path. A secret without scope applies to every path.
+ *
+ * The scope is borrowed and copied. Fails with `ERROR_INPUT_INVALID` on a read-only secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param scope The scope to add.
+ * @param scope_length The length of `scope` in bytes. `scope` must be valid UTF-8, need not be null-terminated, and may
+ * be NULL only when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_add_scope(duckdb_v2_secret_handle secret, const char *scope,
+                                                        idx_t scope_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Removes every scope from the secret. In a create callback this includes the ones the user gave; check
+ * `duckdb_v2_secret_get_scope_count()` on the output first to supply a default scope only when the user gave none.
+ * Fails with `ERROR_INPUT_INVALID` on a read-only secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_clear_scope(duckdb_v2_secret_handle secret,
+                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the value of a key of the secret.
+ *
+ * The value is borrowed and copied and can be of any type, nested ones included; a NULL value is stored as a NULL.
+ * Setting a key again replaces its value. Keys are matched case-insensitively and keep the casing given first. For the
+ * options of a `CREATE SECRET` this is the value the named parameter was given. Fails with `ERROR_INPUT_INVALID` on a
+ * read-only secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param key The key to set.
+ * @param key_length The length of `key` in bytes. `key` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param value The value to store. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_set_value(duckdb_v2_secret_handle secret, const char *key,
+                                                        idx_t key_length, duckdb_v2_value_handle value,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Marks a key as sensitive, so that its value is never displayed: `duckdb_secrets()` and the echo of `CREATE SECRET`
+ * show it as `redacted`, while `duckdb_v2_secret_get_value()` still returns it. The key does not have to hold a value
+ * yet, which suits keys only some secrets hold. Keys are matched case-insensitively. Fails with `ERROR_INPUT_INVALID`
+ * on a read-only secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param key The key to redact.
+ * @param key_length The length of `key` in bytes. `key` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_add_redacted_key(duckdb_v2_secret_handle secret, const char *key,
+                                                               idx_t key_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the secret, releasing its resources. Values and views retrieved from it must not be used afterwards, except
+ * values the caller owns.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Must only be called on an owned secret, never on the borrowed ones of a create callback.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_destroy(duckdb_v2_secret_handle *secret);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows a string property of the secret, see `SECRET_PROPERTY`. Empty when the property is not set, except the
+ * persist type, which then reads back as `default`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param property The property to read.
+ * @param value Receives a borrowed pointer to the value. Valid until the secret is destroyed or the property is set
+ * again.
+ * @param value_length Receives the length of `*value` in bytes. `*value` is not guaranteed to be null-terminated.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_property(duckdb_v2_secret_handle secret,
+                                                           DUCKDB_V2_SECRET_PROPERTY property, const char **value,
+                                                           idx_t *value_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the number of scopes of the secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param count Receives the number of scopes.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_scope_count(duckdb_v2_secret_handle secret, idx_t *count,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows a scope of the secret, in the order added.
+ *
+ * Fails with `ERROR_INPUT_OUT_OF_RANGE` when the index is not below `duckdb_v2_secret_get_scope_count()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param index The index of the scope.
+ * @param scope Receives a borrowed pointer to the scope. Valid until the secret is destroyed or its scopes change
+ * (`duckdb_v2_secret_add_scope()`, `duckdb_v2_secret_clear_scope()`).
+ * @param scope_length Receives the length of `*scope` in bytes. `*scope` is not guaranteed to be null-terminated.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_scope(duckdb_v2_secret_handle secret, idx_t index, const char **scope,
+                                                        idx_t *scope_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the number of keys of the secret.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param count Receives the number of keys.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_key_count(duckdb_v2_secret_handle secret, idx_t *count,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows a key of the secret. The order is unspecified but stable for the handle.
+ *
+ * Fails with `ERROR_INPUT_OUT_OF_RANGE` when the index is not below `duckdb_v2_secret_get_key_count()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param index The index of the key.
+ * @param key Receives a borrowed pointer to the key. Valid until the secret is destroyed.
+ * @param key_length Receives the length of `*key` in bytes. `*key` is not guaranteed to be null-terminated.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_key(duckdb_v2_secret_handle secret, idx_t index, const char **key,
+                                                      idx_t *key_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the value of a key of the secret, unredacted. The returned value is owned by the caller and must be
+ * destroyed via `duckdb_v2_value_destroy()`.
+ *
+ * A key the secret does not have is not an error: `value` receives a null handle then, which tells it apart from a key
+ * holding a NULL value. Keys are matched case-insensitively.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param key The key to read.
+ * @param key_length The length of `key` in bytes. `key` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param value Receives the value, or a null handle if the secret has no such key. Owned by the caller; destroy via
+ * `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_value(duckdb_v2_secret_handle secret, const char *key,
+                                                        idx_t key_length, duckdb_v2_value_handle *value,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves whether the value of the key is redacted when the secret is displayed. A key the secret does not have is
+ * not redacted.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param secret The secret.
+ * @param key The key to check.
+ * @param key_length The length of `key` in bytes. `key` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param redacted Receives whether the key is redacted.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_is_key_redacted(duckdb_v2_secret_handle secret, const char *key,
+                                                              idx_t key_length, bool *redacted,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up the secret of a type that applies best to a path, the way DuckDB resolves the credentials of a file it
+ * opens.
+ *
+ * Of the secrets of the type visible to the context's transaction, the one whose scope is the longest prefix of the
+ * path wins; a secret without scope matches every path with the lowest score. When no secret matches, `secret` receives
+ * a null handle and the call still succeeds. The returned secret is a copy owned by the caller, to destroy via
+ * `duckdb_v2_secret_destroy()`.
+ *
+ * The lookup also sees secrets created in the transaction with the `transaction` persist type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param ctx The context to look up in.
+ * @param path The path to find a secret for, e.g. `s3://bucket/key`.
+ * @param path_length The length of `path` in bytes. `path` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param type The secret type to look for, e.g. `s3`.
+ * @param type_length The length of `type` in bytes. `type` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the best matching secret, or a null handle if none matches. Owned by the caller.
+ * @param score Optional. Receives how well the secret matches: the length of the longest matching scope prefix, higher
+ * is better. Undefined when nothing matched. Lets the caller rank the matches of several types.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_handle ctx, const char *path,
+                                                             idx_t path_length, const char *type, idx_t type_length,
+                                                             duckdb_v2_secret_handle *secret, int64_t *score,
+                                                             duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up a secret by its name, across all storages.
+ *
+ * When no secret has the name, `secret` receives a null handle and the call still succeeds. The type is not checked:
+ * compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()`. The returned secret is a copy owned by
+ * the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Fails with `ERROR_CONFIGURATION_INVALID` when more than one storage holds a secret of the name.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param ctx The context to look up in.
+ * @param name The name of the secret.
+ * @param name_length The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the secret, or a null handle if there is none of that name. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ctx, const char *name,
+                                                                  idx_t name_length, duckdb_v2_secret_handle *secret,
+                                                                  duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a secret, as the equivalent `CREATE SECRET` statement would, in the context's transaction.
+ *
+ * The keys of the given secret are the named parameters of the statement. The secret function for its type and provider
+ * runs to build the stored secret, and the secret manager stores it according to its persist type and storage. Use the
+ * `transaction` persist type for credentials that must not outlive the transaction. `created` is optional: when given,
+ * it receives a copy of the secret that now exists, which with `SECRET_ON_CONFLICT_IGNORE` is the existing one. The
+ * copy is owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Redacted keys of the given secret are ignored: the provider decides which keys of the stored secret are redacted. A
+ * secret read back with storage `transaction` (a transaction secret) is created with the `transaction` persist type.
+ * Fails with `ERROR_CONFIGURATION_PERMISSION` when `enable_external_access` is off, before the keys are checked, as
+ * `CREATE SECRET` does.
+ *
+ * To refresh a secret, create a new one through its provider: copy the old secret's properties
+ * (`duckdb_v2_secret_get_property()` / `duckdb_v2_secret_set_property()`, skipping empty ones) and scopes, set the
+ * refresh options as keys, and create it with `SECRET_ON_CONFLICT_REPLACE`. Do not copy the old secret's keys as is:
+ * they are the stored values, not the provider's named parameters.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param ctx The context to create the secret in.
+ * @param secret The description of the secret. Borrowed.
+ * @param on_conflict What to do when a secret of the same name exists.
+ * @param created Optional. Receives the secret. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx,
+                                                             duckdb_v2_secret_handle secret,
+                                                             DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                                                             duckdb_v2_secret_handle *created,
+                                                             duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up the secret of a type that applies best to a path, the way DuckDB resolves the credentials of a file it
+ * opens.
+ *
+ * Of the secrets of the type visible to the connection's transaction, or one of their own when the connection has none
+ * open, the one whose scope is the longest prefix of the path wins; a secret without scope matches every path with the
+ * lowest score. When no secret matches, `secret` receives a null handle and the call still succeeds. The returned
+ * secret is a copy owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * The lookup also sees secrets created in the transaction with the `transaction` persist type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to look up in.
+ * @param path The path to find a secret for, e.g. `s3://bucket/key`.
+ * @param path_length The length of `path` in bytes. `path` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param type The secret type to look for, e.g. `s3`.
+ * @param type_length The length of `type` in bytes. `type` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the best matching secret, or a null handle if none matches. Owned by the caller.
+ * @param score Optional. Receives how well the secret matches: the length of the longest matching scope prefix, higher
+ * is better. Undefined when nothing matched. Lets the caller rank the matches of several types.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_lookup_secret(duckdb_v2_connection_handle conn, const char *path,
+                                                                idx_t path_length, const char *type, idx_t type_length,
+                                                                duckdb_v2_secret_handle *secret, int64_t *score,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up a secret by its name, across all storages.
+ *
+ * When no secret has the name, `secret` receives a null handle and the call still succeeds. The type is not checked:
+ * compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()`. The returned secret is a copy owned by
+ * the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Fails with `ERROR_CONFIGURATION_INVALID` when more than one storage holds a secret of the name.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to look up in.
+ * @param name The name of the secret.
+ * @param name_length The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the secret, or a null handle if there is none of that name. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_secret_by_name(duckdb_v2_connection_handle conn, const char *name,
+                                                                     idx_t name_length, duckdb_v2_secret_handle *secret,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a secret, as the equivalent `CREATE SECRET` statement would, in the connection's transaction, or one of their
+ * own when the connection has none open.
+ *
+ * The keys of the given secret are the named parameters of the statement. The secret function for its type and provider
+ * runs to build the stored secret, and the secret manager stores it according to its persist type and storage. Use the
+ * `transaction` persist type for credentials that must not outlive the transaction. Outside an explicit transaction a
+ * secret with the `transaction` persist type ends with the implicit transaction the call runs in. `created` is
+ * optional: when given, it receives a copy of the secret that now exists, which with `SECRET_ON_CONFLICT_IGNORE` is the
+ * existing one. The copy is owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Redacted keys of the given secret are ignored: the provider decides which keys of the stored secret are redacted. A
+ * secret read back with storage `transaction` (a transaction secret) is created with the `transaction` persist type.
+ * Fails with `ERROR_CONFIGURATION_PERMISSION` when `enable_external_access` is off, before the keys are checked, as
+ * `CREATE SECRET` does.
+ *
+ * To refresh a secret, create a new one through its provider: copy the old secret's properties
+ * (`duckdb_v2_secret_get_property()` / `duckdb_v2_secret_set_property()`, skipping empty ones) and scopes, set the
+ * refresh options as keys, and create it with `SECRET_ON_CONFLICT_REPLACE`. Do not copy the old secret's keys as is:
+ * they are the stored values, not the provider's named parameters.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to create the secret in.
+ * @param secret The description of the secret. Borrowed.
+ * @param on_conflict What to do when a secret of the same name exists.
+ * @param created Optional. Receives the secret. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_secret(duckdb_v2_connection_handle conn,
+                                                                duckdb_v2_secret_handle secret,
+                                                                DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                                                                duckdb_v2_secret_handle *created,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+/* --- Struct definitions for secret --- */
 
 /* ============================================================================
  * MODULE: stats

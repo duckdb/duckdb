@@ -187,6 +187,10 @@ TEST_CASE("Concurrent handle destruction does not drop a newer registration", "[
 // against writes (e.g. ext4, tmpfs - unlike XFS) this produces a torn read and a spurious
 // checksum failure that invalidates the database.
 TEST_CASE("Stress stale metadata block handle pin against checkpoint rewrite", "[storage][.]") {
+#ifdef __MUSL_ENABLED__
+	SKIP_TEST("Times out after 300 seconds on musl");
+	return;
+#endif
 	auto path = TestCreatePath("metadata_pin_race.db");
 	if (const char *dir = std::getenv("METADATA_PIN_RACE_DIR")) {
 		// allow redirecting the database to a filesystem on which reads can tear (e.g. tmpfs)

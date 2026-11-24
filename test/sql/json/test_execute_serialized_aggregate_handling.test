@@ -1,0 +1,30 @@
+# name: test/sql/json/test_execute_serialized_aggregate_handling.test
+# description: A serialized statement whose aggregate handling forbids aggregates binds without them and is refused with them
+# group: [json]
+
+require json
+
+# The function reports no progress, which the progress verifier flags once its result spans two chunks.
+statement ok
+SET debug_verify_progress_ignore='UNSUPPORTED_SOURCE:JSON_EXECUTE_SERIALIZED_SQL';
+
+query I
+SELECT * FROM json_execute_serialized_sql(replace(json_serialize_sql('SELECT i + 1 AS j FROM range(3) t(i)'),
+    '"aggregate_handling":"STANDARD_HANDLING"', '"aggregate_handling":"NO_AGGREGATES_ALLOWED"'))
+ORDER BY j
+----
+1
+2
+3
+
+statement error
+SELECT * FROM json_execute_serialized_sql(replace(json_serialize_sql('SELECT sum(i) FROM range(3) t(i)'),
+    '"aggregate_handling":"STANDARD_HANDLING"', '"aggregate_handling":"NO_AGGREGATES_ALLOWED"'))
+----
+Aggregates cannot be present in a Project relation
+
+statement error
+SELECT * FROM json_execute_serialized_sql(replace(json_serialize_sql('SELECT i FROM range(3) t(i) GROUP BY i'),
+    '"aggregate_handling":"STANDARD_HANDLING"', '"aggregate_handling":"NO_AGGREGATES_ALLOWED"'))
+----
+Aggregates cannot be present in a Project relation

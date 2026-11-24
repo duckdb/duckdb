@@ -1,6 +1,7 @@
 #include "duckdb/function/window/window_naive_aggregator.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_hash_expression.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
@@ -30,6 +31,7 @@ WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &exec
 			                                               arg_idx, arg_type, arg_types.size() + arg_idx));
 		}
 		args_equal = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(arg_equals));
+		args_hash = BoundHashExpression::CreateOnColumns(client, arg_types);
 	}
 }
 
@@ -99,6 +101,7 @@ protected:
 	SubFrames frames;
 	//! The optional hash table used for DISTINCT
 	Vector hashes;
+	unique_ptr<ExpressionExecutor> args_hash;
 	//! The state used for comparing the collection across chunk boundaries
 	unique_ptr<WindowCursor> comparer;
 	//! Whether two rows have the same arguments, over [left arguments..., right arguments...]
@@ -158,6 +161,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 			auto compare_types = aggregator.arg_types;
 			compare_types.insert(compare_types.end(), aggregator.arg_types.begin(), aggregator.arg_types.end());
 			args_compare.InitializeEmpty(compare_types);
+			args_hash = make_uniq<ExpressionExecutor>(context.client.GetContext(), *aggregator.args_hash);
 		}
 	}
 
@@ -214,7 +218,7 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 	auto &scanned = cursor->chunk;
 	SelectionVector sel(&s, 1);
 	leaves.Slice(scanned, sel, 1);
-	leaves.Hash(hashes);
+	BoundHashExpression::Execute(*args_hash, leaves, hashes);
 
 	return *FlatVector::GetData<hash_t>(hashes);
 }

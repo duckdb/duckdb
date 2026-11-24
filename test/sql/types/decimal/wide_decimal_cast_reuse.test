@@ -1,0 +1,73 @@
+# name: test/sql/types/decimal/wide_decimal_cast_reuse.test
+# description: Wide decimal cast buffers does not overwrite results across rows and vectors
+# group: [decimal]
+
+statement ok
+CREATE TABLE cast_inputs AS
+SELECT i, CASE WHEN i % 17 = 0 THEN NULL ELSE i - 4096 END v
+FROM range(8195) t(i)
+
+query I
+SELECT count(*) FROM cast_inputs
+WHERE (v::DECIMAL(40,3))::VARCHAR IS DISTINCT FROM (v::DECIMAL(18,3))::VARCHAR
+----
+0
+
+query I
+SELECT count(*) FROM cast_inputs
+WHERE (v::DECIMAL(40,3))::DOUBLE IS DISTINCT FROM v::DOUBLE
+   OR (v::DECIMAL(40,3))::FLOAT IS DISTINCT FROM v::FLOAT
+----
+0
+
+# Store formatted results so this fixture also works with older persistent storage formats.
+# The C++ cast-state test retains wide DECIMAL vectors themselves across later casts.
+statement ok
+CREATE TABLE retained_casts AS
+SELECT i, ((v::DECIMAL(40,3))::DECIMAL(60,20))::VARCHAR expanded,
+       ((v::DECIMAL(40,3))::DECIMAL(40,1))::VARCHAR reduced
+FROM cast_inputs
+WHERE i % 3 <> 0
+ORDER BY i DESC
+
+query I
+SELECT count(*) FROM retained_casts JOIN cast_inputs USING (i)
+WHERE expanded IS DISTINCT FROM (v::DECIMAL(60,20))::VARCHAR
+   OR reduced IS DISTINCT FROM (v::DECIMAL(18,1))::VARCHAR
+----
+0
+
+query T
+SELECT ('-170141183460469231731687303715884105728'::HUGEINT)::DECIMAL(60,2)
+----
+-170141183460469231731687303715884105728.00
+
+query T
+SELECT ('340282366920938463463374607431768211455'::UHUGEINT)::DECIMAL(60,2)
+----
+340282366920938463463374607431768211455.00
+
+query I
+SELECT count(*) FROM cast_inputs
+WHERE TRY_CAST(v AS DECIMAL(40,39)) IS DISTINCT FROM
+      CASE WHEN abs(v) < 10 THEN v::DECIMAL(40,39) END
+----
+0
+
+# Large formatted values followed by ordinary values.
+query I
+WITH inputs AS (
+    SELECT CASE WHEN i % 3 = 0 THEN repeat('9', 3000)
+                WHEN i % 3 = 1 THEN '-' || repeat('8', 3000) ELSE '42' END v
+    FROM range(4099) t(i)
+)
+SELECT count(*) FROM inputs
+WHERE (v::DECIMAL(3020,20))::VARCHAR IS DISTINCT FROM v || '.' || repeat('0', 20)
+----
+0
+
+statement ok
+DROP TABLE retained_casts
+
+statement ok
+DROP TABLE cast_inputs

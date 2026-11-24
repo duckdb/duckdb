@@ -73,7 +73,10 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return SystemCatalogScanner::CreateBindData(names, return_types, "table_name", "table_oid");
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "table_name";
+	columns.entry_oid = "table_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, TableFunctionInitInput &input) {

@@ -152,10 +152,61 @@ duckdb_v2_instance_create_with_options(duckdb_v2_environment_handle env, const c
 	});
 }
 
+//! The startup options of `config` by the canonical names of the options, with the values in the options' types.
+static duckdb::identifier_map_t<duckdb::Value> CanonicalStartupOptions(const duckdb::DBConfig &config,
+                                                                       const duckdb::DBConfig &option_source) {
+	duckdb::identifier_map_t<duckdb::Value> result;
+	for (auto &entry : config.options.user_options) {
+		auto name = entry.first;
+		auto value = entry.second;
+		duckdb::LogicalType type;
+		duckdb::ExtensionOption extension_option;
+		auto option = duckdb::DBConfig::GetOptionByName(entry.first);
+		if (option) {
+			name = duckdb::Identifier(duckdb::string(option->name));
+			type = duckdb::DBConfig::ParseLogicalType(option->parameter_type);
+		} else if (option_source.TryGetExtensionOption(entry.first, extension_option)) {
+			type = extension_option.type;
+		}
+		if (type.id() == duckdb::LogicalTypeId::VARCHAR) {
+			// text compares regardless of case, as enumerations such as access_mode are parsed
+			value = duckdb::Value(duckdb::StringUtil::Lower(value.ToString()));
+		} else if (type.id() != duckdb::LogicalTypeId::INVALID) {
+			auto converted = value.DefaultTryCastAs(type);
+			if (converted) {
+				value = std::move(*converted);
+			}
+		}
+		result[name] = std::move(value);
+	}
+	return result;
+}
+
+//! Whether a request for the startup options of `requested` can share an instance created with those of `existing`.
+static bool IsSameStartupConfig(const duckdb::DBConfig &existing, const duckdb::DBConfig &requested) {
+	if (existing.options.configuration_env != requested.options.configuration_env) {
+		return false;
+	}
+	auto existing_options = CanonicalStartupOptions(existing, existing);
+	auto requested_options = CanonicalStartupOptions(requested, existing);
+	if (existing_options.size() != requested_options.size()) {
+		return false;
+	}
+	for (auto &entry : requested_options) {
+		auto existing_entry = existing_options.find(entry.first);
+		if (existing_entry == existing_options.end() ||
+		    !duckdb::Value::NotDistinctFrom(existing_entry->second, entry.second)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(duckdb_v2_environment_handle env, const char *path, idx_t path_length,
                                                const char *const *option_names, const idx_t *option_names_lengths,
                                                const char *const *option_values, const idx_t *option_values_lengths,
-                                               idx_t option_count, duckdb_v2_instance_handle *out_instance,
+                                               idx_t option_count, duckdb_v2_instance_init_callback_fn init,
+                                               void *init_user_data, duckdb_v2_instance_handle *out_instance,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(env);
 	DUCKDB_CHECK_ARG(out_instance);
@@ -172,12 +223,32 @@ DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(duckdb_v2_environment_handle env,
 		SetStartupOptions(startup_config, option_names, option_names_lengths, option_values, option_values_lengths,
 		                  option_count);
 		auto *env_wrapper = Convert(env);
+		bool initializing = false;
+		std::function<void(duckdb::DuckDB &)> on_create;
+		if (init) {
+			on_create = [&](duckdb::DuckDB &created) {
+				initializing = true;
+				// a borrowed handle for the callback, not counted in the environment
+				CV2Instance borrowed(*env_wrapper, duckdb::make_shared_ptr<duckdb::DuckDB>(*created.instance));
+				CV2ErrorInfo init_err = {};
+				auto init_err_ptr = Convert(&init_err);
+				init(Convert(&borrowed), init_user_data, &init_err_ptr);
+				if (init_err.HasError()) {
+					init_err.ThrowAsException();
+				}
+				initializing = false;
+			};
+		}
 		duckdb::shared_ptr<duckdb::DuckDB> database;
 		try {
 			// an unnamed in-memory database is never cached: every call opens a new one
 			database = env_wrapper->cache->GetOrCreateInstance(
-			    path ? duckdb::string(path, path_length) : duckdb::string(), startup_config);
+			    path ? duckdb::string(path, path_length) : duckdb::string(), startup_config,
+			    duckdb::CacheBehavior::AUTOMATIC, on_create, IsSameStartupConfig);
 		} catch (duckdb::ConnectionException &ex) {
+			if (initializing) {
+				throw;
+			}
 			// the file is open in an instance with a different configuration
 			throw duckdb::ResourceInUseException(duckdb::ErrorData(ex).RawMessage());
 		}

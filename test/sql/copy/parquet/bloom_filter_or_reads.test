@@ -1,0 +1,122 @@
+# name: test/sql/copy/parquet/bloom_filter_or_reads.test
+# description: An OR filter only reads Bloom filters if every branch can be checked against them
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET threads = 1;
+
+# x only holds even values in [0, 1998], so odd values within min/max can only be excluded by the Bloom filter
+statement ok
+COPY (SELECT (i % 1000) * 2 AS x FROM range(100000) t(i))
+TO '{TEST_DIR}/bloom_or_reads.parquet' (ROW_GROUP_SIZE 10000, DICTIONARY_SIZE_LIMIT 2000);
+
+query II
+SELECT count(*), count(bloom_filter_offset) FROM parquet_metadata('{TEST_DIR}/bloom_or_reads.parquet');
+----
+10	10
+
+query II
+SELECT bool_and(a.bloom_filter_excludes), bool_and(b.bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_or_reads.parquet', 'x', 501) a
+JOIN parquet_bloom_probe('{TEST_DIR}/bloom_or_reads.parquet', 'x', 503) b USING (row_group_id);
+----
+true	true
+
+statement ok
+CREATE MACRO bloom_reads() AS TABLE
+	SELECT count(*) AS reads
+	FROM duckdb_logs_parsed('FileSystem'), (
+		SELECT min(bloom_filter_offset) AS span_begin, max(bloom_filter_offset + bloom_filter_length) AS span_end
+		FROM parquet_metadata('{TEST_DIR}/bloom_or_reads.parquet')
+	)
+	WHERE op = 'READ' AND parse_filename(path) = 'bloom_or_reads.parquet' AND pos >= span_begin AND pos + bytes <= span_end;
+
+statement ok
+SET enable_external_file_cache = false;
+
+foreach disable_prefetch true false
+
+statement ok
+SET disable_parquet_prefetching = {disable_prefetch};
+
+# a range branch can never be excluded by the Bloom filter, so the OR cannot be either
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_or_reads.parquet' WHERE x = 501 OR x < 10;
+----
+500
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT reads FROM bloom_reads();
+----
+0
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_or_reads.parquet' WHERE x IN (501, 503) OR x < 10;
+----
+500
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT reads FROM bloom_reads();
+----
+0
+
+# every branch can be excluded: the Bloom filters are read and rule out all row groups
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_or_reads.parquet' WHERE x = 501 OR x = 503;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT reads > 0 FROM bloom_reads();
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_or_reads.parquet' WHERE x = 501 OR (x = 503 AND x > 10);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT reads > 0 FROM bloom_reads();
+----
+true
+
+endloop
