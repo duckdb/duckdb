@@ -3861,10 +3861,6 @@ TEST_CASE("Top-level transform arenas honor the database memory limit", "[api][g
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 	}
 	Parser parser(*con.context);
-	try {
-		parser.ParseQuery("ARENA_MEMORY");
-		FAIL("Expected an out-of-memory exception during parsing");
-	} catch (const OutOfMemoryException &ex) {
-		REQUIRE(StringUtil::Contains(ErrorData(ex).RawMessage(), "While parsing SQL:"));
-	}
+	REQUIRE_THROWS_WITH(parser.ParseQuery("ARENA_MEMORY"),
+	                    Catch::Contains("While parsing SQL: failed to allocate data"));
 }
