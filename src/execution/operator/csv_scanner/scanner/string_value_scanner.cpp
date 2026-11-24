@@ -2310,11 +2310,18 @@ void StringValueScanner::SetStart() {
 		// the state those bytes leave an unquoted value in
 		CSVState before;
 		switch (before_start.state) {
-		case CSVState::STANDARD:
-		case CSVState::STANDARD_NEWLINE:
 		case CSVState::RECORD_SEPARATOR:
 		case CSVState::CARRIAGE_RETURN:
 		case CSVState::NOT_SET:
+		case CSVState::STANDARD_NEWLINE:
+			if (exact_start && !after_carriage_return) {
+				// a row surely ended before the start, so a quote or a comment byte opens there
+				before = CSVState::RECORD_SEPARATOR;
+				break;
+			}
+			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+			break;
+		case CSVState::STANDARD:
 		case CSVState::INVALID:
 			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
 			break;
@@ -2337,9 +2344,7 @@ void StringValueScanner::SetStart() {
 			break;
 		case CSVState::STANDARD:
 			if ((leading_line_feed && ends_row) || (exact_start && before_start.state == CSVState::STANDARD)) {
-				// the line feed ends the row of the scanner before this one or an empty line, or the bytes before the
-				// start end inside a value, where a line start rule such as the inert escape of quotes_only does not
-				// hold
+				// the line feed ends the row of the scanner before this one or an empty line, a value surely goes on
 				unquoted_start = CSVState::STANDARD;
 			}
 			break;
