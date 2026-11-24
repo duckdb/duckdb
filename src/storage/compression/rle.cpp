@@ -763,11 +763,6 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
-	if (use_dictionary) {
-		TryRLEScanDictionary(scan_state, vector_count, result);
-		scan_state.filter_cache->Filter(DictionaryVector::SelVector(result), sel, sel_count);
-		return;
-	}
 	if (!sel.IsSet()) {
 		if (const auto matches = scan_state.filter_cache->GetPureMask()) {
 			auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
