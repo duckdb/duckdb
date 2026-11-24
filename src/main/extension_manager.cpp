@@ -44,6 +44,9 @@ void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
 }
 
+ExtensionManager::~ExtensionManager() {
+}
+
 ExtensionManager &ExtensionManager::Get(DatabaseInstance &db) {
 	return db.GetExtensionManager();
 }

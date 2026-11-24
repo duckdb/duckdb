@@ -1,0 +1,15 @@
+# name: test/sql/table_function/duckdb_extension_memory.test
+# description: Test the duckdb_extension_memory function
+# group: [table_function]
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM duckdb_extension_memory());
+----
+extension_name	VARCHAR
+memory_usage_bytes	BIGINT
+
+# Only extensions that use the C API allocator are listed, and none of the built-in ones do
+query I
+SELECT count(*) FROM duckdb_extension_memory();
+----
+0

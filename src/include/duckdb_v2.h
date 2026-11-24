@@ -757,6 +757,296 @@ typedef enum DUCKDB_V2_FUNCTION_PROPERTY_VALUE {
 /* --- Struct definitions for function properties --- */
 
 /* ============================================================================
+ * MODULE: allocator
+ * ============================================================================ */
+
+/* --- Enums for allocator --- */
+
+/* --- Struct forward declarations for allocator --- */
+
+typedef struct duckdb_v2_allocator_raw_functions duckdb_v2_allocator_raw_functions;
+
+/* --- Types for allocator --- */
+
+/*!
+ * An owned, thread-safe allocator. Free all allocations made through this handle before destroying it with
+ * `duckdb_v2_allocator_destroy()`. Do not destroy it while another thread is using it.
+ */
+typedef struct _duckdb_v2_allocator {
+	void *internal_ptr;
+} * duckdb_v2_allocator_handle;
+
+/* --- Constants for allocator --- */
+
+/* --- Function pointer typedefs for allocator --- */
+
+/*!
+ * Allocates `size` bytes aligned to `align` from the allocator behind `state`, or returns NULL when out of memory.
+ * `size` must be non-zero and `align` a power of two; neither is checked. Never throws.
+ */
+typedef void *(*duckdb_v2_allocator_raw_alloc_fn)(void *state, idx_t size, idx_t align);
+
+/*!
+ * Releases memory obtained through the same `duckdb_v2_allocator_raw_functions` or the allocator they came from, with
+ * the size and alignment it was allocated with. `ptr` must not be NULL. Never throws.
+ */
+typedef void (*duckdb_v2_allocator_raw_dealloc_fn)(void *state, void *ptr, idx_t size, idx_t align);
+
+/*!
+ * Resizes memory like `duckdb_v2_allocator_realloc()`, or returns NULL when out of memory, leaving `ptr` untouched.
+ * `ptr` must not be NULL, and `old_size` and `new_size` must be non-zero. Never throws.
+ */
+typedef void *(*duckdb_v2_allocator_raw_realloc_fn)(void *state, void *ptr, idx_t old_size, idx_t align,
+                                                    idx_t new_size);
+
+/* --- Functions for allocator --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the allocation functions behind an allocator, which allocate without argument checks or error reporting.
+ *
+ * Returns ERROR_INPUT_INVALID if `allocator` or `out_functions` is NULL.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator whose functions to retrieve. Must outlive every use of them.
+ * @param out_functions Receives the functions.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_get_raw_functions(duckdb_v2_allocator_handle allocator,
+                                                                   duckdb_v2_allocator_raw_functions *out_functions,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates an allocator for process-global extension memory, e.g. a Rust global allocator. It remains usable after every
+ * database has closed. Its backing bytes are counted per extension in `duckdb_extension_memory()`, shared across loads,
+ * and do not count towards any database's memory limit.
+ *
+ * A statically linked extension may pass NULL before its entrypoint runs. The allocator is immediately usable, but its
+ * bytes are not reported until `duckdb_v2_allocator_register_extension()` associates it with an extension.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param extension The loading extension, or NULL to register the allocator later.
+ * @param out_allocator Receives the owned allocator. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                       duckdb_v2_allocator_handle *out_allocator,
+                                                                       duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Attributes a process-global allocator to the loading extension, including allocations that are already live. This
+ * does not replace the allocator or change how its memory is freed. Repeated registration with the same extension
+ * succeeds, including from another database. Registering to a different extension or registering a database-scoped
+ * allocator returns ERROR_INPUT_INVALID and leaves the allocator unchanged.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator created by `duckdb_v2_allocator_create_with_extension()`.
+ * @param extension The non-NULL extension handle passed to the loading entrypoint.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_register_extension(duckdb_v2_allocator_handle allocator,
+                                                                    duckdb_v2_extension_handle extension,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates an allocator charged to the connection's database under the EXTENSION tag of `duckdb_memory()`. Allocations
+ * respect that database's memory limit. The handle keeps the database alive, not the connection.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection whose database to allocate from.
+ * @param out_allocator Receives the owned allocator. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_connection(duckdb_v2_connection_handle conn,
+                                                                        duckdb_v2_allocator_handle *out_allocator,
+                                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates an allocator for the context's database with the same accounting and memory limit as
+ * `duckdb_v2_allocator_create_with_connection()`. The handle keeps the database alive and remains usable after the
+ * callback returns.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context whose database to allocate from.
+ * @param out_allocator Receives the owned allocator. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_create_with_context(duckdb_v2_context_handle context,
+                                                                     duckdb_v2_allocator_handle *out_allocator,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Releases the allocator handle and sets it to NULL. This does not free outstanding allocations or reset shared
+ * accounting. Safe to call with NULL or an already-NULL handle.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_destroy(duckdb_v2_allocator_handle *allocator);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Allocates `size` uninitialized bytes aligned to `align`.
+ *
+ * The memory must be released with `duckdb_v2_allocator_dealloc()` or resized with `duckdb_v2_allocator_realloc()` on
+ * the same allocator, passing the same `size` and `align`. A `size` of 0 succeeds and yields NULL.
+ *
+ * Returns ERROR_INPUT_INVALID if `allocator` or `out_ptr` is NULL or `align` is not a power of two, and
+ * ERROR_RESOURCE_OUT_OF_MEMORY if the allocation fails.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator to allocate from.
+ * @param size The number of bytes to allocate. May be 0.
+ * @param align The alignment of the returned pointer in bytes. Must be a power of two.
+ * @param out_ptr Receives the allocated memory, or NULL if `size` is 0. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_alloc(duckdb_v2_allocator_handle allocator, idx_t size, idx_t align,
+                                                       void **out_ptr, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Allocates `size` zero-initialized bytes aligned to `align`.
+ *
+ * Behaves like `duckdb_v2_allocator_alloc()`, except that the returned memory is zeroed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator to allocate from.
+ * @param size The number of bytes to allocate. May be 0.
+ * @param align The alignment of the returned pointer in bytes. Must be a power of two.
+ * @param out_ptr Receives the allocated memory, or NULL if `size` is 0. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_alloc_zeroed(duckdb_v2_allocator_handle allocator, idx_t size,
+                                                              idx_t align, void **out_ptr,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Releases memory obtained from `duckdb_v2_allocator_alloc()`, `duckdb_v2_allocator_alloc_zeroed()` or
+ * `duckdb_v2_allocator_realloc()` on the same allocator.
+ *
+ * `size` and `align` must be the ones the memory was allocated with. Passing a NULL `ptr` is a no-op.
+ *
+ * Returns ERROR_INPUT_INVALID if `allocator` is NULL or `align` is not a power of two, in which case `ptr` is not
+ * released.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator `ptr` was allocated from.
+ * @param ptr The memory to release, or NULL.
+ * @param size The size `ptr` was allocated with.
+ * @param align The alignment `ptr` was allocated with.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_dealloc(duckdb_v2_allocator_handle allocator, void *ptr, idx_t size,
+                                                         idx_t align);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Resizes memory obtained from `duckdb_v2_allocator_alloc()`, `duckdb_v2_allocator_alloc_zeroed()` or
+ * `duckdb_v2_allocator_realloc()` on the same allocator to `new_size` bytes, keeping its alignment.
+ *
+ * The first `min(old_size, new_size)` bytes are preserved; any bytes beyond are uninitialized. On success `ptr` is
+ * released and must no longer be used, even if `out_ptr` receives the same address. On failure `ptr` is left untouched
+ * and remains owned by the caller.
+ *
+ * A NULL `ptr` (with an `old_size` of 0) behaves like `duckdb_v2_allocator_alloc()`. A `new_size` of 0 releases `ptr`
+ * and yields NULL.
+ *
+ * Returns ERROR_INPUT_INVALID if `allocator` or `out_ptr` is NULL, `align` is not a power of two, or `ptr` is NULL with
+ * a non-zero `old_size` (or vice versa), and ERROR_RESOURCE_OUT_OF_MEMORY if the allocation fails.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param allocator The allocator `ptr` was allocated from.
+ * @param ptr The memory to resize, or NULL.
+ * @param old_size The size `ptr` was allocated with. Must be 0 if `ptr` is NULL.
+ * @param align The alignment `ptr` was allocated with, which the resized memory keeps.
+ * @param new_size The new size in bytes. May be 0.
+ * @param out_ptr Receives the resized memory, or NULL if `new_size` is 0. Set to NULL on failure.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_allocator_realloc(duckdb_v2_allocator_handle allocator, void *ptr,
+                                                         idx_t old_size, idx_t align, idx_t new_size, void **out_ptr,
+                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+/* --- Struct definitions for allocator --- */
+
+/*!
+ * The allocation functions behind an allocator, for callers that allocate on a hot path, e.g. a Rust global allocator.
+ * They skip the argument checks and error reporting of `duckdb_v2_allocator_alloc()` and friends: invalid arguments are
+ * undefined behavior, and failure is reported only as NULL. Memory may be freed or resized through either interface.
+ * Valid for as long as the allocator is.
+ */
+struct duckdb_v2_allocator_raw_functions {
+	//! Passed as the first argument of every function.
+	void *state;
+
+	//! Allocates uninitialized memory.
+	duckdb_v2_allocator_raw_alloc_fn alloc;
+
+	//! Allocates zeroed memory.
+	duckdb_v2_allocator_raw_alloc_fn alloc_zeroed;
+
+	//! Releases memory.
+	duckdb_v2_allocator_raw_dealloc_fn dealloc;
+
+	//! Resizes memory.
+	duckdb_v2_allocator_raw_realloc_fn realloc;
+};
+
+/* ============================================================================
  * MODULE: arena
  * ============================================================================ */
 

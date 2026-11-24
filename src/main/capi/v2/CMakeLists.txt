@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   capi_v2.cpp
   capi_v2_stubs.cpp
+  capi_v2_allocator.cpp
   capi_v2_arena.cpp
   capi_v2_arrow.cpp
   capi_v2_expression.cpp

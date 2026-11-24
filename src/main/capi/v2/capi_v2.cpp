@@ -285,6 +285,36 @@ auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &ra
 	}
 }
 
+auto ReportCaughtError(duckdb_v2_error_info_handle *err) noexcept -> DUCKDB_V2_ERROR {
+	auto code = static_cast<DUCKDB_V2_ERROR>(DUCKDB_V2_ERROR_NONE);
+	auto text = string();
+	optional<string> raw_message;
+	RenderCaughtError(code, text, raw_message);
+	if (code == DUCKDB_V2_ERROR_NONE) {
+		return code;
+	}
+
+	// Failure: report detail through the slot if the caller provided one.
+	if (err) {
+		if (!*err) {
+			// Allocate a new error info handle if not provided; if even that fails, the code alone reports it.
+			try {
+				*err = Convert(new CV2ErrorInfo());
+			} catch (const std::bad_alloc &) {
+				return DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+			} catch (...) { // NOLINT(bugprone-empty-catch)
+				return code;
+			}
+		}
+		auto &out = *Convert(*err);
+		out.code = code;
+		out.message = std::move(text);
+		out.raw_message = std::move(raw_message);
+	}
+
+	return code;
+}
+
 auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, const char *argument) noexcept
     -> DUCKDB_V2_ERROR {
 	const auto code = DUCKDB_V2_ERROR_INPUT_INVALID;

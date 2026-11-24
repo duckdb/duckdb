@@ -56,6 +56,7 @@ public:
 class ExtensionManager {
 public:
 	explicit ExtensionManager(DatabaseInstance &db);
+	~ExtensionManager();
 
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 	DUCKDB_API vector<string> GetExtensions();

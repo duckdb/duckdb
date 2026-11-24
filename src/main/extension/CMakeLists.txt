@@ -1,5 +1,6 @@
 add_library(
   duckdb_main_extension OBJECT
+  capi_allocator.cpp
   extension_alias.cpp
   extension_helper.cpp
   extension_install.cpp
