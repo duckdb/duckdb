@@ -2,7 +2,7 @@
 # description: Connections of one shared transaction append to and scan a table of a file database while row groups are written to disk
 # group: [transactions]
 
-load __TEST_DIR__/join_transaction_concurrent_file_database.db
+load {TEST_DIR}/join_transaction_concurrent_file_database.db
 
 statement ok
 CREATE TABLE s(a BIGINT, b VARCHAR, thread INTEGER)
