@@ -1,0 +1,35 @@
+# name: test/sql/types/variant/variant_type_shredding.test
+# description: TYPE values in a VARIANT column are never shredded
+# group: [variant]
+
+load {TEST_DIR}/variant_type_shredding.db
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE t(v VARIANT);
+
+statement ok
+INSERT INTO t SELECT make_type('INTEGER')::VARIANT FROM range(3000);
+
+statement ok
+INSERT INTO t VALUES (NULL), (42);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+# the column shreds on the INTEGER and keeps the TYPE values unshredded
+query II
+SELECT s.shredding_state, s.partially_shredded.type FROM (SELECT stats(v) s FROM t LIMIT 1);
+----
+SHREDDED	INTEGER
+
+query II
+SELECT v::VARCHAR, count(*) FROM t GROUP BY ALL ORDER BY ALL
+----
+42	1
+INTEGER	3000
+NULL	1
