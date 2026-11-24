@@ -1,0 +1,172 @@
+# name: test/sql/types/struct/remap_struct_empty_default.test
+# description: A struct default does not replace a nested field that is mapped to a source
+# group: [struct]
+
+statement ok
+CREATE VIEW src AS
+SELECT * FROM (VALUES
+	(1, {s: {a: 1, b: 'x'}, l: [{a: 1}, NULL], m: MAP {1: {a: 2}}, km: MAP {{a: 1}: 2}, e: {}}),
+	(2, NULL),
+	(3, {s: NULL, l: NULL, m: NULL, km: NULL, e: NULL}),
+	(4, {s: {a: 4, b: 'y'}, l: [], m: MAP {}, km: MAP {}, e: {}})
+) t(id, x);
+
+statement ok
+CREATE TYPE st AS STRUCT(a INT, b VARCHAR);
+
+# an empty struct default for a field that is mapped by name replaced the field with a struct without fields:
+# these returned uninitialized values for s.a, raised an internal error or crashed
+statement error
+SELECT remap_struct(x, NULL::STRUCT(s STRUCT(a INT)), {s: 's'}, {s: {}}) FROM (VALUES ({s: {a: 1}})) t(x);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(s STRUCT(a INT)), {s: 's'}, {s: {}}) FROM (VALUES ({s: NULL})) t(x);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT id, remap_struct(x, NULL::STRUCT(s STRUCT(a INT, b VARCHAR)), {s: 's'}, {s: {}}) FROM src ORDER BY id;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT id, remap_struct(x, NULL::STRUCT(s st), {s: 's'}, {s: {}}) FROM src ORDER BY id;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct({s: {a: 1}}, NULL::STRUCT(s STRUCT(a INT)), {s: 's'}, {s: {}});
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# below a mapped struct, as the element of a list (in a struct and at the root), as the value and the key of a map
+statement error
+SELECT remap_struct(x, NULL::STRUCT(o STRUCT(s STRUCT(a INT))), {o: ('o', {s: 's'})}, {o: {s: {}}}) FROM (VALUES ({o: {s: {a: 1}}})) t(x);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l STRUCT(a INT)[]), {l: ('l', {list: 'list'})}, {l: {list: {}}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x.l, NULL::STRUCT(a INT)[], {list: 'list'}, {list: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x.m, NULL::MAP(INT, STRUCT(a INT)), {key: 'key', value: 'value'}, {value: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x.km, NULL::MAP(STRUCT(a INT), INT), {key: 'key', value: 'value'}, {key: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# a list in a list, the inner list mapped by name
+statement error
+SELECT remap_struct(x, NULL::STRUCT(ll INT[][]), {ll: ('ll', {list: 'list'})}, {ll: {list: {}}}) FROM (VALUES ({ll: [[1], []]})) t(x);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# a NULL-typed source field leaves the field without a child mapping even when the mapping is a tuple
+statement error
+SELECT remap_struct(x, NULL::STRUCT(s STRUCT(a INT)), {s: ('s', NULL::STRUCT(a VARCHAR))}, {s: {}}) FROM (VALUES ({s: NULL})) t(x);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# a LIST or MAP target raised an internal error
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l STRUCT(a INT)[]), {l: 'l'}, {l: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(m MAP(INT, STRUCT(a INT))), {m: 'm'}, {m: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# behaviour change: with an empty struct as the target the default has the type of the field. It replaced the
+# source and its NULLs ({e: NULL} became {'e': {}}, and a NULL default turned {} into NULL). A default that
+# stands for the whole value of a mapped field is a binder error for every other type as well
+statement error
+SELECT id, remap_struct(x, {e: {}}, {e: 'e'}, {e: {}}) FROM src ORDER BY id;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct({s: {}}, {s: {}}, {s: 's'}, {s: {}});
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT id, remap_struct(x, {e: {}}, {e: 'e'}, {e: nullif({}, {})}) FROM src ORDER BY id;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# behaviour change: the error is raised at bind time, so calls that returned a result because execution never
+# reached the field are rejected as well: a constant NULL input, a NULL struct above the field, no rows,
+# rows whose lists are NULL or empty
+statement error
+SELECT remap_struct(NULL::STRUCT(l INT[]), NULL::STRUCT(l INT[]), {l: 'l'}, {l: {}});
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct({o: NULL::STRUCT(s INT[])}, NULL::STRUCT(o STRUCT(s INT[])), {o: ('o', {s: 's'})}, {o: {s: {}}});
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l STRUCT(a INT)[]), {l: 'l'}, {l: {}}) FROM src WHERE id > 4;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l STRUCT(a INT)[]), {l: ('l', {list: 'list'})}, {l: {list: {}}}) FROM src WHERE id IN (3, 4);
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# the same shape with a default that has fields was already rejected
+statement error
+SELECT remap_struct(x, NULL::STRUCT(s STRUCT(a INT, b VARCHAR)), {s: 's'}, {s: {a: 2}}) FROM src;
+----
+<REGEX>:Binder Error:.*No child remaps found.*
+
+# protection: an empty default for a field that is mapped with a child mapping changes nothing
+query III
+SELECT id,
+       remap_struct(x, NULL::STRUCT(s STRUCT(a INT)), {s: ('s', {a: 'a'})}, {s: {}}),
+       remap_struct(x, NULL::STRUCT(l STRUCT(a INT)[], m MAP(INT, STRUCT(a INT))),
+                    {l: ('l', {list: ('list', {a: 'a'})}), m: ('m', {key: 'key', value: ('value', {a: 'a'})})},
+                    {l: {list: {}}, m: {value: {}}})
+FROM src ORDER BY id;
+----
+1	{'s': {'a': 1}}	{'l': [{'a': 1}, NULL], 'm': {1={'a': 2}}}
+2	NULL	NULL
+3	{'s': NULL}	{'l': NULL, 'm': NULL}
+4	{'s': {'a': 4}}	{'l': [], 'm': {}}
+
+# protection: a field without a source takes the default, an empty struct is the value of an empty struct field
+query II
+SELECT id, remap_struct(x, {m: MAP {1: {a: 2}}, n: {}}, {m: 'm'}, {n: {}}) FROM src ORDER BY id;
+----
+1	{'m': {1={'a': 2}}, 'n': {}}
+2	NULL
+3	{'m': NULL, 'n': {}}
+4	{'m': {}, 'n': {}}
+
+# protection: a field with fields and no child mapping reports what is missing
+statement error
+SELECT remap_struct(x, NULL::STRUCT(s STRUCT(a INT)), {s: ('s', {})}, {s: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*Missing target value "a" for remap.*
+
+statement error
+SELECT remap_struct(x, {e: {}, n: {a: 1}}, {e: 'e'}, {n: {}}) FROM src;
+----
+<REGEX>:Binder Error:.*Missing target value "a" for remap.*

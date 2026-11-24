@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/projection_placement.hpp"
 
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -289,8 +290,10 @@ static bool FindLiftPlacement(LogicalProjection &projection, idx_t expression_in
                               const column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                               const column_binding_map_t<idx_t> &reading_expressions, LiftPlacement &result) {
 	auto &expression = *projection.expressions[expression_index];
+	// Preserve the placement chosen by compressed materialization.
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || expression.IsVolatile() ||
-	    expression.CanThrow() || !projection.children[0]->has_estimated_cardinality) {
+	    expression.CanThrow() || CMUtils::GetWrappedInput(expression) ||
+	    !projection.children[0]->has_estimated_cardinality) {
 		return false;
 	}
 
@@ -767,8 +770,10 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
                           const column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                           const column_binding_map_t<idx_t> &reading_expressions, ExpressionPlacement &result) {
 	auto &expression = *projection.expressions[expression_index];
+	// Preserve the placement chosen by compressed materialization.
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || expression.IsVolatile() ||
-	    expression.CanThrow() || !projection.children[0]->has_estimated_cardinality) {
+	    expression.CanThrow() || CMUtils::GetWrappedInput(expression) ||
+	    !projection.children[0]->has_estimated_cardinality) {
 		return false;
 	}
 

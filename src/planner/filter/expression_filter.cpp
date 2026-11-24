@@ -83,6 +83,16 @@ unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(Expression
 	return make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
+unique_ptr<ExpressionFilter> ExpressionFilter::CreateSelectivityOptionalFilter(unique_ptr<Expression> child_expr,
+                                                                               const LogicalType &column_type,
+                                                                               SelectivityOptionalFilterType type) {
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
+	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
+	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
+}
+
 bool ExpressionFilter::IsSimpleFilterColumnRef(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF ||
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;

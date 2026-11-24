@@ -152,9 +152,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 			auto existing_entry = set.GetEntry(transaction, entry_name);
 			auto existing_type = existing_entry ? existing_entry->type : entry_type;
 			throw CatalogException::EntryAlreadyExists(existing_type, entry_name);
-		} else {
-			return nullptr;
 		}
+		if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+			// the entry was created after it was dropped: by a concurrent statement of this transaction
+			throw TransactionException("Catalog write-write conflict on create or replace of %s", entry_name);
+		}
+		return nullptr;
 	}
 	return result;
 }
