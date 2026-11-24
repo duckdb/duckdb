@@ -100,6 +100,11 @@ const char *const CHAOS_STATEMENTS[] = {
     "DROP TABLE IF EXISTS big"};
 constexpr idx_t CHAOS_STATEMENT_COUNT = sizeof(CHAOS_STATEMENTS) / sizeof(CHAOS_STATEMENTS[0]);
 
+idx_t ChaosSeed() {
+	auto env = getenv("DUCKDB_CHAOS_SEED");
+	return env ? NumericCast<idx_t>(atoi(env)) * 1000003 : 0;
+}
+
 bool IsFatal(const string &error) {
 	return error.find("INTERNAL") != string::npos || error.find("Internal Error") != string::npos ||
 	       error.find("FATAL") != string::npos || error.find("Assertion") != string::npos ||
@@ -151,7 +156,7 @@ void RunChaosRound(idx_t round, const string &path, idx_t connection_count, idx_
 		vector<thread> threads;
 		for (idx_t i = 0; i < connection_count; i++) {
 			threads.emplace_back([&, i]() {
-				std::mt19937 rng(round * 1000 + i);
+				std::mt19937 rng(ChaosSeed() + round * 1000 + i);
 				auto &con = *cons[i];
 				for (idx_t s = 0; s < statements_per_connection; s++) {
 					if (rng() % 20 == 0) {
@@ -190,7 +195,7 @@ void RunChaosRound(idx_t round, const string &path, idx_t connection_count, idx_
 		thread interrupter;
 		if (interrupts) {
 			interrupter = thread([&]() {
-				std::mt19937 rng(round);
+				std::mt19937 rng(ChaosSeed() + round);
 				while (!done) {
 					std::this_thread::sleep_for(std::chrono::milliseconds(15));
 					cons[rng() % connection_count]->Interrupt();
@@ -214,7 +219,7 @@ void RunChaosRound(idx_t round, const string &path, idx_t connection_count, idx_
 		}
 
 		// the connections leave in random order, commit or roll back
-		std::mt19937 rng(round);
+		std::mt19937 rng(ChaosSeed() + round);
 		vector<idx_t> order;
 		for (idx_t i = 0; i < connection_count; i++) {
 			order.push_back(i);

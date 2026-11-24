@@ -233,6 +233,9 @@ public:
 	TableIndexList &GetIndexes(Context &context, DataTable &table);
 	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
+	//! Throws if the table has transaction-local changes and the transaction is shared: other connections can be
+	//! using the local storage, which an ALTER moves to the new version of the table
+	void VerifyAlter(ClientContext &context, DataTable &table);
 	void VerifyNewConstraint(Context &context, DataTable &parent, const BoundConstraint &constraint);
 
 	DuckTransaction &GetTransaction() const {

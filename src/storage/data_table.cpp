@@ -100,6 +100,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	column_definitions.emplace_back(new_column.Copy());
 
 	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.VerifyAlter(context, parent);
 
 	ExpressionExecutor default_executor(context);
 	default_executor.AddExpression(default_value);
@@ -120,6 +121,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	// prevent any new tuples from being added to the parent
 	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.VerifyAlter(context, parent);
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
 	for (auto &column_def : parent.column_definitions) {
@@ -170,6 +172,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	info->BindIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.VerifyAlter(context, parent);
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -194,6 +197,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
+	local_storage.VerifyAlter(context, parent);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {

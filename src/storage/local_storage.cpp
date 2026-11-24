@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
@@ -291,12 +292,18 @@ PhysicalIndex LocalTableStorage::CreateOptimisticCollection(unique_ptr<Optimisti
 
 OptimisticWriteCollection &LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
 	lock_guard<mutex> l(collections_lock);
-	auto &collection = optimistic_collections[collection_index.index];
-	return *collection;
+	if (collection_index.index >= optimistic_collections.size() || !optimistic_collections[collection_index.index]) {
+		// the table was altered by a connection that shares the transaction while the statement was running
+		throw TransactionException("The table was modified concurrently by a connection sharing the transaction");
+	}
+	return *optimistic_collections[collection_index.index];
 }
 
 void LocalTableStorage::ResetOptimisticCollection(const PhysicalIndex collection_index) {
 	lock_guard<mutex> l(collections_lock);
+	if (collection_index.index >= optimistic_collections.size()) {
+		throw TransactionException("The table was modified concurrently by a connection sharing the transaction");
+	}
 	optimistic_collections[collection_index.index].reset();
 }
 
@@ -851,6 +858,15 @@ TableIndexList &LocalStorage::GetIndexes(Context &context, DataTable &table) {
 
 optional_ptr<LocalTableStorage> LocalStorage::GetStorage(const DataTable &table) {
 	return table_manager.GetStorage(table);
+}
+
+void LocalStorage::VerifyAlter(ClientContext &context, DataTable &table) {
+	if (!table_manager.GetStorage(table)) {
+		return;
+	}
+	if (MetaTransaction::Get(context).IsShared()) {
+		throw TransactionException("Cannot alter a table with transaction-local changes in a shared transaction");
+	}
 }
 
 void LocalStorage::VerifyNewConstraint(Context &context, DataTable &parent, const BoundConstraint &constraint) {
