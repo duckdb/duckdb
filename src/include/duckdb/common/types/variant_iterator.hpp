@@ -336,9 +336,14 @@ public:
 		return ordered_entries;
 	}
 
-private:
+	//! The number of raw entries, including the fields missing in this row
+	idx_t GetRawCount() const {
+		return raw_count;
+	}
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
+
+private:
 	//! The end position in the iteration space
 	idx_t EndPos() const {
 		return order == VariantIterationOrder::LEXICOGRAPHIC ? ordered_entries.size() : raw_count;
