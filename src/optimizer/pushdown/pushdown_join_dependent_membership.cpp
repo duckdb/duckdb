@@ -2,6 +2,7 @@
 
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
@@ -197,6 +198,36 @@ static unique_ptr<MembershipTarget> FindMembershipTarget(LogicalOperator &root,
 	return nullptr;
 }
 
+static bool IsMembershipLikelySelective(ClientContext &context, MembershipTarget &target,
+                                        const vector<MembershipSource> &sources) {
+	RelationStatsExtractor extractor(context);
+	auto input = extractor.Extract(*target.aggregate.children[0]);
+	if (!input) {
+		return false;
+	}
+	idx_t largest_domain = 0;
+	for (auto &key : target.keys) {
+		if (!IsMembershipColumn(*key)) {
+			return false;
+		}
+		auto column = input->GetColumnStats(key->Cast<BoundColumnRefExpression>().Binding());
+		if (!column) {
+			return false;
+		}
+		largest_domain = MaxValue(largest_domain, column->current_domain.distinct_count);
+	}
+	double build_rows = 0;
+	for (auto &source : sources) {
+		auto stats = extractor.Extract(source.projection);
+		if (!stats) {
+			return false;
+		}
+		build_rows += static_cast<double>(stats->cardinality);
+	}
+	// Correlated keys can cover the whole input despite a large product of their distinct counts.
+	return build_rows < static_cast<double>(largest_domain);
+}
+
 static unique_ptr<LogicalCTERef> CreateMembershipReader(Binder &binder, TableIndex cte_index,
                                                         const vector<LogicalType> &types) {
 	vector<Identifier> names;
@@ -298,6 +329,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoinDependentMembership(uniq
 		if (!CanShareMembershipSource(source.projection)) {
 			return op;
 		}
+	}
+	if (!IsMembershipLikelySelective(optimizer.context, *target, sources)) {
+		return op;
 	}
 	return AddMembershipRestriction(optimizer.binder, std::move(op), sources, probe_keys, *target);
 }

@@ -13,6 +13,10 @@ INSERT INTO sales VALUES
     (1,10,5), (1,10,7), (2,20,3), (2,20,4), (3,30,9),
     (4,40,11), (5,50,13), (7,70,17), (8,80,19), (9,NULL,6);
 
+# Enough unmatched groups make the membership restriction selective.
+statement ok
+INSERT INTO sales SELECT i,i,1 FROM range(100,200) t(i);
+
 statement ok
 CREATE TABLE web(k INTEGER, j INTEGER, qty INTEGER);
 
@@ -101,18 +105,12 @@ WHERE coalesce(w.qty,0)+coalesce(c.qty,0)>0;
 3	9
 
 # Unknown matches are necessary only if all-NULL RHS outputs fail the predicate.
-query I rowsort
-SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+query I
+SELECT count(*) FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
 LEFT JOIN c ON s.k=c.k AND s.j=c.j
 WHERE coalesce(w.qty,0)=0 OR coalesce(c.qty,0)=0;
 ----
-1
-2
-4
-5
-7
-8
-9
+107
 
 query II
 EXPLAIN SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
@@ -186,3 +184,29 @@ LEFT JOIN c ON a.k=c.k
 WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
 ----
 Could not convert string 'invalid' to INT64
+
+# Broad RHS domains should not introduce an extra membership build and probe.
+statement ok
+CREATE TABLE broad_membership AS SELECT i k,hash(i) j,1 qty FROM range(100) t(i);
+
+query I
+SELECT count(*)
+FROM (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) a
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) b
+ON a.k=b.k AND a.j=b.j
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) c
+ON a.k=c.k AND a.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+100
+
+query II
+EXPLAIN SELECT count(*)
+FROM (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) a
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) b
+ON a.k=b.k AND a.j=b.j
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) c
+ON a.k=c.k AND a.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*membership_source.*
