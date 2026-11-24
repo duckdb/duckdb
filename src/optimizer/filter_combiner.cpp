@@ -135,6 +135,10 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 	// collect every column reference that belongs to an equivalence set
 	vector<reference<const BoundColumnRefExpression>> candidate_columns;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(filter, [&](const BoundColumnRefExpression &col) {
+		// An expression can distinguish equal values, such as signed zeros cast to VARCHAR.
+		if (!col.GetReturnType().EqualValuesAreIdentical()) {
+			return;
+		}
 		auto entry = equivalence_set_map.find(col);
 		if (entry == equivalence_set_map.end()) {
 			return;

@@ -1,0 +1,32 @@
+# name: test/optimizer/pushdown/join_filter_signed_zero.test
+# description: Signed zeros compare equal in a join but can render differently in a filter
+# group: [pushdown]
+
+foreach floating_type FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE lhs AS
+SELECT d::{floating_type} AS d FROM (VALUES ('-0.0'), ('0.0')) AS t(d);
+
+statement ok
+CREATE OR REPLACE TABLE rhs AS SELECT '0.0'::{floating_type} AS d;
+
+query I
+SELECT count(*) FROM lhs JOIN rhs ON lhs.d = rhs.d
+WHERE lhs.d::VARCHAR = '-0.0';
+----
+1
+
+endloop
+
+statement ok
+CREATE TABLE lhs_list AS SELECT [-0.0::DOUBLE] AS d;
+
+statement ok
+CREATE TABLE rhs_list AS SELECT [0.0::DOUBLE] AS d;
+
+query I
+SELECT count(*) FROM lhs_list JOIN rhs_list ON lhs_list.d = rhs_list.d
+WHERE lhs_list.d::VARCHAR = '[-0.0]';
+----
+1
