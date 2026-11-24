@@ -22,6 +22,10 @@ double CostModel::ComputeCost(const DPJoinNode &left, const DPJoinNode &right,
 	return left.cost + right.cost + input_cost + output_rows;
 }
 
+double CostModel::ComputeCostLowerBound(const DPJoinNode &left, const DPJoinNode &right, double output_rows) {
+	return ComputeCost(left, right, nullptr, output_rows);
+}
+
 void CostModel::InitializeRecursiveMemory(ClientContext &context, RelationManager &relations) {
 	if (!relations.HasRecursiveRelations() || Settings::Get<PreferRangeJoinsSetting>(context)) {
 		return;

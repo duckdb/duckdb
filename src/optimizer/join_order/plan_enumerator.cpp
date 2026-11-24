@@ -2,13 +2,14 @@
 
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/join_order/dphyp_enumerator.hpp"
-#include "duckdb/optimizer/join_order/greedy_join_enumerator.hpp"
+#include "duckdb/optimizer/join_order/linearized_plan_enumerator.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 namespace duckdb {
 
 PlanEnumerator::PlanEnumerator(QueryGraphManager &graph, CostModel &cost_model, const QueryGraphEdges &edges)
-    : query_graph_manager(graph), query_graph(edges), candidate_evaluator(graph, cost_model, edges) {
+    : query_graph_manager(graph), cost_model(cost_model), query_graph(edges),
+      candidate_evaluator(graph, cost_model, edges) {
 }
 
 const JoinOrderPlanMap &PlanEnumerator::GetPlans() const {
@@ -16,13 +17,12 @@ const JoinOrderPlanMap &PlanEnumerator::GetPlans() const {
 }
 
 void PlanEnumerator::InitLeafPlans() {
-	candidate_evaluator.InitLeafPlans(plans);
+	candidate_evaluator.InitLeafPlans(plans, query_graph_manager.relation_manager.GetRelationStats());
 }
 
 bool PlanEnumerator::SolveJoinOrderApproximately() {
-	candidate_evaluator.InitInputPlan(plans);
-	GreedyJoinEnumerator greedy(query_graph_manager, candidate_evaluator);
-	return greedy.Solve(plans);
+	LinearizedPlanEnumerator linearized(query_graph_manager, cost_model, candidate_evaluator);
+	return linearized.SolveApproximately(plans);
 }
 
 bool PlanEnumerator::HasCompletePlan(const JoinOrderPlanMap &memo) const {

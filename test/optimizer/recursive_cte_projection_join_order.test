@@ -122,6 +122,8 @@ SELECT count(*), sum(i) FROM r;
 ----
 4	6
 
+# Match only the inner join's children: the filtered recursive scan and range(3).
+# The surrounding root join can put range(1000) on either side.
 query TT
 EXPLAIN (FORMAT JSON) WITH RECURSIVE r(i) AS (
     VALUES (0)
@@ -134,7 +136,7 @@ EXPLAIN (FORMAT JSON) WITH RECURSIVE r(i) AS (
 )
 SELECT count(*), sum(i) FROM r;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*RANGE.*HASH_JOIN.*
+physical_plan	<REGEX>:.*"name": "HASH_JOIN",\s*"children": \[\s*\{\s*"name": "FILTER",\s*"children": \[\s*\{[^{}]*"name": "REC_CTE_SCAN"[^{}]*\{[^{}]*\}\s*\}\s*\],[^{}]*\{[^{}]*\}\s*\},\s*\{\s*"name": "RANGE",[^{}]*\{[^{}]*"Estimated Cardinality": "3"[^{}]*\}\s*\}\s*\].*
 
 statement ok
 RESET disabled_optimizers;
