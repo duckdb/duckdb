@@ -348,7 +348,8 @@ static bool IsSelectiveEqualityBinding(const RelationManager &relations, const C
 	}
 	auto &domain = stats.columns[index].current_domain;
 	if (domain.source == DistinctCountSource::HLL) {
-		return static_cast<double>(domain.distinct_count) * (1 + HyperLogLog::GetErrorRate()) >= stats.cardinality;
+		return static_cast<double>(domain.distinct_count) * (1 + HyperLogLog::GetErrorRate()) >=
+		       static_cast<double>(stats.cardinality);
 	}
 	return domain.source == DistinctCountSource::EXACT && domain.distinct_count >= stats.cardinality;
 }
