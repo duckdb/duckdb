@@ -2307,8 +2307,9 @@ void StringValueScanner::SetStart() {
 		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
 		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
 		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
-		// the state those bytes leave an unquoted value in
+		// the state those bytes leave an unquoted value in, and whether they surely end inside a value
 		CSVState before;
+		bool exact_value = false;
 		switch (before_start.state) {
 		case CSVState::RECORD_SEPARATOR:
 		case CSVState::CARRIAGE_RETURN:
@@ -2324,6 +2325,7 @@ void StringValueScanner::SetStart() {
 		case CSVState::STANDARD:
 		case CSVState::INVALID:
 			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+			exact_value = exact_start && !after_carriage_return;
 			break;
 		default:
 			// the rules of the state before the start read its first bytes, escapes inert in a comment, line breaks
@@ -2343,7 +2345,7 @@ void StringValueScanner::SetStart() {
 			}
 			break;
 		case CSVState::STANDARD:
-			if ((leading_line_feed && ends_row) || (exact_start && before_start.state == CSVState::STANDARD)) {
+			if ((leading_line_feed && ends_row) || exact_value) {
 				// the line feed ends the row of the scanner before this one or an empty line, a value surely goes on
 				unquoted_start = CSVState::STANDARD;
 			}
