@@ -2308,58 +2308,59 @@ void StringValueScanner::SetStart() {
 		const auto standard = static_cast<uint8_t>(CSVState::STANDARD);
 		const bool leading_line_feed = buffer_handle_ptr[iterator.pos.buffer_pos] == '\n';
 		const bool after_carriage_return = leading_line_feed && before_start.last_byte == '\r';
-		// the state those bytes leave an unquoted value in, and whether they surely end inside a value
-		CSVState before;
-		bool exact_value = false;
-		switch (before_start.state) {
-		case CSVState::RECORD_SEPARATOR:
-		case CSVState::CARRIAGE_RETURN:
-		case CSVState::NOT_SET:
-		case CSVState::STANDARD_NEWLINE:
-			if (exact_start && !after_carriage_return) {
-				// a row surely ended before the start, so a quote or a comment byte opens there
-				before = CSVState::RECORD_SEPARATOR;
+		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
+		if (exact_start && !after_carriage_return) {
+			// the exact state the bytes before the start left starts the search, which reads the first bytes by its
+			// rules, behind a line feed or at the file start the row end state, where a quote or a comment byte opens
+			switch (before_start.state) {
+			case CSVState::RECORD_SEPARATOR:
+			case CSVState::NOT_SET:
+			case CSVState::STANDARD_NEWLINE:
+				unquoted_start = CSVState::RECORD_SEPARATOR;
+				break;
+			default:
+				unquoted_start = before_start.state;
 				break;
 			}
-			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
-			break;
-		case CSVState::STANDARD:
-		case CSVState::INVALID:
-			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : before_start.state;
-			exact_value = exact_start && !after_carriage_return;
-			break;
-		default:
-			// the rules of the state before the start read its first bytes, escapes inert in a comment, line breaks
-			// data inside quotes, a quote inside a field as the embedded quote rule reads it
-			before = before_start.state;
-			break;
-		}
-		const bool ends_row = transitions[static_cast<uint8_t>('\n')][standard] == CSVState::RECORD_SEPARATOR;
-		switch (before) {
-		case CSVState::CARRIAGE_RETURN:
-			if (!ends_row) {
-				// the scanner before this one reads on past the pair, the search starts behind its line feed
-				iterator.pos.buffer_pos++;
-				unquoted_start = CSVState::RECORD_SEPARATOR;
-			} else {
-				unquoted_start = CSVState::CARRIAGE_RETURN;
+		} else {
+			// the state those bytes leave an unquoted value in
+			CSVState before;
+			switch (before_start.state) {
+			case CSVState::STANDARD:
+			case CSVState::STANDARD_NEWLINE:
+			case CSVState::RECORD_SEPARATOR:
+			case CSVState::CARRIAGE_RETURN:
+			case CSVState::NOT_SET:
+			case CSVState::INVALID:
+				before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+				break;
+			default:
+				// the rules of the exact state read the line feed, data behind an escape or inside quotes
+				before = before_start.state;
+				break;
 			}
-			break;
-		case CSVState::STANDARD:
-			if ((leading_line_feed && ends_row) || exact_value) {
-				// the line feed ends the row of the scanner before this one or an empty line, a value surely goes on
-				unquoted_start = CSVState::STANDARD;
+			switch (before) {
+			case CSVState::CARRIAGE_RETURN:
+				if (!ends_row) {
+					// the scanner before this one reads on past the pair, the search starts behind its line feed
+					iterator.pos.buffer_pos++;
+					unquoted_start = CSVState::RECORD_SEPARATOR;
+				} else {
+					unquoted_start = CSVState::CARRIAGE_RETURN;
+				}
+				break;
+			case CSVState::STANDARD:
+				if (leading_line_feed && ends_row) {
+					// the line feed ends the row of the scanner before this one or an empty line
+					unquoted_start = CSVState::STANDARD;
+				}
+				break;
+			case CSVState::INVALID:
+				break;
+			default:
+				unquoted_start = before;
+				break;
 			}
-			break;
-		case CSVState::INVALID:
-			if (exact_value) {
-				// the row before the start is broken, the search reads it on as the scanner before does
-				unquoted_start = CSVState::INVALID;
-			}
-			break;
-		default:
-			unquoted_start = before;
-			break;
 		}
 	}
 	// At this point we have 3 options:
