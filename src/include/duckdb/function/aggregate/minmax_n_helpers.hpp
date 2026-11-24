@@ -11,6 +11,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -193,6 +194,29 @@ public:
 		}
 	}
 
+	//! Appends a slot without restoring the heap order
+	void AppendSlot(ArenaAllocator &allocator, const T &value) {
+		D_ASSERT(size < capacity);
+		if (size == allocated_capacity) {
+			heap = GrowHeap(allocator, heap, allocated_capacity, capacity, size + 1, GROW_TO_CAPACITY_DIVISOR);
+		}
+		heap[size++].Assign(allocator, value);
+	}
+
+	//! Pre-allocates exactly n slots (the state import knows the final size up front)
+	void Reserve(ArenaAllocator &allocator, idx_t n) {
+		if (n > allocated_capacity) {
+			heap = GrowHeap(allocator, heap, allocated_capacity, capacity, n, GROW_TO_CAPACITY_DIVISOR);
+		}
+	}
+
+	//! Restores the heap order after AppendSlot - a valid heap keeps its slot order
+	void RestoreHeap() {
+		if (!std::is_heap(heap, heap + size, Compare)) {
+			std::make_heap(heap, heap + size, Compare);
+		}
+	}
+
 	//! Slot indexes in the order the heap would sort to, leaving the heap intact for later reads and inserts. The
 	//! indexes in heap order form the same heap, so sorting them as a heap yields the same order, ties included.
 	void SortedSlots(vector<idx_t> &order) const {
@@ -290,6 +314,31 @@ public:
 		}
 	}
 
+	//! Appends a slot without restoring the heap order
+	void AppendSlot(ArenaAllocator &allocator, const K &key, const V &value) {
+		D_ASSERT(size < capacity);
+		if (size == allocated_capacity) {
+			heap = GrowHeap(allocator, heap, allocated_capacity, capacity, size + 1, GROW_TO_CAPACITY_DIVISOR);
+		}
+		heap[size].first.Assign(allocator, key);
+		heap[size].second.Assign(allocator, value);
+		size++;
+	}
+
+	//! Pre-allocates exactly n slots (the state import knows the final size up front)
+	void Reserve(ArenaAllocator &allocator, idx_t n) {
+		if (n > allocated_capacity) {
+			heap = GrowHeap(allocator, heap, allocated_capacity, capacity, n, GROW_TO_CAPACITY_DIVISOR);
+		}
+	}
+
+	//! Restores the heap order after AppendSlot - a valid heap keeps its slot order
+	void RestoreHeap() {
+		if (!std::is_heap(heap, heap + size, Compare)) {
+			std::make_heap(heap, heap + size, Compare);
+		}
+	}
+
 	//! Slot indexes in the order the heap would sort to, leaving the heap intact for later reads and inserts. The
 	//! indexes in heap order form the same heap, so sorting them as a heap yields the same order, ties included.
 	void SortedSlots(vector<idx_t> &order) const {
@@ -364,7 +413,7 @@ struct MinMaxFixedValue {
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState() {
+	static EXTRA_STATE CreateExtraState(idx_t count) {
 		return false;
 	}
 
@@ -386,7 +435,7 @@ struct MinMaxStringValue {
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState() {
+	static EXTRA_STATE CreateExtraState(idx_t count) {
 		return false;
 	}
 
@@ -410,8 +459,8 @@ struct MinMaxFallbackValue {
 		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
 	}
 
-	static EXTRA_STATE CreateExtraState() {
-		return Vector(LogicalTypeId::BLOB);
+	static EXTRA_STATE CreateExtraState(idx_t count) {
+		return Vector(LogicalType::BLOB, MaxValue<idx_t>(count, 1));
 	}
 
 	static void PrepareData(const Vector &input, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
@@ -419,7 +468,6 @@ struct MinMaxFallbackValue {
 		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers);
-		input.Flatten();
 		extra_state.ToUnifiedFormat(format);
 	}
 };
@@ -459,7 +507,7 @@ struct MinMaxFixedValueOrNull {
 		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
-	static EXTRA_STATE CreateExtraState() {
+	static EXTRA_STATE CreateExtraState(idx_t count) {
 		return false;
 	}
 
@@ -488,6 +536,21 @@ struct MinMaxNOperation {
 
 		// Merge the heaps
 		target.heap.Insert(aggr_input.allocator, source.heap);
+	}
+
+	//! The intermediate heaps of a repeated combine go to a scratch arena: the combine copies the entries it keeps
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &aggr_input, idx_t count) {
+		if (!source.is_initialized) {
+			return;
+		}
+		// n copies of the source already hold the top n of any larger number of copies
+		count = MinValue(count, source.heap.Capacity());
+		ArenaAllocator scratch(aggr_input.allocator.GetUnderlyingAllocator());
+		AggregateInputData scratch_input(aggr_input.function, aggr_input.bind_data, scratch);
+		STATE result;
+		AggregateExecutor::GenericRepeatedCombine<STATE, OP>(source, result, scratch_input, count);
+		Combine<STATE, OP>(result, target, aggr_input);
 	}
 
 	template <class STATE>
@@ -548,13 +611,120 @@ struct MinMaxNOperation {
 		result.Verify();
 	}
 
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.~STATE();
-	}
-
 	static bool IgnoreNull() {
 		return true;
+	}
+
+	//! Exported state: STRUCT(n, entries LIST(entry)) - the heap slots in heap order, NULL if no value was added
+	static AggregateStateLayout GetStateType(AggregateLayoutInput &input, const LogicalType &entry_type) {
+		child_list_t<LogicalType> children;
+		children.emplace_back("n", LogicalType::BIGINT);
+		children.emplace_back("entries", LogicalType::LIST(entry_type));
+		AggregateStateLayout layout;
+		layout.type = LogicalType::STRUCT(std::move(children));
+		layout.total_state_size = AlignValue(input.function.GetStateSize(input.bind_data.get()));
+		layout.uses_arena = true;
+		return layout;
+	}
+
+	static void PerRowNDestroy(Vector &, AggregateInputData &, idx_t) {
+	}
+
+	//! States with different n values cannot be combined, so a per-row n cannot export its states. The destructor
+	//! keeps it off the streaming window, which (unlike WINDOW) would never check the n of later rows.
+	static void DisableStateExport(BoundAggregateFunction &function) {
+		function.GetCallbacks().get_state_type = nullptr;
+		function.GetCallbacks().SetStateDestructorCallback(PerRowNDestroy);
+	}
+
+	template <class STATE>
+	static void ExportState(Vector &state_vector, AggregateFinalizeInputData &input_data, Vector &result, idx_t count,
+	                        idx_t offset) {
+		const bool nulls_last =
+		    input_data.bind_data ? input_data.bind_data->Cast<ArgMinMaxFunctionData>().nulls_last : true;
+		auto states = state_vector.Values<STATE *>();
+		auto &fields = StructVector::GetEntries(result);
+		auto &entry_lists = fields[1];
+
+		idx_t entry_count = ListVector::GetListSize(entry_lists);
+		for (idx_t i = 0; i < count; i++) {
+			auto &state = *states[i].GetValue();
+			entry_count += state.is_initialized ? state.heap.Size() : 0;
+		}
+		ListVector::Reserve(entry_lists, entry_count);
+		auto &entries = ListVector::GetChildMutable(entry_lists);
+
+		auto n_writer = FlatVector::Writer<int64_t>(fields[0], count, offset);
+		auto list_writer = FlatVector::Writer<list_entry_t>(entry_lists, count, offset);
+		idx_t entry_idx = ListVector::GetListSize(entry_lists);
+		for (idx_t i = 0; i < count; i++) {
+			auto &state = *states[i].GetValue();
+			if (!state.is_initialized || state.heap.IsEmpty()) {
+				// children of a NULL struct must also be NULL
+				n_writer.WriteNull();
+				list_writer.WriteNull();
+				FlatVector::SetNull(result, offset + i, true);
+				continue;
+			}
+			n_writer.WriteValue(UnsafeNumericCast<int64_t>(state.heap.Capacity()));
+			list_writer.WriteValue(list_entry_t(entry_idx, state.heap.Size()));
+			for (idx_t slot = 0; slot < state.heap.Size(); slot++) {
+				state.ExportSlot(entries, entry_idx++, slot, nulls_last);
+			}
+		}
+		ListVector::SetListSize(entry_lists, entry_idx);
+		FlatVector::SetSize(result, offset + count);
+	}
+
+	template <class STATE>
+	static void ImportState(AggregateImportInputData &input) {
+		bool nulls_last = true;
+		bool reject_nulls = true;
+		if (input.bind_data) {
+			auto &bind_data = input.bind_data->Cast<ArgMinMaxFunctionData>();
+			nulls_last = bind_data.nulls_last;
+			reject_nulls = bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL;
+		}
+		const auto count = input.input_vec.size();
+		// flatten the input, so the struct and list children can be read by position
+		Vector input_vec(input.input_vec, 0, count);
+		input_vec.Flatten();
+		auto &fields = StructVector::GetEntries(input_vec);
+		auto n_values = fields[0].Values<int64_t>();
+		auto entry_lists = fields[1].Values<list_entry_t>();
+		const auto child_count = ListVector::GetListSize(fields[1]);
+		typename STATE::ImportData entries(ListVector::GetChild(fields[1]), child_count, nulls_last);
+
+		auto input_validity = input_vec.Validity();
+		for (idx_t i = 0; i < count; i++) {
+			auto &state = *reinterpret_cast<STATE *>(input.dest_buffer + i * input.layout.total_state_size);
+			if (!input_validity.IsValid(i)) {
+				continue;
+			}
+			const auto n = n_values[i];
+			const auto entry_list = entry_lists[i];
+			if (!n.IsValid() || !entry_list.IsValid()) {
+				throw InvalidInputException("Invalid min/max/arg_min/arg_max state - n and entries cannot be NULL");
+			}
+			if (n.GetValue() <= 0 || n.GetValue() >= MIN_MAX_N_MAX_VALUE) {
+				throw InvalidInputException("Invalid min/max/arg_min/arg_max state - n must be > 0 and < %d",
+				                            MIN_MAX_N_MAX_VALUE);
+			}
+			const auto &list = entry_list.GetValue();
+			if (list.length > UnsafeNumericCast<idx_t>(n.GetValue())) {
+				throw InvalidInputException("Invalid min/max/arg_min/arg_max state - more entries than n");
+			}
+			if (list.length == 0) {
+				// an empty heap exports as NULL, so it imports as an empty state too
+				continue;
+			}
+			state.Initialize(input.allocator, UnsafeNumericCast<idx_t>(n.GetValue()));
+			state.heap.Reserve(input.allocator, list.length);
+			for (idx_t entry_idx = list.offset; entry_idx < list.offset + list.length; entry_idx++) {
+				state.ImportSlot(input.allocator, entries, entry_idx, reject_nulls);
+			}
+			state.heap.RestoreHeap();
+		}
 	}
 };
 

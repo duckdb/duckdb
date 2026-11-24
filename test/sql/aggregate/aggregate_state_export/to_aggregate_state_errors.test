@@ -175,13 +175,13 @@ SELECT to_aggregate_state(0::BIGINT, 'count', ['ANY', 'ANY']);
 ----
 Could not re-bind exported aggregate
 
-# MIN/MAX-N also specialize the ANY input before creating their implementation.
+# MIN/MAX-N derive their state type from the ANY input, which must therefore be concrete.
 foreach aggregate min max
 
 statement error
 SELECT to_aggregate_state([1, 2], '{aggregate}', ['ANY', 'BIGINT'], [NULL, 2]);
 ----
-requires a concrete type for signature argument 1
+signature does not resolve a complete result type
 
 endloop
 
