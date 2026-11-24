@@ -363,6 +363,9 @@ public:
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 
+	//! Whether a holistic aggregate still uses the window segment and distinct trees (each level copies its input)
+	bool holistic_window_trees = false;
+
 	//! Whether combining can leave the target referencing the source's memory
 	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
 
@@ -415,6 +418,10 @@ public: // Properties
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }
 	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+	//! Whether a holistic aggregate still uses the window segment and distinct trees (each level copies its input)
+	auto HasHolisticWindowTrees() const -> bool { return properties.holistic_window_trees; }
+	auto SetHolisticWindowTrees(bool value) -> void { properties.holistic_window_trees = value; }
 
 	//! Whether combining can leave the target referencing the source's memory
 	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }

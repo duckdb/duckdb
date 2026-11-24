@@ -21,8 +21,8 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	//	Don't use segment trees for custom windowing or holistic aggregates
-	if (aggr.CanWindow() || aggr.IsHolistic()) {
+	//	Don't use segment trees for custom windowing or holistic aggregates (every level would copy the input)
+	if (aggr.CanWindow() || (aggr.IsHolistic() && !aggr.HasHolisticWindowTrees())) {
 		return false;
 	}
 
