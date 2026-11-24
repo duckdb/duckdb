@@ -42,15 +42,19 @@ bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name
 	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
-static BoundParameterData GetParameterValue(ClientContext &context, const identifier_map_t<BoundParameterData> &values,
-                                            const Identifier &identifier, bool allow_user_variables) {
+//! Returns the value of the parameter, which is stored in "storage" if it comes from a user variable
+static const BoundParameterData &GetParameterValue(ClientContext &context,
+                                                   const identifier_map_t<BoundParameterData> &values,
+                                                   const Identifier &identifier, bool allow_user_variables,
+                                                   BoundParameterData &storage) {
 	auto lookup = values.find(identifier);
 	if (lookup != values.end()) {
 		return lookup->second;
 	}
 	Value variable_value;
 	if (allow_user_variables && ClientConfig::GetConfig(context).GetUserVariable(identifier, variable_value)) {
-		return BoundParameterData(std::move(variable_value));
+		storage = BoundParameterData(std::move(variable_value));
+		return storage;
 	}
 	throw BinderException("Could not find parameter with identifier %s", identifier);
 }
@@ -67,16 +71,20 @@ static bool HasNamedParameters(const PreparedStatementData &data) {
 	return data.unbound_statement && !data.unbound_statement->named_param_map.empty();
 }
 
-static identifier_map_t<idx_t> GetExpectedParameters(const PreparedStatementData &data) {
+//! Returns the expected parameters, which are stored in "storage" if they have to be computed
+static const identifier_map_t<idx_t> &GetExpectedParameters(const PreparedStatementData &data,
+                                                            identifier_map_t<idx_t> &storage) {
 	if (HasNamedParameters(data)) {
 		return data.unbound_statement->named_param_map;
 	}
-	return GetExpectedParameters(data.value_map);
+	storage = GetExpectedParameters(data.value_map);
+	return storage;
 }
 
 void PreparedStatementData::PopulateMissingParameterValues(ClientContext &context,
                                                            identifier_map_t<BoundParameterData> &values) const {
-	const auto expected_parameters = GetExpectedParameters(*this);
+	identifier_map_t<idx_t> expected_storage;
+	const auto &expected_parameters = GetExpectedParameters(*this, expected_storage);
 	const bool allow_user_variables = HasNamedParameters(*this);
 	auto verification_context = allow_user_variables ? &context : nullptr;
 	PreparedStatement::VerifyParameters(values, expected_parameters, verification_context);
@@ -100,10 +108,8 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	if (!unbound_statement) {
 		throw InternalException("Prepared statement without unbound statement");
 	}
-	const auto expected_parameters = GetExpectedParameters(*this);
+	// the values were verified by PopulateMissingParameterValues
 	const bool allow_user_variables = HasNamedParameters(*this);
-	auto verification_context = allow_user_variables ? &context : nullptr;
-	PreparedStatement::VerifyParameters(parameter_values, expected_parameters, verification_context);
 	if (properties.always_require_rebind) {
 		// this statement must always be re-bound
 		return true;
@@ -112,11 +118,13 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 		// parameters not yet bound: query always requires a rebind
 		return true;
 	}
+	BoundParameterData variable_storage;
 	for (auto &it : value_map) {
 		auto &identifier = it.first;
 		const bool can_read_user_variable =
 		    allow_user_variables && PreparedStatement::AllowsUserVariableFallback(identifier);
-		auto parameter_value = GetParameterValue(context, parameter_values, identifier, can_read_user_variable);
+		auto &parameter_value =
+		    GetParameterValue(context, parameter_values, identifier, can_read_user_variable, variable_storage);
 		if (parameter_value.GetValue().type() != it.second->return_type) {
 			return true;
 		}
@@ -139,7 +147,8 @@ void PreparedStatementData::Bind(ClientContext &context, const identifier_map_t<
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	if (unbound_statement || !value_map.empty()) {
-		const auto expected_parameters = GetExpectedParameters(*this);
+		identifier_map_t<idx_t> expected_storage;
+		const auto &expected_parameters = GetExpectedParameters(*this, expected_storage);
 		const bool allow_user_variables = HasNamedParameters(*this);
 		auto verification_context = allow_user_variables ? &context : nullptr;
 		PreparedStatement::VerifyParameters(values, expected_parameters, verification_context);
@@ -149,11 +158,12 @@ void PreparedStatementData::Bind(ClientContext &context, const identifier_map_t<
 
 	// bind the required values
 	const bool allow_user_variables = HasNamedParameters(*this);
+	BoundParameterData variable_storage;
 	for (auto &it : value_map) {
 		const string &identifier = it.first.GetIdentifierName();
 		const bool can_read_user_variable =
 		    allow_user_variables && PreparedStatement::AllowsUserVariableFallback(it.first);
-		auto parameter_value = GetParameterValue(context, values, it.first, can_read_user_variable);
+		auto &parameter_value = GetParameterValue(context, values, it.first, can_read_user_variable, variable_storage);
 		D_ASSERT(it.second);
 		const auto &value = parameter_value.GetValue();
 		auto cast_value = value.TryCastAs(context, it.second->return_type);
