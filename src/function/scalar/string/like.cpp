@@ -601,13 +601,7 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 		idx_t scratch_size = 0;
 		unsafe_unique_array<char> scratch;
 		UnaryExecutor::Execute<string_t, bool>(str_vec, result, args.size(), [&](string_t str) {
-			idx_t str_llength = LowerLength(str.GetData(), str.GetSize());
-			if (str_llength > scratch_size) {
-				scratch = make_unsafe_uniq_array_uninitialized<char>(str_llength);
-				scratch_size = str_llength;
-			}
-			LowerCase(str.GetData(), str.GetSize(), scratch.get());
-			string_t str_lcase(scratch.get(), UnsafeNumericCast<uint32_t>(str_llength));
+			auto str_lcase = LowerCaseToScratch(str, scratch, scratch_size);
 			bool match = matcher ? matcher->Match(str_lcase)
 			                     : (has_escape ? LikeOperatorFunction(str_lcase, pat_lcase, escape_char)
 			                                   : LikeOperatorFunction(str_lcase, pat_lcase));
@@ -663,13 +657,7 @@ void ILikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		idx_t scratch_size = 0;
 		unsafe_unique_array<char> scratch;
 		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t str) {
-			idx_t str_llength = LowerLength(str.GetData(), str.GetSize());
-			if (str_llength > scratch_size) {
-				scratch = make_unsafe_uniq_array_uninitialized<char>(str_llength);
-				scratch_size = str_llength;
-			}
-			LowerCase(str.GetData(), str.GetSize(), scratch.get());
-			string_t str_lcase(scratch.get(), UnsafeNumericCast<uint32_t>(str_llength));
+			auto str_lcase = LowerCaseToScratch(str, scratch, scratch_size);
 			bool match = matcher ? matcher->Match(str_lcase) : LikeOperatorFunction(str_lcase, pat_lcase);
 			return INVERT ? !match : match;
 		});

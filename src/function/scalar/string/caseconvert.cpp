@@ -16,14 +16,23 @@
 namespace duckdb {
 
 template <bool IS_UPPER>
+static inline char ASCIICaseConvertChar(char c) {
+	return UnsafeNumericCast<char>(IS_UPPER ? StringUtil::ASCII_TO_UPPER_MAP[uint8_t(c)]
+	                                        : StringUtil::ASCII_TO_LOWER_MAP[uint8_t(c)]);
+}
+
+template <bool IS_UPPER>
+static void ASCIICaseConvertRange(const char *input_data, idx_t input_length, char *result_data) {
+	for (idx_t i = 0; i < input_length; i++) {
+		result_data[i] = ASCIICaseConvertChar<IS_UPPER>(input_data[i]);
+	}
+}
+
+template <bool IS_UPPER>
 static string_t ASCIICaseConvert(StringHeap &heap, const char *input_data, idx_t input_length) {
 	idx_t output_length = input_length;
 	auto result_str = heap.EmptyString(output_length);
-	auto result_data = result_str.GetDataWriteable();
-	for (idx_t i = 0; i < input_length; i++) {
-		result_data[i] = UnsafeNumericCast<char>(IS_UPPER ? StringUtil::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
-		                                                  : StringUtil::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])]);
-	}
+	ASCIICaseConvertRange<IS_UPPER>(input_data, input_length, result_str.GetDataWriteable());
 	result_str.Finalize();
 	return result_str;
 }
@@ -83,6 +92,61 @@ void LowerCase(const char *input_data, idx_t input_length, char *result_data) {
 	CaseConvert<false>(input_data, input_length, result_data);
 }
 
+static inline int EncodedLength(int32_t codepoint) {
+	return codepoint <= 0x7F ? 1 : codepoint <= 0x7FF ? 2 : codepoint <= 0xFFFF ? 3 : 4;
+}
+
+// Converts input_data[from, input_length) into result_data at the same offsets.
+// Stops before the first code point that converts to a different encoded length and returns its offset;
+// returns input_length when the whole input was converted. result_data[0, returned offset) is final.
+template <bool IS_UPPER>
+static idx_t SameLengthCaseConvert(const char *input_data, idx_t input_length, idx_t from, char *result_data) {
+	for (idx_t i = from; i < input_length;) {
+		if (!(input_data[i] & 0x80)) {
+			result_data[i] = ASCIICaseConvertChar<IS_UPPER>(input_data[i]);
+			i++;
+			continue;
+		}
+		int sz = 0;
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
+		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+		if (EncodedLength(converted) != sz) {
+			return i;
+		}
+		int new_sz = 0;
+		if (!Utf8Proc::CodepointToUtf8(converted, new_sz, result_data + i)) {
+			return i;
+		}
+		i += UnsafeNumericCast<idx_t>(sz);
+	}
+	return input_length;
+}
+
+string_t LowerCaseToScratch(const string_t &str, unsafe_unique_array<char> &scratch, idx_t &scratch_size) {
+	auto str_data = str.GetData();
+	auto str_size = str.GetSize();
+	if (str_size > scratch_size) {
+		scratch = make_unsafe_uniq_array_uninitialized<char>(str_size);
+		scratch_size = str_size;
+	}
+	const auto ascii_end = FirstNonAscii(str_data, str_size);
+	ASCIICaseConvertRange<false>(str_data, ascii_end, scratch.get());
+	const auto done = SameLengthCaseConvert<false>(str_data, str_size, ascii_end, scratch.get());
+	if (done == str_size) {
+		return string_t(scratch.get(), UnsafeNumericCast<uint32_t>(str_size));
+	}
+	// a code point changes its encoded length: keep the lowercased prefix, lowercase the rest in two passes
+	const idx_t str_llength = done + GetResultLength<false>(str_data + done, str_size - done);
+	if (str_llength > scratch_size) {
+		auto grown = make_unsafe_uniq_array_uninitialized<char>(str_llength);
+		memcpy(grown.get(), scratch.get(), done);
+		scratch = std::move(grown);
+		scratch_size = str_llength;
+	}
+	CaseConvert<false>(str_data + done, str_size - done, scratch.get() + done);
+	return string_t(scratch.get(), UnsafeNumericCast<uint32_t>(str_llength));
+}
+
 template <bool IS_UPPER>
 static string_t UnicodeCaseConvert(StringHeap &heap, const char *input_data, idx_t input_length) {
 	const auto ascii_end = FirstNonAscii(input_data, input_length);
@@ -90,14 +154,29 @@ static string_t UnicodeCaseConvert(StringHeap &heap, const char *input_data, idx
 		// ASCII: code points and bytes coincide
 		return ASCIICaseConvert<IS_UPPER>(heap, input_data, input_length);
 	}
-	// first figure out the output length: the ASCII prefix is one byte per code point
-	idx_t output_length = ascii_end + GetResultLength<IS_UPPER>(input_data + ascii_end, input_length - ascii_end);
-	auto result_str = heap.EmptyString(output_length);
-	auto result_data = result_str.GetDataWriteable();
-
-	CaseConvert<IS_UPPER>(input_data, input_length, result_data);
-	result_str.Finalize();
-	return result_str;
+	auto same_str = heap.EmptyString(input_length);
+	auto same_data = same_str.GetDataWriteable();
+	ASCIICaseConvertRange<IS_UPPER>(input_data, ascii_end, same_data);
+	const auto done = SameLengthCaseConvert<IS_UPPER>(input_data, input_length, ascii_end, same_data);
+	if (done == input_length) {
+		same_str.Finalize();
+		return same_str;
+	}
+	// a code point changes its encoded length: keep the converted prefix, convert the rest in two passes
+	const idx_t output_length = done + GetResultLength<IS_UPPER>(input_data + done, input_length - done);
+	if (same_str.IsInlined() || output_length <= string_t::INLINE_LENGTH || output_length > string_t::MAX_STRING_SIZE) {
+		auto result_str = heap.EmptyString(output_length);
+		auto result_data = result_str.GetDataWriteable();
+		memcpy(result_data, same_data, done);
+		CaseConvert<IS_UPPER>(input_data + done, input_length - done, result_data + done);
+		result_str.Finalize();
+		return result_str;
+	}
+	// both strings live in the heap: resize the buffer, in place when it is the last arena allocation
+	auto result_data =
+	    char_ptr_cast(heap.GetAllocator().Reallocate(data_ptr_cast(same_data), input_length, output_length));
+	CaseConvert<IS_UPPER>(input_data + done, input_length - done, result_data + done);
+	return string_t(result_data, UnsafeNumericCast<uint32_t>(output_length));
 }
 
 namespace {

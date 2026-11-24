@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/ilike_unicode.benchmark
+# description: Case-insensitive contains on short strings mixing Latin with diacritics, Greek and Cyrillic
+# group: [string]
+
+name ILike Unicode ('%ПАЛЯНИЦЯ%')
+group string
+
+load benchmark/micro/string/strings_unicode.sql
+
+run
+SELECT COUNT(*) FROM strings WHERE s ILIKE '%паляниця%'
+
+result I
+1250000

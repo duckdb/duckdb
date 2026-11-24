@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/lower_unicode.benchmark
+# description: LOWER on short strings mixing Latin with diacritics, Greek and Cyrillic
+# group: [string]
+
+name Lower (Unicode)
+group string
+
+load benchmark/micro/string/strings_unicode.sql
+
+run
+SELECT SUM(STRLEN(LOWER(s))) FROM strings
+
+result I
+575000000
