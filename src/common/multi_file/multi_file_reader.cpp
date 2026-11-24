@@ -15,7 +15,6 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -1265,31 +1264,6 @@ shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context,
 	return interface.CreateReader(context, file, options, file_options);
 }
 
-//! The statistics of a column that the file list provides in the options of a file - as column_min.<id> and
-//! column_max.<id>, where <id> is the identifier of the column in the schema of the scan
-static unique_ptr<BaseStatistics> TryGetOptionStatistics(const OpenFileInfo &file,
-                                                         const MultiFileColumnDefinition &column) {
-	if (!file.extended_info || column.identifier.IsNull()) {
-		return nullptr;
-	}
-	auto &options = file.extended_info->options;
-	auto min_entry = options.find("column_min." + column.identifier.ToString());
-	auto max_entry = options.find("column_max." + column.identifier.ToString());
-	if (min_entry == options.end() || max_entry == options.end() || min_entry->second.IsNull() ||
-	    max_entry->second.IsNull() || BaseStatistics::GetStatsType(column.type) != StatisticsType::NUMERIC_STATS) {
-		return nullptr;
-	}
-	auto min_value = min_entry->second.DefaultTryCastAs(column.type);
-	auto max_value = max_entry->second.DefaultTryCastAs(column.type);
-	if (!min_value || !max_value) {
-		return nullptr;
-	}
-	auto result = make_uniq<BaseStatistics>(NumericStats::CreateUnknown(column.type));
-	NumericStats::SetMin(*result, *min_value);
-	NumericStats::SetMax(*result, *max_value);
-	return result;
-}
-
 bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
                                              const MultiFileOptions &file_options,
                                              const MultiFileReaderBindData &reader_bind,
@@ -1309,14 +1283,6 @@ bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenF
 		auto column_id = global_column_ids[projection_idx].GetPrimaryIndex();
 		if (!TryResolvePreOpenConstant(column_id, file.path, file_list_idx, reader_bind, file_options, context,
 		                               hive_partitions, hive_partitions_parsed, constant)) {
-			// the file list can provide the statistics of the column of this file
-			auto stats = column_id < reader_bind.schema.size()
-			                 ? TryGetOptionStatistics(file, reader_bind.schema[column_id])
-			                 : nullptr;
-			if (stats && ExpressionFilter::GetExpressionFilter(it.Filter(), "CanSkipFileFromFilters")
-			                     .CheckStatistics(context, *stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return true;
-			}
 			continue;
 		}
 		if (!EvaluateTableFilterAgainstConstant(context, it.Filter(), constant)) {
