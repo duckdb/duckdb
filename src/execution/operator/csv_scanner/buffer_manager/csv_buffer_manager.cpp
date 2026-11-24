@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_random_access_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
@@ -200,7 +201,12 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 		pos -= escapes;
 	}
 	if (file_start) {
-		return ReadBufferEnd(bytes, 0, size, CSVState::NOT_SET, state_machine);
+		// the scanner skips a byte order mark when it reads the first line itself
+		idx_t from = 0;
+		if (state_machine.dialect_options.skip_rows.GetValue() + state_machine.dialect_options.header.GetValue() == 0) {
+			StringUtil::SkipBOM(bytes, size, from);
+		}
+		return ReadBufferEnd(bytes, from, size, CSVState::NOT_SET, state_machine);
 	}
 	// the line of the bytes starts before them, without an escape at their end the next byte still reads on its own
 	CSVBufferEnd result;

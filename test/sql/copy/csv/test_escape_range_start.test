@@ -221,6 +221,25 @@ comment = '#', new_line = ['\n', '\r\n'], buffer_size = 8, max_line_size = 8, pa
 ----
 6	1
 
+# a byte order mark before a quoted value is skipped when the end of the first buffer is read, as the scanner skips it
+statement ok
+COPY (SELECT encode(chr(65279) || '"aaaaaaaaaa#\' || chr(10) || 'x"')) TO '{TEST_DIR}/escape_bom_quoted.csv'
+(FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_bom_quoted.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+1	0
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x"') FROM read_csv('{TEST_DIR}/escape_bom_quoted.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+1	0
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')
