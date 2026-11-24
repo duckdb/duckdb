@@ -231,7 +231,12 @@ static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &
 		auto selected_count = count;
 		segment->Filter(state, count, result, selection, selected_count, filter, *filter_state);
 		REQUIRE(selected_count == count);
-		REQUIRE((result.GetVectorType() == VectorType::DICTIONARY_VECTOR) == (run_length == 37));
+		auto values = result.Values<T>();
+		for (idx_t i = 0; i < selected_count; i++) {
+			REQUIRE(selection.get_index(i) == i);
+			REQUIRE(values[i].IsValid());
+			REQUIRE(values[i].GetValue() == T((i / run_length) % 2));
+		}
 	}
 }
 
