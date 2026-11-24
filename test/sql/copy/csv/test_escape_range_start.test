@@ -183,6 +183,44 @@ comment = '#', new_line = ['\n', '\r\n'], buffer_size = 64, max_line_size = 4, p
 ----
 32	1
 
+# a comment line whose escapes a buffer end splits, the one behind the buffer start escapes nothing either
+statement ok
+COPY (SELECT repeat('p' || chr(10), 4) || '#abcdef\\' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_split.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_split.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = '\n', buffer_size = 16, max_line_size = 16, parallel = false)
+----
+6	1
+
+# a comment line that fills a whole buffer, the buffer behind it starts on its line feed
+statement ok
+COPY (SELECT repeat('p' || chr(10), 4) || '#ccccccc' || chr(10) || 'x' || chr(10)
+|| 'y') TO '{TEST_DIR}/escape_comment_buffer.csv' (HEADER false, QUOTE '', ESCAPE '')
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffer.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 8, max_line_size = 8)
+----
+6	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_comment_buffer.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '', escape = '\', escape_mode = 'anywhere',
+comment = '#', new_line = ['\n', '\r\n'], buffer_size = 8, max_line_size = 8, parallel = false)
+----
+6	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

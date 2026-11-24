@@ -28,9 +28,11 @@ enum class CSVBufferResidency : uint8_t {
 struct CSVBufferEnd {
 	//! The last byte, 0 when there are no bytes
 	char last_byte = '\0';
-	//! The state the bytes leave the state machine in
+	//! The state the bytes leave the state machine in, STANDARD when only known that no escape ends them
 	CSVState state = CSVState::STANDARD;
-	//! False when the line of the last bytes starts before them, which leaves their state unknown
+	//! Whether the state was read from a line start, so that the bytes behind it can be read on from it
+	bool exact = false;
+	//! Whether the state settles how the byte behind the bytes reads, bytes of unknown state ending in an escape do not
 	bool known = false;
 	//! Whether the end was read
 	bool read = false;

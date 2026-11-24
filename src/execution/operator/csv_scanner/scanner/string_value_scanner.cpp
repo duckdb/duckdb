@@ -2260,10 +2260,10 @@ bool StringValueScanner::BytesBeforeStart(CSVBufferEnd &before_start) const {
 		return buffer_idx > 0 && buffer_manager->GetBufferEnd(buffer_idx - 1, before_start) && before_start.known;
 	}
 	before_start = CSVBufferManager::ScanBufferEnd(buffer_handle_ptr, buffer_pos, buffer_idx == 0, *state_machine);
-	if (!before_start.known && buffer_idx > 0) {
+	if (!before_start.exact && buffer_idx > 0) {
 		// the line of the bytes starts in the buffer before, they are read on from its end
 		CSVBufferEnd previous;
-		if (buffer_manager->GetBufferEnd(buffer_idx - 1, previous) && previous.known) {
+		if (buffer_manager->GetBufferEnd(buffer_idx - 1, previous) && previous.exact) {
 			before_start =
 			    CSVBufferManager::ReadBufferEnd(buffer_handle_ptr, 0, buffer_pos, previous.state, *state_machine);
 		}
@@ -2311,6 +2311,8 @@ void StringValueScanner::SetStart() {
 		case CSVState::UNQUOTED_ESCAPE:
 		case CSVState::ESCAPED_RETURN:
 		case CSVState::FIELD_START:
+		case CSVState::COMMENT:
+			// the escape rules of these states read the first byte, a comment keeps its escapes inert
 			before = before_start.state;
 			break;
 		case CSVState::ESCAPE:

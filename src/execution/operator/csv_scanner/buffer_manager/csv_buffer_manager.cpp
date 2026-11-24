@@ -69,7 +69,20 @@ void CSVBufferManager::RememberBufferEnd(idx_t buffer_idx, const CSVBufferHandle
 		}
 		state_machine = buffer_end_state_machine;
 	}
-	const auto buffer_end = ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine);
+	auto buffer_end = ScanBufferEnd(handle.Ptr(), handle.actual_size, buffer_idx == 0, *state_machine);
+	if (!buffer_end.exact && buffer_idx > 0) {
+		// a buffer without a line start is read on from the end of the buffer before, when that end is read already
+		CSVBufferEnd previous;
+		{
+			lock_guard<mutex> parallel_lock(main_mutex);
+			if (buffer_idx - 1 < buffer_ends.size()) {
+				previous = buffer_ends[buffer_idx - 1];
+			}
+		}
+		if (previous.exact) {
+			buffer_end = ReadBufferEnd(handle.Ptr(), 0, handle.actual_size, previous.state, *state_machine);
+		}
+	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (buffer_idx >= buffer_ends.size()) {
 		buffer_ends.resize(buffer_idx + 1);
@@ -142,8 +155,11 @@ CSVBufferEnd CSVBufferManager::ScanBufferEnd(const char *bytes, const idx_t size
 	if (file_start) {
 		return ReadBufferEnd(bytes, 0, size, CSVState::NOT_SET, state_machine);
 	}
+	// the line of the bytes starts before them, without an escape at their end the next byte still reads on its own
 	CSVBufferEnd result;
 	result.last_byte = size > 0 ? bytes[size - 1] : '\0';
+	const idx_t run_end = result.last_byte == '\r' ? size - 1 : size;
+	result.known = run_end == 0 || bytes[run_end - 1] != escape;
 	result.read = true;
 	return result;
 }
@@ -158,6 +174,7 @@ CSVBufferEnd CSVBufferManager::ReadBufferEnd(const char *bytes, const idx_t from
 	CSVBufferEnd result;
 	result.last_byte = size > 0 ? bytes[size - 1] : '\0';
 	result.state = states.states[1];
+	result.exact = true;
 	result.known = true;
 	result.read = true;
 	return result;
