@@ -394,6 +394,26 @@ parallel = false)
 ----
 3	1
 
+# a range starting on a quote behind a broken row, which the toggle rule reads as the broken row does
+statement ok
+COPY (SELECT encode(repeat('p', 10) || chr(10) || '"a"b' || chr(13) || '"' || chr(10) || 'x' || chr(10) || 'y'
+|| chr(10))) TO '{TEST_DIR}/escape_invalid_toggle.csv' (FORMAT BLOB)
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_toggle.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true)
+----
+3	1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE a = 'x') FROM read_csv('{TEST_DIR}/escape_invalid_toggle.csv',
+columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, quote = '"', escape = '\', escape_mode = 'anywhere',
+embedded_quotes = 'toggle', new_line = '\n', buffer_size = 64, max_line_size = 16, ignore_errors = true,
+parallel = false)
+----
+3	1
+
 # lines that fill a buffer each are counted once, with and without the buffer ends read
 statement ok
 COPY (SELECT repeat('a', 8191) FROM range(64)) TO '{TEST_DIR}/escape_full_lines.csv' (HEADER false, QUOTE '', ESCAPE '')

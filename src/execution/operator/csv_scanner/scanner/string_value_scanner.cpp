@@ -2325,7 +2325,7 @@ void StringValueScanner::SetStart() {
 			break;
 		case CSVState::STANDARD:
 		case CSVState::INVALID:
-			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : CSVState::STANDARD;
+			before = after_carriage_return ? transitions[static_cast<uint8_t>('\r')][standard] : before_start.state;
 			exact_value = exact_start && !after_carriage_return;
 			break;
 		default:
@@ -2352,6 +2352,10 @@ void StringValueScanner::SetStart() {
 			}
 			break;
 		case CSVState::INVALID:
+			if (exact_value) {
+				// the row before the start is broken, the search reads it on as the scanner before does
+				unquoted_start = CSVState::INVALID;
+			}
 			break;
 		default:
 			unquoted_start = before;
