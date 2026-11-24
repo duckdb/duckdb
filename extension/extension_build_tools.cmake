@@ -284,7 +284,7 @@ function(duckdb_add_test_bundle NAME)
     build_loadable_extension_directory(
         ${NAME}
         "CPP"
-        test/extensions
+        test/extension
         "default-version"
         ""
         "${TEST_BUNDLE_PARAMETERS}"
@@ -302,8 +302,8 @@ function(duckdb_add_test_bundle NAME)
         ${ARG_LINK_LIBRARIES})
     set_target_properties(
         ${NAME}_loadable_extension
-        PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/extensions"
-                   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/extensions")
+        PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/extension"
+                   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/extension")
 endfunction()
 
 function(build_loadable_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)

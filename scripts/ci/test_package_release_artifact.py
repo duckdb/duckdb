@@ -3,6 +3,7 @@
 import os
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -18,14 +19,7 @@ class PackageReleaseArtifactTest(unittest.TestCase):
         environment["ARTIFACT_OUTPUT_DIR"] = str(output_dir)
         command = ["make", target]
         command.extend(f"{name}={value}" for name, value in variables.items())
-        subprocess.run(
-            command,
-            cwd=REPO_ROOT,
-            env=environment,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        subprocess.run(command, cwd=REPO_ROOT, env=environment, check=True, capture_output=True, text=True)
 
     def test_cli_release_artifact(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -159,15 +153,9 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                         "duckdb_static_extension.h",
                     },
                 )
-                self.assertEqual(
-                    archive.extractfile(members["libduckdb_static.a"]).read(),
-                    b"library",
-                )
+                self.assertEqual(archive.extractfile(members["libduckdb_static.a"]).read(), b"library")
                 self.assertEqual(archive.extractfile(members["libduckdb_shell.a"]).read(), b"shell")
-                self.assertEqual(
-                    archive.extractfile(members["libcore_functions_extension.a"]).read(),
-                    b"extension",
-                )
+                self.assertEqual(archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension")
 
     def test_release_artifact_includes_native_test_probe(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -201,7 +189,6 @@ class PackageReleaseArtifactTest(unittest.TestCase):
             source = root / "windows-build"
             (source / "src").mkdir(parents=True)
             (source / "test" / "extension").mkdir(parents=True)
-            (source / "test" / "extensions").mkdir(parents=True)
             (source / "extension" / "json").mkdir(parents=True)
             (source / "extension" / "test").mkdir(parents=True)
 
@@ -219,7 +206,18 @@ class PackageReleaseArtifactTest(unittest.TestCase):
             (source / repository_extension.parent).mkdir(parents=True)
             (source / repository_extension).write_bytes(b"test extension")
             (source / "test" / "extension" / "loadable_extension_demo.duckdb_extension").write_bytes(b"test fixture")
-            (source / "test" / "extensions" / "duckdb_tests.duckdb_extension").write_bytes(b"test bundle")
+            (source / "test" / "extension" / "duckdb_tests.duckdb_extension").write_bytes(b"test bundle")
+            if sys.platform == "darwin":
+                subprocess.run(
+                    [
+                        "xattr",
+                        "-w",
+                        "com.duckdb.test",
+                        "metadata",
+                        str(source / "test" / "extension" / "duckdb_tests.duckdb_extension"),
+                    ],
+                    check=True,
+                )
 
             archive_path = root / "release-artifact.tar.gz"
             environment = os.environ.copy()
@@ -251,9 +249,10 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                     "release/extension/json/json_extension.lib",
                     f"release/{repository_extension.as_posix()}",
                     "release/test/extension/loadable_extension_demo.duckdb_extension",
-                    "release/test/extensions/duckdb_tests.duckdb_extension",
+                    "release/test/extension/duckdb_tests.duckdb_extension",
                 }
                 self.assertTrue(expected.issubset(members), expected - members.keys())
+                self.assertFalse(any(Path(name).name.startswith("._") for name in members), members.keys())
                 self.assertNotIn("release/extension/test/test.duckdb_extension", members)
                 self.assertEqual(
                     archive.extractfile(members[f"release/{repository_extension.as_posix()}"]).read(), b"test extension"

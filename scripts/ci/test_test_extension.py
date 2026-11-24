@@ -236,6 +236,20 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         for row in rows:
             self.assertEqual(row["partial_skip_reasons"], [])
 
+    def test_bundle_discovery_does_not_load_fixture_extensions(self):
+        extension_root = Path(self.binary).parent / "test" / "extension"
+        for name in ["duckdb_tests.duckdb_extension", "loadable_extension_demo.duckdb_extension"]:
+            self.assertTrue((extension_root / name).is_file(), name)
+        sql = (
+            "SELECT count(*) AS test_count FROM scan_tests("
+            f"['*'], test_roots = [], extension_roots = {run_tests.sql_string_list([extension_root])});"
+            "SELECT count(*) AS loaded_fixtures FROM duckdb_extensions() "
+            "WHERE extension_name = 'loadable_extension_demo' AND loaded;"
+        )
+        rows = self.query(run_tests.build_test_protocol_sql(self.binary, sql))
+        self.assertGreater(rows[0]["test_count"], 0)
+        self.assertEqual(rows[1]["loaded_fixtures"], 0)
+
     def test_cpp_tests_have_separate_temporary_directories(self):
         names = ["Test file operations", "exclusive create fails when the file exists"]
         test_ids = ["cpp:duckdb_tests:" + name for name in names]
@@ -252,7 +266,7 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         sql = (
             "SELECT * FROM run_tests("
             f"{run_tests.sql_string_list(test_ids)}, "
-            f"extension_roots = {run_tests.sql_string_list([Path(self.binary).parent / 'test/extensions'])}, "
+            f"extension_roots = {run_tests.sql_string_list([Path(self.binary).parent / 'test/extension'])}, "
             f"test_flags = {run_tests.sql_string_list(flags)});"
         )
         result = self.query(run_tests.build_test_protocol_sql(self.binary, sql))

@@ -1,4 +1,3 @@
-# Vortex requires clang-scan-deps, which is missing from the Linux CI images.
 if (NOT DEFINED VORTEX_ENABLED)
     set(VORTEX_ENABLED OFF)
 endif()

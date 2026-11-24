@@ -330,10 +330,7 @@ class RunTestsScriptTest(unittest.TestCase):
             test_list = root / "tests"
             test_list.write_text("".join(f"test/sql/{mode}.test\n" for mode in modes))
             summary = root / "summary.md"
-            with mock.patch.dict(
-                os.environ,
-                {"GITHUB_STEP_SUMMARY": str(summary), "GITHUB_SHA": "test-revision"},
-            ):
+            with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary), "GITHUB_SHA": "test-revision"}):
                 proc = start_runner(
                     [
                         "--test-list",
@@ -830,7 +827,7 @@ class RunTestsScriptTest(unittest.TestCase):
                 "--test-extension",
                 str((REPO_ROOT / "build" / "release" / "extension" / "test" / "test.duckdb_extension").resolve()),
                 "--test-bundle-root",
-                str((REPO_ROOT / "build" / "release" / "test" / "extensions").resolve()),
+                str((REPO_ROOT / "build" / "release" / "test" / "extension").resolve()),
                 "[slow]",
                 "test/sql/a.test",
             ],
@@ -858,7 +855,7 @@ class RunTestsScriptTest(unittest.TestCase):
                         [REPO_ROOT / "test", REPO_ROOT / "third_party" / "sqllogictest" / "test", extension_root],
                     )
                     self.assertEqual(args.test_extension, build_dir / "extension" / "test" / "test.duckdb_extension")
-                    self.assertEqual(args.test_bundle_root, [build_dir / "test" / "extensions"])
+                    self.assertEqual(args.test_bundle_root, [build_dir / "test" / "extension"])
                     self.assertEqual(args.workers, "3")
                     self.assertEqual(args.test_flags, "--force-storage")
                     self.assertEqual(args.patterns, ["[appender]"])
@@ -989,9 +986,7 @@ class RunTestsScriptTest(unittest.TestCase):
         try:
             with mock.patch("scripts.ci.run_tests.main", return_value=7) as mock_main:
                 rc = test_runner_wrapper.main(
-                    ["--workers", "1", "test/sql/a.test"],
-                    wrapper_path=wrapper_dir / "run",
-                    source_root=REPO_ROOT,
+                    ["--workers", "1", "test/sql/a.test"], wrapper_path=wrapper_dir / "run", source_root=REPO_ROOT
                 )
             self.assertEqual(rc, 7)
             self.assertEqual(Path.cwd(), original_cwd)
@@ -1024,11 +1019,7 @@ class RunTestsScriptTest(unittest.TestCase):
     def test_batch_filter_preserves_literal_sql_paths_and_escapes_catch_names(self):
         cases = [
             (
-                [
-                    "test/sql/a,b.test",
-                    "test/sql/c,d.test_slow",
-                    "test/sql/e,f.test_coverage",
-                ],
+                ["test/sql/a,b.test", "test/sql/c,d.test_slow", "test/sql/e,f.test_coverage"],
                 "test/sql/a,b.test\ntest/sql/c,d.test_slow\ntest/sql/e,f.test_coverage\n",
             ),
             (
@@ -1247,10 +1238,7 @@ mode skip unsupported: 1
                 self.assertIn(f"Skipped tests ({case['expected_skip_count']}):", proc.stdout)
                 for expected_reason in case["expected_reasons"]:
                     self.assertIn(expected_reason, proc.stdout)
-                self.assertIn(
-                    f"Partially skipped tests ({case['expected_partial_count']}):",
-                    proc.stdout,
-                )
+                self.assertIn(f"Partially skipped tests ({case['expected_partial_count']}):", proc.stdout)
                 for expected_reason in case["expected_partial_reasons"]:
                     self.assertIn(expected_reason, proc.stdout)
 
@@ -1760,11 +1748,7 @@ require windows: 2
         def fake_run_tests(_config, batches, total_tests):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=total_tests,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
@@ -1834,11 +1818,7 @@ require windows: 2
         def fake_run_tests(_config, batches, total_tests):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=total_tests,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
@@ -1884,19 +1864,12 @@ require windows: 2
         def fake_run_tests(_config, batches, total_tests):
             run_calls.append(batches)
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=total_tests,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
             with (
-                mock.patch(
-                    "scripts.ci.run_tests.create_temp_test_list",
-                    return_value=listed_tests_path,
-                ),
+                mock.patch("scripts.ci.run_tests.create_temp_test_list", return_value=listed_tests_path),
                 mock.patch("scripts.ci.run_tests.run_tests", side_effect=fake_run_tests),
             ):
                 proc = start_runner(
@@ -1952,11 +1925,7 @@ require windows: 2
         def fake_run_tests(_config, batches, total_tests):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=total_tests,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
@@ -1997,11 +1966,7 @@ require windows: 2
         )
         run_results = [
             run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=1,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             ),
             run_tests.ConfigRunResult(
                 returncode=1,
@@ -2751,10 +2716,7 @@ ThreadSanitizer: reported 1 warnings
         self.assertIn("WARNING: ThreadSanitizer: data race (pid=123)", stripped_lines)
         self.assertIn("Previous write of size 8 by thread T1:", stripped_lines)
         self.assertIn("Location is heap block allocated by main thread:", stripped_lines)
-        self.assertIn(
-            "SUMMARY: ThreadSanitizer: data race in duckdb::ArenaAllocator::AlignNext()",
-            stripped_lines,
-        )
+        self.assertIn("SUMMARY: ThreadSanitizer: data race in duckdb::ArenaAllocator::AlignNext()", stripped_lines)
         self.assertIn("ThreadSanitizer: reported 1 warnings", stripped_lines)
         self.assertEqual(reproduce_batch, batch)
 
@@ -3452,18 +3414,11 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
             self.assertEqual(len(args), 10)
             print("live config output")
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=1,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
-            with mock.patch(
-                "scripts.ci.run_tests.run_single_config",
-                side_effect=fake_run_single_config,
-            ):
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
                 proc = start_runner(
                     [
                         "--workers",
@@ -3491,18 +3446,11 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
             self.assertFalse(args[9])
             print("live default output")
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=1,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         try:
-            with mock.patch(
-                "scripts.ci.run_tests.run_single_config",
-                side_effect=fake_run_single_config,
-            ):
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
                 proc = start_runner(
                     [
                         "--workers",
@@ -3531,19 +3479,12 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
             seen_outputs.append(output)
             print(f"only in {invocation.label}", file=output)
             return run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=1,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             )
 
         with (
             mock.patch.dict(os.environ, {"CI": ""}, clear=False),
-            mock.patch(
-                "scripts.ci.run_tests.run_single_config",
-                side_effect=fake_run_single_config,
-            ),
+            mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config),
         ):
             proc = start_runner(
                 [
@@ -3615,11 +3556,7 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
         run_results = [
             run_tests.ConfigRunResult(
-                returncode=0,
-                passed_tests=2,
-                failed_tests=0,
-                skipped_tests=0,
-                elapsed_seconds=0.0,
+                returncode=0, passed_tests=2, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
             ),
             run_tests.ConfigRunResult(
                 returncode=1,

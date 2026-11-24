@@ -69,7 +69,26 @@ class ExtensionLinkageTest(unittest.TestCase):
                 targets,
             )
 
-    def check_linkage(self, static_build, wasm_source_build=False, prebuilt=False, sanitized=False):
+    def check_linkage(
+        self,
+        static_build,
+        wasm_source_build=False,
+        prebuilt=False,
+        sanitized=False,
+        build_type="RelWithDebInfo",
+        force_assert=None,
+        force_debug=False,
+        thread_sanitizer=False,
+    ):
+        if force_assert is None:
+            force_assert = sanitized
+        shared_shell = (
+            sanitized
+            and not prebuilt
+            and not thread_sanitizer
+            and sys.platform != "win32"
+            and (force_assert or force_debug or build_type == "Debug")
+        )
         with tempfile.TemporaryDirectory() as directory:
             build = Path(directory)
             query = build / ".cmake/api/v1/query"
@@ -96,13 +115,15 @@ class ExtensionLinkageTest(unittest.TestCase):
                     str(build),
                     "-G",
                     "Ninja",
-                    "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                    f"-DCMAKE_BUILD_TYPE={build_type}",
                     "-DBUILD_EXTENSIONS=tpch",
                     "-DSTATICALLY_LINK_EXTENSIONS=core_functions;tpch;test",
                     f"-DEXTENSION_STATIC_BUILD={int(static_build)}",
                     f"-DWASM_LOADABLE_EXTENSIONS={int(wasm_source_build)}",
                     f"-DENABLE_SANITIZER={int(sanitized)}",
-                    f"-DFORCE_ASSERT={int(sanitized)}",
+                    f"-DFORCE_ASSERT={int(force_assert)}",
+                    f"-DFORCE_DEBUG={int(force_debug)}",
+                    f"-DENABLE_THREAD_SANITIZER={int(thread_sanitizer)}",
                     "-DENABLE_UBSAN=OFF",
                     *extra_flags,
                 ],
@@ -163,6 +184,13 @@ class ExtensionLinkageTest(unittest.TestCase):
             def dependencies(name):
                 return {target_names[dependency["id"]] for dependency in targets[name].get("dependencies", [])}
 
+            if shared_shell:
+                linked = libraries("shell").replace("\\", "/")
+                shared_library = targets["duckdb"]["artifacts"][0]["path"].replace("\\", "/")
+                self.assertIn(shared_library, linked)
+                for archive in ("duckdb_static", "core_functions_extension", "tpch_extension", "test_extension"):
+                    self.assertNotIn(archive, linked)
+
             self.assertIn("test_loadable_extension", dependencies("duckdb_local_extension_repo"))
             self.assertIn("tpch_loadable_extension", dependencies("duckdb_local_extension_repo"))
             if prebuilt:
@@ -188,7 +216,7 @@ class ExtensionLinkageTest(unittest.TestCase):
                         or sys.platform == "win32"
                     ):
                         self.assertLess(linked.index("test_helpers"), linked.rindex("duckdb_static"), linked)
-            if sanitized:
+            if sanitized and not thread_sanitizer and (force_assert or force_debug or build_type == "Debug"):
                 for name in ("test_extension", "shell"):
                     compile_flags = " ".join(
                         fragment["fragment"]
@@ -198,6 +226,8 @@ class ExtensionLinkageTest(unittest.TestCase):
                     self.assertIn("-fsanitize=address", compile_flags, name)
             # Static consumers still need the core archive after their extension archives.
             for name, extension in (("shell", "tpch"), ("static_link_smoke", "parquet")):
+                if name == "shell" and shared_shell:
+                    continue
                 linked = libraries(name)
                 self.assertIn("duckdb_static", linked)
                 self.assertLess(linked.index(f"{extension}_extension"), linked.rindex("duckdb_static"))
@@ -222,6 +252,22 @@ class ExtensionLinkageTest(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "Windows requires EXTENSION_STATIC_BUILD")
     def test_sanitized_loadable_uses_host_duckdb(self):
         self.check_linkage(False, sanitized=True)
+
+    @unittest.skipIf(sys.platform == "win32", "Windows uses a static shell")
+    def test_debug_sanitizer_shell_uses_shared_duckdb(self):
+        self.check_linkage(False, sanitized=True, build_type="Debug", force_assert=False)
+
+    @unittest.skipIf(sys.platform == "win32", "Windows uses a static shell")
+    def test_release_sanitizer_option_keeps_static_shell(self):
+        self.check_linkage(False, sanitized=True, build_type="Release", force_assert=False)
+
+    @unittest.skipIf(sys.platform == "win32", "Windows uses a static shell")
+    def test_forced_debug_sanitizer_shell_uses_shared_duckdb(self):
+        self.check_linkage(False, sanitized=True, build_type="Release", force_assert=False, force_debug=True)
+
+    @unittest.skipIf(sys.platform == "win32", "Windows uses a static shell")
+    def test_thread_sanitizer_keeps_static_shell(self):
+        self.check_linkage(False, sanitized=True, thread_sanitizer=True)
 
 
 if __name__ == "__main__":

@@ -158,7 +158,7 @@ and buffer sizes.
 
 ### ADBC
 
-The ADBC behavior tests are in `test/api/adbc/test_adbc.cpp` and initialize directly against the existing host core.
+The ADBC tests are in `test/api/adbc/test_adbc.cpp`. To run them the DuckDB library path must be provided in the `DUCKDB_INSTALL_LIB` variable.
 
 ### Timing test runs
 

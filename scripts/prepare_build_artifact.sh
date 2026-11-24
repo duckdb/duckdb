@@ -20,7 +20,7 @@ fi
 
 rm -rf "$ARTIFACT_ROOT"
 rm -f "$ARTIFACT_TARBALL"
-mkdir -p "$ARTIFACT_DIR/test/extensions" "$ARTIFACT_DIR/src" "$(dirname "$ARTIFACT_TARBALL")"
+mkdir -p "$ARTIFACT_DIR/test/extension" "$ARTIFACT_DIR/src" "$(dirname "$ARTIFACT_TARBALL")"
 
 copy_file() {
 	local source_path="$1"
@@ -103,12 +103,7 @@ for extension in \
 	copy_file "$extension" "extension/$extension_name/$(basename "$extension")"
 done
 
-# C++ tests are independent loadable test bundles discovered by scan_tests.
-for extension in "$BUILD_DIR"/test/extensions/*.duckdb_extension; do
-	copy_file "$extension" "test/extensions/$(basename "$extension")"
-done
-
-# SQL and C++ tests load these fixture extensions from {BUILD_DIRECTORY}.
+# C++ test bundles and the fixture extensions loaded by SQL and C++ tests.
 for extension in "$BUILD_DIR"/test/extension/*.duckdb_extension; do
 	copy_file "$extension" "test/extension/$(basename "$extension")"
 done
@@ -153,6 +148,6 @@ else
 	COMPRESSOR=(gzip -4)
 fi
 
-tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | "${COMPRESSOR[@]}" > "$ARTIFACT_TARBALL"
+COPYFILE_DISABLE=1 tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | "${COMPRESSOR[@]}" > "$ARTIFACT_TARBALL"
 
 ls -lh "$ARTIFACT_TARBALL"

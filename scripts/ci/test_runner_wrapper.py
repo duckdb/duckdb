@@ -25,7 +25,7 @@ def build_run_tests_argv(
         "--test-extension",
         os.fspath(resolve_test_extension_path(build_dir)),
         "--test-bundle-root",
-        os.fspath(build_dir / "test" / "extensions"),
+        os.fspath(build_dir / "test" / "extension"),
     ]
     for test_root in test_roots or []:
         if test_root:

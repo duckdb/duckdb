@@ -56,6 +56,13 @@ jobs:
     - name: Build
       run: python3 scripts/ci/retry.py -- make
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find "$PWD" -name 'libduck*.dylib' | head -n 1)" >> "$GITHUB_ENV"
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo "$DUCKDB_INSTALL_LIB"
+
     - name: Test
       if: ${{ !inputs.skip_tests }}
       run: make unittest_release
@@ -145,11 +152,11 @@ jobs:
             build/release_arm64/libs \
             build/release_arm64/src \
             build/release_arm64/extension/test \
-            build/release_arm64/test/extensions \
+            build/release_arm64/test/extension \
             build/release_amd64/libs \
             build/release_amd64/src \
             build/release_amd64/extension/test \
-            build/release_amd64/test/extensions
+            build/release_amd64/test/extension
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
           lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
           cp -p build/release/test/run build/release_arm64/test/run
@@ -208,7 +215,7 @@ jobs:
             cmake --build "$extension_build_dir" --target "${loadable_targets[@]}"
             cmake --build "$extension_build_dir" --target duckdb_local_extension_repo
 
-            for extension in build/release/extension/test/*.duckdb_extension build/release/test/extensions/*.duckdb_extension; do
+            for extension in build/release/extension/test/*.duckdb_extension build/release/test/extension/*.duckdb_extension; do
               extension_path="${extension#build/release/}"
               extracted_extension="build/release_${dir_arch}/$extension_path"
               lipo -extract "$lipo_arch" -output "$extracted_extension" "$extension"
