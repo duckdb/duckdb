@@ -1,0 +1,77 @@
+# name: test/sql/macro/table_macro_with_ordinality.test
+# description: WITH ORDINALITY on table macros
+# group: [macro]
+
+statement ok
+CREATE MACRO gs(a, b) AS TABLE SELECT * FROM generate_series(a, b);
+
+query II
+SELECT * FROM gs(10, 11) WITH ORDINALITY;
+----
+10	1
+11	2
+
+query II
+SELECT t.g, t.n FROM gs(10, 11) WITH ORDINALITY AS t(g, n) ORDER BY t.g;
+----
+10	1
+11	2
+
+query II
+SELECT t.ordinality, t.ordinality0 FROM gs(10, 10) WITH ORDINALITY AS t(ordinality);
+----
+10	1
+
+statement ok
+CREATE MACRO two_columns(a, b) AS TABLE SELECT a AS first, b AS second;
+
+query III
+SELECT * FROM two_columns(4, 9) WITH ORDINALITY ORDER BY first;
+----
+4	9	1
+
+query III
+SELECT t.x, t.y, t.n FROM two_columns(4, 9) WITH ORDINALITY AS t(x, y, n);
+----
+4	9	1
+
+statement ok
+CREATE MACRO collision(v) AS TABLE SELECT v AS ordinality;
+
+query II
+SELECT t.ordinality, t.ordinality0 FROM collision(7) WITH ORDINALITY AS t;
+----
+7	1
+
+query II
+SELECT t.ordinality, t.n FROM collision(7) WITH ORDINALITY AS t(ordinality, n);
+----
+7	1
+
+statement ok
+CREATE MACRO collision_suffix(v) AS TABLE SELECT v AS ordinality, v + 1 AS ordinality0;
+
+query III
+SELECT * FROM collision_suffix(7) WITH ORDINALITY;
+----
+7	8	1
+
+statement ok
+CREATE MACRO empty_macro() AS TABLE SELECT 42 AS value WHERE false;
+
+query II
+SELECT * FROM empty_macro() WITH ORDINALITY;
+----
+
+statement error
+SELECT * FROM gs(10, 11) WITH ORDINALITY AS t(a, b, c);
+----
+<REGEX>:Binder Error:.*table "t" has 2 columns available but 3 columns specified.*
+
+statement ok
+CREATE MACRO correlated_macro(v) AS TABLE SELECT v AS value;
+
+statement error
+SELECT * FROM (VALUES (1), (2)) AS outer_table(i), LATERAL correlated_macro(outer_table.i) WITH ORDINALITY;
+----
+<REGEX>:Binder Error:.*WITH ORDINALITY is not supported for correlated table macros.*
