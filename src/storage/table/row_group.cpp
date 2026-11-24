@@ -2078,13 +2078,13 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p,
 	                                 optional<TransactionData> transaction_p)
-	    : row_group(std::move(row_group_p)), is_exact(is_exact_p), transaction(transaction_p) {
+	    : row_group(std::move(row_group_p)), transaction(transaction_p), is_exact(is_exact_p) {
 	}
 
 	shared_ptr<RowGroup> row_group;
-	const bool is_exact;
 	//! Set when the visible rows were not counted up front
 	optional<TransactionData> transaction;
+	const bool is_exact;
 
 	optional_idx GetVisibleRowCount() override {
 		if (!transaction) {
