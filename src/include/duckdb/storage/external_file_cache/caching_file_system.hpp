@@ -103,6 +103,11 @@ public:
 	DUCKDB_API idx_t GetMaxMemory() const;
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
+	//! A read of the whole of a file that is off local disk and at most this large, through a handle that the external
+	//! file cache does not serve, is kept by the handle, which serves its later reads from it without a request
+	static constexpr idx_t WHOLE_FILE_READ_MAXIMUM_SIZE = 1ULL << 16;
+	//! Whether the handle keeps the whole file from such a read (see WHOLE_FILE_READ_MAXIMUM_SIZE)
+	DUCKDB_API bool HoldsWholeFile();
 
 private:
 	//! Open the file unless cached blocks allow deferring it; returns false if the file system returned no handle
@@ -121,6 +126,11 @@ private:
 	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
+	//! Serve [nr_bytes] at [location] from the whole file if the handle keeps it; an empty group otherwise
+	FileBufferHandleGroup ReadFromWholeFile(idx_t nr_bytes, idx_t location);
+	//! Keep [buffer], the first [nr_bytes] of the file, if they are the whole of a small file off local disk (see
+	//! WHOLE_FILE_READ_MAXIMUM_SIZE)
+	void KeepWholeFileRead(const BufferHandle &buffer, idx_t nr_bytes);
 
 private:
 	QueryContext context;
@@ -154,6 +164,14 @@ private:
 
 	//! Throughput fitted from this handle's own reads, used for local files (remote files measure their own).
 	ReadThroughputEstimator throughput_estimator;
+
+	//! Guards the whole file
+	annotated_mutex whole_file_lock;
+	//! The whole file, kept from a read of all of it (see WHOLE_FILE_READ_MAXIMUM_SIZE); never shared with another
+	//! handle
+	BufferHandle whole_file DUCKDB_GUARDED_BY(whole_file_lock);
+	//! The size of the whole file
+	idx_t whole_file_size DUCKDB_GUARDED_BY(whole_file_lock) = 0;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.

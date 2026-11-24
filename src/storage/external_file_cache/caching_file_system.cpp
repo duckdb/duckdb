@@ -441,8 +441,15 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	if (!ReadsAreCached()) {
+		auto from_whole_file = ReadFromWholeFile(nr_bytes, location);
+		if (!from_whole_file.GetHandles().empty()) {
+			return from_whole_file;
+		}
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		ReadUncached(buf.GetDataMutable(), nr_bytes, location);
+		if (location == 0) {
+			KeepWholeFileRead(buf, nr_bytes);
+		}
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -746,6 +753,42 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 bool CachingFileHandle::IsCacheReuseProhibited() {
 	const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
 	return validation_info.IsCacheReuseProhibited();
+}
+
+bool CachingFileHandle::HoldsWholeFile() {
+	const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
+	return whole_file.IsValid();
+}
+
+FileBufferHandleGroup CachingFileHandle::ReadFromWholeFile(idx_t nr_bytes, idx_t location) {
+	BufferHandle pin;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
+		if (!whole_file.IsValid() || location > whole_file_size || nr_bytes > whole_file_size - location) {
+			return FileBufferHandleGroup();
+		}
+		auto block = whole_file.GetBlockHandle();
+		pin = external_file_cache.GetBufferManager().Pin(block);
+	}
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(pin), location, nr_bytes});
+	return FileBufferHandleGroup(std::move(mem_handles));
+}
+
+void CachingFileHandle::KeepWholeFileRead(const BufferHandle &buffer, idx_t nr_bytes) {
+	// the reader asked for all of a small file that the cache does not serve: its later reads come from these bytes, as
+	// they would from the cache, instead of a request each. They stay with this handle, so no other open sees them.
+	if (nr_bytes > WHOLE_FILE_READ_MAXIMUM_SIZE || nr_bytes != GetFileSize() || !CanSeek() || OnDiskFile() ||
+	    IsCacheReuseProhibited()) {
+		return;
+	}
+	auto block = buffer.GetBlockHandle();
+	auto pin = external_file_cache.GetBufferManager().Pin(block);
+	const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
+	if (!whole_file.IsValid()) {
+		whole_file = std::move(pin);
+		whole_file_size = nr_bytes;
+	}
 }
 
 void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {

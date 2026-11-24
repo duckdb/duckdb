@@ -535,7 +535,9 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               BaseFileReaderOptions &options_p,
                                                               const MultiFileOptions &) {
 	auto &options = options_p.Cast<ParquetFileReaderOptions>();
-	return make_shared_ptr<ParquetReader>(context, file, options.options);
+	// a file opened for its schema needs only its footer
+	return make_shared_ptr<ParquetReader>(context, file, options.options, nullptr,
+	                                      unordered_map<idx_t, ParquetReaderProjectionExpression>(), false);
 }
 
 shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {

@@ -135,7 +135,10 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 			known_metadata = previous.metadata;
 		}
 	}
-	auto reader = make_shared_ptr<ParquetReader>(context, result->file, result->options, std::move(known_metadata));
+	// a bind for the schema only needs the footer; the bind that reads the file reads a small one whole
+	auto reader = make_shared_ptr<ParquetReader>(context, result->file, result->options, std::move(known_metadata),
+	                                             unordered_map<idx_t, ParquetReaderProjectionExpression>(),
+	                                             !file_input.schema_only);
 	for (auto &column : reader->GetColumns()) {
 		names.push_back(column.name);
 		return_types.push_back(column.type);
