@@ -367,6 +367,12 @@ static auto Convert(CV2Cipher *stream) -> duckdb_v2_crypto_cipher_handle {
 	return reinterpret_cast<duckdb_v2_crypto_cipher_handle>(stream);
 }
 
+//! Providers such as OpenSSL reject null pointers even for empty buffers
+static const uint8_t *NonNullBuffer(const uint8_t *buffer) {
+	static const uint8_t EMPTY = 0;
+	return buffer ? buffer : &EMPTY;
+}
+
 static DatabaseInstance &GetInstance(duckdb_v2_instance_handle instance) {
 	return *Convert(instance)->GetDatabase().instance;
 }
@@ -425,7 +431,7 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_hash(duckdb_v2_instance_handle instance, DUCKDB
 		if (!util->SupportsHash(hash_function)) {
 			throw duckdb::NotImplementedException("The crypto provider does not support this hash function");
 		}
-		util->Hash(hash_function, data, length, digest);
+		util->Hash(hash_function, NonNullBuffer(data), length, digest);
 		*digest_length = size;
 	});
 }
@@ -454,7 +460,7 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_hmac(duckdb_v2_instance_handle instance, DUCKDB
 		if (!util->SupportsHmac(hash_function)) {
 			throw duckdb::NotImplementedException("The crypto provider does not support HMAC with this hash function");
 		}
-		util->Hmac(hash_function, key, key_length, data, length, mac);
+		util->Hmac(hash_function, NonNullBuffer(key), key_length, NonNullBuffer(data), length, mac);
 		*mac_length = size;
 	});
 }
