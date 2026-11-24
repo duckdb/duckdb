@@ -566,6 +566,12 @@
         "type": "Expression*",
         "status": "read_only",
         "deserialize_skip_assign": true
+      },
+      {
+        "id": 209,
+        "name": "delim_asof",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": [

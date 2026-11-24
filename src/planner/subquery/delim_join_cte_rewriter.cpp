@@ -2166,7 +2166,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		}
 	}
 
-	plan->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+	plan->type = plan->Cast<LogicalComparisonJoin>().delim_asof ? LogicalOperatorType::LOGICAL_ASOF_JOIN
+	                                                            : LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
