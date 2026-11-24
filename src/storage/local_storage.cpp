@@ -494,9 +494,13 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	if (committed_count == 0) {
 		return;
 	}
+	if (committed_count == delete_chunk.size()) {
+		delete_indexes.AppendToDeleteIndexes(delete_chunk, row_ids);
+		return;
+	}
 
 	DataChunk committed_chunk;
-	committed_chunk.Initialize(Allocator::DefaultAllocator(), delete_chunk.GetTypes());
+	committed_chunk.InitializeEmpty(delete_chunk.GetTypes());
 	committed_chunk.Slice(delete_chunk, committed_sel, committed_count);
 
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
