@@ -90,6 +90,14 @@ SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY k) FROM fills ORDER BY ALL;
 1	2	30
 2	0	NULL
 
+# a constant argument ordering is kept as well
+query I
+SELECT fill(c0 ORDER BY 1) OVER () FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
 # the connection is still usable
 query I
 SELECT 42;

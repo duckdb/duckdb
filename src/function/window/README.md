@@ -48,6 +48,10 @@ The binding flags are used by the binder to check whether the function can suppo
 | `can_ignore_nulls` | `true` | Can the function optionally `IGNORE` or `RESPECT NULLS`? |
 | `requires_ordering` | `false` | Does the function read the `ORDER BY` values, so that a redundant key must be kept? |
 
+Unlike the other flags, `requires_ordering` is not checked by the binder:
+it is read by the functional-dependency optimizer and by the SQL exporter,
+which otherwise drop `ORDER BY` keys that are constant within the partition.
+
 Most of the builtin functions use the default values of the flags.
 Notable exceptions are:
 

@@ -201,12 +201,13 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	for (idx_t i = 0; i < expression.Partitions().size(); i++) {
 		window->PartitionsMutable().push_back(std::move(children[ordinal++]));
 	}
+	// Some functions read the ORDER BY values: the argument ordering if there is one, else the window ordering
+	auto &window_function = expression.WindowFunction();
+	bool requires_ordering = window_function && window_function->GetDefinition()->RequiresOrdering();
 	// RANGE offsets and GROUPS frames are defined in terms of the ORDER BY
 	bool needs_order =
 	    IsOrderDependentBoundary(expression.WindowStart()) || IsOrderDependentBoundary(expression.WindowEnd());
-	// Some functions read the ORDER BY values, unless they have an argument ordering of their own
-	auto &window_function = expression.WindowFunction();
-	if (window_function && window_function->GetDefinition()->RequiresOrdering() && expression.ArgOrders().empty()) {
+	if (requires_ordering && expression.ArgOrders().empty()) {
 		needs_order = true;
 	}
 	for (auto &order : expression.OrderBy()) {
@@ -240,7 +241,7 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	}
 	for (auto &order : expression.ArgOrders()) {
 		auto &child = children[ordinal++];
-		if (SQLExportHelpers::IsConstantOrderKey(*order.expression, *child)) {
+		if (!requires_ordering && SQLExportHelpers::IsConstantOrderKey(*order.expression, *child)) {
 			continue;
 		}
 		window->ArgOrdersMutable().emplace_back(
