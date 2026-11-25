@@ -229,7 +229,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ClientConfig::GetConfig(context).use_replacement_scans &&
 		    Settings::Get<EnableExternalAccessSetting>(config) && ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
-			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
+			if (!VirtualFileSystem::Get(context).IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
 				throw BinderException(
 				    "No extension found that is capable of reading the file \"%s\"\n* If this file is a supported file "
 				    "format you can explicitly use the reader functions, such as read_csv, read_json or read_parquet",
