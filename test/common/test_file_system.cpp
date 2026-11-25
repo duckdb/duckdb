@@ -49,12 +49,12 @@ public:
 
 class TestOpenerFileSystem : public OpenerFileSystem {
 public:
-	TestOpenerFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
+	TestOpenerFileSystem(VirtualFileSystem &file_system_p, FileOpener &opener_p)
 	    : file_system(file_system_p), opener(opener_p) {
 	}
 
-public:
-	FileSystem &GetFileSystem() const override {
+private:
+	VirtualFileSystem &GetFileSystem() const override {
 		return file_system;
 	}
 
@@ -63,7 +63,7 @@ public:
 	}
 
 private:
-	FileSystem &file_system;
+	VirtualFileSystem &file_system;
 	FileOpener &opener;
 };
 
@@ -393,7 +393,8 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
 	auto &fs = TestLocalFileSystem();
-	TestOpenerFileSystem opener_fs(fs, opener);
+	VirtualFileSystem vfs;
+	TestOpenerFileSystem opener_fs(vfs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
 	if (fs.DirectoryExists(base)) {
 		fs.RemoveDirectory(base);
@@ -1593,7 +1594,7 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	// Auto-detection matches the fake compression filesystem based on the file name.
 	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
 	flags.SetCompression(FileCompressionType::AUTO_DETECT);
-	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	auto file_handle = vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr);
 
 	// Downcast to make sure compressed file handle is created.
 	REQUIRE(file_handle != nullptr);
@@ -1603,14 +1604,14 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 
 	// Explicitly requesting the registered compression type works as well.
 	flags.SetCompression(FileCompressionType("fake_compress"));
-	file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	file_handle = vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr);
 	REQUIRE(file_handle != nullptr);
 	REQUIRE(file_handle->Cast<FakeCompressFileHandle>().internal_file_handle != nullptr);
 	file_handle.reset();
 
 	// Explicitly requesting a compression type that has not been registered throws.
 	flags.SetCompression(FileCompressionType("nonexistent_compress"));
-	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
+	REQUIRE_THROWS(vfs.OpenFile(OpenFileInfo(filepath), flags, /*opener=*/nullptr));
 
 	fs.RemoveFile(filepath);
 }

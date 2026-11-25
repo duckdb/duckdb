@@ -351,12 +351,13 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 }
 
 //! Whether min/max over the type are computed through arg_min/arg_max over the collated value
-static bool MinMaxUsesCollation(ClientContext &context, const LogicalType &input_type) {
+static bool MinMaxUsesCollation(ClientContext &context, const LogicalType &input_type, CollationType collation_type) {
 	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT, TIMETZ and VARIANT use
 	// explicit binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
 	const auto varchar_collation =
 	    input_type.id() == LogicalTypeId::VARCHAR &&
-	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
+	    (!StringType::GetCollation(input_type).empty() || (collation_type != CollationType::EXPLICIT_COLLATIONS &&
+	                                                       !Settings::Get<DefaultCollationSetting>(context).empty()));
 	const auto nested_collation = StructType::IsStruct(input_type) || input_type.id() == LogicalTypeId::LIST ||
 	                              input_type.id() == LogicalTypeId::ARRAY;
 	return input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::TIME_TZ ||
@@ -370,9 +371,11 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto input_type = arguments[0]->GetReturnType();
 
-	const auto collation = MinMaxUsesCollation(context, input_type);
+	const auto collation_type = input.GetCollationType();
+	const auto collation = MinMaxUsesCollation(context, input_type, collation_type);
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
-	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
+	if (collation &&
+	    ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType(), collation_type)) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
 		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
@@ -543,11 +546,18 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &fu
 	case PhysicalType::INT64:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<int64_t>, COMPARATOR>(function);
 		break;
+	case PhysicalType::INT128:
+		SpecializeMinMaxNFunction<MinMaxFixedValue<hugeint_t>, COMPARATOR>(function);
+		break;
 	case PhysicalType::FLOAT:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<float>, COMPARATOR>(function);
 		break;
 	case PhysicalType::DOUBLE:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(function);
+		break;
+	case PhysicalType::INTERVAL:
+		// sort keys do not normalize intervals, so compare them as interval_t
+		SpecializeMinMaxNFunction<MinMaxFixedValue<interval_t>, COMPARATOR>(function);
 		break;
 	default:
 		SpecializeMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(function);
@@ -565,9 +575,10 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	if (MinMaxUsesCollation(context, arguments[0]->GetReturnType())) {
+	const auto collation_type = input.GetCollationType();
+	if (MinMaxUsesCollation(context, arguments[0]->GetReturnType(), collation_type)) {
 		auto collated_arg = arguments[0]->Copy();
-		if (ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
+		if (ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType(), collation_type)) {
 			vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType(),
 			                           arguments[1]->GetReturnType()};
 			auto collated_function = GetCollatedMinMaxFunction(context, function.GetName(), types);

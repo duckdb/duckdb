@@ -512,8 +512,7 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
-	auto &vfs = opener_filesystem.GetFileSystem();
-	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
 	// Shared variable both all caching modes.
 	string buffer(TEST_BUFFER_SIZE, '\0');
@@ -553,8 +552,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
-	auto &vfs = opener_filesystem.GetFileSystem();
-	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
 	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
 	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);

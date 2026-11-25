@@ -252,6 +252,8 @@ enum class ExtensionLoadResult : uint8_t;
 
 enum class ExtensionRepositoryAccess : uint8_t;
 
+enum class ExtensionRepositoryHostCaller : uint8_t;
+
 enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
@@ -536,8 +538,6 @@ enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RegexMatchOperatorSemantics : uint8_t;
 
-enum class RelationType : uint8_t;
-
 enum class RemoteCapability : uint8_t;
 
 enum class RemoveUnusedColumnsMode : uint8_t;
@@ -637,6 +637,8 @@ enum class StrTimeSpecifier : uint8_t;
 enum class SubqueryType : uint8_t;
 
 enum class SuggestionState : uint8_t;
+
+enum class SystemFile : uint8_t;
 
 enum class TableColumnType : uint8_t;
 
@@ -1052,6 +1054,9 @@ const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryHostCaller>(ExtensionRepositoryHostCaller value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
@@ -1480,9 +1485,6 @@ template<>
 const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
 
 template<>
-const char* EnumUtil::ToChars<RelationType>(RelationType value);
-
-template<>
 const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
 
 template<>
@@ -1631,6 +1633,9 @@ const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
 
 template<>
 const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value);
+
+template<>
+const char* EnumUtil::ToChars<SystemFile>(SystemFile value);
 
 template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
@@ -2090,6 +2095,9 @@ template<>
 ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
 
 template<>
+ExtensionRepositoryHostCaller EnumUtil::FromString<ExtensionRepositoryHostCaller>(const char *value);
+
+template<>
 ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
 
 template<>
@@ -2516,9 +2524,6 @@ template<>
 RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
 
 template<>
-RelationType EnumUtil::FromString<RelationType>(const char *value);
-
-template<>
 RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);
 
 template<>
@@ -2667,6 +2672,9 @@ SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
 
 template<>
 SuggestionState EnumUtil::FromString<SuggestionState>(const char *value);
+
+template<>
+SystemFile EnumUtil::FromString<SystemFile>(const char *value);
 
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);

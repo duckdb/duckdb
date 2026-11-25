@@ -12,6 +12,8 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -940,7 +942,7 @@ static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input,
 		}
 		// Nothing of this batch passed, but an empty chunk means that the batch is exhausted
 		output.Reset();
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 	}
 }
 

@@ -26,6 +26,11 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
+#include "duckdb/planner/planner.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -124,6 +129,31 @@ void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const strin
 	statement->info = std::move(info);
 	// Execute the CREATE VIEW
 	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+}
+
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query) {
+	auto &context = *con.context;
+	Parser parser(context);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("TestExtractPlan can only plan a single statement");
+	}
+	unique_ptr<LogicalOperator> plan;
+	context.RunFunctionInTransaction([&]() {
+		Planner planner(context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		D_ASSERT(planner.plan);
+
+		Optimizer optimizer(*planner.binder, context);
+		plan = optimizer.Optimize(std::move(planner.plan));
+
+		LogicalPlanVerifier::Verify(context, *plan);
+		// the resolver checks the column references against the operator types, which the optimizer leaves stale
+		plan->ResolveOperatorTypes();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+	});
+	return plan;
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
@@ -803,18 +833,6 @@ bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Valu
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	return CHECK_COLUMN(*result, column_number, values);
-}
-
-string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
-		return result.GetError();
-	}
-	string error;
-	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
-		return error;
-	}
-	return "";
 }
 
 string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {

@@ -1,0 +1,270 @@
+# name: test/optimizer/full_join_filter_pushdown.test
+# description: Push comparisons into FULL join inputs while retaining NULL rejection
+# group: [optimizer]
+
+statement ok
+CREATE TABLE lhs (id INTEGER, la INTEGER);
+CREATE TABLE rhs (id INTEGER, ra INTEGER);
+INSERT INTO lhs VALUES (1, 20), (2, 30), (3, NULL), (4, 25);
+INSERT INTO rhs VALUES (1, 20), (1, 21), (2, 40), (3, NULL), (5, 25);
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*la <= 25.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+4	NULL	NULL
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE r.ra <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*ra <= 25.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+NULL	5	25
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25 AND r.ra <= 25;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 AND r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la IS NULL ORDER BY 1, 2;
+----
+3	3
+NULL	5
+
+# Simple projections and reversed operands retain the original output bindings.
+query IIII
+SELECT r.ra, l.k, r.id, l.a
+FROM (SELECT la AS a, id AS k FROM lhs) l FULL JOIN rhs r ON l.k = r.id
+WHERE 25 >= l.a ORDER BY l.k, r.ra;
+----
+20	1	1	20
+21	1	1	20
+NULL	4	NULL	25
+
+# The ordinary outer-join simplifier still narrows a one-sided predicate.
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25;
+----
+physical_plan	<REGEX>:.*Join Type: (LEFT|RIGHT).*
+
+statement ok
+SET disabled_optimizers = 'outer_join_simplification';
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id WHERE l.la <= 25;
+----
+physical_plan	<REGEX>:.*la IS NOT NULL.*Join Type: FULL.*Filters:.*la <= 25.*
+
+query II
+EXPLAIN SELECT l.k, r.id
+FROM (SELECT la AS a, id AS k FROM lhs) l FULL JOIN rhs r ON l.k = r.id WHERE 25 >= l.a;
+----
+physical_plan	<REGEX>:.*Join Type: FULL.*Filters:.*la <= 25.*
+
+# Removing the last match must not leave a new unmatched row from the other input.
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+4	NULL	NULL
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE 25 >= r.ra ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+NULL	5	25
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 AND r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+
+# The residual also protects matches removed from a non-equality FULL join.
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id < r.id
+WHERE l.la > 25 ORDER BY 1, 2;
+----
+2	3
+2	5
+
+# Paired bounds are combined into BETWEEN before filter pushdown.
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la >= 20 AND l.la < 25 ORDER BY 1, 2;
+----
+1	1
+1	1
+
+# Multiple predicates on one column retain all comparisons.
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 AND l.la <> 20 ORDER BY 1, 2;
+----
+4	NULL
+
+# A one-sided ON condition uses a regular ANY join.
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id < 3 WHERE r.ra <= 25;
+----
+physical_plan	<REGEX>:.*Join Type: FULL.*Filters:.*ra <= 25.*
+
+query III
+SELECT l.id, r.id, r.ra FROM lhs l FULL JOIN rhs r ON l.id < 3
+WHERE r.ra <= 25 ORDER BY 1, 2, 3;
+----
+1	1	20
+1	1	21
+1	5	25
+2	1	20
+2	1	21
+2	5	25
+
+query I
+SELECT count(*) FROM lhs l FULL JOIN rhs r USING (id)
+WHERE id BETWEEN 1 AND 2 AND l.id > 2;
+----
+0
+
+# NULL-safe comparisons must retain their original NULL behavior.
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la IS NOT DISTINCT FROM NULL ORDER BY 1, 2;
+----
+3	3
+NULL	5
+
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la IS DISTINCT FROM 25 ORDER BY 1, 2;
+----
+1	1
+1	1
+2	2
+3	3
+NULL	5
+
+# A synthesized row must not reach a throwing sibling before the NULL check.
+statement ok
+CREATE TABLE match_rhs AS SELECT * FROM rhs WHERE id < 5;
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN match_rhs r ON l.id = r.id
+WHERE l.la <= 25 AND CASE WHEN l.id IS NULL THEN (r.ra * 1000)::TINYINT ELSE 0 END = 0;
+----
+physical_plan	<!REGEX>:.*Filters:.*la <= 25.*
+
+query II
+SELECT l.id, r.id FROM lhs l FULL JOIN match_rhs r ON l.id = r.id
+WHERE l.la <= 25 AND CASE WHEN l.id IS NULL THEN (r.ra * 1000)::TINYINT ELSE 0 END = 0
+ORDER BY 1, 2;
+----
+1	1
+1	1
+4	NULL
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id AND random() < 0.5
+WHERE l.la <= 25;
+----
+physical_plan	<!REGEX>:.*Filters:.*la <= 25.*
+
+query II
+EXPLAIN SELECT l.id, r.id FROM lhs l FULL JOIN rhs r ON l.id = r.id
+WHERE l.la <= 25 AND random() < 0.5;
+----
+physical_plan	<!REGEX>:.*Filters:.*la <= 25.*
+
+# Keep runtime join filters from removing the invalid row before the cast.
+statement ok
+SET disabled_optimizers = 'outer_join_simplification,join_filter_pushdown';
+
+# Inlining a computed column must not move its cast below the input's inner join.
+statement ok
+CREATE TABLE cast_source (id INTEGER, s VARCHAR);
+INSERT INTO cast_source VALUES (1, '20'), (2, 'invalid'), (3, '30');
+CREATE TABLE keep_ids (id INTEGER);
+INSERT INTO keep_ids VALUES (1), (3);
+
+query II
+SELECT l.id, l.age
+FROM (SELECT s.id, s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id) l
+WHERE l.age <= 25 ORDER BY 1, 2;
+----
+1	20
+
+# A barrier can inline the cast but must keep it above the join.
+query II
+SELECT l.id, l.age
+FROM (SELECT s.id, s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id) l
+WHERE __internal_barrier(l.age <= 25) ORDER BY 1, 2;
+----
+1	20
+
+query II
+SELECT l.id, l.age
+FROM (SELECT s.id, s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id) l
+FULL JOIN rhs r ON l.id = r.id WHERE l.age <= 25 ORDER BY 1, 2;
+----
+1	20
+1	20
+
+# Inlining a grouping key must also keep its cast above the input's inner join.
+query I
+SELECT l.age
+FROM (SELECT s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id GROUP BY s.s::INTEGER) l
+WHERE l.age <= 25 ORDER BY 1;
+----
+20
+
+query I
+SELECT l.age
+FROM (SELECT s.s::INTEGER AS age FROM cast_source s JOIN keep_ids k ON s.id = k.id GROUP BY s.s::INTEGER) l
+FULL JOIN rhs r ON l.age = r.ra WHERE l.age <= 25 ORDER BY 1;
+----
+20
+
+statement ok
+SET disabled_optimizers = 'outer_join_simplification';
+
+# Non-throwing grouping expressions still permit scan pushdown.
+query II
+EXPLAIN SELECT a FROM (SELECT la::BIGINT AS a FROM lhs GROUP BY la::BIGINT) l WHERE a <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*CAST\(la AS BIGINT\) <= 25.*
+
+# CTE filter pushing also reaches FULL-join pushdown.
+query II
+EXPLAIN WITH cte AS MATERIALIZED (
+    SELECT l.id, l.la, r.id AS rid FROM lhs l FULL JOIN rhs r ON l.id = r.id
+)
+SELECT * FROM cte WHERE la <= 25;
+----
+physical_plan	<REGEX>:.*Filters:.*la <= 25.*
+
+statement ok
+RESET disabled_optimizers;

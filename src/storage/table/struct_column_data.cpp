@@ -177,7 +177,13 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			if (!ConstantVector::IsNull(result)) {
 				throw InternalException("StructColumnData::Scan returned a constant but not NULL vector ");
 			}
-			// constant NULL struct - we don't need to scan any children, everything is already NULL
+			// constant NULL struct - skip the children instead of scanning them, everything is already NULL
+			auto struct_children = GetStructChildren(state);
+			for (auto &child : struct_children) {
+				if (child.should_scan) {
+					child.col.Skip(child.state, scan_count);
+				}
+			}
 			return scan_count;
 		}
 	}

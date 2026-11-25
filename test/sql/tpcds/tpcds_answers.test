@@ -1,0 +1,30 @@
+# name: test/sql/tpcds/tpcds_answers.test
+# description: TPC-DS answers cover the embedded scale factors and match the bundled results
+# group: [tpcds]
+
+require tpcds
+
+query RIIII
+SELECT scale_factor, count(*), count(DISTINCT query_nr), min(query_nr), max(query_nr)
+FROM tpcds_answers()
+GROUP BY scale_factor
+ORDER BY scale_factor;
+----
+0.01	99	99	1	99
+1.0	99	99	1	99
+
+foreach sf 0.01 1
+
+# Windows checkouts may use CRLF while the embedded answers use LF.
+query II
+SELECT count(*), bool_and(
+    replace(a.answer, chr(13) || chr(10), chr(10)) =
+    replace(f.content, chr(13) || chr(10), chr(10)))
+FROM tpcds_answers() a
+JOIN read_text('extension/tpcds/dsdgen/answers/sf{sf}/*.csv') f
+  ON a.query_nr = CAST(regexp_extract(f.filename, '([0-9]+)\.csv$', 1) AS INTEGER)
+WHERE a.scale_factor = {sf};
+----
+99	true
+
+endloop

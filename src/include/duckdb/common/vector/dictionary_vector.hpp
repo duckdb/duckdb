@@ -169,6 +169,10 @@ struct DictionaryVector {
 		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().global_dictionary;
 	}
 	static const Vector &GetCachedHashes(const Vector &input);
+	//! Combine row validity while preserving dictionary encoding and existing NULLs.
+	//! The mask must cover vector.size() rows and is not retained.
+	//! May replace the selection buffer or dictionary entry.
+	static void ApplyValidity(Vector &vector, const ValidityMask &mask);
 };
 
 } // namespace duckdb

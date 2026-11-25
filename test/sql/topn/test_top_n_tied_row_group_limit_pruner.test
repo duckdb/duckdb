@@ -1,0 +1,162 @@
+# name: test/sql/topn/test_top_n_tied_row_group_limit_pruner.test
+# description: Limit pruning of row groups that share the same maximum or minimum
+# group: [topn]
+
+load {TEST_DIR}/top_n_tied_row_group_limit_pruner_main.duckdb
+
+statement ok
+SET threads TO 1
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_tied_row_group_limit_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# Row groups 0 and 1 hold 0, row groups 2 and 3 hold 1, and so on. One row of row group 0 holds the maximum.
+statement ok
+CREATE TABLE db.tied_max AS
+SELECT i AS id, (CASE WHEN i = 9 THEN 3 ELSE i // 4096 END)::BIGINT AS k FROM range(16384) t(i)
+
+# Mirror image: one row of row group 7 holds the minimum
+statement ok
+CREATE TABLE db.tied_min AS
+SELECT i AS id, (CASE WHEN i = 16375 THEN 0 ELSE i // 4096 END)::BIGINT AS k FROM range(16384) t(i)
+
+# The UPDATE below gives row group 0 the same maximum as row groups 6 and 7
+statement ok
+CREATE TABLE db.updated AS
+SELECT i AS id, (i // 4096)::BIGINT AS k FROM range(16384) t(i)
+
+# Three row groups: all 0 with one 3, all 3, all 2
+statement ok
+CREATE TABLE db.three_groups AS
+SELECT i AS id, (CASE WHEN i = 9 THEN 3 ELSE [0, 3, 2][i // 2048 + 1] END)::BIGINT AS k FROM range(6144) t(i)
+
+# Mirror image: all 0, all 3 with one 0, all 1
+statement ok
+CREATE TABLE db.three_groups_asc AS
+SELECT i AS id, (CASE WHEN i = 2048 THEN 0 ELSE [0, 3, 1][i // 2048 + 1] END)::BIGINT AS k FROM range(6144) t(i)
+
+# The first row group holds 1 and one 3, then all 3, then all 2
+statement ok
+CREATE TABLE db.range_group AS
+SELECT i AS id, (CASE WHEN i = 9 THEN 3 ELSE [1, 3, 2][i // 2048 + 1] END)::BIGINT AS k FROM range(6144) t(i)
+
+# Three row groups with the maximum 3: two hold 0 and one 3, one holds only 3. Then all 2
+statement ok
+CREATE TABLE db.three_ties AS
+SELECT i AS id, (CASE WHEN i = 9 OR i = 2057 THEN 3 ELSE [0, 0, 3, 2][i // 2048 + 1] END)::BIGINT AS k
+FROM range(8192) t(i)
+
+# Three row groups with the maximum 5: 4 and one 5, 0 and one 5, 0 and one 5. Then all 3
+statement ok
+CREATE TABLE db.mixed_ties AS
+SELECT i AS id, (CASE WHEN i % 2048 = 9 AND i < 6144 THEN 5 ELSE [4, 0, 0, 3][i // 2048 + 1] END)::BIGINT AS k
+FROM range(8192) t(i)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_tied_row_group_limit_pruner_data.duckdb' AS db
+
+statement ok
+SET threads TO 1
+
+query I
+SELECT k FROM db.tied_max ORDER BY k DESC LIMIT 2 OFFSET 4097
+----
+2
+2
+
+query I
+SELECT k FROM db.tied_min ORDER BY k LIMIT 2 OFFSET 4097
+----
+1
+1
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.tied_max ORDER BY k DESC LIMIT 4099) GROUP BY k ORDER BY k
+----
+2	2
+3	4097
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.tied_min ORDER BY k LIMIT 4099) GROUP BY k ORDER BY k
+----
+0	4097
+1	2
+
+statement ok
+UPDATE db.updated SET k = 3 WHERE id = 9
+
+query I
+SELECT k FROM db.updated ORDER BY k DESC LIMIT 2 OFFSET 4097
+----
+2
+2
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.updated ORDER BY k DESC LIMIT 4099) GROUP BY k ORDER BY k
+----
+2	2
+3	4097
+
+# The limit ends inside the tied row groups
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.tied_max ORDER BY k DESC LIMIT 4097) GROUP BY k ORDER BY k
+----
+3	4097
+
+query I
+SELECT k FROM db.tied_max ORDER BY k DESC LIMIT 2 OFFSET 4096
+----
+3
+2
+
+# A limit that stops before the lower row groups still returns the right rows
+query I
+SELECT k FROM db.tied_max ORDER BY k DESC LIMIT 3 OFFSET 4094
+----
+3
+3
+3
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.three_groups ORDER BY k DESC LIMIT 2050) GROUP BY k ORDER BY k
+----
+2	1
+3	2049
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.three_groups_asc ORDER BY k LIMIT 2050) GROUP BY k ORDER BY k
+----
+0	2049
+1	1
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.range_group ORDER BY k DESC LIMIT 2050) GROUP BY k ORDER BY k
+----
+2	1
+3	2049
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.three_ties ORDER BY k DESC LIMIT 2052) GROUP BY k ORDER BY k
+----
+2	2
+3	2050
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM db.mixed_ties ORDER BY k DESC LIMIT 2052) GROUP BY k ORDER BY k
+----
+3	2
+4	2047
+5	3
+
+# Default row group size, default threads
+statement ok
+CREATE TABLE tied_memory AS
+SELECT i AS id, (CASE WHEN i = 9 THEN 3 ELSE [0, 3, 2][i // 122880 + 1] END)::BIGINT AS k FROM range(368640) t(i)
+
+query II
+SELECT k, count(*) FROM (SELECT k FROM tied_memory ORDER BY k DESC LIMIT 122882) GROUP BY k ORDER BY k
+----
+2	1
+3	122881

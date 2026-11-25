@@ -56,7 +56,7 @@ public:
 	WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, idx_t group_idx, idx_t bin_idx);
 
 	void AllocateMasks();
-	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
+	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx, unordered_map<idx_t, DataChunk> &prefixes);
 
 	ExecutorGlobalStates &GetGlobalStates(ClientContext &client);
 
@@ -269,10 +269,10 @@ public:
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
-                               vector<column_t> partitions)
+                               vector<column_t> partitions, optional_idx partition_limit)
     : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false),
-      partition_info(std::move(partitions)) {
+      partition_info(std::move(partitions)), partition_limit(partition_limit) {
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -315,9 +315,10 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &conte
 }
 
 PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
-                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
+                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+                               optional_idx partition_limit)
     : PhysicalWindow(physical_plan, context, std::move(types), std::move(select_list), estimated_cardinality,
-                     vector<column_t>()) {
+                     vector<column_t>(), partition_limit) {
 }
 
 unique_ptr<WindowExecutor> WindowExecutor::Factory(BoundWindowExpression &wexpr, ClientContext &client,
@@ -345,7 +346,8 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	}
 
 	sort_strategy = SortStrategy::Factory(client, wexpr.Partitions(), wexpr.OrderBy(), op.children[0].get().GetTypes(),
-	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality);
+	                                      wexpr.PartitionsStats(), op.partition_info, op.estimated_cardinality, false,
+	                                      op.partition_limit);
 	strategy_sink = sort_strategy->GetGlobalSinkState(client);
 }
 
@@ -622,7 +624,8 @@ void WindowHashGroup::AllocateMasks() {
 	});
 }
 
-void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
+void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end,
+                                   unordered_map<idx_t, DataChunk> &prefixes) {
 	D_ASSERT(count > 0);
 
 	//	Initialise our range
@@ -660,15 +663,15 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	auto &collection = *rows;
 	auto &scan_cols = gsink.sort_strategy->sort_ids;
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
-	unordered_map<idx_t, DataChunk> prefixes;
 	unordered_map<idx_t, unique_ptr<ExpressionExecutor>> distinct_from;
 	for (auto &order_mask : order_masks) {
 		D_ASSERT(order_mask.first >= order_begin);
-		auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
-		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
-		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
-		keys.Initialize(collection.GetAllocator(), types);
+		if (keys.ColumnCount() == 0) {
+			auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
+			vector<LogicalType> types(2, order_type);
+			keys.Initialize(collection.GetAllocator(), types);
+		}
 		if (order_mask.first == order_begin) {
 			continue;
 		}
@@ -725,6 +728,9 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   }
 		                   }
 	                   });
+	for (auto &prefix : prefixes) {
+		prefix.second.Reset();
+	}
 }
 
 // Per-thread scan state
@@ -763,6 +769,7 @@ public:
 	unique_ptr<WindowCollectionChunkScanner> scanner;
 	//! Buffer for window results
 	DataChunk output_chunk;
+	unordered_map<idx_t, DataChunk> boundary_prefixes;
 
 protected:
 	//! Sort the partition
@@ -843,7 +850,7 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::MASK);
 
-	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx);
+	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx, boundary_prefixes);
 
 	//	Mark this range as done
 	window_hash_group->masked += (task->end_idx - task->begin_idx);
@@ -1259,6 +1266,11 @@ InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

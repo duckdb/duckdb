@@ -21,6 +21,7 @@ struct DynamicFilterData;
 
 class BoundFunctionExpression;
 class ClientContext;
+enum class SelectivityOptionalFilterType : uint8_t;
 
 class ExpressionFilter : public TableFilter {
 public:
@@ -52,6 +53,9 @@ public:
 	                                                        ExpressionType expression_type);
 	//! Build a single-column filter comparing against a constant.
 	static unique_ptr<ExpressionFilter> CreateComparisonFilter(ExpressionType comparison_type, Value constant);
+	static unique_ptr<ExpressionFilter> CreateSelectivityOptionalFilter(unique_ptr<Expression> child_expr,
+	                                                                    const LogicalType &column_type,
+	                                                                    SelectivityOptionalFilterType type);
 	static bool IsSimpleFilterColumnRef(const Expression &expr);
 	//! Flips comparison_type for a constant on the left
 	static optional_ptr<const BoundConstantExpression>

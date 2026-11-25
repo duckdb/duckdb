@@ -349,7 +349,7 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
 			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fl.l_pid);
 			if (!process.empty()) {
 				extended_error = "Conflicting lock is held in " + process;
 			}
