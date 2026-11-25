@@ -46,6 +46,33 @@ explain select a,rowid, row_number() over() as x from foo order by a desc limit 
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
+# Rewrite independent window bindings while preserving their projected scan columns.
+statement ok
+CREATE TABLE rn_bind_a AS SELECT * FROM (VALUES (10, 'a'), (20, NULL), (30, 'c')) t(k, label);
+
+statement ok
+CREATE TABLE rn_bind_b AS SELECT * FROM (VALUES (40, 'd'), (50, 'e')) t(k, label);
+
+query III
+SELECT sum(n), sum(n * 10 + k), count(label)
+FROM (
+    SELECT rn AS n, k, label FROM (SELECT label, row_number() OVER () AS rn, k FROM rn_bind_a)
+    UNION ALL
+    SELECT rn AS n, k, label FROM (SELECT k, row_number() OVER () AS rn, label FROM rn_bind_b)
+) u;
+----
+9	240	4
+
+query II
+EXPLAIN SELECT sum(n), sum(n * 10 + k), count(label)
+FROM (
+    SELECT rn AS n, k, label FROM (SELECT label, row_number() OVER () AS rn, k FROM rn_bind_a)
+    UNION ALL
+    SELECT rn AS n, k, label FROM (SELECT k, row_number() OVER () AS rn, label FROM rn_bind_b)
+) u;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
 statement ok
 select setseed(0.1);
 
