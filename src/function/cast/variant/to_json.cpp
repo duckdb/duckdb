@@ -161,7 +161,7 @@ struct JSONConverterBase {
 		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
 	}
 
-	static yyjson_mut_val *VisitDefault(VariantLogicalType type_id, const_data_ptr_t, yyjson_mut_doc *) {
+	static yyjson_mut_val *VisitDefault(LogicalTypeId type_id, const_data_ptr_t, yyjson_mut_doc *) {
 		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
 };

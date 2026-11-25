@@ -14,13 +14,13 @@ public:
 	}
 
 	void operator()(const optional<VariantNode> &node, VectorWriter<string_t> &string_writer) const {
-		if (!node || node->IsNull() || node->GetTypeId() == VariantLogicalType::VARIANT_NULL) {
+		if (!node || node->IsNull() || node->GetTypeId() == LogicalTypeId::SQLNULL) {
 			string_writer.WriteNull();
 			return;
 		}
 
 		const auto type_id = node->GetTypeId();
-		if (type_id == VariantLogicalType::VARCHAR) {
+		if (type_id == LogicalTypeId::VARCHAR) {
 			string_writer.WriteValue(node->GetString());
 			return;
 		}

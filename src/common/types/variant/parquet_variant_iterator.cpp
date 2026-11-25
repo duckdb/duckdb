@@ -475,7 +475,15 @@ ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
 //===--------------------------------------------------------------------===//
 // ParquetVariantNode
 //===--------------------------------------------------------------------===//
-VariantLogicalType ParquetVariantNode::GetTypeId() const {
+LogicalTypeId ParquetVariantNode::GetTypeId() const {
+	return VariantTypeToLogicalTypeId(GetVariantType());
+}
+
+bool ParquetVariantNode::GetBool() const {
+	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
+}
+
+VariantLogicalType ParquetVariantNode::GetVariantType() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;

@@ -10,7 +10,7 @@ namespace {
 void EmitSelectedNode(const VariantNode &node, VariantBuilder &builder) {
 	if (!node.IsNull() && !node.IsMissing()) {
 		const auto type = node.GetTypeId();
-		if (type != VariantLogicalType::OBJECT && type != VariantLogicalType::ARRAY) {
+		if (type != LogicalTypeId::STRUCT && type != LogicalTypeId::LIST) {
 			builder.EmitPrimitiveNode(node, type);
 			return;
 		}
@@ -67,7 +67,7 @@ void VariantPathFunction::ExecuteVariant(DataChunk &input, const ExpressionState
 }
 
 optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node, int64_t index) {
-	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != VariantLogicalType::ARRAY) {
+	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != LogicalTypeId::LIST) {
 		return {};
 	}
 	const auto elements = node.GetArrayChildren();
@@ -133,7 +133,7 @@ void VariantPathFunction::ExecuteVariantMany(const Vector &input, const vector<v
 					selected[offset + path_idx] = ResolvePath(root, paths[path_idx]);
 				}
 			}
-			if (key_count == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
+			if (key_count == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != LogicalTypeId::STRUCT) {
 				continue;
 			}
 			auto pending = key_count;

@@ -102,7 +102,7 @@ void GetUnquotedRows(const Vector &source, idx_t count, vector<bool> &is_unquote
 			continue;
 		}
 		auto type_id = value.GetTypeId();
-		is_unquoted[i] = type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY;
+		is_unquoted[i] = type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST;
 	}
 }
 

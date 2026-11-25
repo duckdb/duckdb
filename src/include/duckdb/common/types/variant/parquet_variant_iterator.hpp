@@ -111,7 +111,10 @@ public:
 		return kind == Kind::MISSING;
 	}
 
-	DUCKDB_API VariantLogicalType GetTypeId() const;
+	//! The logical type id of the value (SQLNULL for NULL, STRUCT for an OBJECT, LIST for an ARRAY)
+	DUCKDB_API LogicalTypeId GetTypeId() const;
+	//! Returns the payload of a BOOLEAN value
+	DUCKDB_API bool GetBool() const;
 	//! Returns the fixed-width primitive payload (loaded / re-encoded as T)
 	template <class T>
 	T GetData() const;
@@ -123,6 +126,9 @@ public:
 	DUCKDB_API ParquetArrayIterator GetArrayChildren() const;
 
 private:
+	//! The storage-level type of the value
+	VariantLogicalType GetVariantType() const;
+
 	explicit ParquetVariantNode(Kind kind) : kind(kind) {
 	}
 

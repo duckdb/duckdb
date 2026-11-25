@@ -28,18 +28,18 @@ struct VariantNeedle {
 	}
 
 	VariantNode node;
-	VariantLogicalType type_id;
+	LogicalTypeId type_id;
 	VariantComparisonType category;
 	optional<VariantNumberKey> number_key;
 };
 
 //! Whether two primitive values of the same comparison category are equal
-bool IsPrimitiveEqual(const VariantNode &haystack, VariantLogicalType haystack_type, VariantNeedle &needle) {
+bool IsPrimitiveEqual(const VariantNode &haystack, LogicalTypeId haystack_type, VariantNeedle &needle) {
 	switch (needle.category) {
 	case VariantComparisonType::NULL_VALUE:
 		return true;
 	case VariantComparisonType::BOOLEAN:
-		return haystack_type == needle.type_id;
+		return haystack.GetBool() == needle.node.GetBool();
 	case VariantComparisonType::UUID:
 		return haystack.GetData<hugeint_t>() == needle.node.GetData<hugeint_t>();
 	case VariantComparisonType::REAL:
@@ -283,7 +283,7 @@ bool ChildrenMatch(const VariantNode &haystack, const VariantNode &needle, Varia
 }
 
 //! Whether the haystack value itself matches the needle
-bool MatchesNeedle(const VariantNode &haystack, VariantLogicalType haystack_type, VariantNeedle &needle,
+bool MatchesNeedle(const VariantNode &haystack, LogicalTypeId haystack_type, VariantNeedle &needle,
                    vector<VariantMatchFrame> &frames) {
 	const auto category = GetVariantComparisonType(haystack_type);
 	if (category != needle.category) {
@@ -302,8 +302,8 @@ bool MatchesNeedle(const VariantNode &haystack, VariantLogicalType haystack_type
 //! An array or object of the haystack, with the child to visit next
 class VariantWalkFrame {
 public:
-	VariantWalkFrame(const VariantNode &container, VariantLogicalType type_id) {
-		if (type_id == VariantLogicalType::ARRAY) {
+	VariantWalkFrame(const VariantNode &container, LogicalTypeId type_id) {
+		if (type_id == LogicalTypeId::LIST) {
 			elements.emplace(container.GetArrayChildren());
 		} else {
 			entries.emplace(container, VariantIterationOrder::INTERNAL);
@@ -350,7 +350,7 @@ public:
 
 	//! Moves to the next value, which is the first child of the current one if it has any
 	bool Next() {
-		if (type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT) {
+		if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::STRUCT) {
 			frames.emplace_back(value, type_id);
 		}
 		while (!frames.empty()) {
@@ -366,14 +366,14 @@ public:
 	const VariantNode &Value() const {
 		return value;
 	}
-	VariantLogicalType Type() const {
+	LogicalTypeId Type() const {
 		return type_id;
 	}
 
 private:
 	vector<VariantWalkFrame> &frames;
 	VariantNode value;
-	VariantLogicalType type_id;
+	LogicalTypeId type_id;
 };
 
 //! The stacks of a given needle-haystack search

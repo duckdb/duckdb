@@ -144,7 +144,7 @@ struct VariantToVariantSizeAnalyzer {
 		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
-	static uint32_t VisitDefault(VariantLogicalType type_id, const_data_ptr_t, AnalyzeState &) {
+	static uint32_t VisitDefault(LogicalTypeId type_id, const_data_ptr_t, AnalyzeState &) {
 		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
 	}
 };
@@ -257,7 +257,7 @@ struct VariantToVariantDataWriter {
 		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
-	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, WriteState &) {
+	static void VisitDefault(LogicalTypeId type_id, const_data_ptr_t, WriteState &) {
 		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
 	}
 };

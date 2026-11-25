@@ -365,7 +365,9 @@ struct VariantBuilder {
 	//! value via 'it.GetData<T>()' (chosen by 'type_id'); strings via 'it.GetString()'; decimals via
 	//! 'it.GetDecimalProperties()' followed by 'it.GetData<T>()' at the physical type implied by the width.
 	template <class NODE>
-	void EmitPrimitiveNode(const NODE &it, VariantLogicalType type_id) {
+	void EmitPrimitiveNode(const NODE &it, LogicalTypeId logical_type_id) {
+		const auto type_id =
+		    VariantTypeFromLogicalTypeId(logical_type_id, logical_type_id == LogicalTypeId::BOOLEAN && it.GetBool());
 		//! 'blob' may already exceed uint32_t mid-row; this offset is only read once the row is known to fit
 		//! (checked in BuildVariant once the row is fully emitted), so a narrowing wrap here is harmless.
 		auto byte_offset = static_cast<uint32_t>(blob.size());
@@ -556,7 +558,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		}
 		auto type_id = node.GetTypeId();
 		switch (type_id) {
-		case VariantLogicalType::OBJECT: {
+		case LogicalTypeId::STRUCT: {
 			auto children = CollectObjectChildren(node);
 			auto n = children.size();
 			if (stack.size() >= stack.capacity()) {
@@ -572,7 +574,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 			}
 			break;
 		}
-		case VariantLogicalType::ARRAY: {
+		case LogicalTypeId::LIST: {
 			auto array_iter = node.GetArrayChildren();
 			auto n = array_iter.size();
 			if (stack.size() >= stack.capacity()) {

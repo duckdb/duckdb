@@ -166,6 +166,14 @@ enum class VariantLogicalType : uint8_t {
 	ENUM_SIZE /* always kept as last item of the enum */
 };
 
+//! Storage-level helpers: all other variant code should work with LogicalType(Id) instead of VariantLogicalType
+//! VARIANT_NULL -> SQLNULL, BOOL_TRUE/BOOL_FALSE -> BOOLEAN, OBJECT -> STRUCT, ARRAY -> LIST
+DUCKDB_API LogicalTypeId VariantTypeToLogicalTypeId(VariantLogicalType type);
+//! Inverse of VariantTypeToLogicalTypeId, returns false for types that cannot be stored in a VARIANT
+//! 'bool_value' selects BOOL_TRUE/BOOL_FALSE for BOOLEAN
+DUCKDB_API bool TryVariantTypeFromLogicalTypeId(LogicalTypeId id, VariantLogicalType &result, bool bool_value = false);
+DUCKDB_API VariantLogicalType VariantTypeFromLogicalTypeId(LogicalTypeId id, bool bool_value = false);
+
 struct UnifiedVariantVectorData {
 public:
 	explicit UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant);
