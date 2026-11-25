@@ -10,6 +10,9 @@
 
 #include "yyjson.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
 
@@ -41,9 +44,25 @@ public:
 		arena_allocator.Reset();
 	}
 
+	//! Retains the allocator in every string vector of a (possibly nested) vector
 	void AddBuffer(Vector &vector) {
-		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+		switch (vector.GetType().InternalType()) {
+		case PhysicalType::VARCHAR:
 			StringVector::AddAuxiliaryData(vector, make_uniq<JSONStringVectorBuffer>(shared_from_this()));
+			break;
+		case PhysicalType::STRUCT:
+			for (auto &child : StructVector::GetEntries(vector)) {
+				AddBuffer(child);
+			}
+			break;
+		case PhysicalType::LIST:
+			AddBuffer(ListVector::GetChildMutable(vector));
+			break;
+		case PhysicalType::ARRAY:
+			AddBuffer(ArrayVector::GetChildMutable(vector));
+			break;
+		default:
+			break;
 		}
 	}
 
