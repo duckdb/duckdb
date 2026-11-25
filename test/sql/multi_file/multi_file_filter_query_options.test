@@ -125,9 +125,85 @@ SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query
 statement error
 SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/does_not_exist.parquet'')'}])
 ----
-Failed to read the row ids of file
+Failed to read the filter query of file
+
+# the name of the column does not matter
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 7 AS something_else'}])
+----
+7
+
+# the type of the row ids does not matter
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT unnest([2, 3])::UTINYINT'}])
+----
+2
+3
+
+# a BIT value is a bitmap of the rows to scan
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''0101000001''::BIT'}])
+----
+1
+3
+9
+
+# rows past the end of the bitmap are not scanned
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''111''::BIT'}])
+----
+0
+1
+2
+
+# bitmaps can be combined in the query
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ~(''0100100000''::BIT | ''0000000010''::BIT)'}])
+----
+0
+2
+3
+5
+6
+7
+9
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT bit_or(set_bit(bitstring(''0'', 10), x, 1)) FROM unnest([1, 4, 8]) t(x)'}])
+----
+1
+4
+8
+
+# several bitmaps are combined
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (''1000000000''::BIT), (''0000000001''::BIT))'}])
+----
+0
+9
+
+# no bitmap
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT NULL::BIT'}])
+----
+0
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''1''::BIT WHERE false'}])
+----
+0
 
 statement error
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 42 AS something_else'}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (''10''::BIT), (''100''::BIT))'}])
 ----
-row_id
+bitmaps of different sizes
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1, 2'}])
+----
+must return a single column
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''x'''}])
+----
+must return integers or a BIT
