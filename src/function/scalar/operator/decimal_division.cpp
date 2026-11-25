@@ -1,6 +1,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -18,9 +20,9 @@ struct DecimalDivBindData : public FunctionData {
 	// scale_exp = s2 + result_scale - s1
 	// >= 0: scale numerator up:   result_int = (a_int * 10^scale_exp) / b_int
 	// <  0: scale divisor up:     result_int =  a_int / (b_int * 10^|scale_exp|)
-	int32_t scale_exp;
+	int64_t scale_exp;
 
-	explicit DecimalDivBindData(int32_t scale_exp_p) : scale_exp(scale_exp_p) {
+	explicit DecimalDivBindData(int64_t scale_exp_p) : scale_exp(scale_exp_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -38,6 +40,7 @@ struct DecimalDivBindData : public FunctionData {
 // COMPUTE_TYPE controls intermediate arithmetic:
 //   int64_t   -- when input_max_width + |scale_exp| < CACHED_POWERS_OF_TEN (product fits in int64_t)
 //   hugeint_t -- otherwise
+// A division with an argument or a result wider than 38 digits runs in the bignum_t tier instead (see below)
 //===--------------------------------------------------------------------===//
 
 template <class T>
@@ -100,6 +103,8 @@ static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &r
 
 	bool scale_divisor = bind_data.scale_exp < 0;
 	uint32_t abs_exp = UnsafeNumericCast<uint32_t>(AbsValue(bind_data.scale_exp));
+	// the fixed-size tiers are only selected when the scaled operands fit a hugeint_t
+	D_ASSERT(abs_exp <= Decimal::MAX_WIDTH_INT128);
 
 	COMPUTE_TYPE scale_factor;
 	if constexpr (std::is_same_v<COMPUTE_TYPE, int64_t>) {
@@ -211,6 +216,102 @@ static scalar_function_t GetDecimalDivExecuteFunction(PhysicalType result_physic
 }
 
 //===--------------------------------------------------------------------===//
+// The bignum_t tier: an argument or the result is wider than 38 digits
+//
+// The arguments are brought to BIGNUM blobs of their unscaled values and divided with the rounding of the fixed-size
+// tiers (half to even); the quotient is a BIGNUM blob, or an integer when the result is a fixed-size decimal
+//===--------------------------------------------------------------------===//
+
+template <class SOURCE_TYPE>
+static void WidenDecimalToBignum(Vector &input, Vector &widened, idx_t count) {
+	auto &heap = StringVector::GetStringHeap(widened);
+	UnaryExecutor::Execute<SOURCE_TYPE, string_t>(input, widened, count, [&](SOURCE_TYPE value) {
+		return HugeintCastToBignum::Operation<hugeint_t>(hugeint_t(value), heap).data;
+	});
+}
+
+//! Bring an argument to the bignum_t tier; a decimal keeps its unscaled value at the same scale
+static Vector &GetWideDecimalInput(Vector &input, idx_t count, unique_ptr<Vector> &widened) {
+	auto source_physical = input.GetType().InternalType();
+	if (source_physical == PhysicalType::VARCHAR) {
+		return input;
+	}
+	auto scale = DecimalType::GetScale(input.GetType());
+	widened = make_uniq<Vector>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128 + 1, scale), count);
+	switch (source_physical) {
+	case PhysicalType::INT16:
+		WidenDecimalToBignum<int16_t>(input, *widened, count);
+		break;
+	case PhysicalType::INT32:
+		WidenDecimalToBignum<int32_t>(input, *widened, count);
+		break;
+	case PhysicalType::INT64:
+		WidenDecimalToBignum<int64_t>(input, *widened, count);
+		break;
+	case PhysicalType::INT128:
+		WidenDecimalToBignum<hugeint_t>(input, *widened, count);
+		break;
+	default:
+		throw InternalException("decimal_division: unexpected argument physical type");
+	}
+	return *widened;
+}
+
+//! RESULT_TYPE is string_t for a result wider than 38 digits, the integer of the result tier otherwise
+template <class RESULT_TYPE>
+static void WideDecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<DecimalDivBindData>();
+	unique_ptr<Vector> lhs_widened;
+	unique_ptr<Vector> rhs_widened;
+	auto &lhs = GetWideDecimalInput(args.data[0], args.size(), lhs_widened);
+	auto &rhs = GetWideDecimalInput(args.data[1], args.size(), rhs_widened);
+
+	const auto scale_exp = bind_data.scale_exp;
+	const auto result_width = DecimalType::GetWidth(result.GetType());
+	DecimalHelper<bignum_t>::RescaleState scratch(state.GetContext().TryGetClientContext());
+
+	BinaryExecutor::Execute<bignum_t, bignum_t, RESULT_TYPE>(
+	    lhs, rhs, result, args.size(), [&](bignum_t a, bignum_t b) -> RESULT_TYPE {
+		    // the quotient of the previous row has been consumed
+		    scratch.Reset();
+		    bignum_t quotient;
+		    if (!DecimalHelper<bignum_t>::TryDivide(scratch, a, b, scale_exp, DecimalRounding::HALF_TO_EVEN,
+		                                            quotient)) {
+			    throw InvalidInputException("decimal_division: division by zero");
+		    }
+		    // rounding can carry into a digit the result type does not have
+		    if (!DecimalHelper<bignum_t>::FitsWidth(quotient, result_width)) {
+			    throw OutOfRangeException("decimal_division: result out of range for result type");
+		    }
+		    if constexpr (std::is_same_v<RESULT_TYPE, string_t>) {
+			    return StringVector::AddStringOrBlob(result, quotient.data);
+		    } else {
+			    hugeint_t value;
+			    RESULT_TYPE out;
+			    if (!DecimalHelper<bignum_t>::TryToHugeint(quotient, value) || !Hugeint::TryCast(value, out)) {
+				    throw OutOfRangeException("decimal_division: result out of range for result type");
+			    }
+			    return out;
+		    }
+	    });
+}
+
+static scalar_function_t GetWideDecimalDivExecuteFunction(PhysicalType result_physical) {
+	switch (result_physical) {
+	case PhysicalType::INT16:
+		return WideDecimalDivExecute<int16_t>;
+	case PhysicalType::INT32:
+		return WideDecimalDivExecute<int32_t>;
+	case PhysicalType::INT64:
+		return WideDecimalDivExecute<int64_t>;
+	case PhysicalType::INT128:
+		return WideDecimalDivExecute<hugeint_t>;
+	default:
+		return WideDecimalDivExecute<string_t>;
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Bind function
 //===--------------------------------------------------------------------===//
 
@@ -219,7 +320,9 @@ static void SelectDecimalDivFunction(BoundScalarFunction &bound_function);
 // Result width and scale for e1 / e2 (SQL Server semantics):
 //   result_scale = max(6, s1 + p2 + 1)
 //   result_width = p1 - s1 + s2 + result_scale
-// Both are capped at Decimal::MAX_WIDTH_INT128 (38).
+// Both are bounded by the widest DECIMAL the session binds (the max_decimal_width setting, or an argument that is
+// wider), like the results of the other decimal operators: a session bound to the fixed-size decimals
+// (max_decimal_width = 38) raises the errors of the fixed-size division.
 static void DecimalDivisionResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &lhs_type = input.GetArgumentType(0);
@@ -229,50 +332,66 @@ static void DecimalDivisionResolveTypes(ResolveScalarFunctionTypesInput &input) 
 	if (!lhs_type.GetDecimalProperties(p1, s1) || !rhs_type.GetDecimalProperties(p2, s2)) {
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
-	if (Decimal::IsWide(p1) || Decimal::IsWide(p2)) {
-		throw NotImplementedException("decimal_division is not supported for DECIMAL types wider than %d digits",
-		                              Decimal::MAX_WIDTH_INT128);
+	// the widest DECIMAL the division constructs: the limit of the session, or a DECIMAL argument that is wider
+	const auto decimal_width_limit = input.GetDecimalWidthLimit();
+	uint32_t max_decimal_width = 0;
+	if (lhs_type.id() == LogicalTypeId::DECIMAL) {
+		max_decimal_width = MaxValue<uint32_t>(max_decimal_width, p1);
 	}
-	// an integer argument is an implicit DECIMAL(p, 0): bind on its canonical DECIMAL type
+	if (rhs_type.id() == LogicalTypeId::DECIMAL) {
+		max_decimal_width = MaxValue<uint32_t>(max_decimal_width, p2);
+	}
+	const idx_t width_limit = decimal_width_limit.ResultWidth(max_decimal_width);
+	// an integer argument is an implicit DECIMAL(p, 0), bound on its canonical DECIMAL type within that width: in a
+	// session bound to the fixed-size decimals an integer type with more digits is a DECIMAL(38,0)
+	if (lhs_type.id() != LogicalTypeId::DECIMAL) {
+		p1 = NumericCast<uint32_t>(MinValue<idx_t>(p1, width_limit));
+	}
+	if (rhs_type.id() != LogicalTypeId::DECIMAL) {
+		p2 = NumericCast<uint32_t>(MinValue<idx_t>(p2, width_limit));
+	}
 	auto lhs_decimal_type = lhs_type.id() == LogicalTypeId::DECIMAL ? lhs_type : LogicalType::DECIMAL(p1, s1);
 	auto rhs_decimal_type = rhs_type.id() == LogicalTypeId::DECIMAL ? rhs_type : LogicalType::DECIMAL(p2, s2);
 
-	uint32_t result_scale;
+	idx_t result_scale;
 	if (input.GetArgumentCount() == 3) {
 		auto scale_val = input.GetNonNullConstant(2);
 		auto scale_i = scale_val.GetValue<int32_t>();
-		if (scale_i < 0 || scale_i > Decimal::MAX_WIDTH_INT128) {
-			throw InvalidInputException("decimal_division: scale must be between 0 and %d, got %d",
-			                            Decimal::MAX_WIDTH_INT128, scale_i);
+		if (scale_i < 0 || idx_t(scale_i) > width_limit) {
+			throw InvalidInputException("decimal_division: scale must be between 0 and %llu, got %d", width_limit,
+			                            scale_i);
 		}
-		result_scale = UnsafeNumericCast<uint32_t>(scale_i);
+		result_scale = UnsafeNumericCast<idx_t>(scale_i);
 	} else {
-		result_scale = MaxValue<uint32_t>(6, s1 + p2 + 1);
+		result_scale = MaxValue<idx_t>(6, idx_t(s1) + idx_t(p2) + 1);
 	}
 	// result_width uses signed arithmetic to catch underflow before casting.
 	auto result_width_i = int64_t(p1) - int64_t(s1) + int64_t(s2) + int64_t(result_scale);
 	if (result_width_i < 1) {
-		throw InvalidInputException("decimal_division: scale %d produces a zero-width result for these input types",
+		throw InvalidInputException("decimal_division: scale %llu produces a zero-width result for these input types",
 		                            result_scale);
 	}
-	uint32_t result_width = UnsafeNumericCast<uint32_t>(result_width_i);
+	idx_t result_width = UnsafeNumericCast<idx_t>(result_width_i);
 
-	if (result_scale > Decimal::MAX_WIDTH_INT128) {
+	if (result_scale > width_limit) {
 		throw OutOfRangeException(
-		    "Needed scale %d to accurately represent the division result, but this is out of range of the "
-		    "DECIMAL type. Max scale is %d; could not perform an accurate division. Either add a cast to DOUBLE, "
+		    "Needed scale %llu to accurately represent the division result, but this is out of range of the "
+		    "DECIMAL type. Max scale is %llu; could not perform an accurate division. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
-		    result_scale, Decimal::MAX_WIDTH_INT128);
+		    result_scale, width_limit);
 	}
-	if (result_width > Decimal::MAX_WIDTH_INT128) {
+	if (result_width > width_limit && !Decimal::IsWide(width_limit)) {
+		// the session is bound to the fixed-size decimals: the division does not narrow its result
 		throw OutOfRangeException(
-		    "Needed width %d to accurately represent the division result, but this is out of range of the "
-		    "DECIMAL type. Max width is %d; could not perform an accurate division. Either add a cast to DOUBLE, "
+		    "Needed width %llu to accurately represent the division result, but this is out of range of the "
+		    "DECIMAL type. Max width is %llu; could not perform an accurate division. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
-		    result_width, Decimal::MAX_WIDTH_INT128);
+		    result_width, width_limit);
 	}
 
-	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, result_scale));
+	bound_function.SetReturnType(
+	    LogicalType::DECIMAL(decimal_width_limit.CheckedWidth(result_width, max_decimal_width, "Division"),
+	                         NumericCast<uint32_t>(result_scale)));
 	// keep the argument types: a narrower argument is widened at execution, so binding again yields the same types
 	bound_function.GetArguments()[0] = lhs_decimal_type;
 	bound_function.GetArguments()[1] = rhs_decimal_type;
@@ -283,11 +402,17 @@ static void DecimalDivisionResolveTypes(ResolveScalarFunctionTypesInput &input) 
 static void SelectDecimalDivFunction(BoundScalarFunction &bound_function) {
 	auto &arguments = bound_function.GetArguments();
 	const auto result_physical = bound_function.GetReturnType().InternalType();
+	if (result_physical == PhysicalType::VARCHAR || arguments[0].InternalType() == PhysicalType::VARCHAR ||
+	    arguments[1].InternalType() == PhysicalType::VARCHAR) {
+		// an argument or the result is wider than 38 digits
+		bound_function.SetFunctionCallback(GetWideDecimalDivExecuteFunction(result_physical));
+		return;
+	}
 	const auto wider = MaxValue<PhysicalType>(arguments[0].InternalType(), arguments[1].InternalType());
-	const int32_t scale_exp = int32_t(DecimalType::GetScale(arguments[1])) +
-	                          int32_t(DecimalType::GetScale(bound_function.GetReturnType())) -
-	                          int32_t(DecimalType::GetScale(arguments[0]));
-	const int32_t abs_scale_exp = scale_exp < 0 ? -scale_exp : scale_exp;
+	const int64_t scale_exp = int64_t(DecimalType::GetScale(arguments[1])) +
+	                          int64_t(DecimalType::GetScale(bound_function.GetReturnType())) -
+	                          int64_t(DecimalType::GetScale(arguments[0]));
+	const int64_t abs_scale_exp = scale_exp < 0 ? -scale_exp : scale_exp;
 
 	switch (wider) {
 	case PhysicalType::INT16:
@@ -322,7 +447,7 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	auto lhs_scale = DecimalType::GetScale(bound_function.GetArguments()[0]);
 	auto rhs_scale = DecimalType::GetScale(bound_function.GetArguments()[1]);
 	auto result_scale = DecimalType::GetScale(bound_function.GetReturnType());
-	return make_uniq<DecimalDivBindData>(int32_t(rhs_scale) + int32_t(result_scale) - int32_t(lhs_scale));
+	return make_uniq<DecimalDivBindData>(int64_t(rhs_scale) + int64_t(result_scale) - int64_t(lhs_scale));
 }
 
 //===--------------------------------------------------------------------===//
