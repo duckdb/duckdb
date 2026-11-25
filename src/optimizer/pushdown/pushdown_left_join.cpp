@@ -222,7 +222,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		filters.push_back(std::move(filter));
 	}
 
-	return PushFinalFilters(PushdownJoinDependentMembership(std::move(op)));
+	return PushdownLeftJoinChain(std::move(op));
 }
 
 } // namespace duckdb
