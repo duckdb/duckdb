@@ -1662,6 +1662,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	idx_t j = 0;
 	result.quoted = false;
+	// a quote inside a field marks its value as escaped without an escape character as well
+	const bool has_escape = result.state_machine.dialect_options.state_machine_options.escape != '\0';
 	for (idx_t i = result.last_position.buffer_pos; i < previous_buffer_handle->actual_size; i++) {
 		state_machine->Transition(states, previous_buffer[i]);
 		if (states.EmptyLine() || states.IsCurrentNewRow()) {
@@ -1682,7 +1684,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsUnquoted()) {
 			result.SetUnquoted(result);
 		}
-		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
+		if (states.IsEscaped() && (has_escape || states.IsState(CSVState::FIELD_QUOTE))) {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
@@ -1813,7 +1815,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsComment()) {
 			result.SetComment(result, j);
 		}
-		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
+		if (states.IsEscaped() && (has_escape || states.IsState(CSVState::FIELD_QUOTE))) {
 			result.escaped = true;
 		}
 		if (states.IsInvalid()) {
