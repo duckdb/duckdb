@@ -1787,6 +1787,45 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
 	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
 	 void *user_data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_add_virtual_column)
+	(duckdb_v2_data_source_handle source, DUCKDB_V2_TABLE_VIRTUAL_COLUMN column, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_data_source_handle *source, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_data_source_destroy)(duckdb_v2_data_source_handle *source);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_claim_batch_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_claim_batch_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_exec_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_exec_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_filter_pushdown_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_filter_pushdown_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_init_global_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_global_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_init_local_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_local_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_metrics_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_metrics_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_partition_data_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_partition_data_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_partitioning_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_partitioning_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_progress_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_progress_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_projection_pushdown)
+	(duckdb_v2_data_source_handle source, bool enable, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_user_data)
+	(duckdb_v2_data_source_handle source, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_data_source)
+	(duckdb_v2_table_function_handle function, duckdb_v2_data_source_handle data_source,
+	 duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -4065,6 +4104,53 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_get_profiling_information duckdb_ext_api.duckdb_v2_connection_get_profiling_information
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_add_virtual_column duckdb_ext_api.duckdb_v2_data_source_add_virtual_column
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_create duckdb_ext_api.duckdb_v2_data_source_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_destroy duckdb_ext_api.duckdb_v2_data_source_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_claim_batch_callback duckdb_ext_api.duckdb_v2_data_source_set_claim_batch_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_exec_callback duckdb_ext_api.duckdb_v2_data_source_set_exec_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_filter_pushdown_callback                                                             \
+	duckdb_ext_api.duckdb_v2_data_source_set_filter_pushdown_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_init_global_callback duckdb_ext_api.duckdb_v2_data_source_set_init_global_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_init_local_callback duckdb_ext_api.duckdb_v2_data_source_set_init_local_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_metrics_callback duckdb_ext_api.duckdb_v2_data_source_set_metrics_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_partition_data_callback                                                              \
+	duckdb_ext_api.duckdb_v2_data_source_set_partition_data_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_partitioning_callback duckdb_ext_api.duckdb_v2_data_source_set_partitioning_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_progress_callback duckdb_ext_api.duckdb_v2_data_source_set_progress_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_projection_pushdown duckdb_ext_api.duckdb_v2_data_source_set_projection_pushdown
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_source_set_user_data duckdb_ext_api.duckdb_v2_data_source_set_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_set_data_source duckdb_ext_api.duckdb_v2_table_function_set_data_source
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

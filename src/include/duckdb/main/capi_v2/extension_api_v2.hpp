@@ -1713,6 +1713,45 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
 	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
 	 void *user_data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_add_virtual_column)
+	(duckdb_v2_data_source_handle source, DUCKDB_V2_TABLE_VIRTUAL_COLUMN column, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_data_source_handle *source, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_data_source_destroy)(duckdb_v2_data_source_handle *source);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_claim_batch_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_claim_batch_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_exec_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_exec_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_filter_pushdown_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_filter_pushdown_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_init_global_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_global_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_init_local_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_local_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_metrics_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_metrics_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_partition_data_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_partition_data_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_partitioning_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_partitioning_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_progress_callback)
+	(duckdb_v2_data_source_handle source, duckdb_v2_table_function_progress_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_projection_pushdown)
+	(duckdb_v2_data_source_handle source, bool enable, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_source_set_user_data)
+	(duckdb_v2_data_source_handle source, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_data_source)
+	(duckdb_v2_table_function_handle function, duckdb_v2_data_source_handle data_source,
+	 duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2482,6 +2521,21 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_to_string_set = duckdb_v2_table_function_to_string_set;
 	result.duckdb_v2_instance_open_shared = duckdb_v2_instance_open_shared;
 	result.duckdb_v2_connection_get_profiling_information = duckdb_v2_connection_get_profiling_information;
+	result.duckdb_v2_data_source_add_virtual_column = duckdb_v2_data_source_add_virtual_column;
+	result.duckdb_v2_data_source_create = duckdb_v2_data_source_create;
+	result.duckdb_v2_data_source_destroy = duckdb_v2_data_source_destroy;
+	result.duckdb_v2_data_source_set_claim_batch_callback = duckdb_v2_data_source_set_claim_batch_callback;
+	result.duckdb_v2_data_source_set_exec_callback = duckdb_v2_data_source_set_exec_callback;
+	result.duckdb_v2_data_source_set_filter_pushdown_callback = duckdb_v2_data_source_set_filter_pushdown_callback;
+	result.duckdb_v2_data_source_set_init_global_callback = duckdb_v2_data_source_set_init_global_callback;
+	result.duckdb_v2_data_source_set_init_local_callback = duckdb_v2_data_source_set_init_local_callback;
+	result.duckdb_v2_data_source_set_metrics_callback = duckdb_v2_data_source_set_metrics_callback;
+	result.duckdb_v2_data_source_set_partition_data_callback = duckdb_v2_data_source_set_partition_data_callback;
+	result.duckdb_v2_data_source_set_partitioning_callback = duckdb_v2_data_source_set_partitioning_callback;
+	result.duckdb_v2_data_source_set_progress_callback = duckdb_v2_data_source_set_progress_callback;
+	result.duckdb_v2_data_source_set_projection_pushdown = duckdb_v2_data_source_set_projection_pushdown;
+	result.duckdb_v2_data_source_set_user_data = duckdb_v2_data_source_set_user_data;
+	result.duckdb_v2_table_function_set_data_source = duckdb_v2_table_function_set_data_source;
 	return result;
 }
 

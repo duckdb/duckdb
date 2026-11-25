@@ -19661,6 +19661,381 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_result_to_arrow_c_stream(duckdb_v2_
 
 /* --- Struct definitions for arrow --- */
 
+/* ============================================================================
+ * MODULE: data_source
+ * ============================================================================ */
+
+/* --- Enums for data_source --- */
+
+/* --- Struct forward declarations for data_source --- */
+
+/* --- Types for data_source --- */
+
+/*!
+ * An owned opaque handle to a data source being built. A data source is what scans a source of rows: like a physical
+ * operator source it sets up the state of the scan, hands out the work to the scanning threads, and produces the
+ * batches of rows, without knowing how the call that scans it was bound. It is configured with the setter functions
+ * (e.g. `duckdb_v2_data_source_set_exec_callback()`), and made the scan of a table function with
+ * `duckdb_v2_table_function_set_data_source()`, which any number of table functions can do.
+ *
+ * The callbacks of a data source are the ones a table function has for its scan, and receive the same handles (e.g.
+ * `duckdb_v2_table_function_exec_info_handle`). The "bind data" they can read is the bind data of the table function
+ * call that scans the data source, and the user data they can read is the one set with
+ * `duckdb_v2_data_source_set_user_data()`. Created with `duckdb_v2_data_source_create()`, destroyed with
+ * `duckdb_v2_data_source_destroy()`.
+ */
+typedef struct _duckdb_v2_data_source {
+	void *internal_ptr;
+} * duckdb_v2_data_source_handle;
+
+/* --- Constants for data_source --- */
+
+/* --- Function pointer typedefs for data_source --- */
+
+/* --- Functions for data_source --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a new data source through a factory.
+ *
+ * The data source starts out empty: configure it with the setter functions (e.g.
+ * `duckdb_v2_data_source_set_exec_callback()`), then make it the scan of a table function with
+ * `duckdb_v2_table_function_set_data_source()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_data_source_destroy()`, also after it has been handed to a table function.
+ *
+ * The data source can only be used for table functions of the database the factory belongs to.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the data source through.
+ * @param source On success, receives the newly created data source. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_create(duckdb_v2_factory_handle factory,
+                                                          duckdb_v2_data_source_handle *source,
+                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets arbitrary user data on the data source.
+ *
+ * Associates an opaque pointer with the data source, retrievable from its callbacks via
+ * `duckdb_v2_table_function_init_global_get_user_data()`, `duckdb_v2_table_function_exec_get_user_data()` and their
+ * counterparts on the other phases. The opaque handle bundles the pointer with an optional destructor, invoked when the
+ * data is no longer needed. A data source without user data hands its callbacks the user data of the table function
+ * that scans it, if that has any.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_user_data(duckdb_v2_data_source_handle source,
+                                                                 duckdb_v2_opaque *data,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional global init callback of the data source.
+ *
+ * The global init callback is invoked once per scan, at the start of execution. It can set "global state" shared by
+ * every thread scanning the data source, and declare how many threads may scan it in parallel via
+ * `duckdb_v2_table_function_init_global_set_max_threads()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the global init callback of.
+ * @param callback The global init callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_init_global_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_global_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional local init callback of the data source.
+ *
+ * The local init callback is invoked once per thread that will scan the data source. It can set worker-local "local
+ * state", retrievable from the exec callback, typically derived from the shared global state.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the local init callback of.
+ * @param callback The local init callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_init_local_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_init_local_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the exec callback of the data source.
+ *
+ * The exec callback implements the scan: it is invoked repeatedly during query execution and writes the next batch of
+ * rows to the output chunk, until it produces an empty batch to signal the end of the scan. An exec callback must be
+ * set before the data source is given to a table function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the exec callback of.
+ * @param callback The exec callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_exec_callback(duckdb_v2_data_source_handle source,
+                                                                     duckdb_v2_table_function_exec_callback_fn callback,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional progress callback of the data source.
+ *
+ * The progress callback is invoked on demand during execution to report how far the scan has advanced, which the engine
+ * surfaces as the query's progress. It is invoked concurrently with the exec callback, so it must read the global state
+ * in a thread-safe way.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the progress callback of.
+ * @param callback The progress callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_progress_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_progress_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional metrics callback of the data source.
+ *
+ * The metrics callback is invoked when the engine collects the metrics of the scan, e.g. when profiling is enabled, and
+ * reports them via `duckdb_v2_table_function_metrics_set()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the metrics callback of.
+ * @param callback The metrics callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_metrics_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_metrics_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional filter pushdown callback of the data source.
+ *
+ * The filter pushdown callback is offered the predicates the query applies to the rows of the data source, and accepts
+ * the ones the data source applies itself (see `duckdb_v2_table_function_filter_pushdown_accept()`). It only sees the
+ * predicates of the scan if the data source supports projection pushdown (see
+ * `duckdb_v2_data_source_set_projection_pushdown()`).
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the filter pushdown callback of.
+ * @param callback The filter pushdown callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_filter_pushdown_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_filter_pushdown_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional partition data callback of the data source.
+ *
+ * The partition data callback is invoked on the worker thread that just produced a batch of rows, once per batch, when
+ * a downstream operator needs to know the ordering position of the batch or the values of a set of partitioning
+ * columns. It is required if a partitioning callback is set.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the partition data callback of.
+ * @param callback The partition data callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_partition_data_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_partition_data_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional partitioning callback of the data source.
+ *
+ * The partitioning callback is invoked during query optimization, once per candidate `GROUP BY` column set, to decide
+ * whether the scan can feed a partitioned aggregate directly instead of hashing. Setting it requires a partition data
+ * callback (see `duckdb_v2_data_source_set_partition_data_callback()`).
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the partitioning callback of.
+ * @param callback The partitioning callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_partitioning_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_partitioning_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional claim batch callback of the data source.
+ *
+ * With a claim batch callback, a scanning thread works through the scan one batch at a time: the callback claims the
+ * next batch of work (e.g. the next block of a file) for the thread's local state, typically from the shared global
+ * state, and the exec callback then produces the rows of that batch only, leaving the output chunk empty once the batch
+ * is exhausted. A batch is claimed before the exec callback first runs on a thread, and again whenever the exec
+ * callback leaves the output chunk empty; the scan ends for a thread once the claim batch callback does not claim a
+ * batch. See `duckdb_v2_table_function_set_claim_batch_callback()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to set the claim batch callback of.
+ * @param callback The claim batch callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_claim_batch_callback(
+    duckdb_v2_data_source_handle source, duckdb_v2_table_function_claim_batch_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the data source supports projection pushdown. Defaults to false.
+ *
+ * With projection pushdown, the engine asks the data source for only the columns a query actually uses: the exec
+ * callback's output chunk holds one vector per requested column rather than one per column the scanning table function
+ * declares, and the global init, local init and exec callbacks can look up which declared column each vector stands for
+ * via e.g. `duckdb_v2_table_function_exec_get_column_index()`. Without it the output chunk always holds every declared
+ * column, and the engine drops the unused ones itself.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to configure.
+ * @param enable Whether the data source supports projection pushdown.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_projection_pushdown(duckdb_v2_data_source_handle source,
+                                                                           bool enable,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Declares that the data source can produce the given virtual column.
+ *
+ * A virtual column is not one of the columns the scanning table function declares in bind: the query asks for it by
+ * name, and the data source only produces it when it is asked for. This requires projection pushdown (see
+ * `duckdb_v2_data_source_set_projection_pushdown()`), which is what lets the engine ask for it. See
+ * `duckdb_v2_table_function_add_virtual_column()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to configure.
+ * @param column The virtual column the data source can produce.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_add_virtual_column(duckdb_v2_data_source_handle source,
+                                                                      DUCKDB_V2_TABLE_VIRTUAL_COLUMN column,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Makes the scan of the table function the given data source.
+ *
+ * A table function binds a call - it declares the columns the call returns - and scans it with a data source: the
+ * callbacks that set up the scan and produce its rows. The setters of those callbacks on the table function itself
+ * (e.g. `duckdb_v2_table_function_set_exec_callback()`) configure the function's own data source, which this replaces
+ * together with its user data. The function keeps a copy of the data source as it is when this is called, so the same
+ * data source can be given to any number of functions, and changing it afterwards does not change them.
+ *
+ * The callbacks of the data source read the bind data the bind callback of the function sets, and the user data of the
+ * data source or, if it has none, the user data of the function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the data source of.
+ * @param data_source The data source to scan with. Borrowed; it can be destroyed after this call.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_data_source(duckdb_v2_table_function_handle function,
+                                                                      duckdb_v2_data_source_handle data_source,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the data source, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after it was given to a table function does not affect that table function,
+ * which keeps a copy of the data source as it was.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param source The data source to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_destroy(duckdb_v2_data_source_handle *source);
+#endif
+
+/* --- Struct definitions for data_source --- */
+
 #ifdef __cplusplus
 }
 #endif
