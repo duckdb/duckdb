@@ -21,6 +21,9 @@ class DataChunk;
 class InterruptState;
 class TaskExecutor;
 class Executor;
+class ExecutionContext;
+class StateWithBlockableTasks;
+struct OperatorSourceInput;
 
 enum class AsyncResultsExecutionMode : uint8_t {
 	SYNCHRONOUS,  //! BLOCKED should not bubble up, and they should be executed synchronously
@@ -60,6 +63,11 @@ public:
 	//! Execute tasks synchronously at callsite, side by side on the result's pool: the calling thread works on them
 	//! too and returns when all of them are done. Same preconditions and result as the overload above.
 	void ExecuteTasksSynchronously(ClientContext &context);
+	//! For a source operator: schedules the tasks and returns BLOCKED when the pipeline can block (it can call back
+	//! and the state allows blocking), otherwise runs them synchronously, side by side, and returns HAVE_MORE_OUTPUT.
+	//! Needs to be called with non-empty async_tasks and from BLOCKED state; takes the state's lock.
+	SourceResultType ScheduleOrExecute(ExecutionContext &context, OperatorSourceInput &input,
+	                                   StateWithBlockableTasks &state);
 
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
 	//! Wraps tasks into a BLOCKED result, or HAVE_MORE_OUTPUT when there are none
