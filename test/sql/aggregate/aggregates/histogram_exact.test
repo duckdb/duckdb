@@ -92,11 +92,11 @@ SELECT histogram_exact(l, b) FROM (VALUES ([1], [1])) t(l, b)
 ----
 <REGEX>:Binder Error.*Cannot deduce template type 'T'.*
 
-# the argument promotes to the wider bins element type
+# the argument promotes to the wider bins element type, the other values are keyed by the largest DECIMAL(11,1)
 query I
 SELECT histogram_exact(1::INTEGER, [0.6])
 ----
-{0.6=0, inf=1}
+{0.6=0, 9999999999.9=1}
 
 query I
 SELECT is_histogram_other_bin(NULL)

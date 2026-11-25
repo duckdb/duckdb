@@ -349,9 +349,12 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 
 template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::DECIMAL) {
-		return GetHistogramBinFunction<HIST>(LogicalType::DOUBLE);
+	if (type.id() == LogicalTypeId::DECIMAL && type.InternalType() == PhysicalType::VARCHAR) {
+		// a DECIMAL wider than 38 digits stores its unscaled value as a BIGNUM blob: bin it by its sort key, as text it
+		// would be compared as a string
+		return GetHistogramBinFunction<HistogramGenericFunctor, string_t, HIST>(type);
 	}
+	// the bins of a DECIMAL are DECIMALs of the same type, a value is compared with them exactly
 	switch (type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(binned_histogram_types)
 	case PhysicalType::BOOL:
