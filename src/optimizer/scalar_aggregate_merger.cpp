@@ -1,6 +1,9 @@
 #include "duckdb/optimizer/scalar_aggregate_merger.hpp"
 
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -177,11 +180,50 @@ static bool RecordsRejects(const LogicalGet &get) {
 //! Two scans that one scan reading both of their columns can replace: the same relation, and the rows a scan returns do
 //! not depend on the columns it reads. A scan that drops the rows it fails to parse (ignore_errors) returns a row when
 //! every column it reads parses, so such scans are only shared when they read the same columns.
+//! HashScan must hash compatible scans alike; keep it consistent with changes to this comparison.
 static bool CanShareScan(const LogicalGet &a, const LogicalGet &b) {
 	if (!IsSameRelation(a, b) || RecordsRejects(a)) {
 		return false;
 	}
 	return !HasOption(a, "ignore_errors") || ReadColumns(a) == ReadColumns(b);
+}
+
+static hash_t HashScanParameter(const Value &value) {
+	auto result = value.type().Hash();
+	// VARIANT equality can equate different representations that Value::Hash distinguishes.
+	if (TypeVisitor::Contains(value.type(), LogicalTypeId::VARIANT)) {
+		return result;
+	}
+	return CombineHash(result, value.Hash());
+}
+
+//! Compatible scans must hash alike. ReadSameTables checks collisions before grouping branches.
+//! Omit values without a compatible hash: bind data without arguments has no generic hash.
+static hash_t HashScan(const LogicalGet &scan) {
+	auto result = CombineHash(scan.function.GetName().Hash(), Hash(CastPointerToValue(scan.GetTable().get())));
+	for (auto &parameter : scan.parameters) {
+		result = CombineHash(Hash(result), HashScanParameter(parameter));
+	}
+	hash_t named_parameters = 0;
+	for (auto &entry : scan.named_parameters) {
+		named_parameters += Hash(CombineHash(entry.first.Hash(), HashScanParameter(entry.second)));
+	}
+	result = CombineHash(result, named_parameters);
+	if (HasOption(scan, "ignore_errors")) {
+		for (auto column : ReadColumns(scan)) {
+			result = CombineHash(Hash(result), Hash(column));
+		}
+	}
+	return result;
+}
+
+static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
+	auto result = Hash(branch.scans.size());
+	// ReadSameTables matches scans irrespective of their order.
+	for (auto &scan : branch.scans) {
+		result += Hash(HashScan(scan.get()));
+	}
+	return result;
 }
 
 //! The plain scans under `op`: one scan, or a cross product of scans of different relations (a self-join's copies of
@@ -199,7 +241,8 @@ static bool CollectScans(LogicalOperator &op, vector<reference<LogicalGet>> &sca
 		return false;
 	}
 	auto &scan = op.Cast<LogicalGet>();
-	if (!IsPlainScan(scan)) {
+	// Reject-recording scans cannot share even with an identical scan; exclude them before candidate grouping.
+	if (!IsPlainScan(scan) || RecordsRejects(scan)) {
 		return false;
 	}
 	for (auto &other : scans) {
@@ -378,9 +421,12 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 	}
 	// groups of branches that read the same tables, in the order their first branch appears
 	vector<vector<idx_t>> groups;
+	unordered_map<hash_t, vector<idx_t>> group_index;
 	for (idx_t i = 0; i < branches.size(); i++) {
 		bool placed = false;
-		for (auto &group : groups) {
+		auto &candidates = group_index[HashBranch(branches[i])];
+		for (auto group_idx : candidates) {
+			auto &group = groups[group_idx];
 			if (ReadSameTables(branches[group[0]], branches[i])) {
 				group.push_back(i);
 				placed = true;
@@ -388,6 +434,7 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 			}
 		}
 		if (!placed) {
+			candidates.push_back(groups.size());
 			groups.push_back({i});
 		}
 	}
