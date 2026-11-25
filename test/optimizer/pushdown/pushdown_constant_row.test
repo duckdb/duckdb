@@ -1,0 +1,132 @@
+# name: test/optimizer/pushdown/pushdown_constant_row.test
+# description: Filters against a one-row relation of constants are pushed into the other side of the cross product
+# group: [pushdown]
+
+require parquet
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY';
+
+# keep the statistics propagator from deriving the same filters from the join
+statement ok
+SET disabled_optimizers TO 'statistics_propagation';
+
+statement ok
+CREATE TABLE t AS SELECT range AS g, (range % 10)::VARCHAR AS h FROM range(100);
+
+# integer constant against a BIGINT column, and a string constant
+query II
+EXPLAIN WITH params AS (SELECT 7 AS a, '7' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a AND t.h = p.b;
+----
+logical_opt	<REGEX>:.*Filters: g = 7, h = '7'.*
+
+query I
+WITH params AS (SELECT 7 AS a, '7' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a AND t.h = p.b;
+----
+1
+
+# inner join condition, with a constant column that is only projected, and one that is unused
+query II
+EXPLAIN WITH params AS (SELECT 7 AS a, 3 AS unused) SELECT count(*), max(p.a) FROM t JOIN params p ON t.g = p.a;
+----
+logical_opt	<REGEX>:.*Filters: g = 7.*
+
+query II
+WITH params AS (SELECT 7 AS a, 3 AS unused) SELECT count(*), max(p.a) FROM t JOIN params p ON t.g = p.a;
+----
+1	7
+
+# the constant row used by several scans
+query I
+WITH params AS (SELECT 7 AS a),
+x AS (SELECT g FROM t CROSS JOIN params WHERE t.g = params.a),
+y AS (SELECT g FROM t CROSS JOIN params WHERE t.g = params.a)
+SELECT count(*) FROM x JOIN y USING (g);
+----
+1
+
+# a constant used in a disjunction and in a computed expression
+query I
+WITH params AS (SELECT 7 AS a, '3' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a + 1 OR t.h = p.b;
+----
+11
+
+# a NULL constant matches nothing
+query I
+WITH params AS (SELECT NULL::INT AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+0
+
+# volatile values are not constants
+query II
+EXPLAIN WITH params AS (SELECT random() AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+logical_opt	<REGEX>:.*Comparison Join.*
+
+# a one-row aggregate is not a constant row
+query II
+EXPLAIN WITH params AS (SELECT max(g) AS a FROM t) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+logical_opt	<REGEX>:.*Comparison Join.*
+
+query I
+WITH params AS (SELECT max(g) AS a FROM t) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+1
+
+# prepared statement parameters are not folded, but give the same results
+statement ok
+PREPARE q AS WITH params AS (SELECT ?::INT AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+
+query I
+EXECUTE q(7);
+----
+1
+
+# outer joins are left alone
+query II
+WITH params AS (SELECT 7 AS a) SELECT count(*), count(p.a) FROM t LEFT JOIN params p ON t.g = p.a;
+----
+100	1
+
+# hive partitions are pruned by the substituted constants
+statement ok
+COPY (SELECT range AS v, range % 4 AS part, (range % 3)::VARCHAR AS spart FROM range(120))
+TO '__TEST_DIR__/constant_row_parts' (FORMAT parquet, PARTITION_BY (part, spart));
+
+query II
+EXPLAIN ANALYZE WITH params AS (SELECT 1 AS part, '2' AS spart)
+SELECT count(*) FROM read_parquet('__TEST_DIR__/constant_row_parts/**/*.parquet', hive_partitioning = true,
+hive_types = {'part': INT, 'spart': VARCHAR}) d CROSS JOIN params p WHERE d.part = p.part AND d.spart = p.spart;
+----
+analyzed_plan	<REGEX>:.*Total Files Read: 1.*
+
+query I
+WITH params AS (SELECT 1 AS part, '2' AS spart)
+SELECT count(*) FROM read_parquet('__TEST_DIR__/constant_row_parts/**/*.parquet', hive_partitioning = true,
+hive_types = {'part': INT, 'spart': VARCHAR}) d CROSS JOIN params p WHERE d.part = p.part AND d.spart = p.spart;
+----
+10
+
+# a filter on the constant row alone stays with the constant row
+query I
+WITH params AS (SELECT 7 AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE p.a = 7 AND t.g = p.a;
+----
+1
+
+query I
+WITH params AS (SELECT 7 AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE p.a = 8 AND t.g = p.a;
+----
+0
+
+# the constant row on the left side
+query I
+WITH params AS (SELECT 7 AS a) SELECT count(*) FROM params p CROSS JOIN t WHERE t.g = p.a;
+----
+1
+
+# a constant compared with a constant row column of another type
+query I
+WITH params AS (SELECT '7' AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a::BIGINT;
+----
+1
