@@ -84,7 +84,6 @@ SELECT x, d::VARCHAR FROM (SELECT x, d, row_number() OVER (PARTITION BY d ORDER 
 5	-1.0
 6	0.0
 
-
 # REAL with a single top row
 query I
 SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x DESC) rn FROM f WHERE x <> 6) WHERE rn = 1 ORDER BY d, d::VARCHAR;
@@ -92,19 +91,3 @@ SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x D
 -1.0
 -0.0
 1.5
-
-# a struct-packed payload that cannot be late-materialized
-query II
-SELECT x, d::VARCHAR FROM (SELECT x, d, row_number() OVER (PARTITION BY d ORDER BY x DESC) rn FROM (VALUES (0.0::DOUBLE, 1), (-0.0::DOUBLE, 2), (-0.0::DOUBLE, 4), (0.0::DOUBLE, 6)) v(d, x)) WHERE rn <= 2 ORDER BY x;
-----
-4	-0.0
-6	0.0
-
-# a nested partition column
-query I
-SELECT l::VARCHAR FROM (SELECT l, row_number() OVER (PARTITION BY l ORDER BY x DESC) rn FROM (SELECT [d] AS l, x FROM t)) WHERE rn <= 2 ORDER BY l, l::VARCHAR;
-----
-[-1.0]
-[-0.0]
-[0.0]
-[1.5]

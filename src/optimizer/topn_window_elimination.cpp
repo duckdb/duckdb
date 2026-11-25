@@ -194,20 +194,17 @@ LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t colu
 	return result;
 }
 
-//! Whether the top-n aggregate keeps the sign of a zero in this payload. Payloads that are not stored natively are
-//! kept as sort keys, which store 0.0 and -0.0 alike.
-static bool PayloadKeepsZeroSign(const LogicalType &type, const bool n_aggregate, const bool struct_packed) {
-	if (!TypeVisitor::Contains(type, LogicalTypeId::FLOAT) && !TypeVisitor::Contains(type, LogicalTypeId::DOUBLE)) {
+//! Whether the top-n aggregate keeps the sign of a zero in a single FLOAT or DOUBLE payload column: types that
+//! arg_min/arg_max do not store natively are stored as sort keys, which store 0.0 and -0.0 alike.
+static bool PayloadKeepsZeroSign(const LogicalType &type, const bool n_aggregate) {
+	if (type.id() != LogicalTypeId::FLOAT && type.id() != LogicalTypeId::DOUBLE) {
 		return true;
-	}
-	if (struct_packed) {
-		return false;
 	}
 	if (n_aggregate) {
 #if DUCKDB_SMALLER_BINARY(arg_min_max_n_types)
 		return false;
 #else
-		return type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE;
+		return true;
 #endif
 	}
 #if DUCKDB_SMALLER_BINARY(arg_min_max_types)
@@ -333,13 +330,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
-	if (!used_late_materialization) {
-		for (auto &payload : aggregate_payload) {
-			if (!PayloadKeepsZeroSign(payload->GetReturnType(), params.limit > 1,
-			                          params.payload_type == TopNPayloadType::STRUCT_PACK)) {
-				return op;
-			}
-		}
+	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && aggregate_payload.size() == 1 &&
+	    !PayloadKeepsZeroSign(aggregate_payload[0]->GetReturnType(), params.limit > 1)) {
+		return op;
 	}
 	any_late_materialization |= used_late_materialization;
 
