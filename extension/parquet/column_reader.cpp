@@ -497,7 +497,7 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		// the page has been filtered out!
 		// skip forward
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-		trans.Skip(page_hdr.compressed_page_size);
+		trans.Skip(GetOnDiskPageSize(page_hdr));
 		page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
 	}
 
@@ -575,7 +575,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		idx_t page_num_values =
 		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
 		if (rows_to_skip >= page_num_values) {
-			trans.Skip(page_hdr.compressed_page_size);
+			trans.Skip(GetOnDiskPageSize(page_hdr));
 			page_is_filtered_out = true;
 			page_rows_available = page_num_values;
 			return;
@@ -711,6 +711,15 @@ uint32_t ColumnReader::GetPageBodySize(const PageHeader &page_hdr) const {
 		}
 	}
 	return page_body_size;
+}
+
+uint32_t ColumnReader::GetOnDiskPageSize(const PageHeader &page_hdr) const {
+	if (!reader.parquet_options.encryption_config) {
+		return NumericCast<uint32_t>(page_hdr.compressed_page_size);
+	}
+	// an encrypted page body is stored as a single crypto module: length + nonce + ciphertext + tag
+	const uint32_t framing = ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+	return GetPageBodySize(page_hdr) + framing;
 }
 
 void ColumnReader::AllocateBlock(idx_t payload_size) {
