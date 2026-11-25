@@ -351,14 +351,14 @@ public:
 	}
 };
 
-//! HUGEINT / UHUGEINT are written as DECIMAL(39,0), the narrowest decimal that holds the full range of both: a
+//! HUGEINT / UHUGEINT are written as DECIMAL(39,0), the narrowest decimal that holds the full range of both, as a
 //! big-endian two's complement FIXED_LEN_BYTE_ARRAY, the same form as a wide decimal of that width
 struct ParquetHugeintDecimalTargetType {
 	//! The decimal width that holds every HUGEINT and UHUGEINT value
 	static constexpr const uint32_t DECIMAL_WIDTH = 39;
 	//! The number of sign extension bytes in front of the 16 bytes of the integer
 	static constexpr const idx_t SIGN_EXTENSION_SIZE = 8;
-	//! The length of the FIXED_LEN_BYTE_ARRAY. 39 digits need 17 bytes, but the length is deliberately not minimal:
+	//! The length of the FIXED_LEN_BYTE_ARRAY. 39 digits need 17 bytes, but the length is deliberately not minimal.
 	//! DuckDB 1.x reads a decimal of more than 38 digits as a DOUBLE with a decoder that is only correct when the
 	//! length is a multiple of 8 bytes (it misreads the trailing partial chunk, without an error). The Parquet
 	//! format only requires the length to be large enough for the precision, so the values are sign-extended to 24
@@ -366,7 +366,7 @@ struct ParquetHugeintDecimalTargetType {
 	static constexpr const idx_t PARQUET_SIZE = SIGN_EXTENSION_SIZE + 16;
 	data_t bytes[PARQUET_SIZE];
 
-	//! Numeric comparison: the bytes order like the values once the sign bit is flipped
+	//! Numeric comparison, where the bytes order like the values once the sign bit is flipped
 	static int Compare(const ParquetHugeintDecimalTargetType &lhs, const ParquetHugeintDecimalTargetType &rhs) {
 		const auto lhs_sign = lhs.bytes[0] ^ 0x80;
 		const auto rhs_sign = rhs.bytes[0] ^ 0x80;

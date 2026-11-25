@@ -153,7 +153,7 @@ with open("byte_array_decimal_gt38.parquet", "wb") as f:
 
 
 # decimal(39,2) / decimal(45,3) declared on INT32 / INT64 columns. The Parquet format allows at most 9 / 18 digits
-# there, so no writer produces such a file: it is a file written by DuckDB with the precision patched in the footer.
+# there, so no writer produces such a file. It is a file written by DuckDB with the precision patched in the footer.
 #   COPY (SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE ((i - 1500) / 100)::DECIMAL(9,2) END AS d32,
 #                CASE WHEN i % 11 = 0 THEN NULL ELSE ((i - 1500) * 1000000007 / 1000)::DECIMAL(18,3) END AS d64,
 #                (i % 5 - 2)::DECIMAL(9,2) AS dict32
@@ -172,7 +172,7 @@ def patch_precision(data, scale, old_precision, new_precision, expected_count):
 
 with open("int_decimal_src.parquet", "rb") as f:
     data = f.read()
-data = patch_precision(data, 2, 9, 39, 4)   # d32 and dict32: DECIMAL(9,2) -> DECIMAL(39,2)
-data = patch_precision(data, 3, 18, 45, 2)  # d64: DECIMAL(18,3) -> DECIMAL(45,3)
+data = patch_precision(data, 2, 9, 39, 4)   # d32 and dict32 go from DECIMAL(9,2) to DECIMAL(39,2)
+data = patch_precision(data, 3, 18, 45, 2)  # d64 goes from DECIMAL(18,3) to DECIMAL(45,3)
 with open("int_decimal_gt38.parquet", "wb") as f:
     f.write(data)

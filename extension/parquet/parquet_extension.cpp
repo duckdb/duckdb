@@ -1031,7 +1031,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// If this is an EXPORT DATABASE statement, HUGEINT / UHUGEINT are cast to VARCHAR: a COPY writes them as
+		// If this is an EXPORT DATABASE statement, HUGEINT / UHUGEINT are cast to VARCHAR. A COPY writes them as
 		// DECIMAL(39,0), which is exact, but DuckDB versions without wide decimals read that back as a lossy DOUBLE
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
 			// Replace these types with VARCHAR

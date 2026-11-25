@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_hugeint.test
-# description: Parquet hugeint round trip: HUGEINT is written as an exact DECIMAL(39,0)
+# description: Parquet hugeint round trip, HUGEINT is written as an exact DECIMAL(39,0)
 # group: [writer]
 
 require parquet
@@ -29,7 +29,7 @@ NULL
 100000000000000000000000000000000000001
 -100000000000000000000000000000000000001
 
-# the values are exact: nothing is rounded through a DOUBLE
+# the values are exact, nothing is rounded through a DOUBLE
 query I
 SELECT count(*) FROM (SELECT h::HUGEINT AS h FROM '{TEST_DIR}/hugeints.parquet' EXCEPT ALL SELECT h FROM hugeints)
 ----
@@ -40,7 +40,7 @@ SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
 DECIMAL(39,0)
 
-# 39 digits hold the full HUGEINT range. The big-endian two's complement value needs 17 bytes, but is extended to 24:
+# 39 digits hold the full HUGEINT range. The big-endian two's complement value needs 17 bytes, but is extended to 24.
 # DuckDB 1.x reads such a column as a DOUBLE, and only decodes lengths that are a multiple of 8 bytes correctly
 query IIIIII
 SELECT name, type, type_length, converted_type, precision, scale FROM parquet_schema('{TEST_DIR}/hugeints.parquet') WHERE name = 'h'
@@ -77,7 +77,7 @@ SELECT count(*) FROM (SELECT * FROM hugeints_copy EXCEPT ALL SELECT * FROM hugei
 ----
 0
 
-# several row groups: the statistics of every row group prune correctly, also across the sign
+# several row groups, where the statistics of every row group prune correctly, also across the sign
 statement ok
 COPY (SELECT (i - 5000)::HUGEINT * 10000000000000000000000000000000000 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/hugeints_row_groups.parquet' (ROW_GROUP_SIZE 2000)
 
@@ -101,7 +101,7 @@ SELECT sum(h)::HUGEINT FROM '{TEST_DIR}/hugeints_row_groups.parquet'
 ----
 -50000000000000000000000000000000000000
 
-# few distinct values: dictionary encoded
+# few distinct values are dictionary encoded
 statement ok
 COPY (SELECT ((i % 5) - 2)::HUGEINT * 50000000000000000000000000000000000000 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/hugeints_dictionary.parquet'
 
@@ -110,7 +110,7 @@ SELECT DISTINCT encodings FROM parquet_metadata('{TEST_DIR}/hugeints_dictionary.
 ----
 PLAIN_DICTIONARY
 
-# no bloom filter is written: a reader that sees the column as a DOUBLE would probe it with the hash of a DOUBLE
+# no bloom filter is written, a reader that sees the column as a DOUBLE would probe it with the hash of a DOUBLE
 query I
 SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/hugeints_dictionary.parquet')
 ----

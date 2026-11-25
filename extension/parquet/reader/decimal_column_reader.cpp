@@ -59,7 +59,7 @@ idx_t ParquetDecimalUtils::WideDecimalByteLength(uint32_t width) {
 	const auto required_bytes =
 	    static_cast<idx_t>(std::ceil((static_cast<double>(width) * 3.3219280948873626 + 1) / 8.0));
 	// The length is rounded up to a multiple of 8 bytes, which the Parquet format allows (the length only has to be
-	// large enough for the precision): DuckDB 1.x reads a decimal of more than 38 digits as a DOUBLE with a decoder
+	// large enough for the precision). DuckDB 1.x reads a decimal of more than 38 digits as a DOUBLE with a decoder
 	// that misreads the trailing partial 8-byte chunk of any other length, without an error
 	return AlignValue<idx_t>(required_bytes, 8);
 }

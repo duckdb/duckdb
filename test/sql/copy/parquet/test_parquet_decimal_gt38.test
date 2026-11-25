@@ -83,7 +83,7 @@ SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/byte_array
 ----
 1
 
-# precision above 38 declared on INT32 / INT64 columns (the Parquet format allows at most 9 / 18 digits there):
+# precision above 38 declared on INT32 / INT64 columns (the Parquet format allows at most 9 / 18 digits there).
 # the integers are read into a wide DECIMAL of the declared width, they are not turned into a DOUBLE
 query III
 SELECT typeof(d32), typeof(d64), typeof(dict32) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') LIMIT 1
@@ -136,7 +136,7 @@ SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decima
 1
 
 # wide decimals are written in a FIXED_LEN_BYTE_ARRAY whose length is rounded up to a multiple of 8 bytes
-# (39 digits need 17 bytes, 50 need 21, 76 need 32, 120 need 51): DuckDB 1.x reads these columns as DOUBLE and only
+# (39 digits need 17 bytes, 50 need 21, 76 need 32, 120 need 51). DuckDB 1.x reads these columns as DOUBLE and only
 # decodes such lengths correctly, and the Parquet format only requires the length to be large enough
 statement ok
 COPY (

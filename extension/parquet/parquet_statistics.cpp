@@ -166,7 +166,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 template <class T>
 static Value ParquetDecimalStatsValue(T value, uint32_t width, uint32_t scale) {
 	if (width > Decimal::MAX_WIDTH_INT128) {
-		// a wide decimal (a BIGNUM blob) backed by an integer column: every integer fits
+		// a wide decimal (a BIGNUM blob) backed by an integer column, which every integer fits in
 		auto blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(value));
 		return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
 	}

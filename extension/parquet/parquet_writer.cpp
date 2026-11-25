@@ -364,7 +364,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		break;
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UHUGEINT:
-		// the full range of HUGEINT / UHUGEINT needs 39 digits: declared as a DECIMAL(39,0)
+		// the full range of HUGEINT / UHUGEINT needs 39 digits, so the column is declared as a DECIMAL(39,0)
 		SetSchemaProperties(LogicalType::DECIMAL(ParquetHugeintDecimalTargetType::DECIMAL_WIDTH, 0), schema_ele,
 		                    allow_geometry, context, write_timestamp_as_int96, timestamp_is_adjusted_to_utc);
 		// with a length that is longer than the width needs, see ParquetHugeintDecimalTargetType

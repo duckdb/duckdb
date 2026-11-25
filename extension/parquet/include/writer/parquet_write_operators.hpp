@@ -452,8 +452,8 @@ struct ParquetHugeintDecimalOperator : public BaseParquetOperator {
 		return duckdb_zstd::XXH64(target_value.bytes, ParquetHugeintDecimalTargetType::PARQUET_SIZE, 0);
 	}
 
-	//! No bloom filters: DuckDB versions that read this column as a DOUBLE would probe the filter with the hash of
-	//! a DOUBLE, which is never in it, and skip row groups that hold the value
+	//! No bloom filters, because DuckDB versions that read this column as a DOUBLE would probe the filter with the hash
+	//! of a DOUBLE, which is never in it, and skip row groups that hold the value
 	template <class SRC, class TGT>
 	static constexpr bool WritesBloomFilter() {
 		return false;
