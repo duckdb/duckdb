@@ -264,28 +264,24 @@ static bool IsLowerBound(const ExpressionType comparison_type) {
 	       comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 }
 
-unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr,
-                                                  bool require_exact) const {
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) const {
 	Value low_value, high_value;
 	ExpressionType low_comparison_type = ExpressionType::INVALID;
 	ExpressionType high_comparison_type = ExpressionType::INVALID;
 
-	// Keeps the first bound on each side, returns false if the side already has one.
-	auto try_add_bound = [&](const Value &value, const ExpressionType comparison_type) {
+	// Keeps the first bound on each side.
+	auto add_bound = [&](const Value &value, const ExpressionType comparison_type) {
 		auto is_lower = IsLowerBound(comparison_type);
 		auto &bound_value = is_lower ? low_value : high_value;
-		if (!bound_value.IsNull()) {
-			return false;
+		if (bound_value.IsNull()) {
+			bound_value = value;
+			(is_lower ? low_comparison_type : high_comparison_type) = comparison_type;
 		}
-		bound_value = value;
-		(is_lower ? low_comparison_type : high_comparison_type) = comparison_type;
-		return true;
 	};
 
 	// Use the conjuncts that form a key range, the caller applies the remaining ones to the fetched rows.
 	vector<reference<const Expression>> comparisons;
 	CollectConjunctionChildren(filter_expr, comparisons);
-	idx_t key_range_conjuncts = 0;
 	for (auto &comparison_ref : comparisons) {
 		auto &comparison = comparison_ref.get();
 		if (comparison.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
@@ -303,11 +299,8 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			if (lower_value.IsNull() || upper_value.IsNull()) {
 				return nullptr;
 			}
-			auto added_lower = try_add_bound(lower_value, BoundBetweenExpression::LowerComparisonType(between));
-			auto added_upper = try_add_bound(upper_value, BoundBetweenExpression::UpperComparisonType(between));
-			if (added_lower && added_upper) {
-				key_range_conjuncts++;
-			}
+			add_bound(lower_value, BoundBetweenExpression::LowerComparisonType(between));
+			add_bound(upper_value, BoundBetweenExpression::UpperComparisonType(between));
 			continue;
 		}
 		ExpressionType comparison_type;
@@ -316,21 +309,13 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			continue;
 		}
 		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-			if (require_exact && comparisons.size() != 1) {
-				return nullptr;
-			}
 			return InitializeScanSinglePredicate(constant_value, ExpressionType::COMPARE_EQUAL);
 		}
-		if (try_add_bound(constant_value, comparison_type)) {
-			key_range_conjuncts++;
-		}
+		add_bound(constant_value, comparison_type);
 	}
 
 	// We cannot use an index scan.
 	if (low_value.IsNull() && high_value.IsNull()) {
-		return nullptr;
-	}
-	if (require_exact && key_range_conjuncts != comparisons.size()) {
 		return nullptr;
 	}
 

@@ -36,17 +36,6 @@ void ColumnIndex::SetPushdownExtractType(const LogicalType &type_information,
 		}
 	}
 }
-bool ColumnIndex::HasPushdownCast() const {
-	if (!IsPushdownExtract()) {
-		return false;
-	}
-	auto &child = child_indexes[0];
-	if (child.IsPushdownExtract()) {
-		return child.HasPushdownCast();
-	}
-	auto &field_type = child.HasPrimaryIndex() ? StructType::GetChildTypes(type)[child.GetPrimaryIndex()].second : type;
-	return child.GetType() != field_type;
-}
 const LogicalType &ColumnIndex::GetScanType() const {
 	D_ASSERT(HasType());
 	if (IsPushdownExtract()) {
