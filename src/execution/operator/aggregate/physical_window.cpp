@@ -784,6 +784,13 @@ protected:
 	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Get a chunk by evaluating functions
 	void GetData(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
+	//! Evaluate a slice of the input
+	void Evaluate(ExecutionContext &context, const idx_t position, DataChunk &input, DataChunk &output,
+	              InterruptState &interrupt);
+	//! Merge the input and output columns into the result
+	void BuildResult(ExecutionContext &context, DataChunk &input, DataChunk &output, DataChunk &result) const;
+	//! Co-Evaluation with Early Stop pruning
+	void CoEvaluate(ExecutionContext &context, DataChunk &result, InterruptState &interrupt);
 
 	//! Storage and evaluation for the fully materialised data
 	unique_ptr<WindowBuilder> builder;
@@ -797,6 +804,13 @@ protected:
 	//! Storage and evaluation for chunks used in the evaluate phase
 	ExpressionExecutor eval_exec;
 	DataChunk eval_chunk;
+
+	//! Early stop evaluation
+	idx_t partition_start = DConstants::INVALID_INDEX;
+	idx_t partition_end = DConstants::INVALID_INDEX;
+	DataChunk short_input;
+	DataChunk limit_input;
+	DataChunk limit_output;
 };
 
 idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
@@ -976,7 +990,9 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 		output_types.emplace_back(wexpr.GetReturnType());
 	}
 	output_chunk.Initialize(gsource.client, output_types);
-
+	if (gsink.op.partition_limit.IsValid()) {
+		limit_output.Initialize(gsource.client, output_types);
+	}
 	auto &shared = gsink.shared;
 	shared.PrepareCollection(coll_exec, coll_chunk);
 	shared.PrepareSink(sink_exec, sink_chunk);
@@ -1066,6 +1082,9 @@ bool WindowLocalSourceState::TryAssignTask() {
 	// Scanner first, as it may be referencing sort blocks in the hash group
 	scanner.reset();
 
+	//	Force a recalculation of the partition_start
+	partition_start = DConstants::INVALID_INDEX;
+
 	return gsource.TryNextTask(task, task_local);
 }
 
@@ -1109,8 +1128,142 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	}
 }
 
+void WindowLocalSourceState::Evaluate(ExecutionContext &context, const idx_t position, DataChunk &input,
+                                      DataChunk &output, InterruptState &interrupt) {
+	const auto &executors = gsource.gsink.executors;
+	auto &gestates = window_hash_group->gestates;
+	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
+
+	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
+		auto &executor = *executors[expr_idx];
+		auto &result = output.data[expr_idx];
+		if (eval_chunk.data.empty()) {
+			eval_chunk.SetChildCardinality(input.size());
+		} else {
+			eval_chunk.Reset();
+			eval_exec.Execute(input, eval_chunk);
+		}
+		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
+		executor.Evaluate(context, position, eval_chunk, result, sink, input.size());
+	}
+
+	output_chunk.Verify(context.client.db);
+}
+
+void WindowLocalSourceState::BuildResult(ExecutionContext &context, DataChunk &input, DataChunk &output,
+                                         DataChunk &result) const {
+	idx_t out_idx = 0;
+
+	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity),
+	// so set the result cardinality explicitly here - before the references below
+	// alias input_chunk's/output_chunk's buffers.
+	result.SetChildCardinality(input.size());
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		result.data[out_idx++].Reference(input.data[col_idx]);
+	}
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		result.data[out_idx++].Reference(output.data[col_idx]);
+	}
+
+	result.Verify(context.client.db);
+}
+
+void WindowLocalSourceState::CoEvaluate(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
+	const auto partition_limit = gsource.gsink.op.partition_limit;
+	const auto &partition_mask = window_hash_group->partition_mask;
+	const auto group_count = window_hash_group->count;
+	const auto k = partition_limit.GetIndex();
+	idx_t n;
+
+	output_chunk.Reset();
+
+	//	Skip to the chunk that overlaps the next subrange
+	for (; task->begin_idx < task->end_idx; task->begin_idx++) {
+		//	Read the next chunk
+		window_hash_group->UpdateScanner(scanner, task->begin_idx);
+		batch_index = window_hash_group->batch_base + task->begin_idx;
+		const auto input_base = scanner->Scanned();
+		auto &input_chunk = scanner->chunk;
+		scanner->Scan();
+		const auto input_count = input_chunk.size();
+		const auto input_end = input_base + input_count;
+
+		//	Reset the partition start if we have a new task
+		if (partition_start == DConstants::INVALID_INDEX) {
+			n = 1;
+			partition_start = WindowBoundariesState::FindPrevStart(partition_mask, 0, input_base, n);
+			n = 1;
+			partition_end = WindowBoundariesState::FindNextStart(partition_mask, partition_start + 1, group_count, n);
+		}
+		auto limit_end = MinValue(partition_start + k, partition_end);
+
+		//	Lazy initialisation
+		if (!short_input.ColumnCount() && input_chunk.ColumnCount()) {
+			limit_input.Initialize(gsource.client, input_chunk.GetTypes());
+			short_input.Initialize(gsource.client, limit_input.GetTypes());
+		}
+
+		//	Accumulate all the sub-partitions that intersect the chunk
+		short_input.Reset();
+		for (idx_t input_start = input_base; input_start < input_end; input_start = limit_end) {
+			//	Scan forward until we have a limited partition that overlaps
+			while (limit_end <= input_start) {
+				n = 1;
+				partition_start = partition_end;
+				partition_end =
+				    WindowBoundariesState::FindNextStart(partition_mask, partition_start + 1, group_count, n);
+				limit_end = MinValue(partition_start + k, partition_end);
+			}
+			if (partition_start >= input_end) {
+				break;
+			}
+
+			//	Copy the overlap to the limit buffers and evaluate
+			const auto overlap_begin = MaxValue(partition_start, input_start) - input_base;
+			const auto overlap_end = MinValue(limit_end, input_end) - input_base;
+
+			//	Fast track the entire input to avoid copying
+			if (overlap_begin == 0 && overlap_end == input_count) {
+				Evaluate(context, input_base, input_chunk, output_chunk, interrupt);
+				BuildResult(context, input_chunk, output_chunk, result);
+				++task->begin_idx;
+				return;
+			}
+
+			if (overlap_end <= overlap_begin) {
+				continue;
+			}
+
+			limit_input.Slice(input_chunk, overlap_begin, overlap_end);
+			limit_output.Reset();
+			Evaluate(context, input_base + overlap_begin, limit_input, limit_output, interrupt);
+
+			short_input.Append(limit_input);
+			output_chunk.Append(limit_output);
+		}
+
+		//	If we didn't find anything, move to the next chunk
+		if (!short_input.size()) {
+			continue;
+		}
+
+		BuildResult(context, short_input, output_chunk, result);
+
+		// Move to the next chunk
+		++task->begin_idx;
+
+		return;
+	}
+}
+
 void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
+
+	//	Apply co-evaluation with early stop
+	if (gsource.gsink.op.partition_limit.IsValid()) {
+		CoEvaluate(context, result, interrupt);
+		return;
+	}
 
 	window_hash_group->UpdateScanner(scanner, task->begin_idx);
 	batch_index = window_hash_group->batch_base + task->begin_idx;
@@ -1119,39 +1272,13 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	auto &input_chunk = scanner->chunk;
 	scanner->Scan();
 
-	const auto &executors = gsource.gsink.executors;
-	auto &gestates = window_hash_group->gestates;
-	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	output_chunk.Reset();
-	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
-		auto &executor = *executors[expr_idx];
-		auto &result = output_chunk.data[expr_idx];
-		if (eval_chunk.data.empty()) {
-			eval_chunk.SetChildCardinality(input_chunk.size());
-		} else {
-			eval_chunk.Reset();
-			eval_exec.Execute(input_chunk, eval_chunk);
-		}
-		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
-		executor.Evaluate(context, position, eval_chunk, result, sink, input_chunk.size());
-	}
-	output_chunk.Verify(context.client.db);
 
-	idx_t out_idx = 0;
-	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity), so set the
-	// result cardinality explicitly here - before the references below alias input_chunk's/output_chunk's buffers.
-	result.SetChildCardinality(input_chunk.size());
-	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); col_idx++) {
-		result.data[out_idx++].Reference(input_chunk.data[col_idx]);
-	}
-	for (idx_t col_idx = 0; col_idx < output_chunk.ColumnCount(); col_idx++) {
-		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
-	}
+	Evaluate(context, position, input_chunk, output_chunk, interrupt);
+	BuildResult(context, input_chunk, output_chunk, result);
 
 	// Move to the next chunk
 	++task->begin_idx;
-
-	result.Verify(context.client.db);
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
