@@ -458,6 +458,7 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	if (!entry) {
 		// no building entry: publish between commits
+		D_ASSERT(!index->SupportsDeltaIndexes());
 		unique_lock<mutex> table_lock;
 		auto commit_lock = LockMainTableForIndex(table_lock);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
