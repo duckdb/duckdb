@@ -1,4 +1,4 @@
-# name: test/sql/explain/test_explain_update_strategy.test
+# name: test/sql/explain/test_explain_update_mode.test
 # description: EXPLAIN shows whether an UPDATE runs in place or as a DELETE + INSERT, one section per rule
 # group: [explain]
 
@@ -11,13 +11,13 @@ CREATE TABLE pk (id INTEGER PRIMARY KEY, v INTEGER);
 query II
 EXPLAIN UPDATE pk SET id = 1
 ----
-physical_plan	<REGEX>:.*Table: .*\.pk .*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Table: .*\.pk .*Update Mode: Delete \+ Insert.*
 
 # an index on a column that is not written does not matter
 query II
 EXPLAIN UPDATE pk SET v = 1
 ----
-physical_plan	<REGEX>:.*Table: .*\.pk .*Strategy: In Place.*
+physical_plan	<REGEX>:.*Table: .*\.pk .*Update Mode: In Place.*
 
 # UNIQUE
 statement ok
@@ -26,7 +26,7 @@ CREATE TABLE uq (a INTEGER UNIQUE, v INTEGER);
 query II
 EXPLAIN UPDATE uq SET a = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 # FOREIGN KEY: the referencing column has an index
 statement ok
@@ -35,12 +35,12 @@ CREATE TABLE fk (p INTEGER REFERENCES pk(id), v INTEGER);
 query II
 EXPLAIN UPDATE fk SET p = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE fk SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # CREATE INDEX, also on a column that is only part of a multi-column index
 statement ok
@@ -52,12 +52,12 @@ CREATE INDEX ix_ab ON ix(a, b);
 query II
 EXPLAIN UPDATE ix SET b = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ix SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # an expression index counts for every column it references
 statement ok
@@ -69,12 +69,12 @@ CREATE INDEX ex_idx ON ex((a + 1));
 query II
 EXPLAIN UPDATE ex SET a = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ex SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # an index on a generated column counts for the columns it is computed from
 statement ok
@@ -86,14 +86,14 @@ CREATE INDEX gen_idx ON gen(b);
 query II
 EXPLAIN UPDATE gen SET a = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE gen SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
-# list-like types cannot be updated in place, STRUCTs of scalars or of such STRUCTs can
+# LIST, ARRAY, MAP, UNION, VARIANT, GEOMETRY and GEOGRAPHY, or a STRUCT containing one, cannot be updated in place
 # (a TEMP table, as test configs with an older storage version cannot store VARIANT or GEOGRAPHY)
 statement ok
 CREATE TEMP TABLE ty (l INTEGER[], ar INTEGER[2], m MAP(INTEGER, INTEGER), un UNION(i INTEGER, s VARCHAR), va VARIANT,
@@ -102,52 +102,52 @@ CREATE TEMP TABLE ty (l INTEGER[], ar INTEGER[2], m MAP(INTEGER, INTEGER), un UN
 query II
 EXPLAIN UPDATE ty SET l = [1]
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET ar = [1, 2]
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET m = MAP {1: 1}
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET un = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET va = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET geom = NULL
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET geog = NULL
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET sl = {'x': [1]}
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE ty SET ss = {'x': 1, 'y': 'a'}
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 query II
 EXPLAIN UPDATE ty SET sss = {'x': {'y': 1}}
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # a setting forces DELETE + INSERT
 statement ok
@@ -156,7 +156,7 @@ CREATE TABLE n (a INTEGER, v INTEGER);
 query II
 EXPLAIN UPDATE n SET a = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 statement ok
 SET debug_force_update_to_del_and_insert = true;
@@ -164,7 +164,7 @@ SET debug_force_update_to_del_and_insert = true;
 query II
 EXPLAIN UPDATE n SET a = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 statement ok
 RESET debug_force_update_to_del_and_insert;
@@ -184,50 +184,50 @@ CREATE TABLE s (id INTEGER, name VARCHAR, v INTEGER);
 query II
 EXPLAIN MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET *
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN MERGE INTO n USING n AS src ON n.a = src.a WHEN MATCHED THEN UPDATE
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # MERGE UPDATE BY NAME writes every column of the source
 query II
 EXPLAIN MERGE INTO t USING (SELECT 1 AS id, 2 AS v) src ON t.id = src.id WHEN MATCHED THEN UPDATE BY NAME
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN MERGE INTO t USING (SELECT 1 AS v) src ON t.id = src.v WHEN MATCHED THEN UPDATE BY NAME
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
-# INSERT OR REPLACE writes every inserted column except the key
+# INSERT OR REPLACE writes every inserted column except the key, here also the indexed name
 query II
 EXPLAIN INSERT OR REPLACE INTO t VALUES (1, 'a', 5)
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN INSERT OR REPLACE INTO t BY NAME SELECT 1 AS id, 5 AS v
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # ON CONFLICT DO UPDATE writes exactly the listed columns
 query II
 EXPLAIN INSERT INTO t VALUES (1, 'a', 5) ON CONFLICT (id) DO UPDATE SET v = excluded.v
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 query II
 EXPLAIN INSERT INTO t VALUES (1, 'a', 5) ON CONFLICT (id) DO UPDATE SET name = excluded.name
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 # ON CONFLICT DO NOTHING does not update at all
 query II
@@ -235,16 +235,26 @@ EXPLAIN INSERT INTO t VALUES (1, 'a', 5) ON CONFLICT DO NOTHING
 ----
 physical_plan	<!REGEX>:.*Update.*
 
-# RETURNING writes every column
+# RETURNING writes every column, also in MERGE and ON CONFLICT DO UPDATE
 query II
 EXPLAIN UPDATE t SET v = 1 RETURNING v
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
+
+query II
+EXPLAIN INSERT INTO t VALUES (1, 'a', 5) ON CONFLICT (id) DO UPDATE SET v = excluded.v RETURNING v
+----
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
+
+query II
+EXPLAIN MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET v = s.v RETURNING v
+----
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 query II
 EXPLAIN UPDATE n SET v = 1 RETURNING v
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 statement ok
 CREATE TABLE nl (a INTEGER, l INTEGER[]);
@@ -252,7 +262,7 @@ CREATE TABLE nl (a INTEGER, l INTEGER[]);
 query II
 EXPLAIN UPDATE nl SET a = 1 RETURNING a
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 # an UPDATE trigger that fires acts like RETURNING (TEMP tables, as triggers also need a newer storage version)
 statement ok
@@ -267,7 +277,7 @@ CREATE TRIGGER trg_pk_upd AFTER UPDATE ON trg_pk FOR EACH STATEMENT INSERT INTO 
 query II
 EXPLAIN UPDATE trg_pk SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 statement ok
 CREATE TEMP TABLE trg_n (a INTEGER, v INTEGER);
@@ -278,7 +288,24 @@ CREATE TRIGGER trg_n_upd AFTER UPDATE ON trg_n FOR EACH STATEMENT INSERT INTO au
 query II
 EXPLAIN UPDATE trg_n SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
+
+# an INSERT trigger does the same to ON CONFLICT DO UPDATE
+statement ok
+CREATE TEMP TABLE trg_ins (id INTEGER PRIMARY KEY, v INTEGER);
+
+query II
+EXPLAIN INSERT INTO trg_ins VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET v = excluded.v
+----
+physical_plan	<REGEX>:.*Update Mode: In Place.*
+
+statement ok
+CREATE TRIGGER trg_ins_ins AFTER INSERT ON trg_ins FOR EACH STATEMENT INSERT INTO audit VALUES ('ins');
+
+query II
+EXPLAIN INSERT INTO trg_ins VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET v = excluded.v
+----
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 # a trigger on UPDATE OF other columns does not fire, so it adds nothing
 statement ok
@@ -290,7 +317,7 @@ CREATE TRIGGER trg_of_upd AFTER UPDATE OF id ON trg_of FOR EACH STATEMENT INSERT
 query II
 EXPLAIN UPDATE trg_of SET v = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # a CHECK over two or more columns adds all of them to every UPDATE, even one that writes none of them
 statement ok
@@ -299,7 +326,7 @@ CREATE TABLE chk (a INTEGER, b INTEGER, c INTEGER, CHECK (a <= b));
 query II
 EXPLAIN UPDATE chk SET c = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 statement ok
 CREATE INDEX chk_b ON chk(b);
@@ -307,7 +334,7 @@ CREATE INDEX chk_b ON chk(b);
 query II
 EXPLAIN UPDATE chk SET c = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 statement ok
 CREATE TABLE chk_list (a INTEGER, c INTEGER, l INTEGER[], CHECK (a <= len(l)));
@@ -315,7 +342,7 @@ CREATE TABLE chk_list (a INTEGER, c INTEGER, l INTEGER[], CHECK (a <= len(l)));
 query II
 EXPLAIN UPDATE chk_list SET c = 1
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 # a one-column CHECK adds nothing
 statement ok
@@ -324,14 +351,14 @@ CREATE TABLE chk_one (a INTEGER UNIQUE, c INTEGER, CHECK (a > 0));
 query II
 EXPLAIN UPDATE chk_one SET c = 1
 ----
-physical_plan	<REGEX>:.*Strategy: In Place.*
+physical_plan	<REGEX>:.*Update Mode: In Place.*
 
 # 3. Only the column list matters, not the values: SET id = id moves the row
 
 query II
 EXPLAIN UPDATE pk SET id = id
 ----
-physical_plan	<REGEX>:.*Strategy: Delete \+ Insert.*
+physical_plan	<REGEX>:.*Update Mode: Delete \+ Insert.*
 
 statement ok
 INSERT INTO pk VALUES (1, 1), (2, 2);
@@ -362,4 +389,4 @@ EXPLAIN (FORMAT JSON) MERGE INTO t USING s ON t.id = s.id
     WHEN MATCHED AND t.name IS DISTINCT FROM s.name THEN UPDATE SET name = s.name, v = s.v
     WHEN MATCHED THEN UPDATE SET v = s.v
 ----
-physical_plan	<REGEX>:.*"name": "UPDATE".*"Strategy": "Delete \+ Insert".*"name": "UPDATE".*"Strategy": "In Place".*
+physical_plan	<REGEX>:.*"name": "UPDATE".*"Update Mode": "Delete \+ Insert".*"name": "UPDATE".*"Update Mode": "In Place".*

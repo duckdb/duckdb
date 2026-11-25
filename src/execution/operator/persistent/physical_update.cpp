@@ -510,7 +510,7 @@ InsertionOrderPreservingMap<string> PhysicalUpdate::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Table"] =
 	    tableref.schema.GetQualifiedName(tableref.name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
-	result["Strategy"] = update_is_del_and_insert ? "Delete + Insert" : "In Place";
+	result["Update Mode"] = update_is_del_and_insert ? "Delete + Insert" : "In Place";
 	return result;
 }
 
