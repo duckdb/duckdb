@@ -70,6 +70,9 @@ public:
 
 	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
 		first_set.class_mask = MatcherTokenClass::STRING;
+		// a literal can continue with further string literals on following lines
+		first_set.SetSingleToken();
+		first_set.second.class_mask = MatcherTokenClass::STRING;
 	}
 
 private:

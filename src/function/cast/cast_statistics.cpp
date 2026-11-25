@@ -162,7 +162,8 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 	// for time/timestamps/dates - there are various limitations on what we can propagate
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
@@ -197,9 +198,15 @@ bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &
 		// (the ICU extension overrides them at execution time) but Value::DefaultTryCastAs
 		// uses the static, UTC-only operator, so propagated min/max would diverge from
 		// runtime values. See issue #22235.
+		// The time of day of every timestamp wraps at midnight, as for TIME and TIME_NS above
 		switch (source.id()) {
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return false;
 		default:
 			break;
@@ -279,6 +286,10 @@ unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &st
 	if (source.id() == LogicalTypeId::GEOMETRY && target.id() == LogicalTypeId::GEOMETRY) {
 		// A geometry -> geometry cast only changes CRS metadata, not coordinates, so the bounding box,
 		// type set and null-ness are unchanged: propagate the statistics as-is.
+		return stats.Copy().ToUnique();
+	}
+	if (source.id() == LogicalTypeId::GEOGRAPHY && target.id() == LogicalTypeId::GEOGRAPHY) {
+		// Same as geometry -> geometry: only the CRS changes, so the (geodetic) statistics carry over as-is.
 		return stats.Copy().ToUnique();
 	}
 	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {

@@ -58,20 +58,20 @@ struct ExportAggregateBindData : public FunctionData {
 		return aggr == other.aggr && state_size == other.state_size;
 	}
 
-	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
+	static const ExportAggregateBindData &GetFrom(ExpressionState &state) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		return func_expr.BindInfo()->Cast<ExportAggregateBindData>();
 	}
 };
 
-static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data) {
+static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr, optional_ptr<const FunctionData> bind_data) {
 	return aggr.GetStateType(bind_data);
 }
 
 // destroys the temporary underlying-aggregate states referenced by `states` (no-op if the aggregate has no
 // destructor). the combine/finalize paths below initialize underlying states into scratch buffers - without this
 // their owned heap (e.g. approx_top_k's hash map, approx_quantile's t-digest) would leak.
-static void DestroyExportStates(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
+static void DestroyExportStates(const BoundAggregateFunction &aggr, optional_ptr<const FunctionData> bind_data,
                                 Vector &states, idx_t count, ArenaAllocator &allocator) {
 	if (count == 0 || !aggr.HasStateDestructorCallback()) {
 		return;
@@ -98,7 +98,7 @@ struct CombineState : public FunctionLocalState {
 };
 
 unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                FunctionData *bind_data_p) {
+                                                optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
 	return make_uniq<CombineState>(bind_data);
 }
@@ -120,7 +120,7 @@ struct FinalizeState : public FunctionLocalState {
 };
 
 unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                 FunctionData *bind_data_p) {
+                                                 optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
 	return make_uniq<FinalizeState>(bind_data);
 }
@@ -286,6 +286,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(FunctionBinder &functi
 		}
 	}
 
+	// The recorded signature already holds the collations the state was built with
+	function_binder.arguments_collated = true;
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto [bound_aggr, bind_info] =
 	    function_binder.ResolveAggregateFunction(best_function.GetBinding(), args, keyword_args);
@@ -546,9 +548,15 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
+	// when the targets never keep source memory, the temporary states go into a scratch arena freed per call
+	unique_ptr<ArenaAllocator> scratch;
+	if (underlying_aggr.GetCombineSourceRetention() == AggregateCombineSourceRetention::NEVER_RETAINS) {
+		scratch = make_uniq<ArenaAllocator>(aggr_input_data.allocator.GetUnderlyingAllocator());
+	}
+	auto &source_allocator = scratch ? *scratch : aggr_input_data.allocator;
 	try {
 		AggregateStateSerialization::DeserializeStates(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(),
-		                                               aggr_input_data.allocator, StateMemoryOwnership::BORROWED);
+		                                               source_allocator, StateMemoryOwnership::BORROWED);
 		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (input_count == 2) {
@@ -556,10 +564,10 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		}
 		underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 	} catch (...) {
-		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, source_allocator);
 		throw;
 	}
-	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, source_allocator);
 }
 
 void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
@@ -625,7 +633,7 @@ string OrderModifierToString(OrderType order_type, OrderByNullType null_order) {
 // the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
 // extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
-                                     optional_ptr<FunctionData> bind_data) {
+                                     optional_ptr<const FunctionData> bind_data) {
 	auto layout = bound_function.GetStateType(bind_data);
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, bound_function, layout);
@@ -635,7 +643,8 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 // constructs the AGGREGATE_STATE type for an ordered aggregate - the state is the buffer of values
 // (LIST<buffered_struct>), with the inner signature and the ORDER BY spec stored in the extension info
 LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_function,
-                                           optional_ptr<FunctionData> inner_bind_data, const LogicalType &buffer_struct,
+                                           optional_ptr<const FunctionData> inner_bind_data,
+                                           const LogicalType &buffer_struct,
                                            const vector<SortedAggregateStateOrder> &orders) {
 	LogicalType state_layout = LogicalType::LIST(buffer_struct);
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
@@ -930,6 +939,23 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 	}
 	auto &buffer_struct = ListType::GetChildType(state_type);
 	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
+}
+
+bool ExportAggregateFunction::TryGetCombinedStateLayout(const BoundAggregateFunction &function,
+                                                        optional_ptr<const FunctionData> bind_data,
+                                                        AggregateStateLayout &layout) {
+	if (!bind_data || function.GetStateCombineCallback() != CombineAggrStateCombine) {
+		return false;
+	}
+	auto &combine_data = bind_data->Cast<ExportAggregateBindData>();
+	auto &aggr = combine_data.aggr;
+	// states with explicit export / import callbacks are not described by their field layout alone
+	if (!aggr.HasGetStateTypeCallback() || aggr.HasExportAggregateStateCallback() ||
+	    aggr.HasImportAggregateStateCallback()) {
+		return false;
+	}
+	layout = aggr.GetStateType(combine_data.bind_data.get());
+	return true;
 }
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {

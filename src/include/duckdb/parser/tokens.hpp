@@ -38,7 +38,6 @@ class PragmaStatement;
 class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
-class RelationStatement;
 class SetStatement;
 class SetVariableStatement;
 class ResetVariableStatement;

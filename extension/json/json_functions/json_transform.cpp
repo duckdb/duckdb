@@ -1207,6 +1207,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
+	case LogicalTypeId::GEOGRAPHY:
 		return TransformFromString(vals, result, count, options);
 	case LogicalTypeId::GEOMETRY:
 		return TransformGeometry(vals, result, count, options);
@@ -1309,6 +1310,8 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	options.delay_error = true;
 
 	auto success = TransformFunctionInternal(source, count, result, alc, options);
+	// strings of the result point into the JSON allocator, which must outlive the cast's local state
+	JSONAllocator::AddBuffer(result, alc);
 	if (!success) {
 		HandleCastError::AssignError(options.error_message, parameters);
 	}

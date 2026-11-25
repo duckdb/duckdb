@@ -246,49 +246,20 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::NegativeInfinity(type);
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIME_NS:
 		return Value::TIME_NS(dtime_ns_t(0));
-	case LogicalTypeId::TIMESTAMP: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		return Value::TIMESTAMP(date, dtime_t(0));
-	}
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the minimum timestamp and convert it to timestamp_sec_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(min_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the minimum timestamp and convert it to timestamp_ms_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(min_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPNS(timestamp_ns_t(min_ns));
-	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
-		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
-	}
-	case LogicalTypeId::TIMESTAMP_TZ_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
-	}
 	case LogicalTypeId::INTERVAL: {
 		const auto min_months = NumericLimits<int32_t>::Minimum();
 		const auto min_days = NumericLimits<int32_t>::Minimum();
@@ -360,35 +331,19 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::Infinity(type);
 	case LogicalTypeId::TIME:
 		//	24:00:00 according to PG
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIME_NS:
 		//	24:00:00 according to PG
 		return Value::TIME_NS(dtime_ns_t(Interval::NANOS_PER_DAY));
-	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the maximum timestamp and convert it to timestamp_s_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(max_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the maximum timestamp and convert it to timestamp_ms_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(max_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		const auto ts = timestamp_ns_t(NumericLimits<int64_t>::Maximum() - 1);
-		return Value::TIMESTAMPNS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
@@ -1025,6 +980,22 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenc
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 	Value result;
 	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the LogicalTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOGRAPHY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+	Value result;
+	result.type_ = LogicalType::GEOGRAPHY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOGRAPHY(const_data_ptr_t data, idx_t len) {
+	Value result;
+	result.type_ = LogicalType::GEOGRAPHY(); // construct type explicitly so that we get the ExtraTypeInfo
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
@@ -1796,6 +1767,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -2369,9 +2341,9 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		if (type_.id() == LogicalTypeId::BLOB) {
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
-		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
-			if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
-				// Write as old-style SPATIAL format
+		} else if (type_.id() == LogicalTypeId::GEOMETRY || type_.id() == LogicalTypeId::GEOGRAPHY) {
+			if (type_.id() == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
+				// Write as old-style SPATIAL format (GEOMETRY only - GEOGRAPHY has no legacy form)
 				string blob;
 				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);
 				auto text = Blob::ToString(blob);
@@ -2632,10 +2604,13 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		if (type.id() == LogicalTypeId::BLOB) {
 			auto str = deserializer.ReadProperty<string>(102, "value");
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
-		} else if (type.id() == LogicalTypeId::GEOMETRY) {
+		} else if (type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY) {
 			auto text = deserializer.ReadProperty<string>(102, "value");
+			// GEOGRAPHY is always WKB; GEOMETRY defaults to the legacy SPATIAL format when the property is absent.
+			const auto default_format =
+			    type.id() == LogicalTypeId::GEOGRAPHY ? GeometryStorageType::WKB : GeometryStorageType::SPATIAL;
 			auto type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(103, "geometry_format",
-			                                                                              GeometryStorageType::SPATIAL);
+			                                                                              default_format);
 
 			auto blob = Blob::ToBlob(text);
 			if (type == GeometryStorageType::WKB) {

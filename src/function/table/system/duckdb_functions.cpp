@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/function/table/system_catalog_scanner.hpp"
 #include "duckdb/common/atomic.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -31,6 +32,7 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	idx_t offset_in_entry;
 	//! The offset, published once per chunk (for progress)
 	atomic<idx_t> progress_offset {0};
+	SystemCatalogScannerStats stats;
 };
 
 static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -98,32 +100,33 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("categories");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	return nullptr;
-}
-
-static void ExtractFunctionsFromSchema(ClientContext &context, SchemaCatalogEntry &schema,
-                                       DuckDBFunctionsData &result) {
-	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
-	schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
-	schema.Scan(context, CatalogType::PRAGMA_FUNCTION_ENTRY,
-	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
+	// database_oid is VARCHAR here and there is no schema_oid, so neither is an identity column
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "function_name";
+	columns.entry_oid = "function_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBFunctionsData>();
 
-	// scan all the schemas for tables and collect them and collect them
-	auto schemas = Catalog::GetAllSchemas(context);
+	// collect the functions of the schemas that survive the pushed-down filters; the schemas are enumerated once and
+	// each is scanned for the three function entry types
+	auto schemas = SystemCatalogScanner::GetSchemas(context, input, result->stats);
+	auto filters = SystemCatalogScanner::GetEntryFilters(input);
 	for (auto &schema : schemas) {
-		ExtractFunctionsFromSchema(context, schema.get(), *result);
-	};
+		for (auto type : {CatalogType::SCALAR_FUNCTION_ENTRY, CatalogType::TABLE_FUNCTION_ENTRY,
+		                  CatalogType::PRAGMA_FUNCTION_ENTRY}) {
+			auto entries = SystemCatalogScanner::GetSchemaEntries(context, schema.get(), type, filters, result->stats);
+			result->entries.insert(result->entries.end(), entries.begin(), entries.end());
+		}
+	}
 
-	std::sort(result->entries.begin(), result->entries.end(),
-	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
-		          return (int32_t)a.get().type < (int32_t)b.get().type;
-	          });
+	// stable so that a filtered result is a subsequence of the unfiltered one
+	std::stable_sort(result->entries.begin(), result->entries.end(),
+	                 [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
+		                 return (int32_t)a.get().type < (int32_t)b.get().type;
+	                 });
 	return std::move(result);
 }
 
@@ -848,8 +851,14 @@ static double DuckDBFunctionsProgress(ClientContext &context, const FunctionData
 	return 100.0 * static_cast<double>(offset) / static_cast<double>(data.entries.size());
 }
 
+static void DuckDBFunctionsGetMetrics(TableFunctionGetMetricsInput &input) {
+	SystemCatalogScanner::ReportMetrics(input, input.global_state->Cast<DuckDBFunctionsData>().stats);
+}
+
 void DuckDBFunctionsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction functions("duckdb_functions", {}, DuckDBFunctionsFunction, DuckDBFunctionsBind, DuckDBFunctionsInit);
+	SystemCatalogScanner::RegisterPushdown(functions);
+	functions.get_metrics = DuckDBFunctionsGetMetrics;
 	functions.table_scan_progress = DuckDBFunctionsProgress;
 	set.AddFunction(functions);
 }

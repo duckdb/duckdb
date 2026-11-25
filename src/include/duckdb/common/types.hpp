@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/buffer_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -33,8 +34,6 @@ struct string_t; // NOLINT: mimic std casing
 
 template <class T>
 using child_list_t = vector<std::pair<Identifier, T>>;
-template <class T>
-using buffer_ptr = shared_ptr<T>;
 
 template <class... Args>
 struct VectorStructType;
@@ -44,11 +43,6 @@ struct VectorListType;
 
 //! Marker type selecting the VARIANT specialization of VectorIterator (see variant_iterator.hpp)
 struct VectorVariantType;
-
-template <class T, typename... ARGS>
-buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
-	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
-}
 
 struct list_entry_t { // NOLINT: mimic std casing
 	list_entry_t() = default;
@@ -247,6 +241,7 @@ enum class LogicalTypeId : uint8_t {
 	UUID = 54,
 
 	GEOMETRY = 60,
+	GEOGRAPHY = 61,
 
 	STRUCT = 100,
 	LIST = 101,
@@ -511,9 +506,16 @@ struct LogicalType {
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
 	DUCKDB_API bool IsTemplated() const;
+	//! True, if a vector can hold the type: it has a physical type and child types, as do its children
+	DUCKDB_API bool HasPhysicalType() const;
 
 	//! True, if this type supports in-place updates.
 	bool SupportsRegularUpdate() const;
+	//! Whether two values of this type that compare equal are the same value, so that a function of them agrees and
+	//! either can stand for both. Not for types whose equal values can differ: FLOAT / DOUBLE (0.0 and -0.0),
+	//! INTERVAL (1 month and 30 days), a VARCHAR with a collation, VARIANT (an integer stored at two widths), nor
+	//! for a nested type over one of them. Types this is not known for count as such, too.
+	DUCKDB_API bool EqualValuesAreIdentical() const;
 
 private:
 	//! Takes over a reference to "type_info"
@@ -589,6 +591,9 @@ public:
 	DUCKDB_API static LogicalType GEOMETRY();                                          // NOLINT
 	DUCKDB_API static LogicalType GEOMETRY(const string &crs);
 	DUCKDB_API static LogicalType GEOMETRY(const CoordinateReferenceSystem &crs);
+	DUCKDB_API static LogicalType GEOGRAPHY();                                           // NOLINT
+	DUCKDB_API static LogicalType GEOGRAPHY(const string &crs);
+	DUCKDB_API static LogicalType GEOGRAPHY(const CoordinateReferenceSystem &crs);
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);                         // NOLINT

@@ -53,9 +53,7 @@ env:
 jobs:
  prepare:
     # We run all other jobs on PRs only if they are not draft PR
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
@@ -208,14 +206,14 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          # Wasm extensions: wasm_eh and wasm_threads everywhere, never wasm_mvp
+          # Wasm and Windows extensions: only built on pull requests that change extensions, never wasm_mvp
           wasm_exclude_archs="wasm_mvp"
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs="$wasm_exclude_archs"
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs="$wasm_exclude_archs;osx_amd64"
           else
-            extra_exclude_archs="$wasm_exclude_archs;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
+            extra_exclude_archs="$wasm_exclude_archs;windows_amd64;windows_amd64_mingw;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
           fi
           if [[ -n "$INPUT_EXCLUDE_ARCHS" ]]; then
             extra_exclude_archs="${extra_exclude_archs:+$extra_exclude_archs;}$INPUT_EXCLUDE_ARCHS"
@@ -321,7 +319,7 @@ jobs:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"
+        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt --track-runtime 5"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
@@ -691,12 +689,6 @@ jobs:
         key: ${{ matrix.config.ccache_key }}
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Write changed tests file
-      shell: bash
-      env:
-        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
-      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
-
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
@@ -707,11 +699,10 @@ jobs:
         FORCE_WARN_UNUSED: 1
         LTO: ${{ matrix.config.lto }}
         LTO_JOBS: ${{ matrix.config.lto_jobs }}
-        SMOKE_RUNNER: build/release/test/run
         EXTRA_CMAKE_VARIABLES: ${{ matrix.config.extra_cmake_variables }}
       with:
         build: python3 scripts/ci/retry.py -- make release
-        test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
+        test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.ci_fast_tests && 'build/release/test/run --track-runtime 5 --test-flags="--thread-stack-size 131072"' || 'true' }}
         bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
@@ -1184,8 +1175,6 @@ jobs:
     env:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
-      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
-      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
       # Compile with C++23 to test compatibility with the newer standard.
       CXX_STANDARD: 23
@@ -1216,7 +1205,7 @@ jobs:
       # copy of duckdb, so a type identity that is not stable across images only fails here.
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_release
+        run: build/release/test/run
 
  vector-sizes:
     name: Vector Sizes
@@ -1369,9 +1358,8 @@ jobs:
 
  summary:
     name: Summary
-    if: ${{ always() }}
-    # No fromJSON here: when prepare is skipped (draft PRs, non-member synchronize) its outputs are
-    # empty and fromJSON('') makes the whole run fail with every job skipped.
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    # Use a fallback runner when prepare has no outputs.
     runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
@@ -1512,6 +1500,11 @@ jobs:
         shell: bash
         run: |
           NEEDS_JSON='${{ toJSON(needs) }}'
+
+          if ! jq -e '.prepare.result == "success"' <<<"$NEEDS_JSON" > /dev/null; then
+            echo "The prepare job did not succeed."
+            exit 1
+          fi
 
           failed_or_cancelled=$(
             jq -r '

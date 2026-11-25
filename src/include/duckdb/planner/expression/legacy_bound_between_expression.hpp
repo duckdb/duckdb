@@ -26,7 +26,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
-	static unique_ptr<Expression> DeserializeLegacyExpression(unique_ptr<Expression> input,
+	static unique_ptr<Expression> DeserializeLegacyExpression(ClientContext &context, unique_ptr<Expression> input,
 	                                                          unique_ptr<Expression> lower,
 	                                                          unique_ptr<Expression> upper, bool lower_inclusive,
 	                                                          bool upper_inclusive);

@@ -62,7 +62,7 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
 		return BindResult(
-		    BoundBetweenExpression::Create(std::move(input), std::move(lower), std::move(upper), true, true));
+		    BoundBetweenExpression::Create(context, std::move(input), std::move(lower), std::move(upper), true, true));
 	}
 }
 

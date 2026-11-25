@@ -1,0 +1,359 @@
+# name: test/optimizer/statistics/statistics_cast_time_of_day.test
+# description: The time of day of a timestamp wraps at midnight, so its cast does not propagate bounds
+# group: [statistics]
+
+statement ok
+SET explain_output = 'OPTIMIZED_ONLY';
+
+# the tables outside the attached database are temporary: the database the test runs in keeps no TIMESTAMPTZ_NS or
+# TIME_NS column, which older versions cannot read
+# bounds at two midnights around a noon
+statement ok
+CREATE TEMPORARY TABLE noon AS
+SELECT ns, ns::TIMESTAMP AS us, ns::TIMESTAMP::TIMESTAMP_MS AS ms, ns::TIMESTAMP::TIMESTAMP_S AS s, (ns::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns
+FROM (SELECT make_timestamp_ns(1577836800000000000 + i * 43200000000000) AS ns FROM range(3) r(i));
+
+query I
+SELECT ns FROM noon ORDER BY ALL;
+----
+2020-01-01 00:00:00
+2020-01-01 12:00:00
+2020-01-02 00:00:00
+
+# every cast from a timestamp to a time of day
+foreach source,target,noon_time ns,TIME,TIME'12:00:00' ns,TIME_NS,TIME_NS'12:00:00' us,TIME,TIME'12:00:00' us,TIMETZ,TIMETZ'12:00:00+00' ms,TIME,TIME'12:00:00' s,TIME,TIME'12:00:00' tzns,TIMETZ,TIMETZ'12:00:00+00'
+
+query I
+SELECT count(*) FROM noon WHERE {source}::{target} = {noon_time};
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE TRY_CAST({source} AS {target}) = {noon_time};
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE {source}::{target} > {noon_time};
+----
+0
+
+query I
+SELECT count(*) FROM noon WHERE {source}::{target} <> {noon_time};
+----
+2
+
+query II
+EXPLAIN SELECT count(*) FROM noon WHERE {source}::{target} = {noon_time};
+----
+logical_opt	<!REGEX>:.*Empty Result.*
+
+endloop
+
+foreach source,target ns,TIME us,TIME us,TIMETZ ms,TIME s,TIME tzns,TIMETZ
+
+query II
+SELECT s.min, s.max FROM (SELECT stats({source}::{target}) s FROM noon LIMIT 1);
+----
+NULL	NULL
+
+endloop
+
+# NULLs, values before 1970 and the last nanosecond of a day
+statement ok
+CREATE TEMPORARY TABLE edges AS
+SELECT make_timestamp_ns(ns) AS ns, make_timestamp(us) AS us, (make_timestamp_ns(ns)::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns
+FROM (VALUES (-1, -1), (0, 0), (NULL, NULL), (-86400000000001, -86400000001), (1577923199999999999, 1577923199999999)) v(ns, us);
+
+query III
+SELECT ns, us, tzns = ns::VARCHAR || '+00' FROM edges ORDER BY ALL;
+----
+1969-12-30 23:59:59.999999999	1969-12-30 23:59:59.999999	true
+1969-12-31 23:59:59.999999999	1969-12-31 23:59:59.999999	true
+1970-01-01 00:00:00	1970-01-01 00:00:00	true
+2020-01-01 23:59:59.999999999	2020-01-01 23:59:59.999999	true
+NULL	NULL	NULL
+
+query III
+SELECT count(*) FILTER (WHERE t = TIME_NS '00:00:00'), count(*) FILTER (WHERE t = TIME_NS '23:59:59.999999999'), count(*) FILTER (WHERE t IS NULL)
+FROM (SELECT ns::TIME_NS AS t FROM edges);
+----
+1	3	1
+
+query I
+SELECT count(*) FROM edges WHERE ns::TIME_NS = TIME_NS '00:00:00';
+----
+1
+
+query I
+SELECT count(*) FROM edges WHERE ns::TIME_NS < TIME_NS '23:59:59.999999999';
+----
+1
+
+query I
+SELECT count(*) FROM edges WHERE ns::TIME_NS >= TIME_NS '23:59:59.999999999';
+----
+3
+
+query I
+SELECT count(*) FROM edges WHERE ns::TIME_NS IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM edges WHERE us::TIMETZ = TIMETZ '00:00:00+00';
+----
+1
+
+query I
+SELECT count(*) FROM edges WHERE us::TIMETZ < TIMETZ '23:59:59.999999+00';
+----
+1
+
+# the last nanosecond of a day rounds to the next midnight in microseconds
+query I
+SELECT count(*) FROM edges WHERE tzns::TIMETZ = TIMETZ '00:00:00+00';
+----
+4
+
+query I
+SELECT count(*) FROM edges WHERE ns::TIME = TIME '00:00:00';
+----
+4
+
+query I
+SELECT count(*) FROM edges WHERE tzns::TIMETZ IS NOT NULL;
+----
+4
+
+# a cast on top hands the bounds of the TIMETZ to a type that compares them: 26 hours from 01:00:00, whose
+# first and last times of day are 01:00:00 and 02:00:00
+statement ok
+CREATE TEMPORARY TABLE hours AS
+SELECT us, (us::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns, {'us': us} AS st
+FROM (SELECT TIMESTAMP '2020-01-01 01:00:00' + INTERVAL (i) HOUR AS us FROM range(26) r(i));
+
+foreach source us tzns st.us
+
+query I
+SELECT count(*) FROM hours WHERE {source}::TIMETZ::TIME > TIME '03:00:00';
+----
+20
+
+query I
+SELECT count(*) FROM hours WHERE {source}::TIMETZ::TIME = TIME '23:00:00';
+----
+1
+
+query I
+SELECT count(*) FROM hours WHERE {source}::TIMETZ::TIME BETWEEN TIME '01:00:00' AND TIME '02:00:00';
+----
+4
+
+query II
+EXPLAIN SELECT count(*) FROM hours WHERE {source}::TIMETZ::TIME > TIME '03:00:00';
+----
+logical_opt	<!REGEX>:.*Empty Result.*
+
+query II
+SELECT s.min, s.max FROM (SELECT stats({source}::TIMETZ::TIME) s FROM hours LIMIT 1);
+----
+NULL	NULL
+
+endloop
+
+# the casts that keep the order the statistics are in keep their bounds
+query II
+SELECT s.min, s.max FROM (SELECT stats(ns::DATE) s FROM noon LIMIT 1);
+----
+2020-01-01	2020-01-02
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(ns::TIMESTAMP) s FROM noon LIMIT 1);
+----
+2020-01-01 00:00:00	2020-01-02 00:00:00
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(us::TIMESTAMP_NS) s FROM noon LIMIT 1);
+----
+2020-01-01 00:00:00	2020-01-02 00:00:00
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(tzns::TIMESTAMPTZ) s FROM noon LIMIT 1);
+----
+2020-01-01 00:00:00+00	2020-01-02 00:00:00+00
+
+query II
+EXPLAIN SELECT count(*) FROM noon WHERE ns::DATE = DATE '2020-01-03';
+----
+logical_opt	<REGEX>:.*Empty Result.*
+
+statement ok
+CREATE TEMPORARY TABLE times AS
+SELECT t, t::TIME_NS AS tns, (t::VARCHAR || '+02')::TIMETZ AS ttz
+FROM (SELECT TIME '01:00:00' + i * INTERVAL 11 HOUR AS t FROM range(3) r(i));
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(t::TIME_NS) s FROM times LIMIT 1);
+----
+01:00:00	23:00:00
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(tns::TIME) s FROM times LIMIT 1);
+----
+01:00:00	23:00:00
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(ttz::TIME) s FROM times LIMIT 1);
+----
+01:00:00	23:00:00
+
+query II
+EXPLAIN SELECT count(*) FROM times WHERE t::TIME_NS > TIME_NS '23:00:00.000000001';
+----
+logical_opt	<REGEX>:.*Empty Result.*
+
+# TIMETZ statistics are in the order of the stored value, the local time first, which the cast to TIME keeps.
+# The order of TIMETZ values in SQL is by their UTC time: 12:00:00+05 sorts before 09:30:00-08.
+statement ok
+CREATE TEMPORARY TABLE offsets AS SELECT * FROM (VALUES (TIMETZ '12:00:00+05'), (TIMETZ '09:30:00-08')) v(ttz);
+
+query I
+SELECT ttz FROM offsets ORDER BY ttz;
+----
+12:00:00+05
+09:30:00-08
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(ttz::TIME) s FROM offsets LIMIT 1);
+----
+09:30:00	12:00:00
+
+query III
+SELECT count(*) FILTER (WHERE t = TIME '12:00:00'), count(*) FILTER (WHERE t < TIME '10:00:00'), count(*) FILTER (WHERE t > TIME '10:00:00')
+FROM (SELECT ttz::TIME AS t FROM offsets);
+----
+1	1	1
+
+query II
+EXPLAIN SELECT count(*) FROM offsets WHERE ttz::TIME > TIME '12:00:00';
+----
+logical_opt	<REGEX>:.*Empty Result.*
+
+# row groups of four hours each, from the day before 1970 into the day after
+statement ok
+ATTACH '{TEST_DIR}/cast_time_of_day_pruning.duckdb' AS rg (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE rg;
+
+statement ok
+CREATE TABLE days AS
+SELECT i::INTEGER AS i, ns, ns::TIMESTAMP AS us, (ns::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns,
+	TIME '00:00:00' + INTERVAL (i * 5) SECOND AS t, ((TIME '00:00:00' + INTERVAL (i * 5) SECOND)::VARCHAR || '+00')::TIMETZ AS ttz
+FROM (SELECT i, CASE WHEN i % 64 = 63 THEN NULL ELSE make_timestamp_ns(-86400000000000 + i * 7000000000) END AS ns FROM range(16384) r(i));
+
+statement ok
+CHECKPOINT rg;
+
+query III
+SELECT min(ns), max(ns), count(ns) FROM days;
+----
+1969-12-31 00:00:00	1970-01-01 07:51:14	16128
+
+foreach source,target,low,high ns,TIME_NS,TIME_NS'23:00:00',TIME_NS'23:10:00' ns,TIME,TIME'23:00:00',TIME'23:10:00' us,TIMETZ,TIMETZ'23:00:00+00',TIMETZ'23:10:00+00' us,TIME,TIME'23:00:00',TIME'23:10:00' tzns,TIMETZ,TIMETZ'23:00:00+00',TIMETZ'23:10:00+00'
+
+# ten minutes of the last hour of the first day, in the sixth row group
+query I
+SELECT count(*) FROM days WHERE {source}::{target} BETWEEN {low} AND {high};
+----
+84
+
+# the times before 23:00:00 on both days
+query I
+SELECT count(*) FROM days WHERE {source}::{target} < {low};
+----
+15622
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM days WHERE {source}::{target} BETWEEN {low} AND {high};
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 8 / 8.*
+
+endloop
+
+# row groups that each begin and end at a midnight: the casts of the bounds of every row group are equal
+statement ok
+CREATE TABLE midnights AS
+SELECT ns, ns::TIMESTAMP AS us, (ns::VARCHAR || '+00')::TIMESTAMPTZ_NS AS tzns
+FROM (SELECT make_timestamp_ns(1577836800000000000 + (i // 2048) * 86400000000000 +
+	CASE WHEN i % 2048 = 2047 THEN 86400000000000 ELSE (i % 2048) * 42000000000 END) AS ns FROM range(16384) r(i));
+
+statement ok
+CHECKPOINT rg;
+
+query II
+SELECT min(ns), max(ns) FROM midnights;
+----
+2020-01-01 00:00:00	2020-01-09 00:00:00
+
+foreach source,target,second_row,noon ns,TIME_NS,TIME_NS'00:00:42',TIME_NS'12:00:00' ns,TIME,TIME'00:00:42',TIME'12:00:00' us,TIMETZ,TIMETZ'00:00:42+00',TIMETZ'12:00:00+00' us,TIME,TIME'00:00:42',TIME'12:00:00' tzns,TIMETZ,TIMETZ'00:00:42+00',TIMETZ'12:00:00+00'
+
+query I
+SELECT count(*) FROM midnights WHERE {source}::{target} = {second_row};
+----
+8
+
+query I
+SELECT count(*) FROM midnights WHERE {source}::{target} > {noon};
+----
+8144
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM midnights WHERE {source}::{target} = {second_row};
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 8 / 8.*
+
+endloop
+
+# the cast to DATE keeps the order
+query I
+SELECT count(*) FROM days WHERE ns::DATE = DATE '1970-01-01';
+----
+3977
+
+# the order-preserving casts between the times of day still prune: t reaches 20:00:00 in the last row group
+foreach source,target,low t,TIME_NS,TIME_NS'20:00:00.000000001' ttz,TIME,TIME'20:00:00'
+
+query I
+SELECT count(*) FROM days WHERE {source}::{target} > {low};
+----
+1983
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM days WHERE {source}::{target} > {low};
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 8.*
+
+endloop
+
+# as does a widening integer cast
+query I
+SELECT count(*) FROM days WHERE i::BIGINT + i::BIGINT > 32000;
+----
+383
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM days WHERE i::BIGINT + i::BIGINT > 32000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 8.*
+
+# the attached database is a file of this test alone, emptied again
+statement ok
+DROP TABLE days;
+
+statement ok
+DROP TABLE midnights;
+
+statement ok
+CHECKPOINT rg;

@@ -5,6 +5,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/recursive_cte_scheduling.hpp"
@@ -33,7 +34,7 @@ public:
 		idx_t next;
 	};
 
-	RecursiveCTEPartialKeyIndex(Allocator &allocator, const vector<LogicalType> &full_key_types,
+	RecursiveCTEPartialKeyIndex(ClientContext &context, const vector<LogicalType> &full_key_types,
 	                            vector<idx_t> key_indices);
 
 	//! Key and address selections can differ when addresses have already been compacted.
@@ -51,6 +52,7 @@ private:
 
 	DataChunk partial_keys;
 	DataChunk selected_keys;
+	unique_ptr<ChunkHasher> hasher;
 	Vector hashes;
 	vector<idx_t> heads;
 	vector<Entry> entries;

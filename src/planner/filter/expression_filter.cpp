@@ -83,6 +83,16 @@ unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(Expression
 	return make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
+unique_ptr<ExpressionFilter> ExpressionFilter::CreateSelectivityOptionalFilter(unique_ptr<Expression> child_expr,
+                                                                               const LogicalType &column_type,
+                                                                               SelectivityOptionalFilterType type) {
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(type, selectivity_threshold, n_vectors_to_check);
+	return make_uniq<ExpressionFilter>(CreateSelectivityOptionalFilterExpression(
+	    std::move(child_expr), column_type, selectivity_threshold, n_vectors_to_check));
+}
+
 bool ExpressionFilter::IsSimpleFilterColumnRef(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF ||
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
@@ -305,7 +315,7 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-			FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+			FunctionStatisticsInput input(func_copy, func_copy.BindInfoMutable(), child_stats, &expr_copy);
 			owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
 			return owned_stats.back().get();
 		}

@@ -186,7 +186,7 @@ unique_ptr<MatchRecognizePattern> MatchRecognizePattern::Deserialize(Deserialize
 	return result;
 }
 
-void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                              const BoundWindowFunction &function) {
 	auto &config = bind_data->Cast<MatchRecognizeFunctionData>();
 	serializer.WriteObject(100, "pattern", [&](Serializer &child) { config.pattern->Serialize(child); });
@@ -1077,7 +1077,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		idx_t match_number = 0;
 		auto row = partition_start;
 		while (row <= partition_end) {
-			context.client.InterruptCheck();
+			context.client.FastInterruptCheck();
 			row_conditions.BeginMatch(row, match_number + 1);
 			if (!matcher.Match(row, partition_start, partition_end + 1)) {
 				row++;

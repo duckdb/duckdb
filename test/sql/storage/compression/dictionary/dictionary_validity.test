@@ -1,0 +1,58 @@
+# name: test/sql/storage/compression/dictionary/dictionary_validity.test
+# description: Separate validity preserves nullable string dictionaries
+# group: [dictionary]
+
+require no_latest_storage
+
+load {TEST_DIR}/dictionary_validity.db readwrite v1.0.0
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE VIEW expected AS
+SELECT i, CASE WHEN i % 7 = 0 THEN NULL ELSE 'val_' || lpad((i % 100)::VARCHAR, 3, '0') END AS s
+FROM range(300000) t(i)
+
+statement ok
+CREATE TABLE input(i BIGINT, s VARCHAR USING COMPRESSION DICTIONARY)
+
+statement ok
+INSERT INTO input FROM expected
+
+statement ok
+CHECKPOINT
+
+restart
+
+query T
+SELECT DISTINCT compression FROM pragma_storage_info('input') WHERE segment_type='VARCHAR'
+----
+Dictionary
+
+query I
+SELECT current_setting('debug_force_fetch_row') OR current_setting('default_block_size') <> 262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR count(*) FILTER (WHERE vector_type(s)='DICTIONARY_VECTOR') > 200000 FROM input
+----
+true
+
+query I
+SELECT count(*) FROM (
+    (SELECT * FROM input EXCEPT ALL SELECT * FROM expected)
+    UNION ALL
+    (SELECT * FROM expected EXCEPT ALL SELECT * FROM input)
+)
+----
+0
+
+query I
+WITH actual AS (SELECT hash(s) h, count(*) n, sum(i) s FROM input WHERE s IS NULL OR lower(s) >= 'val_095' GROUP BY hash(s)),
+oracle AS (SELECT hash(s) h, count(*) n, sum(i) s FROM expected WHERE s IS NULL OR lower(s) >= 'val_095' GROUP BY hash(s))
+SELECT count(*) FROM (
+    (SELECT * FROM actual EXCEPT ALL SELECT * FROM oracle)
+    UNION ALL
+    (SELECT * FROM oracle EXCEPT ALL SELECT * FROM actual)
+)
+----
+0

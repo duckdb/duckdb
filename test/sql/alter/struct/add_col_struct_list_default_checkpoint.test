@@ -1,0 +1,32 @@
+# name: test/sql/alter/struct/add_col_struct_list_default_checkpoint.test
+# description: A struct DEFAULT for a LIST or MAP field is rejected for checkpointed rows that are all NULL
+# group: [struct]
+
+load {TEST_DIR}/add_col_struct_list_default_checkpoint.db
+
+# these succeeded: a checkpointed column of NULL structs is scanned as a constant, for which remap_struct returns
+# before it looks at the fields
+statement ok
+CREATE TABLE null_tbl (s STRUCT(a INT));
+
+statement ok
+INSERT INTO null_tbl VALUES (NULL), (NULL);
+
+statement ok
+CHECKPOINT;
+
+statement error
+ALTER TABLE null_tbl ADD COLUMN s.l INT[] DEFAULT {list: 1};
+----
+<REGEX>:Binder Error:.*Default value for l is a struct.*not mapped to a source.*
+
+statement error
+ALTER TABLE null_tbl ADD COLUMN s.m MAP(INT, INT) DEFAULT {key: 1, value: 2};
+----
+<REGEX>:Binder Error:.*Default value for m is a struct.*not mapped to a source.*
+
+query I
+SELECT s FROM null_tbl;
+----
+NULL
+NULL

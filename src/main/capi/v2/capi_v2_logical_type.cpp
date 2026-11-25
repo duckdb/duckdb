@@ -26,7 +26,7 @@ namespace {
 //  - the remaining bind-time-only ids (SQLNULL, UNKNOWN) which only exist
 //    inside the planner / UDF binding paths,
 //  - parameterised types (DECIMAL, LIST, STRUCT, TUPLE, MAP, ARRAY, UNION,
-//    ENUM, VARIANT, GEOMETRY), which need parameters to bind.
+//    ENUM, VARIANT, GEOMETRY, GEOGRAPHY), which need parameters to bind.
 bool IsPrimitiveCreatable(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::ANY:
@@ -168,6 +168,7 @@ idx_t TypeParamCount(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return StringType::GetCollation(type).empty() ? 0 : 1;
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return GeoType::HasCRS(type) ? 1 : 0;
 	default:
 		return 0;
@@ -207,6 +208,7 @@ Value TypeParamValue(const LogicalType &type, idx_t index, std::string_view &out
 		out_name = "collation";
 		return Value(StringType::GetCollation(type));
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return Value(GeoType::GetCRS(type).GetDefinition());
 	default:
 		throw InternalException("TypeParamValue called for a kind without parameters");
@@ -287,7 +289,7 @@ static void CreateLogicalTypeFromIdV2(CV2Factory &factory, DUCKDB_V2_LOGICAL_TYP
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(duckdb_v2_factory_handle factory,
-                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char **param_names,
+                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char *const *param_names,
                                                       const idx_t *param_names_lengths,
                                                       const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                       duckdb_v2_logical_type_handle *out_type,
@@ -342,7 +344,8 @@ static void CreateLogicalTypeFromArgsV2(CV2Factory &factory, duckdb_v2_qname_han
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_name(duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name,
-                                                        const char **param_names, const idx_t *param_names_lengths,
+                                                        const char *const *param_names,
+                                                        const idx_t *param_names_lengths,
                                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                         duckdb_v2_logical_type_handle *out_type,
                                                         duckdb_v2_error_info_handle *err) {

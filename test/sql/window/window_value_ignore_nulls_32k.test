@@ -1,0 +1,55 @@
+# name: test/sql/window/window_value_ignore_nulls_32k.test
+# description: Issue #26135: FIRST/LAST/NTH_VALUE(x ORDER BY ... IGNORE NULLS) with more than 32768 non-NULL values
+# group: [window]
+
+# More than 32768 non-NULL values forces the cascaded levels of the merge sort tree,
+# which used to read past the end of the cascade pointers when the frame held fewer
+# than the requested number of non-NULL values.
+
+statement ok
+CREATE TABLE w AS SELECT i t, CASE WHEN i % 3 = 0 THEN NULL ELSE i::DOUBLE END b FROM range(70000) r(i);
+
+# b increases with t, so the last non-NULL value equals the frame maximum
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT last_value(b ORDER BY t IGNORE NULLS) OVER (ORDER BY t) x,
+           max(b) OVER (ORDER BY t) m
+    FROM w);
+----
+69999	0
+
+# the first non-NULL value equals the frame minimum
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT first_value(b ORDER BY t IGNORE NULLS) OVER (ORDER BY t) x,
+           min(b) OVER (ORDER BY t) m
+    FROM w);
+----
+69999	0
+
+# descending argument order: the last value in DESC order is the frame minimum
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT last_value(b ORDER BY t DESC IGNORE NULLS) OVER (ORDER BY t) x,
+           min(b) OVER (ORDER BY t) m
+    FROM w);
+----
+69999	0
+
+# the second non-NULL value is always 2 once two non-NULL values have been seen
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT nth_value(b, 2 ORDER BY t IGNORE NULLS) OVER (ORDER BY t) x,
+           CASE WHEN count(b) OVER (ORDER BY t) >= 2 THEN 2.0 END m
+    FROM w);
+----
+69998	0
+
+# moving frame
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT last_value(b ORDER BY t IGNORE NULLS) OVER (ORDER BY t ROWS BETWEEN 5000 PRECEDING AND CURRENT ROW) x,
+           max(b) OVER (ORDER BY t ROWS BETWEEN 5000 PRECEDING AND CURRENT ROW) m
+    FROM w);
+----
+69999	0

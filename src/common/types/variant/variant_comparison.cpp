@@ -1,5 +1,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -12,20 +13,8 @@ constexpr int64_t NANOS_PER_MILLI = 1000000;
 constexpr int64_t NANOS_PER_SEC = 1000000000;
 constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
 
-//! Writes the decimal digits of value into the back of buffer (which must hold 20 characters) and
-//! returns the offset of the first digit - so no length has to be computed up front.
-idx_t UInt64Digits(uint64_t value, char *buffer) {
-	idx_t pos = 20;
-	while (value >= 10) {
-		buffer[--pos] = static_cast<char>('0' + value % 10);
-		value /= 10;
-	}
-	buffer[--pos] = static_cast<char>('0' + value);
-	return pos;
-}
-
 //! Build a number key from a sign, the decimal digits of the magnitude (no leading zeros, as e.g.
-//! produced by UInt64Digits) and a base-10 scale (value = magnitude / 10^scale)
+//! produced by NumericHelper::FormatUnsigned) and a base-10 scale (value = magnitude / 10^scale)
 VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, int64_t scale) {
 	VariantNumberKey key;
 	// find the first non-zero digit (magnitude digits have no leading zeros, but be defensive)
@@ -52,32 +41,19 @@ VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, 
 	return key;
 }
 
-//! Build a number key from a 128-bit magnitude, using 64-bit arithmetic whenever the value fits
+//! Build a number key from a 128-bit magnitude
 VariantNumberKey BuildNumberKey(bool negative, uhugeint_t magnitude, int64_t scale) {
-	if (magnitude.upper == 0) {
-		char buffer[20];
-		auto offset = UInt64Digits(magnitude.lower, buffer);
-		return BuildNumberKey(negative, buffer + offset, 20 - offset, scale);
-	}
-	// magnitudes above 64 bits are rare, and are guaranteed to fit inline (39 digits)
-	auto magnitude_digits = Uhugeint::ToString(magnitude);
-	return BuildNumberKey(negative, magnitude_digits.data(), magnitude_digits.size(), scale);
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), scale);
 }
 
 //! Decompose a 128-bit signed value (hugeint) into (sign, magnitude)
 uhugeint_t HugeintMagnitude(const hugeint_t value, bool &negative) {
 	negative = value.upper < 0;
-	uint64_t hi = static_cast<uint64_t>(value.upper);
-	uint64_t lo = value.lower;
-	if (negative) {
-		// two's complement negate to get the magnitude
-		hi = ~hi;
-		lo = ~lo;
-		if (++lo == 0) {
-			++hi;
-		}
-	}
-	return uhugeint_t(hi, lo);
+	const uhugeint_t magnitude(static_cast<uint64_t>(value.upper), value.lower);
+	return negative ? -magnitude : magnitude;
 }
 
 //! Build a number key from a native (<= 64-bit) integer value, computing the magnitude and its
@@ -92,9 +68,10 @@ VariantNumberKey IntegerNumberKey(T value) {
 			magnitude = static_cast<uint64_t>(0) - magnitude; // unsigned negate -> |value| (also handles the minimum)
 		}
 	}
-	char buffer[20];
-	auto offset = UInt64Digits(magnitude, buffer);
-	return BuildNumberKey(negative, buffer + offset, 20 - offset, 0);
+	char buffer[NumericLimits<uint64_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), 0);
 }
 } // namespace
 
@@ -153,6 +130,8 @@ VariantComparisonType GetVariantComparisonType(VariantLogicalType type) {
 		return VariantComparisonType::BITSTRING;
 	case VariantLogicalType::GEOMETRY:
 		return VariantComparisonType::GEOMETRY;
+	case VariantLogicalType::GEOGRAPHY:
+		return VariantComparisonType::GEOGRAPHY;
 	case VariantLogicalType::ARRAY:
 		return VariantComparisonType::ARRAY;
 	case VariantLogicalType::OBJECT:

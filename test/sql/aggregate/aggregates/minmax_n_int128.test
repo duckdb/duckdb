@@ -1,0 +1,25 @@
+# name: test/sql/aggregate/aggregates/minmax_n_int128.test
+# description: Test min/max with n on types stored as 128-bit integers
+# group: [aggregates]
+
+query II
+SELECT min(v, 3), max(v, 3)
+FROM (VALUES ('-170141183460469231731687303715884105728'::HUGEINT), ('170141183460469231731687303715884105727'::HUGEINT),
+             (0::HUGEINT), (NULL), (-1::HUGEINT), (18446744073709551616::HUGEINT)) t(v);
+----
+[-170141183460469231731687303715884105728, -1, 0]	[170141183460469231731687303715884105727, 18446744073709551616, 0]
+
+query II
+SELECT min(v, 2), max(v, 2)
+FROM (VALUES (99999999999999999999999999999999999.99::DECIMAL(38,2)), (-99999999999999999999999999999999999.99::DECIMAL(38,2)),
+             (0.01::DECIMAL(38,2)), (NULL), (-0.01::DECIMAL(38,2))) t(v);
+----
+[-99999999999999999999999999999999999.99, -0.01]	[99999999999999999999999999999999999.99, 0.01]
+
+# UUIDs on both sides of the most significant bit
+query II
+SELECT min(v, 2), max(v, 2)
+FROM (VALUES ('80000000-0000-0000-0000-000000000000'::UUID), ('7fffffff-ffff-ffff-ffff-ffffffffffff'::UUID),
+             ('ffffffff-ffff-ffff-ffff-ffffffffffff'::UUID), (NULL), ('00000000-0000-0000-0000-000000000000'::UUID)) t(v);
+----
+[00000000-0000-0000-0000-000000000000, 7fffffff-ffff-ffff-ffff-ffffffffffff]	[ffffffff-ffff-ffff-ffff-ffffffffffff, 80000000-0000-0000-0000-000000000000]

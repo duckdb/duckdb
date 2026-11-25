@@ -82,7 +82,6 @@ public:
 
 private:
 	DatabaseInstance &db;
-	unique_ptr<FileSystem> owned_file_system;
 	FileSystem &local_fs;
 	mutable DatabaseFileOpener database_opener;
 };

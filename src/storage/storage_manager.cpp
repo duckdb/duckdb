@@ -380,6 +380,11 @@ string StorageManager::GetUnsupportedTypeReason(const LogicalType &logical_type)
 				                required, db.GetName(), current);
 			}
 			break;
+		case LogicalTypeId::GEOGRAPHY:
+			if (storage_version < Geometry::GEOGRAPHY_VERSION_ADDED) {
+				reason = unsupported("GEOGRAPHY columns", Geometry::GEOGRAPHY_VERSION_ADDED);
+			}
+			break;
 		default:
 			break;
 		}
@@ -831,7 +836,7 @@ public:
 	//! Revert the commit
 	void RevertCommit() override;
 	// Make the commit persistent
-	idx_t FlushCommit(bool sync_now) override;
+	idx_t FlushCommit(transaction_t commit_id, bool sync_now) override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -893,7 +898,7 @@ void SingleFileStorageCommitState::RevertCommit() {
 	state = WALCommitState::TRUNCATED;
 }
 
-idx_t SingleFileStorageCommitState::FlushCommit(bool sync_now) {
+idx_t SingleFileStorageCommitState::FlushCommit(transaction_t commit_id, bool sync_now) {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return 0;
 	}
@@ -918,6 +923,17 @@ idx_t SingleFileStorageCommitState::FlushCommit(bool sync_now) {
 		wal_sync_offset = wal.FlushMarker();
 	}
 	state = WALCommitState::FLUSHED;
+	// checkpoints whose bound is past the commit include the blocks of its optimistically written row groups
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsCommitted(block_id, commit_id);
+				}
+			}
+		}
+	}
 	return wal_sync_offset;
 }
 
@@ -974,25 +990,26 @@ SingleFileStorageManager::CreateCheckpointWriter(QueryContext context, Checkpoin
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options, checkpoint_context);
 }
 
-static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
-	vector<reference<DuckTableEntry>> tables;
+//! The storage of the tables, which outlives their catalog entries: a commit after the scan can destroy those.
+static vector<shared_ptr<DataTable>> GetCommittedTables(AttachedDatabase &db) {
+	vector<shared_ptr<DataTable>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	auto bound = VisibilityBound::AllCommitted();
 	catalog.ScanSchemas(bound, [&](DuckSchemaEntry &schema) {
 		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<DuckTableEntry>());
+				tables.push_back(entry.Cast<DuckTableEntry>().GetStorage().shared_from_this());
 			}
 		});
 	});
 	return tables;
 }
 
-static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
+static vector<shared_ptr<DataTable>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
-	vector<reference<DuckTableEntry>> result;
+	vector<shared_ptr<DataTable>> result;
 	for (auto &table : GetCommittedTables(db)) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasUnbound()) {
 			result.push_back(table);
 		}
 	}
@@ -1012,9 +1029,9 @@ static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
 	return ErrorData();
 }
 
-static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) {
+static bool HasBufferedReplays(const vector<shared_ptr<DataTable>> &tables) {
 	for (auto &table : tables) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
 			return true;
 		}
 	}
@@ -1053,7 +1070,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(optional_ptr<ClientConte
 	ErrorData failure;
 	string failed_table;
 	for (auto &table : tables) {
-		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		auto &info = *table->GetDataTableInfo();
 		if (!explicit_checkpoint && !info.GetIndexes().HasBufferedReplays()) {
 			continue;
 		}
@@ -1161,7 +1178,7 @@ void SingleFileStorageManager::Destroy() {
 		return;
 	}
 	for (auto &table : GetCommittedTables(db)) {
-		table.get().GetStorage().Destroy();
+		table->Destroy();
 	}
 }
 

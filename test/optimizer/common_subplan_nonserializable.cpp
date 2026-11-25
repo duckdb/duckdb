@@ -170,6 +170,8 @@ TEST_CASE("Common subplans follow the declared table function stability", "[opti
 	Connection con(db);
 	RegisterRepeatabilityTableFunctions(db);
 	REQUIRE_NO_FAIL(con.Query("SET explain_output='optimized_only'"));
+	// the ALL set operations below are the vehicle for a shared window subplan: keep them a join of two windows
+	REQUIRE_NO_FAIL(con.Query("SET disabled_optimizers='set_operation_aggregate'"));
 
 	// an explicitly volatile scan is never shared
 	const string volatile_query = "SELECT count(*) FROM (SELECT i FROM repeatability_false(7) "
@@ -209,6 +211,8 @@ TEST_CASE("Common subplans require positional parameters to identify repeatable 
 	Connection con(db);
 	RegisterZeroArgumentTableFunction(db);
 	REQUIRE_NO_FAIL(con.Query("SET explain_output='optimized_only'"));
+	// the ALL set operations below are the vehicle for a shared window subplan: keep them a join of two windows
+	REQUIRE_NO_FAIL(con.Query("SET disabled_optimizers='set_operation_aggregate'"));
 
 	// Without serialization callbacks or positional parameters, equal serialized bytes cannot prove that
 	// two binds captured the same rows, so the identity guard must keep sharing disabled.

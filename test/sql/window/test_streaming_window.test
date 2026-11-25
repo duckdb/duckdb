@@ -627,6 +627,16 @@ select
 [{'key': A}, {'key': B}]
 [{'key': A}, {'key': B}, {'key': C}]
 
+# Array Slicing
+query I
+from (values ([1]::INT[1]), ([2]::INT[1]), ([3]::INT[1]))
+select
+   list(col0) over (rows between unbounded preceding and current row) as result
+----
+[[1]]
+[[1], [2]]
+[[1], [2], [3]]
+
 # Reset argument test (fails in debug)
 statement ok
 CREATE TABLE issue17621(i INT, j INT, k INT);
@@ -980,3 +990,17 @@ WITH w AS (
 SELECT COUNT(*), COUNT(*) FILTER (WHERE x IS NOT NULL) FROM w;
 ----
 2051	0
+
+query TT
+EXPLAIN SELECT histogram(i % 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), approx_top_k(i % 3, 2) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(10) r(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+SELECT count(*) FROM (
+	SELECT histogram(i % 7) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) a, histogram(i % 7) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) b,
+	       approx_top_k(i % 7, 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) c, approx_top_k(i % 7, 3) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) d
+	FROM range(5000) r(i)
+) WHERE a != b OR c != d;
+----
+0

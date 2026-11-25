@@ -1,0 +1,44 @@
+# name: test/optimizer/joins/child_join_projection_maps.test
+# description: Preserve projected columns when reordering joins below a non-reorderable join
+# group: [joins]
+
+statement ok
+SET debug_verify_column_bindings = true;
+
+statement ok
+CREATE TABLE tbl(i INTEGER, s VARCHAR, d DOUBLE);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a', 0.5), (2, 'b', 1.5), (3, 'c', 2.5), (4, 'd', 3.5), (NULL, NULL, NULL);
+
+# The scalar subquery adds a column below the outer join. The join above it prunes that column.
+# Approximate enumeration can swap the scalar subquery and the table below this projection map.
+query TRI
+SELECT x1.s, x2.d, x3.i
+FROM tbl AS x1
+LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2)
+JOIN tbl AS x3 ON (x1.i < x3.i)
+ORDER BY ALL;
+----
+a	NULL	2
+a	NULL	3
+a	NULL	4
+b	NULL	3
+b	NULL	4
+c	2.5	4
+c	3.5	4
+
+# Equality keys must remain available above the right outer join after unused-column removal.
+query III
+SELECT x1.i, x2.i, x3.i
+FROM tbl AS x1
+RIGHT JOIN tbl AS x2 ON ((SELECT 3) = x1.i)
+JOIN tbl AS x3 ON (x2.i < x3.i)
+ORDER BY ALL;
+----
+3	1	2
+3	1	3
+3	1	4
+3	2	3
+3	2	4
+3	3	4

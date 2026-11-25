@@ -34,45 +34,39 @@ enum class OptimisticWritePartialManagers { PER_COLUMN, GLOBAL };
 
 class OptimisticDataWriter {
 public:
-	OptimisticDataWriter(ClientContext &context, DataTable &table);
-	OptimisticDataWriter(Context &context, DataTable &table);
+	explicit OptimisticDataWriter(DataTable &table);
 	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
 	~OptimisticDataWriter();
 
+	//! The methods below take the context of the operation that performs them: the writer can outlive the
+	//! connection that created it (e.g. a writer of a transaction that is shared between connections).
 	//! Creates a collection to write to
 	unique_ptr<OptimisticWriteCollection>
-	CreateCollection(DataTable &storage, const vector<LogicalType> &insert_types,
+	CreateCollection(Context &context, DataTable &storage, const vector<LogicalType> &insert_types,
 	                 OptimisticWritePartialManagers type = OptimisticWritePartialManagers::PER_COLUMN);
 	//! Write a new row group to disk (if possible)
-	void WriteNewRowGroup(OptimisticWriteCollection &row_groups, idx_t flushed_row_group_idx);
+	void WriteNewRowGroup(Context &context, OptimisticWriteCollection &row_groups, idx_t flushed_row_group_idx);
 	//! Write any unflushed row groups of a collection to disk
-	void WriteUnflushedRowGroups(OptimisticWriteCollection &row_groups);
+	void WriteUnflushedRowGroups(Context &context, OptimisticWriteCollection &row_groups);
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
-	void FinalFlush();
+	void FinalFlush(Context &context);
 	//! Merge the partially written blocks from one optimistic writer into another
-	void Merge(OptimisticDataWriter &other);
-	void Merge(unique_ptr<PartialBlockManager> &other_manager);
+	void Merge(Context &context, OptimisticDataWriter &other);
+	void Merge(Context &context, unique_ptr<PartialBlockManager> &other_manager);
 	//! Rollback
 	void Rollback();
 
 	//! Whether this writer can write to disk at all (not temporary / in-memory / read-only)
 	bool CanWriteToDisk() const;
 
-	//! Return the runtime services.
-	Context &GetContext() {
-		return context;
-	}
-
 private:
 	//! Prepare a write to disk
-	bool PrepareWrite();
+	bool PrepareWrite(Context &context);
 	//! Flushes a specific row group to disk
-	void FlushToDisk(OptimisticWriteCollection &collection, const vector<const_reference<RowGroup>> &row_groups,
-	                 const vector<int64_t> &segment_indexes);
+	void FlushToDisk(Context &context, OptimisticWriteCollection &collection,
+	                 const vector<const_reference<RowGroup>> &row_groups, const vector<int64_t> &segment_indexes);
 
 private:
-	//! The services in which we're writing the data.
-	Context &context;
 	//! The table.
 	DataTable &table;
 	//! The partial block manager, if any.

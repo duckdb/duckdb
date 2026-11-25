@@ -99,7 +99,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 	// Check that file on disk is created in user-specified case
 	// independently whether FS is case-sensitive or not.
 	// FS access can be eventually changed to CAPI FS.
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	string work_dir = TestDirectoryPath();
 	auto instance_cache = duckdb_create_instance_cache();
 
@@ -107,8 +107,8 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 	for (const string &db_file : db_file_list) {
 		string db_path = TestJoinPath(work_dir, db_file);
 		string attached_db_path = TestJoinPath(work_dir, "attached_" + db_file);
-		fs->TryRemoveFile(db_path);
-		fs->TryRemoveFile(attached_db_path);
+		fs.TryRemoveFile(db_path);
+		fs.TryRemoveFile(attached_db_path);
 
 		duckdb_database db1 = nullptr;
 		REQUIRE(duckdb_get_or_create_from_cache(instance_cache, db_path.c_str(), &db1, nullptr, nullptr) ==
@@ -121,7 +121,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 
 		// Check the file with originally specified case exists in FS
 		bool found = false;
-		fs->ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
+		fs.ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
 			if (name == db_file) {
 				found = true;
 			}
@@ -134,7 +134,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		std::transform(db_file_lower.begin(), db_file_lower.end(), db_file_lower.begin(),
 		               [](unsigned char c) { return tolower(c); });
 		string db_path_lower = TestJoinPath(work_dir, db_file_lower);
-		fs->TryRemoveFile(db_path_lower);
+		fs.TryRemoveFile(db_path_lower);
 		duckdb_database db2 = nullptr;
 		REQUIRE(duckdb_get_or_create_from_cache(instance_cache, db_path_lower.c_str(), &db2, nullptr, nullptr) ==
 		        DuckDBSuccess);
@@ -163,10 +163,10 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		duckdb_disconnect(&conn1);
 		duckdb_close(&db1);
 		if (count == 0) {
-			fs->TryRemoveFile(db_path_lower);
+			fs.TryRemoveFile(db_path_lower);
 		}
-		fs->TryRemoveFile(db_path);
-		fs->TryRemoveFile(attached_db_path);
+		fs.TryRemoveFile(db_path);
+		fs.TryRemoveFile(attached_db_path);
 	}
 	duckdb_destroy_instance_cache(&instance_cache);
 }

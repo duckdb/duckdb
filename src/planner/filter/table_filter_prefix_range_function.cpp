@@ -40,21 +40,30 @@
 
 namespace duckdb {
 
-AllocatedData AllocateBitmap(ClientContext &context, const idx_t word_count, uint64_t *&bitmap_begin) {
-	const idx_t size = word_count * sizeof(uint64_t);
-	BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-	auto buffer = buffer_manager.GetBufferAllocator().Allocate(64ULL + size);
+static idx_t BitmapAllocationSize(idx_t word_count) {
+	const auto size = word_count * sizeof(uint64_t) + 64;
+	if (size < 64ULL * 1024 * 1024 || size > 4ULL * 1024 * 1024 * 1024) {
+		return size;
+	}
+	const auto rounded = NextPowerOfTwo(size);
+	// Reuse allocator size classes only when padding adds at most 1/16.
+	return rounded - size <= size / 16 ? rounded : size;
+}
+
+static HugeAllocation AllocateBitmap(ClientContext &context, const idx_t word_count, uint64_t *&bitmap_begin) {
+	auto &allocator = BufferAllocator::Get(context);
+	auto buffer = allocator.AllocateHuge(BitmapAllocationSize(word_count));
 	bitmap_begin = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buffer.get())) & ~63ULL);
 	std::fill_n(bitmap_begin, word_count, 0);
 	return buffer;
 }
 
 struct PrefixRangeBitmapBuildState : public PrefixRangeFilter::BuildState {
-	explicit PrefixRangeBitmapBuildState(AllocatedData data_p, uint64_t *bitmap_p)
+	explicit PrefixRangeBitmapBuildState(HugeAllocation data_p, uint64_t *bitmap_p)
 	    : data(std::move(data_p)), bitmap(bitmap_p) {
 	}
 
-	AllocatedData data;
+	HugeAllocation data;
 	uint64_t *bitmap;
 };
 
@@ -73,7 +82,8 @@ public:
 		const idx_t buckets = UnsafeNumericCast<idx_t>((span >> shift) + 1);
 		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
 
-		buf_ = AllocateBitmap(context, word_count, bitmap);
+		buf_.Reset();
+		bitmap = nullptr;
 
 		// Only mark initialized as true when local bitmaps are merged.
 		initialized = false;
@@ -81,7 +91,7 @@ public:
 	}
 
 	unique_ptr<PrefixRangeBitmapBuildState> InitializeBuildState(ClientContext &context) const {
-		D_ASSERT(bitmap);
+		D_ASSERT(word_count > 0);
 		uint64_t *state_bitmap;
 		auto state_data = AllocateBitmap(context, word_count, state_bitmap);
 		return make_uniq<PrefixRangeBitmapBuildState>(std::move(state_data), state_bitmap);
@@ -113,16 +123,31 @@ public:
 	void MergeBuildState(PrefixRangeBitmapBuildState &state) {
 		const auto last_word_mask = ~uint64_t(0) >> (WORD_MASK - UnsafeNumericCast<idx_t>((span >> shift) & WORD_MASK));
 		dense = true;
-		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
-			bitmap[word_idx] |= state.bitmap[word_idx];
-			const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
-			dense &= bitmap[word_idx] == expected;
+		if (!bitmap) {
+			// Adopt the first completed lane instead of allocating and copying a second bitmap.
+			buf_ = std::move(state.data);
+			bitmap = state.bitmap;
+			// All bits are already present; one hole is enough to rule out a dense bitmap.
+			for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+				const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
+				if (bitmap[word_idx] != expected) {
+					dense = false;
+					break;
+				}
+			}
+		} else {
+			// Merge every word, even after finding a hole, so no keys from this lane are lost.
+			for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+				bitmap[word_idx] |= state.bitmap[word_idx];
+				const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
+				dense &= bitmap[word_idx] == expected;
+			}
 		}
 		initialized = true;
 	}
 
 	idx_t GetBuildStateSize() const {
-		return word_count * sizeof(uint64_t) + 64;
+		return BitmapAllocationSize(word_count);
 	}
 
 	template <typename T, typename CONVERTER>
@@ -366,7 +391,7 @@ private:
 	U span;
 	idx_t shift;
 	idx_t word_count;
-	AllocatedData buf_;
+	HugeAllocation buf_;
 	uint64_t *bitmap;
 };
 
@@ -413,6 +438,7 @@ private:
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = NumericConverter<T>::Convert(min_val.GetValueUnsafe<T>());
@@ -425,17 +451,20 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, true>(keys, bitmap_state.bitmap);
 	}
 
-	void MergeBuildState(BuildState &state) override {
-		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	void MergeBuildState(unique_ptr<BuildState> state) override {
+		D_ASSERT(!IsPublished());
+		bitmap.MergeBuildState(state->Cast<PrefixRangeBitmapBuildState>());
 	}
 
 	idx_t GetBuildStateSize() const override {
@@ -487,6 +516,7 @@ class StringPrefixRangeFilter : public PrefixRangeFilter {
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = StringPrefixConverter::Convert(min_val.GetValueUnsafe<string_t>());
@@ -500,17 +530,20 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, true>(keys, bitmap_state.bitmap);
 	}
 
-	void MergeBuildState(BuildState &state) override {
-		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	void MergeBuildState(unique_ptr<BuildState> state) override {
+		D_ASSERT(!IsPublished());
+		bitmap.MergeBuildState(state->Cast<PrefixRangeBitmapBuildState>());
 	}
 
 	idx_t GetBuildStateSize() const override {
@@ -722,8 +755,9 @@ static idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &fun
 	return result_count;
 }
 
-static unique_ptr<FunctionLocalState>
-PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> PrefixRangeInitLocalState(ExpressionState &state,
+                                                                const BoundFunctionExpression &expr,
+                                                                optional_ptr<const FunctionData> bind_data) {
 	auto &data = bind_data->Cast<PrefixRangeFunctionData>();
 	if (!data.filter) {
 		return nullptr;

@@ -1,4 +1,5 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/planner/expression/bound_hash_expression.hpp"
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -76,6 +77,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	layout_ptr = std::move(layout);
 
 	hash_offset = layout_ptr->GetOffsets()[layout_ptr->ColumnCount() - 1];
+	auto group_types = layout_ptr->GetTypes();
+	group_types.pop_back();
+	if (!group_types.empty()) {
+		hash_expression = BoundHashExpression::CreateOnColumns(context, group_types);
+	}
 
 	// Partitioned data and pointer table
 	InitializePartitionedData();
@@ -93,6 +99,15 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 
 	state.partitioned_append_state.compute_reverse_partition_sel = true;
 	state.unpartitioned_append_state.compute_reverse_partition_sel = true;
+}
+
+void GroupedAggregateHashTable::HashGroups(DataChunk &groups, AggregateHTProbeState &probe_state,
+                                           Vector &hashes) const {
+	D_ASSERT(hash_expression);
+	if (!probe_state.hash_executor) {
+		probe_state.hash_executor = make_uniq<ExpressionExecutor>(context, *hash_expression);
+	}
+	BoundHashExpression::Execute(*probe_state.hash_executor, groups, hashes);
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
@@ -302,6 +317,23 @@ void GroupedAggregateHashTable::Verify() {
 #endif
 }
 
+void GroupedAggregateHashTable::VerifyEntries(const Vector &group_hashes_v, const Vector &addresses_v, idx_t count) {
+#ifdef DEBUG
+	// every row's entry points to its row, which carries the hash the entry's salt was taken from
+	const auto hashes = group_hashes_v.Values<hash_t>();
+	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &entry = entries[ht_offsets[i]];
+		const auto hash = hashes[i].GetValue();
+		D_ASSERT(entry.IsOccupied());
+		D_ASSERT(entry.GetPointer() == addresses[i]);
+		D_ASSERT(entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
+		D_ASSERT(Load<hash_t>(addresses[i] + hash_offset) == hash);
+	}
+#endif
+}
+
 void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, ht_entry_t());
 }
@@ -320,6 +352,10 @@ idx_t GroupedAggregateHashTable::GetMaterializedCount() const {
 		result += unpartitioned_data->Count();
 	}
 	return result;
+}
+
+idx_t GroupedAggregateHashTable::GetMaterializedSize() const {
+	return partitioned_data->GetDataSize() + (unpartitioned_data ? unpartitioned_data->GetDataSize() : 0);
 }
 
 void GroupedAggregateHashTable::SkipLookups() {
@@ -428,7 +464,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	}
 
 	adaptivity.AddInput(groups.size());
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
 	before_update(state.addresses, state.new_groups, new_group_count);
 	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
@@ -450,7 +486,7 @@ idx_t GroupedAggregateHashTable::AddChunkAndGetNewGroups(DataChunk &groups, Data
 	}
 
 	adaptivity.AddInput(groups.size());
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
 	auto source_addresses = FlatVector::GetData<data_ptr_t>(state.addresses);
 	auto target_addresses = FlatVector::GetDataMutable<data_ptr_t>(new_group_addresses);
@@ -547,7 +583,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		unique_values.CheckCardinality(unique_count);
 		// now we know which entries we are going to add - hash them
 		auto &hashes = dict_state.hashes;
-		unique_values.Hash(hashes);
+		HashGroups(unique_values, state, hashes);
 
 		// add the dictionary groups to the hash table
 		new_group_count = FindOrCreateGroups(unique_values, hashes, new_dictionary_pointers, state.new_groups);
@@ -593,6 +629,10 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 
 optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, DataChunk &payload,
                                                              const unsafe_vector<idx_t> &filter) {
+	if (groups.size() == 0) {
+		// no rows, no group: the constant group below would be added without a row that has it
+		return optional_idx();
+	}
 #ifndef DEBUG
 	if (groups.size() <= 1) {
 		// this only has a point if we have multiple groups
@@ -615,7 +655,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	groups.SetChildCardinality(row_count);
 
 	auto &hashes = dict_state.hashes;
-	unique_values.Hash(hashes);
+	HashGroups(unique_values, state, hashes);
 
 	// add the single constant group to the hash table
 	auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
@@ -633,6 +673,9 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, row_count);
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+	// This chunk needs its own pointer prefix; retain the metadata for the cached dictionary.
+	const auto dictionary_high_bits = dict_state.address_high_bits;
+	const auto dictionary_high_bits_uniform = dict_state.address_high_bits_uniform;
 	dict_state.address_high_bits_uniform = (sizeof(uintptr_t) == sizeof(uint64_t));
 	dict_state.address_high_bits = static_cast<uint64_t>(aggregate_address) & GID_HIGH_MASK;
 	for (idx_t i = 0; i < row_count; i++) {
@@ -642,6 +685,8 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	// ht_offsets are only valid for the single constant group, not the full payload
 	UpdateAggregates(payload, filter, row_count, false);
+	dict_state.address_high_bits = dictionary_high_bits;
+	dict_state.address_high_bits_uniform = dictionary_high_bits_uniform;
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
@@ -669,7 +714,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		return result.GetIndex();
 	}
 	// otherwise append the raw values
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 
 	return AddChunk(groups, state.hashes, payload, filter);
 }
@@ -723,7 +768,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 	// evaluate every aggregate filter once for this chunk
 	filter_set.ApplyFilters(payload, filter);
 	if (UpdateAggregatesClustered(payload, filter, count, ht_offsets_valid)) {
-		Verify();
 		return;
 	}
 
@@ -752,8 +796,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}
-
-	Verify();
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
@@ -1021,6 +1063,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	FlatVector::SetSize(addresses_v, chunk_size);
 	count += new_group_count;
+	VerifyEntries(group_hashes_v, addresses_v, chunk_size);
 	return new_group_count;
 }
 
@@ -1038,7 +1081,7 @@ void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &ad
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses_out,
                                                     SelectionVector &new_groups_out) {
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	return FindOrCreateGroups(groups, state.hashes, addresses_out, new_groups_out);
 }
 
@@ -1069,7 +1112,7 @@ idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLook
 	}
 	InitializeLookupState(lookup_state);
 
-	groups.Hash(lookup_state.hashes);
+	HashGroups(groups, lookup_state, lookup_state.hashes);
 	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		lookup_state.group_chunk.data[group_idx].Reference(groups.data[group_idx]);
 	}
@@ -1241,7 +1284,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		auto &source_rows = fm_state.scan_state.chunk_state;
 		const auto chunk_count = fm_state.groups.size();
 		if (!layout_ptr->AllConstant()) {

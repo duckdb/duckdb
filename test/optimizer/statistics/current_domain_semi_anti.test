@@ -168,12 +168,30 @@ JOIN domain_sa_fact USING (k);
 
 # An ANTI join against an exact-empty relation passes on the implied filter of the selected child.
 query II
+SELECT *
+FROM (domain_sa_left
+	SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k)) refined
+ANTI JOIN domain_sa_empty USING (k);
+----
+20	20
+
+# Preserve the selected shape for the cardinality assertion.
+statement ok
+SET VARIABLE domain_sa_join_threshold = current_setting('approximate_join_order_threshold');
+
+statement ok
+SET approximate_join_order_threshold=12;
+
+query II
 EXPLAIN SELECT *
 FROM (domain_sa_left
 	SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k)) refined
 ANTI JOIN domain_sa_empty USING (k);
 ----
 physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: (RIGHT_)?SEMI.*~1 row.*HASH_JOIN.*Join Type: ANTI.*~1 row.*
+
+statement ok
+SET approximate_join_order_threshold=getvariable('domain_sa_join_threshold');
 
 # A selective preserved-side inner join is chosen before probing a large SEMI RHS.
 # Sampled NDV estimates vary slightly after a storage restart.
@@ -221,6 +239,11 @@ SEMI JOIN (
 physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*UNION.*
 
 # Unsupported generic joins do not propagate child evidence into selected SEMI refinement.
+# (join_to_semi_join is switched off for this plan: the generic join only filters source and its rows are read as a
+# set, so it would become a SEMI join itself)
+statement ok
+SET disabled_optimizers = 'join_to_semi_join';
+
 query II
 EXPLAIN SELECT *
 FROM domain_sa_left
@@ -232,6 +255,9 @@ SEMI JOIN (
 ) generic_join_rhs USING (k);
 ----
 physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+statement ok
+RESET disabled_optimizers;
 
 # Composite base-domain counts also remain on the fallback.
 query II

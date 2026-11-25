@@ -1,0 +1,70 @@
+# name: test/sql/filter/storage_dictionary_filter_cache.test
+# description: Storage filters cache dictionary entries across chunks and replace caches across segments
+# group: [filter]
+
+require no_latest_storage
+
+load {TEST_DIR}/storage_dictionary_filter_cache.db readwrite v1.0.0
+
+statement ok
+SET threads=1
+
+statement ok
+SET force_compression='dictionary'
+
+statement ok
+CREATE TABLE input AS
+SELECT i, 'val_' || lpad((i%100)::VARCHAR, 3, '0') AS s FROM range(300000) t(i)
+
+statement ok
+CHECKPOINT
+
+# Plain Dictionary has no specialized filter callback, so the storage filter sees its scan result.
+query T
+SELECT DISTINCT compression FROM pragma_storage_info('input') WHERE segment_type='VARCHAR'
+----
+Dictionary
+
+query I
+SELECT current_setting('debug_force_fetch_row') OR current_setting('default_block_size')<>262144
+    OR current_setting('debug_verify_vector') <> 'NONE'
+    OR count(*) FILTER (WHERE vector_type(s)='DICTIONARY_VECTOR')>200000 FROM input
+----
+true
+
+query II
+SELECT count(*), sum(i) FROM input WHERE s<'val_003' OR s>='val_098'
+----
+15000	2249850000
+
+query II
+SELECT count(*), sum(i) FROM input WHERE lower(s)>='val_095'
+----
+15000	2250705000
+
+statement ok
+PREPARE filtered AS SELECT count(*), sum(i) FROM input WHERE s >= $1
+
+query II
+EXECUTE filtered('val_095')
+----
+15000	2250705000
+
+query II
+EXECUTE filtered('val_099')
+----
+3000	450147000
+
+# Changing row validity forces the adjacent generic scan/update path.
+statement ok
+UPDATE input SET s=NULL WHERE i%1000=99
+
+query II
+EXECUTE filtered('val_099')
+----
+2700	405267300
+
+query I
+SELECT count(*) FROM input WHERE s IS NULL
+----
+300

@@ -2,21 +2,22 @@
     {
         "name": "decode",
         "parameters": "blob,error_option",
-        "description": "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters.",
+        "description": "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters. If the second argument is the name of an encoding (e.g. 'latin-1', see `system.encodings`), `blob` is decoded from that encoding instead.",
         "examples": [
             "decode('\\xC3\\xBC'::BLOB)",
             "decode('\\xA0'::BLOB, 'replace')",
-            "decode('\\xA0'::BLOB, 'ignore')"
+            "decode('\\xA0'::BLOB, 'ignore')",
+            "decode('\\xFC'::BLOB, 'latin-1')"
         ],
         "type": "scalar_function_set",
         "categories": ["blob"]
     },
     {
         "name": "encode",
-        "parameters": "string",
-        "description": "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding.",
-        "example": "encode('my_string_with_\u00fc')",
-        "type": "scalar_function",
+        "parameters": "string,encoding",
+        "description": "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding, or into the named encoding (e.g. 'latin-1', see `system.encodings`).",
+        "examples": ["encode('my_string_with_\u00fc')", "encode('my_string_with_\u00fc', 'latin-1')"],
+        "type": "scalar_function_set",
         "categories": ["blob"]
     },
     {

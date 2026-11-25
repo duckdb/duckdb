@@ -74,7 +74,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::SQLNULL) {
 		return StatisticsType::BASE_STATS;
 	}
-	if (type.id() == LogicalTypeId::GEOMETRY) {
+	if (type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY) {
 		return StatisticsType::GEOMETRY_STATS;
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {
@@ -710,6 +710,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		} else {
 			VariantStats::SetUnshreddedStats(
 			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
+			VariantStats::MarkAsNotShredded(result);
 		}
 		return result;
 	}

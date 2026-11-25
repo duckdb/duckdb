@@ -87,8 +87,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
 		return Bind(statement.Cast<UpdateStatement>());
-	case StatementType::RELATION_STATEMENT:
-		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
 		return Bind(statement.Cast<CreateStatement>());
 	case StatementType::DROP_STATEMENT:
@@ -179,9 +177,6 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
-		break;
-	case TableReferenceType::DELIM_GET:
-		result = Bind(ref.Cast<DelimGetRef>());
 		break;
 	case TableReferenceType::MATCH_RECOGNIZE:
 		result = Bind(ref.Cast<MatchRecognizeRef>());
