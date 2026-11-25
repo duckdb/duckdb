@@ -1,0 +1,149 @@
+# name: test/sql/join/runtime_filter_through_right_anti.test
+# description: Runtime filters traverse the preserved RIGHT_ANTI input without skipping observable work
+# group: [join]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET disabled_optimizers='statistics_propagation,join_order,build_side_probe_side,compressed_materialization,projection_pullup,projection_placement';
+
+statement ok
+CREATE TABLE left_rows(k BIGINT);
+
+statement ok
+INSERT INTO left_rows VALUES (1),(2),(NULL);
+
+statement ok
+CREATE TABLE right_rows AS SELECT i%100 AS k,i AS v FROM range(10000) t(i);
+
+statement ok
+INSERT INTO right_rows VALUES (NULL,10000),(NULL,10001);
+
+statement ok
+CREATE TABLE wanted(k BIGINT);
+
+statement ok
+INSERT INTO wanted VALUES (42);
+
+statement ok
+PREPARE filtered_anti AS
+SELECT count(*),sum(r.v)
+FROM left_rows l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k=r.k
+JOIN wanted w ON r.k=w.k;
+
+query II
+EXECUTE filtered_anti;
+----
+100	499200
+
+# The parent filter reaches the RIGHT_ANTI build before that scan starts.
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*),sum(r.v)
+FROM left_rows l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k=r.k
+JOIN wanted w ON r.k=w.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]right_rows"[^}]*"Dynamic Filters":[^}]*},\s*"intermediate_rows": 100,.*
+
+# Filtering the preserved input must not create matches or lose NULLs.
+statement ok
+INSERT INTO wanted VALUES (2),(NULL);
+
+query II
+EXECUTE filtered_anti;
+----
+100	499200
+
+query II
+SELECT count(*),sum(r.v)
+FROM left_rows l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k=r.k
+JOIN wanted w ON r.k IS NOT DISTINCT FROM w.k;
+----
+102	519201
+
+query II
+SELECT count(*),sum(r.v)
+FROM left_rows l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k IS NOT DISTINCT FROM r.k
+JOIN wanted w ON r.k IS NOT DISTINCT FROM w.k;
+----
+100	499200
+
+statement ok
+INSERT INTO wanted VALUES (42);
+
+query II
+EXECUTE filtered_anti;
+----
+200	998400
+
+# A filter on a right-hand payload need not be an anti-join key.
+statement ok
+CREATE TABLE wanted_payload AS SELECT 142::BIGINT AS v;
+
+query II
+SELECT r.k,r.v
+FROM left_rows l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k=r.k
+JOIN wanted_payload w ON r.v=w.v;
+----
+42	142
+
+statement ok
+DELETE FROM wanted;
+
+query II
+EXECUTE filtered_anti;
+----
+0	NULL
+
+statement ok
+INSERT INTO wanted VALUES (42);
+
+statement ok
+DELETE FROM left_rows;
+
+query II
+EXECUTE filtered_anti;
+----
+100	499200
+
+# An empty filtered build must not skip a volatile left-hand subtree.
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE observed_rows AS SELECT i AS k FROM range(65536) t(i);
+
+statement ok
+CREATE SEQUENCE observed_seq;
+
+statement ok
+CREATE VIEW observed_left AS SELECT k+0*nextval('observed_seq') AS k FROM observed_rows;
+
+statement ok
+UPDATE wanted SET k=999;
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*)
+FROM observed_left l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON l.k=r.k
+JOIN wanted w ON r.k=w.k;
+----
+analyzed_plan	<!REGEX>:(?s).*"Table": "[^"]*[.]right_rows"[^}]*"Dynamic Filters":.*
+
+query I
+SELECT currval('observed_seq');
+----
+65536
+
+# Declared table-function volatility also prevents skipping the left input.
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*)
+FROM duckdb_memory() l JOIN BY (TYPE RIGHT_ANTI) right_rows r ON least(l.memory_usage_bytes,0)=r.k
+JOIN wanted w ON r.k=w.k;
+----
+analyzed_plan	<!REGEX>:(?s).*"Table": "[^"]*[.]right_rows"[^}]*"Dynamic Filters":.*
+
+statement ok
+RESET disabled_optimizers;
