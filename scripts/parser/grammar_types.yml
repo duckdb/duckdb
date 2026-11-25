@@ -1960,6 +1960,7 @@ expression_depth_nesting_rules:
   - Type
   - NestedType
   - SubqueryReference
+  - WithStatement
   - CustomPrefixExpression
 
 expression_depth_chain_rules:

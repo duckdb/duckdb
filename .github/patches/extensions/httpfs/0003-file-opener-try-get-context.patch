@@ -25,7 +25,7 @@ index 00e346d..6e5a880 100644
  	return nullptr;
  }
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 81ce938..f38e906 100644
+index 01f3a23..21b06e8 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -109,9 +109,9 @@ private:
@@ -40,7 +40,7 @@ index 81ce938..f38e906 100644
  		    context->TryGetCurrentUserSetting(EnableExternalFileCacheSetting::SettingIndex, external_cache_enabled) &&
  		    external_cache_enabled.GetValue<bool>()) {
  			result->override_response_cache_policy = true;
-@@ -648,7 +648,7 @@ void HTTPFileSystem::EraseGlobalCacheEntry(const string &path) {
+@@ -650,7 +650,7 @@ void HTTPFileSystem::EraseGlobalCacheEntry(const string &path) {
  // Get either the local, global, or no cache depending on settings
  static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
  	auto db = FileOpener::TryGetDatabase(opener);
@@ -49,7 +49,7 @@ index 81ce938..f38e906 100644
  	if (!db) {
  		return nullptr;
  	}
-@@ -662,9 +662,9 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
+@@ -664,9 +664,9 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
  
  	if (use_shared_cache) {
  		return httpfs.GetGlobalCache();
@@ -62,7 +62,7 @@ index 81ce938..f38e906 100644
  	}
  	return nullptr;
  }
-@@ -1112,9 +1112,9 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -1114,9 +1114,9 @@ void HTTPFileHandle::LoadFileInfo() {
  }
  
  void HTTPFileHandle::InitializeLogger(FileOpener &opener) {
@@ -75,7 +75,7 @@ index 81ce938..f38e906 100644
  		return;
  	}
  	auto database = opener.TryGetDatabase();
-@@ -1151,21 +1151,21 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -1153,21 +1153,21 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  }
  
  void HTTPFileHandle::InitializeRequestState(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
@@ -117,11 +117,11 @@ index 7f9d284..9f71e29 100644
  
  	//! Called by the ClientContext when the current query ends
 diff --git a/src/s3/s3_list.cpp b/src/s3/s3_list.cpp
-index 0a30ec8..5adfa10 100644
+index 352085b..317a8b3 100644
 --- a/src/s3/s3_list.cpp
 +++ b/src/s3/s3_list.cpp
-@@ -99,6 +99,8 @@ private:
- 	void AppendMatchingFiles(vector<OpenFileInfo> &s3_keys) const;
+@@ -100,6 +100,8 @@ private:
+ 	void AppendMatchingFiles(idx_t count) const;
  
  private:
 +	//! The client of the opener (if any): used to schedule the listing tasks and to log
@@ -129,7 +129,7 @@ index 0a30ec8..5adfa10 100644
  	S3FileSystem &fs;
  	string glob_pattern;
  	optional_ptr<FileOpener> opener;
-@@ -138,8 +140,9 @@ private:
+@@ -139,8 +141,9 @@ private:
  
  S3GlobResult::S3GlobResult(S3FileSystem &fs_p, const string &glob_pattern_p, optional_ptr<FileOpener> opener,
                             const S3AuthResolveOptions &options)
@@ -142,10 +142,10 @@ index 0a30ec8..5adfa10 100644
  		throw InternalException("Cannot S3 Glob without FileOpener");
  	}
 diff --git a/src/s3/s3_request.cpp b/src/s3/s3_request.cpp
-index ccd35a3..1783736 100644
+index 5aabe5a..02cc9eb 100644
 --- a/src/s3/s3_request.cpp
 +++ b/src/s3/s3_request.cpp
-@@ -748,7 +748,7 @@ bool S3RequestExecutor::TryRefreshSession(HTTPRequestSession &session, const S3R
+@@ -824,7 +824,7 @@ bool S3RequestExecutor::TryRefreshSession(HTTPRequestSession &session, const S3R
  	if (!context) {
  		return false;
  	}
@@ -153,9 +153,9 @@ index ccd35a3..1783736 100644
 +	ClientContextFileOpener opener(context->GetContext());
  	auto refreshed_auth_params = current_snapshot.auth_params;
  	auto refreshed_http_params = current_snapshot.Params();
- 	if (!TryRefreshS3AuthMaterial(context, opener, current_snapshot.refresh_path, refreshed_auth_params,
-@@ -1142,7 +1142,7 @@ shared_ptr<HTTPRequestSession> S3RequestExecutor::CreateSession(optional_ptr<Fil
- 	FileOpenerInfo info = {path};
+ 	if (!TryRefreshS3AuthMaterial(context, opener, current_snapshot.file, refreshed_auth_params, refreshed_http_params,
+@@ -1226,7 +1226,7 @@ shared_ptr<HTTPRequestSession> S3RequestExecutor::CreateSession(optional_ptr<Fil
+ 	FileOpenerInfo info(file);
  	auto request_session = HTTPRequestSession::Create(opener, info);
  	weak_ptr<ClientContext> weak_context;
 -	auto context = FileOpener::TryGetClientContext(opener);
@@ -164,10 +164,10 @@ index ccd35a3..1783736 100644
  	if (context && refresh_enabled) {
  		weak_context = context->shared_from_this();
 diff --git a/src/s3/s3fs.cpp b/src/s3/s3fs.cpp
-index c83a99f..dd0cf99 100644
+index cb5abc2..8e431d2 100644
 --- a/src/s3/s3fs.cpp
 +++ b/src/s3/s3fs.cpp
-@@ -249,7 +249,7 @@ HTTPMetadataCacheEntry S3FileHandle::GetCacheEntry() const {
+@@ -246,7 +246,7 @@ HTTPMetadataCacheEntry S3FileHandle::GetCacheEntry() const {
  }
  
  void S3FileHandle::Initialize(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
@@ -176,11 +176,73 @@ index c83a99f..dd0cf99 100644
  	auto refresh_enabled = S3RequestExecutor::CredentialRefreshEnabled(opener);
  	{
  		auto captured = request_session->Capture();
+diff --git a/test/unittest/http/browser_adapter_test.cpp b/test/unittest/http/browser_adapter_test.cpp
+index 4b8b2b9..deeef39 100644
+--- a/test/unittest/http/browser_adapter_test.cpp
++++ b/test/unittest/http/browser_adapter_test.cpp
+@@ -79,7 +79,7 @@ TEST_CASE("HTTPFS owns browser parameters and preserves its provider", "[httpfs]
+ 		HTTPTestHelper::RequireQueryOk(
+ 		    con, "CREATE SECRET browser_headers (TYPE HTTP, EXTRA_HTTP_HEADERS MAP {'X-Secret': 'secret'})");
+ 		HTTPTestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
+-		ClientContextFileOpener opener(*con.context);
++		ClientContextFileOpener opener(con.context->GetContext());
+ 		FileOpenerInfo info;
+ 		info.file.path = server.HTTPPath();
+ 		auto session = HTTPRequestSession::Create(&opener, &info);
+diff --git a/test/unittest/s3/s3_file_credentials_test.cpp b/test/unittest/s3/s3_file_credentials_test.cpp
+index a27c7a3..f09d4c4 100644
+--- a/test/unittest/s3/s3_file_credentials_test.cpp
++++ b/test/unittest/s3/s3_file_credentials_test.cpp
+@@ -924,7 +924,7 @@ TEST_CASE("Named S3 files retain metadata through credential refresh and region
+ 				unique_ptr<FileHandle> handle;
+ 				shared_ptr<HTTPRequestSession> session;
+ 				if (standalone_session) {
+-					ClientContextFileOpener opener(*f.con.context);
++					ClientContextFileOpener opener(f.con.context->GetContext());
+ 					FileOpenerInfo info(file);
+ 					session = S3RequestExecutor::CreateSession(opener, file, S3AuthResolver::Resolve(opener, info));
+ 				} else {
+@@ -1192,7 +1192,7 @@ TEST_CASE("Settings fill keys a named secret leaves unset",
+ 	GovernedHost::Get().SetOmittedKeys({"region", "url_style", "use_ssl", "endpoint", "session_token"});
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().Attach(*f.con.context, "orders");
+-	ClientContextFileOpener opener(*f.con.context);
++	ClientContextFileOpener opener(f.con.context->GetContext());
+ 	FileOpenerInfo info;
+ 	info.file.path = OrdersFile(0);
+ 	GovernedHost::Get().Apply(table_credentials, info);
+@@ -1224,7 +1224,7 @@ TEST_CASE("Settings supply credential fields a named secret leaves unset",
+ 	GovernedHost::Get().SetOmittedKeys({"key_id", "secret", "session_token"});
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().Attach(*f.con.context, "orders");
+-	ClientContextFileOpener opener(*f.con.context);
++	ClientContextFileOpener opener(f.con.context->GetContext());
+ 	FileOpenerInfo info;
+ 	info.file.path = OrdersFile(0);
+ 	GovernedHost::Get().Apply(table_credentials, info);
+@@ -1266,7 +1266,7 @@ namespace {
+ S3AuthParams ResolveWithHandle(Fixture &f, const string &table, const string &scope, const string &path) {
+ 	f.con.BeginTransaction();
+ 	auto table_credentials = GovernedHost::Get().AttachWithScope(*f.con.context, table, scope);
+-	ClientContextFileOpener opener(*f.con.context);
++	ClientContextFileOpener opener(f.con.context->GetContext());
+ 	FileOpenerInfo info;
+ 	info.file.path = path;
+ 	GovernedHost::Get().Apply(table_credentials, info);
+@@ -1407,7 +1407,7 @@ TEST_CASE("The table's credentials serve only the transaction that loaded the ta
+ 	// Another connection, explicitly given the same secret name.
+ 	other.BeginTransaction();
+ 	{
+-		ClientContextFileOpener opener(*other.context);
++		ClientContextFileOpener opener(other.context->GetContext());
+ 		REQUIRE_FALSE(GetNamedSecret(*other.context, table_credentials));
+ 		FileOpenerInfo info;
+ 		info.file.path = OrdersFile(0);
 diff --git a/test/unittest/s3/s3_refresh_test.cpp b/test/unittest/s3/s3_refresh_test.cpp
-index 14669be..29abefb 100644
+index ef0a465..864ca42 100644
 --- a/test/unittest/s3/s3_refresh_test.cpp
 +++ b/test/unittest/s3/s3_refresh_test.cpp
-@@ -546,7 +546,7 @@ CREATE SECRET refresh_s3_endpoint_mode (
+@@ -545,7 +545,7 @@ CREATE SECRET refresh_s3_endpoint_mode (
  	                                                     refreshed_endpoint, test_id));
  
  	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
@@ -190,7 +252,7 @@ index 14669be..29abefb 100644
  	auto auth_params = S3AuthResolver::Resolve(opener, info);
  	REQUIRE(auth_params.GetURLParams().endpoint_mode == initial_mode);
 diff --git a/test/unittest/s3/s3_request_test.cpp b/test/unittest/s3/s3_request_test.cpp
-index 71e14fb..4ca1d53 100644
+index fa825f1..4e350fc 100644
 --- a/test/unittest/s3/s3_request_test.cpp
 +++ b/test/unittest/s3/s3_request_test.cpp
 @@ -947,7 +947,7 @@ static void RunDirectDeleteErrorScenario(const string &client_implementation) {
@@ -202,20 +264,20 @@ index 71e14fb..4ca1d53 100644
  	S3KeyValueReader secret_reader {KeyValueSecretReader(secret, opener)};
  	S3AuthResolveOptions options;
  	options.enable_deprecated_url_parameters = true;
-@@ -2267,7 +2267,7 @@ TEST_CASE("S3 malformed response cleanup does not require retry admission", "[ht
+@@ -2275,7 +2275,7 @@ TEST_CASE("S3 malformed response cleanup does not require retry admission", "[ht
  			Connection con(db);
  			HTTPTestHelper::Configure(db, con, retries, client, true);
  			HTTPTestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
 -			ClientContextFileOpener opener(*con.context);
 +			ClientContextFileOpener opener(con.context->GetContext());
- 			auto session =
- 			    S3RequestExecutor::CreateSession(opener, "s3://bucket/key", ResolveTestAuth(TestAuthConfig()));
+ 			auto session = S3RequestExecutor::CreateSession(opener, OpenFileInfo("s3://bucket/key"),
+ 			                                                ResolveTestAuth(TestAuthConfig()));
  			::AESStateSSLFactory encryption_util;
 diff --git a/test/unittest/s3/s3_retry_test.cpp b/test/unittest/s3/s3_retry_test.cpp
-index bc72169..8d2f90f 100644
+index 202593c..bc34025 100644
 --- a/test/unittest/s3/s3_retry_test.cpp
 +++ b/test/unittest/s3/s3_retry_test.cpp
-@@ -989,7 +989,7 @@ static void RunThrottledListSignalTest(const string &client_implementation, idx_
+@@ -1138,7 +1138,7 @@ static void RunThrottledListSignalTest(const string &client_implementation, idx_
  	ConfigureListRetryTest(db, con, server, client_implementation, 2);
  
  	S3TestHelper::RequireQueryOk(con, "BEGIN TRANSACTION");
@@ -223,7 +285,7 @@ index bc72169..8d2f90f 100644
 +	ClientContextFileOpener opener(con.context->GetContext());
  	FileOpenerInfo info = {S3TestHelper::S3_PATH};
  	auto auth_params = S3AuthResolver::Resolve(opener, info);
- 	auto session = S3RequestExecutor::CreateSession(opener, S3TestHelper::S3_PATH, auth_params);
+ 	auto session = S3RequestExecutor::CreateSession(opener, info.file, auth_params);
 diff --git a/test/unittest/s3/s3_sse_test.cpp b/test/unittest/s3/s3_sse_test.cpp
 index 1125ed9..1e6d948 100644
 --- a/test/unittest/s3/s3_sse_test.cpp

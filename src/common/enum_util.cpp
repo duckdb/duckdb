@@ -168,6 +168,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/os_util.hpp"
@@ -2636,6 +2637,24 @@ const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAcce
 template<>
 ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value) {
 	return static_cast<ExtensionRepositoryAccess>(StringUtil::StringToEnum(GetExtensionRepositoryAccessValues(), 4, "ExtensionRepositoryAccess", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExtensionRepositoryHostCallerValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExtensionRepositoryHostCaller::CREATE_STATEMENT), "CREATE_STATEMENT" },
+		{ static_cast<uint32_t>(ExtensionRepositoryHostCaller::LOOKUP), "LOOKUP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryHostCaller>(ExtensionRepositoryHostCaller value) {
+	return StringUtil::EnumToString(GetExtensionRepositoryHostCallerValues(), 2, "ExtensionRepositoryHostCaller", static_cast<uint32_t>(value));
+}
+
+template<>
+ExtensionRepositoryHostCaller EnumUtil::FromString<ExtensionRepositoryHostCaller>(const char *value) {
+	return static_cast<ExtensionRepositoryHostCaller>(StringUtil::StringToEnum(GetExtensionRepositoryHostCallerValues(), 2, "ExtensionRepositoryHostCaller", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionRepositoryTypeValues() {

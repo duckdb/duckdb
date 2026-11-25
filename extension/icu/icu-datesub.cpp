@@ -10,12 +10,27 @@
 namespace duckdb {
 
 struct ICUCalendarSub : public ICUDateFunc {
+	static bool SubtractsElapsedTime(DatePartSpecifier part) {
+		switch (part) {
+		case DatePartSpecifier::HOUR:
+		case DatePartSpecifier::MINUTE:
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::EPOCH:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::MICROSECONDS:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
 		auto part_value = input.TryGetConstant(0);
 		if (part_value && !part_value->IsNull()) {
 			DatePartSpecifier part;
-			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) && part == DatePartSpecifier::ERA) {
-				// date_sub is not monotone for eras because era boundaries can occur partway through a year
+			if (!TryGetDatePartSpecifier(part_value->GetValue<string>(), part) || !SubtractsElapsedTime(part)) {
+				// calendar parts count whole local units, so moving one argument can step the result back,
+				// e.g. a month boundary that falls between two timestamps or a local day that repeats
 				input.GetBoundFunction().SetArgProperties({});
 			}
 		}
@@ -221,14 +236,25 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // MS-SQL differences can be computed using ICU by truncating both arguments
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
+	static bool TruncatesToSecondOrFiner(DatePartSpecifier part) {
+		switch (part) {
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::EPOCH:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::MICROSECONDS:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
 		auto part_value = input.TryGetConstant(0);
 		if (part_value && !part_value->IsNull()) {
 			DatePartSpecifier part;
-			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) &&
-			    (part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
-			     part == DatePartSpecifier::MILLENNIUM)) {
-				// date_diff is not monotone for these parts because ICU years skip year 0 at the BC/AD boundary
+			if (!TryGetDatePartSpecifier(part_value->GetValue<string>(), part) || !TruncatesToSecondOrFiner(part)) {
+				// date_diff truncates both arguments first, and truncating to a coarser part follows the local
+				// time, which repeats or moves backwards when the UTC offset changes
 				input.GetBoundFunction().SetArgProperties({});
 			}
 		}

@@ -1,0 +1,46 @@
+# name: test/sql/extensions/extension_repository_url.test
+# description: extension_repository_url(host) reports where a host says its repository is
+# group: [extensions]
+
+statement ok
+SET extension_repository_directory='{TEST_DIR}/extension_repositories'
+
+# A name that is not a host is refused before anything is read, and the message is about the lookup, not about
+# creating a repository: there is no WITH PREFIX to suggest.
+statement error
+SELECT extension_repository_url('singleword')
+----
+<REGEX>:Invalid Input Error.*Cannot resolve the extension repository of host 'singleword': 'singleword' is not a host name.*
+
+statement error
+SELECT extension_repository_url('localhost')
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+statement error
+SELECT extension_repository_url('127.0.0.1')
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+# The empty name is refused by the repository name check that every name passes first.
+statement error
+SELECT extension_repository_url('')
+----
+<REGEX>:Invalid Input Error.*Invalid extension repository name '': names cannot be empty.*
+
+# A host is only read, never stored: the lookup leaves the trust store as it was.
+query I
+SELECT count(*) FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+0
+
+query I
+SELECT extension_repository_url(NULL)
+----
+NULL
+
+# The function is volatile: a host is free to publish something else tomorrow, so the value is not folded away.
+query II
+SELECT stability, has_side_effects FROM duckdb_functions() WHERE function_name='extension_repository_url'
+----
+VOLATILE	true

@@ -13,7 +13,7 @@ DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DatabaseInstance> &insta
 DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
-static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
+static string GetDBAbsolutePath(const string &database_p, VirtualFileSystem &fs) {
 	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
@@ -27,7 +27,7 @@ static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 		return database;
 	}
 	// canonicalize the path
-	return fs.CanonicalizePath(database);
+	return fs.FindFileSystem(database, nullptr).CanonicalizePath(database, nullptr);
 }
 
 static string GetCacheKey(const string &database_p, const DBConfig &config) {

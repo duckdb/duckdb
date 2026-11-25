@@ -990,9 +990,25 @@ transaction_t ChunkVectorInfo::ConstantDeleteId() const {
 
 void ChunkVectorInfo::Write(WriteStream &writer, VisibilityBound visibility_bound, idx_t row_count) const {
 	D_ASSERT(row_count > 0 && row_count <= STANDARD_VECTOR_SIZE);
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	transaction_t transaction_id = DConstants::INVALID_INDEX;
-	idx_t count = GetSelVector(TransactionData(transaction_id, visibility_bound), sel, row_count);
+	TransactionData transaction(DConstants::INVALID_INDEX, visibility_bound);
+	// all rows are inserted and the rows in deleted_mask are exactly the deleted rows
+	const bool use_deleted_mask = delete_state == DeleteIdState::MASKED && HasConstantInsertionId() &&
+	                              transaction.view.Sees(ConstantInsertId()) && transaction.view.Sees(mask_delete_id);
+	SelectionVector sel;
+	idx_t count;
+	if (use_deleted_mask) {
+		count = row_count - deleted_mask.CountValid(row_count);
+#ifdef DEBUG
+		SelectionVector verify_sel(STANDARD_VECTOR_SIZE);
+		D_ASSERT(GetSelVector(transaction, verify_sel, row_count) == count);
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(!deleted_mask.RowIsValid(verify_sel.get_index(i)));
+		}
+#endif
+	} else {
+		sel.Initialize(STANDARD_VECTOR_SIZE);
+		count = GetSelVector(transaction, sel, row_count);
+	}
 	if (count == row_count) {
 		// nothing is deleted: skip writing anything
 		writer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
@@ -1008,12 +1024,27 @@ void ChunkVectorInfo::Write(WriteStream &writer, VisibilityBound visibility_boun
 	writer.Write<ChunkInfoType>(ChunkInfoType::VECTOR_INFO);
 	writer.Write<idx_t>(start);
 	ValidityMask mask(STANDARD_VECTOR_SIZE);
-	mask.Initialize(STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < count; i++) {
-		mask.SetInvalid(sel.get_index(i));
-	}
-	for (idx_t i = row_count; i < STANDARD_VECTOR_SIZE; i++) {
-		mask.SetInvalid(i);
+	if (use_deleted_mask) {
+		mask.Copy(deleted_mask, STANDARD_VECTOR_SIZE);
+		mask.EnsureWritable();
+		for (idx_t i = row_count; i < STANDARD_VECTOR_SIZE; i++) {
+			mask.SetInvalidUnsafe(i);
+		}
+	} else {
+		// sel holds the visible rows in ascending order: only the rows in between are deleted
+		mask.SetAllInvalid(STANDARD_VECTOR_SIZE);
+		idx_t row_idx = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto visible_idx = sel.get_index(i);
+			D_ASSERT(visible_idx >= row_idx);
+			for (; row_idx < visible_idx; row_idx++) {
+				mask.SetValidUnsafe(row_idx);
+			}
+			row_idx = visible_idx + 1;
+		}
+		for (; row_idx < row_count; row_idx++) {
+			mask.SetValidUnsafe(row_idx);
+		}
 	}
 	mask.Write(writer, STANDARD_VECTOR_SIZE);
 }

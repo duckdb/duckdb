@@ -114,7 +114,11 @@ class JobStagesTest(unittest.TestCase):
                 changed_keys=changed_keys or set(),
                 reduced_ci_mode=reduced_ci_mode,
                 run_all=run_all,
-                runners={"linux_x64": "runner-x64", "linux_arm64": "runner-arm64"},
+                runners={
+                    "linux_x64": "runner-x64",
+                    "linux_x64_8xlarge": "runner-x64-8xlarge",
+                    "linux_arm64": "runner-arm64",
+                },
                 runner_provider=runner_provider,
                 changed_extension_files=changed_extension_files or [],
             )
@@ -574,20 +578,52 @@ class JobStagesTest(unittest.TestCase):
             selection.runners,
             {
                 "linux_x64": "runner-x64;job.priority=2",
+                "linux_x64_8xlarge": "runner-x64-8xlarge;job.priority=2",
                 "linux_arm64": "runner-arm64;job.priority=2",
             },
         )
-        self.assertEqual(selection.linux_release_matrix[0]["runner"], "runner-x64;job.priority=2")
+        self.assertEqual(selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge;job.priority=2")
 
         pull_request_selection = self._compute_job_selection(
             "pull_request", "feature/my-branch", "duckdb/duckdb", runner_provider="namespace"
         )
         self.assertEqual(pull_request_selection.runners["linux_x64"], "runner-x64")
+        self.assertEqual(pull_request_selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge")
 
         github_selection = self._compute_job_selection(
             "merge_group", "gh-readonly-queue/main/pr-1-abc", "somefork/duckdb", runner_provider="github"
         )
         self.assertEqual(github_selection.runners["linux_x64"], "runner-x64")
+        self.assertEqual(github_selection.linux_release_matrix[0]["runner"], "runner-x64-8xlarge")
+
+    def test_release_runner_selection(self):
+        for event_name in ["pull_request", "push", "workflow_dispatch"]:
+            with self.subTest(event_name=event_name):
+                selection = self._compute_job_selection(event_name, "main", "duckdb/duckdb")
+                for config in selection.linux_release_matrix:
+                    expected_runner = "runner-x64-8xlarge" if config["arch"] == "amd64" else "runner-arm64"
+                    self.assertEqual(config["runner"], expected_runner)
+                for config in selection.linux_musl_matrix:
+                    expected_runner = "runner-x64" if config["arch"] == "amd64" else "runner-arm64"
+                    self.assertEqual(config["runner"], expected_runner)
+
+    def test_release_runner_selection_with_legacy_map(self):
+        selection_input = job_stages.JobSelectionInput(
+            event_name="workflow_dispatch",
+            ref_name="main",
+            default_branch="main",
+            repository="somefork/duckdb",
+            skip_tests=False,
+            changed_keys=set(),
+            reduced_ci_mode="disabled",
+            run_all=True,
+            runners={"linux_x64": "ubuntu-latest", "linux_arm64": "ubuntu-24.04-arm"},
+        )
+        matrix = job_stages.linux_release_matrix(selection_input, optimized_release=True, full_extension_matrix=True)
+        self.assertEqual(
+            [config["runner"] for config in matrix],
+            ["ubuntu-latest", "ubuntu-24.04-arm", "ubuntu-latest", "ubuntu-24.04-arm"],
+        )
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(
