@@ -981,6 +981,67 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	}
 }
 
+// Whether a NULL array row's elements must be NULL in their own vectors, not only in the array's child validity: a
+// struct's fields must be NULL under a NULL struct, and a list copy writes the elements of every list it sees.
+static bool ElementsNeedOwnNulls(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		return true;
+	case PhysicalType::ARRAY:
+		return ElementsNeedOwnNulls(ArrayType::GetChildType(type));
+	default:
+		return false;
+	}
+}
+
+// Copies the elements of rows [offset, offset + copy_count) of an array, some of them NULL, as NULL under the NULL
+// rows.  The input is not changed.
+static void CopyArrayElementsUnderNullRows(ColumnDataMetaData &child_meta_data, ColumnDataCopyFunction &child_function,
+                                           const UnifiedVectorFormat &source_data, Vector &child_vector,
+                                           idx_t array_size, idx_t offset, idx_t copy_count) {
+	const idx_t child_count = copy_count * array_size;
+	SelectionVector element_sel(child_count);
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_data.sel->get_index(offset + i);
+		for (idx_t j = 0; j < array_size; j++) {
+			element_sel.set_index(i * array_size + j, source_idx * array_size + j);
+		}
+	}
+	if (!ElementsNeedOwnNulls(child_vector.GetType())) {
+		// the elements' validity, NULL under the NULL rows, in a mask of their own
+		UnifiedVectorFormat child_data;
+		child_vector.ToUnifiedFormat(child_data);
+		ValidityMask validity;
+		validity.Initialize(child_data.validity.Capacity());
+		child_data.owned_sel.Initialize(child_data.sel->Slice(element_sel, child_count));
+		child_data.sel = &child_data.owned_sel;
+		for (idx_t i = 0; i < child_count; i++) {
+			auto idx = child_data.sel->get_index(i);
+			if (!source_data.validity.RowIsValid(source_data.sel->get_index(offset + i / array_size)) ||
+			    !child_data.validity.RowIsValid(idx)) {
+				validity.SetInvalid(idx);
+			}
+		}
+		child_data.validity = std::move(validity);
+		child_function.function(child_meta_data, child_data, child_vector, 0, child_count);
+		return;
+	}
+	// FlatVector::SetNull makes a nested element NULL in its own vectors too, in a copy of the elements
+	Vector elements(child_vector.GetType(), child_count);
+	VectorOperations::Copy(child_vector, elements, element_sel, child_count, 0, 0);
+	for (idx_t i = 0; i < copy_count; i++) {
+		if (!source_data.validity.RowIsValid(source_data.sel->get_index(offset + i))) {
+			for (idx_t j = 0; j < array_size; j++) {
+				FlatVector::SetNull(elements, i * array_size + j, true);
+			}
+		}
+	}
+	UnifiedVectorFormat elements_data;
+	elements.ToUnifiedFormat(elements_data);
+	child_function.function(child_meta_data, elements_data, elements, 0, child_count);
+}
+
 void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                          idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
@@ -999,41 +1060,30 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
-
-	auto current_child_index = child_index;
-	while (current_child_index.IsValid()) {
-		auto &child_vdata = segment.GetVectorData(current_child_index);
-		current_child_index = child_vdata.next_data;
-	}
-
-	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_vector.ToUnifiedFormat(child_vector_data);
 
-	// Broadcast and sync the validity of the array vector to the child vector
-	// This requires creating a copy of the validity mask: we cannot modify the input validity
-	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
-	if (source_data.validity.IsMaskSet()) {
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto source_idx = source_data.sel->get_index(offset + i);
-			if (!source_data.validity.RowIsValid(source_idx)) {
-				for (idx_t j = 0; j < array_size; j++) {
-					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
-				}
-			}
+	bool any_null = false;
+	if (source_data.validity.CanHaveNull()) {
+		for (idx_t i = 0; i < copy_count && !any_null; i++) {
+			any_null = !source_data.validity.RowIsValid(source_data.sel->get_index(offset + i));
 		}
 	}
-
-	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	// If the array is constant, we need to copy the child vector n times
-	if (is_constant) {
+	if (any_null) {
+		CopyArrayElementsUnderNullRows(child_meta_data, child_function, source_data, child_vector, array_size, offset,
+		                               copy_count);
+		return;
+	}
+	UnifiedVectorFormat child_vector_data;
+	child_vector.ToUnifiedFormat(child_vector_data);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// a constant array: copy its child once per row
 		for (idx_t i = 0; i < copy_count; i++) {
 			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
 		}
-	} else {
-		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-		                        copy_count * array_size);
+		return;
 	}
+	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+	                        copy_count * array_size);
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {

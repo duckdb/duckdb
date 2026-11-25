@@ -12,6 +12,7 @@ add_library_unity(
   test_dictionary_hash_cache.cpp
   test_vector_hash.cpp
   test_column_data_allocator.cpp
+  test_column_data_append.cpp
   test_cow_ptr.cpp
   test_encode_truncated_utf8.cpp
   test_buffer_ptr.cpp
