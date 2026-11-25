@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 
 #include "duckdb/optimizer/distinctness.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -102,7 +103,8 @@ static unique_ptr<LogicalOperator> ReassociateLeftJoinChain(vector<LeftJoinChain
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoinChain(unique_ptr<LogicalOperator> op) {
-	if (filters.empty() || op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	if (filters.empty() || op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    optimizer.OptimizerDisabled(OptimizerType::LEFT_JOIN_CHAIN)) {
 		return PushFinalFilters(std::move(op));
 	}
 	for (auto &filter : filters) {

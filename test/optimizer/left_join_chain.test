@@ -2,6 +2,11 @@
 # description: Reassociate null-rejected LEFT join chains into INNER and FULL joins
 # group: [optimizer]
 
+query T
+SELECT name FROM duckdb_optimizers() WHERE name='left_join_chain';
+----
+left_join_chain
+
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
@@ -334,3 +339,45 @@ LEFT JOIN channel_two c ON a.k=c.k
 WHERE coalesce(b.qty::INTEGER,0)>0 OR coalesce(c.qty,0)>0;
 ----
 physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# The dedicated switch also applies when CTE filter pushdown invokes the rule.
+query II
+EXPLAIN WITH joined AS MATERIALIZED (
+    SELECT s.k,w.qty wqty,c.qty cqty FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+    LEFT JOIN c ON s.k=c.k AND s.j=c.j
+)
+SELECT k FROM joined WHERE coalesce(wqty,0)>0 OR coalesce(cqty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: FULL.*
+
+statement ok
+SET disabled_optimizers='left_join_chain';
+
+query II
+EXPLAIN SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+query II
+EXPLAIN WITH joined AS MATERIALIZED (
+    SELECT s.k,w.qty wqty,c.qty cqty FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+    LEFT JOIN c ON s.k=c.k AND s.j=c.j
+)
+SELECT k FROM joined WHERE coalesce(wqty,0)>0 OR coalesce(cqty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+query IIIII rowsort
+SELECT s.k, s.j, s.qty, w.qty, c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12	2	NULL
+2	20	7	NULL	4
+3	30	9	3	5
+
+statement ok
+RESET disabled_optimizers;

@@ -71,6 +71,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"redundant_distinct", OptimizerType::REDUNDANT_DISTINCT},
     {"set_operation_aggregate", OptimizerType::SET_OPERATION_AGGREGATE},
     {"join_to_semi_join", OptimizerType::JOIN_TO_SEMI_JOIN},
+    {"left_join_chain", OptimizerType::LEFT_JOIN_CHAIN},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
