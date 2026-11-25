@@ -70,6 +70,10 @@ ORDER BY g;
 1	{{'key': 1}=1, {'key': 3}=0}
 2	{{'key': 1}=0, {'key': 3}=1}
 
+# Row-dependent bins use the native aggregate.
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query T
 SELECT histogram(i, bins)
 FROM (VALUES (2, [2, 5]), (5, [2, 5]), (9, [2, 5])) t(i, bins)
