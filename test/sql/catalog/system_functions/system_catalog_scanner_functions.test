@@ -367,12 +367,19 @@ SELECT count(*) = count(DISTINCT (function_oid, parameters)) FROM full_duckdb_fu
 true
 
 query II
-WITH filtered AS (
-    SELECT o.ordinality AS ord, f.pos
-    FROM duckdb_functions() WITH ORDINALITY o
-    JOIN (SELECT row_number() OVER () AS pos, * FROM full_duckdb_functions) f USING (function_oid, parameters)
-    WHERE o.database_name IN ('db1', 'db2')),
-stepped AS (SELECT pos, lag(pos) OVER (ORDER BY ord) AS prev FROM filtered)
+EXPLAIN SELECT row_number() OVER () AS ord, * FROM duckdb_functions() WHERE database_name = 'db1';
+----
+physical_plan	<REGEX>:.*Filters: database_name = 'db1'.*
+
+statement ok
+CREATE TABLE pruned_duckdb_functions AS SELECT row_number() OVER () AS ord, * FROM duckdb_functions() WHERE database_name IN ('db1', 'db2');
+
+query II
+WITH positioned AS (
+    SELECT p.ord, f.pos
+    FROM pruned_duckdb_functions p
+    JOIN (SELECT row_number() OVER () AS pos, * FROM full_duckdb_functions) f USING (function_oid, parameters)),
+stepped AS (SELECT pos, lag(pos) OVER (ORDER BY ord) AS prev FROM positioned)
 SELECT count(*), bool_and(prev IS NULL OR pos > prev) FROM stepped;
 ----
 12	true

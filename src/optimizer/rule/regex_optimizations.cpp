@@ -104,15 +104,16 @@ static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 				ret.like_string += "%";
 			}
 			break;
-		case duckdb_re2::kRegexpStar:
-			// .* is a Star operator is a anyChar operator as a child.
-			// any other child operator would represent a pattern LIKE cannot match.
-			if (subs[cur_sub_index]->nsub() == 1 && subs[cur_sub_index]->sub()[0]->op() == duckdb_re2::kRegexpAnyChar) {
+		case duckdb_re2::kRegexpStar: {
+			// a star at either edge can match the empty string; elsewhere only .* (with 's') maps to %
+			bool at_edge = cur_sub_index == 0 || cur_sub_index + 1 == num_subs;
+			if (at_edge || subs[cur_sub_index]->sub()[0]->op() == duckdb_re2::kRegexpAnyChar) {
 				ret.like_string += "%";
 				break;
 			}
 			ret.exists = false;
 			return ret;
+		}
 		case duckdb_re2::kRegexpLiteralString:
 		case duckdb_re2::kRegexpLiteral: {
 			// if this is the only matching op, we should have directly called

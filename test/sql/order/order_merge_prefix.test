@@ -5,9 +5,18 @@
 statement ok
 SET threads=4;
 
+# Bound the range join's vector pairs without shrinking the ordinary sort cases.
 statement ok
-CREATE TABLE prefix_keys AS
-SELECT i, repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0') AS k
+CREATE MACRO prefix_join_step() AS least(1024, greatest(32, current_setting('standard_vector_size')::BIGINT // 2));
+
+foreach prefix 32 600
+
+statement ok
+SET debug_force_external=false;
+
+statement ok
+CREATE OR REPLACE TABLE prefix_keys AS
+SELECT i, repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0') AS k
 FROM range(8193) t(i);
 
 statement ok
@@ -17,7 +26,7 @@ PRAGMA verify_parallelism;
 query III
 SELECT count(*), sum(i),
        bool_and((prev_k IS NULL OR prev_k <= k) AND
-                k = repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
+                k = repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
 FROM (
     SELECT *, lag(k) OVER () AS prev_k
     FROM (SELECT * FROM prefix_keys ORDER BY k)
@@ -31,7 +40,7 @@ SET debug_force_external=true;
 query III
 SELECT count(*), sum(i),
        bool_and((prev_k IS NULL OR prev_k >= k) AND
-                k = repeat('p', 600) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
+                k = repeat('p', {prefix}) || lpad(((i * 977) % 8193)::VARCHAR, 4, '0'))
 FROM (
     SELECT *, lag(k) OVER () AS prev_k
     FROM (SELECT * FROM prefix_keys ORDER BY k DESC)
@@ -41,7 +50,7 @@ FROM (
 
 # Equal keys and keys ending inside a shared prefix retain their ordinary order.
 statement ok
-CREATE TABLE prefix_lengths AS
+CREATE OR REPLACE TABLE prefix_lengths AS
 SELECT i, CASE WHEN i % 11 = 0 THEN NULL
               ELSE repeat('p', (i % 4) * 200) END AS k
 FROM prefix_keys;
@@ -65,3 +74,19 @@ FROM (
 );
 ----
 8193	true
+
+# Materialized keys must retain their canonical prefix for comparisons during a range join.
+# The nonzero right keys match step + 2*step + ... + 8*step left rows.
+query I
+SELECT count(*) = 36 * prefix_join_step()
+FROM prefix_keys l
+JOIN (
+    SELECT repeat('p', {prefix}) || lpad((CASE WHEN i % prefix_join_step() = 0 THEN i ELSE 0 END)::VARCHAR, 4, '0') AS k
+    FROM prefix_keys
+    WHERE i <= 8 * prefix_join_step()
+) r ON l.k < r.k
+WHERE (l.i * 977) % 8193 <= 8 * prefix_join_step();
+----
+true
+
+endloop

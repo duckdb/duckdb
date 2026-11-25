@@ -44,14 +44,14 @@ void EncodeUTF8ToLatin1(const char *input, idx_t input_size, char *output, idx_t
 			pos++;
 			continue;
 		}
-		// a two byte sequence U+0080..U+07FF, valid UTF-8 is guaranteed by VARCHAR
+		// a two byte sequence U+0080..U+07FF
 		uint32_t code_point = 0;
 		idx_t length = 1;
 		if (lead >= 0xF0) {
 			length = 4;
 		} else if (lead >= 0xE0) {
 			length = 3;
-		} else {
+		} else if (pos + 1 < input_size) {
 			length = 2;
 			code_point = ((lead & 0x1F) << 6) | (static_cast<unsigned char>(input[pos + 1]) & 0x3F);
 		}
@@ -73,23 +73,29 @@ void EncodeUTF8ToUTF16(const char *input, idx_t input_size, char *output, idx_t 
 	};
 	while (pos < input_size) {
 		const auto lead = static_cast<unsigned char>(input[pos]);
-		uint32_t code_point;
-		idx_t length;
+		idx_t length = 4;
 		if (lead <= 0x7F) {
-			code_point = lead;
 			length = 1;
 		} else if (lead < 0xE0) {
-			code_point = ((lead & 0x1F) << 6) | (static_cast<unsigned char>(input[pos + 1]) & 0x3F);
 			length = 2;
 		} else if (lead < 0xF0) {
+			length = 3;
+		}
+		if (pos + length > input_size) {
+			throw ConversionException("Could not encode the character at byte %llu in utf-16", pos);
+		}
+		uint32_t code_point;
+		if (length == 1) {
+			code_point = lead;
+		} else if (length == 2) {
+			code_point = ((lead & 0x1F) << 6) | (static_cast<unsigned char>(input[pos + 1]) & 0x3F);
+		} else if (length == 3) {
 			code_point = ((lead & 0x0F) << 12) | ((static_cast<unsigned char>(input[pos + 1]) & 0x3F) << 6) |
 			             (static_cast<unsigned char>(input[pos + 2]) & 0x3F);
-			length = 3;
 		} else {
 			code_point = ((lead & 0x07) << 18) | ((static_cast<unsigned char>(input[pos + 1]) & 0x3F) << 12) |
 			             ((static_cast<unsigned char>(input[pos + 2]) & 0x3F) << 6) |
 			             (static_cast<unsigned char>(input[pos + 3]) & 0x3F);
-			length = 4;
 		}
 		if (code_point >= 0x10000) {
 			code_point -= 0x10000;

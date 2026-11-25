@@ -344,6 +344,14 @@ struct HugeintSumOperation
 	}
 };
 
+struct UhugeintSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, UhugeintAdd>, ClusteredAddOp<UhugeintAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
 struct IntervalSumSetOperation : public SumSetOperation {
 	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
@@ -586,6 +594,15 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetFallible(); // adding HUGEINT values to the HUGEINT accumulator throws on overflow
+		return function;
+	}
+	case PhysicalType::UINT128: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<uhugeint_t>, uhugeint_t, uhugeint_t, UhugeintSumOperation>(
+		        LogicalType::UHUGEINT, LogicalType::UHUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetFallible(); // adding UHUGEINT values to the UHUGEINT accumulator throws on overflow
 		return function;
 	}
 	default:
@@ -875,6 +892,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
+	sum.AddFunction(GetSumAggregate(PhysicalType::UINT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
