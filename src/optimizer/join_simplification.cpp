@@ -124,7 +124,12 @@ void JoinSimplification::AddRequiredColumns(const vector<JoinCondition> &conditi
 bool JoinSimplification::GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		if (!BoundCastExpression::IsCast(expr)) {
-			return false;
+			// a unary function that propagates NULLs (e.g. encode) is only non-NULL if its input is
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || !expr.PropagatesNullValues()) {
+				return false;
+			}
+			auto &func = expr.Cast<BoundFunctionExpression>();
+			return func.GetChildren().size() == 1 && GetColumnBinding(*func.GetChildren()[0], binding);
 		}
 		auto &cast = expr.Cast<BoundFunctionExpression>();
 		return GetColumnBinding(BoundCastExpression::Child(cast), binding);

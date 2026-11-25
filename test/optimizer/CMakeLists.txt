@@ -15,6 +15,7 @@ add_library_unity(
   join_filter_optimizer_hooks.cpp
   join_order_conflict_detector.cpp
   join_order_enumeration.cpp
+  join_order_linearized.cpp
   logical_plan_verification.cpp
   multi_file_metadata.cpp
   multi_file_repeatability.cpp

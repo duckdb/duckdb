@@ -318,26 +318,6 @@ vector<OpenFileInfo> CachingFileSystemWrapper::Glob(const string &path, FileOpen
 //===----------------------------------------------------------------------===//
 // SubSystem Operations
 //===----------------------------------------------------------------------===//
-void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
-	underlying_file_system.RegisterSubSystem(std::move(sub_fs));
-}
-
-void CachingFileSystemWrapper::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
-	underlying_file_system.RegisterCompressionFilesystem(std::move(fs));
-}
-
-void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
-	underlying_file_system.UnregisterSubSystem(name);
-}
-
-unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {
-	return underlying_file_system.ExtractSubSystem(name);
-}
-
-vector<string> CachingFileSystemWrapper::ListSubSystems() {
-	return underlying_file_system.ListSubSystems();
-}
-
 bool CachingFileSystemWrapper::CanHandleFile(const string &fpath) {
 	return underlying_file_system.CanHandleFile(fpath);
 }
@@ -390,22 +370,6 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
 	return underlying_file_system.OpenCompressedFile(context, std::move(handle), write);
-}
-
-void CachingFileSystemWrapper::SetDisabledFileSystems(const vector<string> &names) {
-	underlying_file_system.SetDisabledFileSystems(names);
-}
-
-vector<string> CachingFileSystemWrapper::GetDisabledFileSystems() {
-	return underlying_file_system.GetDisabledFileSystems();
-}
-
-bool CachingFileSystemWrapper::SubSystemIsDisabled(const string &name) {
-	return underlying_file_system.SubSystemIsDisabled(name);
-}
-
-bool CachingFileSystemWrapper::IsDisabledForPath(const string &path) {
-	return underlying_file_system.IsDisabledForPath(path);
 }
 
 } // namespace duckdb

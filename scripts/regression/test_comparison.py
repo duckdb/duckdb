@@ -94,6 +94,28 @@ class TestPlanCostComparison(unittest.TestCase):
         old, new = profile(varying, [int(probe * 1.03) for probe in varying])
         self.assertEqual(old, new)
 
+    def test_small_work_increases_require_timing(self):
+        old = PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 1000, 1000, 1000, 1.0
+        for component in ("total", "build_side", "probe_side"):
+            for increased_work, needs_timing in ((1030, True), (1031, False)):
+                for time, regressed in ((1.02, not needs_timing), (1.03, not needs_timing), (1.04, True)):
+                    with self.subTest(component=component, increased_work=increased_work, time=time):
+                        new = PlanCost()
+                        new.total, new.build_side, new.probe_side, new.time = 1001, 1001, 1000, time
+                        setattr(new, component, increased_work)
+                        self.assertEqual(old.needs_timing(new), needs_timing)
+                        self.assertEqual(new.needs_timing(old), needs_timing)
+                        self.assertEqual(new > old, regressed)
+                        self.assertEqual(old < new, regressed)
+                        self.assertFalse(old > new)
+
+    def test_work_increase_from_zero_is_not_within_tolerance(self):
+        old, new = PlanCost(), PlanCost()
+        new.total, new.build_side, new.probe_side = 1, 1, 1
+        self.assertFalse(old.needs_timing(new))
+        self.assertTrue(new > old)
+
     def test_variation_tolerance_applies_to_every_cost_component(self):
         def costs(component, values):
             result = []
@@ -114,10 +136,10 @@ class TestPlanCostComparison(unittest.TestCase):
                     self.assertEqual(plan_cost_runner.within_run_variation(old, new), expected)
                     self.assertEqual(plan_cost_runner.within_run_variation(new, old), expected)
 
-    def test_runner_confirms_hot_regression_on_shared_database(self):
+    def test_runner_confirms_hot_regression_for_small_work_increase(self):
         old, new = PlanCost(), PlanCost()
-        old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
-        new.total, new.build_side, new.probe_side, new.time = 5, 40, 100, 0.9
+        old.total, old.build_side, old.probe_side, old.time = 1000, 1000, 1000, 1.0
+        new.total, new.build_side, new.probe_side, new.time = 1010, 1020, 1005, 0.9
         with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
             root = Path(directory)
             (root / 'queries').mkdir()

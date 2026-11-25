@@ -10,6 +10,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -215,9 +216,27 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	return files;
 }
 
+//! A file list that expands the globs with the glob table function
+static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, Value globs,
+                                                    const FileGlobInput &glob_input) {
+	vector<Value> inputs {std::move(globs)};
+	named_argument_map_t named_parameters;
+	named_parameters["full_file_info"] = Value::BOOLEAN(true);
+	named_parameters["allow_empty"] = Value::BOOLEAN(glob_input.AllowsEmpty());
+	if (glob_input.behavior == FileGlobOptions::FALLBACK_GLOB) {
+		named_parameters["fallback_extension"] = Value(glob_input.extension);
+	}
+	return make_uniq<TableFunctionMultiFileList>(context, Identifier("glob"), std::move(inputs),
+	                                             std::move(named_parameters));
+}
+
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
-	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_input);
+	vector<Value> globs;
+	for (auto &path : paths) {
+		globs.emplace_back(path);
+	}
+	auto res = CreateGlobFileList(context, Value::LIST(LogicalType::VARCHAR, std::move(globs)), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -242,7 +261,12 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 		}
 		return CreateFileList(context, paths, glob_input);
 	}
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(files), glob_input);
+	// glob lists the files with open options as-is - a VARIANT lets every file have its own options
+	vector<Value> entries;
+	for (auto &file : files) {
+		entries.push_back(file.ToValue().CastAs(context, LogicalType::VARIANT()));
+	}
+	auto res = CreateGlobFileList(context, Value::LIST(LogicalType::VARIANT(), std::move(entries)), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

@@ -574,11 +574,11 @@ PipelineBroadcastExchange::ConsumerState::operator=(ConsumerState &&other) noexc
 
 PipelineBroadcastExchange::~PipelineBroadcastExchange() = default;
 
-PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientContext &context,
+PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientContext &context_p,
                                                                          const PipelineBroadcastExchange &exchange,
                                                                          idx_t producer_base_batch_index_p)
-    : producer_base_batch_index(producer_base_batch_index_p), supports_batch_index(exchange.SupportsBatchIndex()) {
-	vector<reference<Pipeline>> direct_pipeline_refs;
+    : context(context_p), producer_base_batch_index(producer_base_batch_index_p),
+      supports_batch_index(exchange.SupportsBatchIndex()) {
 	{
 		annotated_lock_guard<annotated_mutex> guard(exchange.lock);
 		auto summary = exchange.GetConsumerSummaryLocked();
@@ -590,14 +590,28 @@ PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientC
 		direct_pipeline_refs = exchange.direct_pipelines;
 	}
 
-	for (auto &pipeline_ref : direct_pipeline_refs) {
-		auto &pipeline = pipeline_ref.get();
+	direct_executors.resize(direct_pipeline_refs.size());
+	for (idx_t index = 0; index < direct_pipeline_refs.size(); index++) {
+		auto &pipeline = direct_pipeline_refs[index].get();
 		pipeline.PrepareExternalInput();
-		direct_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
+		// Ordered consumers must register their local state before batch progress advances.
+		if (pipeline.GetSink()->RequiredPartitionInfo().AnyRequired()) {
+			GetOrCreateDirectExecutor(index);
+		}
 		auto input_chunk = make_uniq<DataChunk>();
 		input_chunk->InitializeEmpty(exchange.Types());
 		direct_input_chunks.push_back(std::move(input_chunk));
 	}
+}
+
+PipelineExecutor &PipelineBroadcastExchangeLocalState::GetOrCreateDirectExecutor(idx_t index) {
+	D_ASSERT(index >= direct_finalize_idx);
+	auto &executor = direct_executors[index];
+	if (!executor) {
+		auto &pipeline = direct_pipeline_refs[index].get();
+		executor = make_uniq<PipelineExecutor>(context, pipeline);
+	}
+	return *executor;
 }
 
 void PipelineBroadcastExchange::SetLogOperator(const PhysicalOperator &op) {
@@ -914,7 +928,7 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 	auto source_partition_data = GetSourcePartitionData(partition_info);
 	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
 	for (; direct_idx < direct_executors.size(); direct_idx++) {
-		auto &executor = *direct_executors[direct_idx];
+		auto &executor = GetOrCreateDirectExecutor(direct_idx);
 		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
 			resuming = false;
@@ -958,6 +972,9 @@ SinkNextBatchType PipelineBroadcastExchangeLocalState::NextBatch(const SourcePar
 	}
 
 	for (; direct_next_batch_idx < direct_executors.size(); direct_next_batch_idx++) {
+		if (!direct_executors[direct_next_batch_idx]) {
+			continue;
+		}
 		auto &executor = *direct_executors[direct_next_batch_idx];
 		executor.SetInterruptState(interrupt_state);
 		PipelineExecuteResult result;
@@ -978,6 +995,9 @@ SinkNextBatchType PipelineBroadcastExchangeLocalState::UpdateMinBatchIndex(const
                                                                            const InterruptState &interrupt_state) {
 	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
 	for (; direct_min_batch_idx < direct_executors.size(); direct_min_batch_idx++) {
+		if (!direct_executors[direct_min_batch_idx]) {
+			continue;
+		}
 		auto &executor = *direct_executors[direct_min_batch_idx];
 		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
@@ -996,7 +1016,8 @@ SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePa
                                                                   const InterruptState &interrupt_state) {
 	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
 	for (; direct_finalize_idx < direct_executors.size(); direct_finalize_idx++) {
-		auto &executor = *direct_executors[direct_finalize_idx];
+		// Empty consumers still finalize, but need only one executor at a time.
+		auto &executor = GetOrCreateDirectExecutor(direct_finalize_idx);
 		executor.SetInterruptState(interrupt_state);
 		auto result = PipelineExecuteResult::NOT_FINISHED;
 		while (result == PipelineExecuteResult::NOT_FINISHED) {
@@ -1005,6 +1026,8 @@ SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePa
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			return SinkCombineResultType::BLOCKED;
 		}
+		direct_input_chunks[direct_finalize_idx].reset();
+		direct_executors[direct_finalize_idx].reset();
 	}
 	return SinkCombineResultType::FINISHED;
 }
