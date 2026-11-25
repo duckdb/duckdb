@@ -7,13 +7,13 @@ require core_functions
 foreach aggregate histogram histogram_exact
 
 query T
-SELECT finalize(${aggregate}(i, [5, 2, 5]) EXPORT_STATE)
+SELECT finalize({aggregate}(i, [5, 2, 5]) EXPORT_STATE)
 FROM (VALUES (2), (5), (9), (NULL)) t(i);
 ----
 {2=1, 5=1, 2147483647=1}
 
 query T
-SELECT finalize(${aggregate}(i, NULL::INTEGER[]) EXPORT_STATE)
+SELECT finalize({aggregate}(i, NULL::INTEGER[]) EXPORT_STATE)
 FROM (VALUES (NULL::INTEGER)) t(i);
 ----
 NULL
@@ -21,15 +21,15 @@ NULL
 query T
 SELECT finalize(combine_aggr(state))
 FROM (
-	SELECT g, ${aggregate}(s, ['medium boundary', 'long boundary', 'medium boundary']) EXPORT_STATE AS state
+	SELECT g, {aggregate}(s, ['medium boundary', 'long boundary', 'medium boundary']) EXPORT_STATE AS state
 	FROM (VALUES (1, 'long boundary'), (2, 'medium boundary'), (2, 'outside boundary')) t(g, s)
 	GROUP BY g
 );
 ----
-{long boundary=1, medium boundary=1, =1}
+{long boundary=1, medium boundary=1, ''=1}
 
 query T
-SELECT finalize(${aggregate}(s, [{'key': 1}, {'key': 3}]) EXPORT_STATE)
+SELECT finalize({aggregate}(s, [{'key': 1}, {'key': 3}]) EXPORT_STATE)
 FROM (VALUES ({'key': 1}), ({'key': 3})) t(s);
 ----
 {{'key': 1}=1, {'key': 3}=1}
@@ -51,6 +51,24 @@ FROM (
 );
 ----
 127	381	1000000
+
+query IT
+SELECT g, histogram_exact(s, ['medium boundary', 'long boundary'])
+FROM (VALUES (1, 'long boundary'), (1, 'outside boundary'), (2, 'medium boundary')) t(g, s)
+GROUP BY g
+ORDER BY g;
+----
+1	{long boundary=1, medium boundary=0, ''=1}
+2	{long boundary=0, medium boundary=1}
+
+query IT
+SELECT g, histogram(s, [{'key': 3}, {'key': 1}])
+FROM (VALUES (1, {'key': 1}), (2, {'key': 3})) t(g, s)
+GROUP BY g
+ORDER BY g;
+----
+1	{{'key': 1}=1, {'key': 3}=0}
+2	{{'key': 1}=0, {'key': 3}=1}
 
 query T
 SELECT histogram(i, bins)

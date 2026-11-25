@@ -21,19 +21,25 @@ SELECT count(*) FROM (SELECT mode(i) OVER (PARTITION BY i % 100) x FROM range(20
 ----
 Out of Memory Error
 
+statement ok
+SET memory_limit='40MB';
+
 foreach aggregate histogram histogram_exact
 
 query III
 SELECT count(*), sum(cardinality(x)), sum(list_sum(map_values(x)))
 FROM (
-	SELECT i % 30000 AS g, ${aggregate}(i, range(0, 100000, 200)) AS x
-	FROM range(300000) r(i)
+	SELECT i // 10 AS g, {aggregate}(100000 + i, range(0, 30000, 60)) AS x
+	FROM range(90000) r(i)
 	GROUP BY g
 );
 ----
-30000	15030000	300000
+9000	4509000	90000
 
 endloop
+
+statement ok
+SET memory_limit='100MB';
 
 # 1000 groups with a full sample of 8192 values and their weights
 statement error
