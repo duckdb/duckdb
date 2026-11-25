@@ -38,6 +38,54 @@ struct ArrowWideDecimalConverter {
 	}
 };
 
+//! Sign-extends a HUGEINT / zero-extends a UHUGEINT into an Arrow decimal256
+struct ArrowHugeintDecimal256Converter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		auto upper = static_cast<uint64_t>(input.upper);
+		// only a (signed) HUGEINT can be negative: a UHUGEINT is extended with zeros
+		const bool negative = std::is_signed<decltype(input.upper)>::value && (upper >> 63) != 0;
+		const uint64_t extension = negative ? ~uint64_t(0) : 0;
+		TGT result;
+		result.words[0] = input.lower;
+		result.words[1] = upper;
+		result.words[2] = extension;
+		result.words[3] = extension;
+		return result;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+		memset(&value, 0, sizeof(TGT));
+	}
+};
+
+//! Appends a UHUGEINT as an Arrow decimal128 (format version 1.0), which only holds values below 2^127
+struct ArrowUhugeintDecimal128Converter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		if ((input.upper >> 63) != 0) {
+			throw InvalidInputException("Cannot convert UHUGEINT value %s to Arrow format version 1.0: it does not fit "
+			                            "in a decimal128, SET arrow_output_version to 1.1 or later",
+			                            input.ToString());
+		}
+		return input;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+		value = TGT(0);
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // ArrowAppender
 //===--------------------------------------------------------------------===//
@@ -227,10 +275,26 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::HUGEINT:
-		InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
+		if (!append_data.options.arrow_lossless_conversion &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_1) {
+			// exported as decimal256 with precision 39, see ArrowConverter
+			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, hugeint_t, ArrowHugeintDecimal256Converter>>(
+			    append_data);
+		} else {
+			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
+		}
 		break;
 	case LogicalTypeId::UHUGEINT:
-		InitializeAppenderForType<ArrowScalarData<uhugeint_t>>(append_data);
+		if (append_data.options.arrow_lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<uhugeint_t>>(append_data);
+		} else if (append_data.options.arrow_output_version >= ArrowFormatVersion::V1_1) {
+			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, uhugeint_t, ArrowHugeintDecimal256Converter>>(
+			    append_data);
+		} else {
+			// decimal128 (format version 1.0): values of 2^127 and above would be read as negative
+			InitializeAppenderForType<ArrowScalarData<uhugeint_t, uhugeint_t, ArrowUhugeintDecimal128Converter>>(
+			    append_data);
+		}
 		break;
 	case LogicalTypeId::UTINYINT:
 		InitializeAppenderForType<ArrowScalarData<uint8_t>>(append_data);

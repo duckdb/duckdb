@@ -17,7 +17,7 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 		REQUIRE(!con.Query("SET arrow_output_version = '1.5'")->HasError());
 	} else {
 		REQUIRE(!con.Query("SET produce_arrow_string_view = false")->HasError());
-		REQUIRE(!con.Query("SET arrow_output_version = '1.0'")->HasError());
+		REQUIRE(!con.Query("RESET arrow_output_version")->HasError());
 	}
 	auto client_properties = con.context->GetClientProperties();
 	auto result = con.context->Query(query, QueryParameters());

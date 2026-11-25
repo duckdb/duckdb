@@ -166,7 +166,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
+		} else if (options.arrow_output_version >= ArrowFormatVersion::V1_1) {
+			// the full HUGEINT / UHUGEINT range needs 39 digits, which only a decimal256 holds (format version 1.1)
+			child.format = "d:39,0,256";
 		} else {
+			// format version 1.0 only has decimal128: the appender rejects UHUGEINT values that do not fit in it
 			child.format = "d:38,0";
 		}
 		break;
