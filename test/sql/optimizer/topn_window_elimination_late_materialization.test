@@ -201,7 +201,7 @@ INSERT INTO nested_cast_t VALUES ('a', 1, 1.1, 'n1'), ('a', 2, 3.7, 'n2'), ('b',
 # The window is still eliminated ...
 query II
 EXPLAIN SELECT key, r, note FROM (
-  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS BIGINT) AS r, note FROM nested_cast_t)
 QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
@@ -210,7 +210,7 @@ logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 # reconstructed from a single default cast.
 query II
 EXPLAIN SELECT key, r, note FROM (
-  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS BIGINT) AS r, note FROM nested_cast_t)
 QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
@@ -218,7 +218,7 @@ logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
 # The intermediate integer truncation must be preserved
 query III
 SELECT key, r, note FROM (
-  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS BIGINT) AS r, note FROM nested_cast_t)
 QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
 ORDER BY key
 ----
@@ -240,7 +240,7 @@ b	8	n4
 
 query III
 SELECT key, r, note FROM (
-  SELECT key, ts, CAST(CAST(x AS INTEGER) AS DOUBLE) AS r, note FROM nested_cast_t)
+  SELECT key, ts, CAST(CAST(x AS INTEGER) AS BIGINT) AS r, note FROM nested_cast_t)
 QUALIFY row_number() OVER (PARTITION BY key ORDER BY ts DESC) = 1
 ORDER BY key
 ----

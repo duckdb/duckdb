@@ -3,6 +3,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
@@ -193,6 +194,29 @@ LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t colu
 	return result;
 }
 
+//! Whether the top-n aggregate keeps the sign of a zero in this payload. Payloads that are not stored natively are
+//! kept as sort keys, which store 0.0 and -0.0 alike.
+static bool PayloadKeepsZeroSign(const LogicalType &type, const bool n_aggregate, const bool struct_packed) {
+	if (!TypeVisitor::Contains(type, LogicalTypeId::FLOAT) && !TypeVisitor::Contains(type, LogicalTypeId::DOUBLE)) {
+		return true;
+	}
+	if (struct_packed) {
+		return false;
+	}
+	if (n_aggregate) {
+#if DUCKDB_SMALLER_BINARY(arg_min_max_n_types)
+		return false;
+#else
+		return type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE;
+#endif
+	}
+#if DUCKDB_SMALLER_BINARY(arg_min_max_types)
+	return false;
+#else
+	return type.id() == LogicalTypeId::DOUBLE;
+#endif
+}
+
 //! Late materialization recreates a payload by re-scanning the base table column and re-applying a single default
 //! (strict) cast at the topmost projection. That only reproduces the original value when the projection expression
 //! is a plain column reference, optionally wrapped in a single non-try cast. A value-transforming expression
@@ -309,6 +333,14 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	if (!used_late_materialization) {
+		for (auto &payload : aggregate_payload) {
+			if (!PayloadKeepsZeroSign(payload->GetReturnType(), params.limit > 1,
+			                          params.payload_type == TopNPayloadType::STRUCT_PACK)) {
+				return op;
+			}
+		}
+	}
 	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
