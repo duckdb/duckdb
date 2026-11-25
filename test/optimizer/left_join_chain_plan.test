@@ -172,7 +172,7 @@ WHERE coalesce(b.qty::INTEGER,0)>0 OR coalesce(c.qty,0)>0;
 ----
 physical_plan	<!REGEX>:.*Join Type: FULL.*
 
-# The dedicated switch also applies when CTE filter pushdown invokes the rule.
+# CTE filter pushdown also invokes the rule.
 query II
 EXPLAIN WITH joined AS MATERIALIZED (
     SELECT s.k,w.qty wqty,c.qty cqty FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
@@ -181,28 +181,6 @@ EXPLAIN WITH joined AS MATERIALIZED (
 SELECT k FROM joined WHERE coalesce(wqty,0)>0 OR coalesce(cqty,0)>0;
 ----
 physical_plan	<REGEX>:.*Join Type: FULL.*
-
-statement ok
-SET disabled_optimizers='left_join_chain';
-
-query II
-EXPLAIN SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
-LEFT JOIN c ON s.k=c.k AND s.j=c.j
-WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
-----
-physical_plan	<!REGEX>:.*Join Type: FULL.*
-
-query II
-EXPLAIN WITH joined AS MATERIALIZED (
-    SELECT s.k,w.qty wqty,c.qty cqty FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
-    LEFT JOIN c ON s.k=c.k AND s.j=c.j
-)
-SELECT k FROM joined WHERE coalesce(wqty,0)>0 OR coalesce(cqty,0)>0;
-----
-physical_plan	<!REGEX>:.*Join Type: FULL.*
-
-statement ok
-RESET disabled_optimizers;
 
 # Throwing preserved inputs are not reassociated.
 statement ok

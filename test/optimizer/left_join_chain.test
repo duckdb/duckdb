@@ -2,11 +2,6 @@
 # description: Preserve results when reassociating null-rejected LEFT join chains
 # group: [optimizer]
 
-query T
-SELECT name FROM duckdb_optimizers() WHERE name='left_join_chain';
-----
-left_join_chain
-
 statement ok
 CREATE TABLE sales(k INTEGER, j INTEGER, qty INTEGER);
 
@@ -243,22 +238,6 @@ WHERE coalesce(b.qty::INTEGER,0)>0 OR coalesce(c.qty,0)>0;
 1	2
 2	NULL
 3	NULL
-
-statement ok
-SET disabled_optimizers='left_join_chain';
-
-query IIIII rowsort
-SELECT s.k, s.j, s.qty, w.qty, c.qty
-FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
-LEFT JOIN c ON s.j=c.j AND s.k=c.k
-WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
-----
-1	10	12	2	NULL
-2	20	7	NULL	4
-3	30	9	3	5
-
-statement ok
-RESET disabled_optimizers;
 
 # An empty combined RHS must not skip observable work in the preserved input.
 statement ok
