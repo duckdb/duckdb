@@ -77,6 +77,42 @@ physical_plan	<REGEX>:([\s\S]*Table: (\S*\.)?sales\b){2}[\s\S]*
 statement ok
 RESET disabled_optimizers
 
+# common-subplan sharing must not mask a merge group that fails to activate
+statement ok
+SET disabled_optimizers = 'common_subplan'
+
+# interleaved merge groups keep their leaf positions around a non-aggregate branch
+statement ok
+CREATE TABLE merge_left AS SELECT * FROM (VALUES (1), (2), (3), (NULL)) t(i);
+
+statement ok
+CREATE TABLE merge_right AS SELECT * FROM (VALUES (5), (7), (NULL)) t(i);
+
+query II
+EXPLAIN SELECT a.v, other.tag, b.v, c.v, d.v
+FROM (SELECT sum(i) AS v FROM merge_left WHERE i < 3) a,
+     (VALUES (10), (20)) other(tag),
+     (SELECT max(i) AS v FROM merge_right) b,
+     (SELECT count(i) AS v FROM merge_left WHERE i > 2) c,
+     (SELECT sum(i) AS v FROM merge_right) d
+ORDER BY other.tag
+----
+physical_plan	<REGEX>:[\s\S]*(Table: (\S*\.)?merge_left\b[\s\S]*Table: (\S*\.)?merge_right\b|Table: (\S*\.)?merge_right\b[\s\S]*Table: (\S*\.)?merge_left\b)[\s\S]*
+
+query II
+EXPLAIN SELECT a.v, other.tag, b.v, c.v, d.v
+FROM (SELECT sum(i) AS v FROM merge_left WHERE i < 3) a,
+     (VALUES (10), (20)) other(tag),
+     (SELECT max(i) AS v FROM merge_right) b,
+     (SELECT count(i) AS v FROM merge_left WHERE i > 2) c,
+     (SELECT sum(i) AS v FROM merge_right) d
+ORDER BY other.tag
+----
+physical_plan	<!REGEX>:[\s\S]*Table: (\S*\.)?merge_(left|right)\b[\s\S]*Table: (\S*\.)?merge_(left|right)\b[\s\S]*Table: (\S*\.)?merge_(left|right)\b[\s\S]*
+
+statement ok
+RESET disabled_optimizers
+
 # two tables, each read once; DISTINCT aggregates; derived tables; the joined shapes read dim2 once
 query II
 EXPLAIN SELECT (SELECT count(*) FILTER (WHERE k = 1) FROM sales WHERE q < 50) AS a, (SELECT count(*) FROM sales WHERE q >= 50) AS b,

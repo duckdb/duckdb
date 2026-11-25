@@ -24,8 +24,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 //! One leaf of a cross-product tree that can be merged with its siblings
 struct ScalarAggregateMerger::Branch {
-	//! The leaf's slot in the cross-product tree
-	reference<unique_ptr<LogicalOperator>> leaf;
+	//! The leaf's position in the collected cross-product leaves
+	idx_t leaf_index;
 	//! The projection over the aggregate, if any
 	optional_ptr<LogicalProjection> projection;
 	reference<LogicalAggregate> aggregate;
@@ -353,16 +353,6 @@ static void CollectLeaves(unique_ptr<LogicalOperator> &op, vector<reference<uniq
 	leaves.push_back(op);
 }
 
-static idx_t LeafPosition(const vector<reference<unique_ptr<LogicalOperator>>> &leaves,
-                          const unique_ptr<LogicalOperator> &leaf) {
-	for (idx_t i = 0; i < leaves.size(); i++) {
-		if (&leaves[i].get() == &leaf) {
-			return i;
-		}
-	}
-	throw InternalException("ScalarAggregateMerger: a branch's leaf is not among its tree's leaves");
-}
-
 bool ScalarAggregateMerger::IsWorthMerging(const Branch &branch) {
 	auto threshold = Settings::Get<ScalarAggregateMergeThresholdSetting>(optimizer.context);
 	for (auto &scan : branch.scans) {
@@ -383,8 +373,8 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 		VisitOperator(leaf.get());
 	}
 	vector<Branch> branches;
-	for (auto &leaf : leaves) {
-		TryMatchBranch(leaf, branches);
+	for (idx_t i = 0; i < leaves.size(); i++) {
+		TryMatchBranch(leaves, i, branches);
 	}
 	// groups of branches that read the same tables, in the order their first branch appears
 	vector<vector<idx_t>> groups;
@@ -413,9 +403,9 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 		if (!merged_leaf) {
 			continue;
 		}
-		merged_leaves[LeafPosition(leaves, branches[group[0]].leaf.get())] = std::move(merged_leaf);
+		merged_leaves[branches[group[0]].leaf_index] = std::move(merged_leaf);
 		for (idx_t k = 1; k < group.size(); k++) {
-			removed[LeafPosition(leaves, branches[group[k]].leaf.get())] = true;
+			removed[branches[group[k]].leaf_index] = true;
 		}
 		changed = true;
 	}
@@ -438,8 +428,9 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 	op = std::move(tree);
 }
 
-void ScalarAggregateMerger::TryMatchBranch(unique_ptr<LogicalOperator> &leaf, vector<Branch> &branches) {
-	reference<LogicalOperator> op = *leaf;
+void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves, idx_t leaf_index,
+                                           vector<Branch> &branches) {
+	reference<LogicalOperator> op = *leaves[leaf_index].get();
 	optional_ptr<LogicalProjection> projection;
 	if (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		projection = &op.get().Cast<LogicalProjection>();
@@ -476,7 +467,7 @@ void ScalarAggregateMerger::TryMatchBranch(unique_ptr<LogicalOperator> &leaf, ve
 	if (!CollectScans(*relation.get(), scans)) {
 		return;
 	}
-	branches.push_back(Branch {leaf, projection, aggregate, relation, std::move(scans), std::move(conjuncts)});
+	branches.push_back(Branch {leaf_index, projection, aggregate, relation, std::move(scans), std::move(conjuncts)});
 }
 
 unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> &branches, const vector<idx_t> &group) {
