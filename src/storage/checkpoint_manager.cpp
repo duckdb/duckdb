@@ -52,7 +52,7 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> che
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	// This happens on failure before we commit the transaction.
 	if (active) {
-		transaction_manager.ResetActiveCheckpoint();
+		transaction_manager.ResetActiveCheckpoint(false);
 	}
 	if (checkpoint_transaction) {
 		// only a checkpoint started by a connection has a checkpoint transaction
@@ -85,7 +85,7 @@ void ActiveCheckpointWrapper::Begin(CheckpointOptions &options) {
 }
 
 void ActiveCheckpointWrapper::Commit() {
-	transaction_manager.ResetActiveCheckpoint();
+	transaction_manager.ResetActiveCheckpoint(true);
 	active = false;
 	if (!checkpoint_transaction) {
 		return;
@@ -336,7 +336,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(QueryContext(GetContext()), header, options.visibility_bound);
+	transaction_t read_stamp, lowest_active_start;
+	transaction_manager.GetStartTimes(read_stamp, lowest_active_start);
+	block_manager.WriteHeader(QueryContext(GetContext()), header, options.visibility_bound, read_stamp,
+	                          lowest_active_start);
 
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());
 	if (debug_verify_blocks) {

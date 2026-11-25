@@ -258,7 +258,7 @@ struct CredentialsFixture {
 		RegisterTestSecretTypes(*db.instance);
 		auto fs_p = make_uniq<MemoryFileSystem>();
 		fs = fs_p.get();
-		db.instance->GetFileSystem().RegisterSubSystem(std::move(fs_p));
+		VirtualFileSystem::Get(*db.instance).RegisterSubSystem(std::move(fs_p));
 		fs->files["mem://bucket/table/a.bin"] = "abc";
 		fs->files["mem://bucket/table/b.bin"] = "def";
 		REQUIRE_NO_FAIL(con.Query("CREATE SECRET by_path (TYPE file_credentials_test, SCOPE 'mem://bucket/table/', "

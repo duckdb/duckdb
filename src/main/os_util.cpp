@@ -6,9 +6,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include <cstdio>
 #include <cstdlib>
-#include <fstream>
-#include <iterator>
 
 namespace duckdb {
 
@@ -77,15 +76,23 @@ bool OSUtil::TryReadSystemFile(SystemFile file, const string &argument, string &
 	}
 	auto path = info.argument == SystemFileArgument::NONE ? string(info.path_format)
 	                                                      : StringUtil::Format(info.path_format, argument);
-	std::ifstream stream(path, std::ios::binary);
-	if (!stream) {
+	auto handle = fopen(path.c_str(), "rb");
+	if (!handle) {
 		return false;
 	}
-	contents.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
-	if (contents.size() > MAX_SYSTEM_FILE_SIZE) {
-		contents.resize(MAX_SYSTEM_FILE_SIZE);
+	contents.clear();
+	char buffer[4096];
+	while (contents.size() < MAX_SYSTEM_FILE_SIZE) {
+		auto to_read = MinValue<idx_t>(sizeof(buffer), MAX_SYSTEM_FILE_SIZE - contents.size());
+		auto bytes_read = fread(buffer, 1, to_read, handle);
+		contents.append(buffer, bytes_read);
+		if (bytes_read < to_read) {
+			break;
+		}
 	}
-	return true;
+	const bool failed = ferror(handle) != 0;
+	fclose(handle);
+	return !failed;
 }
 
 bool OSUtil::IsConfigurationEnv(const string &name) {

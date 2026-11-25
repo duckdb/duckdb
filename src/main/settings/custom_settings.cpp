@@ -635,7 +635,7 @@ void DisabledCompressionMethodsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &input) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = VirtualFileSystem::Get(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
 	for (auto &entry : list) {
 		StringUtil::Trim(entry);
@@ -645,13 +645,11 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 
 void DisabledFilesystemsSetting::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
-	fs.SetDisabledFileSystems(vector<string>());
+	VirtualFileSystem::Get(db).SetDisabledFileSystems(vector<string>());
 }
 
 Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(*context.db);
-	return Value(StringUtil::Join(fs.GetDisabledFileSystems(), ","));
+	return Value(StringUtil::Join(VirtualFileSystem::Get(*context.db).GetDisabledFileSystems(), ","));
 }
 
 //===----------------------------------------------------------------------===//

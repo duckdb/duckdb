@@ -103,11 +103,6 @@ public:
 
 	DUCKDB_API vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
 
-	DUCKDB_API void RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs) override;
-	DUCKDB_API void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
-	DUCKDB_API void UnregisterSubSystem(const string &name) override;
-	DUCKDB_API unique_ptr<BaseFileSystem> ExtractSubSystem(const string &name) override;
-	DUCKDB_API vector<string> ListSubSystems() override;
 	DUCKDB_API bool CanHandleFile(const string &fpath) override;
 
 	DUCKDB_API void Seek(FileHandle &handle, idx_t location) override;
@@ -120,14 +115,6 @@ public:
 
 	DUCKDB_API unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                     bool write) override;
-	DUCKDB_API unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
-	                                                 const FileOpenFlags &flags,
-	                                                 optional_ptr<FileOpener> opener) override;
-
-	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names) override;
-	DUCKDB_API vector<string> GetDisabledFileSystems() override;
-	DUCKDB_API bool SubSystemIsDisabled(const string &name) override;
-	DUCKDB_API bool IsDisabledForPath(const string &path) override;
 
 protected:
 	DUCKDB_API unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
@@ -143,7 +130,8 @@ private:
 	// Return an optional caching file handle, if certain filepath is cached.
 	CachingFileHandle *GetCachingHandleIfPossible(FileHandle &handle);
 
-	BaseFileSystem &underlying_file_system;
+	//! The bound file system the files are opened with; it pushes its own opener
+	FileSystem &underlying_file_system;
 	CachingFileSystem caching_file_system;
 	CachingMode caching_mode;
 };

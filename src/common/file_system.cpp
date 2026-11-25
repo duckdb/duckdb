@@ -23,6 +23,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, const File
 	if (IsDuckDBExtensionName(file.path)) {
 		VerifyCanAccessExtension(file.path, flags);
 	}
+	auto fixed_fs = GetFixedFileSystem();
+	if (fixed_fs) {
+		return fixed_fs->OpenFile(file, flags, GetOpener());
+	}
 	if (flags.GetCachingMode() == CachingMode::NO_CACHING) {
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
@@ -49,12 +53,12 @@ unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path,
 	if (IsDuckDBExtensionName(path.path)) {
 		VerifyCanAccessExtension(path.path, flags);
 	}
-	return GetFileSystem().MemoryMapFile(path, flags, options, GetOpener());
+	return FindFileSystem(path.path).MemoryMapFile(path, flags, options, GetOpener());
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {
 	VerifyCanAccessDirectory(directory);
-	return GetFileSystem().DirectoryExists(directory, GetOpener());
+	return FindFileSystem(directory).DirectoryExists(directory, GetOpener());
 }
 
 void FileSystem::CreateDirectory(const string &directory) {
@@ -64,7 +68,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 bool FileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options) {
 	if (options.mode != CreateDirectoryMode::RECURSIVE) {
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().CreateDirectoryExtended(directory, options, GetOpener());
+		return FindFileSystem(directory).CreateDirectoryExtended(directory, options, GetOpener());
 	}
 	// access is checked for every ancestor: walk up to the first existing directory, then create downwards
 	auto parsed = Path::FromString(directory);
@@ -96,7 +100,7 @@ void FileSystem::RemoveDirectory(const string &directory) {
 
 bool FileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options) {
 	VerifyCanAccessDirectory(directory);
-	return GetFileSystem().RemoveDirectoryExtended(directory, options, GetOpener());
+	return FindFileSystem(directory).RemoveDirectoryExtended(directory, options, GetOpener());
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {
@@ -109,58 +113,62 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 		    "extensions'",
 		    source, target);
 	}
-	GetFileSystem().MoveFile(source, target, GetOpener());
+	FindFileSystem(source).MoveFile(source, target, GetOpener());
 }
 
 bool FileSystem::FileExists(const string &filename) {
 	VerifyCanAccessFile(filename);
-	return GetFileSystem().FileExists(filename, GetOpener());
+	return FindFileSystem(filename).FileExists(filename, GetOpener());
 }
 
 optional<FileMetadata> FileSystem::GetStatsIfExists(const OpenFileInfo &file) {
 	VerifyCanAccessFile(file.path);
-	return GetFileSystem().GetStatsIfExists(file, GetOpener());
+	return FindFileSystem(file.path).GetStatsIfExists(file, GetOpener());
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	return GetFileSystem().IsPipe(filename, GetOpener());
+	return FindFileSystem(filename).IsPipe(filename, GetOpener());
 }
 
 void FileSystem::RemoveFile(const string &filename) {
 	VerifyCanAccessFile(filename);
-	GetFileSystem().RemoveFile(filename, GetOpener());
+	FindFileSystem(filename).RemoveFile(filename, GetOpener());
 }
 
 bool FileSystem::TryRemoveFile(const string &filename) {
 	VerifyCanAccessFile(filename);
-	return GetFileSystem().TryRemoveFile(filename, GetOpener());
+	return FindFileSystem(filename).TryRemoveFile(filename, GetOpener());
 }
 
 void FileSystem::RemoveFiles(const vector<string> &filenames) {
+	reference_map_t<BaseFileSystem, vector<string>> files_by_fs;
 	for (const auto &filename : filenames) {
 		VerifyCanAccessFile(filename);
+		files_by_fs[FindFileSystem(filename)].push_back(filename);
 	}
-	GetFileSystem().RemoveFiles(filenames, GetOpener());
+	for (auto &entry : files_by_fs) {
+		entry.first.get().RemoveFiles(entry.second, GetOpener());
+	}
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
 	VerifyCanAccessDirectory(directory);
-	return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
+	return FindFileSystem(directory).ListFiles(directory, callback, GetOpener().get());
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback) {
 	VerifyCanAccessDirectory(directory);
-	return GetFileSystem().ListFiles(directory, callback, GetOpener());
+	return FindFileSystem(directory).ListFiles(directory, callback, GetOpener());
 }
 
 vector<OpenFileInfo> FileSystem::Glob(const string &path) {
 	VerifyCanAccessFile(path);
-	return GetFileSystem().Glob(path, GetOpener().get());
+	return FindFileSystem(path).Glob(path, GetOpener().get());
 }
 
 unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInput &input) {
 	VerifyCanAccessFile(path);
-	return GetFileSystem().Glob(path, input, GetOpener());
+	return FindFileSystem(path).Glob(path, input, GetOpener());
 }
 
 unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
@@ -190,7 +198,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, const FileGlob
 }
 
 string FileSystem::CanonicalizePath(const string &path) {
-	return GetFileSystem().CanonicalizePath(path, GetOpener());
+	return FindFileSystem(path).CanonicalizePath(path, GetOpener());
 }
 
 string FileSystem::GetHomeDirectory() {
@@ -199,6 +207,22 @@ string FileSystem::GetHomeDirectory() {
 
 string FileSystem::ExpandPath(const string &path) {
 	return FileSystem::ExpandPath(path, GetOpener());
+}
+
+BaseFileSystem &FileSystem::FindFileSystem(const string &path) {
+	auto fixed_fs = GetFixedFileSystem();
+	if (fixed_fs) {
+		return *fixed_fs;
+	}
+	return GetFileSystem().FindFileSystem(path, GetOpener());
+}
+
+BaseFileSystem &FileSystem::PathFileSystem(const string &path) const {
+	auto fixed_fs = GetFixedFileSystem();
+	if (fixed_fs) {
+		return *fixed_fs;
+	}
+	return GetFileSystem().FindFileSystem(path, nullptr);
 }
 
 void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) {

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 
 namespace duckdb {
 class MultiFileList;
@@ -20,8 +21,13 @@ class FileSystem {
 public:
 	virtual ~FileSystem() = default;
 
-	virtual BaseFileSystem &GetFileSystem() const = 0;
+	//! The root that picks the file system of a path
+	virtual VirtualFileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
+	//! If set, every path goes to this file system instead of the one the root picks
+	virtual optional_ptr<BaseFileSystem> GetFixedFileSystem() const {
+		return nullptr;
+	}
 
 public:
 	//! The file system of a client, of a database, or the local file system of a database
@@ -78,43 +84,43 @@ public:
 	bool IsDuckDBExtensionName(const string &path) {
 		// match the canonical name case-insensitively: on the default macOS and Windows file systems a
 		// differently-cased name refers to the same file
-		auto name = StringUtil::Lower(GetFileSystem().ExtractName(CanonicalizePath(path)));
+		auto name = StringUtil::Lower(PathFileSystem(path).ExtractName(CanonicalizePath(path)));
 		return StringUtil::EndsWith(name, ".duckdb_extension") || StringUtil::Contains(name, ".duckdb_extension.");
 	}
 
 	//! Handle-level operations
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-		GetFileSystem().Read(handle, buffer, nr_bytes, location);
+		handle.file_system.Read(handle, buffer, nr_bytes, location);
 	}
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-		return GetFileSystem().Read(handle, buffer, nr_bytes);
+		return handle.file_system.Read(handle, buffer, nr_bytes);
 	}
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-		GetFileSystem().Write(handle, buffer, nr_bytes, location);
+		handle.file_system.Write(handle, buffer, nr_bytes, location);
 	}
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-		return GetFileSystem().Write(handle, buffer, nr_bytes);
+		return handle.file_system.Write(handle, buffer, nr_bytes);
 	}
 	int64_t GetFileSize(FileHandle &handle) {
-		return GetFileSystem().GetFileSize(handle);
+		return handle.file_system.GetFileSize(handle);
 	}
 	timestamp_t GetLastModifiedTime(FileHandle &handle) {
-		return GetFileSystem().GetLastModifiedTime(handle);
+		return handle.file_system.GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) {
-		return GetFileSystem().GetVersionTag(handle);
+		return handle.file_system.GetVersionTag(handle);
 	}
 	FileType GetFileType(FileHandle &handle) {
-		return GetFileSystem().GetFileType(handle);
+		return handle.file_system.GetFileType(handle);
 	}
 	FileMetadata Stats(FileHandle &handle) {
-		return GetFileSystem().Stats(handle);
+		return handle.file_system.Stats(handle);
 	}
 	void Truncate(FileHandle &handle, int64_t new_size) {
-		GetFileSystem().Truncate(handle, new_size);
+		handle.file_system.Truncate(handle, new_size);
 	}
 	void FileSync(FileHandle &handle) {
-		GetFileSystem().FileSync(handle);
+		handle.file_system.FileSync(handle);
 	}
 
 	//! Path-level operations: the access is verified, then forwarded together with the opener
@@ -150,34 +156,35 @@ public:
 
 	//! Path helpers that do not touch the file system
 	string PathSeparator(const string &path) {
-		return GetFileSystem().PathSeparator(path);
+		return PathFileSystem(path).PathSeparator(path);
 	}
 	bool IsPathAbsolute(const string &path) {
-		return GetFileSystem().IsPathAbsolute(path);
+		return PathFileSystem(path).IsPathAbsolute(path);
 	}
 	string JoinPath(const string &a, const string &path) {
-		return GetFileSystem().JoinPath(a, path);
+		return PathFileSystem(a).JoinPath(a, path);
 	}
 	template <typename... ARGS>
 	string JoinPath(const string &a, const string &b, ARGS... args) {
-		return GetFileSystem().JoinPath(a, b, args...);
+		return PathFileSystem(a).JoinPath(a, b, args...);
 	}
 	string ConvertSeparators(const string &path) {
-		return GetFileSystem().ConvertSeparators(path);
+		return PathFileSystem(path).ConvertSeparators(path);
 	}
 	string ExtractBaseName(const string &path) {
-		return GetFileSystem().ExtractBaseName(path);
+		return PathFileSystem(path).ExtractBaseName(path);
 	}
 	string ExtractExtension(const string &path) {
-		return GetFileSystem().ExtractExtension(path);
+		return PathFileSystem(path).ExtractExtension(path);
 	}
 	string ExtractName(const string &path) {
-		return GetFileSystem().ExtractName(path);
+		return PathFileSystem(path).ExtractName(path);
 	}
 
 	//! Sub-file system management
 	std::string GetName() const {
-		return "FileSystem - " + GetFileSystem().GetName();
+		auto fixed_fs = GetFixedFileSystem();
+		return "FileSystem - " + (fixed_fs ? fixed_fs->GetName() : GetFileSystem().GetName());
 	}
 	void RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs) {
 		GetFileSystem().RegisterSubSystem(std::move(sub_fs));
@@ -217,6 +224,10 @@ public:
 	}
 
 private:
+	//! The file system that handles the path
+	BaseFileSystem &FindFileSystem(const string &path);
+	//! The file system whose path conventions apply to the path; does not verify access
+	BaseFileSystem &PathFileSystem(const string &path) const;
 	void VerifyCanAccessFileInternal(const string &path, FileType type);
 	unique_ptr<FileHandle> OpenCachedFile(const OpenFileInfo &file, const FileOpenFlags &flags);
 };

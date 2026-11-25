@@ -533,8 +533,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
-	fs.RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	RegisterLifecycleCopyFunction(db, "copy_remote_partitions", info);
 	REQUIRE_NO_FAIL(connection.Query("SET disabled_filesystems='LocalFileSystem'"));
@@ -564,10 +563,9 @@ TEST_CASE("Partitioned COPY to remote storage does not require the local filesys
 TEST_CASE("COPY to remote storage does not check whether each output file exists", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	string format;
 	SECTION("Parquet") {
@@ -591,10 +589,9 @@ TEST_CASE("A failed COPY to remote storage keeps its outputs", "[api][copy]") {
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(connection.Query("SET async_threads=0"));
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	info->fail_finalize_after = 1;

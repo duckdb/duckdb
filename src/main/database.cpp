@@ -164,6 +164,14 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
+VirtualFileSystem &VirtualFileSystem::Get(DatabaseInstance &db) {
+	return *db.config.file_system;
+}
+
+VirtualFileSystem &VirtualFileSystem::Get(ClientContext &context) {
+	return Get(*context.db);
+}
+
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
@@ -473,16 +481,20 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static BaseFileSystem &ResolveLocalFileSystem(DatabaseInstance &db) {
-	return static_cast<VirtualFileSystem &>(*db.config.file_system).GetLocalFileSystem();
-}
-
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p)), database_opener(db_p) {
+    : file_system(VirtualFileSystem::Get(db_p)), database_opener(db_p) {
+	if (!file_system.GetDefaultFileSystem().IsLocalFileSystem()) {
+		owned_file_system = make_uniq<LocalFileSystem>();
+	}
 }
 
-BaseFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
+VirtualFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	return file_system;
+}
+
+optional_ptr<BaseFileSystem> LocalDatabaseFileSystem::GetFixedFileSystem() const {
+	auto &local_fs = owned_file_system ? *owned_file_system : file_system.GetDefaultFileSystem();
+	if (file_system.SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;

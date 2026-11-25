@@ -309,21 +309,6 @@ public:
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
-	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
-	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs);
-	//! Register a compression filesystem (both built-in and provided by extensions), keyed by its compression type
-	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
-
-	//! Unregister a sub-filesystem by name
-	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
-
-	// !Extract a sub-filesystem by name, with ownership transferred, return nullptr if not registered or the subsystem
-	// has been disabled.
-	DUCKDB_API virtual unique_ptr<BaseFileSystem> ExtractSubSystem(const string &name);
-
-	//! List registered sub-filesystems, including builtin ones
-	DUCKDB_API virtual vector<string> ListSubSystems();
-
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
 
@@ -349,22 +334,11 @@ public:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
 
-	//! Applies the compression (and pipe handling) of the flags to a handle that was opened uncompressed
-	DUCKDB_API virtual unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
-	                                                         const FileOpenFlags &flags,
-	                                                         optional_ptr<FileOpener> opener);
-
 	//! Whether this is a LocalFileSystem instance.
 	DUCKDB_API virtual bool IsLocalFileSystem() const;
 
 	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
-
-	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
-	DUCKDB_API virtual vector<string> GetDisabledFileSystems();
-	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
-	//! Check if the filesystem that would handle this path is disabled
-	DUCKDB_API virtual bool IsDisabledForPath(const string &path);
 
 	//! Canonicalize a path
 	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener);

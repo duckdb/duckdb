@@ -728,43 +728,6 @@ unique_ptr<MultiFileList> BaseFileSystem::GlobFilesExtended(const string &path, 
 	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
-void BaseFileSystem::RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs) {
-	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
-}
-
-void BaseFileSystem::UnregisterSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
-}
-
-void BaseFileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
-	throw NotImplementedException("%s: Can't register a compression filesystem on a non-virtual file system",
-	                              GetName());
-}
-
-unique_ptr<BaseFileSystem> BaseFileSystem::ExtractSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
-}
-
-void BaseFileSystem::SetDisabledFileSystems(const vector<string> &names) {
-	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
-}
-
-vector<string> BaseFileSystem::GetDisabledFileSystems() {
-	return vector<string>();
-}
-
-bool BaseFileSystem::SubSystemIsDisabled(const string &name) {
-	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
-}
-
-bool BaseFileSystem::IsDisabledForPath(const string &path) {
-	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
-}
-
-vector<string> BaseFileSystem::ListSubSystems() {
-	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
-}
-
 bool BaseFileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
@@ -823,11 +786,6 @@ FileWriteMode BaseFileSystem::GetWriteMode(FileHandle &handle) {
 unique_ptr<FileHandle> BaseFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                           bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
-}
-
-unique_ptr<FileHandle> BaseFileSystem::WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
-                                                      const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	throw NotImplementedException("%s: WrapOpenedFile is not implemented!", GetName());
 }
 
 bool BaseFileSystem::IsLocalFileSystem() const {

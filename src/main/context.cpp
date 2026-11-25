@@ -24,16 +24,14 @@ public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
-	BaseFileSystem &GetFileSystem() const override {
-		auto &config = DBConfig::GetConfig(context);
-		return *config.file_system;
+	VirtualFileSystem &GetFileSystem() const override {
+		return VirtualFileSystem::Get(context);
 	}
 
 	optional_ptr<FileOpener> GetOpener() const override {
 		return context.GetContext().TryGetFileOpener();
 	}
 
-private:
 	ClientContext &context;
 };
 

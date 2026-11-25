@@ -260,7 +260,7 @@ void StandardVectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = data_ptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 template <idx_t TYPE_SIZE>

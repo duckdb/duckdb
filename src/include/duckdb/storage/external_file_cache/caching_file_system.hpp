@@ -83,6 +83,7 @@ public:
 	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
+	DUCKDB_API optional_ptr<FileOpener> GetOpener() const;
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API timestamp_t GetLastModifiedTime();
 	DUCKDB_API string GetVersionTag();

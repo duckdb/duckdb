@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
@@ -197,9 +198,9 @@ public:
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	ReplacementScanList replacement_scans;
 
-	//! The BaseFileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes
-	//! (e.g. RamFS or something similar). Never null: defaults to a VirtualFileSystem.
-	unique_ptr<BaseFileSystem> file_system;
+	//! The root of the file systems. Never null. Custom file systems are registered on it as sub-systems, or passed as
+	//! its default file system.
+	unique_ptr<VirtualFileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
