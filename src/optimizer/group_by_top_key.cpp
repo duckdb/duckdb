@@ -76,9 +76,7 @@ bool AggregateFunctionCanThrow(const LogicalAggregate &aggregate) {
 	return false;
 }
 
-//! Whether the aggregate evaluates a volatile expression: an aggregate function, one of its arguments, a FILTER or a
-//! group expression. The filter below the aggregate evaluates them for fewer rows, which a side effect (a sequence)
-//! would show.
+//! Whether an aggregate function, argument, FILTER or group expression is volatile and must not see fewer rows
 bool AggregateIsVolatile(const LogicalAggregate &aggregate) {
 	for (auto &expr : aggregate.expressions) {
 		if (expr->IsVolatile()) {
