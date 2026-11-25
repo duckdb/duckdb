@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 
 namespace duckdb {
