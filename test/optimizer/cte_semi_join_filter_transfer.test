@@ -448,6 +448,10 @@ WITH c AS MATERIALIZED (SELECT * FROM t) SELECT k FROM c WHERE k > '-0.0'::DOUBL
 # Plans. A scan box lists its "Filters:" line right above its "Table:" line: "Filters: <p>" on one line and
 # "Table: ...fact" on the next is a table filter of the fact scan.
 
+# Keep the correlated CTEs so these plans exercise the CTE filter pusher.
+statement ok
+SET disabled_optimizers = 'deliminator';
+
 statement ok
 SET explain_output = 'optimized_only';
 
@@ -597,7 +601,7 @@ logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*dfact
 
 # without the CTE filter pusher the outer scan of the correlated EXISTS is unfiltered
 statement ok
-SET disabled_optimizers = 'cte_filter_pusher';
+SET disabled_optimizers = 'cte_filter_pusher,deliminator';
 
 # 1 disabled
 query II
@@ -618,6 +622,9 @@ EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE v > 20
 logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
 # the results are the same without the CTE filter pusher
+statement ok
+SET disabled_optimizers = 'cte_filter_pusher';
+
 query II
 SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k AND f.k > 2) ORDER BY ALL
 ----

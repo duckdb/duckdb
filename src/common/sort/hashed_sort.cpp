@@ -1,4 +1,7 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/sorting/partition_key_tracker.hpp"
@@ -7,7 +10,6 @@
 #include "duckdb/common/types/row/integer_partitioned_tuple_data.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -21,7 +23,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx);
+	HashedSortGroup(Sort &sort, idx_t group_idx);
 
 	const idx_t group_idx;
 	atomic<idx_t> count;
@@ -40,9 +42,8 @@ public:
 	ColumnDataAppendState direct_append_state;
 };
 
-HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
+HashedSortGroup::HashedSortGroup(Sort &sort, idx_t group_idx)
     : group_idx(group_idx), count(0), sort(sort), tasks_completed(0) {
-	sort_global = sort.GetGlobalSinkState(client);
 }
 
 //===--------------------------------------------------------------------===//
@@ -104,7 +105,8 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
     : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
 	if (hashed_sort.track_single_keys) {
-		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, hashed_sort.partition_key_types);
+		single_key_tracker = make_uniq<PartitionKeyTracker>(
+		    client.GetContext(), allocator, hashed_sort.partition_key_types, *hashed_sort.partition_key_mismatch);
 	}
 
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
@@ -290,7 +292,7 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 
 		auto &group_data = groups[group_idx];
 		if (group_data->Count()) {
-			hash_group = make_uniq<HashedSortGroup>(client, *hashed_sort.sort, group_idx);
+			hash_group = make_uniq<HashedSortGroup>(*hashed_sort.sort, group_idx);
 		}
 	}
 
@@ -336,6 +338,17 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 			continue;
 		}
 
+		// The partition is complete: register the group's sort now, reserving its size if below the default minimum
+		if (!gsink.CanBypassSort(hash_bin)) {
+			hash_group->sort_global = sort->GetGlobalSinkState(client);
+			const auto count = partition.Count();
+			const auto row_size = count * partition.GetLayout().GetRowWidth();
+			D_ASSERT(partition.SizeInBytes() >= row_size);
+			// the variable-size data is what the partition holds beyond its fixed-size rows
+			const auto variable_data_size = partition.SizeInBytes() - row_size;
+			sort->SetExpectedSize(client, *hash_group->sort_global, count, variable_data_size);
+		}
+
 		// Prepare to scan into the sort
 		auto &parallel_scan = hash_group->parallel_scan;
 		partition.InitializeScan(parallel_scan, partition_ids);
@@ -369,6 +382,7 @@ public:
 	ExpressionExecutor hash_exec;
 	ExpressionExecutor sort_exec;
 	DataChunk group_chunk;
+	unique_ptr<ChunkHasher> group_hasher;
 	DataChunk sort_chunk;
 	DataChunk payload_chunk;
 
@@ -406,11 +420,15 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 
 	auto hash_types = hashed_sort.payload_types;
 	group_chunk.Initialize(allocator, group_types);
+	if (!group_types.empty()) {
+		group_hasher = make_uniq<ChunkHasher>(context.client, group_types);
+	}
 	hash_types.emplace_back(LogicalType::HASH);
 	payload_chunk.Initialize(allocator, hash_types);
 
 	if (hashed_sort.track_single_keys) {
-		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, group_types);
+		single_key_tracker = make_uniq<PartitionKeyTracker>(context.client.GetContext(), allocator, group_types,
+		                                                    *hashed_sort.partition_key_mismatch);
 	}
 }
 
@@ -426,11 +444,7 @@ void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector)
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
-	const idx_t count = group_chunk.size();
-	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
-	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
-		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
-	}
+	group_hasher->Hash(group_chunk, hash_vector);
 }
 
 SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chunk, OperatorSinkInput &sink) const {
@@ -560,6 +574,7 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 	TupleDataLocalScanState local_scan;
 	partition.InitializeScan(local_scan);
 
+	D_ASSERT(hash_group.sort_global);
 	auto sort_local = sort->GetLocalSinkState(context);
 	OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
 	idx_t combined = 0;
@@ -653,6 +668,16 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 	partition_key_types.reserve(partition_key_count);
 	for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
 		partition_key_types.push_back(partitions[key_idx].expression->GetReturnType());
+	}
+	if (partition_key_count > 0) {
+		vector<unique_ptr<Expression>> key_mismatches;
+		for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
+			auto &type = partition_key_types[key_idx];
+			key_mismatches.push_back(BoundComparisonExpression::CreateOnColumns(
+			    client, ExpressionType::COMPARE_DISTINCT_FROM, type, key_idx, type, partition_key_count + key_idx));
+		}
+		partition_key_mismatch =
+		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(key_mismatches));
 	}
 
 	//	We have to compute ordering expressions ourselves and materialise them.

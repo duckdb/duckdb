@@ -19,6 +19,9 @@ struct BoundComparisonExpression {
 	static bool IsComparison(ExpressionType type);
 	static bool IsComparison(const Expression &expr);
 
+	//! Whether equal, already-bound operands of this type have interchangeable value representations.
+	static bool EqualityPreservesValueRepresentation(const LogicalType &type);
+
 	static const Expression &Left(const BoundFunctionExpression &comparison_expr);
 	static const Expression &Right(const BoundFunctionExpression &comparison_expr);
 
@@ -26,6 +29,10 @@ struct BoundComparisonExpression {
 	static unique_ptr<Expression> &RightMutable(BoundFunctionExpression &between_expr);
 	static unique_ptr<Expression> Create(ExpressionType type, unique_ptr<Expression> left,
 	                                     unique_ptr<Expression> right);
+	//! Create the comparison "#left_idx <op> #right_idx" of two input columns, without casts
+	static unique_ptr<Expression> CreateOnColumns(ClientContext &context, ExpressionType type,
+	                                              const LogicalType &left_type, idx_t left_idx,
+	                                              const LogicalType &right_type, idx_t right_idx);
 	//! Create a comparison, casting both sides to a common type within the limit of the binder, if any - throws if
 	//! they cannot be compared
 	static unique_ptr<Expression> Bind(ClientContext &context, ExpressionType type, unique_ptr<Expression> left,

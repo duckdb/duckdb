@@ -11,6 +11,12 @@
       ]
     },
     {
+      "reason": "The generated SQL is planned differently, which changes how often the volatile expressions the fixture counts are evaluated",
+      "paths": [
+        "test/optimizer/join_to_semi_join_volatile.test"
+      ]
+    },
+    {
       "reason": "A second binding pass adds transaction or file-operation log events",
       "paths": [
         "test/sql/logging/logging.test",
@@ -150,6 +156,18 @@
       "reason": "The rendered SQL spells out the DECIMAL(40,0) type of the stored column a constant is compared with, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
       "paths": [
         "test/sql/index/art/storage/test_art_decimal_key_width.test"
+      ]
+    },
+    {
+      "reason": "The SQL export of a chain of projections that each read their input column twice takes time exponential in the depth of the chain; the fixture pins that the native estimate of the distinct rows reads the plan once per column",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_estimates.test"
+      ]
+    },
+    {
+      "reason": "The generated SQL groups the correlated column of a subquery with a plain GROUP BY, which rebinds under the default or struct-nested collation and merges the outer rows the native plan keeps apart",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_correlated_collation.test"
       ]
     }
   ]

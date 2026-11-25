@@ -366,10 +366,17 @@ static string RepositoryNameOfFile(const string &file_name) {
 string ExtensionRepositoryManager::NormalizeRepositoryName(const string &name) {
 	string result;
 	if (!TryNormalizeRepositoryName(name, result)) {
+		string hint;
+		for (auto c : name) {
+			if (static_cast<unsigned char>(c) >= 0x80) {
+				hint = "\nAn internationalised host is spelled in its punycode form, 'xn--...', in quotes";
+				break;
+			}
+		}
 		throw InvalidInputException("Invalid extension repository name '%s': names cannot be empty and can only "
 		                            "contain letters, digits, '_', '-' and '.' (not at the start or the end, and not "
-		                            "two in a row)",
-		                            name);
+		                            "two in a row)%s",
+		                            name, hint);
 	}
 	return result;
 }
@@ -390,29 +397,49 @@ static constexpr const idx_t METADATA_FORMAT_VERSION = 1;
 //! and not localhost. A single word is not a host: it would be resolved through search domains to a host the user did
 //! not name. There is no stricter test short of the public suffix list; this one keeps out what is certainly not a
 //! public host
-bool ExtensionRepositoryManager::IsHostName(const string &text) {
-	idx_t label_count = 0;
-	idx_t label_start = 0;
-	for (idx_t i = 0; i <= text.size(); i++) {
-		if (i < text.size() && text[i] != '.') {
-			auto c = text[i];
-			if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c) && c != '-') {
+//! A host label: one or more words of letters and digits joined by single dashes, so no leading or trailing dash and
+//! no two dashes touching - except the one place two dashes are legitimate, the 'xn--' that opens an internationalised
+//! label in its punycode (A-label) form: 'xn--mnchen-3ya' for 'münchen'
+static bool IsHostLabel(const string &label) {
+	idx_t start = 0;
+	if (label.size() > 4 && StringUtil::CIEquals(label.substr(0, 4), "xn--")) {
+		start = 4;
+	}
+	idx_t word_length = 0;
+	for (idx_t i = start; i <= label.size(); i++) {
+		auto c = i < label.size() ? label[i] : '-';
+		if (c == '-') {
+			if (word_length == 0) {
 				return false;
 			}
+			word_length = 0;
 			continue;
 		}
-		// end of a label
-		if (i == label_start || text[label_start] == '-' || text[i - 1] == '-') {
+		if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c)) {
 			return false;
 		}
-		label_count++;
-		label_start = i + 1;
+		word_length++;
 	}
-	if (label_count < 2) {
+	return true;
+}
+
+bool ExtensionRepositoryManager::IsHostName(const string &text) {
+	// two or more labels separated by single dots, the last one letters only (an IPv4 literal is not a host), and not
+	// localhost
+	if (text.empty() || text.front() == '.' || text.back() == '.' || text.find("..") != string::npos) {
 		return false;
 	}
-	for (idx_t i = text.rfind('.') + 1; i < text.size(); i++) {
-		if (!StringUtil::CharacterIsAlpha(text[i])) {
+	auto labels = StringUtil::Split(text, '.');
+	if (labels.size() < 2) {
+		return false;
+	}
+	for (auto &label : labels) {
+		if (!IsHostLabel(label)) {
+			return false;
+		}
+	}
+	for (auto c : labels.back()) {
+		if (!StringUtil::CharacterIsAlpha(c)) {
 			return false;
 		}
 	}
@@ -525,20 +552,45 @@ static yyjson_val *ReadVersionedObject(RepositoryJSONDocument &document, const s
 	return root;
 }
 
-ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db,
-                                                                                    optional_ptr<ClientContext> context,
-                                                                                    const string &name_p) {
-	// called by CreateRepository once the access check and the conflict check have passed
+//! How a failed resolution opens, naming what cannot be done: the statement creates a repository, the
+//! extension_repository_url function only looks one up
+static string ResolutionFailure(ExtensionRepositoryHostCaller caller, const string &name) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return StringUtil::Format("Cannot create extension repository '%s'", name);
+	}
+	return StringUtil::Format("Cannot resolve the extension repository of host '%s'", name);
+}
+
+//! What else the user can do, for the caller that has an alternative: the statement can name the location itself
+static string ResolutionHint(ExtensionRepositoryHostCaller caller, const char *hint) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return hint;
+	}
+	return string();
+}
+
+ExtensionRepositoryResolution
+ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                      const string &name_p, ExtensionRepositoryHostCaller caller) {
+	// called by CreateRepository once the access check and the conflict check have passed, and by
+	// extension_repository_url, which reads the same public file without creating or trusting anything
 	auto name = NormalizeRepositoryName(name_p);
 	// only a name that is a host on the public internet is reached: a single word would resolve through search
 	// domains to a host the user did not name, an IP literal or localhost is nobody's statement
 	if (!IsHostName(name)) {
 		throw InvalidInputException(
-		    "Cannot create extension repository '%s': '%s' is not a host name. A host has two or "
-		    "more labels of letters, digits and '-' separated by dots, the last one letters "
-		    "only, and is not localhost\nUse `WITH PREFIX '<url>'` to name the repository's "
-		    "location directly",
-		    name_p, name);
+		    "%s: '%s' is not a host name. A host has two or more labels separated by "
+		    "dots, each label words of letters and digits joined by single dashes (or a "
+		    "punycode label, 'xn--...'), the last label letters only, and is not localhost%s",
+		    ResolutionFailure(caller, name_p), name,
+		    ResolutionHint(caller, "\nUse `WITH PREFIX '<url>'` to name the repository's location directly"));
+	}
+	// reading the host is an external access: refused up front, as LOAD refuses, rather than as a read error from
+	// the file system once the request is attempted
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
+		throw PermissionException("%s: reading the host's metadata file is an external access, which is disabled "
+		                          "through configuration (enable_external_access)",
+		                          ResolutionFailure(caller, name));
 	}
 	ExtensionRepositoryResolution resolution;
 	resolution.host = name;
@@ -558,11 +610,11 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
 		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
 		ErrorData error(ex);
-		throw IOException(
-		    "Cannot create extension repository '%s': %s\nA repository is resolved from its host through "
-		    "https://<host>/.well-known/duckdb-extension-repo.json; use `WITH PREFIX '<url>'` to name the "
-		    "repository's location directly",
-		    name, error.RawMessage());
+		throw IOException("%s: %s\nA repository is resolved from its host through "
+		                  "https://<host>/.well-known/duckdb-extension-repo.json%s",
+		                  ResolutionFailure(caller, name), error.RawMessage(),
+		                  ResolutionHint(caller, "; use `WITH PREFIX '<url>'` to name the repository's "
+		                                         "location directly"));
 	}
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	auto root = ReadVersionedObject(document, metadata_path);
@@ -576,10 +628,10 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 	StringUtil::RTrim(resolution.url, "/");
 	// the keys are fetched from the prefix next: over anything but https they could be anyone's
 	if (!StringUtil::StartsWith(resolution.url, "https://")) {
-		throw InvalidInputException("Cannot create extension repository '%s': the host names the repository at '%s', "
+		throw InvalidInputException("%s: the host names the repository at '%s', "
 		                            "but a repository resolved from its host must be served over https, so that its "
 		                            "signing keys are fetched from where the host says they are",
-		                            name, resolution.url);
+		                            ResolutionFailure(caller, name), resolution.url);
 	}
 	return resolution;
 }

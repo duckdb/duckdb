@@ -2,6 +2,10 @@
 # description: Cost runtime filters at their target scan through a selective join
 # group: [pushdown]
 
+# The filter assertions depend on the exact enumerator's build/probe choices.
+statement ok
+SET approximate_join_order_threshold=12;
+
 statement ok
 SET disabled_optimizers='build_side_probe_side,compressed_materialization';
 

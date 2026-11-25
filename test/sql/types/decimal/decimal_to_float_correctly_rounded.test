@@ -1,0 +1,86 @@
+# name: test/sql/types/decimal/decimal_to_float_correctly_rounded.test
+# description: DECIMAL to FLOAT/DOUBLE rounds like parsing the decimal string, also outside the exact fast path
+# group: [decimal]
+
+statement ok
+CREATE MACRO dec_str(u, s) AS
+	(CASE WHEN u < 0 THEN '-' ELSE '' END) || left(lpad(abs(u)::VARCHAR, 40, '0'), 40 - s) || '.' ||
+	right(lpad(abs(u)::VARCHAR, 40, '0'), s)
+
+# unscaled values of varying digit counts, most of them too large for the exact int -> float fast path
+statement ok
+CREATE TABLE unscaled AS
+SELECT (CASE WHEN (i // 38) % 2 = 0 THEN -1 ELSE 1 END) * (
+	((hash(i)::UHUGEINT * 10000000000000000000::UHUGEINT + hash(i + 1000000)::UHUGEINT) %
+	100000000000000000000000000000000000000::UHUGEINT) // ('1' || repeat('0', (i % 38)::INT))::UHUGEINT)::HUGEINT AS u
+FROM range(100000) t(i)
+
+statement ok
+CREATE TABLE decimals AS
+SELECT dec_str(u % 10000, 2)::DECIMAL(4,2) AS d4_2,
+       dec_str(u % 1000000000, 6)::DECIMAL(9,6) AS d9_6,
+       dec_str(u % 1000000000000000000, 4)::DECIMAL(18,4) AS d18_4,
+       dec_str(u % 1000000000000000000, 10)::DECIMAL(18,10) AS d18_10,
+       dec_str(u % 1000000000000000000, 18)::DECIMAL(18,18) AS d18_18,
+       dec_str(u, 5)::DECIMAL(38,5) AS d38_5,
+       dec_str(u, 10)::DECIMAL(38,10) AS d38_10,
+       dec_str(u, 30)::DECIMAL(38,30) AS d38_30,
+       dec_str(u, 38)::DECIMAL(38,38) AS d38_38
+FROM unscaled
+
+query IIIIIIIII
+SELECT count(*) FILTER (d4_2::DOUBLE <> d4_2::VARCHAR::DOUBLE),
+       count(*) FILTER (d9_6::DOUBLE <> d9_6::VARCHAR::DOUBLE),
+       count(*) FILTER (d18_4::DOUBLE <> d18_4::VARCHAR::DOUBLE),
+       count(*) FILTER (d18_10::DOUBLE <> d18_10::VARCHAR::DOUBLE),
+       count(*) FILTER (d18_18::DOUBLE <> d18_18::VARCHAR::DOUBLE),
+       count(*) FILTER (d38_5::DOUBLE <> d38_5::VARCHAR::DOUBLE),
+       count(*) FILTER (d38_10::DOUBLE <> d38_10::VARCHAR::DOUBLE),
+       count(*) FILTER (d38_30::DOUBLE <> d38_30::VARCHAR::DOUBLE),
+       count(*) FILTER (d38_38::DOUBLE <> d38_38::VARCHAR::DOUBLE)
+FROM decimals
+----
+0	0	0	0	0	0	0	0	0
+
+query IIIIIIIII
+SELECT count(*) FILTER (d4_2::FLOAT <> d4_2::VARCHAR::FLOAT),
+       count(*) FILTER (d9_6::FLOAT <> d9_6::VARCHAR::FLOAT),
+       count(*) FILTER (d18_4::FLOAT <> d18_4::VARCHAR::FLOAT),
+       count(*) FILTER (d18_10::FLOAT <> d18_10::VARCHAR::FLOAT),
+       count(*) FILTER (d18_18::FLOAT <> d18_18::VARCHAR::FLOAT),
+       count(*) FILTER (d38_5::FLOAT <> d38_5::VARCHAR::FLOAT),
+       count(*) FILTER (d38_10::FLOAT <> d38_10::VARCHAR::FLOAT),
+       count(*) FILTER (d38_30::FLOAT <> d38_30::VARCHAR::FLOAT),
+       count(*) FILTER (d38_38::FLOAT <> d38_38::VARCHAR::FLOAT)
+FROM decimals
+----
+0	0	0	0	0	0	0	0	0
+
+# 2^53 + 1 is a midpoint between two doubles: an exact midpoint rounds to even, anything above it rounds up
+query IIII
+SELECT '9007199254740993.0000000000000000000000'::DECIMAL(38,22)::DOUBLE::VARCHAR,
+       '9007199254740993.0000000000000000000001'::DECIMAL(38,22)::DOUBLE::VARCHAR,
+       '-9007199254740993.0000000000000000000001'::DECIMAL(38,22)::DOUBLE::VARCHAR,
+       '9007199254740992.9999999999999999999999'::DECIMAL(38,22)::DOUBLE::VARCHAR
+----
+9007199254740992.0	9007199254740994.0	-9007199254740994.0	9007199254740992.0
+
+# 2^24 + 1 is a midpoint between two floats
+query IIII
+SELECT '16777217.0000000000'::DECIMAL(18,10)::FLOAT::DOUBLE::VARCHAR,
+       '16777217.0000000001'::DECIMAL(18,10)::FLOAT::DOUBLE::VARCHAR,
+       '-16777217.0000000001'::DECIMAL(18,10)::FLOAT::DOUBLE::VARCHAR,
+       '16777216.9999999999'::DECIMAL(18,10)::FLOAT::DOUBLE::VARCHAR
+----
+16777216.0	16777218.0	-16777218.0	16777216.0
+
+# extremes of each physical type
+query IIIIII
+SELECT '-999999999999999999'::DECIMAL(18,0)::DOUBLE::VARCHAR,
+       '-0.999999999999999999'::DECIMAL(18,18)::DOUBLE::VARCHAR,
+       '-99999999999999999999999999999999999999'::DECIMAL(38,0)::DOUBLE::VARCHAR,
+       '0.99999999999999999999999999999999999999'::DECIMAL(38,38)::DOUBLE::VARCHAR,
+       '0.00000000000000000000000000000000000001'::DECIMAL(38,38)::FLOAT::DOUBLE::VARCHAR,
+       '99999999999999999999999999999999999999'::DECIMAL(38,0)::FLOAT::DOUBLE::VARCHAR
+----
+-1e+18	-1.0	-1e+38	1.0	9.999999350456404e-39	9.999999680285692e+37

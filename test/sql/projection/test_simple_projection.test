@@ -32,6 +32,29 @@ SELECT x, y FROM a i1(x, y);
 ----
 42	84
 
+# partial name alias
+query II
+SELECT x, j FROM a i1(x);
+----
+42	84
+
+# an alias that clashes with a remaining column renames that column
+query II
+SELECT j, j_1 FROM a i1(j);
+----
+42	84
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM a i1(J));
+----
+J
+j_1
+
+statement error
+SELECT * FROM a i1(x, y, z);
+----
+<REGEX>:Binder Error:.*has 2 columns available but 3 columns specified.*
+
 # multiple insertions
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

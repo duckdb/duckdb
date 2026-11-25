@@ -635,10 +635,12 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	status_owned.BindQuota(quota);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
-	REQUIRE_THROWS_AS(status_owned.ReportSuccess(), InternalException);
-	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
-	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }), InternalException);
-	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }), InternalException);
+	REQUIRE_THROWS_WITH(status_owned.ReportSuccess(), Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.ReportFailure(), Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }),
+	                    Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }),
+	                    Catch::Contains("is the coordinator's decision"));
 #endif
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
@@ -729,7 +731,7 @@ TEST_CASE("A coordinator that validates after its loop owns the settlement", "[h
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
-	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
+	REQUIRE_THROWS_WITH(status_owned.ReportFailure(), Catch::Contains("is the coordinator's decision"));
 #endif
 }
 
@@ -836,7 +838,7 @@ TEST_CASE("A returned HTTP error with the quota exhaustion note still parses as 
 	auto quota = http_util.GetRetryQuota("http://throttled.example.com");
 	HTTPResponse throttled(HTTPStatusCode::TooManyRequests_429);
 	throttled.reason = "Too Many Requests";
-	throttled.headers.Insert("ETag", "W/\"bf-0ojpck62M0d8\"");
+	throttled.headers.InsertIfAbsent("ETag", "W/\"bf-0ojpck62M0d8\"");
 	HTTPException error_sent(throttled, "HTTP HEAD error on '%s' (HTTP 429 Too Many Requests)", request.url);
 
 	unique_ptr<HTTPResponse> response;

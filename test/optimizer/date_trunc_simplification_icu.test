@@ -84,6 +84,101 @@ select * from test2 where date_trunc('hour', d) >= '2025-11-02T02:30:00+00'::TIM
 2025-11-02 01:30:00-03:30
 
 #
+# truncating to a minute or longer can cross a change of UTC offset
+#
+
+# at a fall-back, 01:30 EDT truncates to 01:00 EST, after it
+statement ok
+set TimeZone='America/New_York';
+
+statement ok
+create table test3 as select TIMESTAMPTZ '2021-11-07 04:00:00+00' + INTERVAL (i) MINUTE AS d from range(240) r(i);
+
+query I
+select count(*) from test3 where date_trunc('hour', d) >= '2021-11-07 06:00:00+00'::TIMESTAMPTZ and date_trunc('hour', d) <= '2021-11-07 07:00:00+00'::TIMESTAMPTZ;
+----
+180
+
+# Monrovia went from -00:44:30 to +00 at 00:44:30 UTC, so 00:44:30 to 00:44:59 UTC truncate to the minute 00:44:00 UTC
+statement ok
+set TimeZone='Africa/Monrovia';
+
+statement ok
+create table test4 as select TIMESTAMPTZ '1972-01-07 00:40:00+00' + INTERVAL (i) SECOND AS d from range(600) r(i);
+
+query I
+select count(*) from test4 where date_trunc('minute', d) >= '1972-01-07 00:44:00+00'::TIMESTAMPTZ;
+----
+330
+
+# offsets are whole seconds, so a second or finer is still rewritten
+query II
+explain select count(*) from test4 where date_trunc('second', d) >= '1972-01-07 00:44:00+00'::TIMESTAMPTZ;
+----
+physical_plan	<!REGEX>:.*date_trunc\(.*
+
+# ICU truncates TIMESTAMPTZ_NS in the session time zone too
+statement ok
+set TimeZone='America/New_York';
+
+statement ok
+create table test3_ns as select cast(TIMESTAMPTZ '2021-11-07 04:00:00+00' + INTERVAL (i) MINUTE as TIMESTAMPTZ_NS) AS d from range(240) r(i);
+
+query I
+select count(*) from test3_ns where date_trunc('hour', d) >= '2021-11-07 06:00:00+00'::TIMESTAMPTZ and date_trunc('hour', d) <= '2021-11-07 07:00:00+00'::TIMESTAMPTZ;
+----
+180
+
+statement ok
+set TimeZone='Africa/Monrovia';
+
+statement ok
+create table test4_ns as select cast(TIMESTAMPTZ '1972-01-07 00:40:00+00' + INTERVAL (i) SECOND as TIMESTAMPTZ_NS) AS d from range(600) r(i);
+
+query I
+select count(*) from test4_ns where date_trunc('minute', d) >= '1972-01-07 00:44:00+00'::TIMESTAMPTZ;
+----
+330
+
+#
+# truncation that follows the local time is not monotone, so statistics must not prune the comparison either
+#
+
+# Magadan fell back two hours: 01:30+12 truncates to 01:00+10, after the truncation of the later 00:30+10
+statement ok
+set TimeZone='Asia/Magadan';
+
+statement ok
+create table test5 as select unnest([TIMESTAMPTZ '2014-10-25 13:30:00+00', TIMESTAMPTZ '2014-10-25 14:30:00+00', TIMESTAMPTZ '2014-10-25 16:00:00+00']) AS d;
+
+query I
+select count(*) from test5 where date_trunc('hour', d) = '2014-10-25 14:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+query I
+select count(*) from test5 where date_trunc('hour', d) <= '2014-10-25 14:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+# Casey fell back from 02:00 to 23:00 of the day before, so the local date moves backwards
+statement ok
+set TimeZone='Antarctica/Casey';
+
+statement ok
+create table test6 as select unnest([TIMESTAMPTZ '2010-03-04 14:30:00+00', TIMESTAMPTZ '2010-03-04 15:30:00+00']) AS d;
+
+query I
+select count(*) from test6 where date_trunc('day', d) >= '2010-03-04 00:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+query I
+select count(*) from test6 where date_trunc('hour', d) >= '2010-03-04 16:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+#
 # check comparisons with infinity
 #
 

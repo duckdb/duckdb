@@ -47,7 +47,7 @@ SELECT sum(x.v),sum(y.v)
 FROM (SELECT p.* FROM p JOIN b USING(g)) x
 JOIN (SELECT p.* FROM p JOIN c USING(g)) y ON x.g=y.g-400;
 ----
-analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]dates"(?:[^}]*"Dynamic Filters": "[^"]* OR [^"]*"[^}]*},\s*"intermediate_rows": [4-9][0-9]{3},|(?:,\s*"(?:Type|Projections|Estimated Cardinality)":\s*(?:"[^"]*"|\[[^]]*\]))+\s*},\s*"intermediate_rows": 10000,).*
+analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]dates"(?:[^}]*"Dynamic Filters": (?:"[^"]* OR [^"]*"|\[[^]]*"[^"]* OR [^"]*"[^]]*\])[^}]*},\s*"intermediate_rows": [4-9][0-9]{3},|(?:,\s*"(?:Type|Projections|Estimated Cardinality)":\s*(?:"[^"]*"|\[[^]]*\]))+\s*},\s*"intermediate_rows": 10000,).*
 
 # Both UNION inputs must finish before the producer publishes its filter.
 query II
@@ -133,14 +133,15 @@ CREATE OR REPLACE TABLE c AS SELECT i AS g FROM range(100500,100700) t(i);
 statement ok
 SET max_execution_time=60000;
 
+# These inputs are unique. SEMI joins preserve their build orientation while keeping estimates enabled.
 query II
 EXPLAIN (ANALYZE, FORMAT JSON)
 WITH p AS MATERIALIZED (SELECT d.g,sum(f.v) v FROM facts f JOIN dates d USING(k) GROUP BY d.g)
 SELECT sum(x.v),sum(y.v)
-FROM (SELECT p.* FROM p JOIN b USING(g)) x
-JOIN (SELECT p.* FROM p JOIN c USING(g)) y ON x.g=y.g-400;
+FROM (SELECT p.* FROM p SEMI JOIN b USING(g)) x
+JOIN (SELECT p.* FROM p SEMI JOIN c USING(g)) y ON x.g=y.g-400;
 ----
-analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]dates"(?:[^}]*"Dynamic Filters": "[^"]* OR [^"]*"[^}]*},\s*"intermediate_rows": (?:[4-9][0-9]{2}|[1-9][0-9]{3,4}|1[0-9]{5}),|(?:,\s*"(?:Type|Projections|Estimated Cardinality)":\s*(?:"[^"]*"|\[[^]]*\]))+\s*},\s*"intermediate_rows": 200000,).*
+analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]dates"(?:[^}]*"Dynamic Filters": (?:"[^"]* OR [^"]*"|\[[^]]*"[^"]* OR [^"]*"[^]]*\])[^}]*},\s*"intermediate_rows": (?:[4-9][0-9]{2}|[1-9][0-9]{3,4}|1[0-9]{5}),|(?:,\s*"(?:Type|Projections|Estimated Cardinality)":\s*(?:"[^"]*"|\[[^]]*\]))+\s*},\s*"intermediate_rows": 200000,).*
 
 statement ok
 SET max_execution_time=0;

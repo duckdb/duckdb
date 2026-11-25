@@ -47,7 +47,7 @@ struct LifecycleCopyBindData : FunctionData {
 		return info == other_p.Cast<LifecycleCopyBindData>().info;
 	}
 
-	LifecycleCopyInfo &GetInfo() {
+	LifecycleCopyInfo &GetInfo() const {
 		return info->Cast<LifecycleCopyInfo>();
 	}
 
@@ -201,11 +201,11 @@ unique_ptr<FunctionData> LifecycleCopyBind(ClientContext &, CopyFunctionBindInpu
 	return make_uniq<LifecycleCopyBindData>(input.function_info);
 }
 
-unique_ptr<LocalFunctionData> LifecycleCopyInitializeLocal(ExecutionContext &, FunctionData &) {
+unique_ptr<LocalFunctionData> LifecycleCopyInitializeLocal(ExecutionContext &, const FunctionData &) {
 	return make_uniq<LifecycleCopyLocalData>();
 }
 
-unique_ptr<GlobalFunctionData> LifecycleCopyInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+unique_ptr<GlobalFunctionData> LifecycleCopyInitializeGlobal(ClientContext &context, const FunctionData &bind_data,
                                                              const string &path) {
 	auto state = make_uniq<LifecycleCopyGlobalData>(context, path);
 	auto &info = bind_data.Cast<LifecycleCopyBindData>().GetInfo();
@@ -214,13 +214,14 @@ unique_ptr<GlobalFunctionData> LifecycleCopyInitializeGlobal(ClientContext &cont
 	return std::move(state);
 }
 
-void LifecycleCopySink(ExecutionContext &, FunctionData &, GlobalFunctionData &, LocalFunctionData &, DataChunk &) {
+void LifecycleCopySink(ExecutionContext &, const FunctionData &, GlobalFunctionData &, LocalFunctionData &,
+                       DataChunk &) {
 }
 
-void LifecycleCopyCombine(ExecutionContext &, FunctionData &, GlobalFunctionData &, LocalFunctionData &) {
+void LifecycleCopyCombine(ExecutionContext &, const FunctionData &, GlobalFunctionData &, LocalFunctionData &) {
 }
 
-void LifecycleCopyFinalize(ClientContext &, FunctionData &bind_data, GlobalFunctionData &global_data) {
+void LifecycleCopyFinalize(ClientContext &, const FunctionData &bind_data, GlobalFunctionData &global_data) {
 	auto &info = bind_data.Cast<LifecycleCopyBindData>().GetInfo();
 	auto attempt = info.finalize_attempts.fetch_add(1);
 	if (attempt >= info.fail_finalize_after) {
@@ -233,7 +234,7 @@ void LifecycleCopyFinalize(ClientContext &, FunctionData &bind_data, GlobalFunct
 	info.finalized_paths.push_back(state.path);
 }
 
-void LifecycleCopyGetStatistics(ClientContext &, FunctionData &, GlobalFunctionData &,
+void LifecycleCopyGetStatistics(ClientContext &, const FunctionData &, GlobalFunctionData &,
                                 CopyFunctionFileStatistics &statistics) {
 	statistics.footer_size_bytes = Value();
 }
@@ -246,12 +247,13 @@ CopyFunctionExecutionMode LifecycleBatchExecutionMode(bool, bool) {
 	return CopyFunctionExecutionMode::BATCH_COPY_TO_FILE;
 }
 
-unique_ptr<PreparedBatchData> LifecycleCopyPrepareBatch(ClientContext &, FunctionData &, GlobalFunctionData &,
+unique_ptr<PreparedBatchData> LifecycleCopyPrepareBatch(ClientContext &, const FunctionData &, GlobalFunctionData &,
                                                         unique_ptr<ColumnDataCollection>) {
 	return make_uniq<LifecycleCopyPreparedData>();
 }
 
-void LifecycleCopyFlushBatch(ClientContext &, FunctionData &, GlobalFunctionData &global_data, PreparedBatchData &) {
+void LifecycleCopyFlushBatch(ClientContext &, const FunctionData &, GlobalFunctionData &global_data,
+                             PreparedBatchData &) {
 	global_data.Cast<LifecycleCopyGlobalData>().flushed_batches++;
 }
 
@@ -329,7 +331,7 @@ struct BackpressurePreparedData : PreparedBatchData {
 	vector<int64_t> rows;
 };
 
-unique_ptr<PreparedBatchData> BackpressurePrepare(ClientContext &, FunctionData &bind_data, GlobalFunctionData &,
+unique_ptr<PreparedBatchData> BackpressurePrepare(ClientContext &, const FunctionData &bind_data, GlobalFunctionData &,
                                                   unique_ptr<ColumnDataCollection> collection) {
 	auto &info = bind_data.Cast<LifecycleCopyBindData>().info->Cast<BackpressureCopyInfo>();
 	{
@@ -353,7 +355,7 @@ unique_ptr<PreparedBatchData> BackpressurePrepare(ClientContext &, FunctionData 
 	return std::move(result);
 }
 
-void BackpressureFlush(ClientContext &, FunctionData &bind_data, GlobalFunctionData &, PreparedBatchData &batch) {
+void BackpressureFlush(ClientContext &, const FunctionData &bind_data, GlobalFunctionData &, PreparedBatchData &batch) {
 	auto &info = bind_data.Cast<LifecycleCopyBindData>().info->Cast<BackpressureCopyInfo>();
 	lock_guard<mutex> guard(info.lock);
 	auto &rows = batch.Cast<BackpressurePreparedData>().rows;
@@ -482,7 +484,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 	const auto interrupt_while_blocked = GENERATE(false, true);
 	if (interrupt_while_blocked) {
 		connection.Interrupt();
-		REQUIRE_THROWS_AS(copy.Sink(first_context, first_chunk, first_input), InterruptException);
+		REQUIRE_THROWS_WITH(copy.Sink(first_context, first_chunk, first_input), Catch::Contains("Interrupted!"));
 		context.ClearInterrupt();
 	}
 
@@ -501,7 +503,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 	REQUIRE(second_task->wakeups == 0);
 	if (interrupt_while_blocked) {
 		connection.Interrupt();
-		REQUIRE_THROWS_AS(copy.Combine(second_context, second_combine), InterruptException);
+		REQUIRE_THROWS_WITH(copy.Combine(second_context, second_combine), Catch::Contains("Interrupted!"));
 		context.ClearInterrupt();
 	}
 	REQUIRE(copy.Sink(first_context, first_chunk, first_input) == SinkResultType::NEED_MORE_INPUT);
@@ -545,8 +547,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
-	fs.RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	RegisterLifecycleCopyFunction(db, "copy_remote_partitions", info);
 	REQUIRE_NO_FAIL(connection.Query("SET disabled_filesystems='LocalFileSystem'"));
@@ -576,10 +577,9 @@ TEST_CASE("Partitioned COPY to remote storage does not require the local filesys
 TEST_CASE("COPY to remote storage does not check whether each output file exists", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	string format;
 	SECTION("Parquet") {
@@ -603,10 +603,9 @@ TEST_CASE("A failed COPY to remote storage keeps its outputs", "[api][copy]") {
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(connection.Query("SET async_threads=0"));
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	info->fail_finalize_after = 1;
@@ -852,7 +851,7 @@ TEST_CASE("COPY cleans a finalized temporary file when its move fails", "[api][c
 	}
 }
 
-TEST_CASE("Abandoning multi-chunk COPY statistics preserves finalized files", "[api][copy]") {
+TEST_CASE("Abandoning multi-chunk COPY statistics preserves finalized files", "[api][copy][.]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));

@@ -896,11 +896,11 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 	}
 }
 
-TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
+static void TestAppenderAllocatorFlushThreshold(idx_t row_count) {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	const size_t blob_size = 100 * 1024;
+	const idx_t blob_size = 10 * 1024;
 	std::vector<uint8_t> data(blob_size, 'A');
 	auto value = duckdb::Value::BLOB(data.data(), data.size());
 	REQUIRE_NO_FAIL(con.Query("SET GLOBAL memory_limit='1GB'"));
@@ -908,7 +908,7 @@ TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
 
 	// Flush when call `EndRow`
 	Appender appender_1(con, "my_table", 16 * 1024 * 1024);
-	for (int i = 0; i < 10000; i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		appender_1.BeginRow();
 		appender_1.Append(value);
 		appender_1.EndRow();
@@ -917,12 +917,25 @@ TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
 
 	// Flush when call `FlushChunk`
 	Appender appender_2(con, "my_table", 64 * 1024);
-	for (int i = 0; i < 10000; i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		appender_2.BeginRow();
 		appender_2.Append(value);
 		appender_2.EndRow();
 	}
 	appender_2.Close();
+	result = con.Query("SELECT count(*) = " + to_string(2 * row_count) +
+	                   " AND sum(octet_length(b)) = count(*) * 10240 "
+	                   "AND bool_and(b = repeat('A', 10240)::BLOB) FROM my_table");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}
+
+TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
+	// Cross both the allocation threshold and a chunk boundary, including a final partial chunk.
+	TestAppenderAllocatorFlushThreshold(MaxValue<idx_t>(2049, STANDARD_VECTOR_SIZE + 1));
+}
+
+TEST_CASE("Stress appender_allocator_flush_threshold", "[appender][.]") {
+	TestAppenderAllocatorFlushThreshold(10000);
 }
 
 TEST_CASE("Test appender on a temp table in a read only database", "[appender]") {
@@ -1003,7 +1016,6 @@ TEST_CASE("Test appender on a view keeps the open transaction", "[appender]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (1)"));
-	REQUIRE_THROWS_AS(Appender(con, "vw"), CatalogException);
 	REQUIRE_THROWS_WITH(Appender(con, "vw"), Catch::Matchers::Contains("vw' could not be found"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (2)"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));

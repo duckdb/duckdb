@@ -12,6 +12,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 
+#include <string_view>
+
 namespace duckdb {
 
 // Forward declaration.
@@ -21,7 +23,7 @@ class DatabaseInstance;
 class DebugFileSystem;
 
 struct DebugFileHandle : public FileHandle {
-	DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p);
+	DebugFileHandle(DebugFileSystem &fs, string path, unique_ptr<FileHandle> inner_p);
 	void Close() override;
 	bool CanSeek() override;
 	idx_t GetProgress() override;
@@ -29,10 +31,13 @@ struct DebugFileHandle : public FileHandle {
 	unique_ptr<FileHandle> inner;
 };
 
-//! Wraps a FileSystem and injects configurable latency on open/read/write.
+//! Handles "debugfs://<local path>": forwards to the local file system and injects configurable latency on
+//! open/read/write.
 class DebugFileSystem : public FileSystem {
 public:
-	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db);
+	explicit DebugFileSystem(DatabaseInstance &db);
+
+	static constexpr std::string_view PATH_PREFIX = "debugfs://";
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
@@ -46,6 +51,7 @@ public:
 
 	string GetName() const override;
 	bool IsLocalFileSystem() const override;
+	bool CanHandleFile(const string &fpath) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
@@ -81,17 +87,6 @@ public:
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 	string PathSeparator(const string &path) override;
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override;
-	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
-	void UnregisterSubSystem(const string &name) override;
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
-	void SetDisabledFileSystems(const vector<string> &names) override;
-	vector<string> GetDisabledFileSystems() override;
-	bool SubSystemIsDisabled(const string &name) override;
-	bool IsDisabledForPath(const string &path) override;
-	vector<string> ListSubSystems() override;
-	string GetHomeDirectory() override;
-	string ExpandPath(const string &path) override;
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
 	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
 
@@ -117,6 +112,10 @@ private:
 	// Random engine is initialized lazily on first IO operation, so users could set the random seed for reproduction.
 	void ApplyDelay();
 	void EnsureRandomEngineInitialized();
+	//! The local path of a "debugfs://" path
+	static string ToInner(const string &path);
+	static OpenFileInfo ToInner(const OpenFileInfo &file);
+	static string FromInner(const string &path);
 
 	unique_ptr<FileSystem> inner_fs;
 	DatabaseInstance &db;

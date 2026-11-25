@@ -49,7 +49,7 @@ AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocat
 }
 
 AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
-                                                       optional_ptr<FunctionData> bind_data_p,
+                                                       optional_ptr<const FunctionData> bind_data_p,
                                                        ArenaAllocator &allocator_p,
                                                        optional_ptr<FunctionLocalState> local_state_p)
     : AggregateInputData(function_p, bind_data_p, allocator_p), local_state(local_state_p) {
@@ -185,10 +185,11 @@ BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
                                                        BoundAggregateFunction &bound_function_p,
                                                        vector<unique_ptr<Expression>> &arguments_p,
                                                        optional_ptr<Binder> binder_p,
-                                                       optional_ptr<const DecimalWidthLimit> decimal_width_limit_p)
+                                                       optional_ptr<const DecimalWidthLimit> decimal_width_limit_p,
+                                                       bool arguments_collated_p)
     : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p,
                         binder_p, decimal_width_limit_p),
-      bound_function(bound_function_p) {
+      bound_function(bound_function_p), arguments_collated(arguments_collated_p) {
 }
 
 } // namespace duckdb

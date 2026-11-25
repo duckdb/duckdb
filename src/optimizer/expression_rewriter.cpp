@@ -160,6 +160,12 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context,
                                                           vector<unique_ptr<Expression>> children, Value value) {
+	for (auto &child : children) {
+		if (child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			// an untyped NULL child folds the call before its types are resolved: keep the type of the constant
+			return make_uniq<BoundConstantExpression>(Value(value.type()));
+		}
+	}
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(std::move(value)));
 	// constant_or_null has the type of the leading constant, also when a typed NULL child folds the call
 	return BindBuiltinScalarExpression(context, ConstantOrNullFun::Name, std::move(children));

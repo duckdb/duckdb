@@ -140,7 +140,7 @@ typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &i
                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
-typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                    const BoundWindowFunction &function);
 typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, BoundWindowFunction &function);
 
@@ -301,7 +301,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	auto SetExtraFunctionInfo(ARGS &&... args) -> void {
+	auto SetExtraFunctionInfo(ARGS &&...args) -> void {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	auto GetFunctionInfo() const -> shared_ptr<WindowFunctionInfo> {

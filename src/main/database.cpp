@@ -56,9 +56,8 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
+	file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	encoding_functions = make_uniq<EncodingFunctionSet>();
-	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
 	type_manager = make_uniq<TypeManager>(*this);
@@ -163,6 +162,14 @@ Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
 
 Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
+}
+
+VirtualFileSystem &VirtualFileSystem::Get(DatabaseInstance &db) {
+	return *db.config.file_system;
+}
+
+VirtualFileSystem &VirtualFileSystem::Get(ClientContext &context) {
+	return Get(*context.db);
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
@@ -398,12 +405,9 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
-		if (!config.file_system) {
-			throw InternalException("No file system!?");
-		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
+			ExtensionHelper::LoadExternalExtension(*this, GetFileSystem(), {config.options.database_type});
 		}
 	}
 
@@ -477,22 +481,20 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	auto &default_fs = vfs.GetDefaultFileSystem();
-	if (default_fs.IsLocalFileSystem()) {
-		return default_fs;
-	}
-	owned = make_uniq<LocalFileSystem>();
-	return *owned;
-}
-
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+    : file_system(VirtualFileSystem::Get(db_p)), database_opener(db_p) {
+	if (!file_system.GetDefaultFileSystem().IsLocalFileSystem()) {
+		owned_file_system = make_uniq<LocalFileSystem>();
+	}
 }
 
-FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
+VirtualFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	return file_system;
+}
+
+optional_ptr<FileSystem> LocalDatabaseFileSystem::GetFixedFileSystem() const {
+	auto &local_fs = owned_file_system ? *owned_file_system : file_system.GetDefaultFileSystem();
+	if (file_system.SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;
@@ -531,6 +533,8 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
+	config.file_system = std::move(new_config.file_system);
+	new_config.file_system = make_uniq<VirtualFileSystem>();
 	config.options = new_config.options;
 	config.SetDisabledOptimizers(config.options.disabled_optimizers);
 	config.user_settings = new_config.user_settings;
@@ -556,11 +560,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
-	if (new_config.file_system) {
-		config.file_system = std::move(new_config.file_system);
-	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
-	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedDatabasePath(database_path);
@@ -581,8 +580,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	config.block_allocator = std::move(new_config.block_allocator);
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
-		config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
-		                                                   DBConfig::GetSystemAvailableMemory(*config.file_system));
+		config.block_allocator =
+		    make_uniq<BlockAllocator>(*config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory());
 	}
 	config.block_allocator->SetEnabled(config.options.enable_block_allocator);
 	config.replacement_scans = std::move(new_config.replacement_scans);

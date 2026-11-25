@@ -274,7 +274,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 
 	HTTPHeaders headers(db);
 	if (options.use_etags && install_info && !install_info->etag.empty()) {
-		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
+		headers.InsertIfAbsent("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 
 	string download_url = url;
@@ -341,8 +341,8 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 	}
 
 	QueryContext query_context(context);
-	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
+	auto &fs = FileSystem::GetLocal(db);
+	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }

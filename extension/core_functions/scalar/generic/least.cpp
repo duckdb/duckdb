@@ -53,7 +53,7 @@ struct LeastGreatestSortKeyState : public FunctionLocalState {
 
 template <class OP>
 unique_ptr<FunctionLocalState> LeastGreatestSortKeyInit(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data) {
+                                                        optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<LeastGreatestSortKeyState>(expr.GetChildren().size(), OP::NullOrdering());
 }
 
@@ -283,6 +283,24 @@ void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		break;
 	case PhysicalType::INT128:
 		bound_function.SetFunctionCallback(LeastGreatestFunction<hugeint_t, OP>);
+		break;
+	case PhysicalType::UINT8:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<uint8_t, OP>);
+		break;
+	case PhysicalType::UINT16:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<uint16_t, OP>);
+		break;
+	case PhysicalType::UINT32:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<uint32_t, OP>);
+		break;
+	case PhysicalType::UINT64:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<uint64_t, OP>);
+		break;
+	case PhysicalType::UINT128:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<uhugeint_t, OP>);
+		break;
+	case PhysicalType::FLOAT:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<float, OP>);
 		break;
 	case PhysicalType::DOUBLE:
 		bound_function.SetFunctionCallback(LeastGreatestFunction<double, OP>);

@@ -20,7 +20,12 @@ using thread_id = std::thread::id;
 } // namespace duckdb
 
 #else
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/string.hpp"
+
+namespace duckdb {
 using thread_id = uint64_t;
+} // namespace duckdb
 #endif
 
 #include "duckdb/common/optional_ptr.hpp"
