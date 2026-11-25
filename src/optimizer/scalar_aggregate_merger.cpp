@@ -317,9 +317,43 @@ struct ScalarAggregateMerger::Branch {
 
 //! One of the first branch's scans, which the merged leaf keeps, and the columns it gains for the other branches
 struct ScalarAggregateMerger::MergeTarget {
+	explicit MergeTarget(LogicalGet &scan_p) : scan(scan_p) {
+		auto &column_ids = scan_p.GetColumnIds();
+		column_bindings.reserve(column_ids.size());
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			// Keep the first position if a column occurs more than once.
+			column_bindings.emplace(column_ids[i].GetPrimaryIndex(),
+			                        ColumnBinding(scan_p.table_index, ProjectionIndex(i)));
+		}
+	}
+
+	//! Where this target reads column, allocating a position without changing the scan until the merge is accepted.
+	ColumnBinding BindingFor(column_t column) {
+		auto entry = column_bindings.find(column);
+		if (entry != column_bindings.end()) {
+			return entry->second;
+		}
+		ColumnBinding binding(scan.get().table_index,
+		                      ProjectionIndex(scan.get().GetColumnIds().size() + added_columns.size()));
+		column_bindings.emplace(column, binding);
+		added_columns.emplace_back(column, binding);
+		return binding;
+	}
+
+	void ApplyAddedColumns() {
+		for (auto &entry : added_columns) {
+			auto position = scan.get().AddColumnId(entry.first);
+			D_ASSERT(position == entry.second.column_index);
+			(void)position;
+		}
+		added_columns.clear();
+	}
+
+private:
 	reference<LogicalGet> scan;
 	//! A column the scan gains, and the binding that column lands on
 	vector<std::pair<column_t, ColumnBinding>> added_columns;
+	unordered_map<column_t, ColumnBinding> column_bindings;
 };
 
 static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
@@ -425,25 +459,6 @@ static bool TreeHasProjectionMap(const LogicalOperator &op) {
 		}
 	}
 	return false;
-}
-
-//! Where `target` reads `column`: the binding it has, or the one it gains once its group merges
-static ColumnBinding TargetBinding(ScalarAggregateMerger::MergeTarget &target, column_t column) {
-	auto &scan = target.scan.get();
-	auto &column_ids = scan.GetColumnIds();
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].GetPrimaryIndex() == column) {
-			return ColumnBinding(scan.table_index, ProjectionIndex(i));
-		}
-	}
-	for (auto &entry : target.added_columns) {
-		if (entry.first == column) {
-			return entry.second;
-		}
-	}
-	ColumnBinding binding(scan.table_index, ProjectionIndex(column_ids.size() + target.added_columns.size()));
-	target.added_columns.emplace_back(column, binding);
-	return binding;
 }
 
 //===--------------------------------------------------------------------===//
@@ -579,8 +594,8 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 	D_ASSERT(op);
 }
 
-void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves, idx_t leaf_index,
-                                           vector<Branch> &branches) {
+void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves,
+                                           idx_t leaf_index, vector<Branch> &branches) {
 	reference<LogicalOperator> op = *leaves[leaf_index].get();
 	optional_ptr<LogicalProjection> projection;
 	if (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -630,7 +645,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	vector<MergeTarget> targets;
 	targets.reserve(first.scans.size());
 	for (auto &scan : first.scans) {
-		targets.push_back(MergeTarget {scan, {}});
+		targets.emplace_back(scan.get());
 	}
 	vector<column_binding_map_t<ColumnBinding>> remaps(group.size());
 	for (idx_t k = 1; k < group.size(); k++) {
@@ -646,7 +661,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 					continue;
 				}
 				remaps[k][ColumnBinding(scan.table_index, ProjectionIndex(i))] =
-				    TargetBinding(target, column_ids[i].GetPrimaryIndex());
+				    target.BindingFor(column_ids[i].GetPrimaryIndex());
 			}
 		}
 	}
@@ -714,11 +729,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 
 	// the group merges: the target scans read the added columns
 	for (auto &target : targets) {
-		for (auto &entry : target.added_columns) {
-			auto position = target.scan.get().AddColumnId(entry.first);
-			D_ASSERT(position == entry.second.column_index);
-			(void)position;
-		}
+		target.ApplyAddedColumns();
 	}
 	// each branch's own predicate (none: every row the shared conjuncts keep)
 	vector<unique_ptr<Expression>> predicates(group.size());
