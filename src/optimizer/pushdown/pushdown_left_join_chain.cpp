@@ -1,10 +1,16 @@
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 
 #include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -67,6 +73,45 @@ static bool MatchLeftJoinChainKeys(LeftJoinChainSource &source, vector<LeftJoinC
 			return false;
 		}
 		source.keys[position] = condition.GetRHS().Copy();
+	}
+	return true;
+}
+
+static bool CanFilterLeftJoinChainInput(LogicalOperator &op) {
+	if (ClassifyLogicalOperatorRepeatability(op) != LogicalOperatorRepeatability::REPEATABLE ||
+	    op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		return false;
+	}
+	if ((op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) &&
+	    op.Cast<LogicalJoin>().join_type == JoinType::SINGLE) {
+		return false;
+	}
+	bool can_filter = true;
+	auto check_expression = [&](const Expression &expr) {
+		can_filter &= !expr.IsVolatile() && !expr.CanThrow() && !ExpressionBarrier::Contains(expr);
+	};
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) { check_expression(**expr); });
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		auto table = get.GetTable();
+		// Table functions do not expose whether the scan itself can throw.
+		if (!table || !table->TryGetDuckTableEntry()) {
+			return false;
+		}
+		for (auto &entry : get.table_filters) {
+			check_expression(*ExpressionFilter::GetExpressionFilter(entry.Filter(), "LEFT join chain").expr);
+		}
+		for (auto &filter : get.table_filters.GetMultiColumnFilters()) {
+			check_expression(*ExpressionFilter::GetExpressionFilter(*filter, "LEFT join chain").expr);
+		}
+	}
+	if (!can_filter) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!CanFilterLeftJoinChainInput(*child)) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -148,6 +193,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoinChain(unique_ptr<Log
 		}
 	}
 	if (!removes_null) {
+		return PushFinalFilters(std::move(op));
+	}
+	// The INNER join and its runtime filters can skip work in any of the inputs.
+	if (!CanFilterLeftJoinChainInput(*op)) {
 		return PushFinalFilters(std::move(op));
 	}
 	Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS);

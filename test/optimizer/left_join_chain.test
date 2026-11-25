@@ -381,3 +381,104 @@ WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
 
 statement ok
 RESET disabled_optimizers;
+
+# An empty combined RHS must not skip observable work in the preserved input.
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE observed_rows AS SELECT i k FROM range(65536) t(i);
+
+statement ok
+CREATE SEQUENCE left_chain_seq;
+
+statement ok
+CREATE VIEW observed_s AS SELECT k,nextval('left_chain_seq') q FROM observed_rows;
+
+statement ok
+CREATE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k%2=2 GROUP BY k;
+
+statement ok
+CREATE VIEW observed_c AS SELECT k,max(k) q FROM observed_rows WHERE k%3=3 GROUP BY k;
+
+query II
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+0	NULL
+
+query I
+SELECT nextval('left_chain_seq');
+----
+65537
+
+# Filtering earlier must not hide a cast error, even when the combined RHS is nonempty.
+statement ok
+CREATE OR REPLACE VIEW observed_s AS
+SELECT k,IF(k=65535,'bad',k::VARCHAR)::INTEGER q FROM observed_rows;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+Could not convert string 'bad' to INT32
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k=0 GROUP BY k;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+Could not convert string 'bad' to INT32
+
+query II
+EXPLAIN SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# Filters from the preserved side must not suppress errors in a right-hand input.
+statement ok
+CREATE OR REPLACE VIEW observed_s AS SELECT k FROM observed_rows WHERE k=100;
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows GROUP BY k;
+
+statement ok
+CREATE OR REPLACE VIEW observed_c AS
+SELECT k,IF(k=65535,'bad',k::VARCHAR)::INTEGER q FROM observed_rows GROUP BY k;
+
+statement error
+SELECT count(*),min(b.q),min(c.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+Could not convert string 'bad' to INT32
+
+# Table function scans can raise errors outside their bound expressions.
+statement ok
+COPY (SELECT i k,IF(i=65535,'bad',i::VARCHAR) q FROM range(65536) t(i))
+TO '{TEST_DIR}/left_join_chain_bad.csv' (HEADER true);
+
+statement ok
+CREATE OR REPLACE VIEW observed_s AS
+SELECT * FROM read_csv('{TEST_DIR}/left_join_chain_bad.csv',auto_detect=false,header=true,
+columns={'k':'BIGINT','q':'INTEGER'});
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k%2=2 GROUP BY k;
+
+statement ok
+CREATE OR REPLACE VIEW observed_c AS SELECT k,max(k) q FROM observed_rows WHERE k%3=3 GROUP BY k;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+CSV Error
