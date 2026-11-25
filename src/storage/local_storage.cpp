@@ -89,6 +89,14 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	row_groups = CreateAlteredCollection(std::move(new_collection));
 }
 
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent)
+    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows.load()),
+      optimistic_writer(new_dt), indexes(parent.indexes) {
+	// a new constraint does not change the data: the row groups are shared with the old version
+	PrepareParentForAlter(context, parent);
+	row_groups = CreateAlteredCollection(parent.row_groups->collection);
+}
+
 LocalTableStorage::~LocalTableStorage() {
 }
 
@@ -794,15 +802,13 @@ void LocalStorage::DropTable(DataTable &table) {
 	storage->is_dropped = true;
 }
 
-void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
+void LocalStorage::MoveStorage(ClientContext &context, DataTable &old_dt, DataTable &new_dt) {
 	// check if there are any pending appends for the old version of the table
-	auto new_storage = table_manager.MoveEntry(old_dt);
-	if (!new_storage) {
+	auto storage = table_manager.MoveEntry(old_dt);
+	if (!storage) {
 		return;
 	}
-	// take over the storage from the old entry
-	new_storage->table_ref = new_dt;
-	table_manager.InsertEntry(new_dt, std::move(new_storage));
+	table_manager.InsertEntry(new_dt, make_shared_ptr<LocalTableStorage>(context, new_dt, *storage));
 }
 
 void LocalStorage::AddColumn(ClientContext &context, DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
