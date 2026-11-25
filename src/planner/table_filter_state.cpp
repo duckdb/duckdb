@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -55,7 +56,7 @@ protected:
 		if (count == 0 || match_count == value_count) {
 			return;
 		}
-		if (result.Capacity() < count) {
+		if (!result.IsSet() || result.Capacity() < count) {
 			result.Initialize(count);
 		}
 		idx_t accepted = 0;
@@ -70,7 +71,8 @@ protected:
 			}
 		}
 		if (accepted != count) {
-			sel.Initialize(result);
+			// Transfer ownership so later filters cannot overwrite a retained selection.
+			sel = std::move(result);
 		}
 		count = accepted;
 	}
@@ -172,7 +174,8 @@ struct FilterCacheProperties {
 
 static FilterCacheProperties GetCacheProperties(const Expression &expression) {
 	FilterCacheProperties result;
-	if (expression.CanThrow() || expression.IsVolatile()) {
+	// Verification statistics describe logical rows, not unused dictionary entries.
+	if (expression.CanThrow() || expression.IsVolatile() || expression.GetVerificationStats()) {
 		result.safe = false;
 		return result;
 	}
@@ -232,6 +235,34 @@ ExpressionFilterState::ExpressionFilterState(Context &context, const Expression 
 }
 
 ExpressionFilterState::~ExpressionFilterState() {
+}
+
+bool ExpressionFilterState::TryFilterDictionary(SelectionVector &sel, Vector &vector, idx_t &approved_tuple_count) {
+	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
+	if (!can_cache || vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	const auto size = DictionaryVector::DictionarySize(vector);
+	const auto &id = DictionaryVector::DictionaryId(vector);
+	auto &values = DictionaryVector::Child(vector);
+	if (!size.IsValid() || id.empty() || size.GetIndex() >= MAX_DICTIONARY_SIZE_THRESHOLD ||
+	    values.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return false;
+	}
+	if (approved_tuple_count == 0) {
+		return true;
+	}
+	if (!dictionary_cache || dictionary_id != id) {
+		// Avoid evaluating a large dictionary for only a few selected rows.
+		if (size.GetIndex() > STANDARD_VECTOR_SIZE && approved_tuple_count <= STANDARD_VECTOR_SIZE / 2) {
+			return false;
+		}
+		auto new_cache = CreateCache(values, size.GetIndex());
+		dictionary_id = id;
+		dictionary_cache = std::move(new_cache);
+	}
+	dictionary_cache->Filter(DictionaryVector::SelVector(vector), sel, approved_tuple_count);
+	return true;
 }
 
 template <class CHILD, class FILTER>

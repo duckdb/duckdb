@@ -311,6 +311,12 @@ vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op
 			break;
 		}
 		return ComputeJoinUniqueSets(op.Cast<LogicalComparisonJoin>());
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		if (propagation != DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
+			break;
+		}
+		// the output of a materialized CTE is the output of the query that reads it (the second child)
+		return GetUniqueSets(*op.children[1]);
 	default:
 		break;
 	}

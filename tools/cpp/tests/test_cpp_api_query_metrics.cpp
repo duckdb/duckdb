@@ -75,3 +75,33 @@ TEST_CASE("Stable C++API: query metrics need a finished query", "[cpp_api]") {
 	result.Drain();
 	REQUIRE_NOTHROW(conn.GetQueryMetrics());
 }
+
+TEST_CASE("Stable C++API: GetProfilingInformation renders the profile of the last query", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+
+	// Without profiling there is no profile to render
+	auto disabled = conn.GetProfilingInformation("json");
+
+	conn.Execute("SET enable_profiling = 'no_output'").Drain();
+	conn.Execute("SELECT sum(i) FROM range(1000) t(i)").Drain();
+
+	auto json = conn.GetProfilingInformation("json");
+	REQUIRE(json.find("UNGROUPED_AGGREGATE") != std::string::npos);
+	REQUIRE(json != disabled);
+	REQUIRE(conn.GetProfilingInformation("text").find("Ungrouped Aggregate") != std::string::npos);
+	// The empty format is the configured one, which falls back to the query tree when it is no_output
+	REQUIRE(conn.GetProfilingInformation() == conn.GetProfilingInformation("query_tree"));
+	REQUIRE(conn.GetProfilingInformation("no_output").empty());
+
+	REQUIRE_THROWS_MATCHES(conn.GetProfilingInformation("no_such_format"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+	// Like the metrics, the profile is of a finished query
+	auto result = conn.Execute("SELECT * FROM range(100000)");
+	result.FetchChunk();
+	REQUIRE_THROWS_MATCHES(conn.GetProfilingInformation("json"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_RESOURCE_IN_USE));
+	result.Drain();
+	REQUIRE_NOTHROW(conn.GetProfilingInformation("json"));
+}

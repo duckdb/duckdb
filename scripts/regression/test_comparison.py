@@ -1,5 +1,6 @@
 import contextlib
 import io
+import itertools
 import math
 import os
 import re
@@ -75,11 +76,11 @@ class TestPlanCostComparison(unittest.TestCase):
 
         def profile(old_probes, new_probes):
             samples = {
-                'old': [cost(20, 10, probe) for probe in old_probes],
-                'new': [cost(20, 10, probe) for probe in new_probes],
+                'old': itertools.cycle(cost(20, 10, probe) for probe in old_probes),
+                'new': itertools.cycle(cost(20, 10, probe) for probe in new_probes),
             }
             with patch.object(
-                plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: samples[cli].pop(0)
+                plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: next(samples[cli])
             ):
                 return plan_cost_runner.query_plan_costs('old', 'new', 'db', 'SELECT 1;')
 
