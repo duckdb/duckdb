@@ -141,7 +141,8 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		table.RemoveFromIndexes(context, row_identifiers, count, removal_type, checkpoint_id);
+		table.RemoveFromIndexes(context, row_identifiers, count, removal_type, checkpoint_id,
+		                        VisibilityBound::Before(transaction.commit_id));
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {

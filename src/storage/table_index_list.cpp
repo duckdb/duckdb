@@ -229,9 +229,14 @@ void TableIndexList::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 }
 
 void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const IndexRemovalType removal_type,
-                                       const optional_idx active_checkpoint) {
+                                       const optional_idx active_checkpoint, const VisibilityBound bound) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
+		if (!entry->AddedBefore(bound)) {
+			// commits and reverts hold the commit lock, so only a cleanup can meet an index added after its commit
+			D_ASSERT(removal_type == IndexRemovalType::DELETED_ROWS_IN_USE);
+			continue;
+		}
 		entry->RemoveFromIndex(chunk, row_ids, removal_type, active_checkpoint);
 	}
 }
@@ -549,10 +554,13 @@ void TableIndexList::VerifyForeignKey(optional_ptr<const TableIndexList> delete_
 	entry->VerifyForeignKey(delete_entry, chunk, conflict_manager);
 }
 
-unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
+unordered_set<column_t> TableIndexList::GetIndexedColumns(const VisibilityBound bound) const {
 	annotated_lock_guard lock(index_entries_lock);
 	unordered_set<column_t> column_ids;
 	for (const auto &entry : index_entries) {
+		if (!entry->AddedBefore(bound)) {
+			continue;
+		}
 		auto index_info = entry->GetStorageInfo();
 		column_ids.insert(index_info.column_set.begin(), index_info.column_set.end());
 	}

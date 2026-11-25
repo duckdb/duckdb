@@ -213,9 +213,9 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
-	//! Remove the row identifiers from all the indexes of the table
+	//! Remove the row identifiers from the indexes of the table added before the bound
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());
+	                       IndexRemovalType removal_type, optional_idx checkpoint_id, VisibilityBound bound);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;

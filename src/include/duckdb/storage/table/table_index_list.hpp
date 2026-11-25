@@ -68,9 +68,10 @@ public:
 	void RevertAppend(DataChunk &chunk, row_t row_start);
 	//! Appends deleted rows to all unique indexes.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
-	//! Applies a removal or removal rollback to all index entries.
+	//! Applies a removal or removal rollback to the index entries added before the bound.
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
-	                       optional_idx active_checkpoint = optional_idx());
+	                       optional_idx active_checkpoint = optional_idx(),
+	                       VisibilityBound bound = VisibilityBound::IncludingUncommitted());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(idx_t index_oid);
 	//! Returns the entry matching the index OID.
@@ -138,8 +139,8 @@ public:
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Persist index buffers and install replacements before returning their metadata.
 	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
-	//! Returns the physical table columns referenced by any index.
-	unordered_set<column_t> GetIndexedColumns() const;
+	//! Returns the physical table columns of the indexes added before the bound (by default all).
+	unordered_set<column_t> GetIndexedColumns(VisibilityBound bound = VisibilityBound::IncludingUncommitted()) const;
 	//! Returns the column sets of unique indexes matching the conflict target.
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.

@@ -239,6 +239,10 @@ public:
 	bool ScannableAt(VisibilityBound bound) const {
 		return last_commit < bound;
 	}
+	//! Whether the index was added before the bound: every commit from the bound on maintained it
+	bool AddedBefore(VisibilityBound bound) const {
+		return last_commit < bound;
+	}
 
 private:
 	template <class>
