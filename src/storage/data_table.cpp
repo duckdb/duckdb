@@ -163,7 +163,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.version = DataTableVersion::ALTERED;
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
+DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint,
+                     optional_idx max_index_count)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE) {
 	// ALTER COLUMN to add a new constraint.
 
@@ -172,6 +173,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
+	// indexes are published under the append lock, so none is published until the parent is ALTERED
+	if (max_index_count.IsValid() && info->indexes.CountBuiltIndexes() > max_index_count.GetIndex()) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.",
+		                          parent.GetTableName());
+	}
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -456,35 +462,36 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		auto commit_lock = LockMainTableForIndex(table_lock);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
-	auto commit_lock = db.GetStorageManager().GetCommitLock();
-	// under the commit lock, a commit and its revert always land in the same deltas
-	auto deltas = entry->TakeBuildDeltas();
 	idx_t rounds = 0;
 	idx_t growing_rounds = 0;
-	// merge outside the commit lock until few changed rows are left
-	while (deltas.changed_rows > INDEX_BUILD_LOCKED_ROWS) {
+	idx_t previous_changed_rows = 0;
+	// merge outside the locks until few changed rows are left
+	while (true) {
+		unique_lock<mutex> table_lock;
+		auto commit_lock = LockMainTableForIndex(table_lock);
+		// under the commit lock, a commit and its revert always land in the same deltas
+		auto deltas = entry->TakeBuildDeltas();
+		if (deltas.changed_rows <= INDEX_BUILD_LOCKED_ROWS) {
+			IndexEntry::MergeBuildDeltas(*index, deltas);
+			entry->FinishBuild(std::move(index), index_oid, check_mode);
+			return entry;
+		}
+		if (rounds > 0) {
+			growing_rounds = deltas.changed_rows > previous_changed_rows ? growing_rounds + 1 : 0;
+		}
 		if (rounds == INDEX_BUILD_MAX_ROUNDS || growing_rounds == INDEX_BUILD_MAX_GROWING_ROUNDS) {
 			throw TransactionException(
 			    "CREATE INDEX on table %s cannot keep up with concurrent changes to it: %llu changed rows are left "
 			    "after %llu rounds. Retry when fewer rows are written to the table",
 			    GetTableName(), deltas.changed_rows, rounds);
 		}
+		table_lock.unlock();
 		commit_lock.unlock();
 		IndexEntry::MergeBuildDeltas(*index, deltas);
 		context.FastInterruptCheck();
-		commit_lock.lock();
-		auto next = entry->TakeBuildDeltas();
-		growing_rounds = next.changed_rows > deltas.changed_rows ? growing_rounds + 1 : 0;
-		deltas = std::move(next);
+		previous_changed_rows = deltas.changed_rows;
 		rounds++;
 	}
-	IndexEntry::MergeBuildDeltas(*index, deltas);
-	if (!IsMainTable()) {
-		throw TransactionException(
-		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
-	}
-	entry->FinishBuild(std::move(index), index_oid, check_mode);
-	return entry;
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {

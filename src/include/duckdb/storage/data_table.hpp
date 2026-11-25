@@ -82,8 +82,10 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<StorageIndex> &bound_columns, Expression &cast_expr,
 	          optional_ptr<BoundConstraint> constraint_to_verify = nullptr);
-	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
+	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint.
+	//! Throws if the parent has more than max_index_count built indexes.
+	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint,
+	          optional_idx max_index_count = optional_idx());
 
 	//! A reference to the database instance
 	AttachedDatabase &db;
