@@ -93,3 +93,24 @@ SELECT * FROM glob('http://127.0.0.1:1/allowed/{path}');
 Permission Error: Cannot access file
 
 endloop
+
+# S3-style object stores send a '%' in a key as "%25", so an escaped separator is part of the key name, as in the
+# Hive partition directory of the value 'a/../b'
+foreach path p=a%2F..%2Fb/data.parquet p=x%2F../data.parquet p=..%2F..%2F../data.parquet sub%2f..%2f..%2fprivate
+
+statement error
+SELECT * FROM glob('s3://bucket.name/allowed/{path}');
+----
+<REGEX>:.*(requires the extension|has been disabled by configuration).*
+
+endloop
+
+# Literal and encoded-dot parent segments are still refused
+foreach path .. ../private sub/../../private sub%2f../../private .%2e/private %2e%2e/private
+
+statement error
+SELECT * FROM glob('s3://bucket.name/allowed/{path}');
+----
+Permission Error: Cannot access file
+
+endloop
