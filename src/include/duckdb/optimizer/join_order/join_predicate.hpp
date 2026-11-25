@@ -60,6 +60,9 @@ public:
 	bool HasValidEqualityBindings() const;
 	bool CanBuildEqualityClosure() const;
 	bool CanBuildSelectivityDomain() const;
+	bool IsResidualFilter() const;
+	//! Whether the join model accounts for this filter's selectivity.
+	bool HasSelectivityEstimate() const;
 	bool IsEquivalencePredicate() const;
 	void SetEqualityClassIndex(optional_idx equality_class_index);
 	optional_idx GetEqualityClassIndex() const;

@@ -171,9 +171,9 @@ static vector<unique_ptr<DPJoinNode>> EnumerateAlternatives(QueryGraphManager &g
 						continue;
 					}
 					auto rows = estimator.EstimateCardinality(set);
-					auto node = make_uniq<DPJoinNode>(
-					    set, edge.join_operator, edge.predicates, edge.generated_cross_product, left->set, right->set,
-					    costs.ComputeCost(*left, *right, edge.join_operator, rows.GetDouble()));
+					auto node = make_uniq<DPJoinNode>(set, edge.join_operator, edge.predicates,
+					                                  edge.generated_cross_product, left->set, right->set,
+					                                  costs.ComputeCost(*left, *right, edge.join_operator, set));
 					node->cardinality = rows;
 					result.push_back(std::move(node));
 				}

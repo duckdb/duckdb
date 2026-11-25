@@ -16,14 +16,16 @@ CardinalityEstimator &CostModel::GetCardinalityEstimator() {
 }
 
 double CostModel::ComputeCost(const DPJoinNode &left, const DPJoinNode &right,
-                              optional_ptr<JoinOrderOperator> join_operator, double output_rows) {
-	auto input_cost =
-	    join_operator && join_operator->type == JoinOrderOperatorType::LEFT ? right.cardinality.GetDouble() : 0;
+                              optional_ptr<JoinOrderOperator> join_operator, JoinRelationSet &output) {
+	auto input_cost = join_operator && join_operator->type == JoinOrderOperatorType::LEFT
+	                      ? cardinality_estimator.EstimateCardinalityForCost(right.set).GetDouble()
+	                      : 0;
+	auto output_rows = cardinality_estimator.EstimateCardinalityForCost(output).GetDouble();
 	return left.cost + right.cost + input_cost + output_rows;
 }
 
 double CostModel::ComputeCostLowerBound(const DPJoinNode &left, const DPJoinNode &right, double output_rows) {
-	return ComputeCost(left, right, nullptr, output_rows);
+	return left.cost + right.cost + output_rows;
 }
 
 void CostModel::InitializeRecursiveMemory(ClientContext &context, RelationManager &relations) {

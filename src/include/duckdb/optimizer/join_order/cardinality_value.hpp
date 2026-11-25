@@ -17,7 +17,8 @@ namespace duckdb {
 //! Inputs are finite nonnegative row/domain counts or selectivity factors; only accumulated products need extra range.
 class CardinalityValue {
 public:
-	explicit CardinalityValue(double value = 1) : CardinalityValue(Product(value), Product(1)) {
+	// Scalar inputs can widen to a scaled point; materializing a point remains explicit.
+	CardinalityValue(double value = 1) : CardinalityValue(Product(value), Product(1)) { // NOLINT
 	}
 
 	bool IsZero() const {
@@ -59,13 +60,27 @@ public:
 		return value >= static_cast<double>(maximum) ? maximum : static_cast<idx_t>(value);
 	}
 
-	CardinalityValue operator*(const CardinalityValue &other) const {
-		return CardinalityValue(numerator * other.numerator, Product(denominator * other.denominator));
+	friend CardinalityValue operator*(const CardinalityValue &left, const CardinalityValue &right) {
+		return CardinalityValue(left.numerator * right.numerator, Product(left.denominator * right.denominator));
 	}
 
-	CardinalityValue operator/(const CardinalityValue &other) const {
-		D_ASSERT(!other.IsZero());
-		return CardinalityValue(numerator * other.denominator, other.numerator * denominator);
+	friend CardinalityValue operator/(const CardinalityValue &left, const CardinalityValue &right) {
+		D_ASSERT(!right.IsZero());
+		return CardinalityValue(left.numerator * right.denominator, right.numerator * left.denominator);
+	}
+
+	friend CardinalityValue operator+(const CardinalityValue &left, const CardinalityValue &right) {
+		return CardinalityValue((left.numerator * right.denominator).Add(right.numerator * left.denominator, false),
+		                        Product(left.denominator * right.denominator));
+	}
+
+	//! Subtraction of nonnegative estimates, clamped at zero.
+	friend CardinalityValue operator-(const CardinalityValue &left, const CardinalityValue &right) {
+		if (!(left > right)) {
+			return CardinalityValue(0);
+		}
+		return CardinalityValue((left.numerator * right.denominator).Add(right.numerator * left.denominator, true),
+		                        Product(left.denominator * right.denominator));
 	}
 
 	CardinalityValue &operator*=(const CardinalityValue &other) {
@@ -73,12 +88,33 @@ public:
 		return *this;
 	}
 
-	bool operator>(const CardinalityValue &other) const {
-		return numerator * other.denominator > other.numerator * denominator;
+	CardinalityValue &operator+=(const CardinalityValue &other) {
+		*this = *this + other;
+		return *this;
 	}
 
-	bool operator<(const CardinalityValue &other) const {
-		return other > *this;
+	friend bool operator>(const CardinalityValue &left, const CardinalityValue &right) {
+		return left.numerator * right.denominator > right.numerator * left.denominator;
+	}
+
+	friend bool operator<(const CardinalityValue &left, const CardinalityValue &right) {
+		return right > left;
+	}
+
+	friend bool operator==(const CardinalityValue &left, const CardinalityValue &right) {
+		return !(left > right) && !(right > left);
+	}
+
+	friend bool operator!=(const CardinalityValue &left, const CardinalityValue &right) {
+		return !(left == right);
+	}
+
+	friend bool operator<=(const CardinalityValue &left, const CardinalityValue &right) {
+		return !(left > right);
+	}
+
+	friend bool operator>=(const CardinalityValue &left, const CardinalityValue &right) {
+		return !(left < right);
 	}
 
 private:
@@ -102,6 +138,28 @@ private:
 			Product result(significand * other);
 			if (result.significand != 0) {
 				result.exponent += exponent;
+			}
+			return result;
+		}
+
+		Product Add(const Product &other, bool subtract) const {
+			if (other.significand == 0) {
+				return *this;
+			}
+			if (significand == 0) {
+				D_ASSERT(!subtract);
+				return other;
+			}
+			auto common_exponent = MaxValue(exponent, other.exponent);
+			auto scale = [&](const Product &value) {
+				auto distance = common_exponent - value.exponent;
+				return distance > std::numeric_limits<double>::digits
+				           ? 0.0
+				           : std::ldexp(value.significand, -static_cast<int>(distance));
+			};
+			Product result(scale(*this) + (subtract ? -scale(other) : scale(other)));
+			if (result.significand != 0) {
+				result.exponent += common_exponent;
 			}
 			return result;
 		}

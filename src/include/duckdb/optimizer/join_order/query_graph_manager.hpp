@@ -22,6 +22,7 @@
 namespace duckdb {
 
 class QueryGraphEdges;
+class CardinalityEstimator;
 
 struct GenerateJoinRelation {
 public:
@@ -45,11 +46,13 @@ public:
 	bool Build(JoinOrderOptimizer &optimizer, LogicalOperator &op);
 	//! Prepare an inner-join region without mutating or enumerating its plan.
 	bool BuildForEstimation(RelationStatsExtractor &extractor, LogicalOperator &op);
-	optional<RelationStats> CombineRelationStats(const vector<ColumnBinding> &bindings,
-	                                             const vector<RelationStats> &relation_stats,
-	                                             idx_t root_cardinality) const;
+	optional<RelationStats> ProjectStats(CardinalityEstimator &estimator, JoinRelationSet &set,
+	                                     const vector<ColumnBinding> &bindings) const;
+	//! Project a complete region through its original unary ancestors without reconstructing the join order.
+	optional<RelationStats> ProjectRetainedStats(CardinalityEstimator &estimator, JoinRelationSet &set,
+	                                             LogicalOperator &plan, bool update_estimates = false);
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
-	GenerateJoinRelation Reconstruct(unique_ptr<LogicalOperator> plan, const vector<RelationStats> &relation_stats);
+	GenerateJoinRelation Reconstruct(unique_ptr<LogicalOperator> plan, CardinalityEstimator &estimator);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 	//! Admit original cross-product edges when the current hyperedges cannot complete enumeration.
@@ -68,9 +71,6 @@ public:
 	const vector<unique_ptr<JoinOrderOperator>> &GetJoinOperators() const;
 
 private:
-	optional<RelationStats> CombineRelationStats(const vector<ColumnBinding> &bindings,
-	                                             const vector<reference<const RelationStats>> &inputs,
-	                                             idx_t root_cardinality) const;
 	void PreparePredicateModel(LogicalOperator &op);
 	void GetColumnBinding(const Expression &expression, ColumnBinding &binding);
 	void GetEquivalenceBinding(const Expression &expression, ColumnBinding &binding);
@@ -82,14 +82,17 @@ private:
 	void BuildPredicateModel();
 	void BuildLeftJoinPredicates();
 	void BuildInnerCompanionSets();
+	expression_set_t GetExtractedFilterExpressions() const;
 	void ClearExtractedExpressions();
 	vector<reference<FilterInfo>> GetPendingFilters(JoinRelationSet &root) const;
+	RelationStats ApplyAncestorStats(const vector<reference<LogicalOperator>> &ancestors, RelationStats stats,
+	                                 bool retain_expressions, bool update_estimates);
 	idx_t FindGraphComponent(RelationIndex relation);
 	idx_t GetGraphComponent(RelationIndex relation) const;
 	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
-	                                   const vector<RelationStats> &relation_stats,
+	                                   CardinalityEstimator &estimator,
 	                                   const vector<reference<FilterInfo>> &pending_filters);
 
 public:
@@ -107,6 +110,7 @@ private:
 	//! Filter information including the column_bindings that join filters
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
+	expression_set_t extracted_filter_expressions;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
 	//! Only these operator occurrences can restrict a candidate join.
 	vector<reference<const JoinOrderOperator>> candidate_constraints;
