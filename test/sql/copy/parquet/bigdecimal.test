@@ -30,7 +30,8 @@ SELECT bigdec::DOUBLE FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 5.7896044618658096e+38
 -5.7896044618658096e+38
 
-# avg sums exactly and returns DOUBLE, the interpolating median computes through DOUBLE
+# avg sums exactly and returns DOUBLE, the interpolating median is a DECIMAL: the middle values -0.5 and 0.5 are
+# interpolated exactly
 query I
 SELECT avg(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
@@ -39,7 +40,12 @@ SELECT avg(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 query I
 SELECT median(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
-0.0
+0.00000000000000000000000000000000000000
+
+query I
+SELECT typeof(median(bigdec)) = typeof(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet' GROUP BY typeof(bigdec)
+----
+true
 
 query I
 SELECT round(bigdec, 1) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'

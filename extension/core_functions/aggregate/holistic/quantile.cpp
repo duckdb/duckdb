@@ -174,13 +174,16 @@ string_t QuantileCast::Operation(const string_t &src, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Quantile Interpolation
 //===--------------------------------------------------------------------===//
-//! The delta between two wide decimals scaled by the interpolation fraction and truncated towards zero, as the hugeint
-//! tier computes it in DOUBLE; a delta beyond the DOUBLE range applies the fraction exactly as mantissa / 2^shift
+//! The delta between two wide decimals scaled by the interpolation fraction and truncated towards zero.
+//! A delta that a DOUBLE holds exactly is scaled in DOUBLE, as the hugeint tier computes it, so that the same values in
+//! a fixed-size and in a wide decimal interpolate to the same result. Any other delta (one that needs more than 53
+//! bits, where the DOUBLE of the hugeint tier is already inexact, or one beyond the DOUBLE range) applies the fraction
+//! exactly as mantissa / 2^shift: the median of -0.5 and 0.5 at scale 38 is exactly 0
 static string ScaleWideDecimalDelta(const bignum_t &delta, const double d, StringHeap &heap,
                                     BignumArithmeticState &state) {
-	const auto scaled = DecimalHelper<bignum_t>::ToDouble(delta, 0) * d;
-	if (std::isfinite(scaled)) {
-		return DecimalHelper<bignum_t>::FromDouble(std::trunc(scaled));
+	const auto delta_double = DecimalHelper<bignum_t>::ToDouble(delta, 0);
+	if (std::isfinite(delta_double) && string_t(DecimalHelper<bignum_t>::FromDouble(delta_double)) == delta.data) {
+		return DecimalHelper<bignum_t>::FromDouble(std::trunc(delta_double * d));
 	}
 	int exponent;
 	const double fraction = std::frexp(d, &exponent);
@@ -206,7 +209,7 @@ static string ScaleWideDecimalDelta(const bignum_t &delta, const double d, Strin
 }
 
 //! The bignum_t tier of decimals interpolates like the hugeint tier: the exact delta between the two values is scaled
-//! by the fraction and truncated towards zero
+//! by the fraction and truncated towards zero - see ScaleWideDecimalDelta for the deltas a DOUBLE does not hold
 template <>
 string_t QuantileInterpolate::Operation(const string_t &lo, const double d, const string_t &hi, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::DECIMAL);
