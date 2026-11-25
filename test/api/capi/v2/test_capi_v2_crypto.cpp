@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <string>
+#include <memory>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -271,7 +272,8 @@ struct ProviderStats {
 	idx_t last_aad_length = 0;
 	std::vector<idx_t> iv_lengths;
 	bool fail_init = false;
-	bool *destroyed = nullptr;
+	//! Set when the user data is destroyed; shared, as the instance may outlive the test that checks it
+	std::shared_ptr<bool> destroyed;
 };
 
 struct XorStream {
@@ -578,11 +580,12 @@ TEST_CASE("V2 crypto provider: registration rules", "[capi_v2][crypto]") {
 	duckdb_v2_crypto_provider_destroy(&foreign);
 
 	// Only one provider can be registered.
-	bool destroyed_first = false, destroyed_second = false;
+	auto destroyed_first = std::make_shared<bool>(false);
+	auto destroyed_second = std::make_shared<bool>(false);
 	auto first_stats = new ProviderStats();
-	first_stats->destroyed = &destroyed_first;
+	first_stats->destroyed = destroyed_first;
 	auto second_stats = new ProviderStats();
-	second_stats->destroyed = &destroyed_second;
+	second_stats->destroyed = destroyed_second;
 	auto first = MakeProvider(fx.factory, first_stats);
 	auto second = MakeProvider(fx.factory, second_stats);
 	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, first, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -591,8 +594,8 @@ TEST_CASE("V2 crypto provider: registration rules", "[capi_v2][crypto]") {
 	duckdb_v2_crypto_provider_destroy(&second);
 
 	// The unregistered provider frees its user data with the handle, the registered one with the instance.
-	REQUIRE(destroyed_second);
-	REQUIRE_FALSE(destroyed_first);
+	REQUIRE(*destroyed_second);
+	REQUIRE_FALSE(*destroyed_first);
 	// (the fixture of `fx` is destroyed at the end of the scope)
 }
 

@@ -232,6 +232,14 @@ functions:
       name is resolved exactly as written, with no system-catalog fallback, so
       it names the type in that catalog or schema or fails.
 
+      The width of a DECIMAL, also one nested in another type, is bounded by
+      the max_decimal_width setting of the factory's connection, and by the
+      default of that setting, 1000000, for an instance's factory, which has no
+      settings: the time and memory a wide decimal takes grow with its width.
+      A wider type returns ERROR_INPUT_INVALID; create it with the factory of a
+      connection that raised the setting. factory_create_type_from_id and
+      factory_create_type_from_text apply the same bound.
+
       Parameters are (name, value) pairs in two parallel arrays. param_names
       may be NULL to make every parameter positional, and an empty entry
       makes that one parameter positional. Child types cross as TYPE values,
