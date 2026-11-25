@@ -54,6 +54,9 @@ public:
 	static bool ContainsNull(vector<Value> &in_list);
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
+	//! Simplify already-admitted scan predicates, inheriting required evaluation when an optional bound replaces one.
+	//! On contradiction, return UNSATISFIABLE without modifying the offending column's filter.
+	static FilterResult CombineScanFilters(TableFilterSet &table_filters);
 	bool HasFilters();
 	void GenerateEquivalentFilters(const Expression &filter,
 	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
@@ -66,8 +69,9 @@ public:
 	static void GenerateJoinFilters(const vector<JoinCondition> &conditions,
 	                                const vector<reference<const Expression>> &filters, JoinSide target_side,
 	                                const std::function<void(unique_ptr<Expression> filter)> &callback);
-	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
-	                                        vector<FilterPushdownResult> &pushdown_results);
+	//! Append generated filters to the scan's existing filters.
+	void GenerateTableScanFilters(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                              vector<FilterPushdownResult> &pushdown_results);
 
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 

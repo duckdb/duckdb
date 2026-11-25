@@ -35,6 +35,29 @@
 
 namespace duckdb {
 
+bool ExpressionFilter::IsNativeInFilter(const Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &children = expr.Cast<BoundOperatorExpression>().GetChildren();
+	if (children.size() < 2 || children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    children[0]->Cast<BoundReferenceExpression>().Index() != 0) {
+		return false;
+	}
+	const auto type = children[0]->GetReturnType().InternalType();
+	if (!TypeIsNumeric(type) && type != PhysicalType::BOOL && type != PhysicalType::VARCHAR &&
+	    type != PhysicalType::INTERVAL) {
+		return false;
+	}
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[i]->GetReturnType().InternalType() != type) {
+			return false;
+		}
+	}
+	return true;
+}
+
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p) : ExpressionFilter(std::move(expr_p), {}) {
 }
 
@@ -146,7 +169,7 @@ static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_th
 	return true;
 }
 
-static bool ContainsInternalTableFilterFunction(const Expression &expr) {
+bool ExpressionFilter::ContainsInternalTableFilterFunction(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
@@ -948,6 +971,10 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 
 bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
 	return IsOptionalExpressionInternal(expr, true, true);
+}
+
+bool ExpressionFilter::IsPruningOnlyExpression(const Expression &expr) {
+	return IsOptionalExpressionInternal(expr, true, false);
 }
 
 bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {

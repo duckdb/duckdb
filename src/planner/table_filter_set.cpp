@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
@@ -23,27 +24,6 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
-
-static bool ContainsInternalTableFilterFunction(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
-			return true;
-		}
-		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
-		if (optional_child && ContainsInternalTableFilterFunction(*optional_child)) {
-			return true;
-		}
-	}
-	bool found = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (found) {
-			return;
-		}
-		found = ContainsInternalTableFilterFunction(child);
-	});
-	return found;
-}
 
 static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expression &expr);
 
@@ -257,7 +237,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}
-	if (ContainsInternalTableFilterFunction(expr)) {
+	if (ExpressionFilter::ContainsInternalTableFilterFunction(expr)) {
 		return nullptr;
 	}
 	auto normalized_expr = expr.Copy();
@@ -565,6 +545,8 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	if (!result->HasFilters() && !result->HasMultiColumnFilters()) {
 		return nullptr;
 	}
+	// Work only on this execution's copy. Contradictions can safely retain their original scan predicates.
+	FilterCombiner::CombineScanFilters(*result);
 	return result;
 }
 
