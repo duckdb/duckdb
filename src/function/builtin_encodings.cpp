@@ -29,9 +29,12 @@ void DecodeLatin1ToUTF8(const char *input, idx_t input_size, bool is_last, char 
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 uint16_t LoadUTF16(const char *input, idx_t pos) {
-	return static_cast<uint16_t>(static_cast<unsigned char>(input[pos]) |
-	                             (static_cast<unsigned char>(input[pos + 1]) << 8));
+	const auto first = static_cast<unsigned char>(input[pos]);
+	const auto second = static_cast<unsigned char>(input[pos + 1]);
+	return BIG_ENDIAN_ORDER ? static_cast<uint16_t>((first << 8) | second)
+	                        : static_cast<uint16_t>(first | (second << 8));
 }
 
 void EncodeUTF8ToLatin1(const char *input, idx_t input_size, char *output, idx_t &written) {
@@ -64,12 +67,13 @@ void EncodeUTF8ToLatin1(const char *input, idx_t input_size, char *output, idx_t
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 void EncodeUTF8ToUTF16(const char *input, idx_t input_size, char *output, idx_t &written) {
 	idx_t out = 0;
 	idx_t pos = 0;
 	auto store = [&](uint16_t unit) {
-		output[out++] = static_cast<char>(unit & 0xFF);
-		output[out++] = static_cast<char>(unit >> 8);
+		output[out++] = static_cast<char>(BIG_ENDIAN_ORDER ? unit >> 8 : unit & 0xFF);
+		output[out++] = static_cast<char>(BIG_ENDIAN_ORDER ? unit & 0xFF : unit >> 8);
 	};
 	while (pos < input_size) {
 		const auto lead = static_cast<unsigned char>(input[pos]);
@@ -109,6 +113,7 @@ void EncodeUTF8ToUTF16(const char *input, idx_t input_size, char *output, idx_t 
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
                        idx_t &written) {
 	idx_t pos = 0;
@@ -120,7 +125,7 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 			}
 			break;
 		}
-		const uint16_t ch = LoadUTF16(input, pos);
+		const uint16_t ch = LoadUTF16<BIG_ENDIAN_ORDER>(input, pos);
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
 			if (ch >= 0xDC00) {
 				// low surrogate without a preceding high surrogate
@@ -133,7 +138,7 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 				// the low surrogate follows in the next buffer
 				break;
 			}
-			const uint16_t low = LoadUTF16(input, pos + 2);
+			const uint16_t low = LoadUTF16<BIG_ENDIAN_ORDER>(input, pos + 2);
 			if (low < 0xDC00 || low > 0xDFFF) {
 				throw InvalidInputException("Input is not valid UTF-16");
 			}
@@ -180,13 +185,21 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	};
 	decode_t utf16_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
 	                           idx_t &written) {
-		DecodeUTF16ToUTF8(input, input_size, is_last, output, consumed, written);
+		DecodeUTF16ToUTF8<false>(input, input_size, is_last, output, consumed, written);
 	};
 	encode_t utf16_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
-		EncodeUTF8ToUTF16(input, input_size, output, written);
+		EncodeUTF8ToUTF16<false>(input, input_size, output, written);
+	};
+	decode_t utf16_be_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                              idx_t &written) {
+		DecodeUTF16ToUTF8<true>(input, input_size, is_last, output, consumed, written);
+	};
+	encode_t utf16_be_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
+		EncodeUTF8ToUTF16<true>(input, input_size, output, written);
 	};
 	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2),
-	                  EncodingFunction::Create("utf-16", utf16_decode, utf16_encode, 4, 2)}) {
+	                  EncodingFunction::Create("utf-16", utf16_decode, utf16_encode, 4, 2),
+	                  EncodingFunction::Create("utf-16be", utf16_be_decode, utf16_be_encode, 4, 2)}) {
 		CreateScalarFunctionInfo info(set);
 		EncodingFunction::SetSchema(info);
 		info.internal = true;

@@ -85,6 +85,10 @@ private:
 private:
 	//! Decodes the encoded buffer into the output buffer until either one is exhausted
 	idx_t DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t output_size);
+	//! Binds the streaming overload of the encoding's scalar function as the decoder
+	shared_ptr<const ScalarFunction> BindDecoder(ClientContext &context, ScalarFunctionCatalogEntry &entry);
+	//! Switches a utf-16 decoder to big-endian if the file starts with a big-endian byte order mark
+	void DetectByteOrder();
 	//! Runs the encoding's scalar function over the input, returns the number of bytes consumed
 	idx_t Decode(const char *input, idx_t input_size, bool is_last, string &decoded);
 };

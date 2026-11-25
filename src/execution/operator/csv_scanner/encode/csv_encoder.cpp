@@ -65,13 +65,7 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 		throw InvalidInputException(error.str());
 	}
 
-	// Bind the streaming overload: decode_<name>(encoded BLOB, is_last BOOLEAN)
-	auto function = entry->functions.GetFunctionByArguments(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN});
-	vector<unique_ptr<Expression>> children;
-	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0));
-	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BOOLEAN, 1));
-	decode_expression = function->Bind(context_p, std::move(children));
-	decode_executor = make_uniq<ExpressionExecutor>(context_p, *decode_expression);
+	auto function = BindDecoder(context_p, *entry);
 	decode_input.Initialize(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN}, 1);
 
 	auto window = function->GetProperties().GetProperty(EncodingFunction::MINIMUM_INPUT_WINDOW_PROPERTY);
@@ -80,6 +74,28 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	}
 	// The encoded buffer is even for utf-16, and fits a full input window plus the probe byte
 	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, 2 * minimum_input_window + 2));
+}
+
+shared_ptr<const ScalarFunction> CSVEncoder::BindDecoder(ClientContext &context_p, ScalarFunctionCatalogEntry &entry) {
+	// Bind the streaming overload: decode_<name>(encoded BLOB, is_last BOOLEAN)
+	auto function = entry.functions.GetFunctionByArguments(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN});
+	vector<unique_ptr<Expression>> children;
+	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0));
+	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BOOLEAN, 1));
+	decode_expression = function->Bind(context_p, std::move(children));
+	decode_executor = make_uniq<ExpressionExecutor>(context_p, *decode_expression);
+	return function;
+}
+
+void CSVEncoder::DetectByteOrder() {
+	// A utf-16 file that starts with a big-endian byte order mark is decoded as utf-16be
+	if (encoding_name != "utf-16" || encoded_buffer.GetSize() < 2 ||
+	    static_cast<unsigned char>(encoded_buffer.Ptr()[0]) != 0xFE ||
+	    static_cast<unsigned char>(encoded_buffer.Ptr()[1]) != 0xFF) {
+		return;
+	}
+	auto &client_context = *context.GetClientContext();
+	BindDecoder(client_context, *EncodingFunction::Find(client_context, "utf-16be"));
 }
 
 void CSVEncoder::Reset() {
@@ -154,6 +170,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 	// 3. a new encoded buffer from the file
 	while (output_buffer_pos < decoded_buffer_size) {
 		idx_t current_decoded_buffer_start = output_buffer_pos;
+		const bool file_start = encoded_bytes_read == 0;
 		// An incomplete character at the end of the buffer is moved to the start of the next buffer
 		const idx_t tail_size = encoded_buffer.GetSize() - encoded_buffer.cur_pos;
 		memmove(encoded_buffer.Ptr(), encoded_buffer.Ptr() + encoded_buffer.cur_pos, tail_size);
@@ -178,6 +195,9 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 			} else {
 				has_pass_on_byte = true;
 			}
+		}
+		if (file_start) {
+			DetectByteOrder();
 		}
 		output_buffer_pos = DecodeBuffer(output_buffer, output_buffer_pos, decoded_buffer_size);
 		if (output_buffer_pos == current_decoded_buffer_start) {
