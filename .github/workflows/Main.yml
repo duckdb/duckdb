@@ -908,6 +908,11 @@ jobs:
     - name: Run all release unit tests
       run: make allunit T="--test-flags='--thread-stack-size 131072'"
 
+    - name: Test runner regressions
+      env:
+        DUCKDB_TEST_BINARY: build/release/duckdb
+      run: python -m unittest scripts.ci.test_test_extension
+
     - name: Tools Tests
       run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
