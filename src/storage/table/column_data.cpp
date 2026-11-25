@@ -357,6 +357,9 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 		return;
 	}
 	const idx_t offset = NumericCast<idx_t>(row_id);
+	if (offset > count) {
+		throw InternalException("ColumnData::FetchUpdateRow - row_id out of range");
+	}
 	updates_ref->FetchRows(transaction, &offset, *FlatVector::IncrementalSelectionVector(), 1, result, result_idx);
 }
 
@@ -409,6 +412,7 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(offset_in_row_group + s_count <= count);
 		result.Flatten();
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
@@ -981,6 +985,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 
 	if (updates) {
 		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(state.offset_in_column + count <= this->count);
 		updates->FetchCommittedRange(state.offset_in_column, count, scan_vector);
 	}
 }
