@@ -40,6 +40,36 @@ SELECT round((repeat('9', 200) || '.' || repeat('9', 55))::DECIMAL(255,55), 54) 
 ----
 true
 
+# so does a round at the top digit of the widest fixed-size decimal
+query III
+SELECT round(repeat('9', 38)::DECIMAL(38,0), -1) = ('1' || repeat('0', 38))::DECIMAL(39,0), typeof(round(repeat('9', 38)::DECIMAL(38,0), -1)), typeof(round_even(repeat('9', 38)::DECIMAL(38,0), -5))
+----
+true	DECIMAL(39,0)	DECIMAL(39,0)
+
+# the values of a column, across the carry and through a serialized plan
+statement ok
+SET debug_verify_serializer = true;
+
+query III
+SELECT x, round(x, -1), round_even(x, -2)
+FROM (SELECT v::DECIMAL(38,0) AS x FROM (VALUES (repeat('9', 38)), ('-' || repeat('9', 38)), ('125'), ('-135'), ('250'), (NULL)) t(v)) ORDER BY x NULLS LAST
+----
+-99999999999999999999999999999999999999	-100000000000000000000000000000000000000	-100000000000000000000000000000000000000
+-135	-140	-100
+125	130	100
+250	250	200
+99999999999999999999999999999999999999	100000000000000000000000000000000000000	100000000000000000000000000000000000000
+NULL	NULL	NULL
+
+statement ok
+RESET debug_verify_serializer;
+
+# trunc, ceil and floor have no carry
+query II
+SELECT typeof(trunc(repeat('9', 38)::DECIMAL(38,0), -1)), trunc(repeat('9', 38)::DECIMAL(38,0), -1)
+----
+DECIMAL(38,0)	99999999999999999999999999999999999990
+
 # the carry of a wide decimal always has room
 query II
 SELECT round(repeat('9', 255)::DECIMAL(255,0), -1) = ('1' || repeat('0', 255))::DECIMAL(256,0), typeof(round(repeat('9', 255)::DECIMAL(255,0), -1))

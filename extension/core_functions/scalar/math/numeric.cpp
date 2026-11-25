@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -702,6 +703,19 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 	OP::template Operation<T>(input, state, result);
 }
 
+//! Rounds a DECIMAL(38,0) into the bignum_t tier, where the carry of its top digit has room. The argument keeps its
+//! type, so that binding the function again (when a plan is deserialized) resolves the same types, and its values are
+//! widened here
+template <class OP>
+void WidenedRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
+	Vector widened(result.GetType(), input.size());
+	auto &heap = StringVector::GetStringHeap(widened);
+	UnaryExecutor::Execute<hugeint_t, string_t>(input.data[0], widened, input.size(), [&](hugeint_t value) {
+		return HugeintCastToBignum::Operation<hugeint_t>(value, heap).data;
+	});
+	OP::template RoundVector<bignum_t>(widened, input.size(), state, result);
+}
+
 //! Resolves the types and the function of a decimal round with a precision, given the original decimal type
 template <typename NEGOP, typename POSOP, bool CAN_CARRY>
 unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &decimal_width_limit,
@@ -720,11 +734,12 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &d
 	if (round_value < 0) {
 		target_scale = 0;
 		if (CAN_CARRY && scale == 0 && int64_t(round_value) >= -int64_t(width)) {
-			// a fixed-size decimal stays in the fixed-size tiers (a carry out of 38 digits overflows), a wide decimal
-			// grows by the carry digit
+			// the result grows by the carry digit: a fixed-size decimal within the widest DECIMAL the session binds (a
+			// carry out of 38 digits overflows in a session bound to the fixed-size decimals), a wide decimal has to
+			// fit that width
 			if (Decimal::IsWide(width)) {
 				result_width = decimal_width_limit.CheckedWidth(idx_t(result_width) + 1, width, "Rounding");
-			} else if (result_width < Decimal::MAX_WIDTH_INT128) {
+			} else if (result_width < decimal_width_limit.ResultWidth(width)) {
 				result_width++;
 			}
 		}
@@ -743,10 +758,15 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(const DecimalWidthLimit &d
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, NEGOP>);
 			break;
 		default:
-			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<bignum_t, NEGOP>);
+			if (Decimal::IsWide(width)) {
+				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<bignum_t, NEGOP>);
+			} else {
+				// the carry of a DECIMAL(38,0): the argument is widened at execution
+				bound_function.SetFunctionCallback(WidenedRoundPrecisionDecimal<NEGOP>);
+			}
 			break;
 		}
-		if (result_type.InternalType() != decimal_type.InternalType()) {
+		if (result_type.InternalType() != decimal_type.InternalType() && !Decimal::IsWide(result_width)) {
 			argument_type = LogicalType::DECIMAL(result_width, scale);
 		}
 	} else {
@@ -833,6 +853,11 @@ struct DecimalRoundNegativePrecisionOperator {
 
 	template <class T>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		RoundVector<T>(input.data[0], input.size(), state, result);
+	}
+
+	template <class T>
+	static void RoundVector(Vector &source, idx_t count, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
@@ -841,10 +866,10 @@ struct DecimalRoundNegativePrecisionOperator {
 		if (drop_digits > info.source_width) {
 			// more digits than the values hold are dropped, which leaves less than a tenth: every value rounds to zero
 			const auto zero = DecimalHelper<T>::Store(result, DecimalHelper<T>::FromInteger(hugeint_t(0)));
-			UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T) { return zero; });
+			UnaryExecutor::Execute<T, T>(source, result, count, [&](T) { return zero; });
 			return;
 		}
-		RoundDecimalVector<T, ROUNDING>(input.data[0], result, input.size(), drop_digits, restore_digits, NAME, state);
+		RoundDecimalVector<T, ROUNDING>(source, result, count, drop_digits, restore_digits, NAME, state);
 	}
 };
 

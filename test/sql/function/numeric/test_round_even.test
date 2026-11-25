@@ -116,11 +116,23 @@ SELECT round_even(9999::DECIMAL(4,0), -1), typeof(round_even(9999::DECIMAL(4,0),
 ----
 10000	DECIMAL(5,0)
 
-# at the maximum width overflows
+# at the widest fixed-size decimal the carry widens to a decimal beyond 38 digits
+query II
+SELECT round_even(99999999999999999999999999999999999995::DECIMAL(38,0), -1), typeof(round_even(99999999999999999999999999999999999995::DECIMAL(38,0), -1))
+----
+100000000000000000000000000000000000000	DECIMAL(39,0)
+
+# in a session bound to the fixed-size decimals the carry overflows
+statement ok
+SET max_decimal_width = 38;
+
 statement error
 SELECT round_even(99999999999999999999999999999999999995::DECIMAL(38,0), -1)
 ----
 Overflow in ROUND_EVEN of DECIMAL(38)
+
+statement ok
+RESET max_decimal_width;
 
 # hugeint-backed DECIMAL
 query II
