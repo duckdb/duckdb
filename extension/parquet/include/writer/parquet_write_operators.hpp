@@ -413,6 +413,49 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	}
 };
 
+//! Writes HUGEINT (sign-extended) and UHUGEINT (zero-extended) as the 17 big-endian two's complement bytes of a
+//! DECIMAL(39,0)
+struct ParquetHugeintDecimalOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		TGT result;
+		const auto upper = static_cast<uint64_t>(input.upper);
+		const bool negative = std::is_signed<decltype(input.upper)>::value && (upper >> 63) != 0;
+		result.bytes[0] = negative ? 0xFF : 0x00;
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			const auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result.bytes[1 + i] = (upper >> shift_count) & 0xFF;
+			result.bytes[1 + sizeof(uint64_t) + i] = (input.lower >> shift_count) & 0xFF;
+		}
+		return result;
+	}
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, ParquetHugeintDecimalTargetType::PARQUET_SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &target_value) {
+		return ParquetHugeintDecimalTargetType::PARQUET_SIZE;
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, ParquetHugeintDecimalTargetType::PARQUET_SIZE, 0);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<HugeintDecimalStatisticsState>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
+		stats_p->Cast<HugeintDecimalStatisticsState>().Update(target_value);
+	}
+};
+
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
@@ -433,38 +476,6 @@ struct ParquetTimeTZOperator : public BaseParquetOperator {
 		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
 			numeric_stats.max = target_value;
 		}
-	}
-};
-
-struct ParquetHugeintOperator : public BaseParquetOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Hugeint::Cast<double>(input);
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<ColumnWriterStatistics>();
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
-	}
-};
-
-struct ParquetUhugeintOperator : public BaseParquetOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Uhugeint::Cast<double>(input);
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<ColumnWriterStatistics>();
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
 };
 

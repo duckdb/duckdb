@@ -82,3 +82,55 @@ query I
 SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/byte_array_decimal_gt38.parquet') WHERE x < 1
 ----
 1
+
+# precision above 38 declared on INT32 / INT64 columns (the Parquet format allows at most 9 / 18 digits there):
+# the integers are read into a wide DECIMAL of the declared width, they are not turned into a DOUBLE
+query III
+SELECT typeof(d32), typeof(d64), typeof(dict32) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') LIMIT 1
+----
+DECIMAL(39,2)	DECIMAL(45,3)	DECIMAL(39,2)
+
+query IIIIIII
+SELECT min(d32), max(d32), count(d32), min(d64), max(d64), count(d64), count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet')
+----
+-14.99	14.99	2571	-1499000010.493	1499000010.493	2727	3000
+
+query III
+SELECT d32, d64, dict32 FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') LIMIT 4 OFFSET 1498
+----
+NULL	-2000000.014	1.00
+-0.01	-1000000.007	2.00
+0.00	0.000	-2.00
+0.01	1000000.007	-1.00
+
+# dictionary-encoded pages
+query II
+SELECT dict32, count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') GROUP BY dict32 ORDER BY dict32
+----
+-2.00	600
+-1.00	600
+0.00	600
+1.00	600
+2.00	600
+
+# the integer statistics of the two row groups agree with the data
+query II
+SELECT stats_min_value, stats_max_value FROM parquet_metadata('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE path_in_schema = 'd64' ORDER BY row_group_id
+----
+-1499000010.493	547000003.829
+548000003.836	1499000010.493
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d32 > 14.5
+----
+42
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d64 < -1499000000
+----
+1
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d32 = -0.01 AND d64 = -1000000.007
+----
+1

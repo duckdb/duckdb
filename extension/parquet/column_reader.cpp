@@ -1372,9 +1372,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 		}
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema);
 	case LogicalTypeId::DOUBLE:
-		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
-			return ParquetDecimalUtils::CreateReader(reader, schema);
-		}
 		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(reader, schema);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:

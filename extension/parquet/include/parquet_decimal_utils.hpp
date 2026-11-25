@@ -65,7 +65,4 @@ private:
 	[[noreturn]] static void ThrowInvalidDecimalEncoding();
 };
 
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size, const ParquetColumnSchema &schema);
-
 } // namespace duckdb

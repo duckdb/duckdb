@@ -60,7 +60,7 @@ ORDER BY ALL
 d	PLAIN_DICTIONARY	DICTIONARY_PAGE	1024
 f	PLAIN_DICTIONARY	DICTIONARY_PAGE	1024
 
-# nan_count is zero for NaN-free FLOAT/DOUBLE columns (including HUGEINT written as DOUBLE) and absent otherwise
+# nan_count is zero for NaN-free FLOAT/DOUBLE columns and absent otherwise (HUGEINT is written as a DECIMAL)
 statement ok
 COPY (SELECT i::FLOAT f, i::DOUBLE d, i::HUGEINT h, i FROM range(10) t(i)) TO '{TEST_DIR}/nan_count_zero.parquet'
 
@@ -71,7 +71,7 @@ ORDER BY ALL
 ----
 d	DOUBLE	0	0.0	9.0
 f	FLOAT	0	0.0	9.0
-h	DOUBLE	0	NULL	NULL
+h	FIXED_LEN_BYTE_ARRAY	NULL	0	9
 i	INT64	NULL	0	9
 
 # NaN values inside lists are counted, NULL and empty lists are not

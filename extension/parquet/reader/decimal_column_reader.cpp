@@ -32,43 +32,12 @@ static unique_ptr<ColumnReader> CreateDecimalReaderInternal(const ParquetReader 
 		return make_uniq<DecimalColumnReader<int64_t, FIXED>>(reader, schema);
 	case PhysicalType::INT128:
 		return make_uniq<DecimalColumnReader<hugeint_t, FIXED>>(reader, schema);
-	case PhysicalType::DOUBLE:
-		return make_uniq<DecimalColumnReader<double, FIXED>>(reader, schema);
 	case PhysicalType::VARCHAR:
 		// wide decimal stored as a BIGNUM blob
 		return make_uniq<WideDecimalColumnReader>(reader, schema);
 	default:
 		throw InternalException("Unrecognized type for Decimal");
 	}
-}
-
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
-                                             const ParquetColumnSchema &schema_ele) {
-	double res = 0;
-	if (size == 0) {
-		// empty byte array - value is zero, and there is no sign byte to read
-		return res;
-	}
-	bool positive = (*pointer & 0x80) == 0;
-	for (idx_t i = 0; i < size; i += sizeof(uint64_t)) {
-		// the trailing chunk can hold fewer than 8 bytes - scale by the bytes actually consumed
-		auto byte_size = MinValue<idx_t>(sizeof(uint64_t), size - i);
-		uint64_t input = 0;
-		for (idx_t k = 0; k < byte_size; k++) {
-			auto byte = pointer[i + k];
-			input = (input << 8) | static_cast<uint64_t>(positive ? byte : byte ^ 0xFF);
-		}
-		res = std::ldexp(res, static_cast<int>(8 * byte_size));
-		res += static_cast<double>(input);
-	}
-	if (!positive) {
-		res += 1;
-		res /= pow(10, schema_ele.type_scale);
-		return -res;
-	}
-	res /= pow(10, schema_ele.type_scale);
-	return res;
 }
 
 unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(const ParquetReader &reader,

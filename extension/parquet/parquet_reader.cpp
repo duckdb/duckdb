@@ -587,15 +587,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("Invalid DECIMAL precision %d and scale %d", s_ele.precision, s_ele.scale);
 			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
-			if (s_ele.precision > Decimal::MAX_WIDTH_INT128) {
-				// precisions above 38 become wide (BIGNUM-backed) decimals, other physical types fall back to DOUBLE
-				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
-				if (s_ele.type == Type::BYTE_ARRAY || s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
-					return LogicalType::DECIMAL(NumericCast<uint32_t>(s_ele.precision),
-					                            NumericCast<uint32_t>(s_ele.scale));
-				}
-				return LogicalType::DOUBLE;
-			}
+			// precisions above 38 become wide (BIGNUM-backed) decimals, whichever physical type holds the values
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
 			case Type::FIXED_LEN_BYTE_ARRAY:
