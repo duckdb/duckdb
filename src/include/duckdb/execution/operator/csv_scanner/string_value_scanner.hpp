@@ -324,9 +324,11 @@ public:
 		if (!state_machine.state_machine_options.LineRecords()) {
 			return false;
 		}
-		const auto inside = [](CSVState state) {
-			return state == CSVState::QUOTED || state == CSVState::ESCAPE || state == CSVState::FIELD_QUOTE ||
-			       state == CSVState::QUOTED_NO_FIELD || state == CSVState::ESCAPE_NO_FIELD;
+		const auto toggle = state_machine.state_machine_options.ToggleQuotes();
+		const auto inside = [toggle](CSVState state) {
+			return state == CSVState::QUOTED || state == CSVState::ESCAPE ||
+			       (toggle && (state == CSVState::FIELD_QUOTE || state == CSVState::QUOTED_NO_FIELD ||
+			                   state == CSVState::ESCAPE_NO_FIELD));
 		};
 		const auto current_inside = inside(states.states[1]);
 		const auto previous_inside = inside(states.states[0]);
@@ -456,7 +458,7 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool drop_unescaped_quotes,
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote,
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset

@@ -306,7 +306,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		    !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
-			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
+			if (state_machine.state_machine_options.UnquotedEscapes() && null_str_size[i] == 2 &&
+			    null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
+				// with the escape active the NULL string only matches as the escaped character
 				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
 			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
 				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
@@ -676,8 +678,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    !result.allow_unescaped_quotes, !result.quoted && sm_opts.EscapeQuotesOnly(),
-				    sm_opts.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
+				    !result.quoted && sm_opts.EscapeQuotesOnly(), sm_opts.DoubledQuotes(),
+				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
 		}
@@ -1506,8 +1508,7 @@ void StringValueScanner::ProcessExtraRow() {
 }
 
 string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote,
-                                          bool drop_unescaped_quotes, bool escape_inert_at_field_start,
-                                          bool doubled_quotes, Vector &vector) {
+                                          bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector) {
 	idx_t start = 0;
 	if (escape_inert_at_field_start) {
 		// every escape before the field's first content is inert and drops without escaping anything
@@ -1528,9 +1529,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 				// a doubled quote is one quote
 				cur_pos++;
 			}
-			if (just_escaped || !drop_unescaped_quotes) {
-				removed_escapes_ptr[str_pos++] = c;
-			}
+			removed_escapes_ptr[str_pos++] = c;
 			just_escaped = false;
 		} else {
 			just_escaped = false;
@@ -1893,7 +1892,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 						value = RemoveEscape(str_ptr, length,
 						                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 						                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						                     !result.allow_unescaped_quotes, false,
+						                     false,
 						                     result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
 						                     result.parse_chunk.data[result.chunk_col_id]);
 					}
@@ -1935,7 +1934,6 @@ void StringValueScanner::ProcessOverBufferValue() {
 					} else {
 						value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
-						                     !result.allow_unescaped_quotes,
 						                     !result.quoted && sm_options.EscapeQuotesOnly(),
 						                     sm_options.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 					}

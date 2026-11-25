@@ -259,7 +259,7 @@ new_line = '\r\n', buffer_size = 11)
 ----
 p
 q
-123<CR><LF>b
+123<CR><LF>"b
 c
 d
 

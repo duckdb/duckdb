@@ -535,9 +535,14 @@ bool Utf8Proc::FindNextLegalUTF8(string &str) {
 			return true;
 		}
 		int codepoint_size;
-		auto codepoint =
-		    Utf8Proc::UTF8ToCodepoint(str.c_str() + last_codepoint_start, codepoint_size, str.size() - last_codepoint_start) +
-		    1;
+		int32_t decoded;
+		if (!Utf8Proc::TryUTF8ToCodepoint(str.c_str() + last_codepoint_start, codepoint_size,
+		                                  str.size() - last_codepoint_start, decoded)) {
+			// an undecodable fill from ValidUpperBound; pop it and increment the preceding one
+			str = str.substr(0, last_codepoint_start);
+			continue;
+		}
+		auto codepoint = decoded + 1;
 		if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
 			// incremented codepoint falls within surrogate range; skip to next valid character
 			codepoint = 0xE000;

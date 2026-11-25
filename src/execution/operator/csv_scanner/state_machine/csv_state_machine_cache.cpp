@@ -405,7 +405,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (allow_unescaped_quotes) {
+	if (allow_unescaped_quotes || state_machine_options.DoubledQuotes()) {
 		if (escape == '\0') {
 			// without an escape the reopened quote might also close an unquoted value
 			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
@@ -598,7 +598,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::QUOTED);
 		// a second quote is one literal quote under doubled_quotes, and a close of the toggled section otherwise
 		transition_array[quote][field_quote] = doubled ? CSVState::STANDARD_NO_FIELD : CSVState::UNQUOTED_IN_FIELD;
-		if (enable_unquoted_escape) {
+		if (escape != '\0') {
+			// the toggle has entered quotes, where the escape works under every escape rule
 			transition_array[escape][field_quote] = CSVState::ESCAPE_NO_FIELD;
 		}
 		if (state_machine_options.LineRecords()) {

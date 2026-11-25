@@ -446,7 +446,7 @@ bool CSVReaderOptions::SetBaseOption(Context &context, const Identifier &loption
 	} else if (loption == "comment") {
 		SetComment(ParseString(value, loption));
 	} else if (loption == "new_line") {
-		if (!write_option && value.type().id() == LogicalTypeId::LIST) {
+		if (!write_option && value.type().id() == LogicalTypeId::LIST && !value.IsNull()) {
 			vector<string> terminators;
 			for (auto &child : ListValue::GetChildren(value)) {
 				terminators.push_back(ParseString(child, loption));
