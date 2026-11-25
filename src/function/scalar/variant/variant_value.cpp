@@ -22,8 +22,17 @@ bool IsScalarValue(const VariantNode &node) {
 	}
 }
 
+//! Writes the selected value, or a NULL if it is missing or not a scalar
+void WriteValueResult(const optional<VariantNode> &node, VectorWriter<VectorVariantType> &value_writer) {
+	if (!node || !IsScalarValue(*node)) {
+		value_writer.WriteNull();
+		return;
+	}
+	value_writer.WriteValue(*node);
+}
+
 void VariantValueFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	VariantPathFunction::ExecuteVariant(input, state, result, IsScalarValue);
+	VariantPathFunction::Execute<VectorVariantType>(input, state, result, WriteValueResult);
 }
 
 } // namespace
