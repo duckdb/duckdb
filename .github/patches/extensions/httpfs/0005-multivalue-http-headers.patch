@@ -245,7 +245,7 @@ index 02cc9eb..2b6fff6 100644
  		return headers;
  	}
 diff --git a/test/unittest/http/connection_reuse_test.cpp b/test/unittest/http/connection_reuse_test.cpp
-index 80f687b..a81eaf7 100644
+index 80f687b..7ab70fd 100644
 --- a/test/unittest/http/connection_reuse_test.cpp
 +++ b/test/unittest/http/connection_reuse_test.cpp
 @@ -50,7 +50,7 @@ static void RunCurlTerminalTransportErrorIsNotReused() {
@@ -270,16 +270,35 @@ index 80f687b..a81eaf7 100644
  	HeadRequestInfo request(server.HTTPPath(), headers, params);
  	auto response = http_util.Request(request, client);
  	REQUIRE(response);
-@@ -398,7 +398,7 @@ TEST_CASE("HTTP clients send session headers once", "[httpfs][headers]") {
+@@ -398,14 +398,22 @@ TEST_CASE("HTTP clients send session headers once", "[httpfs][headers]") {
  			auto session = db.instance->config.GetHTTPTransportManager().CreateSession(*con.context, server.HTTPPath());
  			auto &params = session.Parameters();
  			HTTPHeaders headers;
 -			headers.Insert("X-Both", "request");
-+			headers.InsertIfAbsent("X-Both", "request");
++			headers.Append("X-Both", "first");
++			headers.Append("x-both", "second");
  			HeadRequestInfo request(server.HTTPPath(), headers, params);
  			REQUIRE(session.Request(request)->Success());
++
++			headers.Set("X-Both", "replacement");
++			HeadRequestInfo replacement(server.HTTPPath(), headers, params);
++			REQUIRE(session.Request(replacement)->Success());
++
  			auto observations = server.Observations();
-@@ -423,7 +423,7 @@ TEST_CASE("HTTP PUT respects explicit Content-Type and retains the fallback", "[
+-			REQUIRE(observations.size() == 1);
+-			REQUIRE(MockS3HeaderValues(observations[0], "X-Session") == vector<string> {"session"});
+-			// A header of the request takes precedence over a session header with the same name
+-			REQUIRE(MockS3HeaderValues(observations[0], "X-Both") == vector<string> {"request"});
++			REQUIRE(observations.size() == 2);
++			for (const auto &observation : observations) {
++				REQUIRE(MockS3HeaderValues(observation, "X-Session") == vector<string> {"session"});
++			}
++			REQUIRE(MockS3HeaderValues(observations[0], "X-Both") == vector<string> {"first", "second"});
++			REQUIRE(MockS3HeaderValues(observations[1], "X-Both") == vector<string> {"replacement"});
+ 			HTTPTestHelper::RequireQueryOk(con, "ROLLBACK");
+ 		}
+ 	}
+@@ -423,7 +431,7 @@ TEST_CASE("HTTP PUT respects explicit Content-Type and retains the fallback", "[
  				const string fallback_type = "application/octet-stream";
  				HTTPHeaders headers;
  				if (explicit_header) {
