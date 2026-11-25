@@ -4,6 +4,7 @@
 #include <thread>
 #include <type_traits>
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/parse_iterator.hpp"
@@ -737,7 +738,12 @@ static idx_t MeasureTransformScratchMemory(bool throws, bool reentrant) {
 				if (!stack.Execute<bool>({root})) {
 					throw InternalException("Scratch transform returned false");
 				}
-			} catch (InvalidInputException &) {
+			} catch (std::exception &ex) {
+				const ErrorData error(ex);
+				if (error.Type() != ExceptionType::INVALID_INPUT ||
+				    error.RawMessage() != "Scratch transform test failure") {
+					throw;
+				}
 				caught = true;
 			}
 			if (caught != bool(state.throw_after) || state.active || !state.intact ||
@@ -3861,6 +3867,7 @@ TEST_CASE("Top-level transform arenas honor the database memory limit", "[api][g
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 	}
 	Parser parser(*con.context);
-	REQUIRE_THROWS_WITH(parser.ParseQuery("ARENA_MEMORY"),
-	                    Catch::Contains("While parsing SQL: failed to allocate data"));
+	REQUIRE_THROWS_MATCHES(
+	    parser.ParseQuery("ARENA_MEMORY"), std::exception,
+	    ExceptionMatches(ExceptionType::OUT_OF_MEMORY, Catch::Contains("While parsing SQL: failed to allocate data")));
 }
