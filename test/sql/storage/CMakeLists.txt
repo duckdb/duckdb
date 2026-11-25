@@ -2,6 +2,7 @@ add_subdirectory(catalog)
 add_library_unity(
   test_sql_storage
   OBJECT
+  metadata_block_torn_write.cpp
   test_buffer_manager.cpp
   test_checksum.cpp
   test_storage.cpp

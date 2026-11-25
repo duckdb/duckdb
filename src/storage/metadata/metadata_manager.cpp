@@ -54,24 +54,24 @@ MetadataManager::~MetadataManager() {
 }
 
 MetadataHandle MetadataManager::AllocateHandle() {
-	// check if there is any free space left in an existing block
+	// check if there is any free space left in a transient block
 	// if not allocate a new block
+	// disk-backed blocks are never written to: the active header can still reference them, and an
+	// in-place rewrite that tears on a crash would corrupt the checkpoint that header points to
 	MetadataPointer pointer;
 	unique_lock<mutex> guard(block_lock);
 	block_id_t free_block = INVALID_BLOCK;
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		D_ASSERT(kv.first == block.block_id);
-		if (!block.free_blocks.empty()) {
+		if (!block.free_blocks.empty() && block.block->BlockId() >= MAXIMUM_BLOCK) {
 			free_block = kv.first;
 			break;
 		}
 	}
-	guard.unlock();
-	if (free_block == INVALID_BLOCK || free_block > PeekNextBlockId()) {
+	if (free_block == INVALID_BLOCK) {
+		guard.unlock();
 		free_block = AllocateNewBlock(guard);
-	} else {
-		guard.lock();
 	}
 	D_ASSERT(guard.owns_lock());
 	D_ASSERT(free_block != INVALID_BLOCK);
@@ -79,14 +79,9 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	// select the first free metadata block we can find
 	pointer.block_index = UnsafeNumericCast<idx_t>(free_block);
 	auto &block = blocks[free_block];
+	D_ASSERT(block.block->BlockId() >= MAXIMUM_BLOCK);
 	// the block is now dirty
 	block.dirty = true;
-	if (block.block->BlockId() < MAXIMUM_BLOCK) {
-		// this block is a disk-backed block, yet we are planning to write to it
-		// we need to convert it into a transient block before we can write to it
-		ConvertToTransient(guard, block);
-		D_ASSERT(block.block->BlockId() >= MAXIMUM_BLOCK);
-	}
 	D_ASSERT(!block.free_blocks.empty());
 	pointer.index = block.free_blocks.back();
 	// mark the block as used
@@ -103,67 +98,34 @@ MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 
 MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
-	while (true) {
-		shared_ptr<BlockHandle> block_handle;
-		{
-			lock_guard<mutex> guard(block_lock);
-			auto entry = blocks.find(UnsafeNumericCast<int64_t>(pointer.block_index));
-			if (entry == blocks.end()) {
-				throw InternalException("Trying to pin block %llu - but the block did not exist", pointer.block_index);
-			}
-			auto &block = entry->second;
-#ifdef DEBUG
-			for (auto &free_block : block.free_blocks) {
-				if (free_block == pointer.index) {
-					throw InternalException("Pinning block %d.%d but it is marked as a free block", block.block_id,
-					                        free_block);
-				}
-			}
-#endif
-			block_handle = block.block;
-		}
-
-		auto buffer_handle = buffer_manager.Pin(block_handle);
-		if (!buffer_handle.IsValid()) {
-			// the handle was replaced by ConvertToTransient while we were pinning it and can no
-			// longer be loaded from disk - retry with the current handle
-			continue;
-		}
-		MetadataHandle handle;
-		handle.pointer.block_index = pointer.block_index;
-		handle.pointer.index = pointer.index;
-		handle.handle = std::move(buffer_handle);
-		return handle;
-	}
-}
-
-void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &metadata_block) {
-	D_ASSERT(block_lock.owns_lock());
-	auto old_block = metadata_block.block;
-	block_lock.unlock();
-	// pin the old block
-	auto old_buffer = buffer_manager.Pin(old_block);
-
-	// allocate a new transient block to replace it
-	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, &block_manager, false);
-	auto new_block = new_buffer.GetBlockHandle();
-
-	// copy the data to the transient block
-	memcpy(new_buffer.GetDataMutable(), old_buffer.Ptr(), block_manager.GetBlockSize());
-
-	// the disk block now belongs to the transient block and is rewritten in place by a later
-	// checkpoint - the old handle must not reload it from disk after its buffer is evicted
+	shared_ptr<BlockHandle> block_handle;
 	{
-		auto old_block_lock = old_block->GetMemory().GetLock();
-		old_block->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
+		lock_guard<mutex> guard(block_lock);
+		auto entry = blocks.find(UnsafeNumericCast<int64_t>(pointer.block_index));
+		if (entry == blocks.end()) {
+			throw InternalException("Trying to pin block %llu - but the block did not exist", pointer.block_index);
+		}
+		auto &block = entry->second;
+#ifdef DEBUG
+		for (auto &free_block : block.free_blocks) {
+			if (free_block == pointer.index) {
+				throw InternalException("Pinning block %d.%d but it is marked as a free block", block.block_id,
+				                        free_block);
+			}
+		}
+#endif
+		block_handle = block.block;
 	}
 
-	// unregister the old block
-	block_manager.UnregisterBlock(metadata_block.block_id);
-
-	block_lock.lock();
-	metadata_block.block = std::move(new_block);
-	metadata_block.dirty = true;
+	auto buffer_handle = buffer_manager.Pin(block_handle);
+	if (!buffer_handle.IsValid()) {
+		throw InternalException("Failed to pin metadata block %llu", pointer.block_index);
+	}
+	MetadataHandle handle;
+	handle.pointer.block_index = pointer.block_index;
+	handle.pointer.index = pointer.index;
+	handle.handle = std::move(buffer_handle);
+	return handle;
 }
 
 block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
@@ -291,6 +253,34 @@ idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }
 
+bool MetadataManager::BlocksAreSparse(const vector<MetaBlockPointer> &pointers) {
+	// free sub-blocks of a disk-backed block are only reusable once the whole block is free,
+	// so a chain that is alone in its blocks pins them - rewriting it lets the blocks be freed
+	if (pointers.empty()) {
+		return false;
+	}
+	unique_lock<mutex> guard(block_lock);
+	for (auto &pointer : pointers) {
+		auto entry = blocks.find(pointer.GetBlockId());
+		if (entry == blocks.end()) {
+			return false;
+		}
+		auto &block = entry->second;
+		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
+			// transient blocks are still being filled by this checkpoint
+			return false;
+		}
+		idx_t free_count = block.free_blocks.size();
+		for (idx_t mask = block.pending_reuse; mask != 0; mask &= mask - 1) {
+			free_count++;
+		}
+		if (METADATA_BLOCK_COUNT - free_count > METADATA_BLOCK_COUNT / 4) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void MetadataManager::Flush(QueryContext context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
@@ -309,21 +299,20 @@ void MetadataManager::Flush(QueryContext context) {
 		// zero-initialize the few leftover bytes
 		memset(handle.GetDataMutable() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
-		if (block_handle->BlockId() >= MAXIMUM_BLOCK) {
-			// Convert the temporary block to a persistent block.
-			// we cannot use ConvertToPersistent as another thread might still be reading the block
-			// so we use the safe version of ConvertToPersistent
-			auto new_block = block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle),
-			                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
-
-			guard.lock();
-			block.block = std::move(new_block);
-			guard.unlock();
-		} else {
-			// Already a persistent block, so we only need to write it.
-			D_ASSERT(block.block->BlockId() == block.block_id);
-			block_manager.Write(context, handle.GetFileBuffer(), block.block_id);
+		if (block_handle->BlockId() < MAXIMUM_BLOCK) {
+			// a disk-backed block is never rewritten in place: the active header can still reference
+			// it, and a crash during the rewrite would corrupt the checkpoint that header points to
+			throw InternalException("Dirty metadata blocks must be transient");
 		}
+		// Convert the temporary block to a persistent block.
+		// we cannot use ConvertToPersistent as another thread might still be reading the block
+		// so we use the safe version of ConvertToPersistent
+		auto new_block = block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle),
+		                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
+
+		guard.lock();
+		block.block = std::move(new_block);
+		guard.unlock();
 		// the block is no longer dirty
 		block.dirty = false;
 	}
@@ -559,10 +548,6 @@ vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
 		result.push_back(entry.second.block);
 	}
 	return result;
-}
-
-block_id_t MetadataManager::PeekNextBlockId() const {
-	return block_manager.PeekFreeBlockId();
 }
 
 block_id_t MetadataManager::GetNextBlockId() const {

@@ -1656,6 +1656,38 @@ bool RowGroup::CanReuseMetadata(RowGroupWriter &writer) const {
 	return true;
 }
 
+bool RowGroup::ShouldCompactMetadata(RowGroupWriter &writer) const {
+	auto metadata_manager = writer.GetMetadataManager();
+	if (!metadata_manager) {
+		return false;
+	}
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (!ColumnIsLoaded(c)) {
+			// rewriting the metadata requires the column to be loaded
+			return false;
+		}
+	}
+	auto pointers = column_pointers;
+	for (auto &pointer : GetExtraMetadataBlockPointers()) {
+		pointers.push_back(pointer);
+	}
+	return metadata_manager->BlocksAreSparse(pointers);
+}
+
+bool RowGroup::ShouldCompactColumnMetadata(RowGroupWriter &writer, idx_t column_idx) const {
+	auto metadata_manager = writer.GetMetadataManager();
+	if (!metadata_manager) {
+		return false;
+	}
+	vector<MetaBlockPointer> pointers;
+	pointers.push_back(column_pointers[column_idx]);
+	auto extras = per_column_metadata_blocks.GetBlocksForColumns({column_idx});
+	for (auto &block_id : extras[0]) {
+		pointers.emplace_back(block_id, 0);
+	}
+	return metadata_manager->BlocksAreSparse(pointers);
+}
+
 bool RowGroup::HasUnchangedColumns() const {
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (!ColumnIsLoaded(c)) {
@@ -1673,33 +1705,30 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
+		bool can_write_reuse_lists = true;
 		if (GetCollection().SupportsPerColumnWrites()) {
-			if (has_per_column_metadata_blocks) {
-				return result;
+			if (!has_per_column_metadata_blocks) {
+				per_column_metadata_blocks = ComputePerColumnMetadataBlocks();
+				has_per_column_metadata_blocks = true;
 			}
-			per_column_metadata_blocks = ComputePerColumnMetadataBlocks();
-			has_per_column_metadata_blocks = true;
+		} else if (!has_metadata_blocks) {
+			if (!has_per_column_metadata_blocks) {
+				auto meta_blocks = ComputePerColumnMetadataBlocks();
+
+				vector<idx_t> computed_extra_metadata_blocks;
+				meta_blocks.ForEachBlock(
+				    [&](idx_t, idx_t block_id) { computed_extra_metadata_blocks.emplace_back(block_id); });
+				extra_metadata_blocks = computed_extra_metadata_blocks;
+				has_metadata_blocks = true;
+			} else {
+				// we loaded column-level metadata from disk, but don't support writing it anymore, so we need to
+				// fall back to a full checkpoint as we need to write out the metadata in a single go
+				can_write_reuse_lists = false;
+			}
+		}
+		if (can_write_reuse_lists && !ShouldCompactMetadata(writer)) {
 			return result;
 		}
-
-		if (has_metadata_blocks) {
-			return result;
-		}
-
-		if (!has_per_column_metadata_blocks) {
-			auto meta_blocks = ComputePerColumnMetadataBlocks();
-
-			vector<idx_t> computed_extra_metadata_blocks;
-			meta_blocks.ForEachBlock(
-			    [&](idx_t, idx_t block_id) { computed_extra_metadata_blocks.emplace_back(block_id); });
-			extra_metadata_blocks = computed_extra_metadata_blocks;
-			has_metadata_blocks = true;
-			return result;
-		}
-
-		D_ASSERT(has_per_column_metadata_blocks && !GetCollection().SupportsPerColumnWrites());
-		// we loaded column-level metadata from disk, but don't support writing it anymore, so we need to fall back to a
-		// full checkpoint as we need to write out the metadata in a single go
 	}
 
 	// determine which columns can be reused
@@ -1736,6 +1765,10 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 				column_has_changes = false;
 			} else if (!columns[column_idx]->HasAnyChanges()) {
 				column_has_changes = false;
+			}
+			if (!column_has_changes && ColumnIsLoaded(column_idx) && ShouldCompactColumnMetadata(writer, column_idx)) {
+				// the column's metadata sits in mostly-free blocks - rewrite it so they can be freed
+				column_has_changes = true;
 			}
 		}
 
