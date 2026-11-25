@@ -201,7 +201,7 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	for (idx_t i = 0; i < expression.Partitions().size(); i++) {
 		window->PartitionsMutable().push_back(std::move(children[ordinal++]));
 	}
-	// Some functions read the ORDER BY values: the argument ordering if there is one, else the window ordering
+	// Some functions read the ORDER BY values (the argument ordering if there is one, else the window ordering)
 	auto &window_function = expression.WindowFunction();
 	bool requires_ordering = window_function && window_function->GetDefinition()->RequiresOrdering();
 	// RANGE offsets and GROUPS frames are defined in terms of the ORDER BY
