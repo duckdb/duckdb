@@ -125,6 +125,9 @@ public:
 
 	// Assign from shared_ptr copy
 	shared_ptr<T, SAFE> &operator=(const shared_ptr<T, SAFE> &other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
 		internal = other.internal;
 		return *this;
 	}

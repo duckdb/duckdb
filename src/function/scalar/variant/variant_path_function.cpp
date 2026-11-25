@@ -140,7 +140,8 @@ void VariantPathFunction::ExecuteVariantMany(const Vector &input, const vector<v
 			for (const auto &entry : root.GetObjectChildren()) {
 				for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
 					auto &value = selected[offset + path_idx];
-					if (keys[path_idx] && !value && *keys[path_idx] == entry.key) {
+					const auto &key = keys[path_idx];
+					if (key && !value && *key == entry.key) {
 						value = entry.value;
 						pending--;
 					}

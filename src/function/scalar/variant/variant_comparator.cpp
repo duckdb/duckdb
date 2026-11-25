@@ -236,6 +236,9 @@ bool EncodeVariantChildren(VariantEncodeFrame &frame, SINK &sink, vector<Variant
 		}
 		return true;
 	}
+	if (!frame.entries) {
+		throw InternalException("VariantEncodeFrame holds neither an array nor an object");
+	}
 	auto &entries = frame.entries->GetOrderedEntries();
 	while (frame.next_child < entries.size()) {
 		auto entry = entries[frame.next_child++];

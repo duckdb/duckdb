@@ -117,6 +117,9 @@ public:
 	}
 
 private:
+	ReservoirSampler() = default;
+	friend SAMPLER;
+
 	SAMPLER &Sampler() {
 		return static_cast<SAMPLER &>(*this);
 	}

@@ -1901,7 +1901,7 @@ bool DuplicateEliminatedDomainOptimizer::TryPullUpOuterDomainJoin(unique_ptr<Log
 	                          decision.removal_savings)) {
 		return false;
 	}
-	if (decision.action == RestrictionAction::REMOVE) {
+	if (restriction && decision.action == RestrictionAction::REMOVE) {
 		restriction->Remove();
 	}
 
