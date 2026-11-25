@@ -2215,6 +2215,34 @@ functions:
         kind: OUT
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
+  value_unpack_variant:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Returns the value that a VARIANT value holds, as a value of its own type.
+
+      A VARIANT holds a value of any other type, e.g. a TINYINT, a VARCHAR or a LIST of STRUCTs, that is only known
+      per value: this reads it back, with the type that it was stored with. A nested value is unpacked all the way
+      down, so a variant that holds a list of variants gives a list of typed values. A NULL VARIANT gives a NULL
+      value. A value that is not a VARIANT returns ERROR_INPUT_INVALID. The returned value is caller-owned; destroy it
+      via value_destroy.
+    role: getter
+    belongs_to: value
+    parameters:
+      value:
+        type: value
+        description: The VARIANT value to unpack.
+      out_unpacked:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the owned value.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
   value_cast:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-08-04" ]

@@ -1832,6 +1832,12 @@ auto Value::GetChild(idx_t index) const -> Value {
 	return detail::HandleFactory::Make<Value>(child);
 }
 
+auto Value::UnpackVariant() const -> Value {
+	duckdb_v2_value_handle unpacked = nullptr;
+	CheckedAPICall(duckdb_v2_value_unpack_variant, handle(), &unpacked);
+	return detail::HandleFactory::Make<Value>(unpacked);
+}
+
 template <>
 auto Value::Get() const -> bool {
 	bool value = false;

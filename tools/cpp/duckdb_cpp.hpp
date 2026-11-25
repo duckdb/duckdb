@@ -2228,6 +2228,11 @@ public:
 	/// @param index Child index in [0, GetChildCount()).
 	auto GetChild(idx_t index) const -> Value;
 
+	/// The value that a VARIANT value holds, with the type that it was stored with: a TINYINT, a VARCHAR, a LIST of
+	/// STRUCTs, ... A nested value is unpacked all the way down. A NULL VARIANT gives a NULL value.
+	/// @throws InvalidInputException When the value is not a VARIANT.
+	auto UnpackVariant() const -> Value;
+
 	/// Shorthand for `GetChild`.
 	auto operator[](idx_t index) const -> Value {
 		return GetChild(index);

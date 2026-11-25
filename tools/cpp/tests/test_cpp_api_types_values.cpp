@@ -671,3 +671,33 @@ TEST_CASE("Stable C++API: Factory creates chunks and collections, and an instanc
 	REQUIRE(factory.ParseType("mood").ToText() == "ENUM('happy', 'sad')");
 	REQUIRE_THROWS_AS(builtins.ParseType("mood"), InvalidInputException);
 }
+
+TEST_CASE("Stable C++API: a VARIANT value unpacks to the value it holds", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto result = conn.Execute("SELECT 41::TINYINT::VARIANT, 'foo'::VARIANT, ['a', 'b']::VARIANT, NULL::VARIANT, 1");
+	auto chunk = result.FetchChunk();
+	REQUIRE(chunk.GetRowCount() == 1);
+
+	auto tinyint = chunk.GetVector(0).GetValue(0);
+	REQUIRE(tinyint.GetLogicalType().GetTypeId() == LogicalTypeId::VARIANT);
+	auto unpacked = tinyint.UnpackVariant();
+	REQUIRE(unpacked.GetLogicalType().GetTypeId() == LogicalTypeId::TINYINT);
+	REQUIRE(unpacked.Get<int8_t>() == 41);
+
+	auto text = chunk.GetVector(1).GetValue(0).UnpackVariant();
+	REQUIRE(text.GetLogicalType().GetTypeId() == LogicalTypeId::VARCHAR);
+	REQUIRE(text.ToText() == "foo");
+
+	auto list = chunk.GetVector(2).GetValue(0).UnpackVariant();
+	REQUIRE(list.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
+	REQUIRE(list.GetChildCount() == 2);
+	REQUIRE(list.GetChild(1).ToText() == "b");
+
+	REQUIRE(chunk.GetVector(3).GetValue(0).UnpackVariant().IsNull());
+
+	// Only a VARIANT can be unpacked
+	REQUIRE_THROWS_AS(chunk.GetVector(4).GetValue(0).UnpackVariant(), InvalidInputException);
+}

@@ -18979,6 +18979,28 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Returns the value that a VARIANT value holds, as a value of its own type.
+ *
+ * A VARIANT holds a value of any other type, e.g. a TINYINT, a VARCHAR or a LIST of STRUCTs, that is only known per
+ * value: this reads it back, with the type that it was stored with. A nested value is unpacked all the way down, so a
+ * variant that holds a list of variants gives a list of typed values. A NULL VARIANT gives a NULL value. A value that
+ * is not a VARIANT returns ERROR_INPUT_INVALID. The returned value is caller-owned; destroy it via value_destroy.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param value The VARIANT value to unpack.
+ * @param out_unpacked Receives the owned value.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_unpack_variant(duckdb_v2_value_handle value,
+                                                            duckdb_v2_value_handle *out_unpacked,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Casts a value to a target type, using a factory.
  *
  * The conversion is the SQL-faithful, non-strict one, registered custom casts included, and a cast failure surfaces
