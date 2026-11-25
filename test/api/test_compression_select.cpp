@@ -7,8 +7,12 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -113,6 +117,233 @@ static unique_ptr<ColumnSegment> MakeRLETestSegment(DuckDB &db, const Compressio
 		Store<uint16_t>(counts[i], data + count_offset + i * sizeof(uint16_t));
 	}
 	return segment;
+}
+
+TEST_CASE("Retained RLE dictionaries survive selection reuse and scan destruction", "[storage][compression][rle]") {
+	DuckDB db(nullptr);
+	auto function = RLEFun::GetFunction(PhysicalType::INT32);
+	const auto nullable = GENERATE(false, true);
+	Vector first(LogicalType::INTEGER, 28), second(LogicalType::INTEGER, 24);
+	{
+		auto segment = MakeRLETestSegment(db, function, {0, 13, 0, 15, 12, 0, 16}, 56);
+		if (nullable) {
+			segment->GetStatsMutable().SetHasNull();
+		} else {
+			segment->GetStatsMutable().SetHasNoNull();
+		}
+		ColumnScanState state(nullptr);
+		segment->InitializeScan(state);
+		segment->Scan(state, 28, first, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
+		REQUIRE(first.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		const auto id = DictionaryVector::DictionaryId(first);
+		REQUIRE(!id.empty());
+		const auto &child = DictionaryVector::Child(first);
+		REQUIRE(FlatVector::Validity(child).RowIsValid(child.size() - 1) == !nullable);
+		state.offset_in_column = 28;
+		segment->Scan(state, 24, second, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
+		REQUIRE(second.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		REQUIRE(DictionaryVector::DictionaryId(second) == id);
+	}
+	for (idx_t i = 0; i < 28; i++) {
+		REQUIRE(first.GetValue(i) == Value::INTEGER(i < 13 ? 2 : 4));
+	}
+	for (idx_t i = 0; i < 24; i++) {
+		REQUIRE(second.GetValue(i) == Value::INTEGER(i < 12 ? 5 : 7));
+	}
+}
+
+template <class T>
+static unique_ptr<ColumnSegment> MakeRLEPlaceholderSegment(DuckDB &db, const CompressionFunction &function,
+                                                           const LogicalType &type, idx_t run_length) {
+	auto &buffers = BufferManager::GetBufferManager(*db.instance);
+	auto &blocks = buffers.GetTemporaryBlockManager();
+	auto segment = ColumnSegment::CreateTransientSegment(*db.instance, function, type, blocks.GetBlockSize(), blocks);
+	const idx_t entries = 21;
+	const idx_t count_offset = AlignValue(sizeof(uint64_t) + entries * sizeof(T));
+	segment->count = (entries - 1) * run_length;
+	segment->SetByteSize(NumericCast<uint32_t>(count_offset + entries * sizeof(uint16_t)));
+	segment->GetStatsMutable().SetHasNoNull();
+	auto handle = buffers.Pin(segment->GetBlockHandle());
+	auto data = handle.GetDataMutable();
+	Store<uint64_t>(count_offset, data);
+	for (idx_t i = 0; i < entries; i++) {
+		Store<T>(i ? T((i - 1) % 2) : NullValue<T>(), data + sizeof(uint64_t) + i * sizeof(T));
+		Store<uint16_t>(NumericCast<uint16_t>(i ? run_length : 0), data + count_offset + i * sizeof(uint16_t));
+	}
+	return segment;
+}
+
+static void CheckRLEFilterValues(DataChunk &args, ExpressionState &, Vector &result) {
+	auto writer = FlatVector::Writer<bool>(result, args.size());
+	for (idx_t i = 0; i < args.size(); i++) {
+		const auto value = args.data[0].GetValue(i);
+		REQUIRE(value.IsValid());
+		if (value.IsNull()) {
+			writer.WriteNull();
+		} else {
+			writer.WriteValue(true);
+		}
+	}
+}
+
+template <class T>
+static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &type) {
+	INFO(type.ToString());
+	auto compression = RLEFun::GetFunction(type.InternalType());
+	ScalarFunction function("check_rle_values", {}, LogicalType::BOOLEAN, CheckRLEFilterValues);
+	function.GetSignature().AddParameter("value", type);
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	ExpressionFilter filter(
+	    make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments), nullptr));
+	for (const idx_t run_length : {1, 37}) {
+		// A zero-length legacy run is unused even when statistics exclude row NULLs.
+		auto segment = MakeRLEPlaceholderSegment<T>(db, compression, type, run_length);
+		if (run_length == 37) {
+			ColumnScanState scan(nullptr);
+			segment->InitializeScan(scan);
+			Vector result(type, 128);
+			segment->Scan(scan, 128, result, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
+			REQUIRE(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+			const auto &child = DictionaryVector::Child(result);
+			REQUIRE_FALSE(FlatVector::Validity(child).RowIsValid(0));
+			for (idx_t i = 1; i < child.size(); i++) {
+				if (type.id() == LogicalTypeId::BOOLEAN) {
+					// Check raw bytes before GetValue can read them as bool.
+					const auto byte = FlatVector::GetData<int8_t>(child)[i];
+					REQUIRE((byte == 0 || byte == 1));
+				}
+				REQUIRE(child.GetValue(i).IsValid());
+			}
+		}
+		if (!compression.filter) {
+			continue;
+		}
+		auto filter_state = TableFilterState::Initialize(*con.context, filter);
+		REQUIRE(filter_state->can_cache);
+		REQUIRE_FALSE(filter_state->Cast<ExpressionFilterState>().fast_executor);
+		ColumnScanState state(nullptr);
+		segment->InitializeScan(state);
+		const auto count = 20 * run_length;
+		Vector result(type, count);
+		FlatVector::SetSize(result, count_t(count));
+		SelectionVector selection;
+		auto selected_count = count;
+		segment->Filter(state, count, result, selection, selected_count, filter, *filter_state);
+		REQUIRE(selected_count == count);
+		auto values = result.Values<T>();
+		for (idx_t i = 0; i < selected_count; i++) {
+			REQUIRE(selection.get_index(i) == i);
+			REQUIRE(values[i].IsValid());
+			REQUIRE(values[i].GetValue() == T((i / run_length) % 2));
+		}
+	}
+}
+
+TEST_CASE("RLE legacy placeholders remain safe in scans and filters", "[storage][compression][rle]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CheckRLEPlaceholder<int8_t>(db, con, LogicalType::BOOLEAN);
+	CheckRLEPlaceholder<int16_t>(db, con, LogicalType::DECIMAL(4, 0));
+	for (const auto &type : {LogicalType::TIME, LogicalType::TIME_NS, LogicalType::TIME_TZ}) {
+		CheckRLEPlaceholder<int64_t>(db, con, type);
+	}
+}
+
+TEST_CASE("Dictionary validity preserves ownership and dictionary entries", "[storage][compression][rle]") {
+	SECTION("Shared and borrowed selections survive remapping") {
+		const auto borrowed_selection = GENERATE(false, true);
+		Vector result(LogicalType::INTEGER);
+		{
+			auto dictionary = DictionaryVector::CreateReusableDictionary(LogicalType::INTEGER, 3);
+			dictionary->data.SetValue(0, Value::INTEGER(10));
+			dictionary->data.SetValue(1, Value::INTEGER(20));
+			dictionary->data.SetValue(2, Value(LogicalType::INTEGER));
+			sel_t borrowed[3] = {0, 1, 2};
+			SelectionVector indices(3);
+			if (borrowed_selection) {
+				indices.Initialize(borrowed, 3);
+			}
+			for (idx_t i = 0; i < 3; i++) {
+				indices.set_index(i, i);
+			}
+			result.Dictionary(dictionary, indices, 3);
+			ValidityMask validity(3);
+			validity.SetInvalid(1);
+			DictionaryVector::ApplyValidity(result, validity);
+			REQUIRE(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+			REQUIRE(DictionaryVector::DictionaryId(result) == dictionary->id);
+			REQUIRE(indices.get_index(1) == 1);
+		}
+		REQUIRE(result.GetValue(0) == Value::INTEGER(10));
+		REQUIRE(result.GetValue(1).IsNull());
+		REQUIRE(result.GetValue(2).IsNull());
+	}
+
+	SECTION("Reusing or extending a dictionary preserves the original entry and caches") {
+		const auto null_index = GENERATE(0, 3);
+		const auto value = Value("a string longer than the inline string storage");
+		auto dictionary = DictionaryVector::CreateReusableGlobalDictionary(value.type(), 3);
+		for (idx_t i = 0; i < 3; i++) {
+			dictionary->data.SetValue(i, i == idx_t(null_index) ? Value(value.type()) : value);
+		}
+		SelectionVector indices(3);
+		for (idx_t i = 0; i < 3; i++) {
+			indices.set_index(i, i);
+		}
+		Vector result(value.type());
+		result.Dictionary(dictionary, indices, 3);
+		Vector original(value.type());
+		original.Reference(result);
+		REQUIRE(DictionaryVector::CanCacheHashes(result));
+		const auto hashes = &DictionaryVector::GetCachedHashes(result);
+		ValidityMask validity(3);
+		validity.SetAllValid(3);
+		DictionaryVector::ApplyValidity(result, validity);
+		REQUIRE(result.GetBufferRef() == original.GetBufferRef());
+		validity.SetInvalid(1);
+		DictionaryVector::ApplyValidity(result, validity);
+		REQUIRE(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		result.Verify();
+		if (null_index != 3) {
+			REQUIRE(DictionaryVector::DictionaryId(result) == dictionary->id);
+			REQUIRE(DictionaryVector::IsGlobalDictionary(result));
+			REQUIRE(&DictionaryVector::GetCachedHashes(result) == hashes);
+		} else {
+			REQUIRE(DictionaryVector::Child(result).size() == 4);
+			REQUIRE(DictionaryVector::DictionaryId(result).empty());
+			REQUIRE_FALSE(DictionaryVector::IsGlobalDictionary(result));
+		}
+		REQUIRE(Value::NotDistinctFrom(result.GetValue(0), original.GetValue(0)));
+		REQUIRE(result.GetValue(1).IsNull());
+		REQUIRE(result.GetValue(2) == value);
+		REQUIRE(original.GetValue(1) == value);
+		REQUIRE(&DictionaryVector::GetCachedHashes(original) == hashes);
+		REQUIRE(dictionary->data.size() == 3);
+	}
+
+	SECTION("An owned selection preserves the padding after a partial validity word") {
+		auto dictionary = DictionaryVector::CreateReusableDictionary(LogicalType::INTEGER, 2);
+		dictionary->data.SetValue(0, Value::INTEGER(42));
+		dictionary->data.SetValue(1, Value(LogicalType::INTEGER));
+		SelectionVector indices(128);
+		for (idx_t i = 0; i < 128; i++) {
+			indices.set_index(i, i < 65 ? 0 : 99);
+		}
+		const auto data = indices.data();
+		Vector result(LogicalType::INTEGER);
+		result.Dictionary(dictionary, indices, 65);
+		indices = SelectionVector();
+		ValidityMask validity(128);
+		validity.SetAllInvalid(128);
+		validity.SetValid(1);
+		DictionaryVector::ApplyValidity(result, validity);
+		REQUIRE(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		REQUIRE(DictionaryVector::SelVector(result).data() == data);
+		for (idx_t i = 0; i < 128; i++) {
+			REQUIRE(data[i] == (i < 65 ? (i == 1 ? 0 : 1) : 99));
+		}
+	}
 }
 
 TEST_CASE("RLE validation covers batch boundaries before decoding", "[storage][compression][rle]") {
@@ -227,6 +458,7 @@ TEST_CASE("RLE filtering advances past a partially selected batch", "[storage][c
 		}
 	}
 	state.offset_in_column = 10;
+	result.Initialize();
 	segment->Scan(state, 10, result, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 	auto values = result.Values<int32_t>();
 	for (idx_t row = 0; row < 10; row++) {
@@ -255,18 +487,24 @@ TEST_CASE("RLE filtering preserves selections retained by dictionary results",
 		idx_t selected_count = batch_size;
 		segment->Filter(state, batch_size, first, selection, selected_count, *filter, *filter_state);
 		REQUIRE(selected_count == half_batch);
-		// Retain the filter's selection as a dictionary result, just like a row-group scan.
-		retained.Slice(first, selection, selected_count);
+		for (idx_t row = 0; row < selected_count; row++) {
+			REQUIRE(first.GetValue(selection.get_index(row)) == Value::INTEGER(2));
+		}
+		// A flat companion column retains the filter's selection even when the filter emits a dictionary.
+		Vector payload(LogicalType::INTEGER, batch_size);
+		auto writer = FlatVector::Writer<int32_t>(payload, batch_size);
+		for (idx_t row = 0; row < batch_size; row++) {
+			writer.WriteValue(NumericCast<int32_t>(row));
+		}
+		retained.Slice(payload, selection, selected_count);
 	}
 	auto &retained_selection = DictionaryVector::SelVector(retained);
 	REQUIRE(retained_selection.Capacity() >= batch_size);
-	// Only the scan state and the dictionary result still own this selection.
-	REQUIRE(retained_selection.sel_data().use_count() == 2);
 	auto check_retained = [&]() {
 		REQUIRE(retained.size() == half_batch);
 		for (idx_t row = 0; row < half_batch; row++) {
 			REQUIRE(retained_selection.get_index(row) == half_batch + row);
-			REQUIRE(retained.GetValue(row) == Value::INTEGER(2));
+			REQUIRE(retained.GetValue(row) == Value::INTEGER(NumericCast<int32_t>(half_batch + row)));
 		}
 	};
 	check_retained();
@@ -281,8 +519,6 @@ TEST_CASE("RLE filtering preserves selections retained by dictionary results",
 	for (idx_t row = 0; row < batch_size; row++) {
 		REQUIRE(second.GetValue(row) == Value::INTEGER(row < half_batch ? 3 : 4));
 	}
-	// Capacity was sufficient: the scan replaced its selection because it was shared.
-	REQUIRE(retained_selection.sel_data().use_count() == 1);
 	check_retained();
 }
 

@@ -42,7 +42,27 @@ void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
 	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
 }
 
+void CommitDropState::DropTable(shared_ptr<DataTable> table) {
+	dropped_tables.push_back(std::move(table));
+}
+
+void CommitDropState::FreeTables(const vector<shared_ptr<DataTable>> &tables) {
+	for (auto &table : tables) {
+		table->CommitDropTable(*this);
+	}
+}
+
+void CommitDropState::FinalizeCommit(DuckTransactionManager &transaction_manager) {
+	// a running checkpoint started before the drop and may still write the tables: it frees them after its header
+	if (!transaction_manager.DeferDroppedTables(dropped_tables)) {
+		FreeTables(dropped_tables);
+	}
+	dropped_tables.clear();
+	FinalizeCommit();
+}
+
 void CommitDropState::FinalizeCommit() {
+	D_ASSERT(dropped_tables.empty());
 	if (block_manager) {
 		for (auto block_id : dropped_block_ids) {
 			block_manager->MarkBlockAsModified(block_id);
@@ -59,7 +79,7 @@ void CommitDropState::FinalizeCommit() {
 }
 
 bool CommitDropState::Empty() const {
-	return dropped_block_ids.empty() && pending_index_removals.empty();
+	return dropped_block_ids.empty() && pending_index_removals.empty() && dropped_tables.empty();
 }
 
 //===--------------------------------------------------------------------===//

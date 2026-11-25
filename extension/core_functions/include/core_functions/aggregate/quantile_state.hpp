@@ -417,7 +417,7 @@ template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
 AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	auto &function = input.function;
 	AggregateStateLayout layout;
-	if (function.GetReturnType().IsAggregateState()) {
+	if (function.ReturnsExportedState()) {
 		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
 		// its return type IS the state type already
 		layout.type = function.GetReturnType();

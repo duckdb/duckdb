@@ -140,6 +140,10 @@ inline LogicalType TypeVisitor::VisitReplace(const LogicalType &type, F &&func) 
 
 template <class F>
 inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
+	if (!type.HasParameters()) {
+		// a type without parameters has no children
+		return predicate(type);
+	}
 	vector<reference<const LogicalType>> worklist {type};
 
 	while (!worklist.empty()) {

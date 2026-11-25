@@ -321,10 +321,21 @@ SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 statement ok
 SET explain_output='physical_only';
 
+# This assertion checks a particular physical specialization of the exact plan.
+# Keep all result checks under the active test configuration.
+statement ok
+SET VARIABLE saved_join_threshold = current_setting('approximate_join_order_threshold');
+
+statement ok
+SET approximate_join_order_threshold=12;
+
 query II
 EXPLAIN SELECT * FROM query(getvariable('flummi_sql'));
 ----
 physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+statement ok
+SET approximate_join_order_threshold=getvariable('saved_join_threshold');
 
 statement ok
 DROP VIEW edges;

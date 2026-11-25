@@ -118,10 +118,12 @@ SELECT count(*),sum(p.n) FROM rle_segments p JOIN numeric_build b ON p.w=b.w AND
 ----
 61440	61440
 
+# All 61440 matching rows must survive, and the mandatory predicate must reject every 2900.
+# Adaptive ordering can change when optional predicates pause, allowing any of the 60 rows with k=1 through.
 query II
 EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*),sum(p.n) FROM rle_segments p JOIN numeric_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k WHERE b.keep AND p.k<>2900;
 ----
-analyzed_plan	<REGEX>:(?s).*rle_segments[^}]*},\s*"intermediate_rows": 61482,.*
+analyzed_plan	<REGEX>:(?s).*rle_segments[^}]*},\s*"intermediate_rows": (614[4-9][0-9]|61500),.*
 
 query II
 EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*),sum(p.n) FROM dict_frequency p JOIN string_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k WHERE b.keep;

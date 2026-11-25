@@ -536,6 +536,7 @@ static constexpr idx_t PARSER_ARENA_INITIAL_CAPACITY = 8 * ArenaAllocator::ARENA
 class ParseResultAllocator {
 public:
 	ParseResultAllocator();
+	explicit ParseResultAllocator(Allocator &allocator);
 	~ParseResultAllocator();
 
 	template <class RESULT, class... ARGS>

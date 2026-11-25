@@ -1,0 +1,91 @@
+# name: test/sql/aggregate/group/perfect_ht_state_layout.test
+# description: Perfect hash eligibility depends on every bound aggregate state
+# group: [group]
+
+require core_functions
+
+# Some of the native implementations below cannot export their state.
+statement ok
+SET debug_verify_aggregate_state_export=false
+
+statement ok
+SET explain_output='physical_only'
+
+statement ok
+CREATE TABLE input AS SELECT (i % 100)::UTINYINT AS g, i FROM range(65536) t(i)
+
+query II
+EXPLAIN (FORMAT JSON) SELECT list(i) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i), list(i) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i, 3) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT max(i, 3) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+# EXPORT_STATE preserves the ordered wrapper even when the scalar minimum is order insensitive.
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i ORDER BY i DESC) EXPORT_STATE FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i::VARCHAR ORDER BY i DESC) EXPORT_STATE FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT approx_count_distinct(i ORDER BY i DESC) EXPORT_STATE FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT bitstring_agg(i, 0, 65535) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT approx_quantile(i, 0.5) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*), sum(i), avg(i) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT approx_count_distinct(i) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i::VARCHAR) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT max(i::VARCHAR) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min([i]), max({'v': i}) FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT min(i::VARCHAR) EXPORT_STATE, approx_count_distinct(i) EXPORT_STATE FROM input GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*

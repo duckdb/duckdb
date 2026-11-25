@@ -8,6 +8,7 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/sort_key_prefix.hpp"
 #include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 
@@ -338,24 +339,13 @@ static void SortTiedBucket(ClientContext &context, const ITERATOR &begin, const 
 			}
 			varying_bits |= words[0] ^ SUFFIX::ExtractWord(*it, offset);
 		}
-		// The common first word can cache the suffix during this synchronous refinement.
-		struct PrefixRestorer {
-			ITERATOR begin;
-			ITERATOR end;
-			uint64_t prefix;
-
-			~PrefixRestorer() {
-				for (auto it = begin; it != end; ++it) {
-					it->part0 = prefix;
-				}
-			}
-		} restore {begin, end, samples[0].part0};
+		SortKeyPrefixScope<ITERATOR> prefix_scope(begin, end);
 		scanned = 0;
 		for (auto it = begin; it != end; ++it) {
 			if (++scanned % STANDARD_VECTOR_SIZE == 0) {
 				context.FastInterruptCheck();
 			}
-			it->part0 = SUFFIX::ExtractWord(*it, offset);
+			prefix_scope.Set(*it, SUFFIX::ExtractWord(*it, offset));
 		}
 		SUFFIX suffix(extract_key, varying_bits);
 		duckdb_ska_sort::ska_sort(begin, end, suffix, merge);

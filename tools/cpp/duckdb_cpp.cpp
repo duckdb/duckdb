@@ -1768,6 +1768,24 @@ auto Connection::GetQueryMetrics() const -> QueryMetrics {
 	return detail::HandleFactory::Make<QueryMetrics>(_h);
 }
 
+namespace {
+// Collects the text a text sink delivers
+void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
+	WithExceptionGuard(err, [&] {
+		if (text && text_length) {
+			static_cast<std::string *>(user_data)->append(text, text_length);
+		}
+	});
+}
+} // namespace
+
+auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
+	               &out);
+	return out;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Value
 //----------------------------------------------------------------------------------------------------------------------
@@ -3377,6 +3395,12 @@ auto ScalarFunction::Create(Factory &factory) -> ScalarFunction {
 auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), view.data(), view.size());
+	return *this;
+}
+
+auto ScalarFunction::SetSchema(const std::string &schema) & -> ScalarFunction & {
+	auto view = ToStr(schema);
+	CheckedAPICall(duckdb_v2_scalar_function_set_schema, handle(), view.data(), view.size());
 	return *this;
 }
 
