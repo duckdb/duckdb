@@ -29,6 +29,52 @@ SELECT * FROM read_csv('{TEST_DIR}/rule_nullstr_escape.csv', new_line=NULL::VARC
 ----
 This is not accepted as a newline
 
+# where the escape works outside quotes the NULL string matches a plain field of the escape and its character
+foreach escape_mode anywhere quotes_only
+
+query IT
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N') ORDER BY a;
+----
+1	true
+2	false
+
+endloop
+
+# under quotes_only only a plain field of just the escape and the character matches, at any buffer size
+statement ok
+COPY (SELECT * FROM (VALUES ('1,x'), ('22,\N'), ('3,"\N"'), ('4,N'), ('5,\Nx'), ('66,N\'), ('7,\\N')) t(line)) TO '{TEST_DIR}/rule_nullstr_quotes_only.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach buffer_size 8 2000000
+
+foreach parallel true false
+
+query ITT
+SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_quotes_only.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='quotes_only', nullstr='\N', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	x	false
+3	N	false
+4	N	false
+5	Nx	false
+7	N	false
+22	NULL	true
+66	N	false
+
+# a plain NULL string matches what these fields read as
+query IT
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/rule_nullstr_quotes_only.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='quotes_only', nullstr='N', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	false
+3	true
+4	true
+5	false
+7	true
+22	true
+66	true
+
+endloop
+
+endloop
+
 # escape_mode anywhere lets the escape work outside quoted values, escaping any character after it
 query TTT
 SELECT a, replace(b, chr(10), '<nl>'), c FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value', parallel=false) ORDER BY a;

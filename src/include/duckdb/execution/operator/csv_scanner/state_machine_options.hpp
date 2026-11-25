@@ -58,6 +58,10 @@ struct CSVStateMachineOptions {
 	bool EscapeQuotesOnly() const {
 		return escape_mode.GetValue() == CSVEscapeMode::QUOTES_ONLY;
 	}
+	//! Whether the bytes of a field are the escape and one character under quotes_only, the form of a NULL string
+	bool EscapeAndCharacter(const char *field, const idx_t size) const {
+		return EscapeQuotesOnly() && size == 2 && field[0] == escape.GetValue();
+	}
 	//! Whether a doubled quote inside a field is one literal quote
 	bool DoubledQuotes() const {
 		return embedded_quotes.GetValue() == CSVEmbeddedQuotes::DOUBLED ||

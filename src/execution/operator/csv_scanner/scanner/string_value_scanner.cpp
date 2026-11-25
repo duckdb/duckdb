@@ -265,7 +265,7 @@ static bool ParseDecimal(const char *value_ptr, idx_t size, const ParseTypeInfo 
 	return true;
 }
 
-void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
+void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate, bool escape_and_character) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
 	}
@@ -309,7 +309,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			if (state_machine.state_machine_options.UnquotedEscapes() && null_str_size[i] == 2 &&
 			    null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
 				// with the escape active the NULL string only matches as the escaped character
-				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
+				// under quotes_only that is a plain field of just the escape and the character
+				const bool escaped_character =
+				    check_unquoted_escaped_null || (escape_and_character && !policy_quoted && size == 1);
+				is_null = escaped_character && null_str_ptr[i][1] == value_ptr[0];
 			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
 				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
 			}
@@ -659,7 +662,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
 				    sm_opts.delimiter.GetValue(), sm_opts.escape_mode.GetValue(), sm_opts.DoubledQuotes(),
 				    result.units_before_field, result.value_scratch);
-				result.AddValueToVector(value.GetData(), value.GetSize(), true);
+				result.AddValueToVector(value.GetData(), value.GetSize(), true,
+				                        sm_opts.EscapeAndCharacter(value_ptr, length));
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
 				result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id, result.last_position);
@@ -680,7 +684,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
 				    sm_opts.EscapeWorksIn(result.quoted), !result.quoted && sm_opts.EscapeQuotesOnly(),
 				    sm_opts.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
-				result.AddValueToVector(value.GetData(), value.GetSize());
+				result.AddValueToVector(value.GetData(), value.GetSize(), false,
+				                        sm_opts.EscapeAndCharacter(value_ptr, length));
 			}
 		}
 	} else {
@@ -1957,7 +1962,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 				value_size -= extra_delimiter_bytes;
 			}
-			result.AddValueToVector(value.GetData(), value_size, true);
+			const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
+			result.AddValueToVector(value.GetData(), value_size, true,
+			                        sm_options.EscapeAndCharacter(over_buffer_string.c_str(),
+			                                                      over_buffer_string.size() - extra_delimiter_bytes));
 		}
 	} else if (empty_line) {
 		result.EmptyLine(result, iterator.pos.buffer_pos);
