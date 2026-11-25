@@ -3550,6 +3550,7 @@ const StringUtil::EnumStringLiteral *GetJoinOrderOperatorTypeValues() {
 		{ static_cast<uint32_t>(JoinOrderOperatorType::LEFT), "LEFT" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::SEMI), "SEMI" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::ANTI), "ANTI" },
+		{ static_cast<uint32_t>(JoinOrderOperatorType::MARK), "MARK" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::CROSS_PRODUCT), "CROSS_PRODUCT" }
 	};
 	return values;
@@ -3557,12 +3558,12 @@ const StringUtil::EnumStringLiteral *GetJoinOrderOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value) {
-	return StringUtil::EnumToString(GetJoinOrderOperatorTypeValues(), 5, "JoinOrderOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value) {
-	return static_cast<JoinOrderOperatorType>(StringUtil::StringToEnum(GetJoinOrderOperatorTypeValues(), 5, "JoinOrderOperatorType", value));
+	return static_cast<JoinOrderOperatorType>(StringUtil::StringToEnum(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {
