@@ -323,11 +323,12 @@ void ScalarAggregateMerger::Optimize(unique_ptr<LogicalOperator> &plan) {
 		return;
 	}
 	VisitOperator(plan);
-	if (replacements.empty()) {
+	if (replacements.Empty()) {
 		return;
 	}
-	ColumnBindingReplacer replacer;
-	replacer.replacement_bindings = std::move(replacements);
+	auto binding_replacements = std::move(replacements);
+	replacements = BindingReplacementGraph();
+	ColumnBindingReplacer replacer(binding_replacements);
 	replacer.VisitOperator(*plan);
 	plan->ResolveOperatorTypes();
 }
@@ -613,14 +614,14 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 			for (idx_t i = 0; i < expressions.size(); i++) {
 				auto copy = expressions[i]->Copy();
 				RemapBindings(copy, to_merged);
-				replacements.emplace_back(ColumnBinding(branch.projection->table_index, ProjectionIndex(i)),
-				                          ColumnBinding(projection_index, ProjectionIndex(columns.size())));
+				replacements.Add(ColumnBinding(branch.projection->table_index, ProjectionIndex(i)),
+				                 ColumnBinding(projection_index, ProjectionIndex(columns.size())));
 				columns.push_back(std::move(copy));
 			}
 		} else {
 			for (idx_t j = 0; j < aggregate.expressions.size(); j++) {
-				replacements.emplace_back(ColumnBinding(aggregate.aggregate_index, ProjectionIndex(j)),
-				                          ColumnBinding(projection_index, ProjectionIndex(columns.size())));
+				replacements.Add(ColumnBinding(aggregate.aggregate_index, ProjectionIndex(j)),
+				                 ColumnBinding(projection_index, ProjectionIndex(columns.size())));
 				columns.push_back(make_uniq<BoundColumnRefExpression>(
 				    aggregate.expressions[j]->GetReturnType(),
 				    ColumnBinding(aggregate_index, ProjectionIndex(offsets[k] + j))));

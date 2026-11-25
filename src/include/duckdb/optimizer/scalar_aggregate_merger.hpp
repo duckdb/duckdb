@@ -53,7 +53,7 @@ private:
 private:
 	Optimizer &optimizer;
 	//! The bindings of the branches that were merged away, pointed at the merged projection's columns
-	vector<ReplacementBinding> replacements;
+	BindingReplacementGraph replacements;
 };
 
 } // namespace duckdb
