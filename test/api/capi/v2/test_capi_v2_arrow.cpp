@@ -370,7 +370,7 @@ void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_
 
 void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	std::string_view name = "arrow_roundtrip_range";
 	REQUIRE(duckdb_v2_table_function_set_name(function, name.data(), name.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
 
@@ -383,11 +383,12 @@ void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ArrowRangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ArrowRangeInitCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), ArrowRangeInitCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ArrowRangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ArrowRangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 

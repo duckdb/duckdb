@@ -388,17 +388,18 @@ void ProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 
 void RegisterProbe(duckdb_v2_connection_handle conn) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	std::string_view name = "expr_probe";
 	REQUIRE(duckdb_v2_table_function_set_name(function, name.data(), name.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ProbeInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), ProbeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ProbeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ProbeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(function, ProbePushdownCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 // Runs a single-BIGINT-cell query against the probe and returns the rendered predicates it saw.

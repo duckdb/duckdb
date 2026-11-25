@@ -4444,7 +4444,18 @@ TableFunction::~TableFunction() {
 auto TableFunction::Create(Factory &factory) -> TableFunction {
 	duckdb_v2_table_function_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_table_function_create, factory.handle(), &_h);
-	return detail::HandleFactory::Make<TableFunction>(_h);
+	auto result = detail::HandleFactory::Make<TableFunction>(_h);
+	duckdb_v2_data_source_handle source = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_create, factory.handle(), &source);
+	result.data_source = std::shared_ptr<void>(source, [](void *ptr) {
+		auto source_handle = static_cast<duckdb_v2_data_source_handle>(ptr);
+		duckdb_v2_data_source_destroy(&source_handle);
+	});
+	return result;
+}
+
+auto TableFunction::DataSourceHandle() -> void * {
+	return data_source.get();
 }
 
 auto TableFunction::SetName(const std::string &name) & -> TableFunction & {
@@ -4499,7 +4510,8 @@ auto TableFunction::SetBindCallback(BindCallback callback) & -> TableFunction & 
 
 auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		init_global_callback = nullptr;
 		return *this;
 	}
@@ -4517,14 +4529,16 @@ auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> Tabl
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_init_global_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	init_global_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		init_local_callback = nullptr;
 		return *this;
 	}
@@ -4542,14 +4556,16 @@ auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableF
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_init_local_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	init_local_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		exec_callback = nullptr;
 		return *this;
 	}
@@ -4567,14 +4583,16 @@ auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & 
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_exec_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	exec_callback = callback;
 	return *this;
 }
 
 auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		progress_callback = nullptr;
 		return *this;
 	}
@@ -4592,7 +4610,8 @@ auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFun
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_progress_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	progress_callback = callback;
 	return *this;
 }
@@ -4624,7 +4643,8 @@ auto TableFunction::SetFilterPushdownCallback(FilterPushdownCallback callback) &
 
 auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_partition_data_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		partition_data_callback = nullptr;
 		return *this;
 	}
@@ -4642,7 +4662,8 @@ auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_partition_data_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	partition_data_callback = callback;
 	return *this;
 }
@@ -4674,7 +4695,8 @@ auto TableFunction::SetPartitioningCallback(PartitioningCallback callback) & -> 
 
 auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_claim_batch_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		claim_batch_callback = nullptr;
 		return *this;
 	}
@@ -4692,7 +4714,8 @@ auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> Tabl
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_claim_batch_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	claim_batch_callback = callback;
 	return *this;
 }
@@ -4778,7 +4801,8 @@ auto TableFunction::AddVirtualColumn(VirtualColumn column) & -> TableFunction & 
 
 auto TableFunction::SetMetricsCallback(MetricsCallback callback) & -> TableFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_table_function_set_metrics_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_metrics_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		metrics_callback = nullptr;
 		return *this;
 	}
@@ -4796,7 +4820,8 @@ auto TableFunction::SetMetricsCallback(MetricsCallback callback) & -> TableFunct
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_table_function_set_metrics_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_metrics_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	metrics_callback = callback;
 	return *this;
 }
@@ -4836,6 +4861,8 @@ auto TableFunction::PrepareRegistration() -> void {
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
+	CheckedAPICall(duckdb_v2_table_function_set_data_source, handle(),
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()));
 }
 
 auto TableFunction::BindInput::AddResultColumn(const std::string &name, const LogicalType &type) -> void {

@@ -29,7 +29,7 @@ namespace {
 // Create a table function on the connection with the given name.
 duckdb_v2_table_function_handle MakeTable(duckdb_v2_connection_handle conn, std::string_view name) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_name(function, name.data(), name.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
 	return function;
 }
@@ -223,18 +223,19 @@ void RegisterRange(EnvFixture &fx, std::string_view name = "my_range",
 	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, RangeInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), RangeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	if (info_cb) {
 		REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, info_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	if (data_cb) {
-		REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, data_cb, nullptr) ==
+		REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(function), data_cb, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 	}
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -624,9 +625,10 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 	auto function = MakeTable(fx.conn, "my_pairs");
 	TableSigParam(SigOf(function), "n", integer);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, PairsBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, PairsExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), PairsExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
 	duckdb_v2_result_handle result = nullptr;
@@ -674,9 +676,10 @@ TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_VARIADIC,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ArgsBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ArgsExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ArgsExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_value_destroy(&seven);
 	duckdb_v2_logical_type_destroy(&bigint);
 
@@ -723,13 +726,14 @@ TEST_CASE("V2 table: user data, global state and local state reach exec", "[capi
 	duckdb_v2_opaque user_data = {&payload, nullptr, nullptr};
 	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, StateInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), StateInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, StateInitLocalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_local_callback(TestSourceOf(function), StateInitLocalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, StateExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), StateExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 
 	// The bind data seeded the global counter with 3 rows, each carrying the local state's tag.
 	REQUIRE(QueryI64(fx.conn, "SELECT sum(v)::BIGINT FROM my_state()") == 126);
@@ -750,27 +754,31 @@ TEST_CASE("V2 table: bind and exec errors propagate to the result", "[capi_v2][t
 
 	auto failing_bind = MakeTable(fx.conn, "bad_bind");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(failing_bind, FailingBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(failing_bind, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, failing_bind, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&failing_bind);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(failing_bind), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, failing_bind, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&failing_bind);
 
 	auto failing_exec = MakeTable(fx.conn, "bad_exec");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(failing_exec, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(failing_exec, FailingExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, failing_exec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&failing_exec);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(failing_exec), FailingExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, failing_exec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&failing_exec);
 
 	auto no_columns = MakeTable(fx.conn, "no_columns");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(no_columns, NoColumnsBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(no_columns, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, no_columns, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&no_columns);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(no_columns), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, no_columns, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&no_columns);
 
 	auto any_column = MakeTable(fx.conn, "any_column");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(any_column, AnyColumnBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(any_column, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, any_column, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&any_column);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(any_column), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, any_column, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&any_column);
 
 	REQUIRE(QueryError(fx.conn, "SELECT * FROM bad_bind()").find("bind refused") != std::string::npos);
 	REQUIRE(QueryError(fx.conn, "SELECT * FROM bad_exec()").find("exec refused") != std::string::npos);
@@ -791,30 +799,29 @@ TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 	// No name.
 	{
 		duckdb_v2_table_function_handle function = nullptr;
-		REQUIRE(duckdb_v2_table_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(TestCreateTable(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_table_function_destroy(&function);
+		REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		TestDestroyTable(&function);
 	}
 
 	// No bind callback: a table function has no other way to declare its columns.
 	{
 		auto function = MakeTable(fx.conn, "no_bind");
-		REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_table_function_destroy(&function);
+		REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		TestDestroyTable(&function);
 	}
 
 	// No exec callback.
 	{
 		auto function = MakeTable(fx.conn, "no_exec");
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_table_function_destroy(&function);
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		TestDestroyTable(&function);
 	}
 
 	// A return type on the signature: the columns come from bind instead.
@@ -822,10 +829,10 @@ TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 		auto function = MakeTable(fx.conn, "has_return_type");
 		REQUIRE(duckdb_v2_function_signature_set_return_type(SigOf(function), bigint, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_table_function_destroy(&function);
+		REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		TestDestroyTable(&function);
 	}
 
 	// A parameter without a default following one with a default.
@@ -837,10 +844,10 @@ TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 		TableSigParam(sig, "b", bigint);
 		duckdb_v2_value_destroy(&seven);
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_table_function_destroy(&function);
+		REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		TestDestroyTable(&function);
 	}
 
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -866,12 +873,14 @@ TEST_CASE("V2 table: progress callback reports scan progress", "[capi_v2][table_
 	auto function = MakeTable(fx.conn, "my_progress");
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, RangeInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), RangeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_progress_callback(function, ProgressCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_progress_callback(TestSourceOf(function), ProgressCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 
 	duckdb_v2_result_handle r = nullptr;
@@ -914,17 +923,18 @@ TEST_CASE("V2 table: null arguments and destroy null-safety", "[capi_v2][table_f
 	EnvFixture fx;
 
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_table_function_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_register_table_function(nullptr, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestCreateTable(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestCreateTable(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestRegisterTable(static_cast<duckdb_v2_connection_handle>(nullptr), function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	std::string_view str = "x";
 	REQUIRE(duckdb_v2_table_function_set_name(nullptr, str.data(), str.size(), nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(nullptr, StateBindCb, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(nullptr, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(nullptr), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_get_signature(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestRegisterTable(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_table_function_exec_get_output_chunk(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_progress_set_progress(nullptr, 0.5, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -933,11 +943,11 @@ TEST_CASE("V2 table: null arguments and destroy null-safety", "[capi_v2][table_f
 	REQUIRE(duckdb_v2_table_function_init_global_set_max_threads(nullptr, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// Destroy is null-safe and clears the slot.
-	REQUIRE(duckdb_v2_table_function_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestDestroyTable(nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_handle already_null = nullptr;
-	REQUIRE(duckdb_v2_table_function_destroy(&already_null) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestDestroyTable(&already_null) == DUCKDB_V2_ERROR_NONE);
 	auto live = MakeTable(fx.conn, "unused");
-	REQUIRE(duckdb_v2_table_function_destroy(&live) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestDestroyTable(&live) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(live == nullptr);
 }
 
@@ -1051,15 +1061,16 @@ void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_contex
 void RegisterProj(duckdb_v2_connection_handle conn, std::string_view name, bool projection_pushdown) {
 	auto function = MakeTable(conn, name);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProjBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ProjInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), ProjInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, ProjInitLocalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_local_callback(TestSourceOf(function), ProjInitLocalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ProjExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ProjExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, projection_pushdown, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 // Runs a query and calls fn(view, row) for every cell, row-major.
@@ -1266,12 +1277,13 @@ void RegisterClaim(EnvFixture &fx, std::string_view name,
 	duckdb_v2_opaque user_data = {&claim_user_data_marker, nullptr, nullptr};
 	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ClaimBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ClaimInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), ClaimInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ClaimExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ClaimExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(function, pushdown, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -1482,17 +1494,18 @@ void BatchOrderGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_h
 void RegisterBatchOrder(duckdb_v2_connection_handle conn, std::string_view name, bool with_partition_data) {
 	auto function = MakeTable(conn, name);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, BatchOrderBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, BatchOrderInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), BatchOrderInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, BatchOrderInitLocalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_local_callback(TestSourceOf(function), BatchOrderInitLocalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, BatchOrderExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), BatchOrderExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	if (with_partition_data) {
-		REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, BatchOrderGetPartitionDataCb, nullptr) ==
-		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(function), BatchOrderGetPartitionDataCb,
+		                                                          nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 // ---------------------------------------------------------------------------
@@ -1690,13 +1703,15 @@ void RegisterPartProbeVariant(EnvFixture &fx, std::string_view name,
 	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, PartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), PartProbeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, PartProbeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, data_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), PartProbeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(function), data_cb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, info_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -1941,16 +1956,17 @@ void RegisterProjPartProbe(EnvFixture &fx, std::string_view name) {
 	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProjPartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), PartProbeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ProjPartProbeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ProjPartProbeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, true, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, ProjPartProbeGetPartitionDataCb, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(function), ProjPartProbeGetPartitionDataCb,
+	                                                          nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, ProjPartProbeGetPartitionInfoCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -1988,15 +2004,16 @@ TEST_CASE("V2 table: partitioning requires partition_data", "[capi_v2][table_fun
 	auto function = MakeTable(fx.conn, "info_only_probe");
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, AlwaysPartitionedInfoCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, NoBatchIndexDataCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(function), NoBatchIndexDataCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -2097,8 +2114,8 @@ TEST_CASE("V2 table: partition_data and partitioning null arguments", "[capi_v2]
 	void *data = nullptr;
 	bool flag = false;
 
-	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(nullptr, PartProbeGetPartitionDataCb, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_source_set_partition_data_callback(TestSourceOf(nullptr), PartProbeGetPartitionDataCb,
+	                                                          nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(nullptr, PartProbeGetPartitionInfoCb, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
@@ -2246,9 +2263,10 @@ TEST_CASE("V2 table: named-only parameters and kwargs", "[capi_v2][table_functio
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_ONLY,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, KwargsBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ArgsExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ArgsExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 	duckdb_v2_value_destroy(&one);
 	duckdb_v2_logical_type_destroy(&any);
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -2297,23 +2315,25 @@ TEST_CASE("V2 table: virtual columns need projection pushdown", "[capi_v2][table
 
 	auto virtual_function = MakeTable(fx.conn, "virtual_without_projection");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(virtual_function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(virtual_function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(virtual_function), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_add_virtual_column(
 	            virtual_function, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, virtual_function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_table_function_destroy(&virtual_function);
+	REQUIRE(TestRegisterTable(fx.conn, virtual_function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	TestDestroyTable(&virtual_function);
 
 	// With projection pushdown they register
 	auto function = MakeTable(fx.conn, "virtual_with_projection");
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StateBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, true, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_add_virtual_column(function, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
 	                                                    nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_metrics_callback(function, NoMetricsCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(duckdb_v2_data_source_set_metrics_callback(TestSourceOf(function), NoMetricsCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 TEST_CASE("V2 table: virtual column and metrics arguments", "[capi_v2][table_function]") {
@@ -2323,12 +2343,12 @@ TEST_CASE("V2 table: virtual column and metrics arguments", "[capi_v2][table_fun
 	// A virtual column that does not exist
 	REQUIRE(duckdb_v2_table_function_add_virtual_column(function, static_cast<DUCKDB_V2_TABLE_VIRTUAL_COLUMN>(99),
 	                                                    nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_table_function_destroy(&function);
+	TestDestroyTable(&function);
 
 	void *data = nullptr;
 	REQUIRE(duckdb_v2_table_function_add_virtual_column(nullptr, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
 	                                                    nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_table_function_set_metrics_callback(nullptr, NoMetricsCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_metrics_callback(TestSourceOf(nullptr), NoMetricsCb, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_metrics_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_metrics_get_bind_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -2350,7 +2370,7 @@ TEST_CASE("V2 table: to string arguments", "[capi_v2][table_function]") {
 	auto function = MakeTable(fx.conn, "to_string_arguments");
 	REQUIRE(duckdb_v2_table_function_set_to_string_callback(function, NoToStringCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_to_string_callback(function, nullptr, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	TestDestroyTable(&function);
 
 	void *data = nullptr;
 	REQUIRE(duckdb_v2_table_function_set_to_string_callback(nullptr, NoToStringCb, nullptr) ==

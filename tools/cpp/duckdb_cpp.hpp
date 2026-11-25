@@ -4808,6 +4808,7 @@ private:
 	explicit TableFunction(void *impl);
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
+	auto DataSourceHandle() -> void *;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -4825,6 +4826,8 @@ private:
 	MetricsCallback metrics_callback = nullptr;
 	ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the function scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.

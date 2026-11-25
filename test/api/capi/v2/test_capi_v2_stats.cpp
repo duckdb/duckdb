@@ -421,17 +421,18 @@ void StatsPairStatsCb(duckdb_v2_table_function_stats_info_handle info, duckdb_v2
 
 void RegisterStatsPair(duckdb_v2_connection_handle conn, std::string_view name, StatsMode *mode) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_name(function, name.data(), name.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_opaque user_data = {mode, nullptr, nullptr};
 	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StatsPairBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, StatsPairInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), StatsPairInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, StatsPairExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), StatsPairExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_stats_callback(function, StatsPairStatsCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 } // namespace
@@ -1134,14 +1135,15 @@ void MinMaxPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info,
 void RegisterMinMax(duckdb_v2_connection_handle conn, const char *name, MinMaxMode *mode, bool with_stats,
                     bool with_pushdown) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_name(function, name, std::strlen(name), nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_opaque user_data = {mode, nullptr, nullptr};
 	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, MinMaxBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, MinMaxInitGlobalCb, nullptr) ==
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), MinMaxInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, MinMaxExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), MinMaxExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	if (with_stats) {
 		REQUIRE(duckdb_v2_table_function_set_stats_callback(function, MinMaxStatsCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
@@ -1149,8 +1151,8 @@ void RegisterMinMax(duckdb_v2_connection_handle conn, const char *name, MinMaxMo
 		REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(function, MinMaxPushdownCb, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 	}
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 } // namespace
@@ -1379,10 +1381,11 @@ void ShreddedPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle inf
 
 void RegisterShredded(duckdb_v2_connection_handle conn, const char *name, bool with_stats, bool with_pushdown) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(TestCreateTable(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_name(function, name, std::strlen(name), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ShreddedBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ShreddedExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), ShreddedExecCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	if (with_stats) {
 		REQUIRE(duckdb_v2_table_function_set_stats_callback(function, ShreddedStatsCb, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
@@ -1391,8 +1394,8 @@ void RegisterShredded(duckdb_v2_connection_handle conn, const char *name, bool w
 		REQUIRE(duckdb_v2_table_function_set_filter_pushdown_callback(function, ShreddedPushdownCb, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 	}
-	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
+	REQUIRE(TestRegisterTable(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	TestDestroyTable(&function);
 }
 
 } // namespace

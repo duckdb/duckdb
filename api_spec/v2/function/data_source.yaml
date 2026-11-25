@@ -11,7 +11,7 @@ handles:
       setter functions (e.g. `[[data_source_set_exec_callback]]`), and made the scan of a table function with
       `[[table_function_set_data_source]]`, which any number of table functions can do.
 
-      The callbacks of a data source are the ones a table function has for its scan, and receive the same handles
+      The callbacks of a data source run when a scan executes, and receive the handles of the scan
       (e.g. `[[table_function_exec_info]]`). The "bind data" they can read is the bind data of the table function call
       that scans the data source, and the user data they can read is the one set with `[[data_source_set_user_data]]`.
       Created with `[[data_source_create]]`, destroyed with `[[data_source_destroy]]`.
@@ -182,29 +182,6 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  data_source_set_filter_pushdown_callback:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-25" ]
-    description: |
-      Sets the optional filter pushdown callback of the data source.
-
-      The filter pushdown callback is offered the predicates the query applies to the rows of the data source, and
-      accepts the ones the data source applies itself (see `[[table_function_filter_pushdown_accept]]`). It only
-      sees the predicates of the scan if the data source supports projection pushdown (see
-      `[[data_source_set_projection_pushdown]]`).
-    parameters:
-      source:
-        type: data_source
-        description: The data source to set the filter pushdown callback of.
-      callback:
-        type: table_function_filter_pushdown_callback
-        description: The filter pushdown callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   data_source_set_partition_data_callback:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-25" ]
@@ -213,7 +190,8 @@ functions:
 
       The partition data callback is invoked on the worker thread that just produced a batch of rows, once per batch,
       when a downstream operator needs to know the ordering position of the batch or the values of a set of
-      partitioning columns. It is required if a partitioning callback is set.
+      partitioning columns. A table function with a partitioning callback (see
+      `[[table_function_set_partitioning_callback]]`) requires its data source to have one.
     parameters:
       source:
         type: data_source
@@ -221,28 +199,6 @@ functions:
       callback:
         type: table_function_partition_data_callback
         description: The partition data callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  data_source_set_partitioning_callback:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-25" ]
-    description: |
-      Sets the optional partitioning callback of the data source.
-
-      The partitioning callback is invoked during query optimization, once per candidate `GROUP BY` column set, to
-      decide whether the scan can feed a partitioned aggregate directly instead of hashing. Setting it requires a
-      partition data callback (see `[[data_source_set_partition_data_callback]]`).
-    parameters:
-      source:
-        type: data_source
-        description: The data source to set the partitioning callback of.
-      callback:
-        type: table_function_partitioning_callback
-        description: The partitioning callback to set.
       err:
         type: error_info
         indirection: 1
@@ -260,7 +216,7 @@ functions:
       shared global state, and the exec callback then produces the rows of that batch only, leaving the output chunk
       empty once the batch is exhausted. A batch is claimed before the exec callback first runs on a thread, and
       again whenever the exec callback leaves the output chunk empty; the scan ends for a thread once the claim batch
-      callback does not claim a batch. See `[[table_function_set_claim_batch_callback]]`.
+      callback does not claim a batch.
     parameters:
       source:
         type: data_source
@@ -274,64 +230,18 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  data_source_set_projection_pushdown:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-25" ]
-    description: |
-      Sets whether the data source supports projection pushdown. Defaults to false.
-
-      With projection pushdown, the engine asks the data source for only the columns a query actually uses: the exec
-      callback's output chunk holds one vector per requested column rather than one per column the scanning table
-      function declares, and the global init, local init and exec callbacks can look up which declared column each
-      vector stands for via e.g. `[[table_function_exec_get_column_index]]`. Without it the output chunk always holds
-      every declared column, and the engine drops the unused ones itself.
-    parameters:
-      source:
-        type: data_source
-        description: The data source to configure.
-      enable:
-        type: bool
-        description: Whether the data source supports projection pushdown.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  data_source_add_virtual_column:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-25" ]
-    description: |
-      Declares that the data source can produce the given virtual column.
-
-      A virtual column is not one of the columns the scanning table function declares in bind: the query asks for it by
-      name, and the data source only produces it when it is asked for. This requires projection pushdown (see
-      `[[data_source_set_projection_pushdown]]`), which is what lets the engine ask for it. See
-      `[[table_function_add_virtual_column]]`.
-    parameters:
-      source:
-        type: data_source
-        description: The data source to configure.
-      column:
-        type: TABLE_VIRTUAL_COLUMN
-        description: The virtual column the data source can produce.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   table_function_set_data_source:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-25" ]
     description: |
       Makes the scan of the table function the given data source.
 
-      A table function binds a call - it declares the columns the call returns - and scans it with a data source: the
-      callbacks that set up the scan and produce its rows. The setters of those callbacks on the table function itself
-      (e.g. `[[table_function_set_exec_callback]]`) configure the function's own data source, which this replaces
-      together with its user data. The function keeps a copy of the data source as it is when this is called, so
-      the same data source can be given to any number of functions, and changing it afterwards does not change them.
+      A table function takes care of everything that is decided when a call is planned - it binds the call and
+      declares the columns it returns, and pushes projections and filters down - and scans with a data source: the
+      callbacks that set up the scan at execution time and produce its rows. A table function has no scan callbacks of
+      its own, so a data source must be set before the function is registered. The function keeps a copy of the data
+      source as it is when this is called, so the same data source can be given to any number of functions, and
+      changing it afterwards does not change them.
 
       The callbacks of the data source read the bind data the bind callback of the function sets, and the user data of
       the data source or, if it has none, the user data of the function.

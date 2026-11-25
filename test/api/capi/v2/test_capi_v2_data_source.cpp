@@ -213,9 +213,12 @@ void DsSetCountSignature(duckdb_v2_factory_handle factory, duckdb_v2_table_funct
 
 // Registers a function `name(n)` that binds with `bind_cb` and scans with `source`
 void DsRegisterWithSource(EnvFixture &fx, std::string_view name, duckdb_v2_table_function_bind_callback_fn bind_cb,
-                          duckdb_v2_data_source_handle source, int64_t *user_data = nullptr) {
+                          duckdb_v2_data_source_handle source, int64_t *user_data = nullptr,
+                          bool projection_pushdown = false) {
 	auto function = DsMakeFunction(fx.factory, name);
 	DsSetCountSignature(fx.factory, function);
+	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, projection_pushdown, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, bind_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	if (user_data) {
 		duckdb_v2_opaque data = {user_data, nullptr, nullptr};
@@ -306,32 +309,26 @@ TEST_CASE("V2 data source: a function keeps a copy of the data source it took", 
 	duckdb_v2_data_source_destroy(&source);
 }
 
-TEST_CASE("V2 data source: the setters on a table function configure its own data source", "[capi_v2][data_source]") {
+TEST_CASE("V2 data source: a table function without a data source cannot be registered", "[capi_v2][data_source]") {
 	EnvFixture fx;
 
-	// A function that sets the scan callbacks itself, as before data sources
-	auto function = DsMakeFunction(fx.factory, "ds_direct");
+	auto function = DsMakeFunction(fx.factory, "ds_missing");
 	DsSetCountSignature(fx.factory, function);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, DsCountBindCb<1, 1>, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, DsCountInitGlobalCb, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, DsCountExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_table_function_destroy(&function);
-	REQUIRE(DsQueryI64(fx.conn, "SELECT sum(a)::BIGINT FROM ds_direct(10)") == 45);
+	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	// Taking a data source replaces what was set on the function
-	function = DsMakeFunction(fx.factory, "ds_replaced");
-	DsSetCountSignature(fx.factory, function);
-	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, DsCountBindCb<1, 1>, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, DsProbingExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// Taking a later data source replaces an earlier one
+	auto probing = DsMakeSource(fx.factory);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(probing, DsProbingExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto source = DsMakeCountSource(fx.factory);
+	REQUIRE(duckdb_v2_table_function_set_data_source(function, probing, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_data_source_destroy(&probing);
 	duckdb_v2_data_source_destroy(&source);
 	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_destroy(&function);
 	ds_probe.exec_calls = 0;
-	REQUIRE(DsQueryI64(fx.conn, "SELECT count(*) FROM ds_replaced(10)") == 10);
+	REQUIRE(DsQueryI64(fx.conn, "SELECT count(*) FROM ds_missing(10)") == 10);
 	REQUIRE(ds_probe.exec_calls == 0);
 }
 
@@ -342,8 +339,7 @@ TEST_CASE("V2 data source: projection pushdown reaches the scan", "[capi_v2][dat
 	REQUIRE(duckdb_v2_data_source_set_init_global_callback(source, DsCountInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_data_source_set_exec_callback(source, DsProbingExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_data_source_set_projection_pushdown(source, true, nullptr) == DUCKDB_V2_ERROR_NONE);
-	DsRegisterWithSource(fx, "ds_projected", DsCountBindCb<1, 3>, source);
+	DsRegisterWithSource(fx, "ds_projected", DsCountBindCb<1, 3>, source, nullptr, true);
 	duckdb_v2_data_source_destroy(&source);
 
 	// Only the column the query reads is produced, and it is the declared column c
@@ -371,18 +367,18 @@ TEST_CASE("V2 data source: refusals", "[capi_v2][data_source]") {
 		duckdb_v2_data_source_destroy(&source);
 	}
 
-	// A data source cannot declare a partitioning without the data that backs it
+	// A function cannot declare a partitioning without a data source with the partition data that backs it
 	{
 		auto source = DsMakeCountSource(fx.factory);
-		REQUIRE(duckdb_v2_data_source_set_partitioning_callback(
-		            source,
-		            [](duckdb_v2_table_function_partitioning_info_handle, duckdb_v2_context_handle,
-		               duckdb_v2_error_info_handle *) {},
-		            nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto function = DsMakeFunction(fx.factory, "ds_no_partition_data");
 		DsSetCountSignature(fx.factory, function);
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, DsCountBindCb<1, 1>, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_set_partitioning_callback(
+		            function,
+		            [](duckdb_v2_table_function_partitioning_info_handle, duckdb_v2_context_handle,
+		               duckdb_v2_error_info_handle *) {},
+		            nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -393,27 +389,18 @@ TEST_CASE("V2 data source: refusals", "[capi_v2][data_source]") {
 	// A virtual column needs projection pushdown to be asked for
 	{
 		auto source = DsMakeCountSource(fx.factory);
-		REQUIRE(duckdb_v2_data_source_add_virtual_column(source, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
-		                                                 nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto function = DsMakeFunction(fx.factory, "ds_virtual_column");
 		DsSetCountSignature(fx.factory, function);
 		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, DsCountBindCb<1, 1>, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_add_virtual_column(function, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
+		                                                    nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_data_source_set_projection_pushdown(source, true, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, true, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_table_function_destroy(&function);
-		duckdb_v2_data_source_destroy(&source);
-	}
-
-	// An invalid virtual column
-	{
-		auto source = DsMakeSource(fx.factory);
-		REQUIRE(duckdb_v2_data_source_add_virtual_column(source, static_cast<DUCKDB_V2_TABLE_VIRTUAL_COLUMN>(99),
-		                                                 nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_data_source_destroy(&source);
 	}
 
@@ -438,7 +425,6 @@ TEST_CASE("V2 data source: null arguments and destroy null-safety", "[capi_v2][d
 
 	REQUIRE(duckdb_v2_data_source_set_exec_callback(nullptr, DsCountExecCb, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_data_source_set_user_data(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_data_source_set_projection_pushdown(nullptr, true, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	auto function = DsMakeFunction(fx.factory, "ds_null_args");
 	REQUIRE(duckdb_v2_table_function_set_data_source(nullptr, source, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
