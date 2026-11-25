@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/scalar_aggregate_merger.hpp"
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -188,7 +189,7 @@ static hash_t HashRelation(const LogicalGet &scan) {
 	return CombineHash(result, named_parameters);
 }
 
-//! Compatible scans must hash alike. ReadSameTables checks collisions before grouping branches.
+//! Compatible scans must hash alike. CanShareWith checks collisions before grouping branches.
 static hash_t HashScan(const LogicalGet &scan) {
 	auto result = HashRelation(scan);
 	if (HasOption(scan, "ignore_errors")) {
@@ -199,20 +200,65 @@ static hash_t HashScan(const LogicalGet &scan) {
 	return result;
 }
 
-//! The ordered scans of one branch, indexed by relation identity. The scans outlive this collection.
+//! Borrows the ordered scans of one branch while matching and merging, indexed by relation identity.
 //! Adding columns during merging does not change relation identity or invalidate the index.
-class ScalarAggregateScans {
+class ScalarAggregateMerger::ScanCollection {
 public:
-	bool TryAdd(LogicalGet &scan) {
-		auto &candidates = relation_index[HashRelation(scan)];
-		for (auto index : candidates) {
-			if (IsSameRelation(scans[index].get(), scan)) {
+	//! One plain scan, or a cross product of scans of different relations (self-joins do not pair one to one).
+	bool Collect(LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			for (auto &child : op.children) {
+				if (!Collect(*child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (op.type != LogicalOperatorType::LOGICAL_GET) {
+			return false;
+		}
+		auto &scan = op.Cast<LogicalGet>();
+		// Reject-recording scans cannot share even with an identical scan; exclude them before candidate grouping.
+		return IsPlainScan(scan) && !RecordsRejects(scan) && TryAdd(scan);
+	}
+
+	//! Each stored scan must have a compatible scan in other, preserving the comparison's left/right order.
+	bool CanShareWith(const ScanCollection &other) const {
+		if (scans.size() != other.scans.size()) {
+			return false;
+		}
+		for (auto &scan : scans) {
+			auto candidates = other.FindCandidates(scan.get());
+			if (!candidates) {
+				return false;
+			}
+			bool found = false;
+			for (auto index : *candidates) {
+				if (CanShareScan(scan.get(), other.scans[index].get())) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
 				return false;
 			}
 		}
-		candidates.push_back(scans.size());
-		scans.push_back(scan);
 		return true;
+	}
+
+	//! The last compatible stored scan, in iteration order, matching the original target-selection order.
+	optional_idx FindCompatible(const LogicalGet &scan) const {
+		auto candidates = FindCandidates(scan);
+		if (!candidates) {
+			return optional_idx();
+		}
+		optional_idx result;
+		for (auto index : *candidates) {
+			if (CanShareScan(scans[index].get(), scan)) {
+				result = index;
+			}
+		}
+		return result;
 	}
 
 	idx_t size() const {
@@ -228,6 +274,26 @@ public:
 	}
 
 private:
+	bool TryAdd(LogicalGet &scan) {
+		auto &candidates = relation_index[HashRelation(scan)];
+		for (auto index : candidates) {
+			if (IsSameRelation(scans[index].get(), scan)) {
+				return false;
+			}
+		}
+		candidates.push_back(scans.size());
+		scans.push_back(scan);
+		return true;
+	}
+
+	optional_ptr<const vector<idx_t>> FindCandidates(const LogicalGet &scan) const {
+		auto entry = relation_index.find(HashRelation(scan));
+		if (entry == relation_index.end()) {
+			return nullptr;
+		}
+		return &entry->second;
+	}
+
 	vector<reference<LogicalGet>> scans;
 	unordered_map<hash_t, vector<idx_t>> relation_index;
 };
@@ -244,7 +310,7 @@ struct ScalarAggregateMerger::Branch {
 	reference<LogicalAggregate> aggregate;
 	//! The slot under the filters: the scan, or the cross product of scans of different tables (a FROM list)
 	reference<unique_ptr<LogicalOperator>> relation;
-	ScalarAggregateScans scans;
+	ScanCollection scans;
 	//! The filters' predicates, with ANDs split into their conjuncts
 	vector<reference<const Expression>> conjuncts;
 };
@@ -258,50 +324,11 @@ struct ScalarAggregateMerger::MergeTarget {
 
 static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
 	auto result = Hash(branch.scans.size());
-	// ReadSameTables matches scans irrespective of their order.
+	// CanShareWith matches scans irrespective of their order.
 	for (auto &scan : branch.scans) {
 		result += Hash(HashScan(scan.get()));
 	}
 	return result;
-}
-
-//! The plain scans under `op`: one scan, or a cross product of scans of different relations (a self-join's copies of
-//! a table would not pair one to one with another branch's)
-static bool CollectScans(LogicalOperator &op, ScalarAggregateScans &scans) {
-	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-		for (auto &child : op.children) {
-			if (!CollectScans(*child, scans)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	if (op.type != LogicalOperatorType::LOGICAL_GET) {
-		return false;
-	}
-	auto &scan = op.Cast<LogicalGet>();
-	// Reject-recording scans cannot share even with an identical scan; exclude them before candidate grouping.
-	if (!IsPlainScan(scan) || RecordsRejects(scan)) {
-		return false;
-	}
-	return scans.TryAdd(scan);
-}
-
-//! Two branches read the same tables when their scans pair up one to one as scans that can be shared
-static bool ReadSameTables(const ScalarAggregateMerger::Branch &a, const ScalarAggregateMerger::Branch &b) {
-	if (a.scans.size() != b.scans.size()) {
-		return false;
-	}
-	for (auto &scan : a.scans) {
-		bool found = false;
-		for (auto &other : b.scans) {
-			found = found || CanShareScan(scan.get(), other.get());
-		}
-		if (!found) {
-			return false;
-		}
-	}
-	return true;
 }
 
 //! Equal conjuncts, or the same comparison with its sides swapped (a = b and b = a)
@@ -507,7 +534,7 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 		auto &candidates = group_index[HashBranch(branches[i])];
 		for (auto group_idx : candidates) {
 			auto &group = groups[group_idx];
-			if (ReadSameTables(branches[group[0]], branches[i])) {
+			if (branches[group[0]].scans.CanShareWith(branches[i].scans)) {
 				group.push_back(i);
 				placed = true;
 				break;
@@ -587,8 +614,8 @@ void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<Log
 			return;
 		}
 	}
-	ScalarAggregateScans scans;
-	if (!CollectScans(*relation.get(), scans)) {
+	ScanCollection scans;
+	if (!scans.Collect(*relation.get())) {
 		return;
 	}
 	branches.push_back(Branch {leaf_index, projection, aggregate, relation, std::move(scans), std::move(conjuncts)});
@@ -599,7 +626,9 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	auto &first = branches[group[0]];
 	// every branch's scan bindings land on the first branch's scan of the same table, which gains the columns it
 	// lacks once the group is known to merge
+	// Targets have the first branch's scan order, which FindCompatible returns.
 	vector<MergeTarget> targets;
+	targets.reserve(first.scans.size());
 	for (auto &scan : first.scans) {
 		targets.push_back(MergeTarget {scan, {}});
 	}
@@ -607,13 +636,9 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	for (idx_t k = 1; k < group.size(); k++) {
 		for (auto &branch_scan : branches[group[k]].scans) {
 			auto &scan = branch_scan.get();
-			optional_ptr<MergeTarget> target;
-			for (auto &candidate : targets) {
-				if (CanShareScan(candidate.scan.get(), scan)) {
-					target = &candidate;
-				}
-			}
-			D_ASSERT(target);
+			auto target_index = first.scans.FindCompatible(scan);
+			D_ASSERT(target_index.IsValid());
+			auto &target = targets[target_index.GetIndex()];
 			auto &column_ids = scan.GetColumnIds();
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				// nothing refers to the empty placeholder
@@ -621,7 +646,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 					continue;
 				}
 				remaps[k][ColumnBinding(scan.table_index, ProjectionIndex(i))] =
-				    TargetBinding(*target, column_ids[i].GetPrimaryIndex());
+				    TargetBinding(target, column_ids[i].GetPrimaryIndex());
 			}
 		}
 	}
