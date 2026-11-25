@@ -1,0 +1,30 @@
+# name: test/sql/storage/concurrent_append_scan_validity.test_slow
+# description: Scan nullable columns while other connections append small batches with NULL values
+# group: [storage]
+
+statement ok
+CREATE TABLE tbl(i BIGINT, s VARCHAR, d DOUBLE, l INTEGER[], b BOOLEAN);
+
+concurrentloop threadid 0 8
+
+loop r 0 100
+
+# small batches: the validity masks of the last segment are written by many appends
+statement ok
+INSERT INTO tbl SELECT CASE WHEN range % 3 = 0 THEN NULL ELSE range END, CASE WHEN range % 5 = 0 THEN NULL ELSE 'v' || range END, CASE WHEN range % 7 = 0 THEN NULL ELSE range::DOUBLE END, CASE WHEN range % 4 = 0 THEN NULL ELSE [range] END, range % 2 = 0 FROM range(37)
+
+# readers scan the segment that is being appended to
+statement ok
+SELECT count(i), count(s), count(d), count(l), count(b), sum(i), max(s), sum(d), sum(len(l)) FROM tbl
+
+statement ok
+SELECT * FROM tbl WHERE i IS NULL AND s IS NOT NULL LIMIT 5
+
+endloop
+
+endloop
+
+query IIIIII
+SELECT count(*), count(i), count(s), count(d), count(l), count(b) FROM tbl
+----
+29600	19200	23200	24800	21600	29600
