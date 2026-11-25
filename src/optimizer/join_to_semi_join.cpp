@@ -94,9 +94,14 @@ public:
 				if (unstable_ctes.count(index) > 0) {
 					continue;
 				}
-				// a recursive CTE runs both of its children once per iteration
-				const bool recursive = op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
-				if (IsUnstable(*op.children[0]) || (recursive && IsUnstable(*op.children[1]))) {
+				// a recursive CTE runs both of its children once per iteration, a trampoline all of its branches
+				const bool recursive = op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+				                       op.type == LogicalOperatorType::LOGICAL_TRAMPOLINE;
+				bool unstable = IsUnstable(*op.children[0]);
+				for (idx_t child_idx = 1; recursive && !unstable && child_idx < op.children.size(); child_idx++) {
+					unstable = IsUnstable(*op.children[child_idx]);
+				}
+				if (unstable) {
 					unstable_ctes.insert(index);
 					changed = true;
 				}
@@ -341,7 +346,8 @@ public:
 
 	static void CollectCTEs(LogicalOperator &op, vector<reference<LogicalOperator>> &ctes) {
 		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
-		    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+		    op.type == LogicalOperatorType::LOGICAL_TRAMPOLINE) {
 			ctes.push_back(op);
 		}
 		for (auto &child : op.children) {
