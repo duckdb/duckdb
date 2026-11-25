@@ -43,6 +43,7 @@
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -423,6 +424,30 @@ public:
 		}
 		filters = input.filters;
 		sample_options = input.sample_options;
+	}
+
+	//! Limits the threads to the row groups that the zonemaps cannot skip for the filters
+	void LimitThreadsToUnprunedRowGroups(ClientContext &context) {
+		const auto thread_limit = MinValue<idx_t>(max_threads, context.db->NumberOfThreads());
+		if (!filters || thread_limit <= 1 || ClientConfig::GetConfig(context).verify_parallelism) {
+			return;
+		}
+		TableScanState scan_state;
+		scan_state.Initialize(storage_ids, context, filters);
+		auto local_table = LocalStorage::Get(context, duck_table.catalog).GetStorage(storage);
+		idx_t row_groups = local_table ? local_table->GetCollection().GetRowGroupCount() : 0;
+		auto segments = storage.GetRowGroupCollection()->GetRowGroups();
+		for (auto &node : segments->SegmentNodes()) {
+			if (row_groups >= thread_limit) {
+				return;
+			}
+			auto &row_group = node.GetNode();
+			if (row_group.count > 0 &&
+			    row_group.CheckZonemap(context, scan_state.GetFilterInfo(), node.GetRowStart())) {
+				row_groups++;
+			}
+		}
+		max_threads = MaxValue<idx_t>(row_groups, 1);
 	}
 
 	//! Shared scan-state setup for this table scan
@@ -811,6 +836,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);
+	g_state->LimitThreadsToUnprunedRowGroups(context);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
