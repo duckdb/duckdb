@@ -52,7 +52,7 @@ index 6dbd29c..666eddb 100644
  	return {std::move(headers), std::move(request_params), std::move(configured_headers)};
  }
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index f38e906..a949ad4 100644
+index 21b06e8..acaf404 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -52,7 +52,7 @@ void HTTPFSUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> res
@@ -65,7 +65,7 @@ index f38e906..a949ad4 100644
  }
  
 diff --git a/src/http/httpfs_curl_client.cpp b/src/http/httpfs_curl_client.cpp
-index 7325d58..ee07f1b 100644
+index 1d43064..3c9565c 100644
 --- a/src/http/httpfs_curl_client.cpp
 +++ b/src/http/httpfs_curl_client.cpp
 @@ -39,7 +39,7 @@ static size_t RequestHeaderCallback(void *contents, size_t size, size_t nmemb, v
@@ -86,7 +86,7 @@ index 7325d58..ee07f1b 100644
  		}
  	}
  
-@@ -782,16 +782,9 @@ private:
+@@ -779,16 +779,9 @@ private:
  		response->url = request_info->url;
  		response->reason = HTTPUtil::GetStatusMessage(status_code);
  		if (!request_info->header_collection.empty()) {
@@ -107,7 +107,7 @@ index 7325d58..ee07f1b 100644
  		// ResetRequestInfo();
  		return response;
 diff --git a/src/http/httpfs_httplib_client.cpp b/src/http/httpfs_httplib_client.cpp
-index 130cef6..c0a82d4 100644
+index 8cf60ee..8534f03 100644
 --- a/src/http/httpfs_httplib_client.cpp
 +++ b/src/http/httpfs_httplib_client.cpp
 @@ -154,7 +154,7 @@ public:
@@ -133,10 +133,10 @@ index 089a36f..b2dc611 100644
  
  string S3Provider::GetVersionTag(const HTTPObjectVersion &version, const string &etag) const {
 diff --git a/src/s3/s3_request.cpp b/src/s3/s3_request.cpp
-index 1783736..03c35aa 100644
+index 02cc9eb..2b6fff6 100644
 --- a/src/s3/s3_request.cpp
 +++ b/src/s3/s3_request.cpp
-@@ -185,15 +185,16 @@ public:
+@@ -188,15 +188,16 @@ public:
  
  public:
  	void Create() {
@@ -156,7 +156,7 @@ index 1783736..03c35aa 100644
  	}
  
  private:
-@@ -209,31 +210,31 @@ private:
+@@ -212,31 +213,31 @@ private:
  	}
  
  	void AddRequestHeaders() {
@@ -199,7 +199,7 @@ index 1783736..03c35aa 100644
  		}
  	}
  
-@@ -361,10 +362,10 @@ static HTTPHeaders CreateConfiguredS3Headers(const HTTPConfiguredHeaders &config
+@@ -364,10 +365,10 @@ static HTTPHeaders CreateConfiguredS3Headers(const HTTPConfiguredHeaders &config
  
  	HTTPHeaders result;
  	for (auto &header : sorted_headers) {
@@ -212,7 +212,7 @@ index 1783736..03c35aa 100644
  	}
  	return result;
  }
-@@ -390,11 +391,11 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
+@@ -414,11 +415,11 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
  		provider.ApplyReadCondition(read_condition, headers);
  	}
  	if (provider.GetType() == S3ProviderType::GCS && !request_options.user_project.empty()) {
@@ -226,7 +226,7 @@ index 1783736..03c35aa 100644
  		return headers;
  	}
  	case S3AuthType::SIGV4: {
-@@ -405,13 +406,13 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
+@@ -429,13 +430,13 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
  		return headers;
  	}
  	case S3AuthType::BEARER: {
@@ -245,7 +245,7 @@ index 1783736..03c35aa 100644
  		return headers;
  	}
 diff --git a/test/unittest/http/connection_reuse_test.cpp b/test/unittest/http/connection_reuse_test.cpp
-index b316579..6307256 100644
+index 80f687b..a81eaf7 100644
 --- a/test/unittest/http/connection_reuse_test.cpp
 +++ b/test/unittest/http/connection_reuse_test.cpp
 @@ -50,7 +50,7 @@ static void RunCurlTerminalTransportErrorIsNotReused() {
@@ -270,7 +270,16 @@ index b316579..6307256 100644
  	HeadRequestInfo request(server.HTTPPath(), headers, params);
  	auto response = http_util.Request(request, client);
  	REQUIRE(response);
-@@ -397,7 +397,7 @@ TEST_CASE("HTTP PUT respects explicit Content-Type and retains the fallback", "[
+@@ -398,7 +398,7 @@ TEST_CASE("HTTP clients send session headers once", "[httpfs][headers]") {
+ 			auto session = db.instance->config.GetHTTPTransportManager().CreateSession(*con.context, server.HTTPPath());
+ 			auto &params = session.Parameters();
+ 			HTTPHeaders headers;
+-			headers.Insert("X-Both", "request");
++			headers.InsertIfAbsent("X-Both", "request");
+ 			HeadRequestInfo request(server.HTTPPath(), headers, params);
+ 			REQUIRE(session.Request(request)->Success());
+ 			auto observations = server.Observations();
+@@ -423,7 +423,7 @@ TEST_CASE("HTTP PUT respects explicit Content-Type and retains the fallback", "[
  				const string fallback_type = "application/octet-stream";
  				HTTPHeaders headers;
  				if (explicit_header) {
@@ -341,8 +350,23 @@ index 5068fff..3e3c15f 100644
  TEST_CASE("configured headers do not override positional read headers", "[httpfs][positional-read][headers]") {
  	RunConfiguredReadHeaderCollision();
  	RunConfiguredIfMatchCollision();
+diff --git a/test/unittest/s3/s3_file_credentials_test.cpp b/test/unittest/s3/s3_file_credentials_test.cpp
+index f09d4c4..c4be336 100644
+--- a/test/unittest/s3/s3_file_credentials_test.cpp
++++ b/test/unittest/s3/s3_file_credentials_test.cpp
+@@ -940,8 +940,8 @@ TEST_CASE("Named S3 files retain metadata through credential refresh and region
+ 				    S3RequestExecutor::RunSession(encryption_util, *session, spec, [&](S3RequestData &request_data) {
+ 					    buffer.clear();
+ 					    auto headers = request_data.headers;
+-					    headers.Insert("Range", "bytes=0-1023");
+-					    headers.Insert("If-Match", etag);
++					    headers.InsertIfAbsent("Range", "bytes=0-1023");
++					    headers.InsertIfAbsent("If-Match", etag);
+ 					    GetRequestInfo request(
+ 					        request_data.http_url, headers, *request_data.http_params,
+ 					        [](const HTTPResponse &) { return true; },
 diff --git a/test/unittest/s3/s3_request_test.cpp b/test/unittest/s3/s3_request_test.cpp
-index 4ca1d53..5dd6f3b 100644
+index 4e350fc..bc4b437 100644
 --- a/test/unittest/s3/s3_request_test.cpp
 +++ b/test/unittest/s3/s3_request_test.cpp
 @@ -1945,10 +1945,10 @@ TEST_CASE("S3 provider version policy preserves version semantics", "[httpfs][s3
@@ -358,7 +382,7 @@ index 4ca1d53..5dd6f3b 100644
  		auto metadata_version = provider.ReadObjectVersion(version_headers);
  		REQUIRE(metadata_version.GetType() == HTTPObjectVersionType::S3_VERSION_ID);
  		REQUIRE(metadata_version.GetValue() == "null");
-@@ -2154,7 +2154,7 @@ TEST_CASE("S3 HTTP errors preserve metadata and provider-specific context", "[ht
+@@ -2162,7 +2162,7 @@ TEST_CASE("S3 HTTP errors preserve metadata and provider-specific context", "[ht
  	response.reason = "Forbidden by test";
  	response.body = "<Error><Code>InvalidAccessKeyId</Code><Message>bad credentials</Message>"
  	                "<AWSAccessKeyId>test-key</AWSAccessKeyId></Error>";
@@ -367,7 +391,7 @@ index 4ca1d53..5dd6f3b 100644
  
  	auto config = TestAuthConfig();
  	config.credentials.region = "eu-west-1";
-@@ -2233,7 +2233,7 @@ TEST_CASE("S3 region correction retains spent retries", "[httpfs][s3][retry][sha
+@@ -2241,7 +2241,7 @@ TEST_CASE("S3 region correction retains spent retries", "[httpfs][s3][retry][sha
  			attempts++;
  			if (attempts == 2) {
  				auto response = make_uniq<HTTPResponse>(HTTPStatusCode::MovedPermanently_301);
