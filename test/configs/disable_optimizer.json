@@ -28,6 +28,12 @@
       ]
     },
     {
+      "reason": "Checks that an ungrouped DISTINCT FILTER is placed below deduplication.",
+      "paths": [
+        "test/sql/aggregate/distinct/rewrite/distinct_ungrouped_filter_plan.test"
+      ]
+    },
+    {
       "reason": "Rejecting corrupt Parquet geometry statistics requires optimizer statistics propagation.",
       "paths": [
         "test/parquet/corrupt/geometry_add_wkb_type_oob.test"

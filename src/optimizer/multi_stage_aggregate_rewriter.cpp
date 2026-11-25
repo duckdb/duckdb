@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
@@ -183,9 +184,37 @@ static unique_ptr<LogicalOperator> CreateProjection(Optimizer &optimizer, unique
 	return std::move(projection);
 }
 
+static bool HasVolatileExpression(const LogicalOperator &op) {
+	bool has_volatile = false;
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](const unique_ptr<Expression> *expr) { has_volatile |= (*expr)->IsVolatile(); });
+	for (auto &child : op.children) {
+		has_volatile = has_volatile || HasVolatileExpression(*child);
+	}
+	return has_volatile;
+}
+
+static bool DistinctInputsCanThrow(const BoundAggregateExpression &aggregate) {
+	for (auto &child : aggregate.GetChildren()) {
+		if (child->CanThrow()) {
+			return true;
+		}
+	}
+	if (!aggregate.GetOrderBys()) {
+		return false;
+	}
+	for (auto &order : aggregate.GetOrderBys()->orders) {
+		if (order.expression->CanThrow()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate &aggr, const DistinctAggregateSet &set,
                                          unique_ptr<LogicalOperator> input,
-                                         const column_binding_map_t<ColumnBinding> &input_replacements) {
+                                         const column_binding_map_t<ColumnBinding> &input_replacements,
+                                         bool input_has_volatile) {
 	const idx_t group_count = aggr.groups.size();
 	auto &source_aggregate = aggr.expressions[set.source_index]->Cast<BoundAggregateExpression>();
 
@@ -224,7 +253,14 @@ static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate 
 		distinct_groups.push_back(AggregateRewriteHelper::CopyAndRebind(*order_expr, input_replacements));
 	}
 	optional_idx filter_column_offset;
-	if (source_aggregate.GetFilter()) {
+	if (source_aggregate.GetFilter() && group_count == 0 && !input_has_volatile &&
+	    !DistinctInputsCanThrow(source_aggregate)) {
+		// Ungrouped output is one row, so filter first unless that could skip volatile or throwing inputs.
+		auto filter = make_uniq<LogicalFilter>(
+		    AggregateRewriteHelper::CopyAndRebind(*source_aggregate.GetFilter(), input_replacements));
+		filter->AddChild(std::move(input));
+		input = std::move(filter);
+	} else if (source_aggregate.GetFilter()) {
 		// Keeping FILTER as a deduplication key preserves argument evaluation and groups with no qualifying rows.
 		filter_column_offset = distinct_groups.size();
 		distinct_groups.push_back(
@@ -807,10 +843,11 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		                                            input_replacements);
 	};
 
+	const bool input_has_volatile = aggr.groups.empty() && HasVolatileExpression(*op->children[0]);
 	for (auto &set : distinct_sets) {
 		column_binding_map_t<ColumnBinding> input_replacements;
-		auto branch =
-		    CreateDistinctBranch(optimizer, aggr, set, CreateBranchInput(input_replacements), input_replacements);
+		auto branch = CreateDistinctBranch(optimizer, aggr, set, CreateBranchInput(input_replacements),
+		                                   input_replacements, input_has_volatile);
 		branch_plans.push_back(std::move(branch.plan));
 		branches.push_back(std::move(branch));
 	}
