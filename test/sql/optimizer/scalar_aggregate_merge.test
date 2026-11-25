@@ -146,6 +146,23 @@ ORDER BY other.tag;
 3	10	7	1	12
 3	20	7	1	12
 
+# whole subtrees disappear; surviving left and right children keep their bindings and row multiplicity
+query IIIIIII
+SELECT a.v, b.v, c.v, d.v, other.tag, e.v, f.v
+FROM (((SELECT sum(i) AS v FROM merge_left WHERE i < 3) a
+       CROSS JOIN (SELECT max(i) AS v FROM merge_right) b)
+      CROSS JOIN
+      ((SELECT count(i) AS v FROM merge_left WHERE i > 2) c
+       CROSS JOIN (SELECT sum(i) AS v FROM merge_right) d))
+     CROSS JOIN
+     (((SELECT min(i) AS v FROM merge_left) e
+       CROSS JOIN (SELECT count(i) AS v FROM merge_right) f)
+      CROSS JOIN (VALUES (10), (20)) other(tag))
+ORDER BY other.tag;
+----
+3	7	1	12	10	1	2
+3	7	1	12	20	1	2
+
 # prepared statements: the parameters keep their values through the rewrite
 statement ok
 PREPARE p AS SELECT (SELECT count(*) FROM sales WHERE q < $1) AS a, (SELECT sum(paid) FROM sales WHERE q > $2) AS b

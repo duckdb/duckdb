@@ -15,7 +15,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -361,7 +360,7 @@ ScalarAggregateMerger::ScalarAggregateMerger(Optimizer &optimizer) : optimizer(o
 }
 
 void ScalarAggregateMerger::Optimize(unique_ptr<LogicalOperator> &plan) {
-	// rebuilding a cross-product tree would move the positions a projection map names: only plans without them
+	// Merging or removing leaves moves the positions a projection map names: only plans without them.
 	if (TreeHasProjectionMap(*plan)) {
 		return;
 	}
@@ -394,6 +393,21 @@ static void CollectLeaves(unique_ptr<LogicalOperator> &op, vector<reference<uniq
 		return;
 	}
 	leaves.push_back(op);
+}
+
+//! Remove empty cross products and collapse those with only one surviving child.
+static void PruneCrossProduct(unique_ptr<LogicalOperator> &op) {
+	if (!op || op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return;
+	}
+	D_ASSERT(op->children.size() == 2);
+	for (auto &child : op->children) {
+		PruneCrossProduct(child);
+	}
+	if (!op->children[0] || !op->children[1]) {
+		auto child = std::move(op->children[op->children[0] ? 0 : 1]);
+		op = std::move(child);
+	}
 }
 
 bool ScalarAggregateMerger::IsWorthMerging(const Branch &branch) {
@@ -459,20 +473,17 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 	if (!changed) {
 		return;
 	}
-	// rebuild the tree over the leaves that remain: a cross product's bindings are its children's, so their order
-	// changes nothing above it
-	vector<unique_ptr<LogicalOperator>> kept;
+	// Keep the surviving tree's shape instead of rebuilding it as a left-deep chain.
+	// Finish all leaf-slot updates before pruning, which invalidates the references in leaves and branches.
 	for (idx_t i = 0; i < leaves.size(); i++) {
 		if (removed[i]) {
-			continue;
+			leaves[i].get().reset();
+		} else if (merged_leaves[i]) {
+			leaves[i].get() = std::move(merged_leaves[i]);
 		}
-		kept.push_back(merged_leaves[i] ? std::move(merged_leaves[i]) : std::move(leaves[i].get()));
 	}
-	auto tree = std::move(kept[0]);
-	for (idx_t i = 1; i < kept.size(); i++) {
-		tree = LogicalCrossProduct::Create(std::move(tree), std::move(kept[i]));
-	}
-	op = std::move(tree);
+	PruneCrossProduct(op);
+	D_ASSERT(op);
 }
 
 void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves, idx_t leaf_index,
