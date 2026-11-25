@@ -229,14 +229,6 @@ static void DecimalDivisionResolveTypes(ResolveScalarFunctionTypesInput &input) 
 	if (!lhs_type.GetDecimalProperties(p1, s1) || !rhs_type.GetDecimalProperties(p2, s2)) {
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
-	// an integer argument is bound within the fixed-size decimals: HUGEINT and UHUGEINT, whose values have up to 39
-	// digits, as DECIMAL(38,0)
-	if (lhs_type.id() != LogicalTypeId::DECIMAL) {
-		p1 = MinValue<uint32_t>(p1, Decimal::MAX_WIDTH_INT128);
-	}
-	if (rhs_type.id() != LogicalTypeId::DECIMAL) {
-		p2 = MinValue<uint32_t>(p2, Decimal::MAX_WIDTH_INT128);
-	}
 	if (Decimal::IsWide(p1) || Decimal::IsWide(p2)) {
 		throw NotImplementedException("decimal_division is not supported for DECIMAL types wider than %d digits",
 		                              Decimal::MAX_WIDTH_INT128);

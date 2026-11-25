@@ -42,6 +42,30 @@ SELECT h_max < d38, h_max > d38, u_max = u_max + 0.0, h_min <= -1701411834604692
 ----
 false	true	true	false
 
+# a HUGEINT and a DECIMAL without fractional digits of up to 38 digits are compared as HUGEINT: every value of such
+# a DECIMAL is a HUGEINT
+statement ok
+PRAGMA disable_optimizer
+
+query II
+EXPLAIN SELECT h_max > 5::DECIMAL(18,0) AND h_min <= 5::DECIMAL(38,0) AND 5::DECIMAL(4,0) = h_max AND h_max IN (5::DECIMAL(9,0)) AND h_max BETWEEN 1::DECIMAL(18,0) AND 5::DECIMAL(18,0) FROM integers
+----
+physical_plan	<!REGEX>:.*AS DECIMAL\(39,0\).*
+
+query IIIII
+SELECT h_max > '99999999999999999999999999999999999999'::DECIMAL(38,0), h_min < '-99999999999999999999999999999999999999'::DECIMAL(38,0), h_max = 5::DECIMAL(18,0), 5::DECIMAL(4,0) < h_max, h_min BETWEEN -5::DECIMAL(18,0) AND 5::DECIMAL(18,0) FROM integers
+----
+true	true	false	true	false
+
+# with fractional digits, or against a UHUGEINT, the comparison is in the DECIMAL that holds both
+query II
+EXPLAIN SELECT h_max > 5::DECIMAL(18,1), u_max > 5::DECIMAL(18,0) FROM integers
+----
+physical_plan	<REGEX>:.*AS DECIMAL\(40,1\).*AS DECIMAL\(39,0\).*
+
+statement ok
+PRAGMA enable_optimizer
+
 # arithmetic with a DECIMAL
 query III
 SELECT h_max + d18, h_min - d18, u_max + d18 FROM integers
@@ -62,6 +86,28 @@ query IIII
 SELECT h_max % d18, u_max % d18, typeof(h_max % d18), typeof(u_max % d18) FROM integers
 ----
 1.00	0.00	DECIMAL(41,2)	DECIMAL(41,2)
+
+# the modulo of a HUGEINT and a DECIMAL without fractional digits of up to 38 digits is an integer modulo: it is
+# computed on 128-bit integers, its result is no larger than the smaller operand
+query IIIIII
+SELECT h_max % 97::DECIMAL(18,0), h_min % 97::DECIMAL(18,0), 97::DECIMAL(18,0) % h_min, h_min % '99999999999999999999999999999999999999'::DECIMAL(38,0), '99999999999999999999999999999999999999'::DECIMAL(38,0) % h_min, h_min % -1::DECIMAL(4,0) FROM integers
+----
+65	-66	97	-70141183460469231731687303715884105729	99999999999999999999999999999999999999	0
+
+query IIII
+SELECT typeof(h_max % 97::DECIMAL(18,0)), typeof(97::DECIMAL(4,0) % h_max), typeof(u_max % 97::DECIMAL(18,0)), typeof(h_max % '97'::DECIMAL(40,0)) FROM integers
+----
+DECIMAL(38,0)	DECIMAL(38,0)	DECIMAL(39,0)	DECIMAL(40,0)
+
+query II
+SELECT u_max % 97::DECIMAL(18,0), h_min % '97'::DECIMAL(40,0) FROM integers
+----
+34	-66
+
+statement error
+SELECT h_max % 0::DECIMAL(18,0) FROM integers
+----
+<REGEX>:.*Division by zero.*
 
 # a (U)HUGEINT bound to the DECIMAL overload of an aggregate keeps its 39 digits
 query IIII
@@ -145,10 +191,32 @@ SELECT sum(arg := h_max) FROM integers
 ----
 <REGEX>:.*Conversion Error.*Could not cast value 170141183460469231731687303715884105727 to DECIMAL\(38,0\).*
 
+# UHUGEINT and a signed integer combine to the types they had before wide decimals, pair for pair
 query IIII
-SELECT typeof(coalesce(h_max, u_max)), typeof([h_max, u_max]), typeof(coalesce(u_max, t)), typeof(coalesce(u_max, 1::BIGINT)) FROM integers
+SELECT typeof(coalesce(h_max, u_max)), typeof([h_max, u_max]), typeof(CASE WHEN t > 0 THEN u_max ELSE h_max END), typeof(greatest(h_max, u_max)) FROM integers
 ----
 DOUBLE	DOUBLE[]	DOUBLE	DOUBLE
+
+query IIII
+SELECT typeof(coalesce(u_max, 1::TINYINT)), typeof(coalesce(u_max, 1::SMALLINT)), typeof(coalesce(u_max, 1::INTEGER)), typeof(coalesce(u_max, 1::BIGINT)) FROM integers
+----
+SMALLINT	INTEGER	BIGINT	HUGEINT
+
+query IIII
+SELECT typeof([1::TINYINT, u_max]), typeof(CASE WHEN t > 0 THEN 1::BIGINT ELSE u_max END), typeof(greatest(1::INTEGER, u_max)), typeof(x) FROM integers, (SELECT 1::UHUGEINT AS x UNION ALL SELECT 1::BIGINT) LIMIT 1
+----
+SMALLINT[]	HUGEINT	BIGINT	HUGEINT
+
+# so UHUGEINT and BIGINT are compared as HUGEINT, exactly
+query III
+SELECT 9223372036854775808::UHUGEINT = 9223372036854775807::BIGINT, 9223372036854775808::UHUGEINT > 9223372036854775807::BIGINT, 9223372036854775807::UHUGEINT = 9223372036854775807::BIGINT
+----
+false	true	true
+
+query I
+SELECT count(*) FROM (SELECT 9223372036854775808::UHUGEINT k) x JOIN (SELECT 9223372036854775807::BIGINT k) y ON x.k = y.k
+----
+0
 
 statement ok
 RESET max_decimal_width

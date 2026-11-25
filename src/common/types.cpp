@@ -1132,15 +1132,16 @@ static LogicalType CombineNumericTypes(const LogicalTypeResolver &logical_type_r
 	// in this case we need to upcast to make sure the types fit
 
 	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::UHUGEINT) {
-		// UHUGEINT and a signed integer: no integer type holds the values of both, a DECIMAL of 39 digits does
-		// a session that stays within the fixed-size decimals has no exact type for them, there they become a DOUBLE
-		const auto decimal_width_limit = logical_type_resolver.GetDecimalWidthLimit();
-		uint32_t width, scale;
-		if (decimal_width_limit.GetDecimalProperties(LogicalType::UHUGEINT, width, scale) &&
-		    width > Decimal::MAX_WIDTH_INT128) {
+		// UHUGEINT and a signed integer: no integer type holds the values of both, the DECIMAL of a UHUGEINT does
+		// a limit that does not allow that DECIMAL binds the pair below, to the types it had before wide decimals
+		// (stored index keys of those versions have these types)
+		uint32_t width, scale, bound_width, bound_scale;
+		if (LogicalType(LogicalTypeId::UHUGEINT).GetDecimalProperties(width, scale) &&
+		    logical_type_resolver.GetDecimalWidthLimit().GetDecimalProperties(LogicalTypeId::UHUGEINT, bound_width,
+		                                                                      bound_scale) &&
+		    bound_width == width) {
 			return LogicalType::DECIMAL(width, scale);
 		}
-		return LogicalType::DOUBLE;
 	}
 	if (left.id() == LogicalTypeId::BIGINT || right.id() == LogicalTypeId::UBIGINT) {
 		return LogicalType::HUGEINT;
@@ -1153,6 +1154,12 @@ static LogicalType CombineNumericTypes(const LogicalTypeResolver &logical_type_r
 	}
 	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
 		return LogicalType::SMALLINT;
+	}
+
+	// No type is larger than (u)hugeint, so casting to double is required
+	// UHUGEINT is on the left because the enum is lower
+	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::HUGEINT) {
+		return LogicalType::DOUBLE;
 	}
 	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
 }

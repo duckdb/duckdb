@@ -117,6 +117,14 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 			required_width = width_limit;
 		}
 		res = LogicalType::DECIMAL(NumericCast<uint32_t>(required_width), max_scale);
+		if (Decimal::IsWide(DecimalType::GetWidth(res)) && max_scale == 0 && !Decimal::IsWide(max_decimal_width) &&
+		    (left_type.id() == LogicalTypeId::HUGEINT || right_type.id() == LogicalTypeId::HUGEINT) &&
+		    (left_type.id() == LogicalTypeId::DECIMAL || right_type.id() == LogicalTypeId::DECIMAL)) {
+			// a HUGEINT and a DECIMAL without fractional digits that is stored in a fixed-size integer: the DECIMAL
+			// that holds every HUGEINT is stored as a BIGNUM blob, while every value of the DECIMAL is a HUGEINT,
+			// so the two are compared as HUGEINT, which is as exact and compares 128-bit integers
+			res = LogicalType::HUGEINT;
+		}
 		break;
 	}
 	case LogicalTypeId::VARCHAR:

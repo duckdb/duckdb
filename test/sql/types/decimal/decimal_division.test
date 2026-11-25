@@ -219,23 +219,14 @@ SELECT decimal_division(1::{type}, 4.00);
 
 endloop
 
-# HUGEINT and UHUGEINT are treated as DECIMAL(38,0), so they only fit with a small enough result scale
+# HUGEINT and UHUGEINT are integers of 39 digits, a DECIMAL wider than the fixed-size decimals: decimal_division
+# divides those once it supports wide decimals
 foreach type HUGEINT UHUGEINT
 
-query II
-SELECT decimal_division(10::{type}, 4::DECIMAL(1,0), 0), typeof(decimal_division(10::{type}, 4::DECIMAL(1,0), 0));
-----
-2	DECIMAL(38,0)
-
 statement error
-SELECT decimal_division(1::{type}, 4.00);
+SELECT decimal_division(10::{type}, 4::DECIMAL(1,0), 0);
 ----
-<REGEX>:Out of Range Error:.*Needed width 46.*
-
-statement error
-SELECT decimal_division(170141183460469231731687303715884105727::{type}, 2::DECIMAL(1,0), 0);
-----
-<REGEX>:Conversion Error:.*Could not cast value.*
+<REGEX>:Not implemented Error:.*not supported for DECIMAL types wider than 38 digits.*
 
 endloop
 
