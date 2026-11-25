@@ -256,7 +256,7 @@ EXPLAIN SELECT k + 1, count(*) c FROM many GROUP BY k LIMIT 9000
 ----
 logical_opt	<REGEX>:.*Top N.*
 
-# an aggregate function that can throw: the sum of DECIMAL(38,0) values of +-5e34 over 6,145 rows is not proven
+# an aggregate function that can throw. The sum of DECIMAL(38,0) values of +-5e34 over 6,145 rows is not proven
 # safe by the statistics and could overflow its result width on a group that the filter cut rows from; the sibling
 # with aggregates that cannot throw is rewritten
 statement ok

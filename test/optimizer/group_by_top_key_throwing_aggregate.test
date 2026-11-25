@@ -33,7 +33,7 @@ SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k DESC LIMIT 2
 2	0
 1	0
 
-# a LIMIT without ORDER BY: whichever group is returned sums to 0
+# a LIMIT without ORDER BY, whichever group is returned sums to 0
 query I
 SELECT s FROM (SELECT k, sum(v) s FROM decimal_cancellation GROUP BY k LIMIT 1)
 ----

@@ -63,8 +63,8 @@ bool IsPlainGroupedAggregate(const LogicalAggregate &aggregate) {
 }
 
 //! Whether an aggregate function of the aggregate can throw. The groups after the bound lose rows to the filter and
-//! are finalized before the Top-N drops them: sum(DECIMAL(38,0)) overflows on a group whose cancelling rows are gone.
-//! The arguments of the aggregates are not checked: they see unchanged input rows, only fewer of them.
+//! are finalized before the Top-N drops them, so sum(DECIMAL(38,0)) overflows on a group whose cancelling rows are
+//! gone. The arguments of the aggregates are not checked, they see unchanged input rows, only fewer of them.
 bool AggregateFunctionCanThrow(const LogicalAggregate &aggregate) {
 	for (auto &expr : aggregate.expressions) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();

@@ -18,7 +18,7 @@ statement ok
 ANALYZE;
 
 # a Top-N over a row-number filter over a DISTINCT whose keys include a DATE -> TIMESTAMP_MS cast. The dynamic filter
-# of the top-key filter would reach a scan through a cast that can throw: it is not pushed. The rows are the same
+# of the top-key filter would reach a scan through a cast that can throw, so it is not pushed. The rows are the same
 # with the rule disabled and enabled.
 foreach disabled 'group_by_top_key' ''
 
