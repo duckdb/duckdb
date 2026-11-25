@@ -50,10 +50,15 @@ EXPLAIN SELECT * FROM (SELECT u, d, u // 2 AS j FROM casts) WHERE u BETWEEN 100.
 ----
 logical_opt	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*Filters:[\s\S]*CAST\(u AS DECIMAL\(21,1\)\) BETWEEN 100.5 AND 200.5[\s\S]*
 
-# a HUGEINT compared with decimal literals is cast to a DECIMAL(39,1), whose 38 integral digits are one short of
-# a HUGEINT: the filter stays above the projection
+# a HUGEINT compared with decimal literals is cast to a DECIMAL(40,1), whose 39 integral digits hold every HUGEINT
 query II
 EXPLAIN SELECT * FROM (SELECT h, d, h // 2 AS j FROM casts) WHERE h BETWEEN 100.5 AND 200.5
+----
+logical_opt	<REGEX>:[\s\S]*SEQ_SCAN[\s\S]*Filters:[\s\S]*CAST\(h AS DECIMAL\(40,1\)\) BETWEEN '100.5'::DECIMAL\(40,1\) AND '200.5'::DECIMAL\(40,1\)[\s\S]*
+
+# a DECIMAL(39,1) has 38 integral digits, one short of a HUGEINT: the filter stays above the projection
+query II
+EXPLAIN SELECT * FROM (SELECT h, d, h // 2 AS j FROM casts) WHERE CAST(h AS DECIMAL(39,1)) BETWEEN 100.5 AND 200.5
 ----
 logical_opt	<REGEX>:[\s\S]*FILTER[\s\S]*CAST\(h AS DECIMAL\(39,1\)\) BETWEEN '100.5'::DECIMAL\(39,1\) AND '200.5'::DECIMAL\(39,1\)[\s\S]*SEQ_SCAN[^│]*│ Table:[\s\S]*
 
@@ -200,9 +205,15 @@ SELECT CAST(i AS DECIMAL(10,0)), CAST(b AS DECIMAL(19,0)), CAST(u AS DECIMAL(20,
 2147483647	9223372036854775807	18446744073709551615	170141183460469231731687303715884105727	99999999.9900
 NULL	NULL	NULL	NULL	NULL
 
-# the casts one digit short do overflow for the extremes, as does the cast of a HUGEINT
-statement error
+# a HUGEINT compared with decimal literals keeps its 39 digits, also for the extremes
+query I
 SELECT h FROM (SELECT h, d, h // 2 AS j FROM casts) WHERE h BETWEEN 100.5 AND 200.5
+----
+150
+
+# the casts one digit short do overflow for the extremes
+statement error
+SELECT h FROM (SELECT h, d, h // 2 AS j FROM casts) WHERE CAST(h AS DECIMAL(39,1)) BETWEEN 100.5 AND 200.5
 ----
 <REGEX>:Conversion Error.*
 

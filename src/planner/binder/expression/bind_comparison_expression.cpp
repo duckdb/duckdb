@@ -98,7 +98,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		uint32_t max_width = 0, max_scale = 0, max_width_over_scale = 0, max_decimal_width = 0;
 		for (idx_t i = 0; i < argument_types.size(); i++) {
 			uint32_t width, scale;
-			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
+			auto can_convert = decimal_width_limit.GetDecimalProperties(argument_types[i], width, scale);
 			if (!can_convert) {
 				result_type = res;
 				return true;

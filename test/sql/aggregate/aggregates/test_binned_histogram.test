@@ -205,11 +205,12 @@ SELECT typeof(histogram(1::INTEGER, [1::BIGINT]))
 ----
 MAP(BIGINT, UBIGINT)
 
-# key types for argument and bin pairs that unify to a wider type
+# key types for argument and bin pairs that unify to a wider type: UHUGEINT and a signed integer unify to
+# DECIMAL(39,0), and the bins of a DECIMAL are DOUBLE
 query IIII
 SELECT typeof(histogram(true, [0, 1])), typeof(histogram(1::SMALLINT, [10, 20])), typeof(histogram(1::UBIGINT, [10, 20])), typeof(histogram(1::UHUGEINT, [10, 20]))
 ----
-MAP(INTEGER, UBIGINT)	MAP(INTEGER, UBIGINT)	MAP(HUGEINT, UBIGINT)	MAP(BIGINT, UBIGINT)
+MAP(INTEGER, UBIGINT)	MAP(INTEGER, UBIGINT)	MAP(HUGEINT, UBIGINT)	MAP(DOUBLE, UBIGINT)
 
 # bin values outside the argument type's range work through promotion instead of failing in a forced cast
 query I
@@ -217,12 +218,11 @@ SELECT histogram(v, [100000]) FROM (VALUES (1::SMALLINT)) t(v)
 ----
 {100000=1}
 
-# the UHUGEINT and INTEGER combination narrows to BIGINT, so an argument beyond the signed range
-# fails its cast at runtime, like the corresponding explicit cast - the combine rule is discussed separately
-statement error
+# the UHUGEINT and INTEGER combination holds every value of both, so an argument beyond the signed range is binned
+query I
 SELECT histogram(v, [10, 20]) FROM (VALUES (170141183460469231731687303715884105728::UHUGEINT)) t(v)
 ----
-<REGEX>:.*Conversion Error.*out of range.*
+{10.0=0, 20.0=0, inf=1}
 
 # TIMESTAMP bins promote a DATE argument
 query I

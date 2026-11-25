@@ -47,6 +47,18 @@ uint32_t DecimalWidthLimit::ResultWidth(uint32_t max_input_width) const {
 	return MaxValue<uint32_t>(width, max_input_width);
 }
 
+bool DecimalWidthLimit::GetDecimalProperties(const LogicalType &type, uint32_t &result_width,
+                                             uint32_t &result_scale) const {
+	if (!type.GetDecimalProperties(result_width, result_scale)) {
+		return false;
+	}
+	if (type.id() != LogicalTypeId::DECIMAL) {
+		// the limit is at least the widest fixed-size decimal, so it only bounds HUGEINT and UHUGEINT
+		result_width = MinValue<uint32_t>(result_width, width);
+	}
+	return true;
+}
+
 uint32_t DecimalWidthLimit::CheckedWidth(idx_t result_width, uint32_t max_input_width, const string &operation) const {
 	if (result_width > NumericLimits<uint32_t>::Maximum()) {
 		throw OutOfRangeException("%s needs a DECIMAL of %llu digits, the width of a DECIMAL is at most %u", operation,

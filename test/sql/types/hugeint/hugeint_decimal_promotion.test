@@ -1,0 +1,162 @@
+# name: test/sql/types/hugeint/hugeint_decimal_promotion.test
+# description: HUGEINT and UHUGEINT are integers of 39 digits when they are promoted to a DECIMAL
+# group: [hugeint]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT
+	170141183460469231731687303715884105727::HUGEINT AS h_max,
+	(-170141183460469231731687303715884105727 - 1)::HUGEINT AS h_min,
+	340282366920938463463374607431768211455::UHUGEINT AS u_max,
+	1.25::DECIMAL(38,2) AS d38,
+	1.5::DECIMAL(18,2) AS d18,
+	5::TINYINT AS t
+
+# combining with a DECIMAL keeps all 39 digits before the decimal point
+query II
+SELECT x, typeof(x) FROM (SELECT d38 AS x FROM integers UNION ALL SELECT h_max FROM integers UNION ALL SELECT h_min FROM integers) ORDER BY 1
+----
+-170141183460469231731687303715884105728.00	DECIMAL(41,2)
+1.25	DECIMAL(41,2)
+170141183460469231731687303715884105727.00	DECIMAL(41,2)
+
+query II
+SELECT x, typeof(x) FROM (SELECT d18 AS x FROM integers UNION ALL SELECT u_max FROM integers) ORDER BY 1
+----
+1.50	DECIMAL(41,2)
+340282366920938463463374607431768211455.00	DECIMAL(41,2)
+
+query IIII
+SELECT typeof(coalesce(h_max, d38)), typeof(CASE WHEN t > 0 THEN u_max ELSE d18 END), typeof([h_max, 1.5::DECIMAL(2,1)]), typeof(greatest(u_max, d18)) FROM integers
+----
+DECIMAL(41,2)	DECIMAL(41,2)	DECIMAL(40,1)[]	DECIMAL(41,2)
+
+# a DECIMAL that already has 39 digits before the decimal point is kept
+query II
+SELECT typeof(coalesce(h_max, 1::DECIMAL(41,2))), typeof(coalesce(h_max, 1::DECIMAL(45,2))) FROM integers
+----
+DECIMAL(41,2)	DECIMAL(45,2)
+
+# the comparison is exact
+query IIII
+SELECT h_max < d38, h_max > d38, u_max = u_max + 0.0, h_min <= -170141183460469231731687303715884105728.5 FROM integers
+----
+false	true	true	false
+
+# arithmetic with a DECIMAL
+query III
+SELECT h_max + d18, h_min - d18, u_max + d18 FROM integers
+----
+170141183460469231731687303715884105728.50	-170141183460469231731687303715884105729.50	340282366920938463463374607431768211456.50
+
+query III
+SELECT typeof(h_max + d18), typeof(h_min - d18), typeof(u_max + d18) FROM integers
+----
+DECIMAL(42,2)	DECIMAL(42,2)	DECIMAL(42,2)
+
+query IIII
+SELECT h_max * d18, u_max * d18, typeof(h_max * d18), typeof(u_max * d18) FROM integers
+----
+255211775190703847597530955573826158590.50	510423550381407695195061911147652317182.50	DECIMAL(57,2)	DECIMAL(57,2)
+
+query IIII
+SELECT h_max % d18, u_max % d18, typeof(h_max % d18), typeof(u_max % d18) FROM integers
+----
+1.00	0.00	DECIMAL(41,2)	DECIMAL(41,2)
+
+# a (U)HUGEINT bound to the DECIMAL overload of an aggregate keeps its 39 digits
+query IIII
+SELECT sum(arg := h_max), typeof(sum(arg := h_max)), sum(arg := u_max), typeof(sum(arg := u_max)) FROM integers
+----
+170141183460469231731687303715884105727	DECIMAL(59,0)	340282366920938463463374607431768211455	DECIMAL(59,0)
+
+# a cast to a DECIMAL with 39 digits before the decimal point never fails, and is undone in a comparison
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE h_max::DECIMAL(40,1) = 5
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# HUGEINT and UHUGEINT combine to the DECIMAL that holds both, not to a DOUBLE
+query II
+SELECT x, typeof(x) FROM (SELECT h_min AS x FROM integers UNION ALL SELECT h_max FROM integers UNION ALL SELECT u_max FROM integers) ORDER BY 1
+----
+-170141183460469231731687303715884105728	DECIMAL(39,0)
+170141183460469231731687303715884105727	DECIMAL(39,0)
+340282366920938463463374607431768211455	DECIMAL(39,0)
+
+query IIII
+SELECT typeof(coalesce(h_max, u_max)), typeof(CASE WHEN t > 0 THEN u_max ELSE h_max END), typeof([h_max, u_max]), typeof(greatest(u_max, h_max)) FROM integers
+----
+DECIMAL(39,0)	DECIMAL(39,0)	DECIMAL(39,0)[]	DECIMAL(39,0)
+
+query II
+SELECT [h_min, u_max], greatest(u_max, h_max) FROM integers
+----
+[-170141183460469231731687303715884105728, 340282366920938463463374607431768211455]	340282366920938463463374607431768211455
+
+# as does UHUGEINT with any other signed integer
+query IIII
+SELECT typeof(coalesce(u_max, t)), typeof([u_max, -1]), typeof(coalesce(u_max, 1::BIGINT)), typeof(coalesce(t, u_max)) FROM integers
+----
+DECIMAL(39,0)	DECIMAL(39,0)[]	DECIMAL(39,0)	DECIMAL(39,0)
+
+query II
+SELECT coalesce(u_max, t), [u_max, -1] FROM integers
+----
+340282366920938463463374607431768211455	[340282366920938463463374607431768211455, -1]
+
+# the comparison of HUGEINT and UHUGEINT is exact: these two differ by one, and are equal as a DOUBLE
+query IIII
+SELECT h_max = (h_max::UHUGEINT + 1::UHUGEINT), h_max < (h_max::UHUGEINT + 1::UHUGEINT), h_min < u_max, u_max > t FROM integers
+----
+false	true	true	true
+
+query III
+SELECT u_max IN (h_max, h_min), h_max IN (u_max, h_max), u_max BETWEEN h_min AND h_max FROM integers
+----
+false	true	false
+
+query I
+SELECT count(*) FROM integers i1 JOIN integers i2 ON i1.h_max = i2.u_max - 170141183460469231731687303715884105728::UHUGEINT
+----
+1
+
+# a session that stays within 38 digits binds as before: a (U)HUGEINT counts as 38 digits, HUGEINT and UHUGEINT
+# combine to a DOUBLE
+statement ok
+SET max_decimal_width = 38
+
+query IIII
+SELECT typeof(coalesce(h_max, d38)), typeof(coalesce(h_max, 1::DECIMAL(18,0))), typeof(h_max + d18), typeof(h_max * d18) FROM integers
+----
+DECIMAL(38,2)	DECIMAL(38,0)	DECIMAL(38,2)	DECIMAL(38,2)
+
+query II
+SELECT typeof(h_max % 1::DECIMAL(18,0)), 1::HUGEINT + d18 FROM integers
+----
+DECIMAL(38,0)	2.50
+
+statement error
+SELECT coalesce(h_max, 1::DECIMAL(18,0)) FROM integers
+----
+<REGEX>:.*Conversion Error.*Could not cast value 170141183460469231731687303715884105727 to DECIMAL\(38,0\).*
+
+statement error
+SELECT sum(arg := h_max) FROM integers
+----
+<REGEX>:.*Conversion Error.*Could not cast value 170141183460469231731687303715884105727 to DECIMAL\(38,0\).*
+
+query IIII
+SELECT typeof(coalesce(h_max, u_max)), typeof([h_max, u_max]), typeof(coalesce(u_max, t)), typeof(coalesce(u_max, 1::BIGINT)) FROM integers
+----
+DOUBLE	DOUBLE[]	DOUBLE	DOUBLE
+
+statement ok
+RESET max_decimal_width
+
+query I
+SELECT typeof(coalesce(h_max, u_max)) FROM integers
+----
+DECIMAL(39,0)

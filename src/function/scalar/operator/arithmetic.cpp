@@ -431,7 +431,7 @@ LogicalType DecimalArithmeticResultType(const DecimalWidthLimit &decimal_width_l
 			continue;
 		}
 		uint32_t width, scale;
-		auto can_convert = input_type.GetDecimalProperties(width, scale);
+		auto can_convert = decimal_width_limit.GetDecimalProperties(input_type, width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
 			                      "explicit cast",
@@ -1245,7 +1245,7 @@ LogicalType DecimalMultiplyResultType(const DecimalWidthLimit &decimal_width_lim
 			continue;
 		}
 		uint32_t width, scale;
-		auto can_convert = input_type.GetDecimalProperties(width, scale);
+		auto can_convert = decimal_width_limit.GetDecimalProperties(input_type, width, scale);
 		if (!can_convert) {
 			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
 			                      "explicit cast",

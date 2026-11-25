@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/exception.hpp"
@@ -354,7 +355,7 @@ inline LogicalType BindDecimalArgument(ClientContext &context, unique_ptr<Expres
 		return type;
 	}
 	uint32_t width, scale;
-	if (!type.GetDecimalProperties(width, scale)) {
+	if (!DecimalWidthLimit::FromSetting(context).GetDecimalProperties(type, width, scale)) {
 		throw BinderException("%s: cannot compute the DECIMAL aggregate of type %s", function_name, type.ToString());
 	}
 	auto decimal_type = LogicalType::DECIMAL(width, scale);

@@ -1058,15 +1058,14 @@ bool LogicalType::GetDecimalProperties(uint32_t &width, uint32_t &scale) const {
 		scale = 0;
 		break;
 	case LogicalTypeId::HUGEINT:
-		// hugeint: max size decimal (38, 0)
-		// note that a hugeint is not guaranteed to fit in this
-		width = 38;
+		// Int128 — [-170141183460469231731687303715884105728 : 170141183460469231731687303715884105727]
+		// 39 digits: one more than the widest fixed-size decimal, DecimalWidthLimit::GetDecimalProperties bounds it
+		width = 39;
 		scale = 0;
 		break;
 	case LogicalTypeId::UHUGEINT:
-		// hugeint: max size decimal (38, 0)
-		// note that a uhugeint is not guaranteed to fit in this
-		width = 38;
+		// UInt128 — [0 : 340282366920938463463374607431768211455]
+		width = 39;
 		scale = 0;
 		break;
 	case LogicalTypeId::DECIMAL:
@@ -1098,9 +1097,10 @@ static LogicalType DecimalSizeCheck(const LogicalTypeResolver &logical_type_reso
 	auto width = DecimalType::GetWidth(right);
 	auto scale = DecimalType::GetScale(right);
 
+	const auto decimal_width_limit = logical_type_resolver.GetDecimalWidthLimit();
 	uint32_t other_width;
 	uint32_t other_scale;
-	bool success = left.GetDecimalProperties(other_width, other_scale);
+	bool success = decimal_width_limit.GetDecimalProperties(left, other_width, other_scale);
 	if (!success) {
 		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
 	}
@@ -1109,7 +1109,7 @@ static LogicalType DecimalSizeCheck(const LogicalTypeResolver &logical_type_reso
 	if (other_width > effective_width) {
 		idx_t new_width = idx_t(other_width) + scale;
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
-		const idx_t width_limit = logical_type_resolver.GetDecimalWidthLimit().ResultWidth(width);
+		const idx_t width_limit = decimal_width_limit.ResultWidth(width);
 		if (new_width > width_limit) {
 			new_width = width_limit;
 		}
@@ -1118,18 +1118,30 @@ static LogicalType DecimalSizeCheck(const LogicalTypeResolver &logical_type_reso
 	return right;
 }
 
-static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalType &right) {
+static LogicalType CombineNumericTypes(const LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                       const LogicalType &right) {
 	D_ASSERT(left.id() != right.id());
 	if (left.id() > right.id()) {
 		// this method is symmetric
 		// arrange it so the left type is smaller to limit the number of options we need to check
-		return CombineNumericTypes(right, left);
+		return CombineNumericTypes(logical_type_resolver, right, left);
 	}
 	// we can't cast implicitly either way and types are not equal
 	// this happens when left is signed and right is unsigned
 	// e.g. INTEGER and UINTEGER
 	// in this case we need to upcast to make sure the types fit
 
+	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::UHUGEINT) {
+		// UHUGEINT and a signed integer: no integer type holds the values of both, a DECIMAL of 39 digits does
+		// a session that stays within the fixed-size decimals has no exact type for them, there they become a DOUBLE
+		const auto decimal_width_limit = logical_type_resolver.GetDecimalWidthLimit();
+		uint32_t width, scale;
+		if (decimal_width_limit.GetDecimalProperties(LogicalType::UHUGEINT, width, scale) &&
+		    width > Decimal::MAX_WIDTH_INT128) {
+			return LogicalType::DECIMAL(width, scale);
+		}
+		return LogicalType::DOUBLE;
+	}
 	if (left.id() == LogicalTypeId::BIGINT || right.id() == LogicalTypeId::UBIGINT) {
 		return LogicalType::HUGEINT;
 	}
@@ -1141,12 +1153,6 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	}
 	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
 		return LogicalType::SMALLINT;
-	}
-
-	// No type is larger than (u)hugeint, so casting to double is required
-	// UHUGEINT is on the left because the enum is lower
-	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::HUGEINT) {
-		return LogicalType::DOUBLE;
 	}
 	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
 }
@@ -1262,7 +1268,7 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 		}
 		// for unsigned/signed comparisons we have a few fallbacks
 		if (left.IsNumeric() && right.IsNumeric()) {
-			result = CombineNumericTypes(left, right);
+			result = CombineNumericTypes(logical_type_resolver, left, right);
 			return true;
 		}
 		if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
