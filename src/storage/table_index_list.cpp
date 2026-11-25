@@ -140,7 +140,7 @@ shared_ptr<IndexEntry> TableIndexList::FindBuildingIndex(transaction_t build_tra
 }
 
 void TableIndexList::RemoveBuildingIndex(const IndexEntry &entry) {
-	// commits may still hold the entry, so only drop it from the list
+	// a failed build is never published: commits that still hold it only write deltas nobody reads
 	annotated_lock_guard lock(index_entries_lock);
 	for (idx_t i = 0; i < index_entries.size(); i++) {
 		if (index_entries[i].get() == &entry && entry.IsBuilding()) {
