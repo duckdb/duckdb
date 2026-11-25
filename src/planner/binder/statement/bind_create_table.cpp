@@ -276,6 +276,10 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
+	if (base.columns.LogicalColumnCount() == base.columns.PhysicalColumnCount()) {
+		// no generated columns
+		return;
+	}
 
 	vector<Identifier> names;
 	vector<LogicalType> types;

@@ -82,14 +82,14 @@ public:
 //===--------------------------------------------------------------------===//
 PartitionedSort::PartitionedSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys,
                                  const Types &payload_types, const OperatorPartitionInfo &partition_info,
-                                 bool require_payload)
-    : SortStrategy(payload_types), partition_info(partition_info) {
+                                 bool require_payload, optional_idx partition_limit)
+    : SortStrategy(payload_types, partition_limit), partition_info(partition_info) {
 	//	Pipeline does the partitioning for us, so leave them out
 	vector<unique_ptr<Expression>> unpartitioned;
 	vector<unique_ptr<BaseStatistics>> unpartitioned_stats;
 	OperatorPartitionInfo unpartitioned_info;
 	child_strategy = SortStrategy::Factory(client, unpartitioned, order_bys, payload_types, unpartitioned_stats,
-	                                       unpartitioned_info, 0, require_payload);
+	                                       unpartitioned_info, 0, require_payload, partition_limit);
 
 	this->payload_types = child_strategy->payload_types;
 	scan_ids = child_strategy->scan_ids;

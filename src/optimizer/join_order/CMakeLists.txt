@@ -12,6 +12,9 @@ add_library_unity(
   cardinality_estimator.cpp
   cost_model.cpp
   plan_enumerator.cpp
+  join_order_candidate.cpp
+  dphyp_enumerator.cpp
+  greedy_join_enumerator.cpp
   relation_manager.cpp
   query_graph_manager.cpp)
 set(ALL_OBJECT_FILES

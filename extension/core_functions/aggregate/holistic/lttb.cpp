@@ -382,7 +382,7 @@ auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 	auto &function = input.function;
 	using ST = LTTBState::STATE_TYPE;
 	AggregateStateLayout layout;
-	if (function.GetReturnType().IsAggregateState()) {
+	if (function.ReturnsExportedState()) {
 		// The function has been modified for state export, its return type IS the state type already
 		layout.type = function.GetReturnType();
 	} else {

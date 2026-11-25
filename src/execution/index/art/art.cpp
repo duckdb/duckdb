@@ -1615,9 +1615,11 @@ void ART::Verify(IndexLock &l) {
 }
 
 void ART::VerifyInternal() {
+#ifdef D_ASSERT_IS_ENABLED
 	if (root_ptr.HasMetadata()) {
 		root_ptr.Verify(*this);
 	}
+#endif
 }
 
 void ART::VerifyAllocations(IndexLock &l) {
