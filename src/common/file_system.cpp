@@ -200,7 +200,8 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, const FileGlob
 }
 
 string FileSystem::CanonicalizePath(const string &path) {
-	return FindFileSystem(path).CanonicalizePath(GetContext(), path);
+	// canonicalizing does not need the file system extension of the path, so it is not autoloaded
+	return PathFileSystem(path).CanonicalizePath(GetContext(), path);
 }
 
 string FileSystem::GetHomeDirectory() {

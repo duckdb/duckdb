@@ -1029,7 +1029,8 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 }
 
 string DBConfig::SanitizeAllowedPath(Context &context, const string &path_p) const {
-	auto &fs = file_system->FindFileSystem(path_p, &context);
+	// canonicalizing does not need the file system extension of the path, so it is not autoloaded
+	auto &fs = file_system->FindFileSystem(path_p, nullptr);
 	auto result = fs.CanonicalizePath(context, FileSystem::ExpandPath(context, path_p));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = fs.PathSeparator(path_p);
