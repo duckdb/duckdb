@@ -29,13 +29,15 @@ statement ok
 PRAGMA disable_profiling;
 
 query II
-SELECT operator[1].children[1].extra_info.Table LIKE '%.t', operator[1].children[1].extra_info."Update Mode"
-FROM '{TEST_DIR}/profiling_update_mode_in_place.json';
+SELECT value->'extra_info'->>'Table' LIKE '%.t', value->'extra_info'->>'Update Mode'
+FROM read_text('{TEST_DIR}/profiling_update_mode_in_place.json'), json_tree(content)
+WHERE value->>'type' = 'UPDATE';
 ----
 true	In Place
 
 query II
-SELECT operator[1].children[1].extra_info.Table LIKE '%.t', operator[1].children[1].extra_info."Update Mode"
-FROM '{TEST_DIR}/profiling_update_mode_del_insert.json';
+SELECT value->'extra_info'->>'Table' LIKE '%.t', value->'extra_info'->>'Update Mode'
+FROM read_text('{TEST_DIR}/profiling_update_mode_del_insert.json'), json_tree(content)
+WHERE value->>'type' = 'UPDATE';
 ----
 true	Delete + Insert
