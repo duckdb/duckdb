@@ -1,0 +1,60 @@
+# name: test/sql/aggregate/aggregate_state_export/binned_histogram_export_state.test
+# description: Round-trip the boundaries and counts in a binned histogram state
+# group: [aggregate_state_export]
+
+require core_functions
+
+foreach aggregate histogram histogram_exact
+
+query T
+SELECT finalize(${aggregate}(i, [5, 2, 5]) EXPORT_STATE)
+FROM (VALUES (2), (5), (9), (NULL)) t(i);
+----
+{2=1, 5=1, 2147483647=1}
+
+query T
+SELECT finalize(${aggregate}(i, NULL::INTEGER[]) EXPORT_STATE)
+FROM (VALUES (NULL::INTEGER)) t(i);
+----
+NULL
+
+query T
+SELECT finalize(combine_aggr(state))
+FROM (
+	SELECT g, ${aggregate}(s, ['medium boundary', 'long boundary', 'medium boundary']) EXPORT_STATE AS state
+	FROM (VALUES (1, 'long boundary'), (2, 'medium boundary'), (2, 'outside boundary')) t(g, s)
+	GROUP BY g
+);
+----
+{long boundary=1, medium boundary=1, =1}
+
+query T
+SELECT finalize(${aggregate}(s, [{'key': 1}, {'key': 3}]) EXPORT_STATE)
+FROM (VALUES ({'key': 1}), ({'key': 3})) t(s);
+----
+{{'key': 1}=1, {'key': 3}=1}
+
+endloop
+
+statement ok
+SET debug_force_external=true;
+
+statement ok
+SET threads=4;
+
+query III
+SELECT count(*), sum(cardinality(h)), sum(list_sum(map_values(h)))
+FROM (
+	SELECT i % 127 AS g, histogram_exact(i % 3, [2, 0, 2]) AS h
+	FROM range(1000000) t(i)
+	GROUP BY g
+);
+----
+127	381	1000000
+
+query T
+SELECT histogram(i, bins)
+FROM (VALUES (2, [2, 5]), (5, [2, 5]), (9, [2, 5])) t(i, bins)
+GROUP BY i % 1;
+----
+{2=1, 5=1, 2147483647=1}
