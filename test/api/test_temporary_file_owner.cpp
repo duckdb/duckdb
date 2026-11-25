@@ -1,8 +1,13 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 using namespace duckdb;
 
@@ -46,25 +51,42 @@ TEST_CASE("Test temporary file owners", "[api]") {
 namespace {
 
 //! Makes closing the first owner markers fail
-class FailingMarkerCloseFileSystem : public VirtualFileSystem {
+class FailingMarkerCloseFileSystem : public LocalFileSystem {
 public:
 	atomic<idx_t> marker_opens {0};
 
-protected:
-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-	                                        optional_ptr<FileOpener> opener) override {
-		if (!StringUtil::EndsWith(file.path, "owner") || marker_opens++ >= 3) {
-			return VirtualFileSystem::OpenFileExtended(file, flags, opener);
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		if (!IsMarker(path) || marker_opens++ >= 3) {
+			return LocalFileSystem::OpenFile(path, flags, opener);
 		}
 		unique_ptr<FileHandle> handle;
 		auto open_file = [&]() {
-			handle = VirtualFileSystem::OpenFileExtended(file, flags, opener);
+			handle = LocalFileSystem::OpenFile(path, flags, opener);
 		};
-		if (!TestOpenWithFailingClose(file.path, open_file)) {
-			throw InternalException("Could not make closing \"%s\" fail", file.path);
+		marker_fd = TestOpenDescriptor(path, open_file);
+		if (marker_fd == -1) {
+			throw InternalException("Could not find the descriptor of \"%s\"", path);
 		}
 		return handle;
 	}
+
+	FileType GetFileType(FileHandle &handle) override {
+		auto type = LocalFileSystem::GetFileType(handle);
+		if (marker_fd != -1 && IsMarker(handle.GetPath())) {
+			// the root reads the type after opening, closing the descriptor now makes the close of the handle fail
+			close(marker_fd);
+			marker_fd = -1;
+		}
+		return type;
+	}
+
+private:
+	static bool IsMarker(const string &path) {
+		return StringUtil::EndsWith(path, "owner");
+	}
+
+	int marker_fd = -1;
 };
 
 } // namespace
@@ -73,7 +95,7 @@ TEST_CASE("A failed close of a temporary directory marker is reported", "[api]")
 	auto fs = make_uniq<FailingMarkerCloseFileSystem>();
 	auto &marker_fs = *fs;
 	DBConfig config;
-	config.file_system = std::move(fs);
+	config.file_system = make_uniq<VirtualFileSystem>(std::move(fs));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	auto temp_directory = TestCreatePath("failed_marker_close.tmp");
