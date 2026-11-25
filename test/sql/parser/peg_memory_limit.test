@@ -1,0 +1,37 @@
+# name: test/sql/parser/peg_memory_limit.test
+# description: PEG parsing honors the memory limit and releases arenas after failure
+# group: [parser]
+
+statement ok
+SET VARIABLE oversized_statement = 'SELECT [' || repeat('1,', 400000) || '1]';
+
+statement ok
+SET memory_limit='16MB';
+
+statement ok
+SET VARIABLE parser_memory_before = (
+    SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag='ALLOCATOR'
+);
+
+loop attempt 0 3
+
+statement error
+SELECT * FROM query(getvariable('oversized_statement'));
+----
+<REGEX>:Out of Memory Error: While parsing SQL: failed to allocate data of size .* \(.*/.* used\).*
+
+query I
+SELECT memory_usage_bytes <= getvariable('parser_memory_before')
+FROM duckdb_memory() WHERE tag='ALLOCATOR';
+----
+true
+
+query I
+SELECT 42;
+----
+42
+
+endloop
+
+statement ok
+RESET memory_limit;

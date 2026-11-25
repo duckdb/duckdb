@@ -94,3 +94,25 @@ SELECT * FROM t4
 2	2
 3	3
 4	4
+
+# duplicates are renamed case-insensitively, and the renamed columns can be referenced
+statement ok
+CREATE TABLE t5 AS SELECT 1 a, 2 a, 3 "A", 4 a_1;
+
+query I
+SELECT column_name FROM (DESCRIBE t5);
+----
+a
+a_1
+A_2
+a_1_1
+
+query IIII
+SELECT a, a_1, A_2, a_1_1 FROM t5;
+----
+1	2	3	4
+
+query II
+SELECT t5.a_1, t5.a_1_1 FROM t5;
+----
+2	4

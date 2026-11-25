@@ -23,7 +23,7 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
 RETRIES = 2
-PROFILE_RUNS = 5
+PROFILE_RUNS = 10
 # Overlapping cost samples whose medians differ by more than this are still compared.
 MEDIAN_TOLERANCE = 0.05
 

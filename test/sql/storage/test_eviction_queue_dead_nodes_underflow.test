@@ -24,7 +24,7 @@ Out of Memory
 
 # GROUP BY with many groups: builds a hash table.
 statement error
-SELECT i % 1000000 as g, COUNT(*) FROM range(10000000) t(i) GROUP BY 1;
+SELECT i % 5000000 as g, COUNT(*) FROM range(10000000) t(i) GROUP BY 1;
 ----
 Out of Memory
 
