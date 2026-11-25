@@ -269,10 +269,10 @@ TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
 		// looked at
 		DataChunk chunk;
 		chunk.Initialize(*con.context, {LogicalType::UHUGEINT});
+		chunk.SetChildCardinality(2);
 		auto data = FlatVector::GetDataMutable<uhugeint_t>(chunk.data[0]);
 		data[0] = uhugeint_t(uint64_t(1) << 63, 0);
 		data[1] = uhugeint_t(0, 42);
-		chunk.SetCardinality(2);
 		SelectionVector sel(1);
 		sel.set_index(0, 1);
 		chunk.Slice(sel, 1);
