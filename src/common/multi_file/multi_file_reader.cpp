@@ -10,7 +10,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/common/multi_file/table_function_delete_filter.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"

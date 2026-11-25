@@ -1,0 +1,133 @@
+# name: test/sql/multi_file/multi_file_row_id_options.test
+# description: Test describing the rows of a file to scan with a query in its open options
+# group: [multi_file]
+
+require parquet
+
+statement ok
+COPY (SELECT i a FROM range(10) t(i)) TO '{TEST_DIR}/row_id_options_data.parquet'
+
+statement ok
+COPY (SELECT 'x' file_path, pos FROM (VALUES (2::BIGINT), (5), (9)) t(pos)) TO '{TEST_DIR}/row_id_options_del.parquet'
+
+statement ok
+COPY (SELECT 'x' file_path, pos, snapshot_id AS _ducklake_internal_snapshot_id FROM (VALUES (1::BIGINT, 1::BIGINT), (4, 3), (7, 5)) t(pos, snapshot_id)) TO '{TEST_DIR}/row_id_options_del_snap.parquet'
+
+# the query decides which rows are scanned
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE row_id NOT IN (0, 3, 4)'}])
+----
+1
+2
+5
+6
+7
+8
+9
+
+# all rows
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids'}])
+----
+10
+
+# the order of the row ids and duplicates do not matter
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT unnest([8, 1, 8, 1]) AS row_id'}])
+----
+1
+8
+
+# max_row_count truncates the file
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE row_id < 6'}])
+----
+6
+
+# a delete file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids ANTI JOIN read_parquet(''{TEST_DIR}/row_id_options_del.parquet'') d ON row_id = d.pos'}])
+----
+0
+1
+3
+4
+6
+7
+8
+
+# a delete file with snapshot ids, filtered to a snapshot
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids ANTI JOIN read_parquet(''{TEST_DIR}/row_id_options_del_snap.parquet'') d ON row_id = d.pos AND d._ducklake_internal_snapshot_id <= 3'}])
+----
+0
+2
+3
+5
+6
+7
+8
+9
+
+# deletes from several sources, and a truncated file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE row_id < 9 AND row_id NOT IN (SELECT pos FROM read_parquet(''{TEST_DIR}/row_id_options_del.parquet'') UNION ALL SELECT 0::BIGINT)'}])
+----
+1
+3
+4
+6
+7
+8
+
+# scan the deleted rows instead of the other rows
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids SEMI JOIN read_parquet(''{TEST_DIR}/row_id_options_del.parquet'') d ON row_id = d.pos'}])
+----
+2
+5
+9
+
+# counts are not answered from the metadata of the file
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE row_id NOT IN (1, 2)'}])
+----
+8
+
+# no query at all
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet'}])
+----
+10
+
+# no rows
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE false'}])
+----
+0
+
+# NULL row ids and row ids that are not part of the file are ignored
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT unnest([3, NULL, 100, 4]) AS row_id'}])
+----
+3
+4
+
+# row ids of a larger file are filtered per chunk
+statement ok
+COPY (SELECT i a FROM range(10000) t(i)) TO '{TEST_DIR}/row_id_options_large.parquet'
+
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_large.parquet', 'row_id_query': 'SELECT row_id FROM __file_row_ids WHERE row_id % 3 = 0 AND row_id < 9000'}])
+----
+3000	13495500
+
+statement error
+SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/does_not_exist.parquet'')'}])
+----
+Failed to read the row ids of file
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/row_id_options_data.parquet', 'row_id_query': 'SELECT 42 AS something_else'}])
+----
+row_id

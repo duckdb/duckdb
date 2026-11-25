@@ -18,7 +18,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
-#include "duckdb/common/multi_file/table_function_delete_filter.hpp"
+#include "duckdb/common/multi_file/table_function_row_id_filter.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
@@ -369,8 +369,8 @@ public:
 		auto result = bind_data.multi_file_reader->InitializeReader(
 		    reader_data, bind_data, global_columns, global_column_ids, table_filters, context, global_state);
 		if (result == ReaderInitializeType::INITIALIZED && !reader.deletion_filter) {
-			// the file list can describe the deleted rows of a file with its options
-			reader.deletion_filter = TableFunctionDeleteFilter::TryCreate(context, reader.file);
+			// the file list can describe the rows of a file to scan with its options
+			reader.deletion_filter = TableFunctionRowIdFilter::TryCreate(context, reader);
 		}
 		return result;
 	}
