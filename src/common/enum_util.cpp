@@ -168,6 +168,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/os_util.hpp"
@@ -2638,6 +2639,24 @@ ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const 
 	return static_cast<ExtensionRepositoryAccess>(StringUtil::StringToEnum(GetExtensionRepositoryAccessValues(), 4, "ExtensionRepositoryAccess", value));
 }
 
+const StringUtil::EnumStringLiteral *GetExtensionRepositoryHostCallerValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExtensionRepositoryHostCaller::CREATE_STATEMENT), "CREATE_STATEMENT" },
+		{ static_cast<uint32_t>(ExtensionRepositoryHostCaller::LOOKUP), "LOOKUP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryHostCaller>(ExtensionRepositoryHostCaller value) {
+	return StringUtil::EnumToString(GetExtensionRepositoryHostCallerValues(), 2, "ExtensionRepositoryHostCaller", static_cast<uint32_t>(value));
+}
+
+template<>
+ExtensionRepositoryHostCaller EnumUtil::FromString<ExtensionRepositoryHostCaller>(const char *value) {
+	return static_cast<ExtensionRepositoryHostCaller>(StringUtil::StringToEnum(GetExtensionRepositoryHostCallerValues(), 2, "ExtensionRepositoryHostCaller", value));
+}
+
 const StringUtil::EnumStringLiteral *GetExtensionRepositoryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtensionRepositoryType::CORE), "CORE" },
@@ -3550,6 +3569,7 @@ const StringUtil::EnumStringLiteral *GetJoinOrderOperatorTypeValues() {
 		{ static_cast<uint32_t>(JoinOrderOperatorType::LEFT), "LEFT" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::SEMI), "SEMI" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::ANTI), "ANTI" },
+		{ static_cast<uint32_t>(JoinOrderOperatorType::MARK), "MARK" },
 		{ static_cast<uint32_t>(JoinOrderOperatorType::CROSS_PRODUCT), "CROSS_PRODUCT" }
 	};
 	return values;
@@ -3557,12 +3577,12 @@ const StringUtil::EnumStringLiteral *GetJoinOrderOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value) {
-	return StringUtil::EnumToString(GetJoinOrderOperatorTypeValues(), 5, "JoinOrderOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value) {
-	return static_cast<JoinOrderOperatorType>(StringUtil::StringToEnum(GetJoinOrderOperatorTypeValues(), 5, "JoinOrderOperatorType", value));
+	return static_cast<JoinOrderOperatorType>(StringUtil::StringToEnum(GetJoinOrderOperatorTypeValues(), 6, "JoinOrderOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {

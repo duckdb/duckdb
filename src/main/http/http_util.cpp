@@ -39,27 +39,32 @@ void HTTPParams::RequireServerCertificateVerification() {
 }
 
 HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
-	headers.insert({"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())});
+	Append("User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID()));
 }
 
 HTTPHeaders::~HTTPHeaders() = default;
 
 void HTTPHeaders::Insert(string key, string value) {
-	headers.insert(make_pair(std::move(key), std::move(value)));
+	InsertIfAbsent(std::move(key), std::move(value));
+}
+
+void HTTPHeaders::InsertIfAbsent(string key, string value) {
+	if (!HasHeader(key)) {
+		Append(std::move(key), std::move(value));
+	}
 }
 
 void HTTPHeaders::Append(string key, string value) {
-	auto entry = headers.find(key);
-	if (entry == headers.end()) {
-		headers.insert(make_pair(std::move(key), std::move(value)));
-		return;
-	}
-	auto repeated_entry = repeated_headers.find(key);
-	if (repeated_entry == repeated_headers.end()) {
-		repeated_headers.insert(make_pair(std::move(key), header_values_t {entry->second, std::move(value)}));
-	} else {
-		repeated_entry->second.push_back(std::move(value));
-	}
+	headers.emplace(std::move(key), std::move(value));
+}
+
+void HTTPHeaders::Set(string key, string value) {
+	RemoveAll(key);
+	Append(std::move(key), std::move(value));
+}
+
+void HTTPHeaders::RemoveAll(const string &key) {
+	headers.erase(key);
 }
 
 bool HTTPHeaders::HasHeader(const string &key) const {
@@ -67,19 +72,23 @@ bool HTTPHeaders::HasHeader(const string &key) const {
 }
 
 string HTTPHeaders::GetHeaderValue(const string &key) const {
-	auto entry = headers.find(key);
-	if (entry == headers.end()) {
+	auto range = headers.equal_range(key);
+	if (range.first == range.second) {
 		throw InternalException("Header value not found");
 	}
-	return entry->second;
+	return range.first->second;
 }
 
 HTTPHeaders::header_values_t HTTPHeaders::GetHeaderValues(const string &key) const {
-	auto repeated_entry = repeated_headers.find(key);
-	if (repeated_entry != repeated_headers.end()) {
-		return repeated_entry->second;
+	auto range = headers.equal_range(key);
+	if (range.first == range.second) {
+		throw InternalException("Header value not found");
 	}
-	return {GetHeaderValue(key)};
+	header_values_t values;
+	for (auto it = range.first; it != range.second; ++it) {
+		values.push_back(it->second);
+	}
+	return values;
 }
 
 HTTPResponse::HTTPResponse(HTTPStatusCode code) : status(code) {
@@ -437,7 +446,7 @@ static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
 		} else if (entry.first == "reason") {
 			response->reason = entry.second;
 		} else if (StringUtil::StartsWith(entry.first, "header_")) {
-			response->headers.Insert(entry.first.substr(7), entry.second);
+			response->headers.InsertIfAbsent(entry.first.substr(7), entry.second);
 		}
 	}
 	return response;

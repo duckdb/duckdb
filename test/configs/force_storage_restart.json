@@ -90,6 +90,7 @@
         "test/sql/copy/parquet/page_index/page_index_cache.test",
         "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/page_index/page_index_cache_budget.test",
+        "test/sql/copy/parquet/page_index/page_index_expression_filter.test",
         "test/parquet/utf8_validation_page_index.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
@@ -204,7 +205,8 @@
     {
       "reason": "A temporary secret must still be there at the next statement, which a restart in between prevents.",
       "paths": [
-        "test/sql/extensions/extension_repository_from_host_httpfs.test"
+        "test/sql/extensions/extension_repository_from_host_httpfs.test",
+        "test/sql/extensions/extension_repository_url_httpfs.test"
       ]
     }
   ]

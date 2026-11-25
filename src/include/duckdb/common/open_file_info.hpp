@@ -60,7 +60,7 @@ public:
 	//! options to open the file with in its other fields (a VARIANT holding either is unpacked). Errors name the
 	//! function that was given the file
 	DUCKDB_API static OpenFileInfo FromValue(const Value &input, const Identifier &function_name);
-	//! The inverse of FromValue: the path as a VARCHAR when there are no options, a file struct otherwise
+	//! The inverse of FromValue: the path as a VARCHAR for a plain path, a file struct otherwise
 	DUCKDB_API Value ToValue() const;
 
 	bool operator<(const OpenFileInfo &rhs) const {
