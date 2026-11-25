@@ -1808,7 +1808,16 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 	ConvertedSchemaWrapper out_types;
 
-	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
+	auto set_stream_error = [&](const char *what, int code) {
+		const char *stream_message = input->get_last_error ? input->get_last_error(input) : nullptr;
+		SetError(error, std::string("Failed to get ") + what + " from the input stream: (" + std::to_string(code) +
+		                    ") " + strerror(code) + ": " + (stream_message ? stream_message : "(unknown error)"));
+	};
+	auto schema_code = input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
+	if (schema_code != 0) {
+		set_stream_error("schema", schema_code);
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	auto res = duckdb_schema_from_arrow(connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
 	if (res) {
 		SetError(error, duckdb_error_data_message(res));
@@ -1910,8 +1919,12 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 	// Initialize rows_affected counter if requested
 	int64_t affected = 0;
 
-	input->get_next(input, &arrow_array_wrapper.arrow_array);
-	while (arrow_array_wrapper.arrow_array.release) {
+	// Destroying the appender flushes its buffer, so a failed ingestion must discard the rows first
+	auto discard_rows = [&]() {
+		duckdb_appender_clear(appender.Get());
+	};
+	auto next_code = input->get_next(input, &arrow_array_wrapper.arrow_array);
+	while (next_code == 0 && arrow_array_wrapper.arrow_array.release) {
 		DataChunkWrapper out_chunk;
 		auto res = duckdb_data_chunk_from_arrow(connection, &arrow_array_wrapper.arrow_array, out_types.Get(),
 		                                        &out_chunk.chunk);
@@ -1919,6 +1932,8 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 			SetError(error, duckdb_error_data_message(res));
 			AppendDuckDBErrorDetails(error, res);
 			duckdb_destroy_error_data(&res);
+			discard_rows();
+			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		// Count rows for rows_affected, if a chunk was produced
 		if (out_chunk.chunk) {
@@ -1929,7 +1944,12 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 			return appender_error();
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
-		input->get_next(input, &arrow_array_wrapper.arrow_array);
+		next_code = input->get_next(input, &arrow_array_wrapper.arrow_array);
+	}
+	if (next_code != 0) {
+		discard_rows();
+		set_stream_error("next batch", next_code);
+		return ADBC_STATUS_IO;
 	}
 	// The appender writes the rows it still holds when it closes, so a failure there must fail the ingestion
 	if (duckdb_appender_close(appender.Get()) != DuckDBSuccess) {
