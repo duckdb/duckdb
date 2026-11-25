@@ -1636,10 +1636,72 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_context_lookup_secret)
 	(duckdb_v2_context_handle ctx, const char *path, idx_t path_length, const char *type, idx_t type_length,
 	 duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_cipher_create)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key,
+	 idx_t key_length, duckdb_v2_crypto_cipher_handle *stream, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_crypto_cipher_destroy)(duckdb_v2_crypto_cipher_handle *stream);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_cipher_finalize)
+	(duckdb_v2_crypto_cipher_handle stream, uint8_t *tag, idx_t tag_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_cipher_init)
+	(duckdb_v2_crypto_cipher_handle stream, const uint8_t *iv, idx_t iv_length, const uint8_t *aad, idx_t aad_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_cipher_update)
+	(duckdb_v2_crypto_cipher_handle stream, const uint8_t *in, idx_t in_length, uint8_t *out, idx_t out_capacity,
+	 idx_t *out_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_hash)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *data, idx_t length,
+	 uint8_t *digest, idx_t digest_capacity, idx_t *digest_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_hash_digest_size)
+	(DUCKDB_V2_CRYPTO_HASH_FUNCTION function, idx_t *size, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_hmac)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *key, idx_t key_length,
+	 const uint8_t *data, idx_t length, uint8_t *mac, idx_t mac_capacity, idx_t *mac_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_crypto_provider_handle *provider, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_crypto_provider_destroy)(duckdb_v2_crypto_provider_handle *provider);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_create_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_destroy_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_destroy_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_finalize_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_finalize_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_init_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_init_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_update_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_update_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_hash_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hash_callback_fn callback,
+	 const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_hmac_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hmac_callback_fn callback,
+	 const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_random_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_random_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_user_data)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_random_bytes)
+	(duckdb_v2_instance_handle instance, uint8_t *data, idx_t length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_supports_hash)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_supports_hmac)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_crypto_provider)
+	(duckdb_v2_extension_handle extension, duckdb_v2_crypto_provider_handle provider, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_secret_function)
 	(duckdb_v2_extension_handle extension, duckdb_v2_secret_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_get_object_cache)
 	(duckdb_v2_instance_handle instance, duckdb_v2_object_cache_handle *cache, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_register_crypto_provider)
+	(duckdb_v2_instance_handle instance, duckdb_v2_crypto_provider_handle provider, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_delete)
 	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
 	 duckdb_v2_error_info_handle *err);
@@ -1722,6 +1784,9 @@ typedef struct {
 	 const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
 	 idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
 	 duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
+	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
+	 void *user_data, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3817,10 +3882,87 @@ typedef struct {
 #define duckdb_v2_context_lookup_secret duckdb_ext_api.duckdb_v2_context_lookup_secret
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_cipher_create duckdb_ext_api.duckdb_v2_crypto_cipher_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_cipher_destroy duckdb_ext_api.duckdb_v2_crypto_cipher_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_cipher_finalize duckdb_ext_api.duckdb_v2_crypto_cipher_finalize
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_cipher_init duckdb_ext_api.duckdb_v2_crypto_cipher_init
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_cipher_update duckdb_ext_api.duckdb_v2_crypto_cipher_update
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_hash duckdb_ext_api.duckdb_v2_crypto_hash
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_hash_digest_size duckdb_ext_api.duckdb_v2_crypto_hash_digest_size
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_hmac duckdb_ext_api.duckdb_v2_crypto_hmac
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_create duckdb_ext_api.duckdb_v2_crypto_provider_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_destroy duckdb_ext_api.duckdb_v2_crypto_provider_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_create_callback                                                           \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_create_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_destroy_callback                                                          \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_destroy_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_finalize_callback                                                         \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_finalize_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_init_callback                                                             \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_init_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_update_callback                                                           \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_update_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_hash_callback duckdb_ext_api.duckdb_v2_crypto_provider_set_hash_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_hmac_callback duckdb_ext_api.duckdb_v2_crypto_provider_set_hmac_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_random_callback duckdb_ext_api.duckdb_v2_crypto_provider_set_random_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_user_data duckdb_ext_api.duckdb_v2_crypto_provider_set_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_random_bytes duckdb_ext_api.duckdb_v2_crypto_random_bytes
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_supports_hash duckdb_ext_api.duckdb_v2_crypto_supports_hash
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_supports_hmac duckdb_ext_api.duckdb_v2_crypto_supports_hmac
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_extension_register_crypto_provider duckdb_ext_api.duckdb_v2_extension_register_crypto_provider
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_extension_register_secret_function duckdb_ext_api.duckdb_v2_extension_register_secret_function
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_instance_get_object_cache duckdb_ext_api.duckdb_v2_instance_get_object_cache
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_instance_register_crypto_provider duckdb_ext_api.duckdb_v2_instance_register_crypto_provider
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_object_cache_delete duckdb_ext_api.duckdb_v2_object_cache_delete
@@ -3920,6 +4062,9 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_instance_open_shared duckdb_ext_api.duckdb_v2_instance_open_shared
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_get_profiling_information duckdb_ext_api.duckdb_v2_connection_get_profiling_information
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
