@@ -10,19 +10,27 @@ WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WIT
 ----
 <REGEX>:Parser Error.*Max expression depth.*
 
-statement ok
-RESET max_expression_depth;
-
-# common table expressions next to each other do not nest, so many of them bind under the default limit
-query I
-WITH a0 AS (SELECT 0 AS x), a1 AS (SELECT 1 AS x), a2 AS (SELECT 2 AS x), a3 AS (SELECT 3 AS x), a4 AS (SELECT 4 AS x), a5 AS (SELECT 5 AS x), a6 AS (SELECT 6 AS x), a7 AS (SELECT 7 AS x), a8 AS (SELECT 8 AS x), a9 AS (SELECT 9 AS x), a10 AS (SELECT 10 AS x), a11 AS (SELECT 11 AS x), a12 AS (SELECT 12 AS x), a13 AS (SELECT 13 AS x), a14 AS (SELECT 14 AS x) SELECT x FROM a14;
-----
-14
-
+# a nesting below the limit works
 query I
 WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (SELECT 1 AS x) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t;
 ----
 1
+
+# common table expressions next to each other do not nest: every body peaks at six levels, six of them would
+# exceed the limit if a finished definition kept its level
+query I
+WITH a AS (SELECT + + + + 1), b AS (SELECT + + + + 1), c AS (SELECT + + + + 1), d AS (SELECT + + + + 1), e AS (SELECT + + + + 1), f AS (SELECT + + + + 1) SELECT 1;
+----
+1
+
+statement ok
+RESET max_expression_depth;
+
+# many sibling common table expressions bind under the default limit
+query I
+WITH a0 AS (SELECT 0 AS x), a1 AS (SELECT 1 AS x), a2 AS (SELECT 2 AS x), a3 AS (SELECT 3 AS x), a4 AS (SELECT 4 AS x), a5 AS (SELECT 5 AS x), a6 AS (SELECT 6 AS x), a7 AS (SELECT 7 AS x), a8 AS (SELECT 8 AS x), a9 AS (SELECT 9 AS x), a10 AS (SELECT 10 AS x), a11 AS (SELECT 11 AS x), a12 AS (SELECT 12 AS x), a13 AS (SELECT 13 AS x), a14 AS (SELECT 14 AS x) SELECT x FROM a14;
+----
+14
 
 # a nesting far beyond the limit is rejected while it is parsed, before a tree of that depth exists
 statement error
