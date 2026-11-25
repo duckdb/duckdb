@@ -1,0 +1,749 @@
+module: operator
+#
+# A custom streaming operator: it receives its input as a stream of chunks and produces chunks of output, the way
+# DuckDB's own physical operators do. An operator is defined once and then handed to the object that places it in a
+# query plan; today that is a table function (see table_function_set_operator), which turns the function into a
+# table in-out function.
+#
+#-----------------------------------------------------------------------------------------------------------------------
+# Enums
+#-----------------------------------------------------------------------------------------------------------------------
+enums:
+  OPERATOR_RESULT:
+    description: |
+      What an operator's execute callback reports about the input chunk it was given, set with
+      `[[operator_execute_set_result]]`.
+    values:
+      OPERATOR_RESULT_NEED_MORE_INPUT:
+        value: 0
+        description: |
+          The operator is done with the input chunk: the engine calls the execute callback again with the next input
+          chunk. The default.
+      OPERATOR_RESULT_HAVE_MORE_OUTPUT:
+        value: 1
+        description: |
+          The output chunk is full but the operator is not done with the input chunk: the engine calls the execute
+          callback again with the same input chunk once it has consumed the output.
+      OPERATOR_RESULT_FINISHED:
+        value: 2
+        description: |
+          The operator needs no more input at all, e.g. because it has produced every row it ever will. The engine
+          stops feeding it input, and calls the finalize callback if one is set.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  operator:
+    description: |
+      An owned opaque handle to a custom streaming operator being built. Created with `[[operator_create]]`,
+      configured with the setter functions (e.g. `[[operator_set_execute_callback]]`), handed to the object that runs
+      it (e.g. with `[[table_function_set_operator]]`), and destroyed with `[[operator_destroy]]`.
+
+      An operator transforms a stream of input chunks into a stream of output chunks. The engine may run it on
+      several threads at once: every thread processes a part of the input with a "local state" of its own, next to a
+      "global state" all threads share.
+
+  operator_init_global_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an operator during the global state initialization
+      "init global" phase. The "init global" callback receives this handle and can use it to set up the state shared
+      by every thread running the operator, and to declare how many threads may run it.
+
+  operator_init_local_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an operator during the local state initialization
+      "init local" phase. The "init local" callback receives this handle and can use it to set up the state of one
+      thread running the operator.
+
+  operator_execute_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an operator during the "execute" phase. The "execute"
+      callback receives this handle and uses it to read the input chunk, write the output chunk, and report whether
+      it is done with the input chunk.
+
+  operator_finalize_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to an operator during the "finalize" phase, after the
+      thread's input is exhausted. The "finalize" callback receives this handle and uses it to write the output the
+      operator held back, and to report whether it has more of it.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  operator_init_global_callback:
+    parameters:
+      info:
+        type: operator_init_global_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  operator_init_local_callback:
+    parameters:
+      info:
+        type: operator_init_local_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  operator_execute_callback:
+    parameters:
+      info:
+        type: operator_execute_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  operator_finalize_callback:
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Creates a new operator through a factory.
+
+      The operator starts out empty: configure it with the setter functions (e.g.
+      `[[operator_set_execute_callback]]`), then hand it to the object that runs it, e.g. with
+      `[[table_function_set_operator]]`. The caller owns the returned handle and must destroy it with
+      `[[operator_destroy]]`, also after handing it over.
+
+      The operator can only be handed to objects created through a factory of the same database.
+    role: constructor
+    belongs_to: operator
+    parameters:
+      factory:
+        type: factory
+        description: The factory to create the operator through.
+      op:
+        type: operator
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created operator. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_set_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets arbitrary user data on the operator.
+
+      Associates an opaque pointer with the operator, retrievable from its callbacks via e.g.
+      `[[operator_execute_get_user_data]]`. The opaque handle bundles the pointer with an optional destructor, invoked
+      when the data is no longer needed. Calling this again replaces the previous user data.
+    parameters:
+      op:
+        type: operator
+        description: The operator to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_set_init_global_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional global init callback of the operator.
+
+      The global init callback is invoked once per operator in a query plan, before any input reaches it. It can set
+      "global state" shared by every thread running the operator, and declare how many threads may run it via
+      `[[operator_init_global_set_max_threads]]`.
+    parameters:
+      op:
+        type: operator
+        description: The operator to set the global init callback of.
+      callback:
+        type: operator_init_global_callback
+        description: The global init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_set_init_local_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional local init callback of the operator.
+
+      The local init callback is invoked once per thread that runs the operator, before any input reaches it on that
+      thread. It can set worker-local "local state", retrievable from the execute and finalize callbacks.
+    parameters:
+      op:
+        type: operator
+        description: The operator to set the local init callback of.
+      callback:
+        type: operator_init_local_callback
+        description: The local init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_set_execute_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the execute callback of the operator.
+
+      The execute callback implements the operator's logic. It is invoked with an input chunk and an empty output
+      chunk, writes the rows it produces for the input into the output chunk, and reports with
+      `[[operator_execute_set_result]]` whether it is done with the input chunk. It may produce no rows for an input
+      chunk, and it may produce rows for an input chunk over several invocations. An execute callback must be set
+      before the operator is handed over.
+    parameters:
+      op:
+        type: operator
+        description: The operator to set the execute callback of.
+      callback:
+        type: operator_execute_callback
+        description: The execute callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_set_finalize_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional finalize callback of the operator.
+
+      The finalize callback is invoked on every thread running the operator once the thread's input is exhausted, or
+      once the execute callback reported `OPERATOR_RESULT_FINISHED`. It writes the output the operator held back, e.g.
+      the rows of a buffering operator, and is invoked again for as long as it reports more output with
+      `[[operator_finalize_set_have_more_output]]`.
+
+      Not every way of running an operator supports it: e.g. a table function whose input is correlated with an outer
+      query (`LATERAL`) runs the operator once per row of the outer query, and rejects a finalize callback.
+    parameters:
+      op:
+        type: operator
+        description: The operator to set the finalize callback of.
+      callback:
+        type: operator_finalize_callback
+        description: The finalize callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Init global
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_init_global_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the user data set via `[[operator_set_user_data]]`.
+    parameters:
+      info:
+        type: operator_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_global_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the bind data of the call the operator runs for, e.g. the bind data set by the bind callback of the
+      table function the operator was handed to.
+    parameters:
+      info:
+        type: operator_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_global_set_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the operator's "global state" from the global init callback.
+
+      The global state lives as long as the operator runs and is retrievable from the local init, execute and
+      finalize callbacks. Every thread running the operator shares it, so the operator must synchronize its own
+      access to it. The opaque handle bundles the pointer with an optional destructor, invoked when the operator is
+      done with the state.
+    parameters:
+      info:
+        type: operator_init_global_info
+        description: The global init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the global state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_global_set_max_threads:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets how many threads may run the operator in parallel.
+
+      By default the operator runs on as many threads as the operators feeding it. This sets an upper bound, e.g. 1
+      for an operator that must see its whole input on a single thread; it is not a request, and the engine may use
+      fewer threads. Some ways of running an operator always use a single thread: e.g. a table function called with
+      constant arguments.
+    parameters:
+      info:
+        type: operator_init_global_info
+        description: The global init info handle.
+      max_threads:
+        type: idx
+        description: The maximum number of threads. Must be at least 1.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Init local
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_init_local_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the user data set via `[[operator_set_user_data]]`.
+    parameters:
+      info:
+        type: operator_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_local_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the bind data of the call the operator runs for (see `[[operator_init_global_get_bind_data]]`).
+    parameters:
+      info:
+        type: operator_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_local_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the global state set via `[[operator_init_global_set_global_state]]`.
+    parameters:
+      info:
+        type: operator_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_init_local_set_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the "local state" of the thread from the local init callback.
+
+      The local state belongs to a single thread running the operator, so the operator need not synchronize access to
+      it; it is retrievable from the execute and finalize callbacks on that thread. The opaque handle bundles the
+      pointer with an optional destructor, invoked when the thread is done with the state.
+    parameters:
+      info:
+        type: operator_init_local_info
+        description: The local init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the local state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Execute
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_execute_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the user data set via `[[operator_set_user_data]]`.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the bind data of the call the operator runs for (see `[[operator_init_global_get_bind_data]]`).
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the global state set via `[[operator_init_global_set_global_state]]`.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_get_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the local state set via `[[operator_init_local_set_local_state]]`.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_get_input_chunk:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the input chunk the execute callback processes.
+
+      Read its row count with `[[data_chunk_get_size]]` and its columns with `[[data_chunk_get_vector]]`. What the
+      columns are depends on the object that runs the operator: for a table function, see
+      `[[table_function_set_operator]]`. When the previous invocation reported `OPERATOR_RESULT_HAVE_MORE_OUTPUT`, this
+      is the same input chunk as before. The vectors may be in any representation, e.g. a range of numbers arrives as
+      a sequence: call `[[vector_flatten]]` on a vector before reading it through `[[vector_get_view]]` if needed.
+      Borrowed; other than flattening its vectors, the callback must not modify it. Valid only for the duration of the
+      callback.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed input chunk.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_get_output_chunk:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the output chunk the execute callback writes the rows it produces into.
+
+      The chunk holds one vector per output column of the operator, in order (for a table function: the columns
+      declared with `[[table_function_bind_add_result_column]]`), and starts out empty on every invocation. Write the
+      rows, then declare how many there are with `[[vector_set_size]]` on the first vector, which the engine takes as
+      the chunk's row count and propagates to the other vectors. The chunk holds at most as many rows as the engine's
+      vector size (2048 by default): report `OPERATOR_RESULT_HAVE_MORE_OUTPUT` to produce more rows for the same input.
+      Borrowed; valid only for the duration of the callback.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed output chunk to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_execute_set_result:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Reports whether the execute callback is done with the input chunk. Defaults to
+      `OPERATOR_RESULT_NEED_MORE_INPUT`; see `[[OPERATOR_RESULT]]` for what each result makes the engine do next.
+    parameters:
+      info:
+        type: operator_execute_info
+        description: The execute info handle.
+      result:
+        type: OPERATOR_RESULT
+        description: The result of this invocation.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Finalize
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_finalize_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the user data set via `[[operator_set_user_data]]`.
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_finalize_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the bind data of the call the operator runs for (see `[[operator_init_global_get_bind_data]]`).
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_finalize_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the global state set via `[[operator_init_global_set_global_state]]`.
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_finalize_get_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: Retrieves the local state set via `[[operator_init_local_set_local_state]]`.
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_finalize_get_output_chunk:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the output chunk the finalize callback writes the rows it produces into. It is laid out and sized
+      like the output chunk of the execute callback (see `[[operator_execute_get_output_chunk]]`). Borrowed; valid
+      only for the duration of the callback.
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed output chunk to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  operator_finalize_set_have_more_output:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Reports whether the finalize callback has more output after this invocation. Defaults to false: the operator is
+      done on this thread. With true, the engine calls the finalize callback again once it has consumed the output.
+    parameters:
+      info:
+        type: operator_finalize_info
+        description: The finalize info handle.
+      have_more_output:
+        type: bool
+        description: Whether the callback has more output.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  operator_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Destroys the operator, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Destroying the handle after handing it over (e.g. with `[[table_function_set_operator]]`)
+      does not affect the object it was handed to.
+    parameters:
+      op:
+        type: operator
+        description: The operator to destroy.
+        indirection: 1
+    return_type: ERROR
