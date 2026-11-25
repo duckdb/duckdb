@@ -90,6 +90,21 @@ SELECT histogram(f::DECIMAL(40,3), [10, 50.125, 100]::DECIMAL(40,3)[]), histogra
 ----
 {10.000=24300, 50.125=96300, 100.000=119700, 9999999999999999999999999999999999999.999=59700}	{10.000=24300, 50.125=96300, 100.000=119700, 999999999.999=59700}
 
+# an integer argument beyond 2^53 is binned exactly against integer bins, whichever exact type the two unify to
+query II
+SELECT map_extract_value(histogram(u, [9007199254740992::BIGINT]), 9007199254740992::BIGINT),
+       map_extract_value(histogram_exact(u, [9007199254740992::BIGINT]), 9007199254740992::BIGINT)
+FROM (VALUES (9007199254740993::UHUGEINT)) t(u)
+----
+0	0
+
+query II
+SELECT map_extract_value(histogram(u, [9007199254740992::DECIMAL(39,0)]), 9007199254740992::DECIMAL(39,0)),
+       map_extract_value(histogram_exact(u::DECIMAL(39,0), [9007199254740993::DECIMAL(39,0)]), 9007199254740993::DECIMAL(39,0))
+FROM (VALUES (9007199254740993::UHUGEINT)) t(u)
+----
+0	1
+
 # DOUBLE bins still turn the histogram into one over DOUBLE
 query I
 SELECT typeof(histogram(x, [0.1::DOUBLE, 1])) FROM decimals
