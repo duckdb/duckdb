@@ -69,11 +69,6 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 	optional_ptr<BoundIndex> append_index;
 	if (building) {
 		build_changed_rows += chunk.size();
-		for (auto column_id : bound_index.GetColumnIds()) {
-			if (VectorOperations::HasNull(chunk.data[column_id])) {
-				build_has_null_keys = true;
-			}
-		}
 	}
 	if (bound_index.SupportsDeltaIndexes() && (building || deltas.ShouldUse(active_checkpoint))) {
 		append_index = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
@@ -618,7 +613,6 @@ IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 	result.added = deltas.Take(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
 	result.removed = deltas.Take(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
 	result.changed_rows = build_changed_rows;
-	result.has_null_keys = build_has_null_keys;
 	build_changed_rows = 0;
 	return result;
 }

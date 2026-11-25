@@ -479,9 +479,6 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		rounds++;
 	}
 	IndexEntry::MergeBuildDeltas(*index, deltas);
-	if (index->IsPrimary() && deltas.has_null_keys) {
-		throw ConstraintException("NOT NULL constraint failed: %s", index->GetIndexName());
-	}
 	if (!IsMainTable()) {
 		throw TransactionException(
 		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");

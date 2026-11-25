@@ -118,8 +118,6 @@ struct IndexBuildDeltas {
 	unique_ptr<BoundIndex> removed;
 	//! The number of rows that commits appended or removed
 	idx_t changed_rows = 0;
-	//! Whether a commit appended a row with a NULL key column
-	bool has_null_keys = false;
 };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
@@ -269,8 +267,6 @@ private:
 	const transaction_t build_transaction;
 	//! The rows that commits appended or removed since the build last took the deltas
 	idx_t build_changed_rows = 0;
-	//! Whether a commit appended a row with a NULL key column since the build started
-	bool build_has_null_keys = false;
 };
 
 template <class TARGET>
