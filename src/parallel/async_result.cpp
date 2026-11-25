@@ -265,9 +265,11 @@ bool AsyncResult::TryGenerateTestResult(AsyncResult &result) {
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		break;
 #ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
 	case 1:
 		tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
+		break;
 #endif
 	default:
 		break;
