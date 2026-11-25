@@ -35,6 +35,7 @@ const vector<unique_ptr<Rule>> &ExpressionRewriter::GetRules() {
 	rules.push_back(make_uniq<DatePartSimplificationRule>(*this));
 	rules.push_back(make_uniq<DateTruncSimplificationRule>(*this));
 	rules.push_back(make_uniq<ComparisonSimplificationRule>(*this));
+	rules.push_back(make_uniq<BetweenNullSimplificationRule>(*this));
 	rules.push_back(make_uniq<RowComparisonSimplificationRule>(*this));
 	rules.push_back(make_uniq<InClauseSimplificationRule>(*this));
 	rules.push_back(make_uniq<InEnumSimplificationRule>(*this));
