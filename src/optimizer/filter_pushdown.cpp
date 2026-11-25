@@ -13,8 +13,9 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer, ProjectionMode projection_mode)
-    : optimizer(optimizer), combiner(optimizer.context), projection_mode(projection_mode) {
+FilterPushdown::FilterPushdown(Optimizer &optimizer, ProjectionMode projection_mode, bool inside_secure_view)
+    : optimizer(optimizer), combiner(optimizer.context), projection_mode(projection_mode),
+      inside_secure_view(inside_secure_view) {
 }
 
 bool FilterPushdown::BarrierCanPassThrough(LogicalOperatorType type) {
@@ -77,7 +78,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return op;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		// we can't push filters into the materialized CTE (LHS), but we do want to recurse into it
-		FilterPushdown pushdown(optimizer, projection_mode);
+		FilterPushdown pushdown(optimizer, projection_mode, inside_secure_view);
 		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 		// we can push filters into the rest of the query plan (RHS)
 		op->children[1] = Rewrite(std::move(op->children[1]));
@@ -209,7 +210,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFiltersIntoDelimJoin(unique_ptr<
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
-			FilterPushdown pushdown(optimizer, projection_mode);
+			FilterPushdown pushdown(optimizer, projection_mode, inside_secure_view);
 
 			// check if filter bindings can be applied to the child bindings.
 			auto child_bindings = op->children[child_idx]->GetColumnBindings();
@@ -253,7 +254,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFiltersIntoDelimJoin(unique_ptr<
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
-		FilterPushdown pushdown(optimizer, projection_mode);
+		FilterPushdown pushdown(optimizer, projection_mode, inside_secure_view);
 		pushdown.RewriteChild(*op, child_idx);
 	}
 	// now push any existing filters

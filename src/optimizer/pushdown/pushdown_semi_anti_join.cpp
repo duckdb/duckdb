@@ -12,16 +12,18 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalJoin>();
 
-	FilterPushdown right_pushdown(optimizer, projection_mode);
+	FilterPushdown right_pushdown(optimizer, projection_mode, inside_secure_view);
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && !filters.empty()) {
 		// a right row that matches a left row passes what the filters imply for the right side
 		vector<reference<const Expression>> left_filters;
 		for (auto &filter : filters) {
 			left_filters.push_back(*filter->filter);
 		}
-		FilterCombiner::GenerateJoinFilters(
-		    op->Cast<LogicalComparisonJoin>().conditions, left_filters, JoinSide::RIGHT,
-		    [&](unique_ptr<Expression> right_filter) { right_pushdown.AddFilter(std::move(right_filter)); });
+		FilterCombiner::GenerateJoinFilters(op->Cast<LogicalComparisonJoin>().conditions, left_filters, JoinSide::RIGHT,
+		                                    [&](unique_ptr<Expression> right_filter) {
+			                                    right_pushdown.AddFilter(
+			                                        BarForChild(std::move(right_filter), *op->children[1]));
+		                                    });
 		right_pushdown.GenerateFilters();
 	}
 	// push all current filters down the left side

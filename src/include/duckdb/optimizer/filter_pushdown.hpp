@@ -23,7 +23,8 @@ public:
 	enum class ProjectionMode : uint8_t { ALLOW_COMPUTED_EXPRESSIONS, PRESERVE_COMPUTED_EXPRESSIONS };
 
 	explicit FilterPushdown(Optimizer &optimizer,
-	                        ProjectionMode projection_mode = ProjectionMode::ALLOW_COMPUTED_EXPRESSIONS);
+	                        ProjectionMode projection_mode = ProjectionMode::ALLOW_COMPUTED_EXPRESSIONS,
+	                        bool inside_secure_view = false);
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
@@ -61,6 +62,8 @@ private:
 	Optimizer &optimizer;
 	FilterCombiner combiner;
 	ProjectionMode projection_mode;
+	//! Whether the operators this pushdown visits are inside a secure view
+	bool inside_secure_view;
 
 	vector<unique_ptr<Filter>> filters;
 	//! Push down a LogicalAggregate op
@@ -90,6 +93,11 @@ private:
 	unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSecureView op
 	unique_ptr<LogicalOperator> PushdownSecureView(unique_ptr<LogicalOperator> op);
+	//! Whether a filter must carry a barrier when it is pushed into child past a secure view boundary: it can throw or
+	//! is volatile, or references a column that an operator in child computes with such an expression. Walks child
+	static bool RequiresBarrier(const Expression &expr, LogicalOperator &child);
+	//! Inside a secure view, wrap a filter a join hands to child in a barrier if it requires one there
+	unique_ptr<Expression> BarForChild(unique_ptr<Expression> expr, LogicalOperator &child);
 	//! Remove the filters carrying a barrier from the current filter set and return them
 	vector<unique_ptr<Expression>> ExtractBarrierFilters();
 	// Pushdown an inner join
