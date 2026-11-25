@@ -19,6 +19,8 @@
 namespace duckdb {
 struct AttachOptions;
 class ActiveCheckpointWrapper;
+class ParsedExpression;
+class QueryNode;
 class BlockManager;
 class Catalog;
 class CheckpointWriter;
@@ -40,7 +42,7 @@ public:
 	//! Write the commit's WAL flush marker. With sync_now the WAL is synced up to it before returning;
 	//! otherwise the marker is only pushed to the OS and the WAL offset to sync up to is returned (0 if
 	//! nothing was written, or it was synced here)
-	virtual idx_t FlushCommit(bool sync_now) = 0;
+	virtual idx_t FlushCommit(transaction_t commit_id, bool sync_now) = 0;
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
@@ -80,6 +82,8 @@ public:
 	bool HasWAL() const;
 	void AddWALSize(idx_t size);
 	void SetWALSize(idx_t size);
+	void MarkBufferedIndexReplays();
+	bool HasBufferedIndexReplays() const;
 	//! Gets the number of WAL entries since last checkpoint
 	idx_t GetWALEntriesCount() const;
 	void ResetWALEntriesCount();
@@ -112,7 +116,9 @@ public:
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
-	virtual void CreateCheckpoint(QueryContext context, CheckpointOptions options = CheckpointOptions()) = 0;
+	//! The client context is only passed for explicit checkpoints
+	virtual void CreateCheckpoint(QueryContext context, CheckpointOptions options = CheckpointOptions(),
+	                              optional_ptr<ClientContext> client_context = nullptr) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
@@ -136,6 +142,24 @@ public:
 		D_ASSERT(HasStorageVersion());
 		return StorageVersionInfo::GetStorageVersionString(storage_version);
 	}
+	//! Why a column type cannot be stored at the storage version of this database, empty when it can
+	string GetUnsupportedTypeReason(const LogicalType &type) const;
+	//! Why something that needs the required storage version is not supported by this database, which is prior to it
+	string GetUnsupportedPriorToVersionReason(const string &what, StorageVersion required) const;
+	//! Throws when a column type cannot be stored at the storage version of this database
+	void CheckTypeIsSupported(const LogicalType &type) const;
+	//! Whether a type holds a DECIMAL stored as a BIGNUM blob, the argument types of aggregate states included
+	static bool ContainsWideDecimal(const LogicalType &type);
+	//! Why a type written to the catalog holds a DECIMAL wider than this storage version stores, empty when it does
+	//! not; the subject names what is stored (columns, index keys)
+	string GetUnsupportedDecimalWidthReason(const LogicalType &type, const string &subject = "columns") const;
+	//! Throws when a type written to the catalog holds a DECIMAL wider than this storage version stores
+	void CheckDecimalWidthIsSupported(const LogicalType &type) const;
+	//! Throws when a stored expression casts to a DECIMAL wider than this storage version stores: below v2.0.0 a CAST
+	//! serializes its target as a LogicalType, which the engines of that version read as a fixed-size decimal
+	void CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const;
+	//! The same check over every expression of a stored query (a view or a table macro)
+	void CheckQueryDecimalsAreSupported(QueryNode &node) const;
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
@@ -187,6 +211,8 @@ protected:
 	//! WAL.
 	atomic<idx_t> wal_size;
 	atomic<idx_t> wal_entries_count;
+	//! Set when an unbound index buffers an operation. Cleared by BindIndexesForCheckpoint once none remain.
+	atomic<bool> buffered_index_replays {false};
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
 	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
@@ -220,7 +246,8 @@ public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(QueryContext context, CheckpointOptions options) override;
+	void CreateCheckpoint(QueryContext context, CheckpointOptions options,
+	                      optional_ptr<ClientContext> client_context) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
@@ -230,6 +257,11 @@ public:
 protected:
 	void LoadDatabase(QueryContext context) override;
 
-	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
+	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options,
+	                                                    optional_ptr<ClientContext> checkpoint_context);
+
+private:
+	//! Returns false if the checkpoint must be skipped to keep buffered index replays.
+	bool BindIndexesForCheckpoint(optional_ptr<ClientContext> checkpoint_context, bool explicit_checkpoint);
 };
 } // namespace duckdb

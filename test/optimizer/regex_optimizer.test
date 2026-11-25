@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE test(s VARCHAR);
 
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
+SET explain_output = 'OPTIMIZED_ONLY';
 
 statement ok
 INSERT INTO test VALUES ('aaa');
@@ -253,3 +253,64 @@ WITH fetch_schema AS (
   SELECT s FROM test WHERE regexp_matches(s, 'hello', 'm')
 ) SELECT * FROM fetch_schema LIMIT 0;
 ----
+
+# a leading or trailing star can match the empty string, so it is dropped even when '.' excludes newlines
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, '.*llo.*');
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'llo'\).*
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, '.*?llo');
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'llo'\).*
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, '[a-z]*llo');
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'llo'\).*
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, 'hello[^l]*');
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'hello'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '^hello.*'), s FROM test;
+----
+analyzed_plan	<REGEX>:.*prefix\(s, 'hello'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '.*world$'), s FROM test;
+----
+analyzed_plan	<REGEX>:.*suffix\(s, 'world'\).*
+
+# without 's', a star between other parts of the pattern (including an anchor) or a plus cannot cross a newline
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, 'hello.*world');
+----
+analyzed_plan	<REGEX>:.*regexp_matches\(s, 'hello.\*world'\).*
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, '^.*world');
+----
+analyzed_plan	<REGEX>:.*regexp_matches\(s, '\^.\*world'\).*
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, '.+world');
+----
+analyzed_plan	<REGEX>:.*regexp_matches\(s, '.\+world'\).*
+
+statement ok
+INSERT INTO test VALUES (concat('hello', chr(10), 'world'));
+
+query IIIIIII
+SELECT regexp_matches(s, '.*llo.*'), regexp_matches(s, '^hello.*'), regexp_matches(s, '.*world$'),
+	regexp_matches(s, 'hello.*world'), regexp_matches(s, '^.*world'), regexp_matches(s, '.+world'),
+	regexp_matches(s, '.*o.w.*', 's')
+FROM test ORDER BY s
+----
+true	true	true	false	false	false	true
+true	true	false	false	false	false	false
+true	true	true	true	true	true	true
+false	false	false	false	false	false	false

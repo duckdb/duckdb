@@ -69,6 +69,9 @@ struct RecursiveCTEKeyedProperties {
 	bool can_reuse_changed_group_candidates = false;
 	//! Some payload column compares through a SQL-level expression rather than by value
 	bool has_payload_comparisons = false;
+	//! Every aggregate result fits a fixed-width or string slot, so the commit can materialize the finalized values
+	//! per group and reads consume them without invoking aggregate callbacks
+	bool materialize_finalized_values = false;
 
 	static RecursiveCTEKeyedProperties Derive(const PhysicalRecursiveCTE &op);
 };
@@ -133,6 +136,8 @@ public:
 	vector<idx_t> key_representative_indices;
 	// Contains SQL-level distinct comparisons for the finalized payload columns
 	vector<unique_ptr<Expression>> payload_comparisons;
+	//! DISTINCT FROM comparison of the previous and current value of every payload column
+	vector<unique_ptr<Expression>> payload_distinct_from;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 	//! Physical recursive inputs inside the recursive member

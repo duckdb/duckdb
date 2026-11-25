@@ -1,0 +1,70 @@
+# name: test/sql/copy/parquet/parquet_dictionary_partial_batches.test
+# description: Nullable dictionary and level decoding preserves cursors across partial batches and skips
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE expected AS
+SELECT i AS id,
+       ((i // 2048) % 3)::INTEGER AS filter_col,
+       CASE WHEN i % 19 = 0 THEN NULL
+            WHEN i % 257 < 32 THEN 'repeated'
+            ELSE lpad((i % 200)::VARCHAR, 3, '0') END AS s,
+       CASE WHEN i % 31 = 0 THEN NULL ELSE (hash(i) % 2047)::INTEGER END AS n,
+       CASE WHEN i % 23 = 0 THEN NULL ELSE i % 7 < 3 END AS b,
+       CASE WHEN i % 29 = 0 THEN NULL ELSE [i % 17, NULL, i % 11] END AS l
+FROM range(65017) t(i);
+
+foreach parquet_version v1 v2
+
+statement ok
+COPY expected TO '{TEST_DIR}/partial_{parquet_version}.parquet'
+(PARQUET_VERSION '{parquet_version}', ROW_GROUP_SIZE 20480);
+
+query I
+SELECT count(*) FROM parquet_metadata('{TEST_DIR}/partial_{parquet_version}.parquet')
+WHERE path_in_schema = 's' AND encodings NOT LIKE '%DICTIONARY%';
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT * FROM '{TEST_DIR}/partial_{parquet_version}.parquet'
+    EXCEPT ALL
+    SELECT * FROM expected
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT * FROM expected
+    EXCEPT ALL
+    SELECT * FROM '{TEST_DIR}/partial_{parquet_version}.parquet'
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT * FROM '{TEST_DIR}/partial_{parquet_version}.parquet' WHERE filter_col = 1
+    EXCEPT ALL
+    SELECT * FROM expected WHERE filter_col = 1
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT * FROM expected WHERE filter_col = 1
+    EXCEPT ALL
+    SELECT * FROM '{TEST_DIR}/partial_{parquet_version}.parquet' WHERE filter_col = 1
+);
+----
+0
+
+endloop

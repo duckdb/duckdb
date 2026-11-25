@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
@@ -28,8 +27,6 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 		return PullupSetOperation(std::move(op));
-	case LogicalOperatorType::LOGICAL_DISTINCT:
-		return PullupDistinct(std::move(op));
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return PullupWindow(std::move(op));
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
@@ -73,8 +70,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 unique_ptr<LogicalOperator> FilterPullup::PullupSemiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::SEMI);
-	FilterPullup left_pullup(true, can_add_column);
-	FilterPullup right_pullup(true, can_add_column);
+	FilterPullup left_pullup(context, true, can_add_column);
+	FilterPullup right_pullup(context, true, can_add_column);
 	op->children[0] = left_pullup.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(std::move(op->children[1]));
 
@@ -149,25 +146,6 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 	return PullupBothSide(std::move(op));
 }
 
-unique_ptr<LogicalOperator> FilterPullup::PullupDistinct(unique_ptr<LogicalOperator> op) {
-	const auto &distinct = op->Cast<LogicalDistinct>();
-	if (distinct.distinct_type == DistinctType::DISTINCT) {
-		// Can pull up through a DISTINCT
-		op->children[0] = Rewrite(std::move(op->children[0]));
-		for (auto &expr : filters_expr_pullup) {
-			if (expr->IsVolatile()) {
-				// Keep volatile predicates below the DISTINCT, where they run once per input row
-				op->children[0] = GeneratePullupFilter(std::move(op->children[0]), filters_expr_pullup);
-				return op;
-			}
-		}
-		return op;
-	}
-	// Cannot pull up through a DISTINCT ON (see #19327)
-	D_ASSERT(distinct.distinct_type == DistinctType::DISTINCT_ON);
-	return FinishPullup(std::move(op));
-}
-
 unique_ptr<LogicalOperator> FilterPullup::PullupWindow(unique_ptr<LogicalOperator> op) {
 	if (!can_pullup) {
 		return FinishPullup(std::move(op));
@@ -215,7 +193,7 @@ unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<Logica
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
-		FilterPullup pullup;
+		FilterPullup pullup(context);
 		op->children[i] = pullup.Rewrite(std::move(op->children[i]));
 	}
 	// now pull up any existing filters

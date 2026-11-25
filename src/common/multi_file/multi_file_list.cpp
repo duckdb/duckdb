@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
@@ -303,7 +304,7 @@ idx_t SimpleMultiFileList::GetTotalFileCount() const {
 //===--------------------------------------------------------------------===//
 // LazyFileList
 //===--------------------------------------------------------------------===//
-LazyMultiFileList::LazyMultiFileList(optional_ptr<ClientContext> context_p) : context(context_p) {
+LazyMultiFileList::LazyMultiFileList(optional_ptr<Context> services_p) : services(services_p) {
 }
 
 vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
@@ -362,8 +363,9 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
-	if (context && context->IsInterrupted()) {
-		throw InterruptException();
+	if (services) {
+		// each expansion step can be a slow remote listing, so read the clock every time
+		services->InterruptCheck();
 	}
 	if (!ExpandNextPath()) {
 		all_files_expanded = true;
@@ -389,8 +391,8 @@ GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> gl
 }
 
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> globs_p, FileGlobInput glob_input_p)
-    : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
-      current_glob(0) {
+    : LazyMultiFileList(&context_p.GetContext()), context(context_p), globs(std::move(globs_p)),
+      glob_input(std::move(glob_input_p)), current_glob(0) {
 }
 
 vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {

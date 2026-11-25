@@ -1,3 +1,4 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/connection.hpp"
@@ -8,6 +9,7 @@
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/literal.hpp"
 
 namespace duckdb {
 
@@ -93,7 +95,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			Parser parser(state.GetContext());
+			Parser parser(state.GetClientContext());
 			parser.ParseQuery(input.GetString());
 
 			auto statements_arr = yyjson_mut_arr(doc);
@@ -105,7 +107,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
-				options->storage_compatibility = state.GetContext().db->config.options.storage_compatibility;
+				options->storage_compatibility = state.GetContext().GetDatabase().config.options.storage_compatibility;
 				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 
@@ -127,6 +129,9 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
+			if (error.Type() == ExceptionType::OUT_OF_MEMORY) {
+				throw;
+			}
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",
 			                          StringUtil::Lower(Exception::ExceptionTypeToString(error.Type())).c_str());
@@ -194,6 +199,10 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 		throw ParserException("Error parsing json: no statements");
 	}
 
+	DeserializationPolicy policy;
+	policy.Disallow(LogicalTypeId::POINTER);
+	policy.Disallow(LiteralKind::POINTER);
+
 	vector<unique_ptr<SelectStatement>> result;
 
 	idx_t idx;
@@ -201,6 +210,7 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 	yyjson_val *stmt_json;
 	yyjson_arr_foreach(statements, idx, max, stmt_json) {
 		JsonDeserializer deserializer(stmt_json, doc);
+		deserializer.SetPolicy(policy);
 		auto stmt = SelectStatement::Deserialize(deserializer);
 		if (!stmt->node) {
 			throw ParserException("Error parsing json: no select node found in json");
@@ -254,7 +264,7 @@ ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 // JSON EXECUTE SERIALIZED SQL (PRAGMA)
 //----------------------------------------------------------------------
 static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, const FunctionParameters &parameters) {
-	JSONFunctionLocalState local_state(context);
+	JSONFunctionLocalState local_state(context.GetContext());
 	auto alc = local_state.json_allocator->GetYYAlc();
 
 	if (parameters.values[0].IsNull()) {
@@ -280,7 +290,10 @@ PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
 //----------------------------------------------------------------------
 struct ExecuteSqlTableFunction {
 	struct BindData : public TableFunctionData {
-		shared_ptr<Relation> plan;
+		unique_ptr<QueryNode> node;
+		string query;
+		vector<Identifier> names;
+		vector<LogicalType> types;
 		unique_ptr<Connection> con;
 
 		bool SupportStatementCache() const override {
@@ -300,7 +313,7 @@ struct ExecuteSqlTableFunction {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
-		JSONFunctionLocalState local_state(context);
+		JSONFunctionLocalState local_state(context.GetContext());
 		auto alc = local_state.json_allocator->GetYYAlc();
 
 		auto result = make_uniq<BindData>();
@@ -314,12 +327,24 @@ struct ExecuteSqlTableFunction {
 		if (stmts.size() != 1) {
 			throw BinderException("json_execute_serialized_sql expects exactly one statement");
 		}
-		result->plan = result->con->RelationFromQuery(std::move(stmts[0]));
+		result->query = stmts[0]->ToString();
+		result->node = std::move(stmts[0]->node);
 
-		for (auto &col : result->plan->Columns()) {
-			return_types.emplace_back(col.Type());
-			names.emplace_back(col.Name());
+		// without query text, a prepare error keeps its position for the outer query to report
+		auto statement = make_uniq<SelectStatement>();
+		statement->node = result->node->Copy();
+		auto prepared = result->con->Prepare(std::move(statement));
+		if (prepared->HasError()) {
+			prepared->GetErrorObject().Throw();
 		}
+		// a parameter whose type stays open leaves the result unknown, one with a type shows as an expected type
+		if (!prepared->MetadataAvailable() || !prepared->GetExpectedParameterTypes().empty()) {
+			throw BinderException("json_execute_serialized_sql cannot execute a statement with parameters");
+		}
+		result->names = prepared->GetNames();
+		result->types = prepared->GetTypes();
+		return_types = result->types;
+		names = result->names;
 		return std::move(result);
 	}
 
@@ -327,7 +352,31 @@ struct ExecuteSqlTableFunction {
 		auto &data = data_p.bind_data->Cast<BindData>();
 		auto &state = data_p.global_state->Cast<State>();
 		if (!state.result) {
-			state.result = data.plan->ExecuteOrThrow();
+			auto statement = make_uniq<SelectStatement>();
+			statement->node = data.node->Copy();
+			statement->query = data.query;
+			auto result = data.con->context->RunInternalStatement(std::move(statement), QueryParameters());
+			result->ThrowIfError();
+			if (result->GetTypes() != data.types || result->GetNames() != data.names) {
+				string error = "Result mismatch in query!\nExpected the following columns: [";
+				for (idx_t i = 0; i < data.types.size(); i++) {
+					error += i == 0 ? "" : ", ";
+					error += data.names[i] + " " + data.types[i].ToString();
+				}
+				error += "]\nBut result contained the following: ";
+				for (idx_t i = 0; i < result->GetTypes().size(); i++) {
+					error += i == 0 ? "[" : ", ";
+					error += result->ColumnName(i) + " " + result->GetTypes()[i].ToString();
+				}
+				error += "]";
+				if (result->GetNames() != data.names) {
+					error +=
+					    "\nIf no table or view the statement reads changed since it was bound, an unaliased expression "
+					    "may have been named differently at bind and at run; an alias keeps its name stable.";
+				}
+				ErrorData(error).Throw();
+			}
+			state.result = std::move(result);
 		}
 		auto result_chunk = state.result->Fetch();
 		if (!result_chunk) {

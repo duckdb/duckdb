@@ -141,6 +141,8 @@ struct MetadataCommand {
 	const char *description;
 	idx_t match_size;
 	const char *extra_description;
+	//! Pass the remainder of the line as one argument instead of splitting it into words
+	bool raw_arguments;
 };
 
 struct ShellColumnInfo {
@@ -469,7 +471,7 @@ public:
 	//! On a failed run through a pipe with no agent detected and no -agent/-no-agent given: point at -agent
 	void PrintExitHint(int rc);
 	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)
-	void PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement);
+	void PrintQueryEstimate(const duckdb::SQLStatement &statement);
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static std::wstring Win32Utf8ToUnicode(const char *) = delete;

@@ -125,7 +125,7 @@ public:
 		ptr_storage[i] = view.data();
 		length_storage[i] = view.size();
 	}
-	auto ptrs() -> const char ** {
+	auto ptrs() const -> const char *const * {
 		return ptr_storage.empty() ? nullptr : ptr_storage.data();
 	}
 	auto lengths() -> const idx_t * {

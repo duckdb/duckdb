@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/pipeline_execution_order.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -49,9 +50,21 @@ enum class ExternalInputEventState : uint8_t {
 };
 
 class PipelineTask : public ExecutorTask {
+public:
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
 
-public:
+	//! Bounds the chunks per PROCESS_PARTIAL slice of the result collector pipeline tasks the constructing thread
+	//! executes, for the lifetime of the scope. Other pipelines, and any thread outside a scope, process
+	//! PARTIAL_CHUNK_COUNT chunks per slice
+	class PartialChunkBound {
+	public:
+		explicit PartialChunkBound(idx_t chunk_count);
+		~PartialChunkBound();
+
+	private:
+		idx_t previous;
+	};
+
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p);
 
 	Pipeline &pipeline;
@@ -64,6 +77,10 @@ public:
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+private:
+	//! The chunks this task's PROCESS_PARTIAL slice processes on the current thread
+	idx_t PartialChunkCount() const;
 };
 
 class PipelineBuildState {
@@ -207,6 +224,8 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
+	//! Execution order required by the pipeline, independent of operator caching.
+	PipelineExecutionOrder GetExecutionOrder() const;
 	//! Marks this pipeline as fed externally instead of by scheduled source tasks
 	void SetExternalInput(const vector<reference<Pipeline>> &producer_pipelines);
 	bool IsExternalInput() const {

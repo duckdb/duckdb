@@ -1,4 +1,6 @@
 #include "capi_tester.hpp"
+
+#include <cmath>
 #include <regex>
 
 using namespace duckdb;
@@ -311,6 +313,13 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(2, 0)) == -320938.4298);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(3, 0)) == 49082094824.904820482094);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(4, 0)) == 0.0);
+	// a wide descriptor can carry the smallest 128-bit value, which cannot be negated
+	duckdb_decimal wide_minimum;
+	wide_minimum.width = 39;
+	wide_minimum.scale = 1;
+	wide_minimum.value.lower = 0;
+	wide_minimum.value.upper = INT64_MIN;
+	REQUIRE(duckdb_decimal_to_double(wide_minimum) == -std::ldexp(1.0, 127) / 10.0);
 
 	REQUIRE(!result->IsNull(0, 0));
 	REQUIRE(!result->IsNull(1, 0));
@@ -722,6 +731,23 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	auto string_from_decimal = result->Fetch<string>(0, 0);
 	REQUIRE(string_from_decimal == "-0.5");
+}
+
+TEST_CASE("Convert wide decimals near a double rounding midpoint through the C API", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto result = tester.Query("SELECT '10000000000000001.0000000000000000000001'::DECIMAL(39,22), "
+	                           "'-10000000000000001.0000000000000000000001'::DECIMAL(39,22)");
+	REQUIRE_NO_FAIL(*result);
+	auto positive = result->Fetch<duckdb_decimal>(0, 0);
+	auto negative = result->Fetch<duckdb_decimal>(1, 0);
+	REQUIRE(positive.width == 39);
+	REQUIRE(positive.scale == 22);
+	REQUIRE(negative.width == 39);
+	REQUIRE(negative.scale == 22);
+	REQUIRE(duckdb_decimal_to_double(positive) == 10000000000000002.0);
+	REQUIRE(duckdb_decimal_to_double(negative) == -10000000000000002.0);
 }
 
 TEST_CASE("Test custom_user_agent config", "[capi]") {

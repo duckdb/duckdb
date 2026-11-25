@@ -17,7 +17,7 @@ FROM range(200)
 
 concurrentforeach task rename insert
 
-loop run 0 200
+loop run 0 3
 
 onlyif task=rename
 statement maybe

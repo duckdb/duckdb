@@ -21,6 +21,9 @@ VariantPathBindData::VariantPathBindData(const vector<string> &input_paths) : Fu
 		}
 	}
 }
+VariantPathBindData::VariantPathBindData(int64_t index) : FunctionData() {
+	paths.push_back({VariantPathComponent(index)});
+}
 
 unique_ptr<FunctionData> VariantPathBindData::Copy() const {
 	return make_uniq<VariantPathBindData>(*this);
@@ -75,14 +78,15 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 
 	const auto &path_expr = *arguments[1];
 	const auto &return_type = path_expr.GetReturnType();
-	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST &&
+	    return_type.id() != LogicalTypeId::BIGINT) {
+		throw BinderException("%s expects the second argument to be of type VARCHAR, VARCHAR[] or BIGINT, not %s",
 		                      function_name, return_type.ToString());
 	}
 	if (return_type.id() == LogicalTypeId::LIST) {
 		const auto child_type_id = ListType::GetChildType(return_type).id();
 		if (child_type_id != LogicalTypeId::VARCHAR && child_type_id != LogicalTypeId::SQLNULL) {
-			throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+			throw BinderException("%s expects the second argument to be of type VARCHAR, VARCHAR[] or BIGINT, not %s",
 			                      function_name, return_type.ToString());
 		}
 	}
@@ -95,6 +99,9 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 	}
 	if (path_type_id == LogicalTypeId::LIST) {
 		return make_uniq<VariantPathBindData>(CollectPaths(constant_arg, function_name.GetIdentifierName()));
+	}
+	if (path_type_id == LogicalTypeId::BIGINT) {
+		return make_uniq<VariantPathBindData>(constant_arg.GetValue<int64_t>());
 	}
 
 	throw BinderException("%s received an unexpected type for the second argument", function_name);

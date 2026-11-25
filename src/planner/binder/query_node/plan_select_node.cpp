@@ -46,6 +46,10 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 			// already an aggregate state export - skip verification
 			return false;
 		}
+		if (aggr->Cast<BoundAggregateExpression>().IsDistinct()) {
+			// the exported state of a DISTINCT aggregate cannot be re-bound: EXPORT_STATE rejects DISTINCT
+			return false;
+		}
 	}
 
 	// we transform a query like "SELECT grp, SUM(col) FROM tbl GROUP BY grp" into
@@ -214,7 +218,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	}
 
 	if (!statement.windows.empty()) {
-		auto win = make_uniq<LogicalWindow>(statement.window_index);
+		auto win = make_uniq<LogicalWindow>(statement.window_index, optional_idx());
 		win->expressions = std::move(statement.windows);
 		// visit the window expressions
 		for (auto &expr : win->expressions) {

@@ -50,7 +50,6 @@ class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
 struct PreprocessedStatement;
-class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
 class ClientContextLock;
@@ -130,8 +129,8 @@ public:
 	shared_ptr<ClientContext> base_context;
 	//! The number of internal connections between this client and its base client (0 for a base client)
 	idx_t internal_depth = 0;
-	//! The services of this ClientContext: owns the client configuration, logger, query profiler, file system, ...
-	shared_ptr<Context> services;
+	//! The context of this ClientContext: owns the client configuration, logger, query profiler, file system, ...
+	shared_ptr<Context> context;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
 	//! Data for the currently running transaction
@@ -167,10 +166,10 @@ public:
 	DUCKDB_API void SuppressInterrupts();
 	DUCKDB_API void CancelTransaction();
 
+	//! InterruptCheck that only reads the clock for the timeout every 256th call, for hot loops
+	DUCKDB_API void FastInterruptCheck() const;
 	//! Check for interrupt or timeout, throws InterruptException if triggered
 	DUCKDB_API void InterruptCheck() const;
-	//! InterruptCheck that reads the clock on every call, for waits that block between checks
-	DUCKDB_API void BlockingInterruptCheck() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
@@ -225,19 +224,6 @@ public:
 	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
-	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
-	//! list with the set of returned columns
-	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Internal function for try bind relation. It does not require a client-context lock.
-	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Non-blocking. Submits a relation and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation,
-	                                          const QueryParameters &query_parameters);
-	//! Blocking. Runs a relation to completion and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
-
 	//! Prepare a query. A statement that expands into several is kept as written and expanded at each execution, so
 	//! its metadata is known only from the result
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
@@ -266,9 +252,6 @@ public:
 	//! invalidates the active transaction according to the transaction invalidation policy, as fits statements that are
 	//! parsed to be run; without it the transaction stays usable, as fits statements that are only inspected.
 	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
-
-	//! Extract the logical plan of a query
-	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -305,9 +288,9 @@ public:
 		return log_config;
 	}
 
-	//! Returns the services (client configuration, logging, metrics, file system) owned by this context
-	Context &Services() const {
-		return *services;
+	//! The Context (client configuration, logging, metrics, file system) owned by this client context
+	Context &GetContext() const {
+		return *context;
 	}
 
 	//! Returns the current query string (if any)
@@ -341,6 +324,9 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Rolls back the active transaction (if any) without throwing, while the context is still fully alive
+	void RollbackActiveTransaction();
+
 	friend class Parser;
 	friend class ParseIterator;
 	ParserOptions GetParserOptions();
@@ -465,9 +451,6 @@ private:
 	//! Record the error on the result, end the query and report EXECUTION_ERROR
 	QueryResultState FailQueryInternal(ClientContextLock &lock, BaseQueryResult &result, ErrorData error);
 	void UpdateProgressInternal(QueryResultState state);
-
-	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
-	                                       const QueryParameters &query_parameters);
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());

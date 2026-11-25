@@ -104,7 +104,7 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 		}
 
 		// construct the options
-		AttachOptions options(attach_info->options, config.options.access_mode);
+		AttachOptions options(context.client.GetContext(), attach_info->options, config.options.access_mode);
 		if (owns_resource) {
 			options.deleter_function = launched.deleter_function;
 			options.deleter_payload = launched.deleter_payload;
@@ -131,10 +131,14 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 
 		// check ATTACH IF NOT EXISTS
 		auto &db_manager = DatabaseManager::Get(context.client);
-		auto existing_db = db_manager.GetDatabase(name);
+		// compare by oid: a held reference would keep a database replaced by OR REPLACE from being closed
+		idx_t existing_oid = DConstants::INVALID_INDEX;
+		if (auto existing_db = db_manager.GetDatabase(name)) {
+			existing_oid = existing_db->oid;
+		}
 		attached_db = db_manager.AttachDatabase(context.client, *attach_info, options);
 		// IF NOT EXISTS / OR REPLACE can return the existing attachment without opening the path
-		if (attached_db == existing_db) {
+		if (attached_db->oid == existing_oid) {
 			warn_ducklake_metadata = false;
 		}
 	} catch (...) {

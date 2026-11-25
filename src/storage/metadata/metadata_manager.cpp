@@ -9,13 +9,14 @@
 
 namespace duckdb {
 
-MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), dirty(false) {
+MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), pending_reuse(0), dirty(false) {
 }
 
-MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept : dirty(false) {
+MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept : pending_reuse(0), dirty(false) {
 	std::swap(block, other.block);
 	std::swap(block_id, other.block_id);
 	std::swap(free_blocks, other.free_blocks);
+	std::swap(pending_reuse, other.pending_reuse);
 	auto dirty_val = dirty.load();
 	dirty = other.dirty.load();
 	other.dirty = dirty_val;
@@ -25,6 +26,7 @@ MetadataBlock &MetadataBlock::operator=(MetadataBlock &&other) noexcept {
 	std::swap(block, other.block);
 	std::swap(block_id, other.block_id);
 	std::swap(free_blocks, other.free_blocks);
+	std::swap(pending_reuse, other.pending_reuse);
 	auto dirty_val = dirty.load();
 	dirty = other.dirty.load();
 	other.dirty = dirty_val;
@@ -236,8 +238,8 @@ MetadataPointer MetadataManager::FromDiskPointerInternal(unique_lock<mutex> &blo
 
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) { // LCOV_EXCL_START
-		throw InternalException("Failed to load metadata pointer (id %llu, idx %llu, ptr %llu)\n", block_id, index,
-		                        pointer.block_pointer);
+		throw DataCorruptionException("Failed to load metadata pointer (id %llu, idx %llu, ptr %llu)\n", block_id,
+		                              index, pointer.block_pointer);
 	} // LCOV_EXCL_STOP
 	MetadataPointer result;
 	result.block_index = UnsafeNumericCast<idx_t>(block_id);
@@ -328,6 +330,7 @@ void MetadataManager::Flush(QueryContext context) {
 }
 
 void MetadataManager::Write(WriteStream &sink) {
+	lock_guard<mutex> guard(block_lock);
 	sink.Write<uint64_t>(blocks.size());
 	for (auto &kv : blocks) {
 		kv.second.Write(sink);
@@ -338,6 +341,9 @@ void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Read(source);
+		if (block.block_id < 0 || block.block_id >= MAXIMUM_BLOCK) {
+			throw DataCorruptionException("Corrupt database file: invalid metadata block id %lld", block.block_id);
+		}
 
 		unique_lock<mutex> guard(block_lock);
 		auto entry = blocks.find(block.block_id);
@@ -353,7 +359,8 @@ void MetadataManager::Read(ReadStream &source) {
 
 void MetadataBlock::Write(WriteStream &sink) {
 	sink.Write<block_id_t>(block_id);
-	sink.Write<idx_t>(FreeBlocksToInteger());
+	// the blocks that wait for older transactions are free on disk
+	sink.Write<idx_t>(FreeBlocksToInteger() | pending_reuse);
 }
 
 idx_t MetadataManager::GetMetadataBlockSize() const {
@@ -398,8 +405,9 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 	free_blocks = BlocksFromInteger(free_list);
 }
 
-void MetadataManager::MarkBlocksAsModified() {
+unordered_map<block_id_t, idx_t> MetadataManager::MarkBlocksAsModified(bool has_readers) {
 	unique_lock<mutex> guard(block_lock);
+	unordered_map<block_id_t, idx_t> freed_blocks;
 	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
 	for (auto &kv : modified_blocks) {
 		auto block_id = kv.first;
@@ -407,6 +415,12 @@ void MetadataManager::MarkBlocksAsModified() {
 		auto entry = blocks.find(block_id);
 		D_ASSERT(entry != blocks.end());
 		auto &block = entry->second;
+		if (has_readers && modified_list != 0) {
+			// free on disk only: reused once those transactions have ended
+			block.pending_reuse |= modified_list;
+			freed_blocks[block_id] = modified_list;
+			continue;
+		}
 		idx_t current_free_blocks = block.FreeBlocksToInteger();
 		// merge the current set of free blocks with the modified blocks
 		idx_t new_free_blocks = current_free_blocks | modified_list;
@@ -427,9 +441,23 @@ void MetadataManager::MarkBlocksAsModified() {
 
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
-		idx_t free_list = block.FreeBlocksToInteger();
+		idx_t free_list = block.FreeBlocksToInteger() | block.pending_reuse;
 		idx_t occupied_list = ~free_list;
 		modified_blocks[block.block_id] = occupied_list;
+	}
+	return freed_blocks;
+}
+
+void MetadataManager::ReuseFreedBlocks(const unordered_map<block_id_t, idx_t> &freed_blocks) {
+	lock_guard<mutex> guard(block_lock);
+	for (auto &freed : freed_blocks) {
+		auto entry = blocks.find(freed.first);
+		if (entry == blocks.end()) {
+			throw InternalException("ReuseFreedBlocks - Block id %llu not found in blocks", freed.first);
+		}
+		auto &block = entry->second;
+		block.FreeBlocksFromInteger(block.FreeBlocksToInteger() | freed.second);
+		block.pending_reuse &= ~freed.second;
 	}
 }
 

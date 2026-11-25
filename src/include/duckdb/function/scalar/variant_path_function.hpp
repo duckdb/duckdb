@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+//! Whether a VARIANT value selected by a path is returned
+typedef bool (*variant_node_filter_t)(const VariantNode &node);
+
 struct VariantPathFunction {
 	//! Provides unified construction of path based processing functions.
 	static ScalarFunctionSet CreateFunctionSet(const Identifier &name, const scalar_function_t &function,
@@ -58,6 +61,13 @@ struct VariantPathFunction {
 			return;
 		}
 	}
+
+	//! Executes scalar VARIANT functions that return the VARIANT value selected by an optional constant path argument.
+	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR), f(VARIANT, VARCHAR[]) or f(VARIANT, BIGINT), and
+	//! returns VARIANT, or VARIANT[] for a list of paths. Missing values, and values for which `keep` returns false,
+	//! are written as NULL.
+	static void ExecuteVariant(DataChunk &input, const ExpressionState &state, Vector &result,
+	                           variant_node_filter_t keep);
 
 private:
 	//! Executes a single path and writes RESULT_TYPE per input row.
@@ -105,15 +115,32 @@ private:
 		}
 	}
 
+	//! Executes a single path and writes the selected VARIANT value per input row.
+	static void ExecuteVariantUnary(const Vector &input, const vector<VariantPathComponent> &path, Vector &result,
+	                                idx_t count, variant_node_filter_t keep);
+	//! Executes a list of paths and writes LIST<VARIANT> of the selected values per input row.
+	static void ExecuteVariantMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths,
+	                               Vector &result, idx_t count, variant_node_filter_t keep);
+
+	//! Returns the element at a 0-based index of an ARRAY, negative indexes count from the end. Returns nullopt if the
+	//! node is not an ARRAY or the index is out of range.
+	static optional<VariantNode> ResolveIndex(const VariantNode &node, int64_t index);
+
 	//! Walks the VARIANT using a path, which may be either (partially) shredded or unshredded. Returns nullopt if the
 	//! path is missing in the VARIANT, and the present value with VariantNode otherwise.
 	static optional<VariantNode> ResolvePath(VariantNode node, const vector<VariantPathComponent> &path) {
 		for (const auto &component : path) {
-			if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-				throw InternalException("Path indexes are not supported for this function");
-			}
 			if (node.IsNull() || node.IsMissing()) {
 				return {};
+			}
+
+			if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+				auto element = ResolveIndex(node, component.index);
+				if (!element) {
+					return {};
+				}
+				node = *element;
+				continue;
 			}
 
 			if (node.GetTypeId() != VariantLogicalType::OBJECT) {

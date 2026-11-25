@@ -1,0 +1,94 @@
+diff --git a/src/catalog/rest/transaction/iceberg_transaction_data.cpp b/src/catalog/rest/transaction/iceberg_transaction_data.cpp
+index 3f8a0e7e6..ce640265f 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction_data.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction_data.cpp
+@@ -132,9 +132,10 @@ bool IcebergTransactionData::IsFileInvalidated(const IcebergFileIdentity &file)
+ 	return manifest_deletes.IsInvalidated(file);
+ }
+ 
+-shared_ptr<IcebergMergeDeleteCollector> IcebergTransactionData::GetMergeDeleteCollector(idx_t action_count) {
++shared_ptr<IcebergMergeDeleteCollector> IcebergTransactionData::GetMergeDeleteCollector(ClientContext &context,
++                                                                                        idx_t action_count) {
+ 	lock_guard<mutex> guard(lock);
+-	auto query_id = transaction.active_query.load();
++	auto query_id = context.transaction.GetActiveQuery();
+ 	if (!merge_delete_query_id || *merge_delete_query_id != query_id) {
+ 		VerifyMergeDeletesComplete();
+ 		merge_delete_collector = make_shared_ptr<IcebergMergeDeleteCollector>(action_count);
+@@ -223,7 +224,7 @@ void IcebergTransactionData::AddSnapshot(ClientContext &context, IcebergSnapshot
+ 	if (table_metadata.current_snapshot_id) {
+ 		TableAddAssertCurrentSchemaId();
+ 	}
+-	AddSnapshotUpdate(std::move(add_snapshot), std::move(altered_manifests), merge_action);
++	AddSnapshotUpdate(context, std::move(add_snapshot), std::move(altered_manifests), merge_action);
+ }
+ 
+ void IcebergTransactionData::AddPendingDeleteManifests(IcebergAddSnapshot &add_snapshot,
+@@ -238,10 +239,10 @@ void IcebergTransactionData::AddPendingDeleteManifests(IcebergAddSnapshot &add_s
+ 	}
+ }
+ 
+-void IcebergTransactionData::AddSnapshotUpdate(unique_ptr<IcebergAddSnapshot> add_snapshot,
++void IcebergTransactionData::AddSnapshotUpdate(ClientContext &context, unique_ptr<IcebergAddSnapshot> add_snapshot,
+                                                IcebergManifestDeletes &&altered_manifests, bool merge_action) {
+ 	// All action sinks share this execution's query ID; a later statement gets a different ID.
+-	auto query_id = transaction.active_query.load();
++	auto query_id = context.transaction.GetActiveQuery();
+ 	if (merge_action && merge_query_id && *merge_query_id == query_id) {
+ 		// Keeping one alter gives every action the same transaction-local sequence number.
+ 		auto &snapshot = alters[merge_alter_index].get();
+@@ -281,7 +282,7 @@ void IcebergTransactionData::AddDeleteSnapshot(ClientContext &context, partition
+ 	if (table_metadata.current_snapshot_id) {
+ 		TableAddAssertCurrentSchemaId();
+ 	}
+-	AddSnapshotUpdate(std::move(add_snapshot), std::move(altered_manifests), merge_action);
++	AddSnapshotUpdate(context, std::move(add_snapshot), std::move(altered_manifests), merge_action);
+ }
+ 
+ void IcebergTransactionData::AddUpdateSnapshot(ClientContext &context, partitioned_manifest_entry_map_t &&delete_files,
+@@ -300,7 +301,7 @@ void IcebergTransactionData::AddUpdateSnapshot(ClientContext &context, partition
+ 	auto add_snapshot = make_uniq<IcebergAddSnapshot>(table_info);
+ 	AddPendingDeleteManifests(*add_snapshot, std::move(delete_files));
+ 	add_snapshot->AddPendingManifest(IcebergPendingManifest(data_manifest_metadata, std::move(data_files)));
+-	AddSnapshotUpdate(std::move(add_snapshot), std::move(altered_manifests), merge_action);
++	AddSnapshotUpdate(context, std::move(add_snapshot), std::move(altered_manifests), merge_action);
+ }
+ 
+ void IcebergTransactionData::TableAddSchema(int32_t schema_id) {
+diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
+index 87df25731..571df2535 100644
+--- a/src/execution/operator/iceberg_delete.cpp
++++ b/src/execution/operator/iceberg_delete.cpp
+@@ -99,7 +99,7 @@ unique_ptr<GlobalSinkState> IcebergDelete::GetGlobalSinkState(ClientContext &con
+ 	if (merge_delete_action_index.IsValid()) {
+ 		auto &transaction = IcebergTransaction::Get(context, table.catalog);
+ 		auto &transaction_data = table.table_info.GetOrCreateTransactionData(transaction);
+-		result->merge_deletes = transaction_data.GetMergeDeleteCollector(merge_delete_action_count);
++		result->merge_deletes = transaction_data.GetMergeDeleteCollector(context, merge_delete_action_count);
+ 	}
+ 	return std::move(result);
+ }
+diff --git a/src/include/catalog/rest/transaction/iceberg_transaction_data.hpp b/src/include/catalog/rest/transaction/iceberg_transaction_data.hpp
+index 600074dbe..37cb65d95 100644
+--- a/src/include/catalog/rest/transaction/iceberg_transaction_data.hpp
++++ b/src/include/catalog/rest/transaction/iceberg_transaction_data.hpp
+@@ -32,7 +32,7 @@ public:
+ 	//! Whether this transaction stages a DELETE snapshot; gates the commit-retry safety check.
+ 	bool ContainsDelete() const;
+ 	bool IsFileInvalidated(const IcebergFileIdentity &file) const;
+-	shared_ptr<IcebergMergeDeleteCollector> GetMergeDeleteCollector(idx_t action_count);
++	shared_ptr<IcebergMergeDeleteCollector> GetMergeDeleteCollector(ClientContext &context, idx_t action_count);
+ 	void VerifyMergeDeletesComplete() const;
+ 
+ 	void AddSnapshot(ClientContext &context, IcebergSnapshotOperationType operation,
+@@ -70,8 +70,8 @@ private:
+ 	//! Retains one pending delete manifest per partition spec present in 'delete_files'.
+ 	void AddPendingDeleteManifests(IcebergAddSnapshot &add_snapshot, partitioned_manifest_entry_map_t &&delete_files);
+ 	//! Called with lock held, since MERGE action pipelines may finalize concurrently.
+-	void AddSnapshotUpdate(unique_ptr<IcebergAddSnapshot> add_snapshot, IcebergManifestDeletes &&altered_manifests,
+-	                       bool merge_action);
++	void AddSnapshotUpdate(ClientContext &context, unique_ptr<IcebergAddSnapshot> add_snapshot,
++	                       IcebergManifestDeletes &&altered_manifests, bool merge_action);
+ 
+ 	//! Query IDs distinguish MERGE executions within the same transaction.
+ 	optional<transaction_t> merge_query_id;

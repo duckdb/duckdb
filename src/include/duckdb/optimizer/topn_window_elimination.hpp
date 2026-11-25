@@ -41,8 +41,14 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
+	//! Whether a rewrite used late materialization, which leaves the input of its aggregate to be pruned afterwards
+	bool UsedLateMaterialization() const {
+		return any_late_materialization;
+	}
+
 	//	Returns the <= index for TopN, if any
-	static optional_idx CanOptimize(LogicalOperator &op);
+	//	Note that it can return 0 if the filter removes all rows!
+	static optional_idx CanOptimize(LogicalOperator &op, ClientContext &client);
 
 private:
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
@@ -90,5 +96,6 @@ private:
 	ClientContext &context;
 	Optimizer &optimizer;
 	optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats;
+	bool any_late_materialization = false;
 };
 } // namespace duckdb

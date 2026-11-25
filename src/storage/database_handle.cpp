@@ -17,7 +17,7 @@ DatabaseHandle::DatabaseHandle(unique_ptr<MemoryMappedFile> mmap_handle_p) : mma
 //! that session's logger. Without a client, the database-wide file system only sees global settings.
 static FileSystem &GetDatabaseFileSystem(QueryContext context, AttachedDatabase &db) {
 	if (context.Valid()) {
-		return context.GetServices()->GetFileSystem();
+		return context.GetContext()->GetFileSystem();
 	}
 	return FileSystem::Get(db);
 }
@@ -127,7 +127,9 @@ void DatabaseHandle::Read(QueryContext context, FileBuffer &block, uint64_t loca
 		return;
 	}
 	// Serve fully-covered reads from the prefetched header (only the first few header reads qualify).
-	if (prefetched_header && location + block.AllocSize() <= prefetched_header->size()) {
+	// (the location is derived from a block id, so compare without adding to it: the sum can wrap)
+	if (prefetched_header && location <= prefetched_header->size() &&
+	    block.AllocSize() <= prefetched_header->size() - location) {
 		block.ReadFromMemory(const_data_ptr_cast(prefetched_header->data()), location);
 		return;
 	}

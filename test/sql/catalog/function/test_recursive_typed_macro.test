@@ -1,0 +1,185 @@
+# name: test/sql/catalog/function/test_recursive_typed_macro.test
+# description: Recursive macros with typed parameters respect max_expression_depth
+# group: [function]
+
+# a regression must fail the query instead of hanging the test run
+statement ok
+SET max_execution_time = 30000
+
+statement ok
+SET max_expression_depth = 50
+
+statement ok
+CREATE TABLE t AS SELECT i::INTEGER AS i FROM range(3) r(i)
+
+# baseline: untyped self-recursion through the argument
+statement ok
+CREATE MACRO mu(x) AS x
+
+statement ok
+CREATE OR REPLACE MACRO mu(x) AS mu(mu(x))
+
+statement error
+SELECT mu(1)
+----
+Max expression depth limit of 50 exceeded
+
+# typed self-recursion with a constant argument: overload selection binds the constant argument mt(1)
+statement ok
+CREATE MACRO mt(x INTEGER) AS x
+
+statement ok
+CREATE OR REPLACE MACRO mt(x INTEGER) AS mt(mt(1))
+
+statement error
+SELECT mt(1)
+----
+Max expression depth limit of 50 exceeded
+
+# typed self-recursion with a column argument
+statement ok
+CREATE MACRO mv(x INTEGER) AS x
+
+statement ok
+CREATE OR REPLACE MACRO mv(x INTEGER) AS mv(mv(x))
+
+statement error
+SELECT mv(i) FROM t
+----
+Max expression depth limit of 50 exceeded
+
+# typed self-recursion through a scalar subquery in the argument
+statement ok
+CREATE MACRO ms(x INTEGER) AS x
+
+statement ok
+CREATE OR REPLACE MACRO ms(x INTEGER) AS ms((SELECT ms(1)))
+
+statement error
+SELECT ms(1)
+----
+Max expression depth limit of 50 exceeded
+
+# mutual recursion between two typed macros
+statement ok
+CREATE MACRO ma(x INTEGER) AS x
+
+statement ok
+CREATE MACRO mb(x INTEGER) AS ma(ma(x))
+
+statement ok
+CREATE OR REPLACE MACRO ma(x INTEGER) AS mb(mb(x))
+
+statement error
+SELECT ma(1)
+----
+Max expression depth limit of 50 exceeded
+
+# typed self-recursion through a lambda body
+statement ok
+CREATE MACRO ml(x INTEGER) AS x
+
+statement ok
+CREATE OR REPLACE MACRO ml(x INTEGER) AS list_extract(list_transform([1], lambda y: ml(ml(y))), 1)
+
+statement error
+SELECT ml(1)
+----
+Max expression depth limit of 50 exceeded
+
+# mixed: a typed macro recursing through an untyped one
+statement ok
+CREATE MACRO mx(x) AS x
+
+statement ok
+CREATE MACRO my(x INTEGER) AS mx(mx(x))
+
+statement ok
+CREATE OR REPLACE MACRO mx(x) AS my(my(1))
+
+statement error
+SELECT mx(1)
+----
+Max expression depth limit of 50 exceeded
+
+# typed table macro whose argument recurses through a typed scalar macro
+statement ok
+CREATE MACRO tm(x INTEGER) AS TABLE SELECT x AS y
+
+statement error
+SELECT * FROM tm(mt(1))
+----
+Max expression depth limit of 50 exceeded
+
+# typed table macro recursing through a subquery in its own argument hits the table macro recursion check
+statement ok
+CREATE OR REPLACE MACRO tm(x INTEGER) AS TABLE SELECT * FROM tm((SELECT x))
+
+statement error
+SELECT * FROM tm(1)
+----
+infinite recursion detected: attempting to recursively expand table macro "tm"
+
+# overload selection binds the arguments of a typed macro that discards them, so they count towards the depth
+statement ok
+CREATE MACRO drop_arg(x INTEGER) AS 1
+
+statement error
+SELECT drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(1))))))))))))
+----
+Max expression depth limit of 50 exceeded
+
+# recursion is also bounded by the default depth limit
+statement ok
+RESET max_expression_depth
+
+statement error
+SELECT mt(1)
+----
+Max expression depth limit of 1000 exceeded
+
+statement error
+SELECT ma(1)
+----
+Max expression depth limit of 1000 exceeded
+
+# the discarded-argument nesting binds within the default limit
+query I
+SELECT drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(1))))))))))))
+----
+1
+
+statement ok
+SET max_expression_depth = 50
+
+# finite nesting of typed macros keeps binding, and selects the typed overload
+statement ok
+CREATE MACRO inc(x INTEGER) AS x + 1, (x VARCHAR) AS x || '!'
+
+statement ok
+CREATE MACRO inc_u(x) AS x + 1
+
+query II
+SELECT inc(inc(inc(inc(inc(1))))), inc(inc(inc('a')))
+----
+6	a!!!
+
+# typed and untyped nesting close to the depth limit still binds
+query II
+SELECT inc(inc(inc(inc(inc(inc(inc(1))))))), inc_u(inc_u(inc_u(inc_u(inc_u(inc_u(inc_u(1)))))))
+----
+8	8
+
+query I
+SELECT inc(inc(inc(inc(inc(i))))) FROM t ORDER BY ALL
+----
+5
+6
+7
+
+query I
+SELECT inc((SELECT inc(inc(i)))) FROM t ORDER BY ALL
+----
+3
+4
+5

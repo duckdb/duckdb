@@ -4,7 +4,6 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -64,7 +63,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		// non re-usable buffer (or mmap-backed, which we cannot rewrite): allocate a new buffer
 		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
-	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
+	result->Initialize(Settings::Get<DebugInitializeSetting>(db));
 	return result;
 }
 
@@ -446,9 +445,13 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 
 void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	auto &buffer = handle->GetMemory().GetBuffer(lock);
+	// A failed persistence write can leave an empty, moved-from buffer.
+	if (buffer->Size() == 0) {
+		return;
+	}
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &block_allocator = BlockAllocator::Get(db);
-	auto &buffer = handle->GetMemory().GetBuffer(lock);
 	auto block_header_size = buffer->GetHeaderSize();
 	auto alloc_size = buffer->AllocSize() - block_header_size;
 	if (handle->GetMemory().GetBufferType() == FileBufferType::BLOCK) {
@@ -554,7 +557,7 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
 		idx_t eviction_size = temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(context, block_id, buffer);
 		evicted_data_per_tag[uint8_t(tag)] += eviction_size;
-		auto profiler = Context::TryGetQueryProfiler(context.GetServices());
+		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
 		if (profiler) {
 			profiler->TrackBytesSpilled(eviction_size);
 		}
@@ -604,7 +607,7 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 		throw;
 	}
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-	auto profiler = Context::TryGetQueryProfiler(context.GetServices());
+	auto profiler = Context::TryGetQueryProfiler(context.GetContext());
 	if (profiler) {
 		profiler->TrackBytesSpilled(buffer.AllocSize() + header_size);
 	}
@@ -868,22 +871,23 @@ HugeAllocation BufferAllocator::AllocateHuge(idx_t size) {
 	D_ASSERT(size > 0);
 	auto &data = GetPrivateData()->Cast<BufferAllocatorData>();
 	auto reservation = data.Reserve(size);
-	auto pointer = BlockAllocator::Get(data.manager.GetDatabase()).AllocateHugeData(size);
+	optional_idx home;
+	auto pointer = BlockAllocator::Get(data.manager.GetDatabase()).AllocateHugeData(size, home);
 	reservation.size = 0;
-	return HugeAllocation(*this, pointer, size);
+	return HugeAllocation(*this, pointer, size, home);
 }
 
-void BufferAllocator::FreeHuge(data_ptr_t pointer, idx_t size) {
+void BufferAllocator::FreeHuge(data_ptr_t pointer, idx_t size, optional_idx home) {
 	auto &data = GetPrivateData()->Cast<BufferAllocatorData>();
 	data.Release(size);
-	BlockAllocator::Get(data.manager.GetDatabase()).FreeHugeData(pointer, size);
+	BlockAllocator::Get(data.manager.GetDatabase()).FreeHugeData(pointer, size, home);
 }
 
 HugeAllocation::HugeAllocation() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
-HugeAllocation::HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size)
-    : allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
+HugeAllocation::HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size, optional_idx home)
+    : allocator(allocator), pointer(pointer), allocated_size(allocated_size), allocation_shard(home) {
 	D_ASSERT(pointer);
 }
 
@@ -895,12 +899,14 @@ HugeAllocation::HugeAllocation(HugeAllocation &&other) noexcept
     : allocator(other.allocator), pointer(nullptr), allocated_size(0) {
 	std::swap(pointer, other.pointer);
 	std::swap(allocated_size, other.allocated_size);
+	std::swap(allocation_shard, other.allocation_shard);
 }
 
 HugeAllocation &HugeAllocation::operator=(HugeAllocation &&other) noexcept {
 	std::swap(allocator, other.allocator);
 	std::swap(pointer, other.pointer);
 	std::swap(allocated_size, other.allocated_size);
+	std::swap(allocation_shard, other.allocation_shard);
 	return *this;
 }
 
@@ -909,9 +915,10 @@ void HugeAllocation::Reset() {
 		return;
 	}
 	D_ASSERT(allocator);
-	allocator->FreeHuge(pointer, allocated_size);
+	allocator->FreeHuge(pointer, allocated_size, allocation_shard);
 	pointer = nullptr;
 	allocated_size = 0;
+	allocation_shard = optional_idx();
 }
 
 BufferAllocator &BufferAllocator::Get(ClientContext &context) {
@@ -919,8 +926,8 @@ BufferAllocator &BufferAllocator::Get(ClientContext &context) {
 	return manager.GetBufferAllocator();
 }
 
-BufferAllocator &BufferAllocator::Get(Context &services) {
-	return Get(services.GetDatabase());
+BufferAllocator &BufferAllocator::Get(Context &context) {
+	return Get(context.GetDatabase());
 }
 
 BufferAllocator &BufferAllocator::Get(DatabaseInstance &db) {

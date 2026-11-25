@@ -18,6 +18,7 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/bignum_stats.hpp"
 #include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
@@ -44,7 +45,8 @@ enum class StatisticsType : uint8_t {
 	BASE_STATS,
 	ARRAY_STATS,
 	GEOMETRY_STATS,
-	VARIANT_STATS
+	VARIANT_STATS,
+	BIGNUM_STATS
 };
 
 struct ExtraStatsData {
@@ -70,6 +72,7 @@ class BaseStatistics {
 	friend struct ArrayStats;
 	friend struct GeometryStats;
 	friend struct VariantStats;
+	friend struct BignumStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();
@@ -138,8 +141,14 @@ public:
 	void Verify(const Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
 	void Verify(const Vector &vector, idx_t count) const;
 
-	Value ToStruct() const;
+	//! The statistics as a struct, by default the rendering stats() shows. With exact, the statistics as they are:
+	//! string bounds are VARCHAR / BLOB values holding their bytes instead of text with \xNN escapes, and geometry
+	//! statistics list the geometry types the column holds
+	Value ToStruct(bool exact = false) const;
 	string ToString() const;
+	//! Sets the parts of the statistics a struct (or VARIANT object) in the shape ToStruct produces describes;
+	//! `path` prefixes the field names in error messages
+	DUCKDB_API void SetFromStruct(const Value &value, const string &path = string());
 
 	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
@@ -184,6 +193,8 @@ private:
 		GeometryStatsData geometry_data;
 		//! Variant stats data, for variant stats
 		VariantStatsData variant_data;
+		//! Bignum stats data, for values stored as BIGNUM blobs (decimals wider than 38 digits)
+		BignumStatsData bignum_data;
 	} stats_union;
 	//! Extra stats data, used for e.g. string data if required
 	unique_ptr<ExtraStatsData> extra_data;

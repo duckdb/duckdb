@@ -10,7 +10,7 @@ require vector_size 2048
 require no_vector_verification
 
 statement ok
-PRAGMA force_compression = 'rle'
+SET force_compression = 'rle'
 
 # simple RLE with few values
 statement ok
@@ -56,7 +56,7 @@ query I
 select distinct on (types) vector_type(a) as types from test order by all;
 ----
 CONSTANT_VECTOR
-FLAT_VECTOR
+DICTIONARY_VECTOR
 
 statement ok
 PRAGMA disable_optimizer
@@ -67,8 +67,8 @@ select distinct on (types) types from (select vector_type(a) from test limit 819
 ----
 CONSTANT_VECTOR
 
-# The other vectors are not constant
+# The other vectors contain multiple runs and reference the segment dictionary
 query I
 select distinct on (types) types from (select vector_type(a) from test offset 8192) tbl(types)
 ----
-FLAT_VECTOR
+DICTIONARY_VECTOR
