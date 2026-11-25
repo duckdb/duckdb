@@ -124,7 +124,8 @@ public:
 		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
 			return Visitor::VisitTimestampTZNanos(Load<timestamp_tz_ns_t>(ptr), std::forward<Args>(args)...);
 		default:
-			return Visitor::VisitDefault(VariantTypeToLogicalTypeId(type_id), ptr, std::forward<Args>(args)...);
+			return Visitor::VisitDefault(VariantDefaultType(VariantTypeToLogicalTypeId(type_id)), ptr,
+			                             std::forward<Args>(args)...);
 		}
 	}
 
@@ -203,7 +204,7 @@ public:
 		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return Visitor::VisitTimestampTZNanos(node.GetData<timestamp_tz_ns_t>(), std::forward<Args>(args)...);
 		default:
-			return Visitor::VisitDefault(type_id, nullptr, std::forward<Args>(args)...);
+			return Visitor::VisitDefault(node.GetType(), nullptr, std::forward<Args>(args)...);
 		}
 	}
 

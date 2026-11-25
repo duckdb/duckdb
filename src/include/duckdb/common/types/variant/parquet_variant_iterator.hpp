@@ -111,6 +111,8 @@ public:
 		return kind == Kind::MISSING;
 	}
 
+	//! The logical type of the value (see VariantDefaultType for OBJECT/ARRAY values)
+	DUCKDB_API LogicalType GetType() const;
 	//! The logical type id of the value (SQLNULL for NULL, STRUCT for an OBJECT, LIST for an ARRAY)
 	DUCKDB_API LogicalTypeId GetTypeId() const;
 	//! Returns the payload of a BOOLEAN value

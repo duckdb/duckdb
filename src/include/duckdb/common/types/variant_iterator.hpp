@@ -158,6 +158,8 @@ public:
 		return kind == Kind::MISSING;
 	}
 
+	//! The logical type of the value the cursor points at (see VariantDefaultType for OBJECT/ARRAY values)
+	LogicalType GetType() const;
 	//! The logical type id of the value the cursor points at (SQLNULL for a VARIANT NULL, STRUCT for an OBJECT,
 	//! LIST for an ARRAY)
 	LogicalTypeId GetTypeId() const;

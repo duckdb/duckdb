@@ -146,9 +146,9 @@ struct VariantStatsVisitor {
 		}
 	}
 
-	static void VisitDefault(LogicalTypeId type_id, const_data_ptr_t, VariantShreddingStats &stats,
+	static void VisitDefault(const LogicalType &type, const_data_ptr_t, VariantShreddingStats &stats,
 	                         idx_t stats_column_index) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 

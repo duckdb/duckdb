@@ -136,8 +136,8 @@ struct ValueConverter {
 		return Value::STRUCT(std::move(object_children));
 	}
 
-	static Value VisitDefault(LogicalTypeId type_id, const_data_ptr_t) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	static Value VisitDefault(const LogicalType &type, const_data_ptr_t) {
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 

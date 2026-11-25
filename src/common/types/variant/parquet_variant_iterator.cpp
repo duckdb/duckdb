@@ -479,6 +479,15 @@ LogicalTypeId ParquetVariantNode::GetTypeId() const {
 	return VariantTypeToLogicalTypeId(GetVariantType());
 }
 
+LogicalType ParquetVariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
 bool ParquetVariantNode::GetBool() const {
 	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
 }

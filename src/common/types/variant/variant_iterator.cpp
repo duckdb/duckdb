@@ -330,6 +330,15 @@ LogicalTypeId VariantNode::GetTypeId() const {
 	return VariantTypeToLogicalTypeId(GetVariantType());
 }
 
+LogicalType VariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
 bool VariantNode::GetBool() const {
 	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
 }

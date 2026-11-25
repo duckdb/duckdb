@@ -210,6 +210,21 @@ bool TryVariantTypeFromLogicalTypeId(LogicalTypeId id, VariantLogicalType &resul
 	}
 }
 
+LogicalType VariantDefaultType(LogicalTypeId id) {
+	switch (id) {
+	case LogicalTypeId::STRUCT:
+		return LogicalType::STRUCT(child_list_t<LogicalType>());
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(LogicalType::VARIANT());
+	case LogicalTypeId::GEOMETRY:
+		return LogicalType::GEOMETRY();
+	case LogicalTypeId::GEOGRAPHY:
+		return LogicalType::GEOGRAPHY();
+	default:
+		return LogicalType(id);
+	}
+}
+
 VariantLogicalType VariantTypeFromLogicalTypeId(LogicalTypeId id, bool bool_value) {
 	VariantLogicalType result;
 	if (!TryVariantTypeFromLogicalTypeId(id, result, bool_value)) {
