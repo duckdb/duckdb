@@ -269,50 +269,50 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	Value low_value, high_value;
 	ExpressionType low_comparison_type = ExpressionType::INVALID;
 	ExpressionType high_comparison_type = ExpressionType::INVALID;
-	// True, if a conjunct is not (fully) part of the key range.
-	bool skipped_conjunct = false;
+
+	// Keeps the first bound on each side, returns false if the side already has one.
+	auto try_add_bound = [&](const Value &value, const ExpressionType comparison_type) {
+		auto is_lower = IsLowerBound(comparison_type);
+		auto &bound_value = is_lower ? low_value : high_value;
+		if (!bound_value.IsNull()) {
+			return false;
+		}
+		bound_value = value;
+		(is_lower ? low_comparison_type : high_comparison_type) = comparison_type;
+		return true;
+	};
 
 	// Use the conjuncts that form a key range, the caller applies the remaining ones to the fetched rows.
 	vector<reference<const Expression>> comparisons;
 	CollectConjunctionChildren(filter_expr, comparisons);
+	idx_t key_range_conjuncts = 0;
 	for (auto &comparison_ref : comparisons) {
 		auto &comparison = comparison_ref.get();
 		if (comparison.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 			auto &between = comparison.Cast<BoundFunctionExpression>();
-			if (!BoundBetweenExpression::Input(between).Equals(expr)) {
-				skipped_conjunct = true;
-				continue;
-			}
 			auto &lower_bound = BoundBetweenExpression::LowerBound(between);
 			auto &upper_bound = BoundBetweenExpression::UpperBound(between);
-			if (lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+			if (!BoundBetweenExpression::Input(between).Equals(expr) ||
+			    lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
 			    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-				skipped_conjunct = true;
 				continue;
 			}
+			auto &lower_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
+			auto &upper_value = upper_bound.Cast<BoundConstantExpression>().GetValue();
 			// A NULL bound matches no rows.
-			if (lower_bound.Cast<BoundConstantExpression>().GetValue().IsNull() ||
-			    upper_bound.Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			if (lower_value.IsNull() || upper_value.IsNull()) {
 				return nullptr;
 			}
-			if (low_value.IsNull()) {
-				low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
-				low_comparison_type = BoundBetweenExpression::LowerComparisonType(between);
-			} else {
-				skipped_conjunct = true;
-			}
-			if (high_value.IsNull()) {
-				high_value = upper_bound.Cast<BoundConstantExpression>().GetValue();
-				high_comparison_type = BoundBetweenExpression::UpperComparisonType(between);
-			} else {
-				skipped_conjunct = true;
+			auto added_lower = try_add_bound(lower_value, BoundBetweenExpression::LowerComparisonType(between));
+			auto added_upper = try_add_bound(upper_value, BoundBetweenExpression::UpperComparisonType(between));
+			if (added_lower && added_upper) {
+				key_range_conjuncts++;
 			}
 			continue;
 		}
 		ExpressionType comparison_type;
 		Value constant_value;
 		if (!TryMatchComparison(expr, comparison, comparison_type, constant_value)) {
-			skipped_conjunct = true;
 			continue;
 		}
 		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
@@ -321,23 +321,16 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			}
 			return InitializeScanSinglePredicate(constant_value, ExpressionType::COMPARE_EQUAL);
 		}
-		auto is_lower = IsLowerBound(comparison_type);
-		auto &bound_value = is_lower ? low_value : high_value;
-		auto &bound_comparison_type = is_lower ? low_comparison_type : high_comparison_type;
-		if (!bound_value.IsNull()) {
-			// Keep the first bound on each side.
-			skipped_conjunct = true;
-			continue;
+		if (try_add_bound(constant_value, comparison_type)) {
+			key_range_conjuncts++;
 		}
-		bound_value = constant_value;
-		bound_comparison_type = comparison_type;
 	}
 
 	// We cannot use an index scan.
 	if (low_value.IsNull() && high_value.IsNull()) {
 		return nullptr;
 	}
-	if (require_exact && skipped_conjunct) {
+	if (require_exact && key_range_conjuncts != comparisons.size()) {
 		return nullptr;
 	}
 
