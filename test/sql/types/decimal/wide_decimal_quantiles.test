@@ -57,8 +57,9 @@ FROM (VALUES (NULL::DECIMAL(40,3))) t(x)
 NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
 # values beyond 38 digits, of both signs and of different lengths: the BIGNUM blobs order like their values
+# (cast in each query, as tables and views with wide decimal columns need a recent storage version)
 statement ok
-CREATE TABLE big AS SELECT x::DECIMAL(60,2) AS x FROM (VALUES
+CREATE TABLE big_text AS SELECT x FROM (VALUES
 	('-100000000000000000000000000000000000000000000000000.25'),
 	('-99999999999999999999999999999999999999999.75'),
 	('-340282366920938463463374607431768211456'),
@@ -75,12 +76,12 @@ CREATE TABLE big AS SELECT x::DECIMAL(60,2) AS x FROM (VALUES
 
 query IIII
 SELECT quantile_disc(x, 0) = min(x), quantile_disc(x, 1) = max(x), reservoir_quantile(x, 0) = min(x), reservoir_quantile(x, 1) = max(x)
-FROM big
+FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
 ----
 true	true	true	true
 
 query I
-SELECT unnest(quantile_disc(x, [0.04, 0.12, 0.19, 0.27, 0.35, 0.42, 0.5, 0.58, 0.65, 0.73, 0.81, 0.88, 0.96])) FROM big
+SELECT unnest(quantile_disc(x, [0.04, 0.12, 0.19, 0.27, 0.35, 0.42, 0.5, 0.58, 0.65, 0.73, 0.81, 0.88, 0.96])) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
 ----
 -100000000000000000000000000000000000000000000000000.25
 -99999999999999999999999999999999999999999.75
@@ -97,13 +98,13 @@ SELECT unnest(quantile_disc(x, [0.04, 0.12, 0.19, 0.27, 0.35, 0.42, 0.5, 0.58, 0
 100000000000000000000000000000000000000000000000000.25
 
 query III
-SELECT median(x), quantile_cont(x, [0, 0.5, 1]), reservoir_quantile(x, 0.5) FROM big
+SELECT median(x), quantile_cont(x, [0, 0.5, 1]), reservoir_quantile(x, 0.5) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
 ----
 0.00	[-100000000000000000000000000000000000000000000000000.25, 0.00, 100000000000000000000000000000000000000000000000000.25]	0.00
 
 # the deviations from the median 0 are the absolute values
 query I
-SELECT mad(x) FROM big
+SELECT mad(x) FROM (SELECT x::DECIMAL(60,2) AS x FROM big_text) big
 ----
 65536.50
 
@@ -182,9 +183,6 @@ CREATE TABLE vals AS SELECT ((i * 7919) % 100003 - 50000)::BIGINT AS a, i % 7 AS
 statement ok
 INSERT INTO vals VALUES (NULL, 1), (NULL, 99);
 
-statement ok
-CREATE TABLE decimals AS SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals;
-
 query IIIIII
 SELECT g,
        median(f)::VARCHAR IS NOT DISTINCT FROM median(w)::VARCHAR,
@@ -192,7 +190,7 @@ SELECT g,
        quantile_cont(f, [0.1, 0.33, 0.9])::VARCHAR IS NOT DISTINCT FROM quantile_cont(w, [0.1, 0.33, 0.9])::VARCHAR,
        quantile_disc(f, [0.2, 0.8])::VARCHAR IS NOT DISTINCT FROM quantile_disc(w, [0.2, 0.8])::VARCHAR,
        mad(f)::VARCHAR IS NOT DISTINCT FROM mad(w)::VARCHAR
-FROM decimals GROUP BY g ORDER BY g
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
 ----
 0	true	true	true	true	true
 1	true	true	true	true	true
@@ -209,7 +207,7 @@ SELECT g,
        approx_quantile(f, [0.1, 0.9])::VARCHAR IS NOT DISTINCT FROM approx_quantile(w, [0.1, 0.9])::VARCHAR,
        reservoir_quantile(f, 0.4)::VARCHAR IS NOT DISTINCT FROM reservoir_quantile(w, 0.4)::VARCHAR,
        reservoir_quantile(f, [0.1, 0.9], 100)::VARCHAR IS NOT DISTINCT FROM reservoir_quantile(w, [0.1, 0.9], 100)::VARCHAR
-FROM decimals GROUP BY g ORDER BY g
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
 ----
 0	true	true	true	true
 1	true	true	true	true
@@ -224,7 +222,7 @@ query IIIII
 SELECT g, median(w), mad(w),
        quantile_cont(w, [0.25, 0.75]) IS NOT DISTINCT FROM quantile_cont(f, [0.25, 0.75])::DECIMAL(40,3)[],
        median(w) FILTER (WHERE w > 0) IS NOT DISTINCT FROM median(f) FILTER (WHERE f > 0)
-FROM decimals GROUP BY g ORDER BY g
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals GROUP BY g ORDER BY g
 ----
 0	-39.500	24996.500	true	true
 1	-13.000	25029.000	true	true
@@ -241,7 +239,7 @@ SELECT count(*) FROM (
 	SELECT median(f) OVER wn::VARCHAR IS DISTINCT FROM median(w) OVER wn::VARCHAR AS a,
 	       quantile_cont(f, [0.2, 0.7]) OVER wn::VARCHAR IS DISTINCT FROM quantile_cont(w, [0.2, 0.7]) OVER wn::VARCHAR AS b,
 	       mad(f) OVER wn::VARCHAR IS DISTINCT FROM mad(w) OVER wn::VARCHAR AS c
-	FROM decimals
+	FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
 	WINDOW wn AS (PARTITION BY g ORDER BY f ROWS BETWEEN 5 PRECEDING AND 3 FOLLOWING))
 WHERE a OR b OR c
 ----
@@ -251,7 +249,7 @@ query I
 SELECT count(*) FROM (
 	SELECT median(f) OVER wn::VARCHAR IS DISTINCT FROM median(w) OVER wn::VARCHAR AS a,
 	       quantile_cont(f, 0.9) OVER wn::VARCHAR IS DISTINCT FROM quantile_cont(w, 0.9) OVER wn::VARCHAR AS b
-	FROM decimals
+	FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
 	WINDOW wn AS (ORDER BY g, f ROWS BETWEEN 500 PRECEDING AND 500 FOLLOWING))
 WHERE a OR b
 ----
@@ -271,7 +269,7 @@ query IIII
 SELECT finalize(median(w) EXPORT_STATE) = median(w), finalize(mad(w) EXPORT_STATE) = mad(w),
        finalize(quantile_cont(w, [0.1, 0.9]) EXPORT_STATE) = quantile_cont(w, [0.1, 0.9]),
        finalize(approx_quantile(w, 0.3) EXPORT_STATE) = approx_quantile(w, 0.3)
-FROM decimals
+FROM (SELECT g, a::DECIMAL(38,3) AS f, a::DECIMAL(40,3) AS w FROM vals) decimals
 ----
 true	true	true	true
 
