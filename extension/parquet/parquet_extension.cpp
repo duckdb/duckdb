@@ -301,6 +301,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			}
 		} else if (option_name == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option_values[0]);
+			if (bind_data->encryption_config->GetAADPrefix()) {
+				throw NotImplementedException("Writing Parquet files with an AAD prefix is not supported");
+			}
 		} else if (option_name == "dictionary_compression_ratio_threshold" || option_name == "debug_use_openssl" ||
 		           option_name == "row_group_size" || option_name == "chunk_size" ||
 		           option_name == "row_group_size_bytes" || option_name == "row_groups_per_file") {

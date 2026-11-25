@@ -403,7 +403,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
-		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		auto file_aad = encryption_config->GetFileAAD(crypto_metadata->encryption_algorithm.AES_GCM_V1);
 		CryptoMetaData aad_crypto_metadata = CryptoMetaData(allocator);
 
 		if (!file_aad.empty()) {
@@ -414,7 +414,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		ParquetCrypto::Read(file_metadata, *file_proto, encryption_config->GetFooterKey(), *encryption_util,
 		                    aad_crypto_metadata);
 		auto hash_util = context.db->GetMbedTLSUtil(false);
-		encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(*encryption_config, *hash_util);
+		encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(
+		    *encryption_config, crypto_metadata->encryption_algorithm.AES_GCM_V1, *hash_util);
 	} else {
 		file_metadata.read(file_proto.get());
 	}
@@ -438,8 +439,8 @@ static bool CanUseParquetMetadataStatistics(ClientContext &context,
 	optional_ptr<const string> encryption_key_hash_ptr;
 	if (metadata->IsEncrypted() && parquet_options.encryption_config) {
 		auto hash_util = context.db->GetMbedTLSUtil(false);
-		encryption_key_hash =
-		    ParquetFileMetadataCache::CreateEncryptionKeyHash(*parquet_options.encryption_config, *hash_util);
+		encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(
+		    *parquet_options.encryption_config, metadata->crypto_metadata->encryption_algorithm.AES_GCM_V1, *hash_util);
 		encryption_key_hash_ptr = encryption_key_hash;
 	}
 	return metadata->CanUseMetadataStatistics(parquet_options.encryption_config, encryption_key_hash_ptr);
@@ -1990,8 +1991,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 
 	// keep track of column and row group ordinal if data is encrypted
 	if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
-		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
-		                                       GetGroup(state).ordinal);
+		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm, GetGroup(state).ordinal,
+		                                       *parquet_options.encryption_config);
 	}
 
 	if (group.num_rows < 0) {
@@ -3083,7 +3084,7 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 		auto &child_reader = state.GetColumnReader(col_idx);
 		if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 			child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
-			                                      GetGroup(state).ordinal);
+			                                      GetGroup(state).ordinal, *parquet_options.encryption_config);
 		}
 		ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
 		child_reader.Select(reader_input, result_vector, state.sel, filter_count);
@@ -3174,7 +3175,7 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 			auto &child_reader = state.GetColumnReader(col_idx);
 			if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
-				                                      GetGroup(state).ordinal);
+				                                      GetGroup(state).ordinal, *parquet_options.encryption_config);
 			}
 			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 			auto rows_read = child_reader.Read(reader_input, result_vector);

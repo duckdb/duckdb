@@ -69,12 +69,14 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 void ParquetEncryptionConfig::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "footer_key", footer_key);
 	serializer.WritePropertyWithDefault<unordered_map<string, string>>(101, "column_keys", column_keys);
+	serializer.WritePropertyWithDefault<optional<string>>(102, "aad_prefix", aad_prefix);
 }
 
 shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig());
 	deserializer.ReadPropertyWithDefault<string>(100, "footer_key", result->footer_key);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(101, "column_keys", result->column_keys);
+	deserializer.ReadPropertyWithDefault<optional<string>>(102, "aad_prefix", result->aad_prefix);
 	return result;
 }
 

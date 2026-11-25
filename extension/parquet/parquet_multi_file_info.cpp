@@ -191,9 +191,10 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 	optional_ptr<const string> encryption_key_hash_ptr;
 	// first check if all caches are valid and there are no deletes
 	for (auto &cache : cached_metadata) {
-		if (cache.metadata->IsEncrypted() && encryption_config && !encryption_key_hash_ptr) {
+		if (cache.metadata->IsEncrypted() && encryption_config) {
 			auto hash_util = context.db->GetMbedTLSUtil(false);
-			encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(*encryption_config, *hash_util);
+			encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(
+			    *encryption_config, cache.metadata->crypto_metadata->encryption_algorithm.AES_GCM_V1, *hash_util);
 			encryption_key_hash_ptr = encryption_key_hash;
 		}
 		if (!cache.metadata->CanUseMetadataStatistics(encryption_config, encryption_key_hash_ptr)) {

@@ -58,7 +58,7 @@ public:
 
 	//! Crypto metadata
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
-	//! SHA256 fingerprint of the footer encryption key used to decrypt the cached metadata
+	//! SHA256 fingerprint of the footer encryption key and file AAD used to decrypt the cached metadata
 	//! Here we store the hash of the key to avoid key leak
 	string encryption_key_hash;
 
@@ -74,6 +74,7 @@ public:
 	bool CanUseMetadataStatistics(const shared_ptr<ParquetEncryptionConfig> &encryption_config,
 	                              optional_ptr<const string> encryption_key_hash = nullptr) const;
 	static string CreateEncryptionKeyHash(const ParquetEncryptionConfig &encryption_config,
+	                                      const duckdb_parquet::AesGcmV1 &algorithm,
 	                                      const EncryptionUtil &encryption_util);
 	bool IsValid(CachingFileHandle &new_handle) const;
 	//! Return if a cache entry is valid.

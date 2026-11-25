@@ -155,17 +155,17 @@ public:
 	bool AllValuesAreNull() const;
 
 	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
-	                              idx_t row_group_ordinal_p) {
-		std::string unique_file_identifier;
+	                              idx_t row_group_ordinal_p, const ParquetEncryptionConfig &encryption_config) {
+		string file_aad;
 		if (encryption_algorithm.__isset.AES_GCM_V1) {
-			unique_file_identifier = encryption_algorithm.AES_GCM_V1.aad_file_unique;
+			file_aad = encryption_config.GetFileAAD(encryption_algorithm.AES_GCM_V1);
 		} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
 		} else {
 			throw InvalidInputException("File is encrypted but no encryption algorithm is set");
 		}
 
-		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
+		aad_crypto_metadata.Initialize(file_aad, row_group_ordinal_p, ColumnIndex());
 	}
 
 	virtual idx_t FileOffset() const;

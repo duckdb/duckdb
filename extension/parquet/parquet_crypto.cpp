@@ -83,11 +83,9 @@ void ParquetAdditionalAuthenticatedData::Rewind() const {
 
 void ParquetAdditionalAuthenticatedData::WriteParquetAAD(const CryptoMetaData &crypto_meta_data) {
 	// For the parquet encryption spec, additional authenticated data (AAD) consists of:
-	// (1) a unique prefix constructed by:
-	// an optional aad-prefix (arbitrary length -- ignored for now)
-	// + a unique file identifier (default 8 bytes)
+	// (1) the file AAD: an optional prefix followed by the unique file identifier
 	if (GetPrefixSize() == 0) {
-		WritePrefix(crypto_meta_data.unique_file_identifier);
+		WritePrefix(crypto_meta_data.file_aad);
 	}
 	// (2) a suffix, which length varies according to the module type, consisting of:
 	// + module type (1 byte)
@@ -150,7 +148,8 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 	const auto &keys = ParquetKeys::Get(context);
 	for (idx_t i = 0; i < StructType::GetChildCount(arg.type()); i++) {
 		auto &struct_key = child_types[i].first;
-		if ((struct_key == "footer_key" || struct_key == "footer_key_value") && children[i].IsNull()) {
+		if ((struct_key == "footer_key" || struct_key == "footer_key_value" || struct_key == "aad_prefix") &&
+		    children[i].IsNull()) {
 			throw BinderException("Parquet encryption_config %s cannot be NULL", struct_key);
 		}
 		if (struct_key == "footer_key") {
@@ -165,6 +164,11 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			footer_key = keys.GetKey(footer_key_name);
 		} else if (struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].CastAs(context, LogicalType::BLOB));
+		} else if (struct_key == "aad_prefix") {
+			if (children[i].type().id() != LogicalTypeId::VARCHAR && children[i].type().id() != LogicalTypeId::BLOB) {
+				throw BinderException("Parquet encryption_config aad_prefix must be VARCHAR or BLOB");
+			}
+			aad_prefix = StringValue::Get(children[i]);
 		} else if (struct_key == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
@@ -179,6 +183,29 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 
 const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return footer_key;
+}
+
+const optional<string> &ParquetEncryptionConfig::GetAADPrefix() const {
+	return aad_prefix;
+}
+
+string ParquetEncryptionConfig::GetFileAAD(const duckdb_parquet::AesGcmV1 &algorithm) const {
+	string prefix(algorithm.aad_prefix.data(), algorithm.aad_prefix.size());
+	if (algorithm.__isset.supply_aad_prefix && algorithm.supply_aad_prefix) {
+		if (algorithm.__isset.aad_prefix) {
+			throw InvalidInputException("Parquet file both stores an AAD prefix and requires an external AAD prefix");
+		}
+		if (!aad_prefix) {
+			throw InvalidInputException("Parquet file requires encryption_config aad_prefix");
+		}
+		prefix = *aad_prefix;
+	} else if (aad_prefix && *aad_prefix != prefix) {
+		throw InvalidInputException("Parquet encryption_config aad_prefix does not match the file AAD prefix");
+	}
+	if (!prefix.empty() && algorithm.aad_file_unique.empty()) {
+		throw InvalidInputException("Parquet file with an AAD prefix is missing its unique file identifier");
+	}
+	return prefix + string(algorithm.aad_file_unique.data(), algorithm.aad_file_unique.size());
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
@@ -599,14 +626,14 @@ CryptoMetaData::CryptoMetaData(Allocator &allocator) {
 	additional_authenticated_data = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
 }
 
-void CryptoMetaData::Initialize(const std::string &unique_file_identifier_p, int16_t row_group_ordinal_p,
-                                int16_t column_ordinal_p, int8_t module_p, int16_t page_ordinal_p) {
-	if (unique_file_identifier_p.empty()) {
+void CryptoMetaData::Initialize(const std::string &file_aad_p, int16_t row_group_ordinal_p, int16_t column_ordinal_p,
+                                int8_t module_p, int16_t page_ordinal_p) {
+	if (file_aad_p.empty()) {
 		// aad not used for encryption
 		// this happens with old duckdb-parquet encryption
 		return;
 	}
-	unique_file_identifier = unique_file_identifier_p;
+	file_aad = file_aad_p;
 	module = module_p;
 	row_group_ordinal = row_group_ordinal_p;
 	column_ordinal = column_ordinal_p;
@@ -622,7 +649,7 @@ void CryptoMetaData::ClearAdditionalAuthenticatedData() {
 }
 
 bool CryptoMetaData::IsEmpty() const {
-	return unique_file_identifier.empty();
+	return file_aad.empty();
 }
 
 } // namespace duckdb
