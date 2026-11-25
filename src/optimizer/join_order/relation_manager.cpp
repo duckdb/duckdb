@@ -15,6 +15,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/subquery/has_volatile_expressions.hpp"
 
 namespace duckdb {
 
@@ -395,7 +396,7 @@ static bool ContainsRecurringCTERef(const LogicalOperator &op) {
 	return false;
 }
 
-static bool JoinIsReorderable(LogicalOperator &op) {
+static bool JoinIsReorderable(LogicalOperator &op, bool has_throwing_predicate) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
 	}
@@ -404,6 +405,20 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.HasProjectionMap()) {
 			return false;
+		}
+		if (join.join_type == JoinType::MARK) {
+			// Opening this boundary must not expose an ancestor's throwing predicate to additional rows.
+			if (has_throwing_predicate || !join.duplicate_eliminated_columns.empty() || join.filter_pushdown ||
+			    HasVolatileExpressionsIgnoringError(join)) {
+				return false;
+			}
+			for (auto &condition : join.conditions) {
+				if (!condition.IsComparison() || condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow() ||
+				    !ExpressionContainsColumnRef(condition.GetLHS()) ||
+				    !ExpressionContainsColumnRef(condition.GetRHS())) {
+					return false;
+				}
+			}
 		}
 		// Keep constant membership filters local instead of expanding the join search.
 		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
@@ -433,6 +448,7 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		case JoinType::SEMI:
 		case JoinType::LEFT:
 		case JoinType::ANTI:
+		case JoinType::MARK:
 			for (auto &cond : join.conditions) {
 				if (cond.IsComparison() && ExpressionContainsColumnRef(cond.GetLHS()) &&
 				    ExpressionContainsColumnRef(cond.GetRHS())) {
@@ -555,7 +571,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	active_recursive_ctes = optimizer.recursive_cte_indexes;
 	// Keep the join-region walk off the call stack: leaf extraction has a substantial frame, and generated
 	// plans (e.g. many DISTINCT aggregates) can contain hundreds of nested binary joins.
-	vector<PendingRelation> pending_relations {{input_op, parent, false}};
+	vector<PendingRelation> pending_relations {{input_op, parent, false, false}};
 	bool can_reorder = true;
 	while (!pending_relations.empty()) {
 		auto relation = pending_relations.back();
@@ -586,11 +602,15 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 	auto parent = relation.parent;
 	optional_ptr<LogicalOperator> op = &input_op;
 	vector<reference<LogicalOperator>> unary_filters;
+	auto has_throwing_predicate = relation.has_throwing_predicate;
 	// pass through single child operators (but never past a non-reorderable op such as a DML node, which
 	// must be preserved as its own relation rather than skipped over and dropped during reconstruction)
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type) && !OperatorIsNonReorderable(*op)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			unary_filters.push_back(*op);
+			for (auto &expression : op->expressions) {
+				has_throwing_predicate |= expression->CanThrow();
+			}
 		}
 		op = op->children[0].get();
 	}
@@ -603,7 +623,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 	}
 
 	// Filters inside a leaf are already priced by its statistics and stay with that relation.
-	if (JoinIsReorderable(*op)) {
+	if (JoinIsReorderable(*op, has_throwing_predicate)) {
 		filter_operators.insert(filter_operators.end(), unary_filters.begin(), unary_filters.end());
 		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			filter_operators.push_back(*op);
@@ -705,17 +725,22 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op->Cast<LogicalComparisonJoin>();
-		// SEMI/ANTI and LEFT RHS subtrees stay independent relations. Process the left subtree first,
+		for (auto &condition : join.conditions) {
+			has_throwing_predicate |= condition.IsComparison()
+			                              ? condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow()
+			                              : condition.GetJoinExpression().CanThrow();
+		}
+		// Non-inner RHS subtrees stay independent relations. Process the left subtree first,
 		// then optimize/register the RHS, just as for the recursive traversal.
-		auto separate_rhs =
-		    join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI || join.join_type == JoinType::LEFT;
-		pending_relations.push_back({*op->children[1], op, separate_rhs});
-		pending_relations.push_back({*op->children[0], op, false});
+		auto separate_rhs = join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI ||
+		                    join.join_type == JoinType::LEFT || join.join_type == JoinType::MARK;
+		pending_relations.push_back({*op->children[1], op, separate_rhs, has_throwing_predicate});
+		pending_relations.push_back({*op->children[0], op, false, has_throwing_predicate});
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		pending_relations.push_back({*op->children[1], op, false});
-		pending_relations.push_back({*op->children[0], op, false});
+		pending_relations.push_back({*op->children[1], op, false, has_throwing_predicate});
+		pending_relations.push_back({*op->children[0], op, false, has_throwing_predicate});
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -1001,6 +1026,11 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.Depth() == 0);
 		D_ASSERT(colref.Binding().table_index.IsValid());
+		auto marker = marker_dependencies.find(colref.Binding().table_index);
+		if (marker != marker_dependencies.end()) {
+			bindings.insert(marker->second.begin(), marker->second.end());
+			return true;
+		}
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		if (expression.GetAlias() == "SUBQUERY" &&
 		    relation_mapping.find(colref.Binding().table_index) == relation_mapping.end()) {
@@ -1049,6 +1079,27 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 	auto &join_operators = result.join_operators;
 	reference_map_t<LogicalOperator, vector<idx_t>> operator_predicates;
 	reference_map_t<LogicalOperator, vector<JoinCondition>> operator_conditions;
+	for (auto entry = filter_operators.rbegin(); entry != filter_operators.rend(); ++entry) {
+		auto &current = entry->get();
+		if (current.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			continue;
+		}
+		auto &join = current.Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::MARK) {
+			continue;
+		}
+		auto rhs = operator_relations.at(*join.children[1]);
+		unordered_set<RelationIndex> dependencies {rhs};
+		for (auto &condition : join.conditions) {
+			ExtractBindings(condition.GetLHS(), dependencies);
+		}
+		marker_dependencies.emplace(join.mark_index, std::move(dependencies));
+		relation_mapping.emplace(join.mark_index, rhs);
+		// The marker is produced by the join, after the RHS's own columns.
+		normalized_bindings.emplace(
+		    ColumnBinding(join.mark_index, ProjectionIndex(0)),
+		    ColumnBinding(TableIndex(rhs.index), ProjectionIndex(relations[rhs.index]->stats.columns.size())));
+	}
 	expression_set_t filter_set;
 	// two equal volatile filters are two evaluations, so neither is a duplicate of the other
 	auto is_new_filter = [&](const Expression &expr) {
@@ -1115,6 +1166,7 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 			D_ASSERT(join.expressions.empty());
 			switch (join.join_type) {
 			case JoinType::SEMI:
+			case JoinType::MARK:
 			case JoinType::ANTI: {
 				column_binding_set_t semantic_left_bindings;
 				column_binding_set_t semantic_right_bindings;
@@ -1299,6 +1351,9 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 			case JoinType::ANTI:
 				operator_type = JoinOrderOperatorType::ANTI;
 				break;
+			case JoinType::MARK:
+				operator_type = JoinOrderOperatorType::MARK;
+				break;
 			default:
 				throw InternalException("Unexpected reorderable join type %s", EnumUtil::ToChars(join.join_type));
 			}
@@ -1326,6 +1381,11 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 		}
 		auto descriptor = make_uniq<JoinOrderOperator>(join_operators.size(), operator_type, left.relations,
 		                                               right.relations, syntactic_set, std::move(conditions));
+		if (operator_type == JoinOrderOperatorType::MARK) {
+			auto &join = current.Cast<LogicalComparisonJoin>();
+			descriptor->mark_index = join.mark_index;
+			descriptor->mark_types = join.mark_types;
+		}
 		descriptor->left_operators = left.operators;
 		descriptor->right_operators = right.operators;
 		descriptor->costing_predicate_indices = std::move(predicate_indices);

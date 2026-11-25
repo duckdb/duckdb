@@ -14,6 +14,8 @@ add_library_unity(
   plan_enumerator.cpp
   join_order_candidate.cpp
   join_order_linearizer.cpp
+  join_order_rank.cpp
+  join_order_precedence.cpp
   join_order_plan.cpp
   linearized_plan_enumerator.cpp
   dphyp_enumerator.cpp
