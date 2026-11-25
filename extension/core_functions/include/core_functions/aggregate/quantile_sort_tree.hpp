@@ -166,6 +166,18 @@ interval_t QuantileCast::Operation(const dtime_t &src, Vector &result);
 template <>
 string_t QuantileCast::Operation(const string_t &src, Vector &result);
 
+//! Linear interpolation between two quantile values; a value without a fixed size is allocated in the result vector
+struct QuantileInterpolate {
+	template <class TARGET_TYPE>
+	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi, Vector &result) {
+		return InterpolateOperator::Operation<TARGET_TYPE>(lo, d, hi);
+	}
+};
+
+//! The only strings that interpolate are the unscaled values of DECIMALs wider than 38 digits (BIGNUM blobs)
+template <>
+string_t QuantileInterpolate::Operation(const string_t &lo, const double d, const string_t &hi, Vector &result);
+
 // Continuous interpolation
 template <bool DISCRETE>
 struct QuantileInterpolator {
@@ -182,7 +194,7 @@ struct QuantileInterpolator {
 		} else {
 			auto lo = QuantileCast::Operation<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
 			auto hi = QuantileCast::Operation<ACCESS_TYPE, TARGET_TYPE>(accessor(hidx), result);
-			return InterpolateOperator::Operation<TARGET_TYPE>(lo, RN - FRN, hi);
+			return QuantileInterpolate::Operation<TARGET_TYPE>(lo, RN - FRN, hi, result);
 		}
 	}
 
@@ -198,7 +210,7 @@ struct QuantileInterpolator {
 			std::nth_element(v_t + FRN, v_t + CRN, v_t + end, comp);
 			auto lo = QuantileCast::Operation<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 			auto hi = QuantileCast::Operation<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
-			return InterpolateOperator::Operation<TARGET_TYPE>(lo, RN - FRN, hi);
+			return QuantileInterpolate::Operation<TARGET_TYPE>(lo, RN - FRN, hi, result);
 		}
 	}
 
@@ -209,7 +221,7 @@ struct QuantileInterpolator {
 		} else {
 			auto lo = QuantileCast::Operation<INPUT_TYPE, TARGET_TYPE>(dest[0], result);
 			auto hi = QuantileCast::Operation<INPUT_TYPE, TARGET_TYPE>(dest[1], result);
-			return InterpolateOperator::Operation<TARGET_TYPE>(lo, RN - FRN, hi);
+			return QuantileInterpolate::Operation<TARGET_TYPE>(lo, RN - FRN, hi, result);
 		}
 	}
 

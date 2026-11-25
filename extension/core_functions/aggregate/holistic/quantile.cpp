@@ -1,5 +1,8 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/operator/abs.hpp"
@@ -166,6 +169,62 @@ interval_t QuantileCast::Operation(const dtime_t &src, Vector &result) {
 template <>
 string_t QuantileCast::Operation(const string_t &src, Vector &result) {
 	return StringVector::AddStringOrBlob(result, src);
+}
+
+//===--------------------------------------------------------------------===//
+// Quantile Interpolation
+//===--------------------------------------------------------------------===//
+//! The delta between two wide decimals scaled by the interpolation fraction and truncated towards zero, as the hugeint
+//! tier computes it in DOUBLE; a delta beyond the DOUBLE range applies the fraction exactly as mantissa / 2^shift
+static string ScaleWideDecimalDelta(const bignum_t &delta, const double d, StringHeap &heap,
+                                    BignumArithmeticState &state) {
+	const auto scaled = DecimalHelper<bignum_t>::ToDouble(delta, 0) * d;
+	if (std::isfinite(scaled)) {
+		return DecimalHelper<bignum_t>::FromDouble(std::trunc(scaled));
+	}
+	int exponent;
+	const double fraction = std::frexp(d, &exponent);
+	const auto mantissa = static_cast<int64_t>(std::ldexp(fraction, 53));
+	// 0 < d < 1, so the fraction is divided by a power of two
+	const int shift = 53 - exponent;
+	D_ASSERT(shift > 0);
+	const string mantissa_blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(mantissa));
+	const bignum_t mantissa_value {string_t(mantissa_blob)};
+	const BignumIntermediate mantissa_intermediate(mantissa_value);
+	const BignumIntermediate delta_intermediate(delta);
+	const bignum_t product {BignumIntermediate::Multiply(heap, state, delta_intermediate, mantissa_intermediate)};
+	const BignumIntermediate product_intermediate(product);
+	const string power_blob = DecimalHelper<bignum_t>::PowerOfTwo(NumericCast<idx_t>(shift));
+	const bignum_t power_value {string_t(power_blob)};
+	const BignumIntermediate power(power_value);
+	string_t quotient;
+	string_t remainder;
+	if (!BignumIntermediate::TryDivMod(heap, state, product_intermediate, power, quotient, remainder)) {
+		throw InternalException("QUANTILE: division by a power of two failed");
+	}
+	return quotient.GetString();
+}
+
+//! The bignum_t tier of decimals interpolates like the hugeint tier: the exact delta between the two values is scaled
+//! by the fraction and truncated towards zero
+template <>
+string_t QuantileInterpolate::Operation(const string_t &lo, const double d, const string_t &hi, Vector &result) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::DECIMAL);
+	if (d == 0) {
+		return lo;
+	}
+	// an intermediate refers to the bytes of the bignum_t it is built from, which therefore outlives it
+	StringHeap heap;
+	BignumArithmeticState state;
+	const bignum_t lo_value(lo);
+	const bignum_t hi_value(hi);
+	const BignumIntermediate start(lo_value);
+	const BignumIntermediate end(hi_value);
+	const bignum_t delta {BignumIntermediate::Add(heap, end, start, true)};
+	const string offset_blob = ScaleWideDecimalDelta(delta, d, heap, state);
+	const bignum_t offset_value {string_t(offset_blob)};
+	const BignumIntermediate offset(offset_value);
+	return StringVector::AddStringOrBlob(result, BignumIntermediate::Add(heap, start, offset));
 }
 
 //===--------------------------------------------------------------------===//
@@ -547,6 +606,9 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 			return OP::template GetFunction<int64_t, int64_t>(type, type);
 		case PhysicalType::INT128:
 			return OP::template GetFunction<hugeint_t, hugeint_t>(type, type);
+		case PhysicalType::VARCHAR:
+			// the bignum_t tier (above 38 digits) buffers and interpolates the BIGNUM blobs of the unscaled values
+			return OP::template GetFunction<string_t, string_t>(type, type);
 		default:
 			throw NotImplementedException("Unimplemented continuous quantile DECIMAL aggregate");
 		}
@@ -721,14 +783,6 @@ static bool CanInterpolate(const LogicalType &type) {
 	}
 }
 
-//! Wide decimals have no exact interpolation, they are interpolated as DOUBLE
-static LogicalType InterpolationType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type))) {
-		return LogicalType::DOUBLE;
-	}
-	return type;
-}
-
 struct MedianFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = CanInterpolate(type) ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
@@ -749,7 +803,7 @@ struct MedianFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.ReplaceImplementation(GetAggregate(InterpolationType(arguments[0]->GetReturnType())));
+		function.ReplaceImplementation(GetAggregate(arguments[0]->GetReturnType()));
 		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 	}
 };
@@ -858,9 +912,9 @@ struct ContinuousQuantileFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		auto impl = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL
-		                             ? InterpolationType(arguments[0]->GetReturnType())
-		                             : function.GetArguments()[0]);
+		auto impl =
+		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
+		                                                                           : function.GetArguments()[0]);
 		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}
@@ -892,9 +946,9 @@ struct ContinuousQuantileListFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		auto impl = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL
-		                             ? InterpolationType(arguments[0]->GetReturnType())
-		                             : function.GetArguments()[0]);
+		auto impl =
+		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
+		                                                                           : function.GetArguments()[0]);
 		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}

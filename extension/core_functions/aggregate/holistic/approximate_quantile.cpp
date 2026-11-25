@@ -1,5 +1,7 @@
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -11,6 +13,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
+#include <cmath>
 #include <stdlib.h>
 
 namespace duckdb {
@@ -55,6 +58,39 @@ struct ApproxQuantileCoding {
 		} else if (value < -limit) {
 			target = Cast::Operation<hugeint_t, TARGET_TYPE>(-limit);
 		}
+	}
+};
+
+//! The bignum_t tier of decimals (above 38 digits) is coded like the fixed-size tiers: the unscaled value (a BIGNUM
+//! blob) is sketched as a DOUBLE, and a quantile of the sketch is rounded to an unscaled value and clamped to the
+//! width of the DECIMAL
+struct ApproxQuantileBignumCoding {
+	static double Encode(const string_t &input) {
+		const auto val = DecimalHelper<bignum_t>::ToDouble(bignum_t(input), 0);
+		if (!Value::DoubleIsFinite(val)) {
+			// the fixed-size tiers always fit: skipping the value like an infinite DOUBLE would change the result
+			throw OutOfRangeException("approx_quantile sketches its input as DOUBLE, which cannot hold a DECIMAL "
+			                          "value of more than 308 digits");
+		}
+		return val;
+	}
+
+	static string_t Decode(const double &source, Vector &result) {
+		const auto width = DecimalType::GetWidth(result.GetType());
+		if (Value::DoubleIsFinite(source)) {
+			const auto unscaled = DecimalHelper<bignum_t>::FromDouble(std::nearbyint(source));
+			if (DecimalHelper<bignum_t>::FitsWidth(bignum_t(string_t(unscaled)), width)) {
+				return StringVector::AddStringOrBlob(result, unscaled);
+			}
+		}
+		// The result is approximate, so clamp instead of overflowing.
+		string digits = source < 0 ? "-" : "";
+		digits.append(width, '9');
+		string limit;
+		if (!DecimalHelper<bignum_t>::TryParse(digits.c_str(), digits.size(), width, 0, limit)) {
+			throw InternalException("approx_quantile: could not construct the DECIMAL limit");
+		}
+		return StringVector::AddStringOrBlob(result, limit);
 	}
 };
 
@@ -169,7 +205,13 @@ struct ApproxQuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		auto val = ApproxQuantileCoding::template Encode<INPUT_TYPE, SAVE_TYPE>(input);
+		SAVE_TYPE val;
+		if constexpr (std::is_same<INPUT_TYPE, string_t>::value) {
+			// only DECIMALs wider than 38 digits are aggregated as strings
+			val = ApproxQuantileBignumCoding::Encode(input);
+		} else {
+			val = ApproxQuantileCoding::template Encode<INPUT_TYPE, SAVE_TYPE>(input);
+		}
 		if (!Value::DoubleIsFinite(val)) {
 			return;
 		}
@@ -219,7 +261,11 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto source = state.h->quantile(bind_data.quantiles[0]);
-		ApproxQuantileCoding::Decode(source, target, finalize_data.result.GetType());
+		if constexpr (std::is_same<TARGET_TYPE, string_t>::value) {
+			target = ApproxQuantileBignumCoding::Decode(source, finalize_data.result);
+		} else {
+			ApproxQuantileCoding::Decode(source, target, finalize_data.result.GetType());
+		}
 	}
 };
 
@@ -401,17 +447,21 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, double, double, ApproxQuantileScalarOperation>(
 		    type, type);
+	case PhysicalType::VARCHAR: {
+		if (type.id() != LogicalTypeId::DECIMAL) {
+			throw NotImplementedException("Unimplemented quantile aggregate");
+		}
+		// the bignum_t tier of decimals (above 38 digits)
+		auto function =
+		    AggregateFunction::UnaryAggregate<ApproxQuantileState, string_t, string_t, ApproxQuantileScalarOperation>(
+		        type, type);
+		// a value of more than 308 digits does not fit the sketch
+		function.SetFallible();
+		return function;
+	}
 	default:
 		throw NotImplementedException("Unimplemented quantile aggregate");
 	}
-}
-
-//! Wide decimals have no approximate quantile of their own, they are aggregated as DOUBLE
-LogicalType ApproxQuantileInputType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type))) {
-		return LogicalType::DOUBLE;
-	}
-	return type;
 }
 
 AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
@@ -421,6 +471,8 @@ AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalTy
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::VARCHAR:
+	// plans serialized before the bignum_t tier had an approximate quantile aggregated wide decimals as DOUBLE
 	case PhysicalType::DOUBLE:
 		// keep the DECIMAL type as the input and return type so that the width and scale survive the bind
 		return GetApproximateQuantileAggregateFunction(type);
@@ -492,7 +544,7 @@ void ReplaceApproxQuantileImplementation(BoundAggregateFunction &function, const
 unique_ptr<FunctionData> BindApproxQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = ApproxQuantileInputType(arguments[0]->GetReturnType());
+	auto decimal_type = arguments[0]->GetReturnType();
 	auto bind_data = BindApproxQuantile(input);
 	ReplaceApproxQuantileImplementation(function, ApproxQuantileDecimalFunction(decimal_type));
 	return bind_data;
@@ -537,7 +589,11 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 			const auto &quantile = bind_data.quantiles[q];
 			const auto &source = state.h->quantile(quantile);
 			auto &target = rdata[ridx + q];
-			ApproxQuantileCoding::Decode(source, target, result.GetType());
+			if constexpr (std::is_same<CHILD_TYPE, string_t>::value) {
+				target = ApproxQuantileBignumCoding::Decode(source, result);
+			} else {
+				ApproxQuantileCoding::Decode(source, target, result.GetType());
+			}
 		}
 
 		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
@@ -599,6 +655,13 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 			return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
 		case PhysicalType::INT128:
 			return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
+		case PhysicalType::VARCHAR: {
+			// the bignum_t tier of decimals (above 38 digits)
+			auto function = GetTypedApproxQuantileListAggregateFunction<string_t, string_t>(type);
+			// a value of more than 308 digits does not fit the sketch
+			function.SetFallible();
+			return function;
+		}
 		default:
 			throw NotImplementedException("Unimplemented approximate quantile list decimal aggregate");
 		}
@@ -619,7 +682,7 @@ AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 unique_ptr<FunctionData> BindApproxQuantileDecimalList(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = ApproxQuantileInputType(arguments[0]->GetReturnType());
+	auto decimal_type = arguments[0]->GetReturnType();
 	auto bind_data = BindApproxQuantile(input);
 	ReplaceApproxQuantileImplementation(function, ApproxQuantileDecimalListFunction(decimal_type));
 	return bind_data;

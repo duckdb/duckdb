@@ -1,11 +1,13 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -268,6 +270,56 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	}
 };
 
+//! The bignum_t tier of decimals (above 38 digits), computed like the hugeint tier: the interpolated median of the
+//! exact absolute deviations from the interpolated median. The values are BIGNUM blobs, so the deviations are
+//! materialized instead of being computed inside the comparisons of the selection
+struct WideDecimalMedianAbsoluteDeviationOperation : QuantileOperation {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		const auto n = state.linked_list.total_capacity;
+		if (n == 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		const auto &q = bind_data.quantiles[0];
+		auto &flattened = FlattenedQuantileValues<string_t>::Flatten(finalize_data, state.linked_list);
+		auto values = flattened.Data();
+		QuantileInterpolator<false> interp(q, n, false);
+		const auto med = interp.template Operation<string_t, string_t>(values, finalize_data.result);
+
+		// the flattened values are scratch space: replace each value by its deviation
+		StringHeap heap;
+		const bignum_t median_value(med);
+		const BignumIntermediate median(median_value);
+		for (idx_t i = 0; i < n; i++) {
+			const bignum_t value(values[i]);
+			const BignumIntermediate input(value);
+			auto delta = BignumIntermediate::Add(heap, input, median, true);
+			const bignum_t delta_value(delta);
+			const BignumIntermediate deviation(delta_value);
+			if (deviation.is_negative) {
+				delta = deviation.Negate(heap);
+			}
+			values[i] = delta;
+		}
+		target = interp.template Operation<string_t, T>(values, finalize_data.result);
+	}
+};
+
+AggregateFunction GetWideDecimalMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
+	using STATE = QuantileState<string_t>;
+	using OP = WideDecimalMedianAbsoluteDeviationOperation;
+	auto fun = QuantileBufferingAggregate<STATE, string_t, OP>(type, type);
+	fun.SetStructStateExport(QuantileStateLayout<STATE>);
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetIsHolistic(true);
+	// without window callbacks a windowed mad() aggregates the values of each frame
+	return fun;
+}
+
 unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
@@ -305,6 +357,8 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const Logi
 			return GetTypedMedianAbsoluteDeviationAggregateFunction<int64_t, int64_t, int64_t>(type, type);
 		case PhysicalType::INT128:
 			return GetTypedMedianAbsoluteDeviationAggregateFunction<hugeint_t, hugeint_t, hugeint_t>(type, type);
+		case PhysicalType::VARCHAR:
+			return GetWideDecimalMedianAbsoluteDeviationAggregateFunction(type);
 		default:
 			throw NotImplementedException("Unimplemented Median Absolute Deviation DECIMAL aggregate");
 		}
