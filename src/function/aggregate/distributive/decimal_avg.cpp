@@ -1,6 +1,7 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -61,10 +62,15 @@ struct DecimalAvgOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		// the counts of imported states can be anything, the count of rows of a table cannot overflow
+		uint64_t count;
+		if (!TryAddOperator::Operation(target.count, source.count, count)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		if (!Hugeint::TryAddInPlace(target.sum, source.sum)) {
 			OutOfRangeException::Throw("decimal_average: intermediate sum overflowed HUGEINT range during combine");
 		}
-		target.count += source.count;
+		target.count = count;
 	}
 
 	// Overload for hugeint_t result: direct assignment.
@@ -157,10 +163,15 @@ struct WideDecimalAvgOperation {
 		if (source.count == 0) {
 			return;
 		}
+		// the counts of imported states can be anything, the count of rows of a table cannot overflow
+		uint64_t count;
+		if (!TryAddOperator::Operation(target.count, source.count, count)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		if (target.count == 0) {
 			target.sum.Initialize(input.allocator);
 		}
-		target.count += source.count;
+		target.count = count;
 		target.sum.AddInPlace(input.allocator, source.sum);
 	}
 

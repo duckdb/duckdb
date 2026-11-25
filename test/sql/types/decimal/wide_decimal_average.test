@@ -152,6 +152,27 @@ SELECT finalize(to_aggregate_state({'sum': NULL::BIGNUM, 'count': 2}, 'decimal_a
 ----
 Invalid decimal_average state
 
+# the counts of imported states do not wrap when the states are combined, in the wide and in the fixed-size tiers
+statement error
+SELECT finalize(combine(to_aggregate_state({'sum': 1::BIGNUM, 'count': 18446744073709551615}, 'decimal_average', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'sum': 1::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,0)'])));
+----
+Overflow in aggregate state combine
+
+statement error
+SELECT finalize(combine(to_aggregate_state({'sum': 1::HUGEINT, 'count': 18446744073709551615}, 'decimal_average', ['DECIMAL(18,0)']),
+                        to_aggregate_state({'sum': 1::HUGEINT, 'count': 2}, 'decimal_average', ['DECIMAL(18,0)'])));
+----
+Overflow in aggregate state combine
+
+query II
+SELECT finalize(combine(to_aggregate_state({'sum': 10::BIGNUM, 'count': 18446744073709551613}, 'decimal_average', ['DECIMAL(40,0)']),
+                        to_aggregate_state({'sum': 18446744073709551605::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,0)']))),
+       finalize(combine(to_aggregate_state({'sum': 10::HUGEINT, 'count': 18446744073709551613}, 'decimal_average', ['DECIMAL(18,0)']),
+                        to_aggregate_state({'sum': 18446744073709551605::HUGEINT, 'count': 2}, 'decimal_average', ['DECIMAL(18,0)'])));
+----
+1	1
+
 # the fixed-size tiers keep their HUGEINT sum
 statement error
 SELECT decimal_average(d) FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(38,0)),
