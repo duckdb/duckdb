@@ -361,7 +361,8 @@ public:
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
-		// add the entry before the scan fixes its row range, so the scan sees every row up to the build commit
+		// add the entry first: commits up to its commit are scanned, later ones reach its deltas,
+		// and the scan range fixed after this covers every row of those commits
 		if (bind_data.index_template) {
 			index_build = storage.AddBuildingIndex(tx, *bind_data.index_template);
 		}
