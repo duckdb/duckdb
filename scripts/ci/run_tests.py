@@ -379,7 +379,7 @@ def test_protocol_command(duckdb_bin: str, thread_stack_size: str | None = None,
     command = [duckdb_bin]
     if thread_stack_size is not None:
         command.extend(["--thread-stack-size", thread_stack_size])
-    command.extend(["-unsigned", "-no-agent", "-batch"])
+    command.extend(["-unsigned", "-no-agent", "-no-init", "-batch"])
     if jsonlines:
         command.append("-jsonlines")
     return command
@@ -2021,7 +2021,7 @@ def read_test_state(config: TestRunnerConfig, state_database: Path, child_env):
         return [], f"test state database was not created: {state_database}"
     repository = Path(config.unittest_bin).resolve().parent / "repository"
     proc = subprocess.run(
-        [config.unittest_bin, "-unsigned", "-no-agent", "-batch", "-bail", "-jsonlines", os.fspath(state_database)],
+        [*test_protocol_command(config.unittest_bin), "-bail", os.fspath(state_database)],
         input=(
             f"SET extension_directories = {sql_string_list([repository])};\n"
             "LOAD json;\n"

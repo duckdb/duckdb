@@ -174,6 +174,7 @@ class ExtensionTestInvocationTest(unittest.TestCase):
                 self.assertEqual(runner.main(["--extension-configs", "empty.cmake", "--duckdb", "/build/duckdb"]), 0)
         self.assertEqual(run.call_count, 1)
         self.assertIn("-bail", run.call_args.args[0])
+        self.assertIn("-no-init", run.call_args.args[0])
         self.assertIn("LOAD ", run.call_args.args[0][-1])
         self.assertIn("No extension SQL tests configured", stdout.getvalue())
 

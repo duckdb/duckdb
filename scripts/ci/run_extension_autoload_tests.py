@@ -85,10 +85,7 @@ def run_extension_tests(
     extension = test_extension or run_tests.resolve_test_extension_path(duckdb.parent)
     subprocess.run(
         [
-            str(duckdb),
-            "-unsigned",
-            "-no-agent",
-            "-batch",
+            *run_tests.test_protocol_command(str(duckdb), jsonlines=False),
             "-bail",
             "-c",
             f"LOAD {run_tests.sql_string(extension)};",

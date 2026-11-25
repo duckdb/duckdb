@@ -531,7 +531,7 @@ class RunTestsScriptTest(unittest.TestCase):
     def test_protocol_command_sets_thread_stack_size_before_shell_startup(self):
         self.assertEqual(
             run_tests.test_protocol_command("duckdb", "131072"),
-            ["duckdb", "--thread-stack-size", "131072", "-unsigned", "-no-agent", "-batch", "-jsonlines"],
+            ["duckdb", "--thread-stack-size", "131072", "-unsigned", "-no-agent", "-no-init", "-batch", "-jsonlines"],
         )
 
     def test_exact_test_list_selector_escapes_catch_separator(self):
@@ -569,6 +569,7 @@ class RunTestsScriptTest(unittest.TestCase):
                 "131072",
                 "-unsigned",
                 "-no-agent",
+                "-no-init",
                 "-batch",
                 "-jsonlines",
                 "-f",
@@ -632,7 +633,16 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual(rows[0]["partial_skip_reasons"], [])
         self.assertEqual(
             run.call_args.args[0],
-            ["duckdb", "-unsigned", "-no-agent", "-batch", "-bail", "-jsonlines", os.fspath(state_database)],
+            [
+                "duckdb",
+                "-unsigned",
+                "-no-agent",
+                "-no-init",
+                "-batch",
+                "-jsonlines",
+                "-bail",
+                os.fspath(state_database),
+            ],
         )
         query = run.call_args.kwargs["input"]
         self.assertIn("SET extension_directories", query)
