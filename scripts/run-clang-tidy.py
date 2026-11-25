@@ -184,7 +184,7 @@ def apply_fixes(args, tmpdir):
     subprocess.call(invocation)
 
 
-def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
+def run_tidy(args, tmpdir, build_path, queue, lock, failed_files, worker_stats):
     """Takes filenames out of queue and runs clang-tidy on them."""
     while True:
         name = queue.get()
@@ -202,7 +202,14 @@ def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
         )
 
         proc = subprocess.Popen(invocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output, err = proc.communicate()
+        with lock:
+            worker_stats['active'] += 1
+            worker_stats['peak'] = max(worker_stats['peak'], worker_stats['active'])
+        try:
+            output, err = proc.communicate()
+        finally:
+            with lock:
+                worker_stats['active'] -= 1
         if proc.returncode != 0:
             failed_files.append(name)
             with lock:
@@ -330,8 +337,8 @@ def main():
         files, source_root, third_party_path, file_name_re, args.shard_index, args.shard_count
     )
     print(
-        'Running clang-tidy shard {}/{} on {} of {} files'.format(
-            args.shard_index + 1, args.shard_count, len(selected_files), eligible_file_count
+        'Running clang-tidy shard {}/{} on {} of {} files with {} parallel workers'.format(
+            args.shard_index + 1, args.shard_count, len(selected_files), eligible_file_count, max_task
         )
     )
 
@@ -342,8 +349,11 @@ def main():
         # List of files with a non-zero return code.
         failed_files = []
         lock = threading.Lock()
+        worker_stats = {'active': 0, 'peak': 0}
         for _ in range(max_task):
-            t = threading.Thread(target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files))
+            t = threading.Thread(
+                target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files, worker_stats)
+            )
             t.daemon = True
             t.start()
 
@@ -353,6 +363,7 @@ def main():
 
         # Wait for all threads to be done.
         task_queue.join()
+        print('Peak concurrent clang-tidy workers: {}/{}'.format(worker_stats['peak'], max_task))
         if len(failed_files):
             return_code = 1
 

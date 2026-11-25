@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -80,6 +83,57 @@ class RunClangTidyTest(unittest.TestCase):
             RUN_CLANG_TIDY.validate_shard(-1, 4)
         with self.assertRaisesRegex(ValueError, "between 0"):
             RUN_CLANG_TIDY.validate_shard(4, 4)
+
+    @unittest.skipIf(sys.platform == "win32", "requires executable Python scripts")
+    def test_runs_32_concurrent_workers_and_preserves_failures(self):
+        for exit_code in (0, 1):
+            with self.subTest(exit_code=exit_code), tempfile.TemporaryDirectory() as temp_dir:
+                build_path = Path(temp_dir)
+                files = [build_path / f"file_{index}.cpp" for index in range(64)]
+                database = [{"file": str(path), "directory": temp_dir} for path in files]
+                (build_path / "compile_commands.json").write_text(json.dumps(database))
+                fake_tidy = build_path / "clang-tidy"
+                fake_tidy.write_text(
+                    f"""#!{sys.executable}
+import sys
+import time
+from pathlib import Path
+
+if '-list-checks' in sys.argv:
+    sys.exit(0)
+source = Path(sys.argv[-1])
+source.with_suffix('.started').touch()
+deadline = time.monotonic() + 15
+while len(list(source.parent.glob('*.started'))) < 32:
+    if time.monotonic() > deadline:
+        sys.exit(2)
+    time.sleep(0.01)
+sys.exit({exit_code} if source.stem == 'file_63' else 0)
+"""
+                )
+                fake_tidy.chmod(0o755)
+
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(RUNNER_PATH),
+                        "-p",
+                        temp_dir,
+                        "-clang-tidy-binary",
+                        str(fake_tidy),
+                        "-quiet",
+                        "-j",
+                        "32",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+                self.assertEqual(result.returncode, exit_code, result.stdout + result.stderr)
+                self.assertIn("on 64 of 64 files with 32 parallel workers", result.stdout)
+                self.assertIn("Peak concurrent clang-tidy workers: 32/32", result.stdout)
+                self.assertEqual(len(list(build_path.glob("*.started"))), len(files))
 
 
 if __name__ == "__main__":

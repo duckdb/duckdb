@@ -14,6 +14,7 @@ CLANG_TIDY_STATUS_PATTERNS = (
     re.compile(r"^Found compiler error\(s\)\.$"),
 )
 BUILD_STATUS_PATTERN = re.compile(r"^(?:make(?:\[\d+\])?:|ninja:)")
+WORKER_STATUS_PATTERN = re.compile(r"^(?:Running clang-tidy shard |Peak concurrent clang-tidy workers: )")
 FAILURE_TAIL_LINES = 100
 
 
@@ -22,7 +23,11 @@ def is_error(line):
 
 
 def is_diagnostic_boundary(line):
-    if CLANG_TIDY_INVOCATION_PATTERN.search(line) or BUILD_STATUS_PATTERN.search(line):
+    if (
+        CLANG_TIDY_INVOCATION_PATTERN.search(line)
+        or BUILD_STATUS_PATTERN.search(line)
+        or WORKER_STATUS_PATTERN.search(line)
+    ):
         return True
     return any(pattern.search(line) for pattern in CLANG_TIDY_STATUS_PATTERNS)
 
@@ -58,10 +63,11 @@ def unique_error_blocks(lines):
 
 
 def summarize(lines, command_exit_code):
+    worker_status = [line for line in lines if WORKER_STATUS_PATTERN.search(line)]
     blocks = unique_error_blocks(lines)
     if blocks:
         label = "error" if len(blocks) == 1 else "errors"
-        output = [f"Found {len(blocks)} unique clang-tidy {label}:", ""]
+        output = [*worker_status, f"Found {len(blocks)} unique clang-tidy {label}:", ""]
         for block_index, block in enumerate(blocks):
             if block_index:
                 output.append("")
@@ -70,13 +76,14 @@ def summarize(lines, command_exit_code):
 
     if command_exit_code:
         return [
+            *worker_status,
             "Clang-tidy failed without a recognized diagnostic; showing the final "
             f"{min(FAILURE_TAIL_LINES, len(lines))} log lines:",
             "",
             *lines[-FAILURE_TAIL_LINES:],
         ]
 
-    return ["No clang-tidy errors found."]
+    return [*worker_status, "No clang-tidy errors found."]
 
 
 def main():
