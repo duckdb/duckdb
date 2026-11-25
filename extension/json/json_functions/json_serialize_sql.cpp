@@ -1,5 +1,10 @@
 #include "duckdb/main/context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -101,14 +106,20 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			auto statements_arr = yyjson_mut_arr(doc);
 
 			for (auto &statement : parser.statements) {
-				if (statement->type != StatementType::SELECT_STATEMENT) {
-					throw NotImplementedException("Only SELECT statements can be serialized to json!");
+				switch (statement->type) {
+				case StatementType::SELECT_STATEMENT:
+				case StatementType::INSERT_STATEMENT:
+				case StatementType::DELETE_STATEMENT:
+				case StatementType::UPDATE_STATEMENT:
+					break;
+				default:
+					throw NotImplementedException(
+					    "Only SELECT, INSERT, DELETE, or UPDATE statements can be serialized to json!");
 				}
-				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
 				options->storage_compatibility = state.GetContext().GetDatabase().config.options.storage_compatibility;
-				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
+				auto json = JsonSerializer::Serialize(*statement, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 
 				yyjson_mut_arr_append(statements_arr, json);
@@ -173,7 +184,7 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 //----------------------------------------------------------------------
 // JSON DESERIALIZE
 //----------------------------------------------------------------------
-static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
+static vector<unique_ptr<SQLStatement>> DeserializeSQLStatement(string_t input, yyjson_alc *alc) {
 	auto doc = yyjson_doc_ptr(JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc));
 	if (!doc) {
 		throw ParserException("Could not parse json");
@@ -203,7 +214,7 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 	policy.Disallow(LogicalTypeId::POINTER);
 	policy.Disallow(LiteralKind::POINTER);
 
-	vector<unique_ptr<SelectStatement>> result;
+	vector<unique_ptr<SQLStatement>> result;
 
 	idx_t idx;
 	idx_t max;
@@ -211,11 +222,30 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 	yyjson_arr_foreach(statements, idx, max, stmt_json) {
 		JsonDeserializer deserializer(stmt_json, doc);
 		deserializer.SetPolicy(policy);
-		auto stmt = SelectStatement::Deserialize(deserializer);
-		if (!stmt->node) {
-			throw ParserException("Error parsing json: no select node found in json");
+		auto stmt = SQLStatement::Deserialize(deserializer);
+		// borrowed from stmt, which keeps ownership
+		optional_ptr<QueryNode> node;
+		switch (stmt->type) {
+		case StatementType::SELECT_STATEMENT:
+			node = stmt->Cast<SelectStatement>().node.get();
+			break;
+		case StatementType::INSERT_STATEMENT:
+			node = stmt->Cast<InsertStatement>().node.get();
+			break;
+		case StatementType::UPDATE_STATEMENT:
+			node = stmt->Cast<UpdateStatement>().node.get();
+			break;
+		case StatementType::DELETE_STATEMENT:
+			node = stmt->Cast<DeleteStatement>().node.get();
+			break;
+		default:
+			throw ParserException("Error parsing json: unsupported statement type %s",
+			                      StatementTypeToString(stmt->type));
 		}
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(*stmt->node, [](unique_ptr<ParsedExpression> &child) {
+		if (!node) {
+			throw ParserException("Error parsing json: no query node found in json");
+		}
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(*node, [](unique_ptr<ParsedExpression> &child) {
 			if (!child) {
 				throw ParserException("Error parsing json: null expression found in json");
 			}
@@ -236,7 +266,7 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
-		auto stmts = DeserializeSelectStatement(input, alc);
+		auto stmts = DeserializeSQLStatement(input, alc);
 		// Combine all statements into a single semicolon separated string
 		string str;
 		for (idx_t i = 0; i < stmts.size(); i++) {
@@ -272,7 +302,7 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	}
 
 	auto input = parameters.values[0].GetValueUnsafe<string_t>();
-	auto stmts = DeserializeSelectStatement(input, alc);
+	auto stmts = DeserializeSQLStatement(input, alc);
 	if (stmts.size() != 1) {
 		throw BinderException("json_execute_serialized_sql pragma expects exactly one statement");
 	}
@@ -323,12 +353,15 @@ struct ExecuteSqlTableFunction {
 			throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
 		}
 		auto serialized = input.inputs[0].GetValueUnsafe<string>();
-		auto stmts = DeserializeSelectStatement(serialized, alc);
+		auto stmts = DeserializeSQLStatement(serialized, alc);
 		if (stmts.size() != 1) {
 			throw BinderException("json_execute_serialized_sql expects exactly one statement");
 		}
+		if (stmts[0]->type != StatementType::SELECT_STATEMENT) {
+			throw BinderException("json_execute_serialized_sql expects a SELECT statement");
+		}
 		result->query = stmts[0]->ToString();
-		result->node = std::move(stmts[0]->node);
+		result->node = std::move(stmts[0]->Cast<SelectStatement>().node);
 
 		// without query text, a prepare error keeps its position for the outer query to report
 		auto statement = make_uniq<SelectStatement>();

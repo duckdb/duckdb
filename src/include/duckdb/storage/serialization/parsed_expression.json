@@ -475,7 +475,8 @@
       {
         "id": 201,
         "name": "subquery",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "base": "SQLStatement"
       },
       {
         "id": 202,

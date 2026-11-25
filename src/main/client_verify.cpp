@@ -5,6 +5,7 @@
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
@@ -122,62 +123,14 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		MemoryStream stream(allocator);
 		SerializationOptions options;
 		options.storage_compatibility = StorageCompatibility::FromString("latest");
-		optional_ptr<SelectStatement> to_serialize_stmt;
-		optional_ptr<QueryNode> to_serialize_node;
-		switch (statement->type) {
-		case StatementType::SELECT_STATEMENT:
-			to_serialize_stmt = statement->Cast<SelectStatement>();
-			break;
-		case StatementType::INSERT_STATEMENT:
-			to_serialize_node = (QueryNode &)*statement->Cast<InsertStatement>().node;
-			break;
-		case StatementType::DELETE_STATEMENT:
-			to_serialize_node = (QueryNode &)*statement->Cast<DeleteStatement>().node;
-			break;
-		case StatementType::UPDATE_STATEMENT:
-			to_serialize_node = (QueryNode &)*statement->Cast<UpdateStatement>().node;
-			break;
-		default:
-			throw InternalException("Unsupported type for serialization verification");
-		}
-		// do the round-trip
-		unique_ptr<SelectStatement> deserialized_stmt;
-		unique_ptr<QueryNode> deserialized_node;
-		if (to_serialize_stmt) {
-			BinarySerializer::Serialize(*to_serialize_stmt, stream, options);
-			stream.Rewind();
-			deserialized_stmt = BinaryDeserializer::Deserialize<SelectStatement>(stream);
-		} else {
-			BinarySerializer::Serialize(*to_serialize_node, stream, options);
-			stream.Rewind();
-			deserialized_node = BinaryDeserializer::Deserialize<QueryNode>(stream);
-		}
 
-		switch (statement->type) {
-		case StatementType::SELECT_STATEMENT:
-			ReplaceStatement(statement, std::move(deserialized_stmt));
-			break;
-		case StatementType::INSERT_STATEMENT: {
-			auto result = make_uniq<InsertStatement>();
-			result->node = unique_ptr_cast<QueryNode, InsertQueryNode>(std::move(deserialized_node));
-			ReplaceStatement(statement, std::move(result));
-			break;
-		}
-		case StatementType::DELETE_STATEMENT: {
-			auto result = make_uniq<DeleteStatement>();
-			result->node = unique_ptr_cast<QueryNode, DeleteQueryNode>(std::move(deserialized_node));
-			ReplaceStatement(statement, std::move(result));
-			break;
-		}
-		case StatementType::UPDATE_STATEMENT: {
-			auto result = make_uniq<UpdateStatement>();
-			result->node = unique_ptr_cast<QueryNode, UpdateQueryNode>(std::move(deserialized_node));
-			ReplaceStatement(statement, std::move(result));
-			break;
-		}
-		default:
-			throw InternalException("Unsupported type for serialization verification");
-		}
+		// do the round-trip
+		unique_ptr<SQLStatement> deserialized_stmt;
+		BinarySerializer::Serialize(*statement, stream, options);
+		stream.Rewind();
+		deserialized_stmt = BinaryDeserializer::Deserialize<SQLStatement>(stream);
+
+		ReplaceStatement(statement, std::move(deserialized_stmt));
 	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
 		if (!allow_nested_statements || statement->type != StatementType::SELECT_STATEMENT) {
 			// only supported for SELECT (for now?)

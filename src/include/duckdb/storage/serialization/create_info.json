@@ -191,7 +191,8 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "base": "SQLStatement"
       },
       {
         "id": 204,
@@ -257,7 +258,8 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "base": "SQLStatement"
       },
       {
         "id": 204,

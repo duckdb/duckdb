@@ -177,8 +177,12 @@ SWITCH_STATEMENT_FORMAT = (
 
 DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
 DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'
+DESERIALIZE_CAST_BASE_EXPRESSION = 'unique_ptr_cast<{base_property}, {derived_property}>(deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default}))'
+DESERIALIZE_ELEMENT_CAST_BASE_FORMAT = '\tauto {property_name} = ' + DESERIALIZE_CAST_BASE_EXPRESSION + ';\n'
 DESERIALIZE_ELEMENT_CLASS_FORMAT = '\tdeserializer.ReadProperty<{property_type}>({property_id}, "{property_key}", result{assignment}{property_name}{property_default});\n'
-DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n\tresult{assignment}{property_name} = unique_ptr_cast<{base_property}, {derived_property}>(std::move({property_name}));\n'
+DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = (
+    '\tresult{assignment}{property_name} = ' + DESERIALIZE_CAST_BASE_EXPRESSION + ';\n'
+)
 
 MOVE_LIST = [
     "string",
@@ -231,6 +235,13 @@ def replace_pointer(type):
 
 def get_default_argument(default_value):
     return f"{default_value}".lower() if type(default_value) == bool else f"{default_value}"
+
+
+def get_base_deserialize_template(template, entry):
+    # Fill in the base/derived types of a member read as a base class pointer and cast to its declared type
+    base_property = entry.base.replace("*", "")
+    derived_property = re.sub(r"^unique_ptr<(.+)>$", r"\1", entry.type.replace("*", ""))
+    return template.replace("{base_property}", base_property).replace("{derived_property}", derived_property)
 
 
 def get_deserialize_element_template(
@@ -609,7 +620,11 @@ class SerializableClass:
         property_name = deserialize_local_name(entry)
         template = DESERIALIZE_ELEMENT_FORMAT
         if base:
-            template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace("{base_property}", base.replace("*", ""))
+            if entry.status == MemberVariableStatus.DELETED:
+                template = DESERIALIZE_ELEMENT_BASE_FORMAT
+            else:
+                template = DESERIALIZE_ELEMENT_CAST_BASE_FORMAT
+            template = get_base_deserialize_template(template, entry)
 
         return get_deserialize_element_template(
             template,
@@ -918,9 +933,7 @@ def generate_class_code(class_entry: SerializableClass):
         write_property_name = entry.serialize_property
         deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_FORMAT
         if entry.base:
-            deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT.replace(
-                "{base_property}", entry.base.replace("*", "")
-            ).replace("{derived_property}", entry.type.replace("*", ""))
+            deserialize_template_str = get_base_deserialize_template(DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT, entry)
 
         class_serialize += class_entry.get_serialize_element(entry)
 

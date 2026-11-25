@@ -266,7 +266,7 @@ void SubqueryRef::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SubqueryRef>(new SubqueryRef());
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "subquery", result->subquery);
+	result->subquery = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(200, "subquery"));
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "column_name_alias", result->column_name_alias);
 	return std::move(result);
 }

@@ -1,6 +1,23 @@
 [
   {
+    "class": "SQLStatement",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/sql_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 50,
+        "name": "type",
+        "type": "StatementType",
+        "default": "StatementType::SELECT_STATEMENT"
+      }
+    ]
+  },
+  {
     "class": "SelectStatement",
+    "base": "SQLStatement",
+    "enum": "SELECT_STATEMENT",
     "includes": [
       "duckdb/parser/statement/select_statement.hpp"
     ],
@@ -9,6 +26,69 @@
         "id": 100,
         "name": "node",
         "type": "QueryNode*"
+      },
+      {
+        "id": 101,
+        "name": "named_param_map",
+        "type": "identifier_map_t<idx_t>"
+      }
+    ]
+  },
+  {
+    "class": "InsertStatement",
+    "base": "SQLStatement",
+    "enum": "INSERT_STATEMENT",
+    "includes": [
+      "duckdb/parser/statement/insert_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "node",
+        "type": "InsertQueryNode*",
+        "base": "QueryNode"
+      },
+      {
+        "id": 101,
+        "name": "named_param_map",
+        "type": "identifier_map_t<idx_t>"
+      }
+    ]
+  },
+  {
+    "class": "DeleteStatement",
+    "base": "SQLStatement",
+    "enum": "DELETE_STATEMENT",
+    "includes": [
+      "duckdb/parser/statement/delete_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "node",
+        "type": "DeleteQueryNode*",
+        "base": "QueryNode"
+      },
+      {
+        "id": 101,
+        "name": "named_param_map",
+        "type": "identifier_map_t<idx_t>"
+      }
+    ]
+  },
+  {
+    "class": "UpdateStatement",
+    "base": "SQLStatement",
+    "enum": "UPDATE_STATEMENT",
+    "includes": [
+      "duckdb/parser/statement/update_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "node",
+        "type": "UpdateQueryNode*",
+        "base": "QueryNode"
       },
       {
         "id": 101,

@@ -95,7 +95,7 @@ void CopyQueryNode::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<QueryNode> CopyQueryNode::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, CopyInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<CopyQueryNode>(new CopyQueryNode(std::move(info)));
 	return std::move(result);
 }
@@ -136,7 +136,7 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", result->select_statement);
+	result->select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(200, "select_statement"));
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "columns", result->columns);
 	auto table = deserializer.ReadPropertyWithDefault<Identifier>(202, "table");
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(203, "schema");

@@ -313,7 +313,7 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
 	auto aliases = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "aliases");
-	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query");
+	auto query = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(101, "query"));
 	auto materialized = deserializer.ReadProperty<CTEMaterialize>(102, "materialized");
 	auto key_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets");
 	auto payload_aggregates = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates");

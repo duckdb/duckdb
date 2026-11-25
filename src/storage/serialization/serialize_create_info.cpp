@@ -203,7 +203,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	auto table = deserializer.ReadPropertyWithDefault<Identifier>(200, "table");
 	deserializer.ReadProperty<ColumnList>(201, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", result->constraints);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
+	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(203, "query"));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
@@ -227,8 +227,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
 	auto trigger_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "trigger_name");
-	auto base_table = deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table");
-	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
+	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table"));
 	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
 	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(206, "columns", result->columns);
@@ -276,7 +275,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto view_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "view_name");
 	auto aliases = deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "aliases");
 	auto types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types");
-	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
+	auto query = unique_ptr_cast<SQLStatement, SelectStatement>(deserializer.ReadPropertyWithDefault<unique_ptr<SQLStatement>>(203, "query"));
 	auto names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "names");
 	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
 	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<identifier_map_t<Value>>(206, "column_comments_map", identifier_map_t<Value>());

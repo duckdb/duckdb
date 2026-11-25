@@ -296,7 +296,7 @@ void LogicalAlter::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalAlter::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, AlterInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalAlter>(new LogicalAlter(std::move(info)));
 	return std::move(result);
 }
@@ -326,7 +326,7 @@ void LogicalAttach::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalAttach::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, AttachInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalAttach>(new LogicalAttach(std::move(info)));
 	return std::move(result);
 }
@@ -388,7 +388,7 @@ void LogicalConnect::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalConnect::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, ConnectInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalConnect>(new LogicalConnect(std::move(info)));
 	return std::move(result);
 }
@@ -399,7 +399,7 @@ void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, CopyDatabaseInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalCopyDatabase>(new LogicalCopyDatabase(std::move(info)));
 	return std::move(result);
 }
@@ -423,9 +423,9 @@ void LogicalCreateIndex::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info");
+	auto info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info"));
 	auto unbound_expressions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions");
-	auto alter_table_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(202, "alter_table_info");
+	auto alter_table_info = unique_ptr_cast<ParseInfo, AlterTableInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(202, "alter_table_info"));
 	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions), std::move(alter_table_info)));
 	return std::move(result);
 }
@@ -488,7 +488,7 @@ void LogicalDetach::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalDetach::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, DetachInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalDetach>(new LogicalDetach(std::move(info)));
 	return std::move(result);
 }
@@ -499,7 +499,7 @@ void LogicalDisconnect::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalDisconnect::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, DisconnectInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalDisconnect>(new LogicalDisconnect(std::move(info)));
 	return std::move(result);
 }
@@ -525,7 +525,7 @@ void LogicalDrop::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalDrop::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, DropInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalDrop>(new LogicalDrop(std::move(info)));
 	return std::move(result);
 }
@@ -580,8 +580,8 @@ void LogicalExport::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalExport::Deserialize(Deserializer &deserializer) {
-	auto copy_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "copy_info");
-	auto exported_tables = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(201, "exported_tables");
+	auto copy_info = unique_ptr_cast<ParseInfo, CopyInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "copy_info"));
+	auto exported_tables = unique_ptr_cast<ParseInfo, BoundExportData>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(201, "exported_tables"));
 	auto result = duckdb::unique_ptr<LogicalExport>(new LogicalExport(deserializer.Get<ClientContext &>(), std::move(copy_info), std::move(exported_tables)));
 	return std::move(result);
 }
@@ -697,7 +697,7 @@ void LogicalLoad::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalLoad::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, LoadInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalLoad>(new LogicalLoad(std::move(info)));
 	return std::move(result);
 }
@@ -931,7 +931,7 @@ void LogicalTransaction::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalTransaction::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto info = unique_ptr_cast<ParseInfo, TransactionInfo>(deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info"));
 	auto result = duckdb::unique_ptr<LogicalTransaction>(new LogicalTransaction(std::move(info)));
 	return std::move(result);
 }
