@@ -303,6 +303,11 @@ public:
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
+	//! Passes the rows from start_row onwards to append, then moves the index to this table's index list.
+	//! Appends are blocked in between, so every committed row is passed here or appended by its commit.
+	shared_ptr<IndexEntry> AddBuiltIndex(unique_ptr<BoundIndex> index, idx_t index_oid, ConstraintCheckMode check_mode,
+	                                     idx_t start_row,
+	                                     const std::function<void(DataChunk &chunk, Vector &row_ids)> &append);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

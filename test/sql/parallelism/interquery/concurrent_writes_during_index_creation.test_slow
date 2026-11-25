@@ -26,7 +26,46 @@ SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1
 ----
 1	20001
 
+# Always answer the point lookup from the index, it otherwise falls back to a table scan above 2048 matches.
+statement ok
+SET index_scan_max_count=1_000_000
+
 query I
 SELECT COUNT(*) FROM integers WHERE i = 1
 ----
 20001
+
+# Rows committed while a UNIQUE index is created are appended to it with constraint checking.
+statement ok
+CREATE TABLE uniques AS SELECT range AS i FROM range (1_000_000)
+
+concurrentloop threadid 0 11
+
+onlyif threadid=0
+statement ok
+CREATE UNIQUE INDEX u_index ON uniques(i)
+
+loop x 0 2000
+
+onlyif threadid<>0
+statement ok
+INSERT INTO uniques VALUES (-{threadid} * 2000 - {x} - 1)
+
+endloop
+
+endloop
+
+query I
+SELECT COUNT(*) FROM uniques WHERE i < 0
+----
+20000
+
+# Every concurrently inserted key must be in the index.
+loop x 2001 22001
+
+statement error
+INSERT INTO uniques VALUES (-{x})
+----
+<REGEX>:Constraint Error.*Duplicate key.*
+
+endloop

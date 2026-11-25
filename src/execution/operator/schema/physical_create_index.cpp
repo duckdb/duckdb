@@ -52,6 +52,9 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 class CreateIndexGlobalSinkState : public GlobalSinkState {
 public:
 	unique_ptr<IndexBuildGlobalState> gstate;
+	mutex lock;
+	//! One past the highest row id that was sunk into the index
+	idx_t scanned_rows = 0;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
@@ -69,6 +72,7 @@ public:
 	unique_ptr<IndexBuildLocalState> lstate;
 	DataChunk key_chunk;
 	DataChunk row_chunk;
+	idx_t scanned_rows = 0;
 };
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
@@ -94,6 +98,9 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	// Reference the key columns and rowid column
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
+	for (auto entry : lstate.row_chunk.data[0].ValidValues<row_t>()) {
+		lstate.scanned_rows = MaxValue<idx_t>(lstate.scanned_rows, NumericCast<idx_t>(entry.GetValue()) + 1);
+	}
 
 	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
 	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
@@ -117,6 +124,10 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 
 	IndexBuildCombineInput combine_input {bind_data.get(), *gstate.gstate, *lstate.lstate, table, *info};
 	index_type.build_combine(combine_input);
+	{
+		lock_guard<mutex> guard(gstate.lock);
+		gstate.scanned_rows = MaxValue<idx_t>(gstate.scanned_rows, lstate.scanned_rows);
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -187,8 +198,24 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Add the index to the storage.
-	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), index_oid, check_mode);
+	// Rows committed after the build scan started are not in the index yet, append them before adding it.
+	auto &index = *bound_index;
+	const auto reject_nulls = alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY;
+	auto append = [&](DataChunk &chunk, Vector &row_ids) {
+		if (reject_nulls) {
+			for (auto column_id : index.GetColumnIds()) {
+				if (VectorOperations::HasNull(chunk.data[column_id])) {
+					throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
+				}
+			}
+		}
+		auto error = index.Append(chunk, row_ids);
+		if (error.HasError()) {
+			error.Throw();
+		}
+	};
+	auto index_entry =
+	    storage.AddBuiltIndex(std::move(bound_index), index_oid, check_mode, gstate.scanned_rows, append);
 	if (local_table_storage) {
 		// Existing transaction-local rows are verified when committing, so we only add a delete index.
 		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);

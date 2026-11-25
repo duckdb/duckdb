@@ -397,6 +397,61 @@ void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
+shared_ptr<IndexEntry> DataTable::AddBuiltIndex(unique_ptr<BoundIndex> index, idx_t index_oid,
+                                                ConstraintCheckMode check_mode, idx_t start_row,
+                                                const std::function<void(DataChunk &chunk, Vector &row_ids)> &append) {
+	// Commits append to the indexes and the table while holding the append lock.
+	lock_guard<mutex> lock(append_lock);
+	const auto end_row = row_groups->GetNextRowId();
+	if (start_row < end_row) {
+		auto &types = row_groups->GetTypes();
+		auto &col_ids = index->GetColumnIds();
+		vector<StorageIndex> scan_column_ids;
+		vector<LogicalType> scan_types;
+		for (auto col_id : col_ids) {
+			scan_column_ids.emplace_back(col_id);
+			scan_types.push_back(types[col_id]);
+		}
+		scan_column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		scan_types.push_back(LogicalType::ROW_TYPE);
+
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(Allocator::Get(db), scan_types);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(types);
+
+		TableScanState state;
+		state.Initialize(scan_column_ids);
+		row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, scan_column_ids, start_row, end_row);
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		while (true) {
+			scan_chunk.Reset();
+			state.table_state.Scan(scan_chunk, TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			// The scan starts at a vector boundary, skip the rows before start_row.
+			idx_t count = 0;
+			for (auto entry : scan_chunk.data[col_ids.size()].Values<row_t>()) {
+				if (NumericCast<idx_t>(entry.GetValue()) >= start_row) {
+					sel.set_index(count++, entry.GetIndex());
+				}
+			}
+			if (count == 0) {
+				continue;
+			}
+			if (count != scan_chunk.size()) {
+				scan_chunk.Slice(sel, count);
+			}
+			for (idx_t i = 0; i < col_ids.size(); i++) {
+				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
+			}
+			append(table_chunk, scan_chunk.data[col_ids.size()]);
+		}
+	}
+	return info->indexes.AddIndex(std::move(index), index_oid, check_mode);
+}
+
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
 	auto index = info->indexes.FindForeignKeyIndex(keys, type);
 	return index != nullptr;
