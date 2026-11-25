@@ -73,6 +73,33 @@ SELECT count(*) FROM (SELECT * FROM (five FULL OUTER JOIN one ON a = b), two LIM
 ----
 11
 
+# a non-empty side that statistics prove never matches is replaced by an empty result
+statement ok
+CREATE TABLE a AS SELECT i % 10 AS k FROM range(100) t(i);
+
+statement ok
+CREATE TABLE b AS SELECT i AS k FROM range(10) t(i);
+
+query I
+SELECT count(*) FROM (SELECT a.k FROM a LEFT JOIN b ON a.k = b.k AND b.k < -1 LIMIT 3);
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT a.k FROM b RIGHT JOIN a ON a.k = b.k AND b.k < -1 LIMIT 3);
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT a.k FROM a FULL OUTER JOIN b ON a.k = b.k AND b.k < -1 LIMIT 3);
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT a.k FROM a LEFT JOIN b ON a.k = b.k AND b.k < -1 LIMIT 300);
+----
+100
+
 statement ok
 CREATE OR REPLACE TABLE t1(c0 BIGINT NOT NULL);
 
