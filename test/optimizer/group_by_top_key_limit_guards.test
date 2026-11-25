@@ -256,6 +256,27 @@ EXPLAIN SELECT k + 1, count(*) c FROM many GROUP BY k LIMIT 9000
 ----
 logical_opt	<REGEX>:.*Top N.*
 
+# an aggregate function that can throw: the sum of DECIMAL(38,0) values of +-5e34 over 6,145 rows is not proven
+# safe by the statistics and could overflow its result width on a group that the filter cut rows from; the sibling
+# with aggregates that cannot throw is rewritten
+statement ok
+CREATE TABLE wide AS SELECT (i % 20)::INTEGER AS k, CASE WHEN i % 2 = 0 THEN '50000000000000000000000000000000000'::DECIMAL(38,0) ELSE '-50000000000000000000000000000000000'::DECIMAL(38,0) END AS v FROM range(6145) r(i);
+
+query II
+EXPLAIN SELECT k, sum(v) FROM wide GROUP BY k LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top N.*
+
+query II
+EXPLAIN SELECT k, count(*), min(v), max(v) FROM wide GROUP BY k LIMIT 3
+----
+logical_opt	<REGEX>:.*Top N.*
+
+query I
+SELECT count(*) FROM (SELECT k, sum(v) s FROM wide GROUP BY k LIMIT 3)
+----
+3
+
 query II
 SELECT count(*), sum(c) FROM (SELECT random() r, k, count(*) c FROM many GROUP BY k LIMIT 9000)
 ----

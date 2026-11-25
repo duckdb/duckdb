@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -59,6 +60,19 @@ bool IsSingleGroupingSet(const LogicalAggregate &aggregate) {
 
 bool IsPlainGroupedAggregate(const LogicalAggregate &aggregate) {
 	return !aggregate.groups.empty() && IsSingleGroupingSet(aggregate) && aggregate.grouping_functions.empty();
+}
+
+//! Whether an aggregate function of the aggregate can throw. The groups after the bound lose rows to the filter and
+//! are finalized before the Top-N drops them: sum(DECIMAL(38,0)) overflows on a group whose cancelling rows are gone.
+//! The arguments of the aggregates are not checked: they see unchanged input rows, only fewer of them.
+bool AggregateFunctionCanThrow(const LogicalAggregate &aggregate) {
+	for (auto &expr : aggregate.expressions) {
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
+		if (aggr.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			return true;
+		}
+	}
+	return false;
 }
 
 //! Whether the filter can compare keys of this type. It keeps the distinct keys of a thread as sort keys and compares
@@ -260,7 +274,8 @@ unique_ptr<LogicalOperator> GroupByTopKey::LimitToTopN(unique_ptr<LogicalOperato
 	auto &aggregate = child.get().Cast<LogicalAggregate>();
 	// an aggregate without aggregate functions is a DISTINCT: the LIMIT stops it early
 	if (!IsPlainGroupedAggregate(aggregate) || aggregate.expressions.empty() ||
-	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER) {
+	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER ||
+	    AggregateFunctionCanThrow(aggregate)) {
 		return op;
 	}
 	// order by the first group key that is a column, preferring one that the scans can filter on
@@ -345,7 +360,8 @@ bool GroupByTopKey::TryMatch(LogicalOperator &op, TopKeyMatch &match) {
 	}
 	auto &aggregate = child.get().Cast<LogicalAggregate>();
 	if (!IsPlainGroupedAggregate(aggregate) ||
-	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER) {
+	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER ||
+	    AggregateFunctionCanThrow(aggregate)) {
 		return false;
 	}
 	// the groups after the bound are incomplete until the Top-N drops them, and the projections and the ORDER BY are

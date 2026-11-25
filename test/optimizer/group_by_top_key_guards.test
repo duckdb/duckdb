@@ -35,6 +35,16 @@ CREATE TABLE w AS SELECT ((i * 37) % 1000)::BIGINT * 10000000000 AS k, i AS v FR
 statement ok
 CREATE TABLE cancellation AS SELECT CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k, i % 2 AS other_key, CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 1 WHEN i < 4096 THEN 0 ELSE -1 END AS v FROM range(6145) r(i);
 
+# the same shape with DECIMAL(38,0) values of +-5e34: the 1,024 rows of k = 2 that a filter would leave sum to
+# 1.024e38, which fits the HUGEINT accumulator but not the DECIMAL(38) result. 6,145 rows of 5e34 exceed 1e38, so
+# the statistics do not prove the sum safe
+statement ok
+CREATE TABLE decimal_cancellation AS SELECT CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k, CASE WHEN i = 6144 THEN 0::DECIMAL(38,0) WHEN i < 2048 THEN '50000000000000000000000000000000000'::DECIMAL(38,0) WHEN i < 4096 THEN 0::DECIMAL(38,0) ELSE '-50000000000000000000000000000000000'::DECIMAL(38,0) END AS v FROM range(6145) r(i);
+
+# DECIMAL(38,0) values of +-3e30 in 6,145 rows: the statistics prove that the sum fits a DECIMAL(38)
+statement ok
+CREATE TABLE small_decimal AS SELECT (i % 3)::INTEGER AS k, CASE WHEN i % 2 = 0 THEN '3000000000000000000000000000000'::DECIMAL(38,0) ELSE '-3000000000000000000000000000000'::DECIMAL(38,0) END AS v FROM range(6145) r(i);
+
 statement ok
 SET explain_output = 'optimized_only';
 
@@ -331,6 +341,42 @@ EXPLAIN SELECT k1, k2, sum(v) FROM t GROUP BY k1, k2 ORDER BY k1, sum(v) DESC, k
 ----
 logical_opt	<REGEX>:.*Top Key Filter.*
 
+# an aggregate function that can throw: the groups after the bound are finalized before the Top-N drops them, and a
+# sum of DECIMAL(38,0) that lost its cancelling rows to the filter overflows the result width (see RESULT below).
+# The sum of a HUGEINT column (the accumulator overflows) and string_agg (the maximum string size) are declined too
+query II
+EXPLAIN SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT h, sum(h) FROM ty GROUP BY h ORDER BY h LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, string_agg(k2) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+# the statistics prove the sum of a DECIMAL(38,0) column safe: it keeps the filter
+query II
+EXPLAIN SELECT k, sum(v) FROM small_decimal GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
+# aggregates that cannot throw: count, min, max, the sum of an INTEGER column (also with a FILTER clause), and
+# a throwing argument expression (it sees input rows, not partial aggregates)
+query II
+EXPLAIN SELECT k1, count(*), min(v), max(v), sum(v), sum(v) FILTER (WHERE v % 2 = 0) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, count(v::TINYINT), max(v::TINYINT) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
 # ---------------------------------------------------------------------------------------------------------------
 # RESULT: the same rows with the rule disabled and enabled
 # ---------------------------------------------------------------------------------------------------------------
@@ -416,6 +462,13 @@ query III
 SELECT k, other_key, sum(v) FROM cancellation GROUP BY k, other_key ORDER BY k, sum(v) DESC, other_key LIMIT 1
 ----
 0	0	0
+
+# a sum of DECIMAL(38,0) that can throw: a group that a filter had cut off would carry 1.024e38, which does not fit
+# the result width (the sum is finalized before the Top-N drops the group)
+query II
+SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+0	0
 
 # empty input
 query II
@@ -640,12 +693,24 @@ SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k DESC LIMIT 1
 # 20 keys that arrive in runs of one chunk each. The first chunk sets the bound (the key 0, whose hash is 0), and
 # every later chunk of a larger key is rejected as a whole. Those chunks count for the effectiveness check as well,
 # so the filter keeps rejecting past its window of 100 chunks: 74 of the 1,465 chunks pass and one group is built
-require vector_size 2048
+require exact_vector_size 2048
 
 query II
 EXPLAIN ANALYZE SELECT (i // 2048) % 20 AS k, sum(i) FROM range(3000000) r(i) GROUP BY k ORDER BY k LIMIT 1
 ----
 analyzed_plan	<REGEX>:.*Hash Group By[^╭]* 1 row .*Top Key Filter[^╭]*Limit: 1 [^╭]* 151,552 rows.*
+
+# more passing chunks than the window holds: 123 of the 2,442 chunks pass (251,904 rows). Counting the passing
+# chunks only, the filter would switch itself off after 100 of them and pass the 1.1 million rows after that
+query II
+EXPLAIN ANALYZE SELECT (i // 2048) % 20 AS k, sum(i) FROM range(5000000) r(i) GROUP BY k ORDER BY k LIMIT 1
+----
+analyzed_plan	<REGEX>:.*Hash Group By[^╭]* 1 row .*Top Key Filter[^╭]*Limit: 1 [^╭]* 251,904 rows.*
+
+query II
+SELECT (i // 2048) % 20 AS k, sum(i) FROM range(5000000) r(i) GROUP BY k ORDER BY k LIMIT 1
+----
+0	629655081984
 
 query II
 EXPLAIN ANALYZE SELECT (i // 2048) % 20 AS k, sum(i) FROM range(1000000) r(i) GROUP BY k ORDER BY k LIMIT 1
