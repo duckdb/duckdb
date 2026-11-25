@@ -497,6 +497,24 @@ TEST_CASE("Stable C++API: DECIMAL Values of a runtime width and scale", "[cpp_ap
 	REQUIRE(huge_read.value.lower == 0);
 	REQUIRE(huge_read.value.upper == 1);
 
+	// Widths above 38 are BIGNUM-backed, and the width is any uint32_t, not capped at 255.
+	auto wide = Value::CreateDecimal(factory, int128_t {static_cast<uint64_t>(-12345), -1}, 300, 260);
+	REQUIRE(wide.GetLogicalType().ToText() == "DECIMAL(300,260)");
+	REQUIRE(wide.ToText() == "-0." + std::string(255, '0') + "12345");
+	auto wide_read = wide.GetDecimal();
+	REQUIRE(wide_read.width == 300);
+	REQUIRE(wide_read.scale == 260);
+	REQUIRE(wide_read.value.lower == static_cast<uint64_t>(-12345));
+	REQUIRE(wide_read.value.upper == -1);
+	// A backing integer beyond 128 bits is read exactly as a bignum_t.
+	auto beyond_chunk = conn.Execute("SELECT '-1" + std::string(42, '0') + ".00'::DECIMAL(50, 2)").FetchChunk();
+	auto beyond = beyond_chunk.GetVector(0).GetValue(0);
+	REQUIRE_THROWS_AS(beyond.GetDecimal(), Exception);
+	auto beyond_backing = beyond.Get<bignum_t>().Decode();
+	REQUIRE(beyond_backing.is_negative);
+	// the backing integer 10^44 needs 147 bits
+	REQUIRE(beyond_backing.magnitude.size() == 19);
+
 	// The same value as the typed constructor.
 	REQUIRE(Value::Create(factory, decimal_t<9, 3> {123456789}).GetDecimal().value.lower == 123456789);
 	// And from a query.

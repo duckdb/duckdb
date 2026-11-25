@@ -744,8 +744,8 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	duckdb_v2_hugeint_t scaled {1234, 0};
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &scaled, 4, 2, &narrow, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_hugeint_t read {};
-	uint8_t read_width = 0;
-	uint8_t read_scale = 0;
+	uint32_t read_width = 0;
+	uint32_t read_scale = 0;
 	REQUIRE(duckdb_v2_value_get_decimal(narrow, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(read.lower == 1234);
 	REQUIRE(read.upper == 0);
@@ -788,6 +788,24 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	REQUIRE(read_scale == 10);
 	duckdb_v2_value_destroy(&wide_value);
 
+	// Width and scale are the uint32_t of the engine: a width beyond 255 builds and reads back the same way.
+	duckdb_v2_hugeint_t negative_backing {static_cast<uint64_t>(-123456789012345ll), -1};
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &negative_backing, 1000, 300, &wide_value, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(wide_value) == "-0." + std::string(285, '0') + "123456789012345");
+	REQUIRE(duckdb_v2_value_get_logical_type(wide_value, &t, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(t) == "DECIMAL(1000,300)");
+	duckdb_v2_logical_type_destroy(&t);
+	REQUIRE(duckdb_v2_value_get_decimal(wide_value, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read.lower == static_cast<uint64_t>(-123456789012345ll));
+	REQUIRE(read.upper == -1);
+	REQUIRE(read_width == 1000);
+	REQUIRE(read_scale == 300);
+	duckdb_v2_value_destroy(&wide_value);
+	// the scale is checked against the width beyond 255 too
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 300, 301, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(out == nullptr);
+
 	// Beyond 128 bits value_get_decimal fails; the exact storage comes through value_get_blob + bignum_decode.
 	auto wide_type =
 	    MakeType(fx.factory, "decimal", nullptr, {MakeInt32Value(fx.factory, 60), MakeInt32Value(fx.factory, 1)});
@@ -798,6 +816,14 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	err = nullptr;
 	REQUIRE(duckdb_v2_value_get_decimal(huge_value, &read, &read_width, &read_scale, &err) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(err != nullptr);
+	// the error names the functions that read the value exactly
+	const char *message = nullptr;
+	idx_t message_length = 0;
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message, &message_length) == DUCKDB_V2_ERROR_NONE);
+	std::string message_text(message, message_length);
+	REQUIRE(message_text.find("DECIMAL(60,1)") != std::string::npos);
+	REQUIRE(message_text.find("duckdb_v2_value_get_blob") != std::string::npos);
+	REQUIRE(message_text.find("duckdb_v2_bignum_decode") != std::string::npos);
 	duckdb_v2_error_info_destroy(&err);
 	const char *storage = nullptr;
 	idx_t storage_length = 0;
