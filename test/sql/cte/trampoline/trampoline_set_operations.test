@@ -1,0 +1,66 @@
+# name: test/sql/cte/trampoline/trampoline_set_operations.test
+# description: EXCEPT and INTERSECT (ALL) in trampoline branches, uncorrelated and per outer row
+# group: [trampoline]
+
+statement ok
+CREATE TABLE o AS SELECT * FROM (VALUES (1), (2), (3)) v(k);
+
+statement ok
+CREATE TABLE s AS SELECT * FROM (VALUES (1), (1), (2), (4), (4)) v(x);
+
+# bag semantics: duplicates on both sides
+query I
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM (VALUES (1), (1), (1), (2), (3), (4)) v(x))
+	BRANCH 1: ((SELECT 0, n FROM t) EXCEPT ALL (SELECT 0, x FROM s))
+) SELECT list(n ORDER BY n) FROM t;
+----
+[1, 3]
+
+query I
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM (VALUES (1), (1), (1), (2), (3), (4)) v(x))
+	BRANCH 1: ((SELECT 0, n FROM t) INTERSECT ALL (SELECT 0, x FROM s))
+) SELECT list(n ORDER BY n) FROM t;
+----
+[1, 1, 2, 4]
+
+query I
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM (VALUES (1), (1), (1), (2), (3), (4)) v(x))
+	BRANCH 1: ((SELECT 0, n FROM t) EXCEPT (SELECT 0, x FROM s))
+) SELECT list(n ORDER BY n) FROM t;
+----
+[3]
+
+# correlated: the right side does not read the wave, the left side anchors the branch, and the set operation
+# runs per outer row
+query II
+SELECT k, list(n ORDER BY n) FROM o, LATERAL (WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM s WHERE x <= o.k + 1)
+	BRANCH 1: ((SELECT 0, n FROM t) EXCEPT ALL (SELECT 0, x FROM s WHERE x = o.k))
+) SELECT n FROM t) GROUP BY k ORDER BY k;
+----
+1	[2]
+2	[1, 1]
+3	[1, 1, 2, 4, 4]
+
+query II
+SELECT k, list(n ORDER BY n) FROM o, LATERAL (WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM s WHERE x <= o.k + 1)
+	BRANCH 1: ((SELECT 0, n FROM t) INTERSECT ALL (SELECT 0, x FROM s WHERE x >= o.k))
+) SELECT n FROM t) GROUP BY k ORDER BY k;
+----
+1	[1, 1, 2]
+2	[2]
+3	[4, 4]
+
+query II
+SELECT k, list(n ORDER BY n) FROM o, LATERAL (WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, x FROM s WHERE x <= o.k + 1)
+	BRANCH 1: ((SELECT 0, n FROM t) EXCEPT (SELECT 0, x FROM s WHERE x = o.k))
+) SELECT n FROM t) GROUP BY k ORDER BY k;
+----
+1	[2]
+2	[1]
+3	[1, 2, 4]
