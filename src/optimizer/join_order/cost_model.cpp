@@ -20,7 +20,10 @@ double CostModel::ComputeCost(const DPJoinNode &left, const DPJoinNode &right,
 	auto input_cost = join_operator && join_operator->type == JoinOrderOperatorType::LEFT
 	                      ? cardinality_estimator.EstimateCardinalityForCost(right.set).GetDouble()
 	                      : 0;
-	auto output_rows = cardinality_estimator.EstimateCardinalityForCost(output).GetDouble();
+	// Keep fractional INNER estimates distinct when comparing join orders.
+	auto output_rows = !join_operator || join_operator->type == JoinOrderOperatorType::INNER
+	                       ? cardinality_estimator.EstimateCardinality(output).GetDouble()
+	                       : cardinality_estimator.EstimateCardinalityForCost(output).GetDouble();
 	return left.cost + right.cost + input_cost + output_rows;
 }
 

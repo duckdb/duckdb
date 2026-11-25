@@ -85,6 +85,30 @@ static JoinOrderOperator &AddOperator(vector<unique_ptr<JoinOrderOperator>> &ope
 	return *operators.back();
 }
 
+TEST_CASE("INNER join costs distinguish estimates below one", "[optimizer][relation_statistics]") {
+	for (double rows : {0.25, 0.75}) {
+		JoinRelationSetManager sets;
+		auto &left = sets.GetJoinRelation(RelationIndex(0));
+		auto &right = sets.GetJoinRelation(RelationIndex(1));
+		auto &output = sets.Union(left, right);
+		vector<unique_ptr<JoinOrderOperator>> operators;
+		auto &inner = AddOperator(operators, sets, left, right, JoinOrderOperatorType::INNER);
+		JoinPredicateModel predicates;
+		CardinalityEstimator estimator(sets, predicates);
+		auto left_stats = CreateStats({ColumnBinding(TableIndex(0), ProjectionIndex(0))}, {1}, 1);
+		left_stats.cardinality = rows;
+		left_stats.columns[0].current_domain.distinct_count = rows;
+		estimator.Initialize({left_stats, CreateStats({ColumnBinding(TableIndex(1), ProjectionIndex(0))}, {1}, 1)},
+		                     operators);
+		CostModel costs(estimator);
+		DPJoinNode lhs(left), rhs(right);
+		lhs.cost = 2;
+		rhs.cost = 3;
+		REQUIRE(costs.ComputeCost(lhs, rhs, &inner, output) == Approx(5 + rows));
+		REQUIRE(costs.ComputeCost(lhs, rhs, nullptr, output) == Approx(5 + rows));
+	}
+}
+
 static unique_ptr<LogicalOperator> CreateProjectedDummy(TableIndex input_index, TableIndex projection_index) {
 	auto dummy = make_uniq<LogicalDummyScan>(input_index);
 	vector<unique_ptr<Expression>> expressions;
