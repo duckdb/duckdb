@@ -336,6 +336,10 @@ public:
 		    states.states[1] == CSVState::RECORD_SEPARATOR || states.states[1] == CSVState::CARRIAGE_RETURN;
 		return current_inside || (previous_inside && record_end);
 	}
+	//! Whether the file ended inside an open quote, also one the embedded quote toggle opened with its last byte
+	inline bool FileEndsInsideQuotes() const {
+		return states.IsQuotedCurrent() || (embedded_quote_fields && states.IsState(CSVState::FIELD_QUOTE));
+	}
 	//! Reads the field a record end inside an open quote left in progress as NULL
 	void AddUnterminatedQuoteNull();
 	//! Routes a quoted field through the embedded quote text pass when that pass could change it

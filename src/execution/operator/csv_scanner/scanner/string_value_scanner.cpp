@@ -1079,7 +1079,7 @@ bool StringValueResult::AddRowWithoutValue(StringValueResult &result, const idx_
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	if (result.quoted) {
+	if (result.quoted || result.FileEndsInsideQuotes()) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	} else {
 		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
@@ -1822,7 +1822,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		j++;
 	}
 	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-	    states.IsQuotedCurrent() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+	    result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
 		// the file ended inside a quoted value, recorded before the value itself is added, while line records
 		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
@@ -2045,7 +2045,7 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
 		lines_read++;
-	} else if (states.IsQuotedCurrent() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+	} else if (result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
 		// Unterminated quote, while line records read the field left open as NULL instead
 		LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 		result.current_line_position.begin = result.current_line_position.end;

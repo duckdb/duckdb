@@ -169,6 +169,61 @@ SELECT x, replace(y, chr(10), '<LF>') FROM read_csv('{TEST_DIR}/rule_toggle_nl.c
 1	a"<LF>b
 2	c
 
+# a toggle section left open at the end of the file is an unterminated quote, with or without a final line break
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"')) TO '{TEST_DIR}/rule_toggle_eof.csv' (FORMAT BLOB);
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"' || chr(10))) TO '{TEST_DIR}/rule_toggle_eof_nl.csv' (FORMAT BLOB);
+
+foreach embedded_quotes toggle doubled_toggle
+
+foreach file rule_toggle_eof.csv rule_toggle_eof_nl.csv
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}');
+----
+Value with unterminated quote found
+
+foreach parallel true false
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', ignore_errors=true, parallel={parallel});
+----
+x
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/{file}', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', unterminated_quote='null_at_line_end', parallel={parallel});
+----
+x
+NULL
+
+endloop
+
+endloop
+
+# read as a value the field left open keeps its text
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='{embedded_quotes}', unterminated_quote='value');
+----
+x
+a
+
+endloop
+
+# the same when the field left open is read over the last two buffers
+statement ok
+COPY (SELECT encode('xxxxxx' || chr(10) || 'ab"')) TO '{TEST_DIR}/rule_toggle_eof_buffers.csv' (FORMAT BLOB);
+
+foreach parallel true false
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_eof_buffers.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', buffer_size=8, parallel={parallel});
+----
+Value with unterminated quote found
+
+endloop
+
 # the space delimiter keeps its meaning under the field quote rules
 statement ok
 COPY (SELECT 'a  b' AS line) TO '{TEST_DIR}/rule_space_delim.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
