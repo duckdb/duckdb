@@ -2,7 +2,7 @@
 # description: A filter over shredded VARIANT strings whose statistics upper bound pads a truncated character
 # group: [variant]
 
-load __TEST_DIR__/shredded_bound.db
+load {TEST_DIR}/shredded_bound.db
 
 statement ok
 SET variant_minimum_shredding_size = 0;

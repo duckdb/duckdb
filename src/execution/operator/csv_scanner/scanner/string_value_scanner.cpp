@@ -1889,12 +1889,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 						result.chunk_col_id++;
 						cast_errored = true;
 					} else {
-						value = RemoveEscape(str_ptr, length,
-						                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						                     false,
-						                     result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
-						                     result.parse_chunk.data[result.chunk_col_id]);
+						value = RemoveEscape(
+						    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						    state_machine->dialect_options.state_machine_options.quote.GetValue(), false,
+						    result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
+						    result.parse_chunk.data[result.chunk_col_id]);
 					}
 				}
 			}
