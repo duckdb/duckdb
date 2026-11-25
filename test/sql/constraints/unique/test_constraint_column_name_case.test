@@ -1,0 +1,20 @@
+# name: test/sql/constraints/unique/test_constraint_column_name_case.test
+# description: Report declared column names for table-level primary key and unique constraints
+# group: [unique]
+
+statement ok
+CREATE TABLE constraint_column_name_case (
+    id INTEGER,
+    DisplayName VARCHAR,
+    Code INTEGER,
+    PRIMARY KEY (ID, displayname),
+    UNIQUE (CODE)
+);
+
+query TT rowsort
+SELECT constraint_type, constraint_column_names[1] || COALESCE(', ' || constraint_column_names[2], '')
+FROM duckdb_constraints()
+WHERE table_name = 'constraint_column_name_case' AND constraint_type IN ('PRIMARY KEY', 'UNIQUE');
+----
+PRIMARY KEY	id, DisplayName
+UNIQUE	Code

@@ -167,7 +167,9 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 		if (unique.HasIndex()) {
 			result.column_indexes.push_back(unique.GetIndex());
 		} else {
-			result.column_names = unique.GetColumnNames();
+			for (auto column_name : unique.GetColumnNames()) {
+				result.column_indexes.push_back(table.GetColumnIndex(column_name));
+			}
 		}
 		break;
 	}
