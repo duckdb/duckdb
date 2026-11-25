@@ -259,7 +259,7 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		info.name = GenerateInternalName("__duckdb_reader_");
 		info.on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
-		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
+		AttachOptions attach_options(context.GetContext(), attach_kv, AccessMode::READ_ONLY);
 		attach_options.visibility = AttachVisibility::HIDDEN;
 
 		auto attached = db_manager.AttachDatabase(context, info, attach_options);
@@ -528,7 +528,7 @@ void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
 	});
 }
 
-static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<FunctionData>) {
+static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<const FunctionData>) {
 	vector<column_t> result;
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
 	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);

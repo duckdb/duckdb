@@ -1,6 +1,7 @@
 #include "include/icu-datefunc.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -18,7 +19,10 @@ ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_se
 	InitCalendar();
 }
 
-ICUDateFunc::BindData::BindData(ClientContext &context) : cal_setting("gregorian") {
+ICUDateFunc::BindData::BindData(ClientContext &context) : BindData(context.GetContext()) {
+}
+
+ICUDateFunc::BindData::BindData(Context &context) : cal_setting("gregorian") {
 	context.TryGetCurrentSetting("TimeZone", tz_setting);
 	context.TryGetCurrentSetting("Calendar", cal_setting);
 
@@ -115,8 +119,9 @@ bool ICUDateFunc::CalendarCacheState::TrySetTimeZone(Calendar *calendar, const s
 	return true;
 }
 
-unique_ptr<FunctionLocalState>
-ICUDateFunc::InitCalendarCache(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+unique_ptr<FunctionLocalState> ICUDateFunc::InitCalendarCache(ExpressionState &state,
+                                                              const BoundFunctionExpression &expr,
+                                                              optional_ptr<const FunctionData> bind_data) {
 	auto &info = bind_data->Cast<BindData>();
 	return make_uniq<CalendarCacheState>(*info.calendar);
 }

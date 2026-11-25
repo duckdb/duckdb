@@ -109,6 +109,12 @@
         "name": "distinct_validity",
         "type": "TupleDataValidityType",
         "default": "TupleDataValidityType::CAN_HAVE_NULL_VALUES"
+      },
+      {
+        "id": 208,
+        "name": "preserve_input_order",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": [
@@ -131,10 +137,17 @@
         "id": 201,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "partition_limit",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
-      "window_index"
+      "window_index",
+      "partition_limit"
     ]
   },
   {
@@ -236,6 +249,27 @@
       "orders",
       "limit",
       "offset"
+    ]
+  },
+  {
+    "class": "LogicalTopKeyFilter",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TOP_KEY_FILTER",
+    "members": [
+      {
+        "id": 200,
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      },
+      {
+        "id": 201,
+        "name": "limit",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": [
+      "orders",
+      "limit"
     ]
   },
   {
@@ -551,12 +585,18 @@
         "id": 208,
         "name": "predicate",
         "type": "Expression*",
-        "status": "deleted"
+        "status": "read_only",
+        "deserialize_skip_assign": true
       }
     ],
     "constructor": [
       "join_type",
       "type"
+    ],
+    "finalize_deserialization": [
+      "if (predicate) {",
+      "\tresult->conditions.emplace_back(std::move(predicate));",
+      "}"
     ]
   },
   {
@@ -636,6 +676,17 @@
         "name": "allow_out_of_order",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "comparison_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 205,
+        "name": "correlated_column_count",
+        "type": "idx_t",
+        "default": "0"
       }
     ],
     "constructor": [
@@ -935,12 +986,6 @@
         "id": 208,
         "name": "old_row_columns",
         "type": "vector<idx_t>"
-      },
-      {
-        "id": 209,
-        "name": "row_id_handling",
-        "type": "RowIdHandling",
-        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [

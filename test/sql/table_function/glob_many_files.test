@@ -1,0 +1,35 @@
+# name: test/sql/table_function/glob_many_files.test
+# description: Globs that match more files than fit in a single vector
+# group: [table_function]
+
+statement ok
+COPY (SELECT i, i AS j FROM range(3000) t(i)) TO '{TEST_DIR}/glob_many_files' (FORMAT csv, PARTITION_BY i);
+
+query II
+SELECT count(*), count(DISTINCT file) FROM glob('{TEST_DIR}/glob_many_files/**/*.csv');
+----
+3000	3000
+
+# the files of a glob are returned in order, also across vectors
+query I
+SELECT count(*) FROM (SELECT file, row_number() OVER () AS rn FROM glob('{TEST_DIR}/glob_many_files/*/*.csv')) t1
+JOIN (SELECT file, row_number() OVER (ORDER BY file) AS rn FROM glob('{TEST_DIR}/glob_many_files/*/*.csv')) t2
+USING (rn) WHERE t1.file <> t2.file;
+----
+0
+
+query II
+SELECT count(*), sum(i) FROM read_csv('{TEST_DIR}/glob_many_files/**/*.csv', hive_partitioning = true);
+----
+3000	4498500
+
+# a glob that matches nothing within a list of globs
+query I
+SELECT count(*) FROM glob(['{TEST_DIR}/glob_many_files/i=1/*.csv', '{TEST_DIR}/glob_many_files/i=nothing*/*.csv', '{TEST_DIR}/glob_many_files/i=2/*.csv']);
+----
+2
+
+statement error
+SELECT count(*) FROM read_csv(['{TEST_DIR}/glob_many_files/i=1/*.csv', '{TEST_DIR}/glob_many_files/i=nothing*/*.csv']);
+----
+No files found that match the pattern

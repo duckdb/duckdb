@@ -1,0 +1,45 @@
+# name: test/sql/function/generic/least_greatest_float.test
+# description: Test LEAST/GREATEST on FLOAT
+# group: [generic]
+
+query II
+SELECT LEAST(-1.5::FLOAT, 2.25::FLOAT, -3.75::FLOAT), GREATEST(-1.5::FLOAT, 2.25::FLOAT, -3.75::FLOAT)
+----
+-3.75	2.25
+
+query III
+SELECT LEAST(NULL, 1.5::FLOAT), GREATEST(1.5::FLOAT, NULL, -2.5::FLOAT), LEAST(NULL::FLOAT, NULL::FLOAT)
+----
+1.5	1.5	NULL
+
+# NaN is greater than any other value, including infinity
+query IIII
+SELECT GREATEST('nan'::FLOAT, 'inf'::FLOAT), LEAST('nan'::FLOAT, 'inf'::FLOAT), LEAST('-inf'::FLOAT, 'nan'::FLOAT), GREATEST('-inf'::FLOAT, 1::FLOAT)
+----
+nan	inf	-inf	1.0
+
+# -0.0 and 0.0 are equal: the first argument is returned, as for DOUBLE
+query IIII
+SELECT LEAST(-0.0::FLOAT, 0.0::FLOAT)::VARCHAR, LEAST(0.0::FLOAT, -0.0::FLOAT)::VARCHAR,
+       GREATEST(-0.0::FLOAT, 0.0::FLOAT)::VARCHAR, GREATEST(0.0::FLOAT, -0.0::FLOAT)::VARCHAR
+----
+-0.0	0.0	-0.0	0.0
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM (VALUES
+	(1.5::FLOAT, -1::FLOAT),
+	('nan'::FLOAT, NULL),
+	(NULL, 'inf'::FLOAT),
+	(-0.0::FLOAT, 'nan'::FLOAT),
+	('-inf'::FLOAT, 2.5::FLOAT)
+) v(f, g);
+
+query IIII
+SELECT LEAST(f, 0.0::FLOAT), GREATEST(f, 0.0::FLOAT), LEAST(f, g), GREATEST(f, g)
+FROM tbl
+----
+0.0	1.5	-1.0	1.5
+0.0	nan	nan	nan
+0.0	0.0	inf	inf
+-0.0	-0.0	-0.0	nan
+-inf	0.0	-inf	2.5

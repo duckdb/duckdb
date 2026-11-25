@@ -194,7 +194,7 @@ SELECT count(*) FROM t;
 
 # the functions stay consistent within a query, so the optimizer keeps rewriting and pruning their filters
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
+SET explain_output = 'OPTIMIZED_ONLY';
 
 statement ok
 CREATE TABLE days AS SELECT TIMESTAMPTZ '2000-01-01 00:00:00+00' + i * INTERVAL '1 day' AS ts FROM range(10000) r(i);
@@ -227,11 +227,11 @@ statement ok
 CREATE TABLE pruning.days AS SELECT TIMESTAMPTZ '2000-01-01 00:00:00+00' + i * INTERVAL '1 day' AS ts FROM range(8192) r(i);
 
 query I
-SELECT count(*) FROM pruning.days WHERE date_diff('day', TIMESTAMPTZ '2000-01-01 00:00:00+00', ts) = 3000;
+SELECT count(*) FROM pruning.days WHERE date_diff('second', TIMESTAMPTZ '2000-01-01 00:00:00+00', ts) = 259200000;
 ----
 1
 
 query II
-EXPLAIN ANALYZE SELECT ts FROM pruning.days WHERE date_diff('day', TIMESTAMPTZ '2000-01-01 00:00:00+00', ts) = 3000;
+EXPLAIN ANALYZE SELECT ts FROM pruning.days WHERE date_diff('second', TIMESTAMPTZ '2000-01-01 00:00:00+00', ts) = 259200000;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 4.*

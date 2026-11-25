@@ -63,6 +63,8 @@ struct ScheduleEventData {
 	//! The schedule ResolveExternalInputs validated, reused so the runtime-filter edges the analysis saw are
 	//! exactly the edges that run (nullptr when nothing needed resolution or for reschedules).
 	unique_ptr<PipelineSchedule> resolved_schedule;
+	//! The events without dependencies, which the caller schedules
+	vector<shared_ptr<Event>> ready_events;
 };
 
 static shared_ptr<Event> CreatePipelineScheduleEvent(const PipelineScheduleStage &stage, bool initial_schedule) {
@@ -124,22 +126,21 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	// verify that we have no cyclic dependencies
 	VerifyScheduledEvents(events);
 
-	// schedule the pipelines that do not have dependencies
+	// the events that do not have dependencies start the schedule
 	for (auto &event : events) {
 		if (!event->HasDependencies()) {
-			event->Schedule();
-			if (!event->HasTasks() && !event->IsFinished() && event->AutoFinishWithoutTasks()) {
-				event->Finish();
-			}
+			event_data.ready_events.push_back(event);
 		}
 	}
 }
 
-void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
-                              unique_ptr<PipelineSchedule> resolved_schedule) {
-	ScheduleEventData event_data(meta_pipelines, events, true);
-	event_data.resolved_schedule = std::move(resolved_schedule);
-	ScheduleEventsInternal(event_data);
+void Executor::ScheduleReadyEvents(const vector<shared_ptr<Event>> &ready_events) {
+	for (auto &event : ready_events) {
+		event->Schedule();
+		if (!event->HasTasks() && !event->IsFinished() && event->AutoFinishWithoutTasks()) {
+			event->Finish();
+		}
+	}
 }
 
 void Executor::VerifyScheduledEvents(const vector<shared_ptr<Event>> &events) {
@@ -205,6 +206,7 @@ void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipel
                                    vector<shared_ptr<Event>> &events_p) {
 	ScheduleEventData event_data(pipelines_p, events_p, false);
 	ScheduleEventsInternal(event_data);
+	ScheduleReadyEvents(event_data.ready_events);
 }
 
 bool Executor::NextExecutor() {
@@ -257,6 +259,8 @@ void Executor::Initialize(PhysicalOperator &plan) {
 
 void Executor::InitializeInternal(PhysicalOperator &plan) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
+	vector<shared_ptr<MetaPipeline>> to_schedule;
+	ScheduleEventData event_data(to_schedule, events, true);
 	{
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = &plan;
@@ -276,11 +280,10 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		root_pipeline->Build(*physical_plan);
 
 		// Resolve graph-dependent input modes after every pipeline and dependency has been constructed.
-		vector<shared_ptr<MetaPipeline>> to_schedule;
 		root_pipeline->GetMetaPipelines(to_schedule, true, true);
 		// Model the runtime-filter ordering edges under the same condition ScheduleRuntimeFilters uses below:
 		// this is the initial schedule, so only recursive CTEs disable them.
-		auto resolved_schedule = state.ResolveExternalInputs(to_schedule, recursive_ctes.empty());
+		event_data.resolved_schedule = state.ResolveExternalInputs(to_schedule, recursive_ctes.empty());
 
 		profiler->Initialize(plan);
 		root_pipeline->Ready();
@@ -301,10 +304,13 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		// collect all pipelines from the root pipelines (recursively) for the progress bar and verify them
 		root_pipeline->GetPipelines(pipelines, true);
 
-		// finally, verify and schedule
+		// finally, verify the pipelines and create the events
 		VerifyPipelines();
-		ScheduleEvents(to_schedule, std::move(resolved_schedule));
+		ScheduleEventsInternal(event_data);
 	}
+	// scheduling creates tasks, and the destructor of a task takes executor_lock: a task destroyed because its
+	// scheduling fails must not find the lock held by this thread
+	ScheduleReadyEvents(event_data.ready_events);
 }
 
 void Executor::CancelTasks() {
@@ -484,7 +490,11 @@ QueryResultState Executor::ExecuteTask() {
 		}
 		if (task) {
 			// partially process the task
-			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
+			TaskExecutionResult result;
+			{
+				PipelineTask::PartialChunkBound bound(PartialChunkCount());
+				result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
+			}
 			if (result == TaskExecutionResult::TASK_BLOCKED) {
 				task->Deschedule();
 				task.reset();
@@ -715,6 +725,21 @@ bool Executor::ResultStoreCanPark() {
 	auto buffer = GetResultBuffer();
 	// The store was settled on retained at submission: producers append and never park
 	return !buffer || buffer->Lifetime() != ResultLifetime::RETAINED;
+}
+
+idx_t Executor::PartialChunkCount() {
+	// A thread that runs tasks here while worker threads produce a streaming result is that result's consumer: the
+	// producers park as soon as the buffer is full, and only its pop frees them. When a unit nearly fills the buffer,
+	// one unit fits at a time, so after every pop the consumer reschedules a producer, finds the buffer empty and
+	// takes a task - often the one it just rescheduled, before the woken worker gets to it. A full slice then stalls
+	// the whole pipeline for its length while every worker finishes its unit and parks. The consumer therefore runs
+	// one chunk per slice and returns to its buffer. A thread with no workers to wait for keeps the full slice:
+	// NumberOfThreads counts the external threads too, so only a count above them means workers exist
+	auto external_threads = Settings::Get<ExternalThreadsSetting>(context);
+	if (TaskScheduler::GetScheduler(context).NumberOfThreads() > external_threads && ResultStoreCanPark()) {
+		return 1;
+	}
+	return PipelineTask::PARTIAL_CHUNK_COUNT;
 }
 
 bool Executor::ResultCollectorIsBlocked() {

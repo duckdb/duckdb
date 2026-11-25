@@ -73,6 +73,7 @@ public:
 	using RightEntry = std::pair<idx_t, idx_t>;
 
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
+	enum class LeafPart { LEFT, RIGHT };
 
 	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, unique_ptr<WindowCursor> cursor,
 	                      const ValidityArray &filter_mask);
@@ -103,7 +104,7 @@ protected:
 	void EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
 	                         const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part);
 	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
-	                    const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part);
+	                    const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part, LeafPart leaf_part);
 
 	static inline const idx_t *FrameBegins(const idx_t *begins, const idx_t *ends, const idx_t *bounds,
 	                                       FramePart frame_part) {
@@ -149,12 +150,15 @@ public:
 
 class WindowSegmentTreeLocalState : public WindowAggregatorLocalState {
 public:
-	explicit WindowSegmentTreeLocalState(ExecutionContext &context) : WindowAggregatorLocalState(context) {
+	explicit WindowSegmentTreeLocalState(ExecutionContext &context)
+	    : WindowAggregatorLocalState(context), result_arena(BufferAllocator::Get(context.client)) {
 	}
 
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 	void Evaluate(ExecutionContext &context, const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds,
 	              Vector &result, idx_t count, idx_t row_idx);
+	//! The arena of the result parts, reset per batch
+	ArenaAllocator result_arena;
 	//! The left (default) segment tree part
 	unique_ptr<WindowSegmentTreePart> part;
 	//! The right segment tree part (for EXCLUDE)
@@ -496,8 +500,10 @@ void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const Wind
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
 	if (!part) {
-		part = make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggr, cursor->Copy(), gtstate.filter_mask);
+		part = make_uniq<WindowSegmentTreePart>(result_arena, gtstate.aggr, cursor->Copy(), gtstate.filter_mask);
 	}
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	result_arena.Reset();
 
 	if (gtstate.aggregator.exclude_mode != WindowExcludeMode::NO_OTHER) {
 		// If we exclude the current row, then both left and right need to contain it.
@@ -536,17 +542,15 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, c
 	Initialize(count);
 
 	if (order_insensitive) {
-		//	First pass: aggregate the segment tree nodes with sharing
+		// Shared states must contain only tree nodes, before either set of leaves is added.
 		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
-
-		//	Second pass: aggregate the ragged leaves
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::FULL);
-	} else {
-		//	Evaluate leaves in order
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::LEFT);
-		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
-		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::RIGHT);
 	}
+	// Process each side in a separate pass so the cursor does not seek between both frame ends for every row.
+	EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, LeafPart::LEFT);
+	if (!order_insensitive) {
+		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
+	}
+	EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, LeafPart::RIGHT);
 }
 
 void WindowSegmentTreePart::Initialize(idx_t count) {
@@ -658,19 +662,17 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalSta
 
 void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
                                            const idx_t *ends, const idx_t *bounds, idx_t count, idx_t row_idx,
-                                           FramePart frame_part, FramePart leaf_part) {
+                                           FramePart frame_part, LeafPart leaf_part) {
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 
-	// For order-sensitive aggregates, we have to process the ragged leaves in two pieces.
-	// The left side have to be added before the main tree followed by the ragged right sides.
-	// The current row is the leftmost value of the right hand side.
-	const bool compute_left = leaf_part != FramePart::RIGHT;
-	const bool compute_right = leaf_part != FramePart::LEFT;
+	// Process the ragged leaves one side at a time.
+	// Order-sensitive aggregates add left leaves before the tree and right leaves after it.
+	const bool compute_left = leaf_part == LeafPart::LEFT;
+	const bool compute_right = leaf_part == LeafPart::RIGHT;
 	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
-	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
-	// current row
+	// EXCLUDE TIES adds the current row before the right frame part's other leaves.
 	const bool add_curr_row = compute_left && frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
 
 	// We need the full range of the frame to clamp

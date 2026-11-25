@@ -5,6 +5,8 @@
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/logical_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -26,7 +28,7 @@ namespace {
 //  - the remaining bind-time-only ids (SQLNULL, UNKNOWN) which only exist
 //    inside the planner / UDF binding paths,
 //  - parameterised types (DECIMAL, LIST, STRUCT, TUPLE, MAP, ARRAY, UNION,
-//    ENUM, VARIANT, GEOMETRY), which need parameters to bind.
+//    ENUM, VARIANT, GEOMETRY, GEOGRAPHY), which need parameters to bind.
 bool IsPrimitiveCreatable(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::ANY:
@@ -140,11 +142,13 @@ LogicalType BindBuiltinTypeV2(const QualifiedName &name, const vector<TypeArgume
 
 // Binds a type by name in the factory's scope: the client's catalog, or the built-in types only.
 LogicalType BindTypeV2(CV2Factory &factory, const QualifiedName &name, const vector<TypeArgument> &args) {
-	if (!factory.TryGetClientContext()) {
-		return BindBuiltinTypeV2(name, args);
-	}
 	LogicalType result;
-	factory.WithTransaction([&](ClientContext &context) { result = BindTypeByNameV2(context, name, args); });
+	if (!factory.TryGetClientContext()) {
+		result = BindBuiltinTypeV2(name, args);
+	} else {
+		factory.WithTransaction([&](ClientContext &context) { result = BindTypeByNameV2(context, name, args); });
+	}
+	CheckDecimalWidthV2(factory, result);
 	return result;
 }
 
@@ -168,6 +172,7 @@ idx_t TypeParamCount(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return StringType::GetCollation(type).empty() ? 0 : 1;
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return GeoType::HasCRS(type) ? 1 : 0;
 	default:
 		return 0;
@@ -181,8 +186,7 @@ idx_t TypeParamCount(const LogicalType &type) {
 Value TypeParamValue(const LogicalType &type, idx_t index, std::string_view &out_name) {
 	switch (type.id()) {
 	case LogicalTypeId::DECIMAL:
-		return index == 0 ? Value::UTINYINT(NumericCast<uint8_t>(DecimalType::GetWidth(type)))
-		                  : Value::UTINYINT(NumericCast<uint8_t>(DecimalType::GetScale(type)));
+		return index == 0 ? Value::UINTEGER(DecimalType::GetWidth(type)) : Value::UINTEGER(DecimalType::GetScale(type));
 	case LogicalTypeId::LIST:
 		return Value::TYPE(ListType::GetChildType(type));
 	case LogicalTypeId::ARRAY:
@@ -208,6 +212,7 @@ Value TypeParamValue(const LogicalType &type, idx_t index, std::string_view &out
 		out_name = "collation";
 		return Value(StringType::GetCollation(type));
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return Value(GeoType::GetCRS(type).GetDefinition());
 	default:
 		throw InternalException("TypeParamValue called for a kind without parameters");
@@ -215,6 +220,27 @@ Value TypeParamValue(const LogicalType &type, idx_t index, std::string_view &out
 }
 
 } // anonymous namespace
+
+void CheckDecimalWidthV2(CV2Factory &factory, const LogicalType &type) {
+	auto context = factory.TryGetClientContext();
+	const uint32_t limit = context ? DecimalWidthLimit::FromSetting(context).width : Decimal::DEFAULT_MAX_WIDTH;
+	TypeVisitor::Contains(type, [&](const LogicalType &child) {
+		if (child.id() != LogicalTypeId::DECIMAL || DecimalType::GetWidth(child) <= limit) {
+			return false;
+		}
+		if (context) {
+			throw InvalidInputException(
+			    "DECIMAL width %u exceeds the maximum DECIMAL width of %u (SET max_decimal_width to allow wider "
+			    "decimals)",
+			    DecimalType::GetWidth(child), limit);
+		}
+		throw InvalidInputException(
+		    "DECIMAL width %u exceeds the maximum DECIMAL width of %u: a factory without a connection creates decimals "
+		    "up to the default of max_decimal_width, use the factory of a connection that raised the setting for wider "
+		    "decimals",
+		    DecimalType::GetWidth(child), limit);
+	});
+}
 
 auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType {
 	D_ASSERT(!types.empty());
@@ -288,7 +314,7 @@ static void CreateLogicalTypeFromIdV2(CV2Factory &factory, DUCKDB_V2_LOGICAL_TYP
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(duckdb_v2_factory_handle factory,
-                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char **param_names,
+                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char *const *param_names,
                                                       const idx_t *param_names_lengths,
                                                       const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                       duckdb_v2_logical_type_handle *out_type,
@@ -308,13 +334,14 @@ static void CreateLogicalTypeFromTextV2(CV2Factory &factory, std::string_view te
 	*out_type = nullptr;
 	// Parse and bind errors propagate.
 	auto string = duckdb::string(text);
-	if (!factory.TryGetClientContext()) {
-		*out_type = Convert(duckdb::TypeManager::Get(factory.GetDatabase()).ParseLogicalType(string));
-		return;
-	}
 	duckdb::LogicalType parsed;
-	factory.WithTransaction(
-	    [&](duckdb::ClientContext &context) { parsed = duckdb::TransformStringToLogicalType(string, context); });
+	if (!factory.TryGetClientContext()) {
+		parsed = duckdb::TypeManager::Get(factory.GetDatabase()).ParseLogicalType(string);
+	} else {
+		factory.WithTransaction(
+		    [&](duckdb::ClientContext &context) { parsed = duckdb::TransformStringToLogicalType(string, context); });
+	}
+	CheckDecimalWidthV2(factory, parsed);
 	*out_type = Convert(std::move(parsed));
 }
 
@@ -343,7 +370,8 @@ static void CreateLogicalTypeFromArgsV2(CV2Factory &factory, duckdb_v2_qname_han
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_name(duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name,
-                                                        const char **param_names, const idx_t *param_names_lengths,
+                                                        const char *const *param_names,
+                                                        const idx_t *param_names_lengths,
                                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                         duckdb_v2_logical_type_handle *out_type,
                                                         duckdb_v2_error_info_handle *err) {

@@ -31,8 +31,8 @@ bool WindowRangeCast::Capture(const Expression &expression, const Expression &op
 		if (!BoundCastExpression::HasValidBindData(cast)) {
 			return false;
 		}
-		casts.push_back({BoundCastExpression::SourceType(cast), cast.GetReturnType(),
-		                 BoundCastExpression::IsTryCast(cast), BoundCastExpression::IsDefaultCast(cast)});
+		casts.push_back(
+		    {BoundCastExpression::SourceType(cast), cast.GetReturnType(), BoundCastExpression::IsTryCast(cast)});
 		current = &BoundCastExpression::Child(cast);
 	}
 	return true;
@@ -49,8 +49,7 @@ optional_ptr<const Expression> WindowRangeCast::Match(const Expression &expressi
 		if (!BoundCastExpression::HasValidBindData(cast) ||
 		    !BoundCastExpression::SourceType(cast).EqualsIncludingCollation(origin.source_type) ||
 		    !cast.GetReturnType().EqualsIncludingCollation(origin.target_type) ||
-		    BoundCastExpression::IsTryCast(cast) != origin.try_cast ||
-		    BoundCastExpression::IsDefaultCast(cast) != origin.default_cast) {
+		    BoundCastExpression::IsTryCast(cast) != origin.try_cast) {
 			return nullptr;
 		}
 		current = &BoundCastExpression::Child(cast);
@@ -114,7 +113,10 @@ void WindowRangeCast::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "source_type", source_type);
 	serializer.WriteProperty(101, "target_type", target_type);
 	serializer.WriteProperty(102, "try_cast", try_cast);
-	serializer.WriteProperty(103, "default_cast", default_cast);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		// readers before v2.1.0 require the removed default-cast flag
+		serializer.WriteProperty(103, "default_cast", false);
+	}
 }
 
 WindowRangeCast WindowRangeCast::Deserialize(Deserializer &deserializer) {
@@ -122,7 +124,7 @@ WindowRangeCast WindowRangeCast::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty(100, "source_type", result.source_type);
 	deserializer.ReadProperty(101, "target_type", result.target_type);
 	deserializer.ReadProperty(102, "try_cast", result.try_cast);
-	deserializer.ReadProperty(103, "default_cast", result.default_cast);
+	deserializer.ReadDeletedProperty<bool>(103, "default_cast");
 	return result;
 }
 

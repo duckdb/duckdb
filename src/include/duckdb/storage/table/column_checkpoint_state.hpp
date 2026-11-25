@@ -18,11 +18,12 @@ namespace duckdb {
 class ColumnData;
 class DatabaseInstance;
 class RowGroup;
+class Context;
 class PartialBlockManager;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
+	ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column, Context &context,
 	                      PartialBlockManager &partial_block_manager);
 	virtual ~ColumnCheckpointState();
 
@@ -32,6 +33,8 @@ struct ColumnCheckpointState {
 	unique_ptr<BaseStatistics> global_stats;
 
 protected:
+	//! The context to attribute the checkpoint IO to
+	Context &context;
 	PartialBlockManager &partial_block_manager;
 	shared_ptr<ColumnData> result_column;
 
@@ -51,6 +54,9 @@ public:
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
+	}
+	Context &GetContext() {
+		return context;
 	}
 
 public:

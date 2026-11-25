@@ -726,39 +726,6 @@ unique_ptr<MultiFileList> FileSystem::GlobFilesExtended(const string &path, cons
 	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
-void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
-	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
-}
-
-void FileSystem::UnregisterSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
-}
-
-void FileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
-	throw NotImplementedException("%s: Can't register a compression filesystem on a non-virtual file system",
-	                              GetName());
-}
-
-unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
-}
-
-void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
-	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
-}
-
-bool FileSystem::SubSystemIsDisabled(const string &name) {
-	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
-}
-
-bool FileSystem::IsDisabledForPath(const string &path) {
-	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
-}
-
-vector<string> FileSystem::ListSubSystems() {
-	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
-}
-
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }

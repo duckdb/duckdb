@@ -8,46 +8,63 @@
 
 #pragma once
 
-#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/planner/column_binding.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 class JoinElimination;
-class PipelineInfo;
-
-struct DistinctGroupRef {
-	column_binding_set_t distinct_group;
-	unordered_set<ProjectionIndex> ref_column_ids;
-};
 
 class PipelineInfo {
 public:
-	unique_ptr<LogicalOperator> root = nullptr;
+	//! The tables the operators above (and the conditions of the joins above) reference
 	unordered_set<TableIndex> ref_table_ids;
-	unordered_map<TableIndex, column_binding_set_t> distinct_groups;
-
-	// pushdown filter condition(ex in table scan operator),
-	// if have outer table columns then cannot elimination
-	bool has_filter = false;
-
-	optional_ptr<LogicalOperator> join_parent = nullptr;
-	idx_t join_index = 0;
+	//! The operators above return the same result when rows of this pipeline are repeated: an aggregate for which
+	//! LogicalAggregate::IgnoresDuplicates holds (DISTINCT, GROUP BY without aggregates, min / max, DISTINCT
+	//! aggregates) or the right side of a SEMI / ANTI join, with nothing in between that sees how often a row occurs.
+	//! It only passes through projections, filters, UNNEST and joins without a volatile expression; every other
+	//! operator (LIMIT, window, set operation, ...) ends it
+	bool ignores_duplicates = false;
 
 public:
+	//! The state a pipeline below starts with: the references of the operators above. Whether the pipeline below
+	//! ignores duplicates is decided by the operator that starts it
 	PipelineInfo CreateChild() {
 		auto result = PipelineInfo();
 		result.ref_table_ids = ref_table_ids;
-		result.distinct_groups = distinct_groups;
 		return result;
 	}
+};
+
+//! What a removed subtree would no longer do, beyond returning rows: evaluate a volatile expression (nextval, random),
+//! modify data, or run a table function that declares itself VOLATILE. A reference to a materialized CTE counts with
+//! everything in the definition of that CTE: once the reference is gone, the columns only it read are pruned from the
+//! definition, expressions included.
+class RemovedSubtreeEffects {
+public:
+	//! Registers the CTEs that are defined in the plan
+	explicit RemovedSubtreeEffects(LogicalOperator &plan);
+
+	//! Whether removing the subtree would skip an effect
+	bool HasEffect(LogicalOperator &subtree);
+
+private:
+	void CollectDefinitions(LogicalOperator &op);
+	//! Whether the definition of a materialized CTE has an effect; computed once per CTE
+	bool DefinitionHasEffect(TableIndex cte_index);
+
+	//! The materialized CTEs of the plan (the CTE operators; the definition is their first child)
+	unordered_map<TableIndex, reference<LogicalOperator>> materialized_ctes;
+	//! The recursive CTEs of the plan: a reference to one reads the working table of a recursion that is part of the
+	//! plan around the reference
+	unordered_set<TableIndex> recursive_ctes;
+	unordered_map<TableIndex, bool> definition_has_effect;
 };
 
 class JoinElimination : public LogicalOperatorVisitor {
@@ -55,35 +72,47 @@ public:
 	explicit JoinElimination() {
 	}
 
-	void OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx);
-	// with specific condition we can eliminate a (left/right, semi, inner) join.
-	// exemplify left/right join eliminaion condition:
-	// 1. output can only have outer table columns
-	// 2. join result cannot filter by inner table columns(ex. in where clause/ having clause ...)
-	// 3. must ensure each outer row can match at most one inner table row, such as:
-	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table
-	//  join condition columns contains a whole distinct group) 2) join result columns contains a whole distinct group
+	// A LEFT / RIGHT join is replaced by its outer side when
+	// 1. nothing above the join reads a column of its inner side (the output, filters, the conditions of the joins
+	//    above only read the outer side),
+	// 2. neither the join condition nor the inner side has a volatile expression (nextval, random): they would not
+	//    be evaluated any more. The inner side must not have any other effect either (RemovedSubtreeEffects), and
+	// 3. the join cannot change how often an outer row occurs in a way that is visible. There are two separate proofs:
+	//    a) the operators above ignore duplicates (PipelineInfo::ignores_duplicates): the join only repeats outer rows
+	//    b) every outer row matches at most one inner row: the inner side is distinct on the columns its equality
+	//       conditions compare (Distinctness: a DISTINCT / GROUP BY, a PRIMARY KEY, also below filters and as the
+	//       result of an aggregate that was split into aggregates over a materialized CTE). This holds whatever is
+	//       above the join. A SINGLE join is only removed by this proof: it raises an error on a second match.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
-	void OptimizeInternal(unique_ptr<LogicalOperator> op);
+	//! Whether Optimize removed a join
+	bool RemovedJoin() const;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	unique_ptr<JoinElimination> CreateChildren() {
 		auto result = make_uniq<JoinElimination>();
 		result->pipe_info = pipe_info.CreateChild();
+		result->effects = effects;
 		return result;
 	}
 
 private:
-	unique_ptr<LogicalOperator> TryEliminateJoin();
-	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
-	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
+	//! Analyses the operators of this pipeline from `op` down. A join is replaced in place, through `op`, by its outer
+	//! side when it can be removed; `replaceable`: whether `op` itself may be replaced (false for the root of the
+	//! plan and for the children of operators that may read their columns by position)
+	void OptimizeOperator(unique_ptr<LogicalOperator> &op, bool replaceable);
+	//! Analyses child `child_idx` of `op` with `child_optimizer` and keeps the projection map `op` has for that child
+	//! valid when a join was removed below
+	void OptimizeChild(LogicalOperator &op, idx_t child_idx, JoinElimination &child_optimizer, bool replaceable);
+	//! Analyses the join `op` of this pipeline and both of its sides, and removes it when it can
+	void OptimizeJoin(unique_ptr<LogicalOperator> &op);
+	void OptimizeJoinChild(LogicalOperator &join, idx_t child_idx, JoinElimination &child);
+	//! Replaces the join `op` by its outer side when it can; returns whether it did
+	bool TryEliminateJoin(unique_ptr<LogicalOperator> &op);
 
 	PipelineInfo pipe_info;
-
-	optional_ptr<LogicalOperator> children_root;
-	vector<unique_ptr<JoinElimination>> children;
-
-	unique_ptr<JoinElimination> left_child;
-	unique_ptr<JoinElimination> right_child;
+	//! Shared by the optimizers of all pipelines of one plan
+	shared_ptr<RemovedSubtreeEffects> effects;
+	//! The number of joins removed in this pipeline and the pipelines below it
+	idx_t removed_joins = 0;
 };
 } // namespace duckdb

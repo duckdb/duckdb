@@ -60,7 +60,7 @@ public:
 	//! Retire excess idle clients and discard excess active clients on release
 	DUCKDB_API void SetCapacity(idx_t capacity) DUCKDB_EXCLUDES(lock);
 	DUCKDB_API idx_t GetCapacity() const DUCKDB_EXCLUDES(lock);
-	DUCKDB_API static idx_t AutomaticCapacity(const DBConfig &config);
+	DUCKDB_API static idx_t AutomaticCapacity(const DBConfig &config, optional_idx async_threads = optional_idx());
 
 private:
 	explicit HTTPTransportManager(const shared_ptr<HTTPUtil> &initial_http_util);

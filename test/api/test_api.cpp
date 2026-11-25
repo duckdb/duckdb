@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/main/statement_iterator.hpp"
@@ -18,6 +19,7 @@
 #include <chrono>
 #include <fstream>
 #include <thread>
+#include "duckdb/main/settings.hpp"
 
 using namespace duckdb;
 
@@ -94,6 +96,27 @@ TEST_CASE("Test destroying connections with open transactions", "[api]") {
 
 	auto conn = make_uniq<Connection>(*db);
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE test(i INTEGER)"));
+}
+
+TEST_CASE("Test destroying connections with open transactions while unwinding", "[api]") {
+	auto db = make_uniq<DuckDB>(nullptr);
+	try {
+		Connection con(*db);
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1)"));
+		throw std::runtime_error("unwind");
+	} catch (std::runtime_error &) { // NOLINT
+	}
+
+	// the transaction was rolled back: the table does not exist and later transactions work normally
+	Connection conn(*db);
+	REQUIRE_FAIL(conn.Query("SELECT * FROM test"));
+	REQUIRE_NO_FAIL(conn.Query("CREATE TABLE test(i INTEGER)"));
+	REQUIRE_NO_FAIL(conn.Query("INSERT INTO test VALUES (2)"));
+	REQUIRE_NO_FAIL(conn.Query("CHECKPOINT"));
+	auto result = conn.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 }
 
 static void long_running_query(Connection *conn, bool *correct) {
@@ -560,7 +583,7 @@ TEST_CASE("Extract the plan of joins the optimizer rewrites", "[api]") {
 	    "JOIN p AS p3 ON k2.p2 = p3.pid JOIN interest AS i ON i.pid = p3.pid "
 	    "ANTI JOIN knows AS k3 ON k3.p1 = p1.pid AND k3.p2 = p3.pid"};
 	for (auto &query : queries) {
-		auto plan = con.ExtractPlan(query);
+		auto plan = TestExtractPlan(con, query);
 		REQUIRE(plan);
 		auto result = con.Query(query);
 		REQUIRE_NO_FAIL(*result);
@@ -571,11 +594,6 @@ TEST_CASE("Extract the plan of joins the optimizer rewrites", "[api]") {
 TEST_CASE("Test connection API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-
-	// extract a plan node
-	REQUIRE_NOTHROW(con.ExtractPlan("SELECT 42"));
-	// can only extract one statement at a time
-	REQUIRE_THROWS(con.ExtractPlan("SELECT 42; SELECT 84"));
 
 	// append to a table
 	con.Query("CREATE TABLE integers(i integer);");
@@ -828,7 +846,7 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 	DBConfig config;
-	config.options.maximum_threads = 8;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(8));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -921,14 +939,41 @@ TEST_CASE("Test insert returning in CPP API", "[api]") {
 	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
 }
 
-TEST_CASE("Test a logical execute still has types after an optimization pass", "[api]") {
+TEST_CASE("Test an extracted EXECUTE plan still has types after an optimization pass", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.Query("PREPARE test AS SELECT 42::INTEGER;");
-	const auto query_plan = con.ExtractPlan("EXECUTE test");
-	REQUIRE((query_plan->type == LogicalOperatorType::LOGICAL_EXECUTE));
+	const auto query_plan = TestExtractPlan(con, "EXECUTE test");
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
+}
+
+TEST_CASE("Test destroying an extracted read_duckdb plan inside its transaction", "[api]") {
+	auto db_path = TestCreatePath("extract_plan_read_duckdb.db");
+	TestDeleteFile(db_path);
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "' AS source"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE source.t AS SELECT range AS i FROM range(10)"));
+	REQUIRE_NO_FAIL(con.Query("DETACH source"));
+
+	// the plan holds the reader that attached the database file while binding - destroying the plan detaches the file
+	const auto query = "SELECT * FROM read_duckdb('" + db_path + "')";
+	auto &db_manager = DatabaseManager::Get(*con.context);
+	const auto database_count = db_manager.GetDatabases().size();
+	for (auto commit : {true, false}) {
+		REQUIRE_NOTHROW(con.BeginTransaction());
+		auto plan = TestExtractPlan(con, query);
+		REQUIRE(db_manager.GetDatabases().size() == database_count + 1);
+		plan.reset();
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+		if (commit) {
+			REQUIRE_NOTHROW(con.Commit());
+		} else {
+			REQUIRE_NOTHROW(con.Rollback());
+		}
+		REQUIRE(db_manager.GetDatabases().size() == database_count);
+	}
 }
 
 static bool HasFlippedDelimJoin(const LogicalOperator &op) {
@@ -1063,10 +1108,10 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 	SECTION("Normal interrupt works") {
 		context.Interrupt();
 		REQUIRE(context.IsInterrupted());
-		REQUIRE_THROWS(context.InterruptCheck());
+		REQUIRE_THROWS(context.FastInterruptCheck());
 		context.ClearInterrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 	}
 
 	SECTION("SuppressInterrupts blocks subsequent Interrupt calls") {
@@ -1075,7 +1120,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// Since state is SUPPRESSED, CAS fails and interrupt is discarded
 		context.Interrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1086,7 +1131,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// overriding the INTERRUPTED state
 		context.SuppressInterrupts();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1096,7 +1141,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// Now back to NOT_INTERRUPTED, Interrupt() should work again
 		context.Interrupt();
 		REQUIRE(context.IsInterrupted());
-		REQUIRE_THROWS(context.InterruptCheck());
+		REQUIRE_THROWS(context.FastInterruptCheck());
 		context.ClearInterrupt();
 	}
 
@@ -1107,7 +1152,7 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		// After COMMIT, state should be SUPPRESSED — Interrupt() should be discarded
 		context.Interrupt();
 		REQUIRE(!context.IsInterrupted());
-		REQUIRE_NOTHROW(context.InterruptCheck());
+		REQUIRE_NOTHROW(context.FastInterruptCheck());
 		// Cleanup
 		context.ClearInterrupt();
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
@@ -1126,7 +1171,7 @@ TEST_CASE("Test internal connections follow the interrupts of their base client"
 		con.context->Interrupt();
 		REQUIRE(child.context->IsInterrupted());
 		REQUIRE(grandchild.context->IsInterrupted());
-		REQUIRE_THROWS(grandchild.context->InterruptCheck());
+		REQUIRE_THROWS(grandchild.context->FastInterruptCheck());
 		con.context->ClearInterrupt();
 		REQUIRE(!grandchild.context->IsInterrupted());
 	}
@@ -1138,13 +1183,13 @@ TEST_CASE("Test internal connections follow the interrupts of their base client"
 	}
 
 	SECTION("The base client's query deadline applies to internal connections while it is set") {
-		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_NOTHROW(grandchild.context->InterruptCheck());
 		// a deadline in the past, as a base query that ran out of time would leave it
 		con.context->query_deadline = 1;
-		REQUIRE_THROWS(grandchild.context->BlockingInterruptCheck());
-		REQUIRE_THROWS(child.context->BlockingInterruptCheck());
+		REQUIRE_THROWS(grandchild.context->InterruptCheck());
+		REQUIRE_THROWS(child.context->InterruptCheck());
 		con.context->query_deadline.SetInvalid();
-		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_NOTHROW(grandchild.context->InterruptCheck());
 	}
 
 	SECTION("A query running on behalf of the base stops when the base is interrupted") {

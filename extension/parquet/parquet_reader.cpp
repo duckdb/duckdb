@@ -1,4 +1,5 @@
 #include "parquet_reader.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <string.h>
 #include <unordered_map>
@@ -31,6 +32,9 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -79,6 +83,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -334,14 +339,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 
 		ResizeableBuffer buf;
-		buf.resize(allocator, 8);
-		buf.zero();
+		buf.Resize(allocator, 8);
+		buf.Zero();
 
 		transport.Prefetch(file_size - prefetch_size, prefetch_size);
 		transport.SetLocation(file_size - 8);
-		transport.read(buf.ptr, 8);
+		transport.read(buf.GetCurrentLoc(), 8);
 
-		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+		ParseParquetFooter(buf.GetCurrentLoc(), file_handle.GetPath(), file_size, encryption_config, footer_len,
+		                   footer_encrypted);
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
@@ -581,8 +587,13 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("Invalid DECIMAL precision %d and scale %d", s_ele.precision, s_ele.scale);
 			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
-			if (s_ele.precision > DecimalType::MaxWidth()) {
+			if (s_ele.precision > Decimal::MAX_WIDTH_INT128) {
+				// precisions above 38 become wide (BIGNUM-backed) decimals, other physical types fall back to DOUBLE
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
+				if (s_ele.type == Type::BYTE_ARRAY || s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
+					return LogicalType::DECIMAL(NumericCast<uint32_t>(s_ele.precision),
+					                            NumericCast<uint32_t>(s_ele.scale));
+				}
 				return LogicalType::DOUBLE;
 			}
 			switch (s_ele.type) {
@@ -1031,7 +1042,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 }
 
 static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth,
-                           string &crs) {
+                           string &crs, bool &is_geography) {
+	is_geography = false;
 	const auto is_blob = s_ele.__isset.type && s_ele.type == Type::BYTE_ARRAY;
 	if (!is_blob) {
 		return false;
@@ -1048,6 +1060,8 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 
 	const auto is_native_geog = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOGRAPHY;
 	if (is_native_geog) {
+		// The edge-interpolation algorithm is ignored on read; any GEOGRAPHY logical type maps to GEOGRAPHY.
+		is_geography = true;
 		if (s_ele.logicalType.GEOGRAPHY.__isset.crs) {
 			crs = s_ele.logicalType.GEOGRAPHY.crs;
 		}
@@ -1065,6 +1079,7 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 		auto meta_ptr = metadata.geo_metadata->GetColumnMeta(s_ele.name);
 		if (meta_ptr) {
 			crs = meta_ptr->projjson;
+			is_geography = meta_ptr->geometry_model == GeometryModel::GEODETIC;
 		}
 		return true;
 	}
@@ -1107,6 +1122,36 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 //! The maximum nesting depth of a Parquet schema - deeper schemas would overflow the stack while being read
 static constexpr idx_t MAX_PARQUET_SCHEMA_DEPTH = 500;
 
+//! The VARIANT reader reads the 'metadata' and 'value' columns as binary
+static bool IsVariantBinaryColumn(const ParquetColumnSchema &schema) {
+	// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
+	const auto is_binary = schema.type.id() == LogicalTypeId::BLOB || schema.type.id() == LogicalTypeId::VARCHAR;
+	return schema.children.empty() && schema.parquet_type == duckdb_parquet::Type::BYTE_ARRAY && is_binary &&
+	       schema.schema_type == ParquetColumnSchemaType::COLUMN;
+}
+
+//! The first 'value' column below a shredded 'typed_value' that is not binary, if any
+static optional_ptr<const ParquetColumnSchema> FindNonBinaryShreddedValue(const ParquetColumnSchema &typed_value) {
+	if (typed_value.type.id() != LogicalTypeId::STRUCT && typed_value.type.id() != LogicalTypeId::LIST) {
+		return nullptr;
+	}
+	// the fields of an object and the element of an array are groups of 'value' and 'typed_value'
+	for (auto &group : typed_value.children) {
+		for (auto &child : group.children) {
+			if (child.name == "value" && !IsVariantBinaryColumn(child)) {
+				return &child;
+			}
+			if (child.name == "typed_value") {
+				auto shredded_value = FindNonBinaryShreddedValue(child);
+				if (shredded_value) {
+					return shredded_value;
+				}
+			}
+		}
+	}
+	return nullptr;
+}
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
@@ -1138,7 +1183,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	// Check for geometry type
 	string crs;
-	if (IsGeometryType(s_ele, *metadata, depth, crs)) {
+	bool is_geography = false;
+	if (IsGeometryType(s_ele, *metadata, depth, crs, is_geography)) {
 		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
 		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
 		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
@@ -1151,10 +1197,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		LogicalType target_type;
 
 		auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs);
-		if (lookup) {
-			target_type = LogicalType::GEOMETRY(*lookup);
+		if (is_geography) {
+			target_type = lookup ? LogicalType::GEOGRAPHY(*lookup) : LogicalType::GEOGRAPHY();
 		} else {
-			target_type = LogicalType::GEOMETRY();
+			target_type = lookup ? LogicalType::GEOMETRY(*lookup) : LogicalType::GEOMETRY();
 		}
 
 		// Inner BLOB schema
@@ -1218,16 +1264,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			is_variant = true;
 		}
 		if (is_variant) {
-			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			if (child_schemas.size() < 2) {
+				throw DataCorruptionException("Failed to read Parquet file \"%s\": VARIANT column \"%s\" must have a "
+				                              "'metadata' and a 'value' column",
+				                              file.path, string(s_ele.name));
+			}
 			for (auto &child_schema : child_schemas) {
 				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					// the 'value' columns of the groups below 'typed_value' are read as binary as well
+					if (FindNonBinaryShreddedValue(child_schema)) {
+						throw DataCorruptionException(
+						    "Failed to read Parquet file \"%s\": the 'value' column of a shredded field of VARIANT "
+						    "column \"%s\" must be a binary BYTE_ARRAY column",
+						    file.path, string(s_ele.name));
+					}
 					continue;
 				}
-				// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
-				const auto is_binary =
-				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
-				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
-				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
+				if (!IsVariantBinaryColumn(child_schema)) {
 					throw DataCorruptionException(
 					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
 					    "must be a binary BYTE_ARRAY column",
@@ -1441,8 +1494,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
                              shared_ptr<ParquetFileMetadataCache> metadata_p,
                              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
-      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)),
-      projection_expressions(std::move(projection_expressions_p)) {
+      allocator(BufferAllocator::Get(context_p)), buffer_manager(BufferManager::GetBufferManager(context_p)),
+      parquet_options(std::move(parquet_options_p)), projection_expressions(std::move(projection_expressions_p)) {
 	auto flags = FileFlags::FILE_FLAGS_READ;
 	flags.SetRequestSizing(RequestSizing::BY_READER);
 	file_handle = fs.OpenFile(context_p, file, flags);
@@ -1552,7 +1605,8 @@ unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &contex
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+      buffer_manager(BufferManager::GetBufferManager(context_p)), metadata(std::move(metadata_p)),
+      parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
 	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
@@ -1927,6 +1981,11 @@ bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReader
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return true;
+		}
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			scan_filter.filter_state.reset();
+		} else if (!scan_filter.filter_state) {
+			scan_filter.filter_state = TableFilterState::Initialize(context, scan_filter.filter);
 		}
 	}
 	return false;
@@ -2330,7 +2389,7 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics) {
 			can_have_nan = ParquetStatisticsUtils::CanHaveNaN(column_chunk.meta_data.statistics, can_have_nan);
 		}
-		ParquetPageIndexUtils::FilterPages(column_reader.Schema(), column_index, filter_column.filter.get(),
+		ParquetPageIndexUtils::FilterPages(context, column_reader.Schema(), column_index, filter_column.filter.get(),
 		                                   parquet_options, can_have_nan, page_may_match[i]);
 		for (auto may_match : page_may_match[i]) {
 			any_page_pruned = any_page_pruned || !may_match;
@@ -2449,9 +2508,8 @@ idx_t ParquetReader::GetDataSize() const {
 	return data_size;
 }
 
-ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter)
+ParquetScanFilter::ParquetScanFilter(ProjectionIndex filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
-	filter_state = TableFilterState::Initialize(context, filter);
 }
 
 ParquetScanFilter::~ParquetScanFilter() {
@@ -2498,7 +2556,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices,
 		                                                     context.GetContext().GetLoggerPtr(), file.path);
 		for (auto &entry : *filters) {
-			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
+			state.scan_filters.emplace_back(entry.GetIndex(), entry.Filter());
 		}
 	}
 	if (state.filter_eliminated_all_rows.size() != state.scan_filters.size()) {
@@ -2545,8 +2603,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
-	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
+	state.define_buf.Resize(allocator, STANDARD_VECTOR_SIZE);
+	state.repeat_buf.Resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
 shared_ptr<ParquetReader> ParquetReader::CreateMetadataReader(ClientContext &context, ParquetOptions parquet_options,
@@ -2598,18 +2656,42 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 
 		// Special handle generated columns.
-		const auto &column_schema = root_schema->children[primary_index];
-		if (column_schema.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		reference<const ParquetColumnSchema> column_schema = root_schema->children[primary_index];
+		if (column_schema.get().schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 			return true;
+		}
+		// resolve an extracted struct field to the leaf column it reads
+		if (storage_index.IsPushdownExtract()) {
+			reference<const StorageIndex> index = storage_index;
+			while (index.get().HasChildren() && column_schema.get().type.id() == LogicalTypeId::STRUCT) {
+				if (column_schema.get().children.empty()) {
+					// INT96 can be exposed as a struct without physical child columns.
+					return false;
+				}
+				index = index.get().GetChildIndex(0);
+				column_schema = column_schema.get().children[index.get().GetPrimaryIndex()];
+			}
+		}
+		// row_group.columns is indexed by leaf column, so only leaf columns map to a column chunk
+		auto &leaf_schema = column_schema.get();
+		if (leaf_schema.schema_type != ParquetColumnSchemaType::COLUMN || !leaf_schema.children.empty()) {
+			return false;
 		}
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_chunk = row_group.columns[primary_index];
+		const auto &column_chunk = row_group.columns[leaf_schema.column_index];
 
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
 		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
 			const auto &stats = column_chunk.meta_data.statistics;
+			const auto type_id = leaf_schema.type.id();
+			const bool is_floating_point = type_id == LogicalTypeId::FLOAT || type_id == LogicalTypeId::DOUBLE;
+			const bool can_have_nan = parquet_options->can_have_nan && stats.__isset.nan_count == 0;
+			if (is_floating_point && can_have_nan) {
+				// the max is replaced by NaN as an upper bound, as the stored max leaves out NaN values
+				return false;
+			}
 			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
 		return false;
@@ -2959,8 +3041,12 @@ idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &r
 
 		auto &result_vector = result.data[local_idx.GetIndex()];
 		ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
-		child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
-		                    filter_count, is_first_filter);
+		if (scan_filter.filter_state) {
+			child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
+			                    filter_count, is_first_filter);
+		} else {
+			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
+		}
 		if (log_prefetch) {
 			auto &filters_used = state.prefetch_metrics.logger.filters_used;
 			if (filters_used.size() != state.scan_filters.size()) {
@@ -3078,11 +3164,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 
 	auto &deletion_filter = this->deletion_filter;
 
-	state.define_buf.zero();
-	state.repeat_buf.zero();
+	state.define_buf.Zero();
+	state.repeat_buf.Zero();
 
-	auto define_ptr = (uint8_t *)state.define_buf.ptr;
-	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
+	auto define_ptr = (uint8_t *)state.define_buf.GetCurrentLoc();
+	auto repeat_ptr = (uint8_t *)state.repeat_buf.GetCurrentLoc();
 
 	if (filters || deletion_filter) {
 		auto res = ProcessFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);

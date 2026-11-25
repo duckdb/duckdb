@@ -4,6 +4,8 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
+#include "duckdb/execution/expression_executor.hpp"
+
 namespace duckdb {
 
 class RecursiveCTEGroupAddressSet {
@@ -21,7 +23,9 @@ private:
 };
 
 struct RecursiveCTEKeyDeltaState {
-	RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op);
+	//! With materialized finalized values (address_only_previous) the previous rows carry only group addresses,
+	//! because the old payload values stay readable from the rows themselves until the commit overwrites them
+	RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op, bool address_only_previous);
 
 	void Reset();
 	void PrepareCollections();
@@ -70,8 +74,12 @@ struct RecursiveCTEKeyDeltaState {
 
 	ColumnDataCollection previous_rows;
 	ColumnDataCollection new_keys;
+	//! Finalized rows buffered by the changed-candidate validation until it either succeeds and publishes them
+	//! or fails and the regular delta finalization takes over
+	ColumnDataCollection pending_finalized;
 	ColumnDataAppendState previous_append_state;
 	ColumnDataAppendState new_key_append_state;
+	ColumnDataAppendState pending_finalized_append_state;
 	DataChunk selected_keys;
 	DataChunk aggregate_rows;
 	DataChunk updated_aggregate_rows;
@@ -81,6 +89,8 @@ struct RecursiveCTEKeyDeltaState {
 	DataChunk previous_scan_rows;
 	DataChunk key_scan_rows;
 	DataChunk comparison_rows;
+	//! DISTINCT FROM comparison of every payload column
+	vector<unique_ptr<ExpressionExecutor>> payload_distinct_from;
 	Vector matched_addresses;
 	Vector finalize_addresses;
 	SelectionVector found_groups;

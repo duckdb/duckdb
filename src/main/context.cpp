@@ -24,16 +24,15 @@ public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
-	FileSystem &GetFileSystem() const override {
-		auto &config = DBConfig::GetConfig(context);
-		return *config.file_system;
+private:
+	VirtualFileSystem &GetFileSystem() const override {
+		return VirtualFileSystem::Get(context);
 	}
 
 	optional_ptr<FileOpener> GetOpener() const override {
 		return context.GetContext().TryGetFileOpener();
 	}
 
-private:
 	ClientContext &context;
 };
 
@@ -274,6 +273,18 @@ optional_ptr<QueryProfiler> Context::TryGetQueryProfiler(optional_ptr<Context> c
 	return context->TryGetQueryProfiler();
 }
 
+void Context::FastInterruptCheck() const {
+	if (context) {
+		context->FastInterruptCheck();
+	}
+}
+
+void Context::InterruptCheck() const {
+	if (context) {
+		context->InterruptCheck();
+	}
+}
+
 bool Context::IsClient() const {
 	return context != nullptr;
 }
@@ -369,8 +380,8 @@ const shared_ptr<QueryProfiler> &Context::GetQueryProfilerPtr() const {
 	return profiler;
 }
 
-shared_ptr<Context> DatabaseInstance::Services() {
-	return make_shared_ptr<Context>(*this);
+Context &DatabaseInstance::GetContext() {
+	return *services;
 }
 
 } // namespace duckdb

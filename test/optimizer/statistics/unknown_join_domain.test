@@ -1,0 +1,54 @@
+# name: test/optimizer/statistics/unknown_join_domain.test
+# description: Unknown scan domains scale with population without counting redundant equalities twice
+# group: [statistics]
+
+require parquet
+
+statement ok
+COPY (SELECT 'key_' || i AS k, 'other_' || i AS k2 FROM range(100) t(i))
+TO '{TEST_DIR}/unknown_join_domain.parquet';
+
+statement ok
+CREATE VIEW unknown_domain AS FROM read_parquet('{TEST_DIR}/unknown_join_domain.parquet');
+
+statement ok
+SET explain_output='optimized_only';
+
+query I
+SELECT count(*) FROM unknown_domain a JOIN unknown_domain b USING (k);
+----
+100
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USING (k);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"500"\s*}\s*}\s*\]\s*$
+
+# Two distinct keys replace the discounted domain only once for this relation pair.
+query I
+SELECT count(*) FROM unknown_domain a JOIN unknown_domain b USING (k, k2);
+----
+100
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USING (k, k2);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"100"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM unknown_domain a, unknown_domain b, unknown_domain c
+WHERE a.k=b.k AND b.k=c.k AND a.k=c.k;
+----
+100
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a, unknown_domain b, unknown_domain c
+WHERE a.k=b.k AND b.k=c.k;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"2500"\s*}\s*}\s*\]\s*$
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a, unknown_domain b, unknown_domain c
+WHERE a.k=c.k AND b.k=c.k AND a.k=b.k;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"2500"\s*}\s*}\s*\]\s*$

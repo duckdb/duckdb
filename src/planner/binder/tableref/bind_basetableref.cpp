@@ -229,7 +229,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ClientConfig::GetConfig(context).use_replacement_scans &&
 		    Settings::Get<EnableExternalAccessSetting>(config) && ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
-			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
+			if (!VirtualFileSystem::Get(context).IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
 				throw BinderException(
 				    "No extension found that is capable of reading the file \"%s\"\n* If this file is a supported file "
 				    "format you can explicitly use the reader functions, such as read_csv, read_json or read_parquet",
@@ -240,9 +240,14 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// if we found a CTE that cannot be referenced that means that there is a circular reference
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
+			if (ctebinding->IsRecursiveSelfReference()) {
+				throw BinderException(error_context,
+				                      "Recursive reference to CTE %s must not appear in its non-recursive term",
+				                      ref.Table());
+			}
 			throw BinderException(error_context,
-			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
-			                      "use recursive CTEs.",
+			                      "Circular reference to CTE %s, recursive CTEs must use WITH RECURSIVE and have the "
+			                      "form <non-recursive term> UNION [ALL] <recursive term>",
 			                      ref.Table());
 		}
 		// could not find an alternative: bind again to get the error
@@ -270,15 +275,19 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<Identifier> table_names;
 		vector<TableColumnType> table_categories;
 
-		vector<LogicalType> return_types;
-		vector<Identifier> return_names;
-		for (auto &col : table.GetColumns().Logical()) {
+		auto &columns = table.GetColumns();
+		table_types.reserve(columns.LogicalColumnCount());
+		table_names.reserve(columns.LogicalColumnCount());
+		for (auto &col : columns.Logical()) {
 			table_types.push_back(col.Type());
 			table_names.emplace_back(col.Name());
-			return_types.push_back(col.Type());
-			return_names.emplace_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		auto return_types = table_types;
+		auto return_names = table_names;
+		// the ColumnList of a table already deduplicates its column names
+		if (!ref.column_name_alias.empty()) {
+			table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		}
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {

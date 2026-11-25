@@ -1,4 +1,6 @@
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
@@ -248,6 +250,7 @@ void QueryGraphManager::BuildInnerCompanionSets() {
 }
 
 bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op) {
+	relation_manager.SetSourceStats(optimizer.GetSourceStats());
 	// have the relation manager extract the join relations and create a reference list of all the
 	// filter operators.
 	auto can_reorder = relation_manager.ExtractJoinRelations(optimizer, op, filter_operators);
@@ -263,6 +266,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 }
 
 bool QueryGraphManager::BuildForEstimation(RelationStatsExtractor &extractor, LogicalOperator &op) {
+	relation_manager.SetSourceStats(extractor.GetSourceStats(op));
 	if (!relation_manager.ExtractJoinRelationsForEstimation(extractor, op, filter_operators) ||
 	    relation_manager.NumRelations() <= 1) {
 		return false;
@@ -788,6 +792,8 @@ static JoinType GetJoinType(JoinOrderOperatorType type) {
 		return JoinType::SEMI;
 	case JoinOrderOperatorType::ANTI:
 		return JoinType::ANTI;
+	case JoinOrderOperatorType::MARK:
+		return JoinType::MARK;
 	default:
 		throw InternalException("Operator occurrence type %d has no comparison join type", static_cast<int>(type));
 	}
@@ -872,6 +878,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 			} else {
 				auto join = make_uniq<LogicalComparisonJoin>(GetJoinType(descriptor->type));
+				join->mark_index = descriptor->mark_index;
+				join->mark_types = std::move(descriptor->mark_types);
 				join->children.push_back(std::move(left.op));
 				join->children.push_back(std::move(right.op));
 				join->conditions = std::move(descriptor->conditions);
@@ -939,10 +947,16 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		vector<reference<const RelationStats>> child_stats {left.stats, right.stats};
 		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 		    (result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::SEMI ||
+		     result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::MARK ||
 		     result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::ANTI)) {
 			result_stats = RelationStatisticsHelper::ExtractOperatorStats(*result_operator, context, child_stats);
 			if (result_stats) {
-				result_cardinality = result_stats->cardinality;
+				if (result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::MARK) {
+					result_stats->cardinality = result_cardinality;
+					result_stats->CapCurrentDomainsToCardinality();
+				} else {
+					result_cardinality = result_stats->cardinality;
+				}
 			}
 		} else {
 			result_stats = CombineRelationStats(result_operator->GetColumnBindings(), child_stats, result_cardinality);

@@ -7,6 +7,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -19,6 +20,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 
@@ -51,30 +53,36 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
                                                                            const CompiledGrammar &grammar,
-                                                                           optional_idx &failure_index) {
+                                                                           optional_idx &failure_index) try {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
 	vector<MatcherSuggestion> suggestions;
-	ParseResultAllocator parse_result_allocator;
+	// Parsing is query work too: count its arenas against the database memory
+	// limit instead of letting a complex statement grow the process unchecked.
+	auto &allocator = options.context ? BufferAllocator::Get(*options.context) : Allocator::DefaultAllocator();
+	ParseResultAllocator parse_result_allocator(allocator);
 	idx_t max_token_index = token_iterator.Position();
-	// the packrat cache outlives the match processes, so they need separate arenas
-	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
-	ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
-	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
-	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
-	MatchState state(token_iterator, match_context);
-	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
-	process_allocator.FreeAll();
-	if (!match_result.IsSuccess()) {
-		failure_index = state.GetMaxTokenIndex();
-		return nullptr;
-	}
-	D_ASSERT(match_result.HasParseResult());
+	auto match_result = MatcherResult::Failure();
+	{
+		// Match processes and packrat entries are no longer needed once the parse result is built.
+		// the packrat cache outlives the match processes, so they need separate arenas
+		ArenaAllocator process_allocator(allocator, PARSER_ARENA_INITIAL_CAPACITY);
+		ArenaAllocator packrat_allocator(allocator, PARSER_ARENA_INITIAL_CAPACITY);
+		ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
+		MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
+		                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
+		MatchState state(token_iterator, match_context);
+		match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
+		if (!match_result.IsSuccess()) {
+			failure_index = state.GetMaxTokenIndex();
+			return nullptr;
+		}
+		D_ASSERT(match_result.HasParseResult());
 
-	// Advance the caller's cursor past the consumed tokens.
-	token_iterator.SetPosition(state.token_iterator);
+		// Advance the caller's cursor past the consumed tokens.
+		token_iterator.SetPosition(state.token_iterator);
+	}
 
 	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
 	//   child 0: Optional<Statement>
@@ -95,10 +103,23 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 		}
 	}
 
-	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
+	if (options.match_only) {
+		auto start = stmt_opt.GetResult().GetOffset().GetIndex();
+		idx_t end_index = terminator_offset.IsValid() ? terminator_offset.GetIndex() : token_iterator.EndOffset();
+		auto statement = make_uniq<PassthroughStatement>();
+		statement->stmt_location = QueryLocation(start, end_index - start);
+		return std::move(statement);
+	}
+
+	ArenaAllocator transformer_allocator(allocator, PARSER_ARENA_INITIAL_CAPACITY);
 	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
+} catch (const OutOfMemoryException &ex) {
+	if (!options.context) {
+		throw;
+	}
+	throw OutOfMemoryException("While parsing SQL: %s", ErrorData(ex).RawMessage());
 }
 
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
@@ -108,7 +129,6 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	//===--------------------------------------------------------------------===//
 	collapsible_rules.insert("Expression");
 	collapsible_rules.insert("ColumnDefaultExpr");
-	collapsible_rules.insert("LambdaArrowExpression");
 	collapsible_rules.insert("LogicalOrExpression");
 	collapsible_rules.insert("ColDefOrExpr");
 	collapsible_rules.insert("LogicalAndExpression");
@@ -153,14 +173,15 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("SubqueryReference", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("WithStatement", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("CustomPrefixExpression", ExpressionDepthKind::NESTING);
-	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsDistinctFromExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("ComparisonExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("BetweenInLikeExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("InfixOtherOperatorExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("ArrowChainBody", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("BitwiseExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("TildeExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("AdditiveExpression", ExpressionDepthKind::CHAIN);

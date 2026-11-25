@@ -44,16 +44,16 @@ SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'operator_mem
 ----
 operator_memory_limit	NULL	VARCHAR
 
-# test that operator_memory_limit causes OOM for operators that check GetOperatorMemoryLimit()
-# while memory_limit (hard cap) is set high enough to not interfere
+# A low operator budget triggers external processing; the zero temp quota prevents offload.
+# Keep a separate hard memory cap for the remaining allocations.
 statement ok
-PRAGMA memory_limit='100MB'
+SET memory_limit='100MB'
 
 statement ok
-PRAGMA temp_directory=''
+SET temp_directory='{TEST_DIR}/operator_memory_limit.tmp'
 
 statement ok
-PRAGMA max_temp_directory_size='0B'
+SET max_temp_directory_size='0B'
 
 statement ok
 SET operator_memory_limit='1MB'

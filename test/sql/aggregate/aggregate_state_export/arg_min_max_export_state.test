@@ -148,3 +148,15 @@ query I
 SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(arg_min(COLUMNS(*), COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
 ----
 true
+
+# states keep the collation they were exported with, not the default collation of the session
+statement ok
+CREATE TABLE saved AS SELECT arg_max(s, [s]::VARCHAR[1]) EXPORT_STATE st FROM (VALUES ('a'), ('B')) t(s) GROUP BY s;
+
+statement ok
+SET default_collation = 'nocase';
+
+query T
+SELECT finalize(combine_aggr(st)) FROM saved;
+----
+a

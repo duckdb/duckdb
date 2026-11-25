@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -23,13 +24,13 @@ public:
 
 public:
 	PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
-	                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
+	                        cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
 	CopyFunctionReturnType return_type;
@@ -42,8 +43,20 @@ public:
 	optional_idx batch_size;
 	optional_idx batch_size_bytes;
 
+	//! File rotation: file_path is a directory, and the files in it are written one after another
+	optional_idx batches_per_file;
+	optional_idx file_size_bytes;
+	CopyOverwriteMode overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
+	FilenamePattern filename_pattern;
+	string file_extension;
+
+	bool Rotate() const {
+		return file_size_bytes.IsValid() || batches_per_file.IsValid();
+	}
+
 public:
 	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 
@@ -86,5 +99,11 @@ public:
 	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
 	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
+
+private:
+	//! Moves on to the next file once the current one has reached a rotation limit
+	void RotateFile(ClientContext &context, GlobalSinkState &gstate_p) const;
+	//! The result of a rotating copy: its files in the order they were written
+	SourceResultType GetRotatedFiles(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 };
 } // namespace duckdb

@@ -27,6 +27,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -245,49 +246,20 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::NegativeInfinity(type);
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIME_NS:
 		return Value::TIME_NS(dtime_ns_t(0));
-	case LogicalTypeId::TIMESTAMP: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		return Value::TIMESTAMP(date, dtime_t(0));
-	}
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the minimum timestamp and convert it to timestamp_sec_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(min_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the minimum timestamp and convert it to timestamp_ms_t.
-		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(min_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPNS(timestamp_ns_t(min_ns));
-	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
-		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
-		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
-	}
-	case LogicalTypeId::TIMESTAMP_TZ_NS: {
-		// Clear the fractional day.
-		auto min_ns = NumericLimits<int64_t>::Minimum();
-		min_ns /= Interval::NANOS_PER_DAY;
-		min_ns *= Interval::NANOS_PER_DAY;
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
-	}
 	case LogicalTypeId::INTERVAL: {
 		const auto min_months = NumericLimits<int32_t>::Minimum();
 		const auto min_days = NumericLimits<int32_t>::Minimum();
@@ -310,6 +282,11 @@ Value Value::MinimumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
+		case PhysicalType::VARCHAR: {
+			// the minimum wide decimal is -(10^width - 1)
+			auto blob = Bignum::VarcharToBignum(string_t("-" + string(width, '9')));
+			return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
+		}
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -354,35 +331,19 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::DATE:
-		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::Infinity(type);
 	case LogicalTypeId::TIME:
 		//	24:00:00 according to PG
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIME_NS:
 		//	24:00:00 according to PG
 		return Value::TIME_NS(dtime_ns_t(Interval::NANOS_PER_DAY));
-	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the maximum timestamp and convert it to timestamp_s_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_sec_t ts(max_ts.value / Interval::MICROS_PER_SEC);
-		return Value::TIMESTAMPSEC(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the maximum timestamp and convert it to timestamp_ms_t.
-		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const timestamp_ms_t ts(max_ts.value / Interval::MICROS_PER_MSEC);
-		return Value::TIMESTAMPMS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		const auto ts = timestamp_ns_t(NumericLimits<int64_t>::Maximum() - 1);
-		return Value::TIMESTAMPNS(ts);
-	}
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
@@ -408,6 +369,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
+		case PhysicalType::VARCHAR: {
+			// the maximum wide decimal is 10^width - 1
+			auto blob = Bignum::VarcharToBignum(string_t(string(width, '9')));
+			return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
+		}
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -646,6 +612,9 @@ Value Value::DECIMAL(int64_t value, uint32_t width, uint32_t scale) {
 	case PhysicalType::INT64:
 		result.value_.bigint = value;
 		break;
+	case PhysicalType::VARCHAR:
+		// the unscaled value of a wide decimal is a BIGNUM blob
+		return Value::DECIMAL(hugeint_t(value), width, scale);
 	default:
 		result.value_.hugeint = value;
 		break;
@@ -656,10 +625,37 @@ Value Value::DECIMAL(int64_t value, uint32_t width, uint32_t scale) {
 }
 
 Value Value::DECIMAL(hugeint_t value, uint32_t width, uint32_t scale) {
+	if (Decimal::IsWide(width)) {
+		// the unscaled value of a wide decimal is a BIGNUM blob
+		auto blob = DecimalHelper<bignum_t>::FromInteger(value);
+		return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
+	}
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(bignum_t value, uint32_t width, uint32_t scale) {
+	if (!Decimal::IsWide(width)) {
+		// the fixed-size tiers hold the unscaled value as the integer of their width
+		hugeint_t unscaled;
+		if (!DecimalHelper<bignum_t>::TryToHugeint(value, unscaled)) {
+			throw InternalException("Value::DECIMAL: the BIGNUM does not fit a DECIMAL(%d,%d)", width, scale);
+		}
+		if (width > Decimal::MAX_WIDTH_INT64) {
+			return Value::DECIMAL(unscaled, width, scale);
+		}
+		int64_t narrow;
+		if (!Hugeint::TryCast(unscaled, narrow)) {
+			throw InternalException("Value::DECIMAL: the BIGNUM does not fit a DECIMAL(%d,%d)", width, scale);
+		}
+		return Value::DECIMAL(narrow, width, scale);
+	}
+	Value result(LogicalType::DECIMAL(width, scale));
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(value.data.GetString());
 	return result;
 }
 
@@ -984,6 +980,22 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenc
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 	Value result;
 	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the LogicalTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOGRAPHY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+	Value result;
+	result.type_ = LogicalType::GEOGRAPHY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOGRAPHY(const_data_ptr_t data, idx_t len) {
+	Value result;
+	result.type_ = LogicalType::GEOGRAPHY(); // construct type explicitly so that we get the ExtraTypeInfo
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
@@ -1755,6 +1767,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -1794,6 +1807,12 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
+	case LogicalTypeId::DECIMAL:
+		// a bare literal would be reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast
+		if (type_.InternalType() == PhysicalType::VARCHAR) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
 	case LogicalTypeId::FLOAT:
 		if (!FloatIsFinite(FloatValue::Get(*this)) ||
 		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
@@ -2165,9 +2184,15 @@ optional<Value> Value::TryCastAs(ClientContext &context, const LogicalType &targ
 	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, error_message, strict);
 }
 
+optional<Value> Value::TryCastAs(Context &context, const LogicalType &target_type, string *error_message,
+                                 bool strict) const {
+	GetCastFunctionInput get_input(context);
+	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, error_message, strict);
+}
+
 optional<Value> Value::DefaultTryCastAs(const LogicalType &target_type, string *error_message, bool strict) const {
 	CastFunctionSet set;
-	GetCastFunctionInput get_input;
+	auto get_input = GetCastFunctionInput::Default();
 	return TryCastAs(set, get_input, target_type, error_message, strict);
 }
 
@@ -2189,9 +2214,14 @@ Value Value::CastAs(ClientContext &context, const LogicalType &target_type, bool
 	return CastAs(CastFunctionSet::Get(context), get_input, target_type, strict);
 }
 
+Value Value::CastAs(Context &context, const LogicalType &target_type, bool strict) const {
+	GetCastFunctionInput get_input(context);
+	return CastAs(CastFunctionSet::Get(context), get_input, target_type, strict);
+}
+
 Value Value::DefaultCastAs(const LogicalType &target_type, bool strict) const {
 	CastFunctionSet set;
-	GetCastFunctionInput get_input;
+	auto get_input = GetCastFunctionInput::Default();
 	return CastAs(set, get_input, target_type, strict);
 }
 
@@ -2311,9 +2341,9 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		if (type_.id() == LogicalTypeId::BLOB) {
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
-		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
-			if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
-				// Write as old-style SPATIAL format
+		} else if (type_.id() == LogicalTypeId::GEOMETRY || type_.id() == LogicalTypeId::GEOGRAPHY) {
+			if (type_.id() == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
+				// Write as old-style SPATIAL format (GEOMETRY only - GEOGRAPHY has no legacy form)
 				string blob;
 				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);
 				auto text = Blob::ToString(blob);
@@ -2397,23 +2427,15 @@ static bool ValueIsValidShallow(const Value &value) {
 		const auto width = DecimalType::GetWidth(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
+			return DecimalHelper<int16_t>::FitsWidth(value.GetValueUnsafe<int16_t>(), width);
 		case PhysicalType::INT32:
-		case PhysicalType::INT64: {
-			int64_t decimal_value;
-			if (type.InternalType() == PhysicalType::INT16) {
-				decimal_value = value.GetValueUnsafe<int16_t>();
-			} else if (type.InternalType() == PhysicalType::INT32) {
-				decimal_value = value.GetValueUnsafe<int32_t>();
-			} else {
-				decimal_value = value.GetValueUnsafe<int64_t>();
-			}
-			return decimal_value > -NumericHelper::POWERS_OF_TEN[width] &&
-			       decimal_value < NumericHelper::POWERS_OF_TEN[width];
-		}
-		case PhysicalType::INT128: {
-			const auto decimal_value = value.GetValueUnsafe<hugeint_t>();
-			return decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
-		}
+			return DecimalHelper<int32_t>::FitsWidth(value.GetValueUnsafe<int32_t>(), width);
+		case PhysicalType::INT64:
+			return DecimalHelper<int64_t>::FitsWidth(value.GetValueUnsafe<int64_t>(), width);
+		case PhysicalType::INT128:
+			return DecimalHelper<hugeint_t>::FitsWidth(value.GetValueUnsafe<hugeint_t>(), width);
+		case PhysicalType::VARCHAR:
+			return DecimalHelper<bignum_t>::FitsWidth(value.GetValueUnsafe<bignum_t>(), width);
 		default:
 			throw InternalException("Invalid physical type for DECIMAL");
 		}
@@ -2582,10 +2604,13 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		if (type.id() == LogicalTypeId::BLOB) {
 			auto str = deserializer.ReadProperty<string>(102, "value");
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
-		} else if (type.id() == LogicalTypeId::GEOMETRY) {
+		} else if (type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY) {
 			auto text = deserializer.ReadProperty<string>(102, "value");
+			// GEOGRAPHY is always WKB; GEOMETRY defaults to the legacy SPATIAL format when the property is absent.
+			const auto default_format =
+			    type.id() == LogicalTypeId::GEOGRAPHY ? GeometryStorageType::WKB : GeometryStorageType::SPATIAL;
 			auto type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(103, "geometry_format",
-			                                                                              GeometryStorageType::SPATIAL);
+			                                                                              default_format);
 
 			auto blob = Blob::ToBlob(text);
 			if (type == GeometryStorageType::WKB) {
@@ -2705,7 +2730,7 @@ bool Value::ValuesAreEqual(ClientContext &context, const Value &result_value, co
 }
 bool Value::DefaultValuesAreEqual(const Value &result_value, const Value &value) {
 	CastFunctionSet set;
-	GetCastFunctionInput get_input;
+	auto get_input = GetCastFunctionInput::Default();
 	return Value::ValuesAreEqual(set, get_input, result_value, value);
 }
 

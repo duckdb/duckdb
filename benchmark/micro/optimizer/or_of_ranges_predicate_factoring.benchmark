@@ -1,0 +1,31 @@
+# name: benchmark/micro/optimizer/or_of_ranges_predicate_factoring.benchmark
+# description: An OR of disjuncts that each restrict one column to a range, as in the scan TPC-DS q28 shares when merged
+# group: [optimizer]
+
+name OR of ranges predicate factoring
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE t AS
+SELECT (i % 100)::INTEGER AS q, ((hash(i) % 20000) / 100)::DECIMAL(7, 2) AS x,
+       ((hash(i + 1) % 2000000) / 100)::DECIMAL(7, 2) AS y, ((hash(i + 2) % 10000) / 100)::DECIMAL(7, 2) AS z
+FROM range(30000000) r(i);
+
+run
+SELECT count(*), sum(x) FROM t
+WHERE (q BETWEEN 0 AND 5
+        AND (x BETWEEN 8 AND 18 OR y BETWEEN 459 AND 1459 OR z BETWEEN 57 AND 77))
+    OR (q BETWEEN 6 AND 10
+        AND (x BETWEEN 90 AND 100 OR y BETWEEN 2323 AND 3323 OR z BETWEEN 31 AND 51))
+    OR (q BETWEEN 11 AND 15
+        AND (x BETWEEN 142 AND 152 OR y BETWEEN 12214 AND 13214 OR z BETWEEN 79 AND 99))
+    OR (q BETWEEN 16 AND 20
+        AND (x BETWEEN 135 AND 145 OR y BETWEEN 6071 AND 7071 OR z BETWEEN 38 AND 58))
+    OR (q BETWEEN 21 AND 25
+        AND (x BETWEEN 122 AND 132 OR y BETWEEN 836 AND 1836 OR z BETWEEN 17 AND 37))
+    OR (q BETWEEN 26 AND 30
+        AND (x BETWEEN 154 AND 164 OR y BETWEEN 7326 AND 8326 OR z BETWEEN 7 AND 27));
+
+result II
+2586042	262257715.07

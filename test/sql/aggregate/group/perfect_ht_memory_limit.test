@@ -1,27 +1,70 @@
 # name: test/sql/aggregate/group/perfect_ht_memory_limit.test
-# description: Perfect hash aggregate states are allocated through the buffer manager and respect the memory limit
+# description: Perfect hash and radix hash aggregate states respect the memory limit
 # group: [group]
 
 statement ok
-SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+SET explain_output='physical_only';
 
 statement ok
-PRAGMA explain_output='physical_only';
+SET threads=1
 
 statement ok
-PRAGMA memory_limit='100MB'
+SET temp_directory=''
 
 statement ok
-CREATE TABLE t AS SELECT (i%16)::INT g FROM range(300000) t(i);
+SET max_temp_directory_size='0B'
 
-# the perfect hash aggregate must be used for this query
+statement ok
+CREATE TABLE t AS SELECT (i // 2048)::UTINYINT AS g, i FROM range(16 * 2048) t(i)
+
+# Generate one wide string per group, spaced 2048 rows apart.
+statement ok
+CREATE VIEW input_strings AS
+SELECT g, CASE WHEN i % 2048 = 0 THEN repeat('x', 2000000) || g::VARCHAR END AS v FROM t
+
+# Single-result string minima can retain a wide value per group on either path.
+statement ok
+CREATE VIEW totals AS SELECT count(*) AS groups, sum(length(v)) AS bytes
+FROM (SELECT min(v) AS v FROM input_strings GROUP BY g) grouped
+
+foreach threshold 0 12
+
+statement ok
+SET perfect_ht_threshold={threshold}
+
+statement ok
+SET memory_limit='16MB'
+
+onlyif threshold=0
 query II
-EXPLAIN SELECT g, list(repeat('x', 1000)) FROM t GROUP BY g
+EXPLAIN (FORMAT JSON) SELECT * FROM totals
 ----
-physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
+physical_plan	<REGEX>:(?s).*"name": "HASH_GROUP_BY".*
 
-# 300MB of list payload does not fit in the 100MB limit
+onlyif threshold=12
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM totals
+----
+physical_plan	<REGEX>:(?s).*"name": "PERFECT_HASH_GROUP_BY".*
+
+# Reading all sixteen strings fits in 16 MB.
+query II
+SELECT count(v), sum(length(v)) FROM input_strings
+----
+16	32000022
+
+# The sixteen minima retain 32 MB of strings.
 statement error
-SELECT g, list(repeat('x', 1000)) FROM t GROUP BY g
+SELECT * FROM totals
 ----
 Out of Memory
+
+statement ok
+SET memory_limit='256MB'
+
+query II
+SELECT * FROM totals
+----
+16	32000022
+
+endloop

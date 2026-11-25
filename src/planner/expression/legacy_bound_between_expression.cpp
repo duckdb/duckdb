@@ -12,13 +12,12 @@ LegacyBoundBetweenExpression::LegacyBoundBetweenExpression(unique_ptr<Expression
       upper_inclusive(upper_inclusive) {
 }
 
-unique_ptr<Expression> LegacyBoundBetweenExpression::DeserializeLegacyExpression(unique_ptr<Expression> input,
-                                                                                 unique_ptr<Expression> lower,
-                                                                                 unique_ptr<Expression> upper,
-                                                                                 bool lower_inclusive,
-                                                                                 bool upper_inclusive) {
-	return BoundBetweenExpression::Create(std::move(input), std::move(lower), std::move(upper), lower_inclusive,
-	                                      upper_inclusive);
+unique_ptr<Expression>
+LegacyBoundBetweenExpression::DeserializeLegacyExpression(ClientContext &context, unique_ptr<Expression> input,
+                                                          unique_ptr<Expression> lower, unique_ptr<Expression> upper,
+                                                          bool lower_inclusive, bool upper_inclusive) {
+	return BoundBetweenExpression::Create(context, std::move(input), std::move(lower), std::move(upper),
+	                                      lower_inclusive, upper_inclusive);
 }
 
 string LegacyBoundBetweenExpression::ToString() const {

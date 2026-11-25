@@ -148,14 +148,15 @@ TEST_CASE("Literal strings, hex strings and bit strings", "[literal]") {
 	RequireSameLiteralValue(Literal::Hex("FF00ab").ToValue(), ParseConstant("X'FF00ab'"));
 	RequireSameLiteralValue(Literal::Hex("").ToValue(), ParseConstant("X''"));
 	REQUIRE(Literal::Hex("FF").ToString() == "X'FF'");
-	REQUIRE_THROWS_AS(Literal::Hex("F"), ParserException);
-	REQUIRE_THROWS_AS(Literal::Hex("GG"), ParserException);
+	REQUIRE_THROWS_WITH(Literal::Hex("F"),
+	                    Catch::Contains("Hex string literal must have an even number of hex digits"));
+	REQUIRE_THROWS_WITH(Literal::Hex("GG"), Catch::Contains("Hex string literal contains a non-hexadecimal character"));
 
 	RequireSameLiteralValue(Literal::Bit("0101").ToValue(), ParseConstant("B'0101'"));
 	REQUIRE(Literal::Bit("0101").ToValue().type() == LogicalType::BIT);
 	REQUIRE(Literal::Bit("0101").ToValue().ToString() == "0101");
 	REQUIRE(Literal::Bit("0101").ToString() == "B'0101'");
-	REQUIRE_THROWS_AS(Literal::Bit("012"), ParserException);
+	REQUIRE_THROWS_WITH(Literal::Bit("012"), Catch::Contains("Bit string literal contains a non-binary character"));
 }
 
 TEST_CASE("Literal equality and hashing", "[literal]") {

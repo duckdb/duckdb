@@ -897,3 +897,23 @@ TEST_CASE("Stable C++API: scalar function overloads carry their own description 
 	REQUIRE(chunk.GetVector(3).GetValue(0).ToText() == "numeric|example");
 	REQUIRE(chunk.GetVector(3).GetValue(1).ToText() == "");
 }
+
+TEST_CASE("Stable C++API: scalar function in a system schema", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
+
+	auto function = ScalarFunction::Create(factory);
+	function.SetName("cpp_in_schema").SetSchema("encodings").SetExecCallback(PlusOneExec);
+	function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	conn.Register(function);
+
+	REQUIRE(CollectInts(conn.Execute("SELECT system.encodings.cpp_in_schema(41)")) == std::vector<int32_t> {42});
+	REQUIRE_THROWS(conn.Execute("SELECT cpp_in_schema(41)"));
+
+	auto missing = ScalarFunction::Create(factory);
+	missing.SetName("cpp_in_missing_schema").SetSchema("no_such_schema").SetExecCallback(PlusOneExec);
+	missing.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	REQUIRE_THROWS(conn.Register(missing));
+}
