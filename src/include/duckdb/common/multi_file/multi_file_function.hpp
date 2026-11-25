@@ -18,7 +18,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
-#include "duckdb/common/multi_file/table_function_row_id_filter.hpp"
+#include "duckdb/common/multi_file/table_function_query_filter.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
@@ -370,7 +370,7 @@ public:
 		    reader_data, bind_data, global_columns, global_column_ids, table_filters, context, global_state);
 		if (result == ReaderInitializeType::INITIALIZED && !reader.deletion_filter) {
 			// the file list can describe the rows of a file to scan with its options
-			reader.deletion_filter = TableFunctionRowIdFilter::TryCreate(context, reader);
+			reader.deletion_filter = TableFunctionQueryFilter::TryCreate(context, reader);
 		}
 		return result;
 	}
