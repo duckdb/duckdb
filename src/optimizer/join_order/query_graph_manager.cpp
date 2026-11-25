@@ -1230,6 +1230,9 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	}
 	for (auto &operator_ptr : join_operators) {
 		auto &op = *operator_ptr;
+		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT && !JoinOrderConflictDetector::MustApplyAsOperator(op)) {
+			continue;
+		}
 		if (JoinOrderConflictDetector::IsCompletedBy(op, left) || JoinOrderConflictDetector::IsCompletedBy(op, right) ||
 		    !JoinOrderConflictDetector::IsCompletedBy(op, combined)) {
 			continue;
@@ -1238,7 +1241,7 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 				return false;
 			}
-		} else if (JoinOrderConflictDetector::MustApplyAsOperator(op) && selected_operator != &op) {
+		} else if (selected_operator != &op) {
 			return false;
 		}
 	}
