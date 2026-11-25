@@ -218,22 +218,9 @@ static idx_t ValidityEntryCount(idx_t count) {
 	return count / ValidityMask::BITS_PER_VALUE + (count % ValidityMask::BITS_PER_VALUE != 0);
 }
 
-//! Appends clear bits in the entries that scans of the same segment read: until the segment is sealed (no more
-//! appends), both sides access the entries atomically
-struct ValiditySegmentState : public CompressedSegmentState {
-	explicit ValiditySegmentState(bool sealed_p) : sealed(sealed_p) {
-	}
-
-	atomic<bool> sealed;
-};
-
-static ValiditySegmentState &GetValiditySegmentState(ColumnSegment &segment) {
-	return segment.GetSegmentState()->Cast<ValiditySegmentState>();
-}
-
-//! Whether scans must read the entries atomically
+//! Whether scans must read the entries atomically: only transient segments can still be appended to
 static bool CanBeAppendedTo(ColumnSegment &segment) {
-	return !GetValiditySegmentState(segment).sealed.load(std::memory_order_acquire);
+	return segment.GetSegmentType() == ColumnSegmentType::TRANSIENT;
 }
 
 static atomic<validity_t> &AtomicValidityEntry(validity_t &entry) {
@@ -607,8 +594,7 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 		auto buffer_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 		memset(buffer_ptr, 0xFF, segment.SegmentSize());
 	}
-	// only transient segments can be appended to
-	return make_uniq<ValiditySegmentState>(block_id != INVALID_BLOCK);
+	return nullptr;
 }
 
 static void ValidityAppendInvalid(CompressionAppendState &append_state, ColumnSegment &segment,
@@ -644,11 +630,6 @@ static void ValidityAppendInvalid(CompressionAppendState &append_state, ColumnSe
 
 idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &validity_stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
-	auto &segment_state = GetValiditySegmentState(segment);
-	if (segment_state.sealed.load(std::memory_order_relaxed)) {
-		// a reverted append can leave room in a sealed segment: the caller continues in a new segment
-		return 0;
-	}
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
 	if (data.validity.CannotHaveNull()) {
@@ -659,24 +640,16 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		ValidityAppendInvalid(append_state, segment, validity_stats, data, offset, append_count);
 		segment.count += append_count;
 	}
-	if (segment.count == max_tuples) {
-		// publishes the appended entries to scans that read the segment without atomics
-		segment_state.sealed.store(true, std::memory_order_release);
-	}
 	return append_count;
 }
 
 idx_t ValidityFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
-	GetValiditySegmentState(segment).sealed.store(true, std::memory_order_release);
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
 void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 	D_ASSERT(new_count <= segment.count);
-	if (!CanBeAppendedTo(segment)) {
-		// the reverted rows are never appended to again
-		return;
-	}
+	D_ASSERT(CanBeAppendedTo(segment));
 	// appends only clear bits: set the bits of the reverted rows again, concurrent scans read these entries
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
