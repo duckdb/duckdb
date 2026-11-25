@@ -25,6 +25,7 @@
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
@@ -269,6 +270,53 @@ void ThrowMismatchedStoredKey(const UnboundIndex &unbound_index, StorageVersion 
 	                      name);
 }
 
+//! Why the stored keys of an index stored from the storage version of wide decimals on cannot be matched by the keys
+//! its expressions compute now, empty when they can. The stored keys are encoded from the physical types the
+//! expressions were bound to, which the index records: an expression that binds to another physical type now (the
+//! result type of a function is decided by the engine that binds it) computes keys of another encoding. The engines
+//! of that storage version that stored no record bound the same column types, so their keys over plain columns match;
+//! the type their key expressions had is unknown
+string DescribeStoredKeyTypeDifference(const vector<unique_ptr<Expression>> &keys,
+                                       const IndexStorageInfo &storage_info) {
+	auto entry = storage_info.options.find("key_physical_types");
+	if (entry == storage_info.options.end()) {
+		for (auto &key : keys) {
+			if (key->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF &&
+			    key->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+				return StringUtil::Format("the index does not record the types of its stored keys, and the type of "
+				                          "its key expression %s (%s now) is decided by the engine that binds it",
+				                          key->ToString(), key->GetReturnType().ToString());
+			}
+		}
+		return string();
+	}
+	auto &stored_types = ListValue::GetChildren(entry->second);
+	if (stored_types.size() != keys.size()) {
+		return StringUtil::Format("the index stores %llu keys, its definition has %llu", stored_types.size(),
+		                          keys.size());
+	}
+	for (idx_t i = 0; i < keys.size(); i++) {
+		const auto stored_type = static_cast<PhysicalType>(stored_types[i].GetValue<uint8_t>());
+		auto &type = keys[i]->GetReturnType();
+		if (type.InternalType() != stored_type) {
+			return StringUtil::Format("the stored keys of %s have the physical type %s, the expression binds to %s "
+			                          "(physical type %s) now",
+			                          keys[i]->ToString(), TypeIdToString(stored_type), type.ToString(),
+			                          TypeIdToString(type.InternalType()));
+		}
+	}
+	return string();
+}
+
+void ThrowMismatchedStoredKeyType(const UnboundIndex &unbound_index, const string &difference) {
+	auto &name = unbound_index.GetIndexName();
+	throw BinderException(
+	    "Cannot bind index %s on table %s: %s, so the stored keys cannot be matched with the keys this "
+	    "engine computes. DROP INDEX %s and CREATE it again; until then writes to the table fail, as does "
+	    "a CHECKPOINT after writes replayed from the write-ahead log",
+	    name, unbound_index.GetTableName(), difference, name);
+}
+
 //! The keys of a new index are stored at the storage version of its database: a key the engines of that version
 //! compute otherwise is refused, like a column type they cannot read, so that they compute the stored keys
 void CheckNewKeys(AttachedDatabase &db, const vector<unique_ptr<Expression>> &keys, const IndexKeyBinding &binding) {
@@ -387,6 +435,14 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index,
 				return nullptr;
 			}
 			ThrowMismatchedStoredKey(unbound_index, binding.version, difference);
+		}
+	} else if (storage_info.IsValid()) {
+		auto difference = DescribeStoredKeyTypeDifference(unbound_expressions, storage_info);
+		if (!difference.empty()) {
+			if (skip_mismatched_keys) {
+				return nullptr;
+			}
+			ThrowMismatchedStoredKeyType(unbound_index, difference);
 		}
 	}
 

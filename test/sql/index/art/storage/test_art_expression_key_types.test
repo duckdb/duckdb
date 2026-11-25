@@ -1,0 +1,66 @@
+# name: test/sql/index/art/storage/test_art_expression_key_types.test
+# description: Expression indexes record the physical types of their keys and keep matching their stored keys when the database is opened again
+# group: [storage]
+
+# the storage version is chosen per database below, the configs that force one cannot
+require no_force_storage
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types.db' AS d (STORAGE_VERSION 'v2.1.0')
+
+statement ok
+CREATE TABLE d.t (x DECIMAL(18,0), y DECIMAL(38,2), s VARCHAR, i INTEGER)
+
+statement ok
+CREATE UNIQUE INDEX ix ON d.t ((round(x, -1)))
+
+statement ok
+CREATE UNIQUE INDEX iy ON d.t ((y + y), (lower(s)))
+
+statement ok
+CREATE UNIQUE INDEX ii ON d.t (i)
+
+statement ok
+INSERT INTO d.t VALUES (11, 1.5, 'A', 1), (1234, 2.5, 'B', 2)
+
+# opened again twice: after a checkpoint, and with rows added since the checkpoint
+loop round 0 2
+
+statement ok
+CHECKPOINT d
+
+statement ok
+DETACH d
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types.db' AS d
+
+statement error
+INSERT INTO d.t VALUES (12, 9, 'Z', 9)
+----
+<REGEX>:.*Duplicate key.*round.*: 10.*
+
+statement error
+INSERT INTO d.t VALUES (500, 1.5, 'a', 9)
+----
+<REGEX>:.*Duplicate key.*
+
+statement error
+INSERT INTO d.t VALUES (500, 9, 'Z', 2)
+----
+<REGEX>:.*Duplicate key.*
+
+query I
+SELECT i FROM d.t WHERE round(x, -1) = 1230
+----
+2
+
+statement ok
+INSERT INTO d.t VALUES (10000 + {round} * 100, 100 + {round}, 'row' || {round}, 100 + {round})
+
+endloop
+
+query I
+SELECT count(*) FROM d.t
+----
+4
