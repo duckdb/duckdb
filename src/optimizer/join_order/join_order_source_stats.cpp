@@ -13,6 +13,83 @@
 
 namespace duckdb {
 
+DistinctCount JoinDomainEstimate::Resolve(const vector<ColumnBinding> &bindings) const {
+	auto domain = estimate;
+	for (auto binding : bindings) {
+		auto entry = local_fallbacks.find(binding);
+		if (entry != local_fallbacks.end()) {
+			domain = domain ? RelationStatisticsHelper::SelectTotalDomain({*domain, entry->second}) : entry->second;
+		}
+	}
+	if (!domain) {
+		return DistinctCount(CardinalityValue(NumericLimits<idx_t>::Maximum()), DistinctCountSource::CARDINALITY);
+	}
+	if (!estimate || !estimate->has_usable_domain || reliable_source_count != 1 ||
+	    (estimate->source != DistinctCountSource::HLL && estimate->source != DistinctCountSource::EXACT)) {
+		return *domain;
+	}
+	optional<CardinalityValue> key_domain;
+	for (auto candidate : min_max_candidates) {
+		if (candidate > domain->distinct_count && candidate <= reliable_source_cardinality) {
+			key_domain = key_domain ? MinValue(*key_domain, candidate) : candidate;
+		}
+	}
+	if (key_domain) {
+		domain->distinct_count = *key_domain;
+	}
+	return *domain;
+}
+
+optional<CardinalityValue> JoinDomainEstimate::UnknownScanBasis() const {
+	return estimate && !estimate->has_usable_domain ? optional<CardinalityValue>(estimate->distinct_count)
+	                                                : optional<CardinalityValue>();
+}
+
+void JoinDomainEstimate::AddSource(const JoinColumnSource &source) {
+	if (!sources.insert(source.binding).second) {
+		return;
+	}
+	if (source.domain.has_usable_domain &&
+	    (source.domain.source == DistinctCountSource::HLL || source.domain.source == DistinctCountSource::EXACT)) {
+		reliable_source_cardinality = MinValue(reliable_source_cardinality, source.source_cardinality);
+		reliable_source_count++;
+	}
+}
+
+void JoinDomainEstimate::Update(ColumnBinding binding, const DistinctCount &distinct_count,
+                                optional_ptr<const JoinColumnSources> column_sources) {
+	auto observation = distinct_count;
+	if (distinct_count.source == DistinctCountSource::DERIVED) {
+		// Source ranges cannot uplift a population already conditioned at a relational boundary.
+		reliable_source_cardinality = 0;
+	}
+	if (column_sources) {
+		AddSource(column_sources->direct);
+		for (auto &source : column_sources->equivalents) {
+			AddSource(source);
+		}
+		if (distinct_count.source == DistinctCountSource::DERIVED || !distinct_count.has_usable_domain) {
+			observation = column_sources->direct.domain;
+		}
+		if (!distinct_count.has_usable_domain) {
+			// Preserve P separately from the original scan fallback S: discount S before restricting to P.
+			local_fallbacks.emplace(binding, distinct_count);
+		}
+	} else if (!distinct_count.has_usable_domain || distinct_count.source == DistinctCountSource::DERIVED) {
+		// A boundary's conditioned population is not an observation of another input's raw source.
+		local_fallbacks.emplace(binding, distinct_count);
+		return;
+	} else if (distinct_count.source == DistinctCountSource::HLL ||
+	           distinct_count.source == DistinctCountSource::EXACT) {
+		// A reliable observation without source provenance has no known population for the uplift guard.
+		reliable_source_cardinality = 0;
+	}
+	if (column_sources && observation.source == DistinctCountSource::MIN_MAX) {
+		min_max_candidates.push_back(MinValue(observation.distinct_count, column_sources->direct.scan_cardinality));
+	}
+	estimate = estimate ? RelationStatisticsHelper::SelectTotalDomain({*estimate, observation}) : observation;
+}
+
 JoinOrderSourceStats::JoinOrderSourceStats(ClientContext &context, LogicalOperator &root) {
 	AddPlan(context, root);
 }
@@ -27,8 +104,10 @@ void JoinOrderSourceStats::AddPlan(ClientContext &context, LogicalOperator &root
 			auto &get = op.Cast<LogicalGet>();
 			if (scans.find(get.table_index) == scans.end()) {
 				auto source = get.EstimateSourceStatistics(context);
-				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, source);
-				scans.emplace(get.table_index, ScanStats {source.estimated_cardinality, std::move(stats)});
+				column_binding_map_t<DistinctCount> source_domains;
+				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, source, source_domains);
+				scans.emplace(get.table_index,
+				              ScanStats {source.estimated_cardinality, std::move(stats), std::move(source_domains)});
 			}
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -182,8 +261,9 @@ join_column_sources_t JoinOrderSourceStats::Resolve(LogicalOperator &root) const
 			if (entry != scans.end() && !get.extra_info.sample_options) {
 				auto &scan = entry->second;
 				for (auto &column : scan.stats.columns) {
-					output.emplace(column.binding, JoinColumnSources({column.binding, scan.cardinality,
-					                                                  scan.stats.cardinality, column.total_domain}));
+					output.emplace(column.binding,
+					               JoinColumnSources({column.binding, scan.cardinality, scan.stats.cardinality,
+					                                  scan.source_domains.at(column.binding)}));
 				}
 			}
 		} else if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {

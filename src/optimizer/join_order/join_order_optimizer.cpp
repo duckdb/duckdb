@@ -129,6 +129,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 }
 
 void JoinOrderOptimizer::AddMaterializedCTEStats(TableIndex index, RelationStats &&stats) {
+	stats.EstablishSupportIdentity();
 	materialized_cte_stats.emplace(index, std::move(stats));
 }
 

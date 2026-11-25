@@ -9,6 +9,7 @@ add_library_unity(
   common_subplan.cpp
   common_subplan_nonserializable.cpp
   dynamic_filter_groups.cpp
+  equality_cardinality.cpp
   expression_type_serialization.cpp
   filter_pushdown_alias.cpp
   function_invocation_serialization.cpp

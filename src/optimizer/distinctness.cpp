@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
@@ -158,8 +159,8 @@ vector<column_binding_set_t> Distinctness::ComputeJoinUniqueSets(LogicalComparis
 			result.insert(result.end(), right_sets.begin(), right_sets.end());
 		}
 		if (result.size() > MAX_UNIQUE_SETS) {
-			// this is the only place where the number of unique sets grows: bound it, so that a chain of key joins
-			// does not accumulate them. Dropping a unique set only loses a proof
+			// Bound the alternatives collected from both inputs so that a chain of key joins does not
+			// accumulate them. Dropping a unique set only loses a proof.
 			result.resize(MAX_UNIQUE_SETS);
 		}
 		return result;
@@ -295,6 +296,30 @@ vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalPr
 	return result;
 }
 
+vector<column_binding_set_t> Distinctness::ComputeDistinctUniqueSets(LogicalDistinct &distinct) {
+	// Both DISTINCT and DISTINCT ON keep at most one row per target tuple and never duplicate child rows.
+	auto result = GetUniqueSets(*distinct.children[0]);
+	column_binding_set_t key;
+	for (auto &target : distinct.distinct_targets) {
+		if (target->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return result;
+		}
+		auto &ref = target->Cast<BoundColumnRefExpression>();
+		if (ref.Depth() != 0) {
+			return result;
+		}
+		key.insert(ref.Binding());
+	}
+	if (!key.empty() && std::find(result.begin(), result.end(), key) == result.end()) {
+		// Keep the new source key even when the child already supplies the maximum number of alternatives.
+		result.insert(result.begin(), std::move(key));
+		if (result.size() > MAX_UNIQUE_SETS) {
+			result.resize(MAX_UNIQUE_SETS);
+		}
+	}
+	return result;
+}
+
 vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op) {
 	if (ForwardsChildUniqueSets(op.type, propagation)) {
 		return GetUniqueSets(*op.children[0]);
@@ -304,6 +329,8 @@ vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op
 		return ComputeScanUniqueSets(op.Cast<LogicalGet>());
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return ComputeAggregateUniqueSets(op.Cast<LogicalAggregate>());
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		return ComputeDistinctUniqueSets(op.Cast<LogicalDistinct>());
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return ComputeProjectionUniqueSets(op.Cast<LogicalProjection>());
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:

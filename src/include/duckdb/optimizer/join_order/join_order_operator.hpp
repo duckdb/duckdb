@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -62,7 +64,9 @@ struct JoinOrderOperator {
 	vector<LogicalType> mark_types;
 	//! Predicate copies used only for cardinality estimation and query-graph connectivity.
 	vector<idx_t> costing_predicate_indices;
-	//! LEFT ON residuals not covered by a costing predicate or an equivalent equality key.
+	//! Normalized LEFT ON equalities, including same-side keys that cannot be query-graph edges.
+	vector<pair<ColumnBinding, ColumnBinding>> costing_equalities;
+	//! LEFT ON residuals outside the column-equality model.
 	vector<reference<const Expression>> residual_predicates;
 	//! Whether this occurrence must apply its complete conditions together.
 	//! Independent predicates must satisfy each filtering dependency or lie outside its subtree.

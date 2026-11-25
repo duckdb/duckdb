@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_optimizer_relation_statistics
   OBJECT
+  equality_cardinality.cpp
   relation_statistics.cpp
   relation_statistics_extractor.cpp
   relation_statistics_helper.cpp

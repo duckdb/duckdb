@@ -1,0 +1,82 @@
+# name: test/optimizer/statistics/finite_restriction_boundaries.test
+# description: Repeated finite predicates retain their value restrictions across materialization
+# group: [statistics]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET disabled_optimizers = 'cte_filter_pusher';
+
+statement ok
+CREATE TABLE finite_boundary_values(k INTEGER NOT NULL);
+
+statement ok
+INSERT INTO finite_boundary_values SELECT k FROM (VALUES (0), (42), (84)) v(k), range(1000);
+
+statement ok
+ANALYZE finite_boundary_values;
+
+# The second short NOT IN is a separate FILTER above the materialized producer.
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT k FROM finite_boundary_values WHERE k NOT IN (42, 84))
+SELECT k FROM c WHERE k NOT IN (84, 42);
+----
+physical_plan	<REGEX>:(?s).*FILTER.*CTE_SCAN.*
+
+query I
+WITH c AS MATERIALIZED (SELECT k FROM finite_boundary_values WHERE k NOT IN (42, 84))
+SELECT count(*) FROM c WHERE k NOT IN (84, 42);
+----
+1000
+
+# These exclusions are disjoint from the finite producer's allowed values.
+query I
+WITH c AS MATERIALIZED (SELECT k AS x FROM finite_boundary_values WHERE k IN (42, 84))
+SELECT count(*) FROM c WHERE x NOT IN (1, 2);
+----
+2000
+
+query I
+WITH c AS MATERIALIZED (SELECT k AS x FROM finite_boundary_values WHERE k IN (42, 84))
+SELECT count(*) FROM c WHERE x NOT IN (84, 105);
+----
+1000
+
+query I
+WITH c AS MATERIALIZED (SELECT k FROM finite_boundary_values WHERE k NOT IN (42))
+SELECT count(*) FROM c WHERE k NOT IN (42, 84, 84);
+----
+1000
+
+query I
+WITH c AS MATERIALIZED (SELECT DISTINCT k FROM finite_boundary_values WHERE k IN (42, 84))
+SELECT count(*) FROM c WHERE k NOT IN (1, 2);
+----
+2
+
+query I
+WITH c AS MATERIALIZED (
+    SELECT k FROM finite_boundary_values WHERE k = 42
+    UNION ALL
+    SELECT k FROM finite_boundary_values WHERE k = 84
+)
+SELECT count(*) FROM c WHERE k NOT IN (1, 2);
+----
+2000
+
+# Ordinary nested NULLs compare as values; top-level UNION active NULL has a different equality contract.
+query I
+WITH c AS MATERIALIZED (SELECT {'n': NULL::INTEGER} x WHERE {'n': NULL::INTEGER} IN ({'n': NULL::INTEGER}))
+SELECT count(*) FROM c WHERE x IN ({'n': NULL::INTEGER});
+----
+1
+
+query I
+WITH c AS MATERIALIZED (SELECT union_value(str := 'a') x WHERE union_value(str := 'a') IN (union_value(str := 'a')))
+SELECT count(*) FROM c WHERE x NOT IN (union_value(str := NULL::VARCHAR));
+----
+0
+
+statement ok
+RESET disabled_optimizers;

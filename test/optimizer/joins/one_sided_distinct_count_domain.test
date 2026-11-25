@@ -80,6 +80,17 @@ EXPLAIN SELECT * FROM od_fact JOIN (SELECT range k FROM range(0) UNION ALL SELEC
 ----
 physical_plan	<REGEX>:[^~]*~[12].[0-9]{3}.[0-9]{3} rows.*
 
+# Empty-population identity is independent of arm order and association.
+query II
+EXPLAIN SELECT * FROM od_fact JOIN (SELECT ((range % 50) * 20)::BIGINT k FROM range(1000) UNION ALL SELECT range FROM range(0)) l ON od_fact.k = l.k;
+----
+physical_plan	<REGEX>:[^~]*~[12].[0-9]{3}.[0-9]{3} rows.*
+
+query II
+EXPLAIN SELECT * FROM od_fact JOIN (SELECT range k FROM range(0) UNION ALL (SELECT ((range % 50) * 20)::BIGINT FROM range(1000) UNION ALL SELECT range FROM range(0))) l ON od_fact.k = l.k;
+----
+physical_plan	<REGEX>:[^~]*~[12].[0-9]{3}.[0-9]{3} rows.*
+
 query II
 EXPLAIN SELECT * FROM od_fact JOIN (SELECT k FROM read_parquet('{TEST_DIR}/od_dim.parquet') WHERE false UNION ALL SELECT (k % 50) * 20 FROM read_parquet('{TEST_DIR}/od_dim.parquet')) l ON od_fact.k = l.k;
 ----
@@ -199,15 +210,21 @@ JOIN (VALUES ('0'), ('20'), ('40'), ('60'), ('80'), ('100')) v(k) USING(k);
 ----
 6000
 
-# A VALUES list supplies its own join fallback without becoming Parquet's base NDV.
+# With no source NDV, Parquet retains its 50K population fallback and VALUES retains six.
+# Both domains are unknown: the scan prior discounts 50K to 10K for the join estimate.
+# This estimates 30 matches; the actual 6000 above exposes the missing repetition statistics.
 
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/od_lowndv.parquet') f
 JOIN (VALUES ('0'), ('20'), ('40'), ('60'), ('80'), ('100')) v(k) USING(k);
 ----
-physical_plan	<REGEX>:[^~]*~50.000 rows.*
+physical_plan	<REGEX>:[^~]*~30 rows.*
 
 # Grouped and materialized CSV dimensions likewise retain their local fallback.
+# File sizes estimate 778000 fact rows and 778 dimension rows, with no source NDVs.
+# Grouping supplies a usable derived domain and proves uniqueness, estimating 778 matches.
+# Plain materialization retains unknown domains, so the scan prior estimates 3890 matches.
+# Neither supplies the missing fact-key repetition or coverage observations.
 
 statement ok
 COPY (SELECT (range % 1000)::BIGINT k FROM range(1000000)) TO '{TEST_DIR}/od_csv_fact.csv' (HEADER);
@@ -219,13 +236,13 @@ query II
 EXPLAIN SELECT * FROM read_csv('{TEST_DIR}/od_csv_fact.csv') f
 JOIN (SELECT k, sum(v) FROM read_csv('{TEST_DIR}/od_csv_dim.csv') GROUP BY k) d USING(k);
 ----
-physical_plan	<REGEX>:[^~]*~[6-9][0-9]{2}.[0-9]{3} rows.*
+physical_plan	<REGEX>:[^~]*~778 rows.*
 
 query II
 EXPLAIN WITH d AS MATERIALIZED (SELECT * FROM read_csv('{TEST_DIR}/od_csv_dim.csv'))
 SELECT * FROM read_csv('{TEST_DIR}/od_csv_fact.csv') f JOIN d USING(k);
 ----
-physical_plan	<REGEX>:[^~]*~[6-9][0-9]{2}.[0-9]{3} rows.*
+physical_plan	<REGEX>:[^~]*~3,890 rows.*
 
 query I
 SELECT count(*) FROM read_csv('{TEST_DIR}/od_csv_fact.csv') f
@@ -240,6 +257,7 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/od_csv_fact.csv') f JOIN d USING(k);
 1000000
 
 # A hidden large NDV has already contributed to the inner join's estimate.
+# The mathematical 10000-row point can publish as 9999 after floating-point products.
 
 statement ok
 CREATE TABLE od_pa AS SELECT (range % 50)::BIGINT k FROM range(10000);
@@ -254,7 +272,7 @@ query II
 EXPLAIN SELECT r.k, r.g FROM (SELECT od_pa.k, random() g FROM od_pa JOIN od_pb USING(k)) r
 JOIN od_dim USING(k);
 ----
-physical_plan	<REGEX>:[^~]*~10.000 rows.*
+physical_plan	<REGEX>:[^~]*~(9,999|10,000) rows.*
 
 query I
 SELECT count(*) FROM (SELECT od_pa.k, random() g FROM od_pa JOIN od_pb USING(k)) r JOIN od_dim USING(k);

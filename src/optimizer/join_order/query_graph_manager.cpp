@@ -91,121 +91,52 @@ void QueryGraphManager::BuildPredicateModel() {
 		predicate_model.AddEqualityClass(std::move(equality_class));
 	}
 
-	for (auto &equality_class : predicate_model.GetEqualityClasses()) {
-		for (auto &edge : equality_class.edges) {
-			auto &left = set_manager.GetJoinRelation(edge.left_relation);
-			auto &right = set_manager.GetJoinRelation(edge.right_relation);
-			auto &pair = set_manager.Union(left, right);
-			auto first_binding = edge.left_binding;
-			auto second_binding = edge.right_binding;
-			if (pair.relations[0] != edge.left_relation) {
-				D_ASSERT(pair.relations[0] == edge.right_relation);
-				first_binding = edge.right_binding;
-				second_binding = edge.left_binding;
-			}
-			predicate_model.AddDirectEqualityPairClass(pair, equality_class.index, first_binding, second_binding);
-		}
-	}
 	BuildLeftJoinPredicates();
 }
 
 void QueryGraphManager::BuildLeftJoinPredicates() {
-	idx_t next_left_equality_group = 0;
 	for (auto &op : join_operators) {
 		if (op->type != JoinOrderOperatorType::LEFT) {
 			continue;
 		}
-		JoinEqualityGroups groups;
 		auto add_equality = [&](ExpressionType type, const Expression &left, const Expression &right) {
 			if (type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-				return ColumnBinding();
+				return false;
 			}
-			ColumnBinding left_binding;
-			ColumnBinding right_binding;
+			ColumnBinding left_binding, right_binding;
 			GetEquivalenceBinding(left, left_binding);
 			GetEquivalenceBinding(right, right_binding);
 			if (!left_binding.table_index.IsValid() || !right_binding.table_index.IsValid()) {
-				return ColumnBinding();
+				return false;
 			}
-			groups.AddEquality(left_binding, right_binding);
-			return left_binding;
+			op->costing_equalities.emplace_back(left_binding, right_binding);
+			return true;
 		};
-		vector<ColumnBinding> modeled_equalities;
-		vector<reference<const Expression>> pending_residuals;
-		vector<pair<reference<const Expression>, ColumnBinding>> residuals;
+		vector<reference<const Expression>> pending;
 		for (auto &condition : op->conditions) {
 			if (condition.IsComparison()) {
-				auto binding = add_equality(condition.GetComparisonType(), condition.GetLHS(), condition.GetRHS());
-				if (binding.table_index.IsValid()) {
-					modeled_equalities.push_back(binding);
-				}
+				add_equality(condition.GetComparisonType(), condition.GetLHS(), condition.GetRHS());
 			} else {
-				pending_residuals.push_back(condition.GetJoinExpression());
+				pending.push_back(condition.GetJoinExpression());
 			}
 		}
-		// Same-side ON equalities can connect keys even though they are not costing predicates.
-		while (!pending_residuals.empty()) {
-			auto &expression = pending_residuals.back().get();
-			pending_residuals.pop_back();
+		while (!pending.empty()) {
+			auto &expression = pending.back().get();
+			pending.pop_back();
 			if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 				for (auto &child : expression.Cast<BoundConjunctionExpression>().GetChildren()) {
-					pending_residuals.push_back(*child);
+					pending.push_back(*child);
 				}
 				continue;
 			}
-			ColumnBinding binding;
 			if (BoundComparisonExpression::IsComparison(expression)) {
 				auto &comparison = expression.Cast<BoundFunctionExpression>();
-				binding = add_equality(expression.GetExpressionType(), BoundComparisonExpression::Left(comparison),
-				                       BoundComparisonExpression::Right(comparison));
+				if (add_equality(expression.GetExpressionType(), BoundComparisonExpression::Left(comparison),
+				                 BoundComparisonExpression::Right(comparison))) {
+					continue;
+				}
 			}
-			residuals.emplace_back(expression, binding);
-		}
-		reference_map_t<JoinRelationSet, RelationPairEqualitySummary> summaries;
-		vector<pair<reference<JoinPredicate>, reference<JoinRelationSet>>> pairs;
-		unordered_map<idx_t, idx_t> group_ids;
-		for (auto predicate_index : op->costing_predicate_indices) {
-			auto &predicate = predicate_model.GetPredicates()[predicate_index].get();
-			auto type = predicate.GetComparisonType();
-			if (!predicate.CanBuildSelectivityDomain() || !predicate.HasValidEqualityBindings() ||
-			    (type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
-				continue;
-			}
-			auto first_binding = predicate.GetEqualityBinding(true);
-			auto second_binding = predicate.GetEqualityBinding(false);
-			auto first_relation = JoinOrderUtil::GetBindingRelation(first_binding);
-			auto second_relation = JoinOrderUtil::GetBindingRelation(second_binding);
-			if (first_relation == second_relation) {
-				continue;
-			}
-			auto &pair = set_manager.Union(set_manager.GetJoinRelation(first_relation),
-			                               set_manager.GetJoinRelation(second_relation));
-			if (pair.relations[0] != first_relation) {
-				std::swap(first_binding, second_binding);
-			}
-			auto group_root = groups.GetGroup(first_binding);
-			auto group_entry = group_ids.find(group_root);
-			if (group_entry == group_ids.end()) {
-				group_entry = group_ids.insert(make_pair(group_root, next_left_equality_group++)).first;
-			}
-			predicate.GetFilter().left_equality_group = optional_idx(group_entry->second);
-			summaries[pair].AddEquality(group_root, first_binding, second_binding);
-			pairs.emplace_back(predicate, pair);
-		}
-		for (auto &entry : pairs) {
-			if (summaries.at(entry.second).HasDirectCompositeEquality()) {
-				entry.first.get().SetCompositeJoinPair(entry.second);
-			}
-		}
-		unordered_set<idx_t> accounted_groups;
-		for (auto &binding : modeled_equalities) {
-			accounted_groups.insert(groups.GetGroup(binding));
-		}
-		for (auto &residual : residuals) {
-			auto &binding = residual.second;
-			if (!binding.table_index.IsValid() || accounted_groups.insert(groups.GetGroup(binding)).second) {
-				op->residual_predicates.push_back(residual.first);
-			}
+			op->residual_predicates.push_back(expression);
 		}
 	}
 }

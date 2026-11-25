@@ -27,6 +27,8 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/equality_cardinality.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -35,18 +37,22 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -128,6 +134,8 @@ TEST_CASE("MARK boundaries preserve the left population and publish their marker
 		left_stats.row_retention = 0.25;
 		left_stats.columns[0].current_domain.distinct_count = 0.25;
 		left_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
+		left_stats.AddUniqueKey({0});
+		left_stats.EstablishSupportIdentity();
 		auto right_stats = CreateStats({right_binding}, {rhs_rows}, rhs_rows);
 		JoinPredicateModel predicates;
 		CardinalityEstimator estimator(sets, predicates);
@@ -153,6 +161,12 @@ TEST_CASE("MARK boundaries preserve the left population and publish their marker
 		REQUIRE(extracted->row_retention == projected->row_retention);
 		REQUIRE(extracted->max_cardinality.GetIndex() == projected->max_cardinality.GetIndex());
 		REQUIRE(extracted->columns.size() == projected->columns.size());
+		REQUIRE(extracted->HasUniqueKey({0}));
+		REQUIRE(projected->HasUniqueKey({0}));
+		REQUIRE(extracted->columns[0].support_identities);
+		REQUIRE(projected->columns[0].support_identities);
+		REQUIRE(extracted->columns[0].support_identities->at(0).origin ==
+		        projected->columns[0].support_identities->at(0).origin);
 		for (idx_t i = 0; i < extracted->columns.size(); i++) {
 			REQUIRE(extracted->columns[i].total_domain.distinct_count ==
 			        projected->columns[i].total_domain.distinct_count);
@@ -186,21 +200,26 @@ static unique_ptr<LogicalOperator> CreateProjectedDummy(TableIndex input_index, 
 class UnsupportedOutputOperator : public LogicalOperator {
 public:
 	explicit UnsupportedOutputOperator(TableIndex output_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT), output_index(output_index) {
+	    : UnsupportedOutputOperator({ColumnBinding(output_index, ProjectionIndex(0))}, LogicalType::INTEGER) {
+	}
+
+	UnsupportedOutputOperator(vector<ColumnBinding> bindings, const LogicalType &type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT), bindings(std::move(bindings)), output_type(type) {
 	}
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(output_index, ProjectionIndex(0))};
+		return bindings;
 	}
 
 protected:
 	void ResolveTypes() override {
-		types = {LogicalType::INTEGER};
+		types = vector<LogicalType>(bindings.size(), output_type);
 	}
 
 private:
-	TableIndex output_index;
+	vector<ColumnBinding> bindings;
+	LogicalType output_type;
 };
 
 TEST_CASE("An internal single-input filter survives join reconstruction",
@@ -764,6 +783,281 @@ TEST_CASE("Join source populations survive changes in relation cardinality", "[o
 	}
 }
 
+TEST_CASE("Join refinement preserves derived populations and refines missing NDVs",
+          "[optimizer][relation_statistics]") {
+	for (bool source_lineage : {false, true}) {
+		for (auto kind :
+		     {DistinctCountSource::CARDINALITY, DistinctCountSource::MIN_MAX, DistinctCountSource::DERIVED}) {
+			JoinRelationSetManager sets;
+			JoinPredicateModel model;
+			auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+			auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+			auto &left = sets.GetJoinRelation(RelationIndex(0));
+			auto &right = sets.GetJoinRelation(RelationIndex(1));
+			auto &joined = sets.Union(left, right);
+			FilterInfo filter(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), joined, 0);
+			filter.SetLeftSet(left);
+			filter.SetRightSet(right);
+			filter.left_binding = a;
+			filter.right_binding = b;
+			auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			JoinEqualityClass group;
+			group.index = 0;
+			group.columns = {a, b};
+			group.relations = {RelationIndex(0), RelationIndex(1)};
+			group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a, b);
+			model.AddEqualityClass(std::move(group));
+			auto input = CreateStats({a}, {123}, 384);
+			input.columns[0].total_domain.source = kind;
+			input.columns[0].total_domain.has_usable_domain = kind != DistinctCountSource::CARDINALITY;
+			auto dimension = CreateStats({b}, {59}, 64);
+			join_column_sources_t sources;
+			sources.emplace(b, JoinColumnSources({ColumnBinding(TableIndex(20), ProjectionIndex(0)), 64, 64,
+			                                      dimension.columns[0].total_domain}));
+			if (source_lineage) {
+				sources.emplace(a, JoinColumnSources({ColumnBinding(TableIndex(10), ProjectionIndex(0)), 384, 384,
+				                                      DistinctCount(384, DistinctCountSource::CARDINALITY)}));
+			}
+			CardinalityEstimator estimator(sets, model);
+			estimator.Initialize({input, dimension}, {}, sources);
+			auto expected = kind != DistinctCountSource::DERIVED ? 59 : 123;
+			auto projected = estimator.ProjectStats(left, {a});
+			REQUIRE(projected);
+			// Pair imputation must not rewrite the input population.
+			REQUIRE(projected->columns[0].total_domain.distinct_count == 123);
+			REQUIRE(projected->columns[0].current_domain.distinct_count == 123);
+			REQUIRE(estimator.EstimateCardinality(joined).GetDouble() == Approx(384.0 * 64 / expected));
+		}
+	}
+}
+
+TEST_CASE("Derived population scope survives alias reconciliation", "[optimizer][relation_statistics]") {
+	REQUIRE(EnumUtil::FromString<DistinctCountSource>("DERIVED") == DistinctCountSource::DERIVED);
+	REQUIRE(EnumUtil::ToString(DistinctCountSource::DERIVED) == "DERIVED");
+	auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto b = ColumnBinding(TableIndex(0), ProjectionIndex(1));
+	for (bool reverse : {false, true}) {
+		auto stats = CreateStats({a, b}, {64, 64}, 128);
+		stats.columns[reverse ? 1 : 0].total_domain.source = DistinctCountSource::DERIVED;
+		stats.equivalent_columns = {{0, 1}};
+		vector<RelationStats> inputs {stats};
+		EqualityCardinalityModel model(inputs);
+		for (auto &column : inputs[0].columns) {
+			REQUIRE(column.total_domain.source == DistinctCountSource::DERIVED);
+		}
+		auto output = CreateStats({a}, {64}, 128);
+		output.CopyEvidence(stats, {optional_idx(1)});
+		REQUIRE(output.columns[0].total_domain.source == DistinctCountSource::DERIVED);
+	}
+}
+
+TEST_CASE("Source refinement consumes explicit scalar aliases without tuple inference",
+          "[optimizer][relation_statistics]") {
+	for (auto kind : {DistinctCountSource::DERIVED, DistinctCountSource::EXACT, DistinctCountSource::CARDINALITY}) {
+		for (bool tuple_alias : {false, true}) {
+			for (bool prenormalize : {false, true}) {
+				JoinRelationSetManager sets;
+				JoinPredicateModel model;
+				auto a0 = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+				auto a1 = ColumnBinding(TableIndex(0), ProjectionIndex(1));
+				auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+				auto &left = sets.GetJoinRelation(RelationIndex(0));
+				auto &right = sets.GetJoinRelation(RelationIndex(1));
+				auto &joined = sets.Union(left, right);
+				FilterInfo filter(CreateJoinComparison(a1, b, ExpressionType::COMPARE_EQUAL), joined, 0);
+				filter.SetLeftSet(left);
+				filter.SetRightSet(right);
+				filter.left_binding = a1;
+				filter.right_binding = b;
+				auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a1, b);
+				predicate.SetEqualityClassIndex(optional_idx(0));
+				JoinEqualityClass group;
+				group.index = 0;
+				group.columns = {a1, b};
+				group.relations = {RelationIndex(0), RelationIndex(1)};
+				group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a1, b);
+				model.AddEqualityClass(std::move(group));
+				auto input = CreateStats({a0, a1}, {123, 123}, 384);
+				input.columns[0].total_domain.source = kind;
+				input.columns[0].total_domain.has_usable_domain = kind != DistinctCountSource::CARDINALITY;
+				input.columns[1].total_domain.source = DistinctCountSource::CARDINALITY;
+				input.columns[1].total_domain.has_usable_domain = false;
+				if (tuple_alias) {
+					auto tuples = make_shared_ptr<vector<RelationTupleIdentity>>();
+					tuples->push_back({{0, 1}, {make_shared_ptr<SupportOrigin>(), {0, 0}}});
+					input.tuple_identities = tuples;
+				} else {
+					input.equivalent_columns = {{0, 1}};
+				}
+				auto dimension = CreateStats({b}, {59}, 64);
+				vector<RelationStats> inputs {input, dimension};
+				if (prenormalize) {
+					EqualityCardinalityModel normalized(inputs);
+				}
+				join_column_sources_t sources;
+				sources.emplace(a1, JoinColumnSources({ColumnBinding(TableIndex(10), ProjectionIndex(0)), 384, 384,
+				                                       DistinctCount(384, DistinctCountSource::CARDINALITY)}));
+				sources.emplace(b, JoinColumnSources({ColumnBinding(TableIndex(20), ProjectionIndex(0)), 64, 64,
+				                                      dimension.columns[0].total_domain}));
+				CardinalityEstimator estimator(sets, model);
+				estimator.Initialize(inputs, {}, sources);
+				auto projected = estimator.ProjectStats(left, {a0, a1});
+				REQUIRE(projected);
+				INFO("prenormalize=" << prenormalize << " tuple_alias=" << tuple_alias);
+				auto expected = tuple_alias || kind == DistinctCountSource::CARDINALITY ? 59 : 123;
+				for (idx_t c = 0; c < projected->columns.size(); c++) {
+					auto &column = projected->columns[c];
+					// Tuple identities describe complete joint supports; scalar aliases are explicit.
+					auto expected_kind = tuple_alias && c == 1 ? DistinctCountSource::CARDINALITY : kind;
+					REQUIRE(column.total_domain.source == expected_kind);
+					REQUIRE(column.total_domain.distinct_count == 123);
+					REQUIRE(column.current_domain.distinct_count == 123);
+				}
+				REQUIRE(estimator.EstimateCardinality(joined).GetDouble() == Approx(384.0 * 64 / expected));
+			}
+		}
+	}
+}
+
+TEST_CASE("Source refinement consumes finalized key populations", "[optimizer][relation_statistics]") {
+	for (bool prenormalize : {false, true}) {
+		JoinRelationSetManager sets;
+		JoinPredicateModel model;
+		vector<unique_ptr<FilterInfo>> filters;
+		vector<RelationStats> inputs;
+		vector<ColumnBinding> bindings;
+		join_column_sources_t sources;
+		JoinEqualityClass group;
+		group.index = 0;
+		for (idx_t r = 0; r < 3; r++) {
+			auto binding = ColumnBinding(TableIndex(r), ProjectionIndex(0));
+			bindings.push_back(binding);
+			auto point = r == 0 ? 59 : r == 1 ? 100 : 60;
+			auto input = CreateStats({binding}, {MinValue(idx_t(point), idx_t(64))}, 64);
+			input.columns[0].total_domain.distinct_count = point;
+			input.columns[0].total_domain.source = r == 1 ? DistinctCountSource::CARDINALITY : DistinctCountSource::HLL;
+			input.columns[0].total_domain.has_usable_domain = r != 1;
+			if (r == 0) {
+				input.AddUniqueKey({0});
+			}
+			sources.emplace(binding,
+			                JoinColumnSources({ColumnBinding(TableIndex(10 + r), ProjectionIndex(0)),
+			                                   r == 1 ? idx_t(100) : idx_t(64), 64, input.columns[0].total_domain}));
+			inputs.push_back(std::move(input));
+			group.columns.insert(binding);
+			group.relations.insert(RelationIndex(r));
+			if (r == 0) {
+				continue;
+			}
+			auto &left = sets.GetJoinRelation(RelationIndex(r - 1));
+			auto &right = sets.GetJoinRelation(RelationIndex(r));
+			auto filter =
+			    make_uniq<FilterInfo>(CreateJoinComparison(bindings[r - 1], binding, ExpressionType::COMPARE_EQUAL),
+			                          sets.Union(left, right), filters.size());
+			filter->SetLeftSet(left);
+			filter->SetRightSet(right);
+			filter->left_binding = bindings[r - 1];
+			filter->right_binding = binding;
+			auto &predicate =
+			    model.RegisterPredicate(*filter, JoinPredicateClass::INNER_EQUALITY, bindings[r - 1], binding);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			group.edges.emplace_back(predicate, RelationIndex(r - 1), RelationIndex(r), bindings[r - 1], binding);
+			filters.push_back(std::move(filter));
+		}
+		model.AddEqualityClass(std::move(group));
+		if (prenormalize) {
+			EqualityCardinalityModel normalized(inputs);
+		}
+		CardinalityEstimator estimator(sets, model);
+		estimator.Initialize(inputs, {}, sources);
+		auto &b = sets.GetJoinRelation(RelationIndex(1));
+		auto projected = estimator.ProjectStats(b, {bindings[1]});
+		REQUIRE(projected);
+		auto &bc = sets.Union(b, sets.GetJoinRelation(RelationIndex(2)));
+		INFO("prenormalize=" << prenormalize
+		                     << " B population=" << projected->columns[0].total_domain.distinct_count.GetDouble()
+		                     << " BC=" << estimator.EstimateCardinality(bc).GetDouble());
+		// The finalized A key is outside BC and cannot impute its B population.
+		REQUIRE(projected->columns[0].total_domain.distinct_count == 100);
+		REQUIRE(estimator.EstimateCardinality(bc).GetDouble() == Approx(64.0 * 64 / 60));
+	}
+}
+
+TEST_CASE("Captured scalar populations remain finalized through repeated source refinement",
+          "[optimizer][relation_statistics]") {
+	for (bool unique : {false, true}) {
+		for (bool joint : {false, true}) {
+			if (!unique && !joint) {
+				continue;
+			}
+			auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+			auto input = CreateStats({binding}, {64}, 64);
+			input.columns[0].total_domain = DistinctCount(100, DistinctCountSource::CARDINALITY);
+			if (unique) {
+				input.AddUniqueKey({0});
+			}
+			if (joint) {
+				input.joint_stats.push_back({{0},
+				                             DistinctCount(100, DistinctCountSource::DERIVED, true),
+				                             DistinctCount(64, DistinctCountSource::CARDINALITY),
+				                             nullptr});
+			}
+			vector<RelationStats> inputs {input};
+			for (idx_t iteration = 0; iteration < 3; iteration++) {
+				EqualityCardinalityModel model(inputs);
+				const auto &normalized = inputs;
+				REQUIRE(normalized[0].columns[0].total_domain.distinct_count == 100);
+				REQUIRE(normalized[0].columns[0].current_domain.distinct_count == 64);
+				REQUIRE(normalized[0].columns[0].total_domain.source == DistinctCountSource::DERIVED);
+				if (joint) {
+					REQUIRE(normalized[0].joint_stats[0].total_domain.source == DistinctCountSource::DERIVED);
+				}
+			}
+		}
+	}
+}
+
+TEST_CASE("Set operations publish computed population kinds", "[optimizer][relation_statistics]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	for (auto type : {LogicalOperatorType::LOGICAL_UNION, LogicalOperatorType::LOGICAL_INTERSECT}) {
+		LogicalSetOperation op(TableIndex(30), 1, make_uniq<LogicalDummyScan>(TableIndex(10)),
+		                       make_uniq<LogicalDummyScan>(TableIndex(20)), type, true);
+		auto left = CreateStats({ColumnBinding(TableIndex(10), ProjectionIndex(0))}, {64}, 128);
+		auto right = CreateStats({ColumnBinding(TableIndex(20), ProjectionIndex(0))}, {32}, 64);
+		auto stats = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+		REQUIRE(stats);
+		REQUIRE(stats->columns[0].total_domain.source == DistinctCountSource::DERIVED);
+		REQUIRE(stats->columns[0].total_domain.distinct_count ==
+		        (type == LogicalOperatorType::LOGICAL_UNION ? 96 : 32));
+	}
+}
+
+TEST_CASE("UNION population evidence includes currently empty unknown contributions",
+          "[optimizer][relation_statistics]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	LogicalSetOperation op(TableIndex(30), 1, make_uniq<LogicalDummyScan>(TableIndex(10)),
+	                       make_uniq<LogicalDummyScan>(TableIndex(20)), LogicalOperatorType::LOGICAL_UNION, true);
+	auto known = CreateStats({ColumnBinding(TableIndex(10), ProjectionIndex(0))}, {4}, 100);
+	auto unknown = CreateStats({ColumnBinding(TableIndex(20), ProjectionIndex(0))}, {100}, 100);
+	unknown.columns[0].total_domain = DistinctCount(100, DistinctCountSource::DERIVED, false);
+	unknown.columns[0].current_domain = unknown.columns[0].total_domain;
+	RelationStatisticsHelper::ApplyCardinality(unknown, 0);
+	for (bool reverse : {false, true}) {
+		if (reverse) {
+			std::swap(op.children[0], op.children[1]);
+		}
+		auto output = reverse
+		                  ? RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {unknown, known})
+		                  : RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {known, unknown});
+		REQUIRE(output);
+		REQUIRE(output->columns[0].total_domain.distinct_count == 104);
+		REQUIRE_FALSE(output->columns[0].total_domain.has_usable_domain);
+	}
+}
+
 TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimizer][relation_statistics]") {
 	for (auto synthetic_rows : {idx_t(6), idx_t(600)}) {
 		JoinRelationSetManager sets;
@@ -810,13 +1104,131 @@ TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimiz
 		auto &base_join = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
 		REQUIRE(estimator.EstimateCardinality(base_join).GetIndex() == 500000);
 		auto &full_join = sets.Union(base_join, sets.GetJoinRelation(RelationIndex(2)));
-		REQUIRE(estimator.EstimateCardinality(full_join).GetIndex() == 500000);
+		// The selected scan prior is 4,000 for both source bindings. The local synthetic prior stays local.
+		REQUIRE(estimator.EstimateCardinality(full_join).GetDouble() == Approx(125.0 * synthetic_rows));
+	}
+}
+
+TEST_CASE("Unknown graph factors share immutable source scope with direct models",
+          "[optimizer][relation_statistics][equality_cardinality]") {
+	for (bool captured : {false, true}) {
+		for (bool informed_c : {false, true}) {
+			for (bool local : {false, true}) {
+				CAPTURE(captured, informed_c, local);
+				JoinRelationSetManager sets;
+				JoinPredicateModel predicates;
+				vector<RelationStats> inputs;
+				join_column_sources_t sources;
+				vector<unique_ptr<FilterInfo>> filters;
+				vector<pair<ColumnBinding, ColumnBinding>> edges;
+				for (idx_t r = 0; r < 3; r++) {
+					auto rows = local && r == 0 ? 10 : 100;
+					auto input = CreateStats({ColumnBinding(TableIndex(r), ProjectionIndex(0)),
+					                          ColumnBinding(TableIndex(r), ProjectionIndex(1))},
+					                         {idx_t(rows), idx_t(rows)}, rows);
+					for (idx_t c = 0; c < 2; c++) {
+						auto &column = input.columns[c];
+						column.total_domain = DistinctCount(rows, DistinctCountSource::CARDINALITY);
+						if (r == 2 && c == 0 && informed_c) {
+							column.total_domain = DistinctCount(4, DistinctCountSource::EXACT);
+						}
+						column.current_domain = column.total_domain;
+						if (captured) {
+							sources.emplace(
+							    column.binding,
+							    JoinColumnSources({ColumnBinding(TableIndex(100 + r), ProjectionIndex(c)), 100, rows,
+							                       r == 2 && c == 0 && informed_c
+							                           ? column.total_domain
+							                           : DistinctCount(100, DistinctCountSource::CARDINALITY)}));
+						}
+					}
+					inputs.push_back(std::move(input));
+				}
+				for (idx_t c = 0; c < 2; c++) {
+					JoinEqualityClass group;
+					group.index = c;
+					for (idx_t r = 0; r < 3; r++) {
+						group.columns.insert(ColumnBinding(TableIndex(r), ProjectionIndex(c)));
+						group.relations.insert(RelationIndex(r));
+						for (idx_t q = r + 1; q < 3; q++) {
+							auto a = ColumnBinding(TableIndex(r), ProjectionIndex(c));
+							auto b = ColumnBinding(TableIndex(q), ProjectionIndex(c));
+							auto &left = sets.GetJoinRelation(RelationIndex(r));
+							auto &right = sets.GetJoinRelation(RelationIndex(q));
+							auto filter =
+							    make_uniq<FilterInfo>(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL),
+							                          sets.Union(left, right), filters.size());
+							filter->SetLeftSet(left);
+							filter->SetRightSet(right);
+							filter->left_binding = a;
+							filter->right_binding = b;
+							auto &predicate =
+							    predicates.RegisterPredicate(*filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+							predicate.SetEqualityClassIndex(optional_idx(c));
+							group.edges.emplace_back(predicate, RelationIndex(r), RelationIndex(q), a, b);
+							edges.emplace_back(a, b);
+							filters.push_back(std::move(filter));
+						}
+					}
+					predicates.AddEqualityClass(std::move(group));
+				}
+				vector<reference<JoinRelationSet>> regions;
+				for (idx_t mask = 1; mask < 8; mask++) {
+					unordered_set<RelationIndex> relations;
+					for (idx_t r = 0; r < 3; r++) {
+						if (mask & (idx_t(1) << r)) {
+							relations.insert(RelationIndex(r));
+						}
+					}
+					regions.push_back(sets.GetJoinRelation(relations));
+				}
+				EqualityCardinalityModel direct(inputs, sources);
+				CardinalityEstimator graph(sets, predicates);
+				graph.Initialize(inputs, {}, sources);
+				sources.clear();
+				auto inventory = sets.ToString();
+				for (bool reverse : {false, true}) {
+					for (idx_t index = 0; index < regions.size(); index++) {
+						auto &region = regions[reverse ? regions.size() - 1 - index : index].get();
+						vector<idx_t> participants;
+						CardinalityValue rows(1);
+						for (idx_t r = 0; r < region.count; r++) {
+							participants.push_back(region.relations[r].index);
+							rows *= inputs[region.relations[r].index].cardinality;
+						}
+						vector<pair<ColumnBinding, ColumnBinding>> selected;
+						for (auto &edge : edges) {
+							if (std::find(participants.begin(), participants.end(), edge.first.table_index.index) !=
+							        participants.end() &&
+							    std::find(participants.begin(), participants.end(), edge.second.table_index.index) !=
+							        participants.end()) {
+								selected.push_back(edge);
+							}
+						}
+						auto expected = direct.Estimate(direct.Components(selected), participants);
+						REQUIRE(graph.EstimateCardinality(region).GetDouble() ==
+						        Approx((rows * expected.selectivity).GetDouble()));
+					}
+				}
+				auto &ab = regions[2].get();
+				REQUIRE(graph.EstimateCardinality(ab).GetDouble() ==
+				        Approx(local ? (captured ? 50 : 10) : (captured ? 500 : 100)));
+				REQUIRE(sets.ToString() == inventory);
+				auto a = graph.ProjectStats(regions[0].get(), {ColumnBinding(TableIndex(0), ProjectionIndex(0))});
+				REQUIRE(a);
+				REQUIRE(a->columns[0].total_domain.distinct_count == (local ? 10 : 100));
+				REQUIRE_FALSE(a->columns[0].total_domain.has_usable_domain);
+				auto projected = graph.ProjectStats(ab, {ColumnBinding(TableIndex(0), ProjectionIndex(0))});
+				REQUIRE(projected);
+				REQUIRE_FALSE(projected->columns[0].total_domain.has_usable_domain);
+			}
+		}
 	}
 }
 
 TEST_CASE("Min-max uplift counts sources and rejects unknown reliable populations",
           "[optimizer][relation_statistics]") {
-	for (idx_t provenance : {idx_t(0), idx_t(1), idx_t(2)}) {
+	for (idx_t provenance : {idx_t(0), idx_t(1), idx_t(2), idx_t(3)}) {
 		// Same source alias, independent source, or reliable statistics behind a boundary.
 		JoinRelationSetManager sets;
 		JoinPredicateModel model;
@@ -832,12 +1244,17 @@ TEST_CASE("Min-max uplift counts sources and rejects unknown reliable population
 			if (i == 2) {
 				stats.back().columns[0].total_domain.source = DistinctCountSource::MIN_MAX;
 			}
-			auto origin = provenance == 0 && i == 1 ? idx_t(10) : 10 + i;
+			auto origin = (provenance == 0 || provenance == 3) && i == 1 ? idx_t(10) : 10 + i;
 			if (provenance != 2 || i != 1) {
 				sources.emplace(bindings.back(),
 				                JoinColumnSources({ColumnBinding(TableIndex(origin), ProjectionIndex(0)),
 				                                   i == 2 ? idx_t(1000) : idx_t(10000), stats.back().cardinality,
 				                                   stats.back().columns[0].total_domain}));
+			}
+			if (provenance == 3 && i == 1) {
+				// A conditioned alias must disable source uplift even when the HLL point wins selection.
+				stats.back().columns[0].total_domain = DistinctCount(40, DistinctCountSource::DERIVED, true);
+				stats.back().columns[0].current_domain.distinct_count = 40;
 			}
 			group.columns.insert(bindings.back());
 			group.relations.insert(RelationIndex(i));
@@ -862,11 +1279,13 @@ TEST_CASE("Min-max uplift counts sources and rejects unknown reliable population
 		CardinalityEstimator estimator(sets, model);
 		estimator.Initialize(stats, {}, sources);
 		auto &joined = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(2)));
-		REQUIRE(estimator.EstimateCardinality(joined).GetIndex() == (provenance == 0 ? 10000 : 200000));
+		// The third source is absent from this factor and cannot disable its single-source uplift.
+		REQUIRE(estimator.EstimateCardinality(joined).GetIndex() == 10000);
 	}
 }
 
-TEST_CASE("Predicate-local fallback domains order competing equality edges", "[optimizer][relation_statistics]") {
+TEST_CASE("Predicate-local fallback domains are independent of equality edge order",
+          "[optimizer][relation_statistics]") {
 	for (bool reverse_classes : {false, true}) {
 		for (bool reverse_edges : {false, true}) {
 			JoinRelationSetManager sets;
@@ -880,6 +1299,7 @@ TEST_CASE("Predicate-local fallback domains order competing equality edges", "[o
 				idx_t rows = i == 2 ? 10 : 1000;
 				stats.push_back(CreateStats({first, second}, {rows, MinValue<idx_t>(rows, 100)}, rows));
 				stats.back().columns[0].total_domain.source = DistinctCountSource::CARDINALITY;
+				stats.back().columns[0].total_domain.has_usable_domain = false;
 				stats.back().columns[1].total_domain = DistinctCount(100, DistinctCountSource::MIN_MAX);
 				if (i != 2) {
 					sources.emplace(first, JoinColumnSources({first, idx_t(rows), idx_t(rows),
@@ -922,8 +1342,8 @@ TEST_CASE("Predicate-local fallback domains order competing equality edges", "[o
 			auto &base = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
 			auto &all = sets.Union(base, sets.GetJoinRelation(RelationIndex(2)));
 			REQUIRE(estimator.EstimateCardinality(base).GetIndex() == 5000);
-			// Use domains 200 and 100 before the redundant local domain of 10.
-			REQUIRE(estimator.EstimateCardinality(all).GetIndex() == 500);
+			// Unknown priors 200/200/10 give 1/40,000; the informed coordinate independently contributes 1/100.
+			REQUIRE(estimator.EstimateCardinality(all).GetDouble() == Approx(2.5));
 		}
 	}
 }
@@ -984,6 +1404,113 @@ TEST_CASE("Join cardinality divides large products before converting to double",
 				REQUIRE(std::isinf(estimator.EstimateCardinality(*root).GetDouble()));
 				REQUIRE(estimator.EstimateCardinality(*root).GetIndex() == NumericLimits<idx_t>::Maximum());
 			}
+		}
+	}
+}
+
+TEST_CASE("Outside inequalities do not overwrite equality source domains", "[optimizer][relation_statistics]") {
+	for (bool captured_source : {false, true}) {
+		for (idx_t comparisons : {idx_t(0), idx_t(1), idx_t(2)}) {
+			for (bool reverse : {false, true}) {
+				JoinRelationSetManager sets;
+				JoinPredicateModel model;
+				vector<ColumnBinding> bindings;
+				vector<RelationStats> stats;
+				vector<unique_ptr<FilterInfo>> filters;
+				for (auto rows : {idx_t(100), idx_t(10), idx_t(100), idx_t(1000)}) {
+					bindings.emplace_back(TableIndex(bindings.size()), ProjectionIndex(0));
+					stats.push_back(CreateStats({bindings.back()}, {rows}, rows));
+				}
+				stats[0].columns[0].total_domain.source = DistinctCountSource::CARDINALITY;
+				stats[0].columns[0].total_domain.has_usable_domain = false;
+				auto add = [&](idx_t target, ExpressionType type) -> JoinPredicate & {
+					auto &left = sets.GetJoinRelation(RelationIndex(0));
+					auto &right = sets.GetJoinRelation(RelationIndex(target));
+					auto filter = make_uniq<FilterInfo>(CreateJoinComparison(bindings[0], bindings[target], type),
+					                                    sets.Union(left, right), filters.size());
+					filter->SetLeftSet(left);
+					filter->SetRightSet(right);
+					filter->left_binding = bindings[0];
+					filter->right_binding = bindings[target];
+					auto classification = type == ExpressionType::COMPARE_EQUAL
+					                          ? JoinPredicateClass::INNER_EQUALITY
+					                          : JoinPredicateClass::INNER_NON_EQUALITY;
+					auto &predicate = model.RegisterPredicate(*filter, classification, bindings[0], bindings[target]);
+					filters.push_back(std::move(filter));
+					return predicate;
+				};
+				auto &predicate = add(1, ExpressionType::COMPARE_EQUAL);
+				predicate.SetEqualityClassIndex(optional_idx(0));
+				JoinEqualityClass group;
+				group.index = 0;
+				group.columns = {bindings[0], bindings[1]};
+				group.relations = {RelationIndex(0), RelationIndex(1)};
+				group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), bindings[0], bindings[1]);
+				model.AddEqualityClass(std::move(group));
+				for (idx_t i = 0; i < comparisons; i++) {
+					add(2 + (reverse ? comparisons - 1 - i : i), ExpressionType::COMPARE_LESSTHAN);
+				}
+				CardinalityEstimator estimator(sets, model);
+				join_column_sources_t sources;
+				if (captured_source) {
+					sources.emplace(bindings[0],
+					                JoinColumnSources({bindings[0], 100, 100, stats[0].columns[0].total_domain}));
+				}
+				estimator.Initialize(stats, {}, sources);
+				auto &ab = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
+				REQUIRE(estimator.EstimateCardinality(ab).GetDouble() == Approx(100));
+			}
+		}
+	}
+}
+
+TEST_CASE("LEFT equalities consume the closure already established by their inputs",
+          "[optimizer][relation_statistics]") {
+	for (bool redundant : {false, true}) {
+		for (bool inner_on_right : {false, true}) {
+			JoinRelationSetManager sets;
+			JoinPredicateModel model;
+			vector<RelationStats> stats;
+			vector<ColumnBinding> columns;
+			for (idx_t i = 0; i < 3; i++) {
+				columns.emplace_back(TableIndex(i), ProjectionIndex(0));
+				stats.push_back(CreateStats({columns.back()}, {10}, 100));
+			}
+			auto &a = sets.GetJoinRelation(RelationIndex(0));
+			auto &b = sets.GetJoinRelation(RelationIndex(1));
+			auto &c = sets.GetJoinRelation(RelationIndex(2));
+			auto &ab = sets.Union(a, b);
+			auto &root = sets.Union(ab, c);
+			FilterInfo equality(CreateJoinComparison(columns[0], columns[1], ExpressionType::COMPARE_EQUAL), ab, 0);
+			equality.SetLeftSet(a);
+			equality.SetRightSet(b);
+			equality.left_binding = columns[0];
+			equality.right_binding = columns[1];
+			auto &predicate =
+			    model.RegisterPredicate(equality, JoinPredicateClass::INNER_EQUALITY, columns[0], columns[1]);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			JoinEqualityClass group;
+			group.index = 0;
+			group.columns = {columns[0], columns[1]};
+			group.relations = {RelationIndex(0), RelationIndex(1)};
+			group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), columns[0], columns[1]);
+			model.AddEqualityClass(std::move(group));
+			vector<unique_ptr<JoinOrderOperator>> operators;
+			AddOperator(operators, sets, a, b, JoinOrderOperatorType::INNER);
+			auto &outer = AddOperator(operators, sets, inner_on_right ? c : ab, inner_on_right ? ab : c,
+			                          JoinOrderOperatorType::LEFT);
+			outer.costing_equalities.emplace_back(columns[0], columns[2]);
+			if (redundant) {
+				outer.costing_equalities.emplace_back(columns[1], columns[2]);
+				outer.costing_equalities.emplace_back(columns[2], columns[0]);
+			}
+			CardinalityEstimator estimator(sets, model);
+			estimator.Initialize(stats, operators);
+			REQUIRE(estimator.EstimateCardinality(ab).GetDouble() == Approx(1000));
+			REQUIRE(estimator.EstimateCardinality(root).GetDouble() == Approx(10000));
+			auto projected = estimator.ProjectStats(root, columns);
+			REQUIRE(projected);
+			REQUIRE(projected->cardinality.GetDouble() == Approx(10000));
 		}
 	}
 }
@@ -1364,7 +1891,6 @@ TEST_CASE("Large LEFT and composite joins retain their cardinality bounds",
 				group.relations = {RelationIndex(count - 2), RelationIndex(count - 1)};
 				group.edges.emplace_back(predicate, RelationIndex(count - 2), RelationIndex(count - 1), a, b);
 				model.AddEqualityClass(std::move(group));
-				model.AddDirectEqualityPairClass(pair, key, a, b);
 			}
 			filters.push_back(std::move(filter));
 		}
@@ -1377,12 +1903,18 @@ TEST_CASE("Large LEFT and composite joins retain their cardinality bounds",
 		AddOperator(operators, sets, preserved_set, right, type);
 		estimator.Initialize(stats, operators);
 		// The chain has 2^24 rows despite its overflowing numerator.
-		// LEFT doubles/preserves this input; the composite cap preserves it.
+		// LEFT doubles/preserves this input. Two independent equality keys both divide the INNER estimate.
 		auto preserved_cardinality = population >> (2 * (count - 2));
-		auto expected = preserved_cardinality * (join_type == JoinType::LEFT && final_domain < population ? 2 : 1);
+		auto expected = CardinalityValue(preserved_cardinality);
+		if (join_type == JoinType::LEFT) {
+			expected *= CardinalityValue(final_domain < population ? 2 : 1);
+		} else {
+			expected *= CardinalityValue(population) / CardinalityValue(final_domain) / CardinalityValue(final_domain);
+		}
 		auto rows = estimator.EstimateCardinality(*root);
-		REQUIRE(rows.GetDouble() == Approx(double(expected)));
-		REQUIRE(LossyNumericCast<idx_t>(rows.GetDouble()) == expected);
+		REQUIRE_FALSE(rows.IsZero());
+		REQUIRE((rows / expected).GetDouble() == Approx(1));
+		REQUIRE(rows.GetIndex() == expected.GetIndex());
 	}
 }
 
@@ -1655,6 +2187,108 @@ TEST_CASE("Projection and window preserve the statistics source", "[optimizer][r
 	REQUIRE(windowed);
 	REQUIRE(windowed->row_retention == child_stats.row_retention);
 	REQUIRE(*windowed->columns[0].GetSupportedSemiAntiDomainSize() == 10);
+}
+
+TEST_CASE("Windows preserve keys and closed tuple support", "[optimizer][relation_statistics]") {
+	auto child = CreateProjectedDummy(TableIndex(10), TableIndex(20));
+	auto stats = CreateStats(child->GetColumnBindings(), {8}, 8);
+	stats.AddUniqueKey({0});
+	stats.joint_stats.push_back(
+	    {{0}, DistinctCount(16, DistinctCountSource::EXACT), DistinctCount(8, DistinctCountSource::EXACT), nullptr});
+	stats.columns[0].total_domain.distinct_count = 16;
+	stats.EstablishSupportIdentity();
+	LogicalWindow window(TableIndex(30), optional_idx());
+	window.children.push_back(std::move(child));
+	auto result = RelationStatisticsHelper::ExtractWindowStats(window, stats);
+	REQUIRE(result);
+	REQUIRE(result->HasUniqueKey({0}));
+	REQUIRE(result->joint_stats.size() == 1);
+	REQUIRE(result->joint_stats[0].total_domain.distinct_count == 16);
+	REQUIRE(result->joint_stats[0].current_domain.distinct_count == 8);
+	REQUIRE(result->tuple_identities);
+	REQUIRE(result->tuple_identities->at(0).identity.origin == stats.tuple_identities->at(0).identity.origin);
+	REQUIRE(result->columns[0].support_identities);
+}
+
+TEST_CASE("DISTINCT and grouping consume retained joint support after fanout", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	vector<vector<unique_ptr<Expression>>> rows;
+	for (idx_t i = 0; i < 8; i++) {
+		vector<unique_ptr<Expression>> row;
+		row.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(NumericCast<int32_t>(i % 2))));
+		row.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(NumericCast<int32_t>((i / 2) % 2))));
+		rows.push_back(std::move(row));
+	}
+	auto child = make_uniq<LogicalExpressionGet>(
+	    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER}, std::move(rows));
+	auto bindings = child->GetColumnBindings();
+	auto stats = CreateStats(bindings, {2, 2}, 8);
+	for (auto &column : stats.columns) {
+		column.total_domain.distinct_count = 4;
+	}
+	stats.joint_stats.push_back(
+	    {{0, 1}, DistinctCount(16, DistinctCountSource::EXACT), DistinctCount(4, DistinctCountSource::EXACT), nullptr});
+	stats.EstablishSupportIdentity();
+	vector<unique_ptr<Expression>> targets;
+	for (auto &binding : bindings) {
+		targets.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding));
+	}
+	LogicalDistinct distinct(std::move(targets), DistinctType::DISTINCT);
+	distinct.children.push_back(std::move(child));
+	RelationStatsExtractor extractor(*connection.context);
+	REQUIRE(RelationStatisticsHelper::EstimateGroupCardinality(*distinct.children[0], stats, {1, 0}, extractor) == 4);
+	auto result = RelationStatisticsHelper::ExtractDistinctStats(distinct, stats, extractor);
+	REQUIRE(result);
+	REQUIRE(result->cardinality == 4);
+	REQUIRE(result->HasUniqueKey({0, 1}));
+	REQUIRE(result->joint_stats.size() == 1);
+	REQUIRE(result->joint_stats[0].total_domain.distinct_count == 16);
+	REQUIRE(result->joint_stats[0].current_domain.distinct_count == 4);
+	REQUIRE(result->tuple_identities);
+	REQUIRE(result->tuple_identities->at(0).identity.origin == stats.tuple_identities->at(0).identity.origin);
+	REQUIRE(extractor.ExtractedOperatorCount() == 0);
+	auto fractional = CreateStats(bindings, {1, 1}, 16);
+	for (auto &column : fractional.columns) {
+		column.total_domain.distinct_count = 16;
+	}
+	fractional.joint_stats.push_back(
+	    {{0, 1},
+	     DistinctCount(256, DistinctCountSource::EXACT),
+	     DistinctCount(CardinalityValue(1) / CardinalityValue(256), DistinctCountSource::EXACT),
+	     nullptr});
+	auto groups =
+	    RelationStatisticsHelper::EstimateGroupCardinality(*distinct.children[0], fractional, {0, 1}, extractor);
+	REQUIRE(groups.GetDouble() == Approx(1.0 / 256));
+	auto fractional_distinct = RelationStatisticsHelper::ExtractDistinctStats(distinct, fractional, extractor);
+	REQUIRE(fractional_distinct);
+	REQUIRE(fractional_distinct->cardinality.GetDouble() == Approx(1.0 / 256));
+	REQUIRE(fractional_distinct->HasUniqueKey({0, 1}));
+	REQUIRE(fractional_distinct->joint_stats[0].total_domain.distinct_count == 256);
+	distinct.distinct_type = DistinctType::DISTINCT_ON;
+	REQUIRE_FALSE(RelationStatisticsHelper::ExtractDistinctStats(distinct, stats, extractor));
+}
+
+TEST_CASE("Filter equalities retain a key through an equal projected column", "[optimizer][relation_statistics]") {
+	for (auto type :
+	     {ExpressionType::COMPARE_EQUAL, ExpressionType::COMPARE_NOT_DISTINCT_FROM, ExpressionType::COMPARE_NOTEQUAL}) {
+		vector<vector<unique_ptr<Expression>>> rows;
+		auto child = make_uniq<LogicalExpressionGet>(
+		    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER}, std::move(rows));
+		auto bindings = child->GetColumnBindings();
+		auto stats = CreateStats(bindings, {8, 8}, 8);
+		stats.AddUniqueKey({0});
+		stats.EstablishSupportIdentity();
+		LogicalFilter filter(CreateJoinComparison(bindings[0], bindings[1], type));
+		filter.projection_map = {ProjectionIndex(1)};
+		filter.children.push_back(std::move(child));
+		auto result = RelationStatisticsHelper::ExtractFilterStats(filter, stats);
+		REQUIRE(result);
+		REQUIRE(result->columns.size() == 1);
+		REQUIRE(result->HasUniqueKey({0}) == (type != ExpressionType::COMPARE_NOTEQUAL));
+		REQUIRE_FALSE(result->tuple_identities);
+		REQUIRE_FALSE(result->columns[0].support_identities);
+	}
 }
 
 TEST_CASE("Grouping sets discard inherited SEMI domain evidence", "[optimizer][relation_statistics]") {
@@ -1942,14 +2576,15 @@ TEST_CASE("SEMI and ANTI fallback is independent of positive RHS cardinality", "
 					expected = rows;
 				}
 				// Even a one-ULP difference can bypass the enumerator's cost tie-breaker.
+				INFO("rows=" << StringUtil::Format("%.17g", rows)
+				             << ", expected=" << StringUtil::Format("%.17g", expected));
 				REQUIRE(rows == expected);
 			}
 		}
 	}
 }
 
-TEST_CASE("Shared key filters restrict domains only with supported input statistics",
-          "[optimizer][relation_statistics]") {
+TEST_CASE("Current support bounds do not condition original join populations", "[optimizer][relation_statistics]") {
 	for (auto source : {DistinctCountSource::MIN_MAX, DistinctCountSource::HLL, DistinctCountSource::EXACT,
 	                    DistinctCountSource::CARDINALITY}) {
 		for (bool filter_both : {false, true}) {
@@ -1988,8 +2623,13 @@ TEST_CASE("Shared key filters restrict domains only with supported input statist
 					right_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
 				}
 				estimator.Initialize({left_stats, right_stats});
-				auto expected = filter_both && source != DistinctCountSource::CARDINALITY ? 2000 / bound : 200;
-				REQUIRE(estimator.EstimateCardinality(joined).GetIndex() == expected);
+				REQUIRE(estimator.EstimateCardinality(joined).GetIndex() == 200);
+				for (auto &binding : {a, b}) {
+					auto &input = binding == a ? left : right;
+					auto projected = estimator.ProjectStats(input, {binding});
+					REQUIRE(projected);
+					REQUIRE(projected->columns[0].total_domain.distinct_count == 10);
+				}
 			}
 		}
 	}
@@ -2069,6 +2709,8 @@ struct CardinalityProviderData : public TableFunctionData {
 	vector<reference<LogicalGet>> observed_scans;
 	shared_ptr<bool> captured_before_mutation = make_shared_ptr<bool>(true);
 	DistinctCount domain {0, DistinctCountSource::CARDINALITY};
+	bool can_have_null = true;
+	unique_ptr<BaseStatistics> column_statistics;
 };
 
 static unique_ptr<LogicalGet> CreateCardinalityProvider(optional_idx estimate, optional_idx maximum) {
@@ -2142,6 +2784,114 @@ static unique_ptr<LogicalOperator> PlanStatisticsQuery(Connection &connection, c
 	return std::move(planner.plan);
 }
 
+TEST_CASE("Recursive fixpoint statistics do not inherit recursive term proofs", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	string query = "WITH RECURSIVE r(k,n) AS (VALUES (0,0) UNION ALL "
+	               "SELECT k,max(n)+1 FROM r WHERE n<2 GROUP BY k) SELECT * FROM r";
+	auto plan = PlanStatisticsQuery(connection, query);
+	// Inspect the fixpoint before its enclosing materialization creates a new complete-output identity.
+	REQUIRE(plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+	auto &recursive = plan->children[0];
+	REQUIRE(recursive->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+	JoinOrderOptimizer optimizer(*connection.context);
+	RelationStats stats;
+	recursive = optimizer.Optimize(std::move(recursive), stats);
+	REQUIRE(stats.stats_initialized);
+	REQUIRE(stats.MatchesBindings(recursive->GetColumnBindings()));
+	REQUIRE(stats.unique_keys.empty());
+	REQUIRE(stats.joint_stats.empty());
+	REQUIRE(stats.equivalent_columns.empty());
+	REQUIRE_FALSE(stats.tuple_identities);
+	REQUIRE_FALSE(stats.max_cardinality.IsValid());
+	REQUIRE(stats.cardinality > 1);
+	for (auto &column : stats.columns) {
+		REQUIRE_FALSE(column.support_identities);
+		REQUIRE(column.current_domain.distinct_count == stats.cardinality);
+		REQUIRE_FALSE(column.GetSupportedSemiAntiDomainSize());
+	}
+	auto result = connection.Query(query);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 3);
+	connection.Rollback();
+}
+
+TEST_CASE("Composite key populations survive filtering and retained aliases", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query(
+	    "CREATE TABLE key_population(a INTEGER NOT NULL, b INTEGER NOT NULL, parity INTEGER, PRIMARY KEY(a,b))"));
+	REQUIRE_NO_FAIL(connection.Query("INSERT INTO key_population SELECT a,b,(a+b)%2 FROM range(8) x(a),range(8) y(b)"));
+	REQUIRE_NO_FAIL(connection.Query("ANALYZE key_population"));
+	connection.BeginTransaction();
+	auto plan = PlanStatisticsQuery(connection, "SELECT a, a AS alias_a, b FROM key_population WHERE parity=0");
+	// Present the typed constant produced by constant folding, so this fixture exercises the analyzed equality path.
+	auto &filter = plan->children[0]->Cast<LogicalFilter>();
+	auto &comparison = filter.expressions[0]->Cast<BoundFunctionExpression>();
+	BoundComparisonExpression::RightMutable(comparison) = make_uniq<BoundConstantExpression>(Value::INTEGER(0));
+	RelationStatsExtractor extractor(*connection.context);
+	auto stats = extractor.Extract(*plan);
+	REQUIRE(stats);
+	REQUIRE(stats->cardinality == 32);
+	REQUIRE(stats->row_retention == 0.5);
+	REQUIRE(stats->HasUniqueKey({0, 2}));
+	REQUIRE(stats->HasUniqueKey({1, 2}));
+	REQUIRE_FALSE(stats->HasUniqueKey({0, 1}));
+	REQUIRE(stats->joint_stats.size() == 1);
+	REQUIRE(stats->joint_stats[0].total_domain.distinct_count == 64);
+	REQUIRE(stats->joint_stats[0].current_domain.distinct_count == 32);
+	auto reduced = RelationStatisticsHelper::ProjectOutputStats(
+	    *stats, vector<ColumnBinding> {stats->columns[2].binding, stats->columns[1].binding});
+	REQUIRE(reduced);
+	REQUIRE(reduced->HasUniqueKey({0, 1}));
+	REQUIRE(reduced->joint_stats.size() == 1);
+	REQUIRE(reduced->joint_stats[0].total_domain.distinct_count == 64);
+	REQUIRE(reduced->joint_stats[0].current_domain.distinct_count == 32);
+	connection.Rollback();
+}
+
+TEST_CASE("Original scan key populations reconcile weak and estimated domain points",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE original_key(k INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(connection.Query("INSERT INTO original_key SELECT i FROM range(64) t(i)"));
+	REQUIRE_NO_FAIL(connection.Query("ANALYZE original_key"));
+	connection.BeginTransaction();
+	auto plan = PlanStatisticsQuery(connection, "SELECT k FROM original_key");
+	auto &scan = plan->children[0]->Cast<LogicalGet>();
+	for (auto kind : {DistinctCountSource::CARDINALITY, DistinctCountSource::HLL}) {
+		for (idx_t point : {idx_t(59), idx_t(70)}) {
+			CAPTURE(kind, point);
+			auto stats = CreateStats(scan.GetColumnBindings(), {MinValue<idx_t>(point, 64)}, 64);
+			stats.columns[0].total_domain = DistinctCount(point, kind);
+			stats.columns[0].current_domain = DistinctCount(MinValue<idx_t>(point, 64), kind);
+			RelationStatisticsHelper::CaptureUniqueKeys(scan, stats, *connection.context, CardinalityValue(64));
+			REQUIRE(stats.HasUniqueKey({0}));
+			REQUIRE(stats.columns[0].total_domain.distinct_count == 64);
+			REQUIRE(stats.columns[0].current_domain.distinct_count == 64);
+			REQUIRE(stats.joint_stats[0].total_domain.distinct_count == 64);
+			auto raw = stats.columns[0].total_domain;
+			REQUIRE(raw.has_usable_domain);
+			REQUIRE(raw.source == kind);
+			RelationStatisticsHelper::ApplyCardinality(stats, CardinalityValue(32));
+			vector<RelationStats> inputs {stats};
+			EqualityCardinalityModel normalized(inputs);
+			REQUIRE(inputs[0].columns[0].total_domain.distinct_count == 64);
+			REQUIRE(inputs[0].columns[0].current_domain.distinct_count == 32);
+			REQUIRE(inputs[0].columns[0].total_domain.has_usable_domain);
+			REQUIRE(inputs[0].columns[0].current_domain.has_usable_domain);
+			REQUIRE(inputs[0].joint_stats[0].total_domain.distinct_count == 64);
+			REQUIRE(inputs[0].joint_stats[0].current_domain.distinct_count == 32);
+			// Finalization may use DERIVED locally; the captured original source remains usable CARDINALITY.
+			REQUIRE(raw.source == kind);
+			REQUIRE(raw.has_usable_domain);
+		}
+	}
+	connection.Rollback();
+}
+
 static void SetStatisticsTestCardinalities(LogicalOperator &op) {
 	op.SetEstimatedCardinality(0);
 	for (auto &child : op.children) {
@@ -2175,57 +2925,6 @@ static unique_ptr<LogicalGet> CreateDomainProvider(TableIndex index, idx_t rows,
 		return result.ToUnique();
 	};
 	return get;
-}
-
-TEST_CASE("Equality filter estimates retain their ceiling at scan and filter boundaries",
-          "[optimizer][relation_statistics]") {
-	DuckDB db;
-	Connection connection(db);
-	for (idx_t rows : {idx_t(113), idx_t(210)}) {
-		auto scan = CreateDomainProvider(TableIndex(10), rows, DistinctCount(105, DistinctCountSource::HLL));
-		auto child = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context, rows);
-		auto binding = scan->GetColumnBindings()[0];
-		vector<unique_ptr<Expression>> expressions;
-		expressions.push_back(BoundComparisonExpression::Create(
-		    ExpressionType::COMPARE_EQUAL, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
-		    make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
-		auto filtered = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
-		REQUIRE(filtered.cardinality == 2);
-		scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
-		                                                       ExpressionType::COMPARE_EQUAL, Value::INTEGER(42)));
-		auto pushed = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context, rows);
-		REQUIRE(pushed.cardinality == filtered.cardinality);
-	}
-}
-
-TEST_CASE("Equality filter compatibility preserves fractional and scaled arithmetic",
-          "[optimizer][relation_statistics][cardinality_arithmetic]") {
-	ColumnBinding binding(TableIndex(10), ProjectionIndex(0));
-	auto estimate = [&](CardinalityValue rows, CardinalityValue ndv, ExpressionType type,
-	                    DistinctCountSource source = DistinctCountSource::HLL) {
-		RelationStats child;
-		child.cardinality = rows;
-		child.columns.emplace_back(binding, DistinctCount(ndv, source), DistinctCount(MinValue(rows, ndv), source),
-		                           Identifier("key"));
-		vector<unique_ptr<Expression>> expressions;
-		expressions.push_back(
-		    BoundComparisonExpression::Create(type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
-		                                      make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
-		auto result = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
-		REQUIRE(result.cardinality <= rows);
-		return result.cardinality;
-	};
-	auto equal = ExpressionType::COMPARE_EQUAL;
-	REQUIRE(estimate(0.5, 1, equal) == 0.5);
-	REQUIRE(estimate(2.5, 1, equal) == 2.5);
-	CardinalityValue small(std::ldexp(1.0, -600));
-	CardinalityValue large(std::ldexp(1.0, 600));
-	for (auto rows : {small * small, large, large * large}) {
-		auto expected = rows < 1 ? rows : rows / 3;
-		REQUIRE(estimate(rows, 3, equal) == expected);
-	}
-	REQUIRE(estimate(113, 105, ExpressionType::COMPARE_NOTEQUAL).GetDouble() == Approx(113.0 * 104 / 105));
-	REQUIRE(estimate(113, 105, equal, DistinctCountSource::CARDINALITY).GetDouble() == Approx(22.6));
 }
 
 TEST_CASE("Grouped membership statistics reach enumeration and parent cost before reconstruction",
@@ -2620,6 +3319,34 @@ TEST_CASE("Aliases created before joins retain hidden contributors", "[optimizer
 	plan = optimizer.Optimize(std::move(plan), optimized_stats);
 	REQUIRE(optimized_stats.stats_initialized);
 	REQUIRE(optimized_stats.cardinality == 20000000);
+}
+
+TEST_CASE("Projected equality regions retain their mathematical row point",
+          "[optimizer][relation_statistics][cardinality_arithmetic]") {
+	DuckDB db;
+	Connection connection(db);
+	for (idx_t domain : {idx_t(48), idx_t(50)}) {
+		auto plan = CreateContributorJoin(true, 100000);
+		auto &inner = plan->children[0]->children[0]->Cast<LogicalComparisonJoin>();
+		inner.children[0] =
+		    CreateDomainProvider(TableIndex(10), 10000, DistinctCount(domain, DistinctCountSource::HLL));
+		inner.children[1] =
+		    CreateDomainProvider(TableIndex(20), 100000, DistinctCount(100000, DistinctCountSource::HLL));
+		// Supply an observed dimension population; MIN_MAX alone permits source-domain refinement.
+		plan->children[1] = CreateDomainProvider(TableIndex(40), 1000, DistinctCount(1000, DistinctCountSource::HLL));
+		plan->ResolveOperatorTypes();
+		RelationStatsExtractor extractor(*connection.context);
+		auto stats = extractor.Extract(*plan);
+		REQUIRE(stats);
+		// The larger inner domain has already supplied its factor. The projected
+		// key then joins 1000 dimension rows over 1000 values, retaining this row point.
+		REQUIRE(stats->cardinality.GetDouble() == Approx(10000));
+		JoinOrderOptimizer optimizer(*connection.context);
+		RelationStats optimized;
+		plan = optimizer.Optimize(std::move(plan), optimized);
+		REQUIRE(optimized.stats_initialized);
+		REQUIRE(optimized.cardinality.GetDouble() == Approx(10000));
+	}
 }
 
 TEST_CASE("Projected source equalities exclude correlated operands", "[optimizer][relation_statistics]") {
@@ -3545,6 +4272,85 @@ TEST_CASE("Repeated relation outputs share a normalized binding", "[optimizer][r
 	}
 }
 
+TEST_CASE("A proved empty UNION population preserves the surviving source kind",
+          "[optimizer][relation_statistics][union_empty_population]") {
+	DuckDB db;
+	Connection connection(db);
+	auto combine = [&](RelationStats left, RelationStats right) {
+		left.columns[0].binding = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+		right.columns[0].binding = ColumnBinding(TableIndex(20), ProjectionIndex(0));
+		LogicalSetOperation op(TableIndex(30), 1, make_uniq<LogicalDummyScan>(TableIndex(10)),
+		                       make_uniq<LogicalDummyScan>(TableIndex(20)), LogicalOperatorType::LOGICAL_UNION, true);
+		auto output = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+		REQUIRE(output);
+		return *output;
+	};
+	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto empty = CreateStats({binding}, {0}, 0);
+	empty.columns[0].TightenPopulationBound(0);
+	auto active = CreateStats({binding}, {100}, 100);
+	active.columns[0].TightenPopulationBound(100);
+	active.columns[0].total_domain.source = DistinctCountSource::CARDINALITY;
+	active.columns[0].total_domain.has_usable_domain = false;
+	for (auto &output : {combine(empty, active), combine(active, empty), combine(empty, combine(active, empty)),
+	                     combine(combine(empty, active), empty)}) {
+		REQUIRE(output.cardinality == 100);
+		REQUIRE(output.columns[0].total_domain.distinct_count == 100);
+		REQUIRE(output.columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
+		REQUIRE(output.columns[0].PopulationBound().IsValid());
+		REQUIRE(output.columns[0].PopulationBound().GetIndex() == 100);
+	}
+
+	// Empty current support does not erase an earlier nonempty population.
+	auto filtered = CreateStats({binding}, {20}, 20);
+	filtered.cardinality = 0;
+	filtered.max_cardinality = optional_idx(0);
+	filtered.columns[0].current_domain.distinct_count = 0;
+	filtered.columns[0].TightenPopulationBound(20);
+	auto retained = combine(active, filtered);
+	REQUIRE(retained.columns[0].total_domain.distinct_count == 120);
+	REQUIRE(retained.columns[0].total_domain.source == DistinctCountSource::DERIVED);
+	REQUIRE(retained.columns[0].PopulationBound().GetIndex() == 120);
+
+	// A statistical zero alone is not the identity proof.
+	empty = CreateStats({binding}, {0}, 0);
+	empty.max_cardinality = optional_idx();
+	auto uncertain = combine(empty, active);
+	REQUIRE(uncertain.columns[0].total_domain.source == DistinctCountSource::DERIVED);
+
+	empty.max_cardinality = optional_idx(0);
+	empty.columns[0].total_domain.source = DistinctCountSource::HLL;
+	auto unproved_population = combine(empty, active);
+	REQUIRE(unproved_population.columns[0].total_domain.source == DistinctCountSource::DERIVED);
+
+	// Alias normalization can promote the source kind of an approximate zero.
+	auto alias = ColumnBinding(TableIndex(0), ProjectionIndex(1));
+	auto aliases = CreateStats({binding, alias}, {1, 0}, 1);
+	aliases.cardinality = 0;
+	aliases.max_cardinality = optional_idx(0);
+	aliases.columns[0].current_domain.distinct_count = 0;
+	aliases.columns[1].total_domain.source = DistinctCountSource::HLL;
+	aliases.columns[0].TightenPopulationBound(1);
+	aliases.equivalent_columns = {{0, 1}};
+	vector<RelationStats> inputs {aliases};
+	EqualityCardinalityModel model(inputs);
+	auto projected = RelationStatisticsHelper::ProjectOutputStats(inputs[0], {binding});
+	REQUIRE(projected);
+	REQUIRE(projected->columns[0].total_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(projected->columns[0].total_domain.distinct_count == 0);
+	REQUIRE(projected->columns[0].PopulationBound().GetIndex() == 1);
+	auto normalized = combine(*projected, active);
+	REQUIRE(normalized.columns[0].total_domain.source == DistinctCountSource::DERIVED);
+	REQUIRE(normalized.columns[0].PopulationBound().GetIndex() == 101);
+
+	// A genuine zero proof remains authoritative over an overestimated point.
+	empty.columns[0].TightenPopulationBound(0);
+	empty.columns[0].total_domain.distinct_count = 10;
+	auto proved = combine(empty, active);
+	REQUIRE(proved.columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
+	REQUIRE(proved.columns[0].total_domain.distinct_count == 100);
+}
+
 TEST_CASE("Standalone joins inside CTE definitions retain the caller snapshot", "[optimizer][relation_statistics]") {
 	DuckDB db;
 	Connection connection(db);
@@ -3763,4 +4569,2225 @@ TEST_CASE("Selected aggregate domain propagation falls back without a proven sou
 		REQUIRE(result->columns[0].current_domain.source == DistinctCountSource::CARDINALITY);
 	}
 	connection.Rollback();
+}
+
+TEST_CASE("Joint record coalescing preserves derived population kinds", "[optimizer][relation_statistics]") {
+	for (bool reverse : {false, true}) {
+		auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+		auto input = CreateStats({binding}, {64}, 64);
+		input.columns[0].total_domain = DistinctCount(100, DistinctCountSource::HLL);
+		RelationJointStats observed {{0},
+		                             DistinctCount(100, DistinctCountSource::HLL),
+		                             DistinctCount(64, DistinctCountSource::CARDINALITY),
+		                             nullptr};
+		RelationJointStats derived {{0},
+		                            DistinctCount(80, DistinctCountSource::DERIVED, true),
+		                            DistinctCount(64, DistinctCountSource::DERIVED, true),
+		                            nullptr};
+		input.joint_stats =
+		    reverse ? vector<RelationJointStats> {derived, observed} : vector<RelationJointStats> {observed, derived};
+		vector<RelationStats> inputs {input};
+		for (idx_t iteration = 0; iteration < 2; iteration++) {
+			EqualityCardinalityModel model(inputs);
+			const auto &normalized = inputs;
+			INFO("reverse=" << reverse << " iteration=" << iteration);
+			REQUIRE(normalized[0].joint_stats.size() == 1);
+			REQUIRE(normalized[0].columns[0].total_domain.distinct_count == 80);
+			REQUIRE(normalized[0].columns[0].total_domain.source == DistinctCountSource::DERIVED);
+			REQUIRE(normalized[0].joint_stats[0].total_domain.source == DistinctCountSource::DERIVED);
+			REQUIRE(normalized[0].joint_stats[0].current_domain.source == DistinctCountSource::DERIVED);
+		}
+	}
+}
+
+TEST_CASE("Finite equality selection keeps population and row retention separate",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto key = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto alias = ColumnBinding(TableIndex(0), ProjectionIndex(1));
+	auto payload = ColumnBinding(TableIndex(0), ProjectionIndex(2));
+	auto finite_key = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+	for (bool unique : {false, true}) {
+		CAPTURE(unique);
+		auto input = CreateStats({key, alias, payload}, {5, 5, 5}, unique ? 5 : 100);
+		input.columns[0].total_domain.distinct_count = 10;
+		input.columns[1].total_domain.distinct_count = 10;
+		input.columns[2].total_domain.source = DistinctCountSource::CARDINALITY;
+		input.columns[2].total_domain.has_usable_domain = false;
+		input.equivalent_columns = {{0, 1}};
+		input.joint_stats.push_back({{2}, input.columns[2].total_domain, input.columns[2].current_domain, nullptr});
+		if (unique) {
+			input.AddUniqueKey({0});
+		}
+		input.Verify({key, alias, payload});
+		auto finite = CreateStats({finite_key}, {1}, 1);
+		finite.AddUniqueKey({0});
+		vector<RelationStats> inputs {input, finite};
+		EqualityCardinalityModel model(inputs);
+		auto components = model.Components({{alias, finite_key}});
+		auto estimate = model.Estimate(components, {0, 1});
+		auto rows = inputs[0].cardinality * inputs[1].cardinality * estimate.selectivity;
+		if (estimate.maximum) {
+			rows = MinValue(rows, *estimate.maximum);
+		}
+		REQUIRE(rows.GetDouble() == Approx(unique ? 0.5 : 10));
+		auto output = inputs[0];
+		output.cardinality = rows;
+		vector<EqualityProjection> projections(2);
+		projections[0].matched_rows = rows;
+		projections[0].preserve_keys = true;
+		model.Project(output, components, projections, {});
+		for (idx_t c : {idx_t(0), idx_t(1)}) {
+			REQUIRE(output.columns[c].total_domain.distinct_count == 1);
+			REQUIRE(output.columns[c].current_domain.distinct_count.GetDouble() == Approx(0.5));
+			REQUIRE(output.columns[c].total_domain.source == DistinctCountSource::DERIVED);
+			REQUIRE_FALSE(output.columns[c].support_identities);
+		}
+		REQUIRE(output.columns[2].total_domain.distinct_count == 5);
+		REQUIRE(output.columns[2].total_domain.source == DistinctCountSource::CARDINALITY);
+		REQUIRE(output.HasUniqueKey({0}) == unique);
+		for (auto &joint : output.joint_stats) {
+			if (joint.columns == vector<idx_t> {2}) {
+				REQUIRE(joint.total_domain.source == DistinctCountSource::CARDINALITY);
+			}
+		}
+	}
+}
+
+TEST_CASE("Finite tuple selection honors both tuple and coordinate support",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto b = ColumnBinding(TableIndex(0), ProjectionIndex(1));
+	auto fa = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+	auto fb = ColumnBinding(TableIndex(1), ProjectionIndex(1));
+	auto input = CreateStats({a, b}, {5, 5}, 5);
+	input.joint_stats.push_back(
+	    {{0, 1}, DistinctCount(5, DistinctCountSource::EXACT), DistinctCount(5, DistinctCountSource::EXACT), nullptr});
+	input.AddUniqueKey({0, 1});
+	auto finite = CreateStats({fa, fb}, {1, 5}, 5);
+	finite.joint_stats.push_back(
+	    {{0, 1}, DistinctCount(5, DistinctCountSource::EXACT), DistinctCount(5, DistinctCountSource::EXACT), nullptr});
+	finite.AddUniqueKey({0, 1});
+	vector<RelationStats> inputs {input, finite};
+	EqualityCardinalityModel model(inputs);
+	auto components = model.Components({{a, fa}, {b, fb}});
+	auto rows = input.cardinality * finite.cardinality * model.Estimate(components, {0, 1}).selectivity;
+	REQUIRE(rows == 1);
+	auto output = input;
+	output.cardinality = rows;
+	vector<EqualityProjection> projections(2);
+	projections[0].matched_rows = rows;
+	projections[0].preserve_keys = true;
+	model.Project(output, components, projections, {});
+	REQUIRE(output.joint_stats.size() == 1);
+	REQUIRE(output.joint_stats[0].total_domain.distinct_count == 1);
+	REQUIRE(output.joint_stats[0].current_domain.distinct_count == 1);
+	REQUIRE(output.HasUniqueKey({0, 1}));
+	REQUIRE_FALSE(output.HasUniqueKey({0}));
+	REQUIRE_FALSE(output.tuple_identities);
+}
+
+TEST_CASE("Finite filters canonicalize alternatives and aliases before selection",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto alias = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	auto equality = [&](ColumnBinding binding, int32_t value) {
+		return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+		                                         make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+		                                         make_uniq<BoundConstantExpression>(Value::INTEGER(value)));
+	};
+	auto apply = [&](const RelationStats &input, unique_ptr<Expression> predicate) {
+		LogicalFilter filter(std::move(predicate));
+		filter.children.push_back(make_uniq<LogicalExpressionGet>(
+		    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER},
+		    vector<vector<unique_ptr<Expression>>> {}));
+		return RelationStatisticsHelper::ExtractFilterStats(filter, input);
+	};
+	auto input = CreateStats({key, alias}, {10, 10}, 100);
+	input.equivalent_columns = {{0, 1}};
+	input.value_equivalent_columns = {{0, 1}};
+	for (auto &column : input.columns) {
+		column.can_have_null = false;
+		column.current_domain.distinct_count = 5;
+	}
+	vector<unique_ptr<Expression>> variants;
+	variants.push_back(
+	    make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, equality(key, 3), equality(alias, 7)));
+	vector<unique_ptr<Expression>> in_children;
+	in_children.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, alias));
+	for (auto value : {Value::INTEGER(7), Value::INTEGER(3), Value::INTEGER(7), Value(LogicalType::INTEGER)}) {
+		in_children.push_back(make_uniq<BoundConstantExpression>(value));
+	}
+	variants.push_back(
+	    make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN, std::move(in_children)));
+	for (auto &predicate : variants) {
+		auto output = apply(input, std::move(predicate));
+		REQUIRE(output);
+		REQUIRE(output->cardinality == 20);
+		for (auto &column : output->columns) {
+			REQUIRE(column.total_domain.distinct_count == 2);
+			REQUIRE(column.current_domain.distinct_count == 1);
+			REQUIRE(column.PopulationBound().GetIndex() == 2);
+		}
+	}
+	auto same = apply(input, make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, equality(key, 3),
+	                                                               equality(alias, 3)));
+	REQUIRE(same);
+	REQUIRE(same->cardinality == 10);
+	REQUIRE(same->columns[0].current_domain.distinct_count.GetDouble() == Approx(0.5));
+	auto empty = apply(input, make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, equality(key, 3),
+	                                                                equality(alias, 7)));
+	REQUIRE(empty);
+	REQUIRE(empty->IsEmpty());
+	for (auto &column : input.columns) {
+		column.total_domain.source = DistinctCountSource::CARDINALITY;
+		column.total_domain.has_usable_domain = false;
+	}
+	auto unknown = apply(input, equality(key, 3));
+	REQUIRE(unknown);
+	REQUIRE(unknown->cardinality == 20);
+	REQUIRE(unknown->columns[0].total_domain.distinct_count == 10);
+	REQUIRE(unknown->columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
+}
+
+static unique_ptr<Expression> FiniteSelectionComparison(ColumnBinding binding, ExpressionType type, int32_t value) {
+	return BoundComparisonExpression::Create(type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+	                                         make_uniq<BoundConstantExpression>(Value::INTEGER(value)));
+}
+
+static unique_ptr<Expression> FiniteSelectionList(ColumnBinding binding, const vector<Value> &values, bool excluded,
+                                                  const LogicalType &type = LogicalType::INTEGER) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(make_uniq<BoundColumnRefExpression>(type, binding));
+	for (auto &value : values) {
+		children.push_back(make_uniq<BoundConstantExpression>(value));
+	}
+	return make_uniq<BoundOperatorExpression>(excluded ? ExpressionType::COMPARE_NOT_IN : ExpressionType::COMPARE_IN,
+	                                          LogicalType::BOOLEAN, std::move(children));
+}
+
+static optional<RelationStats> ApplyFiniteFilter(const RelationStats &input, unique_ptr<Expression> predicate,
+                                                 const LogicalType &type = LogicalType::INTEGER) {
+	vector<ColumnBinding> bindings;
+	for (auto &column : input.columns) {
+		bindings.push_back(column.binding);
+	}
+	input.Verify(bindings);
+	LogicalFilter filter(std::move(predicate));
+	filter.children.push_back(make_uniq<UnsupportedOutputOperator>(bindings, type));
+	auto result = RelationStatisticsHelper::ExtractFilterStats(filter, input);
+	if (result) {
+		result->Verify(bindings);
+	}
+	return result;
+}
+
+static unique_ptr<Expression> FiniteSelectionNot(unique_ptr<Expression> child) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(child));
+	return make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN, std::move(children));
+}
+
+TEST_CASE("SQL NOT IN preserves finite exclusions through scan and filter extraction",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	vector<Value> values;
+	for (int32_t value = 0; value < 20; value++) {
+		values.push_back(Value::INTEGER(value));
+	}
+	for (bool scan_filter : {false, true}) {
+		for (bool nullable : {false, true}) {
+			for (bool known : {false, true}) {
+				CAPTURE(scan_filter, nullable, known);
+				vector<RelationStats> results;
+				for (bool wrapped : {false, true}) {
+					CAPTURE(wrapped);
+					if (scan_filter) {
+						auto scan = CreateCardinalityProvider(3000, 3000);
+						scan->table_index = key.table_index;
+						auto &data = scan->bind_data.write().Cast<CardinalityProviderData>();
+						data.domain =
+						    DistinctCount(30, known ? DistinctCountSource::EXACT : DistinctCountSource::CARDINALITY);
+						data.can_have_null = nullable;
+						scan->function.statistics = [](ClientContext &, auto bind_data,
+						                               column_t) -> unique_ptr<BaseStatistics> {
+							auto &data = bind_data->template Cast<CardinalityProviderData>();
+							auto stats = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+							if (data.domain.has_usable_domain) {
+								stats.SetDistinctCount(data.domain.distinct_count.GetIndex());
+							}
+							if (!data.can_have_null) {
+								stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+							}
+							return stats.ToUnique();
+						};
+						vector<unique_ptr<Expression>> children;
+						children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0));
+						for (auto &value : values) {
+							children.push_back(make_uniq<BoundConstantExpression>(value));
+						}
+						unique_ptr<Expression> predicate = make_uniq<BoundOperatorExpression>(
+						    wrapped ? ExpressionType::COMPARE_IN : ExpressionType::COMPARE_NOT_IN, LogicalType::BOOLEAN,
+						    std::move(children));
+						if (wrapped) {
+							predicate = FiniteSelectionNot(std::move(predicate));
+						}
+						scan->table_filters.PushFilter(ProjectionIndex(0),
+						                               make_uniq<ExpressionFilter>(std::move(predicate)));
+						results.push_back(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context));
+					} else {
+						auto input = CreateStats({key}, {30}, 3000);
+						input.columns[0].can_have_null = nullable;
+						input.columns[0].total_domain =
+						    DistinctCount(30, known ? DistinctCountSource::EXACT : DistinctCountSource::CARDINALITY);
+						input.columns[0].current_domain = input.columns[0].total_domain;
+						auto predicate = FiniteSelectionList(key, values, !wrapped);
+						if (wrapped) {
+							predicate = FiniteSelectionNot(std::move(predicate));
+						}
+						auto output = ApplyFiniteFilter(input, std::move(predicate));
+						REQUIRE(output);
+						results.push_back(*output);
+					}
+					auto &output = results.back();
+					auto &column = output.columns[0];
+					REQUIRE(column.value_restriction);
+					CHECK(column.value_restriction->excluded);
+					CHECK(column.value_restriction->values.size() == 20);
+					CHECK(column.total_domain.has_usable_domain == known);
+					CHECK_FALSE(column.can_have_null);
+					if (known && !nullable) {
+						CHECK(output.cardinality.GetDouble() == Approx(1000).epsilon(1e-12));
+						CHECK(column.total_domain.distinct_count.GetDouble() == Approx(10).epsilon(1e-12));
+					}
+					vector<Value> repeated_values(values.rbegin(), values.rend());
+					repeated_values.push_back(values[0]);
+					auto repeated =
+					    ApplyFiniteFilter(output, FiniteSelectionNot(FiniteSelectionList(key, repeated_values, false)));
+					REQUIRE(repeated);
+					CHECK(repeated->cardinality == output.cardinality);
+					CHECK(repeated->columns[0].current_domain.distinct_count == column.current_domain.distinct_count);
+					CHECK(repeated->columns[0].total_domain.distinct_count == column.total_domain.distinct_count);
+					CHECK(repeated->columns[0].value_restriction == column.value_restriction);
+				}
+				CHECK(results[0].cardinality == results[1].cardinality);
+				CHECK(results[0].columns[0].current_domain.distinct_count ==
+				      results[1].columns[0].current_domain.distinct_count);
+			}
+		}
+	}
+}
+
+TEST_CASE("SQL NOT IN retains NULL and scalar eligibility semantics",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	for (bool nullable : {false, true}) {
+		auto input = CreateStats({key}, {30}, 3000);
+		input.columns[0].can_have_null = nullable;
+		auto null_list = ApplyFiniteFilter(input, FiniteSelectionNot(FiniteSelectionList(
+		                                              key, {Value::INTEGER(1), Value(LogicalType::INTEGER)}, false)));
+		REQUIRE(null_list);
+		CHECK(null_list->IsEmpty());
+		CHECK(null_list->cardinality == 0);
+
+		input.columns[0].value_restriction = ColumnValueRestriction::Create({Value::INTEGER(1)}, true);
+		auto repeat =
+		    ApplyFiniteFilter(input, FiniteSelectionNot(FiniteSelectionList(key, {Value::INTEGER(1)}, false)));
+		REQUIRE(repeat);
+		CHECK(repeat->cardinality.GetDouble() == Approx(nullable ? 2400 : 3000));
+		CHECK_FALSE(repeat->columns[0].can_have_null);
+	}
+	auto input = CreateStats({key}, {30}, 3000);
+	auto other_not =
+	    ApplyFiniteFilter(input, FiniteSelectionNot(FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 1)));
+	REQUIRE(other_not);
+	REQUIRE(other_not->columns[0].value_restriction);
+	CHECK(other_not->columns[0].value_restriction->excluded);
+	CHECK(other_not->columns[0].value_restriction->values == value_set_t {Value::INTEGER(1)});
+	auto tagged = Value::UNION({{"str", LogicalType::VARCHAR}}, 0, Value("a"));
+	auto tagged_not = ApplyFiniteFilter(
+	    input, FiniteSelectionNot(FiniteSelectionList(key, {tagged}, false, tagged.type())), tagged.type());
+	REQUIRE(tagged_not);
+	CHECK_FALSE(tagged_not->columns[0].value_restriction);
+}
+
+TEST_CASE("Current value restrictions compose exactly and reuse unchanged sets",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto first = ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, false);
+	auto second = ColumnValueRestriction::Create({Value::INTEGER(84), Value::INTEGER(105)}, false);
+	for (bool conjunction : {false, true}) {
+		for (bool left_excluded : {false, true}) {
+			for (bool right_excluded : {false, true}) {
+				CAPTURE(conjunction, left_excluded, right_excluded);
+				auto left = ColumnValueRestriction::Create(first->values, left_excluded);
+				auto right = ColumnValueRestriction::Create(second->values, right_excluded);
+				auto result = ColumnValueRestriction::Combine({left, right}, conjunction);
+				auto reverse = ColumnValueRestriction::Combine({right, left}, conjunction);
+				REQUIRE(result);
+				REQUIRE(reverse);
+				CHECK(result->excluded == reverse->excluded);
+				CHECK(result->values == reverse->values);
+				for (auto value : {1, 42, 84, 105}) {
+					auto literal = Value::INTEGER(value);
+					auto l = (left->values.count(literal) != 0) != left_excluded;
+					auto r = (right->values.count(literal) != 0) != right_excluded;
+					auto included = (result->values.count(literal) != 0) != result->excluded;
+					CHECK(included == (conjunction ? l && r : l || r));
+				}
+			}
+		}
+	}
+	CHECK(ColumnValueRestriction::Combine({first, first}, true) == first);
+	CHECK(ColumnValueRestriction::Combine({first, nullptr}, true) == first);
+	CHECK_FALSE(ColumnValueRestriction::Combine({first, nullptr}, false));
+	auto disjoint = ColumnValueRestriction::Create({Value::INTEGER(1)}, true);
+	CHECK(ColumnValueRestriction::Combine({first, disjoint}, true) == first);
+	auto broad = ColumnValueRestriction::Create({Value::INTEGER(42)}, true);
+	auto narrow = ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, true);
+	CHECK(ColumnValueRestriction::Combine({broad, narrow}, true) == narrow);
+
+	// Literal history has no contributor/owned-scan limit: the query owns all of these literals already.
+	for (auto count : {idx_t(1024), idx_t(1025)}) {
+		value_set_t values;
+		for (idx_t i = 0; i < count; i++) {
+			values.insert(Value::BIGINT(i));
+		}
+		auto history = ColumnValueRestriction::Create(std::move(values), true);
+		auto repeated = ColumnValueRestriction::Combine({history, history}, true);
+		CHECK(repeated == history);
+		CHECK(repeated->values.size() == count);
+		auto finite = ColumnValueRestriction::Create({Value::BIGINT(count), Value::BIGINT(count + 1)}, false);
+		CHECK(ColumnValueRestriction::Combine({history, finite}, true) == finite);
+	}
+}
+
+TEST_CASE("Finite history selects only newly restricted values across filter boundaries",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {3}, 3000);
+	input.columns[0].can_have_null = false;
+	auto excluded = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+	REQUIRE(excluded);
+	CHECK(excluded->cardinality == 1000);
+	CHECK(excluded->columns[0].total_domain.distinct_count == 1);
+	auto history = excluded->columns[0].value_restriction;
+	REQUIRE(history);
+	auto repeated =
+	    ApplyFiniteFilter(*excluded, FiniteSelectionList(key, {Value::INTEGER(84), Value::INTEGER(42)}, true));
+	REQUIRE(repeated);
+	CHECK(repeated->cardinality == 1000);
+	CHECK(repeated->columns[0].value_restriction == history);
+	CHECK_FALSE(repeated->IsEmpty());
+
+	input = CreateStats({key}, {100}, 10000);
+	input.columns[0].can_have_null = false;
+	auto included = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, false));
+	REQUIRE(included);
+	CHECK(included->cardinality == 200);
+	auto disjoint =
+	    ApplyFiniteFilter(*included, FiniteSelectionList(key, {Value::INTEGER(1), Value::INTEGER(2)}, true));
+	REQUIRE(disjoint);
+	CHECK(disjoint->cardinality == 200);
+	CHECK(disjoint->columns[0].value_restriction == included->columns[0].value_restriction);
+	auto overlap =
+	    ApplyFiniteFilter(*included, FiniteSelectionList(key, {Value::INTEGER(84), Value::INTEGER(105)}, true));
+	REQUIRE(overlap);
+	CHECK(overlap->cardinality == 100);
+	INFO("overlap_ndv=" << StringUtil::Format("%.17g", overlap->columns[0].total_domain.distinct_count.GetDouble()));
+	CHECK(overlap->columns[0].total_domain.distinct_count.GetDouble() == Approx(1).epsilon(1e-12));
+	// The statistical point can round; the singleton envelope and its proof bounds remain exact.
+	auto &overlap_column = overlap->columns[0];
+	REQUIRE(overlap_column.value_restriction);
+	CHECK_FALSE(overlap_column.value_restriction->excluded);
+	CHECK(overlap_column.value_restriction->values.size() == 1);
+	CHECK(overlap_column.value_restriction->values.count(Value::INTEGER(42)) == 1);
+	REQUIRE(overlap_column.PopulationBound().IsValid());
+	CHECK(overlap_column.PopulationBound().GetIndex() == 1);
+	REQUIRE(overlap_column.semi_anti_join_domain_evidence.GetDomainBound().IsValid());
+	CHECK(overlap_column.semi_anti_join_domain_evidence.GetDomainBound().GetIndex() == 1);
+	auto empty = ApplyFiniteFilter(*overlap, FiniteSelectionList(key, {Value::INTEGER(42)}, true));
+	REQUIRE(empty);
+	CHECK(empty->IsEmpty());
+
+	auto first = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+	REQUIRE(first);
+	auto next = ApplyFiniteFilter(*first, FiniteSelectionList(key, {Value::INTEGER(84), Value::INTEGER(105)}, true));
+	REQUIRE(next);
+	INFO("next_rows=" << StringUtil::Format("%.17g", next->cardinality.GetDouble()));
+	CHECK(next->cardinality.GetDouble() == Approx(9700).epsilon(1e-12));
+	CHECK(next->columns[0].total_domain.distinct_count == 97);
+	CHECK(next->columns[0].value_restriction->values.size() == 3);
+}
+
+TEST_CASE("Literal history neither requires nor creates usable NDV evidence",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {100}, 1000);
+	input.columns[0].can_have_null = false;
+	input.columns[0].total_domain = DistinctCount(100, DistinctCountSource::CARDINALITY);
+	input.columns[0].current_domain = input.columns[0].total_domain;
+	auto first = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+	REQUIRE(first);
+	REQUIRE(first->columns[0].value_restriction);
+	CHECK_FALSE(first->columns[0].total_domain.has_usable_domain);
+	auto second = ApplyFiniteFilter(*first, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+	REQUIRE(second);
+	CHECK(second->cardinality == first->cardinality);
+	CHECK_FALSE(second->columns[0].total_domain.has_usable_domain);
+	CHECK_FALSE(second->columns[0].PopulationBound().IsValid());
+	CHECK(second->unique_keys.empty());
+
+	// A later nullable boundary invalidates row-count idempotence, not the non-NULL value implication.
+	auto nullable = CreateStats({key}, {1}, 1000);
+	nullable.columns[0].value_restriction = first->columns[0].value_restriction;
+	nullable.columns[0].TightenPopulationBound(1);
+	auto filtered = ApplyFiniteFilter(nullable, FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42));
+	REQUIRE(filtered);
+	CHECK(filtered->cardinality == 800);
+	CHECK_FALSE(filtered->IsEmpty());
+	CHECK(filtered->columns[0].PopulationBound().GetIndex() == 1);
+	CHECK_FALSE(filtered->columns[0].can_have_null);
+	auto repeated = ApplyFiniteFilter(*filtered, FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42));
+	REQUIRE(repeated);
+	CHECK(repeated->cardinality == 800);
+
+	auto point_zero = CreateStats({key}, {1}, 1000);
+	point_zero.columns[0].can_have_null = false;
+	auto zero = ApplyFiniteFilter(point_zero, FiniteSelectionList(key, {Value::INTEGER(42)}, true));
+	REQUIRE(zero);
+	CHECK(zero->cardinality == 0);
+	CHECK(zero->GetCardinalityForCost() == 1);
+	CHECK_FALSE(zero->IsEmpty());
+	CHECK(zero->max_cardinality.GetIndex() == 1000);
+}
+
+TEST_CASE("Literal history uses the scalar comparison null contract",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {10}, 1000);
+	input.columns[0].can_have_null = false;
+	vector<Value> literals {Value::STRUCT({{"n", Value(LogicalType::INTEGER)}}),
+	                        Value::LIST(LogicalType::INTEGER, {Value(LogicalType::INTEGER)}),
+	                        Value::ARRAY(LogicalType::INTEGER, {Value(LogicalType::INTEGER)}),
+	                        Value("long ordinary string")};
+	for (auto &literal : literals) {
+		CAPTURE(literal.type().ToString());
+		auto first =
+		    ApplyFiniteFilter(input, FiniteSelectionList(key, {literal}, false, literal.type()), literal.type());
+		REQUIRE(first);
+		REQUIRE(first->columns[0].value_restriction);
+		CHECK(first->cardinality == 100);
+		auto repeated =
+		    ApplyFiniteFilter(*first, FiniteSelectionList(key, {literal}, false, literal.type()), literal.type());
+		REQUIRE(repeated);
+		CHECK(repeated->cardinality == 100);
+	}
+	auto tagged = Value::UNION({{"str", LogicalType::VARCHAR}}, 0, Value("a"));
+	auto tagged_null = Value::UNION({{"str", LogicalType::VARCHAR}}, 0, Value(LogicalType::VARCHAR));
+	CHECK_FALSE(tagged_null.IsNull());
+	auto first = ApplyFiniteFilter(input, FiniteSelectionList(key, {tagged}, false, tagged.type()), tagged.type());
+	REQUIRE(first);
+	CHECK_FALSE(first->columns[0].value_restriction);
+	auto next = ApplyFiniteFilter(*first, FiniteSelectionList(key, {tagged_null}, true, tagged.type()), tagged.type());
+	REQUIRE(next);
+	CHECK_FALSE(next->columns[0].value_restriction);
+}
+
+TEST_CASE("Mandatory finite predicates publish null rejection after nullable estimation",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto alias = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	auto other = ColumnBinding(TableIndex(10), ProjectionIndex(2));
+	auto input = CreateStats({key, alias, other}, {100, 100, 100}, 1000);
+	input.equivalent_columns = input.value_equivalent_columns = {{0, 1}};
+	auto output = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, false));
+	REQUIRE(output);
+	// The first nullable IN keeps the existing fallback; its actual survivors cannot be NULL.
+	CHECK(output->cardinality == 200);
+	CHECK_FALSE(output->columns[0].can_have_null);
+	CHECK_FALSE(output->columns[1].can_have_null);
+	CHECK(output->columns[2].can_have_null);
+	auto repeated =
+	    ApplyFiniteFilter(*output, FiniteSelectionList(alias, {Value::INTEGER(84), Value::INTEGER(42)}, false));
+	REQUIRE(repeated);
+	CHECK(repeated->cardinality == output->cardinality);
+	auto optional = ApplyFiniteFilter(
+	    input, CreateOptionalFilterExpression(FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+	                                          LogicalType::INTEGER));
+	REQUIRE(optional);
+	CHECK(optional->cardinality == input.cardinality);
+	CHECK(optional->columns[0].can_have_null);
+	CHECK_FALSE(optional->columns[0].value_restriction);
+	auto tautology = ApplyFiniteFilter(
+	    input, make_uniq<BoundConjunctionExpression>(
+	               ExpressionType::CONJUNCTION_OR, FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+	               FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42)));
+	REQUIRE(tautology);
+	CHECK_FALSE(tautology->columns[0].value_restriction);
+	CHECK_FALSE(tautology->columns[0].can_have_null);
+	CHECK(tautology->columns[2].can_have_null);
+}
+
+TEST_CASE("Generic join extraction retains nullability only outside NULL extension",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto a = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto b = ColumnBinding(TableIndex(20), ProjectionIndex(0));
+	for (auto type :
+	     {JoinType::SEMI, JoinType::ANTI, JoinType::RIGHT_SEMI, JoinType::RIGHT_ANTI, JoinType::INNER, JoinType::LEFT,
+	      JoinType::RIGHT, JoinType::OUTER, JoinType::SINGLE, JoinType::MARK, JoinType::INVALID}) {
+		for (bool nullable : {false, true}) {
+			CAPTURE(type, nullable);
+			auto left = CreateStats({a}, {1}, 1000);
+			auto right = CreateStats({b}, {1}, 1000);
+			for (auto input : {&left, &right}) {
+				input->columns[0].can_have_null = nullable;
+				input->columns[0].value_restriction =
+				    ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, true);
+			}
+			auto child = [](ColumnBinding binding) -> unique_ptr<LogicalOperator> {
+				return make_uniq<LogicalExpressionGet>(binding.table_index, vector<LogicalType> {LogicalType::INTEGER},
+				                                       vector<vector<unique_ptr<Expression>>> {});
+			};
+			unique_ptr<LogicalOperator> op;
+			if (type == JoinType::INVALID) {
+				op = make_uniq<LogicalCrossProduct>(child(a), child(b));
+			} else {
+				auto join = make_uniq<LogicalComparisonJoin>(type);
+				join->mark_index = TableIndex(30);
+				join->conditions.emplace_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, a),
+				                              make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, b),
+				                              ExpressionType::COMPARE_EQUAL);
+				join->children.push_back(child(a));
+				join->children.push_back(child(b));
+				op = std::move(join);
+			}
+			auto output = RelationStatisticsHelper::ExtractOperatorStats(*op, *connection.context, {left, right});
+			REQUIRE(output);
+			for (auto &column : output->columns) {
+				if (column.binding.table_index == TableIndex(30)) {
+					CHECK(column.can_have_null);
+					CHECK_FALSE(column.value_restriction);
+					continue;
+				}
+				auto rhs = column.binding == b;
+				auto extended = type == JoinType::OUTER ||
+				                (rhs && (type == JoinType::LEFT || type == JoinType::SINGLE)) ||
+				                (!rhs && type == JoinType::RIGHT);
+				CHECK(column.can_have_null == (nullable || extended));
+				auto projected = RelationStatisticsHelper::ProjectOutputStats(*output, {column.binding});
+				REQUIRE(projected);
+				auto filtered = ApplyFiniteFilter(
+				    *projected, FiniteSelectionList(column.binding, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+				REQUIRE(filtered);
+				CHECK(filtered->cardinality.GetDouble() ==
+				      Approx(output->cardinality.GetDouble() * (nullable || extended ? 0.8 : 1)));
+				CHECK_FALSE(filtered->columns[0].can_have_null);
+				auto repeated = ApplyFiniteFilter(
+				    *filtered, FiniteSelectionList(column.binding, {Value::INTEGER(84), Value::INTEGER(42)}, true));
+				REQUIRE(repeated);
+				CHECK(repeated->cardinality == filtered->cardinality);
+			}
+		}
+	}
+}
+
+TEST_CASE("Passthrough columns retain nullability independently of generated values",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto key = ColumnBinding(TableIndex(20), ProjectionIndex(0));
+	for (bool table_function : {false, true}) {
+		for (bool nullable : {false, true}) {
+			CAPTURE(table_function, nullable);
+			auto input = CreateStats({key}, {1}, 1000);
+			input.columns[0].can_have_null = nullable;
+			input.columns[0].value_restriction = ColumnValueRestriction::Create({Value::INTEGER(42)}, true);
+			unique_ptr<LogicalOperator> op;
+			if (table_function) {
+				auto get = CreateCardinalityProvider(1000, 1000);
+				get->projected_input = {0};
+				op = std::move(get);
+			} else {
+				auto unnest = make_uniq<LogicalUnnest>(TableIndex(10));
+				auto expression = make_uniq<BoundUnnestExpression>(LogicalType::INTEGER);
+				expression->ChildMutable() =
+				    make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)}));
+				unnest->expressions.push_back(std::move(expression));
+				op = std::move(unnest);
+			}
+			op->children.push_back(make_uniq<LogicalExpressionGet>(key.table_index,
+			                                                       vector<LogicalType> {LogicalType::INTEGER},
+			                                                       vector<vector<unique_ptr<Expression>>> {}));
+			auto output = RelationStatisticsHelper::ExtractOperatorStats(*op, *connection.context, {input});
+			REQUIRE(output);
+			for (auto &column : output->columns) {
+				CHECK(column.can_have_null == (column.binding == key ? nullable : true));
+				CHECK(bool(column.value_restriction) == (column.binding == key));
+			}
+		}
+	}
+}
+
+TEST_CASE("Secure view statistics propagation retains non-null finite history",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool propagate : {false, true}) {
+		CAPTURE(propagate);
+		auto scan = CreateCardinalityProvider(1000, 1000);
+		scan->function.statistics = [](ClientContext &, auto, column_t) -> unique_ptr<BaseStatistics> {
+			auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			statistics.SetDistinctCount(100);
+			statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			return statistics.ToUnique();
+		};
+		for (int32_t value : {42, 84}) {
+			scan->table_filters.PushFilter(
+			    ProjectionIndex(0),
+			    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_NOTEQUAL, Value::INTEGER(value)));
+		}
+		auto view = make_uniq<LogicalSecureView>("finite_view",
+		                                         LogicalProjection::CreateIdentity(TableIndex(20), std::move(scan)));
+		view->propagate_statistics = propagate;
+		unique_ptr<LogicalOperator> plan = LogicalProjection::CreateIdentity(TableIndex(30), std::move(view));
+		JoinOrderOptimizer optimizer(*connection.context);
+		RelationStats output;
+		plan = optimizer.Optimize(std::move(plan), output);
+		REQUIRE(output.stats_initialized);
+		REQUIRE(output.columns.size() == 1);
+		CHECK(output.columns[0].can_have_null == !propagate);
+		CHECK(bool(output.columns[0].value_restriction) == propagate);
+		if (propagate) {
+			auto repeated = ApplyFiniteFilter(
+			    output, FiniteSelectionList(output.columns[0].binding, {Value::INTEGER(84), Value::INTEGER(42)}, true));
+			REQUIRE(repeated);
+			CHECK(repeated->cardinality == output.cardinality);
+		}
+	}
+}
+
+TEST_CASE("Scan-proven exclusions remain entailed after a statistics boundary",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreateCardinalityProvider(1000, 1000);
+	scan->function.statistics = [](ClientContext &, auto, column_t) -> unique_ptr<BaseStatistics> {
+		auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+		statistics.SetDistinctCount(1);
+		statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		NumericStats::SetMin(statistics, Value::INTEGER(0));
+		NumericStats::SetMax(statistics, Value::INTEGER(0));
+		return statistics.ToUnique();
+	};
+	scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                       ExpressionType::COMPARE_NOTEQUAL, Value::INTEGER(42)));
+	auto first = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+	REQUIRE(first.columns[0].value_restriction);
+	CHECK(first.cardinality == 1000);
+	auto repeated = ApplyFiniteFilter(
+	    first, FiniteSelectionComparison(first.columns[0].binding, ExpressionType::COMPARE_NOTEQUAL, 42));
+	REQUIRE(repeated);
+	CHECK(repeated->cardinality == 1000);
+	CHECK_FALSE(repeated->IsEmpty());
+}
+
+TEST_CASE("Set operations combine current restrictions independently of population contributors",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto left = CreateStats({ColumnBinding(TableIndex(10), ProjectionIndex(0))}, {10}, 100);
+	auto right = CreateStats({ColumnBinding(TableIndex(20), ProjectionIndex(0))}, {10}, 100);
+	left.columns[0].value_restriction = ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, false);
+	right.columns[0].value_restriction =
+	    ColumnValueRestriction::Create({Value::INTEGER(84), Value::INTEGER(105)}, false);
+	for (auto type : {LogicalOperatorType::LOGICAL_UNION, LogicalOperatorType::LOGICAL_INTERSECT,
+	                  LogicalOperatorType::LOGICAL_EXCEPT}) {
+		LogicalSetOperation op(TableIndex(30), 1, make_uniq<LogicalDummyScan>(TableIndex(10)),
+		                       make_uniq<LogicalDummyScan>(TableIndex(20)), type, true);
+		auto result = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+		REQUIRE(result);
+		REQUIRE(result->columns[0].value_restriction);
+		auto &restriction = *result->columns[0].value_restriction;
+		CHECK_FALSE(restriction.excluded);
+		CHECK(restriction.values.size() == (type == LogicalOperatorType::LOGICAL_UNION       ? 3
+		                                    : type == LogicalOperatorType::LOGICAL_INTERSECT ? 1
+		                                                                                     : 2));
+		CHECK(restriction.values.count(Value::INTEGER(84)));
+	}
+	// A zero estimate is not an empty-row proof. An unrestricted point-zero arm defeats the envelope.
+	right.columns[0].value_restriction.reset();
+	RelationStatisticsHelper::ApplyCardinality(right, 0);
+	LogicalSetOperation op(TableIndex(30), 1, make_uniq<LogicalDummyScan>(TableIndex(10)),
+	                       make_uniq<LogicalDummyScan>(TableIndex(20)), LogicalOperatorType::LOGICAL_UNION, true);
+	auto unknown = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+	REQUIRE(unknown);
+	CHECK_FALSE(unknown->columns[0].value_restriction);
+	right.max_cardinality = optional_idx(0);
+	auto proven = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+	REQUIRE(proven);
+	CHECK(proven->columns[0].value_restriction == left.columns[0].value_restriction);
+	// Its original population remains relevant to the independent numerical UNION owner.
+	CHECK(proven->columns[0].total_domain.distinct_count == 20);
+
+	value_set_t values;
+	for (idx_t i = 0; i < 1024; i++) {
+		values.insert(Value::INTEGER(i));
+	}
+	auto a = ColumnValueRestriction::Create(std::move(values), false);
+	auto b = ColumnValueRestriction::Create({Value::INTEGER(1024)}, false);
+	auto c = ColumnValueRestriction::Create({Value::INTEGER(0)}, true);
+	auto ab = ColumnValueRestriction::Combine({a, b}, false);
+	REQUIRE(ab);
+	CHECK(ab->values.size() == 1025);
+	CHECK_FALSE(ColumnValueRestriction::Combine({ab, c}, false));
+	CHECK_FALSE(ColumnValueRestriction::Combine({a, ColumnValueRestriction::Combine({b, c}, false)}, false));
+}
+
+TEST_CASE("Only value-preserving expressions transport a current literal envelope",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {10}, 100);
+	input.columns[0].can_have_null = false;
+	input.columns[0].value_restriction =
+	    ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, false);
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key));
+	expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key));
+	expressions.push_back(FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42));
+	LogicalProjection projection(TableIndex(20), std::move(expressions));
+	auto projected = RelationStatisticsHelper::ExtractProjectionStats(projection, input);
+	REQUIRE(projected);
+	CHECK(projected->columns[0].value_restriction == input.columns[0].value_restriction);
+	CHECK(projected->columns[1].value_restriction == input.columns[0].value_restriction);
+	CHECK_FALSE(projected->columns[2].value_restriction);
+
+	LogicalAggregate aggregate(TableIndex(30), TableIndex(40), {});
+	aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key));
+	aggregate.grouping_sets.push_back({ProjectionIndex(0)});
+	aggregate.grouping_sets.emplace_back();
+	auto grouped = RelationStatisticsHelper::ExtractAggregationStats(aggregate, input, *connection.context);
+	REQUIRE(grouped);
+	CHECK(grouped->columns[0].value_restriction == input.columns[0].value_restriction);
+	CHECK(grouped->columns[0].can_have_null);
+	// NULL extension keeps a non-NULL implication, never a proof of whole-row no-op.
+	CHECK_FALSE(grouped->columns[0].GetSupportedSemiAntiDomainSize());
+}
+
+TEST_CASE("SEMI witnesses transport envelopes without claiming an ANTI exclusion",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto left_binding = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto right_binding = ColumnBinding(TableIndex(20), ProjectionIndex(0));
+	auto left = CreateStats({left_binding}, {100}, 1000);
+	auto right = CreateStats({right_binding}, {100}, 1000);
+	right.columns[0].total_domain = DistinctCount(100, DistinctCountSource::CARDINALITY);
+	right.columns[0].current_domain = right.columns[0].total_domain;
+	right.columns[0].value_restriction =
+	    ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, false);
+	for (auto type : {JoinType::SEMI, JoinType::ANTI}) {
+		for (bool residual : {false, true}) {
+			CAPTURE(type, residual);
+			LogicalComparisonJoin join(type);
+			join.conditions.emplace_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, left_binding),
+			                             make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right_binding),
+			                             ExpressionType::COMPARE_EQUAL);
+			if (residual) {
+				join.conditions.emplace_back(
+				    CreateJoinComparison(left_binding, right_binding, ExpressionType::COMPARE_LESSTHAN));
+			}
+			auto result = left;
+			RelationStatisticsHelper::ApplySemiAntiJoinStats(join, left, right, result);
+			CHECK(bool(result.columns[0].value_restriction) == (type == JoinType::SEMI));
+			if (type == JoinType::SEMI) {
+				CHECK(result.columns[0].value_restriction == right.columns[0].value_restriction);
+			}
+			CHECK(result.unique_keys.empty());
+			CHECK_FALSE(result.columns[0].support_identities);
+		}
+	}
+}
+
+TEST_CASE("Completed graph SEMI boundaries transport existing witness envelopes",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	for (auto type : {JoinType::SEMI, JoinType::ANTI}) {
+		for (bool residual : {false, true}) {
+			for (bool completed_first : {false, true}) {
+				CAPTURE(type, residual, completed_first);
+				JoinRelationSetManager sets;
+				JoinPredicateModel predicates;
+				auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+				auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+				auto &left = sets.GetJoinRelation(RelationIndex(0));
+				auto &right = sets.GetJoinRelation(RelationIndex(1));
+				auto &root = sets.Union(left, right);
+				FilterInfo filter(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), root, 0, type);
+				filter.source_operator_index = optional_idx(0);
+				filter.SetLeftSet(left);
+				filter.SetRightSet(right);
+				filter.semantic_left_set = left;
+				filter.semantic_right_set = right;
+				predicates.RegisterPredicate(filter, JoinPredicateClass::SEMI_ANTI_JOIN, a, b);
+				vector<unique_ptr<JoinOrderOperator>> operators;
+				auto &op =
+				    AddOperator(operators, sets, left, right,
+				                type == JoinType::SEMI ? JoinOrderOperatorType::SEMI : JoinOrderOperatorType::ANTI);
+				op.conditions.emplace_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, a),
+				                           make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, b),
+				                           ExpressionType::COMPARE_EQUAL);
+				if (residual) {
+					op.conditions.emplace_back(make_uniq<BoundConstantExpression>(Value(true)));
+				}
+				auto first = CreateStats({a}, {100}, 1000);
+				auto second = CreateStats({b}, {100}, 1000);
+				second.columns[0].total_domain = DistinctCount(100, DistinctCountSource::CARDINALITY);
+				second.columns[0].current_domain = second.columns[0].total_domain;
+				second.columns[0].value_restriction =
+				    ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, false);
+				CardinalityEstimator estimator(sets, predicates);
+				estimator.Initialize({first, second}, operators);
+				if (completed_first) {
+					REQUIRE(estimator.ProjectStats(root, {a}));
+				}
+				auto before = estimator.ProjectStats(left, {a});
+				REQUIRE(before);
+				CHECK_FALSE(before->columns[0].value_restriction);
+				auto completed = estimator.ProjectStats(root, {a});
+				REQUIRE(completed);
+				CHECK(bool(completed->columns[0].value_restriction) == (type == JoinType::SEMI));
+				if (type == JoinType::SEMI) {
+					CHECK(completed->columns[0].value_restriction == second.columns[0].value_restriction);
+				}
+				auto rhs = estimator.ProjectStats(right, {b});
+				REQUIRE(rhs);
+				CHECK_FALSE(rhs->columns[0].total_domain.has_usable_domain);
+				CHECK(completed->unique_keys.empty());
+				CHECK_FALSE(completed->columns[0].support_identities);
+				CHECK_FALSE(first.columns[0].value_restriction);
+			}
+		}
+	}
+}
+
+TEST_CASE("Value aliases alone authorize literal intersection within a statistical class",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto alias = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (bool direct_values : {false, true}) {
+		CAPTURE(direct_values);
+		auto input = CreateStats({key, alias}, {100, 100}, 10000);
+		input.equivalent_columns = {{0, 1}};
+		if (direct_values) {
+			input.value_equivalent_columns = {{0, 1}};
+		}
+		for (auto &column : input.columns) {
+			column.can_have_null = false;
+		}
+		auto contradictory = ApplyFiniteFilter(
+		    input,
+		    make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+		                                          FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+		                                          FiniteSelectionComparison(alias, ExpressionType::COMPARE_EQUAL, 84)));
+		REQUIRE(contradictory);
+		CHECK(contradictory->IsEmpty() == direct_values);
+		if (!direct_values) {
+			CHECK(contradictory->cardinality == 100);
+			CHECK(contradictory->columns[0].value_restriction->values.count(Value::INTEGER(42)));
+			CHECK(contradictory->columns[1].value_restriction->values.count(Value::INTEGER(84)));
+			CHECK(contradictory->value_equivalent_columns.empty());
+		}
+		auto filtered =
+		    ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+		REQUIRE(filtered);
+		auto projected = RelationStatisticsHelper::ProjectOutputStats(*filtered, {alias});
+		REQUIRE(projected);
+		CHECK(bool(projected->columns[0].value_restriction) == direct_values);
+		if (direct_values) {
+			auto repeated = ApplyFiniteFilter(
+			    *projected, FiniteSelectionList(alias, {Value::INTEGER(84), Value::INTEGER(42)}, true));
+			REQUIRE(repeated);
+			CHECK(repeated->cardinality == filtered->cardinality);
+		}
+	}
+
+	auto input = CreateStats({key, alias}, {100, 100}, 10000);
+	input.equivalent_columns = {{0, 1}};
+	for (auto &column : input.columns) {
+		column.can_have_null = false;
+	}
+	for (bool excluded : {false, true}) {
+		auto output = ApplyFiniteFilter(
+		    input,
+		    make_uniq<BoundConjunctionExpression>(
+		        ExpressionType::CONJUNCTION_AND,
+		        FiniteSelectionList(key, {Value::INTEGER(1), Value::INTEGER(2)}, excluded),
+		        FiniteSelectionList(alias, {Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4)}, excluded)));
+		REQUIRE(output);
+		CHECK(output->cardinality == (excluded ? 9700 : 200));
+		CHECK_FALSE(output->IsEmpty());
+		CHECK(output->columns[0].value_restriction->values.size() == 2);
+		CHECK(output->columns[1].value_restriction->values.size() == 3);
+		if (excluded) {
+			CHECK_FALSE(output->columns[0].PopulationBound().IsValid());
+			CHECK_FALSE(output->columns[1].PopulationBound().IsValid());
+		}
+	}
+	vector<Value> exclusions;
+	for (idx_t i = 0; i < 98; i++) {
+		exclusions.push_back(Value::INTEGER(i));
+	}
+	auto mixed = ApplyFiniteFilter(
+	    input, make_uniq<BoundConjunctionExpression>(
+	               ExpressionType::CONJUNCTION_AND,
+	               FiniteSelectionList(key, {Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)}, false),
+	               FiniteSelectionList(alias, exclusions, true)));
+	REQUIRE(mixed);
+	CHECK(mixed->cardinality == 200);
+	CHECK_FALSE(mixed->IsEmpty());
+	// The winning exclusion estimates two values; the real finite predicate proves only a three-value bound.
+	auto current_bound = mixed->columns[0].semi_anti_join_domain_evidence.GetDomainBound();
+	REQUIRE(current_bound.IsValid());
+	CHECK(current_bound.GetIndex() <= 3);
+	CHECK_FALSE(mixed->columns[0].PopulationBound().IsValid());
+	CHECK_FALSE(mixed->columns[1].PopulationBound().IsValid());
+	CHECK_FALSE(mixed->columns[0].value_restriction->excluded);
+	CHECK(mixed->columns[1].value_restriction->excluded);
+	exclusions.push_back(Value::INTEGER(98));
+	exclusions.push_back(Value::INTEGER(99));
+	auto exhausted = ApplyFiniteFilter(
+	    input, make_uniq<BoundConjunctionExpression>(
+	               ExpressionType::CONJUNCTION_AND,
+	               FiniteSelectionList(key, {Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)}, false),
+	               FiniteSelectionList(alias, exclusions, true)));
+	REQUIRE(exhausted);
+	CHECK_FALSE(exhausted->IsEmpty());
+	CHECK(exhausted->max_cardinality.GetIndex() == 10000);
+	CHECK(exhausted->GetCardinalityForCost() == 1);
+}
+
+TEST_CASE("Graph projection exports value aliases only for direct same-type equality",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool cast : {false, true}) {
+		for (bool one_output_first : {false, true}) {
+			CAPTURE(cast, one_output_first);
+			JoinRelationSetManager sets;
+			JoinPredicateModel predicates;
+			auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+			auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+			auto &left = sets.GetJoinRelation(RelationIndex(0));
+			auto &right = sets.GetJoinRelation(RelationIndex(1));
+			auto &joined = sets.Union(left, right);
+			unique_ptr<Expression> lhs =
+			    make_uniq<BoundColumnRefExpression>(cast ? LogicalType::DATE : LogicalType::INTEGER, a);
+			unique_ptr<Expression> rhs =
+			    make_uniq<BoundColumnRefExpression>(cast ? LogicalType::VARCHAR : LogicalType::INTEGER, b);
+			if (cast) {
+				lhs = BoundCastExpression::AddCastToType(*connection.context, std::move(lhs), LogicalType::VARCHAR);
+			}
+			FilterInfo filter(
+			    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs)),
+			    joined, 0);
+			filter.SetLeftSet(left);
+			filter.SetRightSet(right);
+			filter.left_binding = a;
+			filter.right_binding = b;
+			auto &predicate = predicates.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			JoinEqualityClass group;
+			group.index = 0;
+			group.columns = {a, b};
+			group.relations = {RelationIndex(0), RelationIndex(1)};
+			group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a, b);
+			predicates.AddEqualityClass(std::move(group));
+			auto first = CreateStats({a}, {100}, 1000);
+			auto second = CreateStats({b}, {100}, 1000);
+			auto first_value = cast ? Value::DATE(1970, 1, 1) : Value::INTEGER(42);
+			auto second_value = cast ? Value("1970-01-01") : Value::INTEGER(84);
+			first.columns[0].value_restriction = ColumnValueRestriction::Create({first_value}, true);
+			second.columns[0].value_restriction = ColumnValueRestriction::Create({second_value}, true);
+			CardinalityEstimator estimator(sets, predicates);
+			estimator.Initialize({first, second}, {}, {});
+			if (one_output_first) {
+				REQUIRE(estimator.ProjectStats(joined, {b}));
+			}
+			// Reconstruction consumes the expression before projecting the joined value evidence.
+			auto condition = std::move(filter.filter);
+			REQUIRE(condition);
+			REQUIRE_FALSE(filter.filter);
+			auto both = estimator.ProjectStats(joined, {a, b});
+			REQUIRE(both);
+			CHECK(both->equivalent_columns.size() == 1);
+			CHECK(both->value_equivalent_columns.size() == (cast ? 0 : 1));
+			CHECK(both->columns[0].value_restriction->values.size() == (cast ? 1 : 2));
+			CHECK(both->columns[1].value_restriction->values.size() == (cast ? 1 : 2));
+			CHECK(both->columns[0].value_restriction->values.count(first_value));
+			CHECK(both->columns[1].value_restriction->values.count(second_value));
+			auto one = estimator.ProjectStats(joined, {b});
+			REQUIRE(one);
+			auto projected = RelationStatisticsHelper::ProjectOutputStats(*both, {b});
+			REQUIRE(projected);
+			CHECK(one->columns[0].value_restriction->values == projected->columns[0].value_restriction->values);
+			vector<RelationStats> normalized {*both};
+			EqualityCardinalityModel model(normalized);
+			CHECK(normalized[0].columns[0].value_restriction->values == both->columns[0].value_restriction->values);
+			CHECK(normalized[0].columns[1].value_restriction->values == both->columns[1].value_restriction->values);
+			auto reprojected = *both;
+			for (idx_t c = 0; c < reprojected.columns.size(); c++) {
+				reprojected.columns[c].binding = ColumnBinding(TableIndex(0), ProjectionIndex(c));
+			}
+			vector<EqualityProjection> projections(1);
+			projections[0].selection = EqualitySelection::ALL;
+			model.Project(reprojected, {}, projections, {});
+			CHECK(reprojected.columns[0].value_restriction->values == both->columns[0].value_restriction->values);
+			CHECK(reprojected.columns[1].value_restriction->values == both->columns[1].value_restriction->values);
+			if (cast) {
+				// A tuple identity alone supplies neither a scalar alias nor a typed value edge.
+				auto closed = *both;
+				closed.equivalent_columns.clear();
+				closed.tuple_identities = make_shared_ptr<vector<RelationTupleIdentity>>(
+				    vector<RelationTupleIdentity> {{{0, 1}, {make_shared_ptr<SupportOrigin>(), {0, 0}}}});
+				vector<RelationStats> closure {closed};
+				EqualityCardinalityModel rebuilt(closure);
+				CHECK(rebuilt.Normalize(ColumnBinding(TableIndex(0), ProjectionIndex(0))) !=
+				      rebuilt.Normalize(ColumnBinding(TableIndex(0), ProjectionIndex(1))));
+				CHECK(closure[0].value_equivalent_columns.empty());
+				CHECK(closure[0].columns[0].value_restriction->values == closed.columns[0].value_restriction->values);
+				CHECK(closure[0].columns[1].value_restriction->values == closed.columns[1].value_restriction->values);
+			}
+		}
+	}
+}
+
+TEST_CASE("Finite complements combine rewritten inequalities and aliases",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto alias = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	auto input = CreateStats({key, alias}, {100, 100}, 1000);
+	input.equivalent_columns = {{0, 1}};
+	input.value_equivalent_columns = {{0, 1}};
+	for (auto &column : input.columns) {
+		column.can_have_null = false;
+		column.TightenPopulationBound(100);
+		column.semi_anti_join_domain_evidence.TightenDomainBound(100);
+	}
+	vector<unique_ptr<Expression>> variants;
+	// Short NOT IN can become inequalities or NOT over equalities.
+	variants.push_back(make_uniq<BoundConjunctionExpression>(
+	    ExpressionType::CONJUNCTION_AND, FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42),
+	    FiniteSelectionComparison(alias, ExpressionType::COMPARE_NOTEQUAL, 84)));
+	variants.push_back(FiniteSelectionList(
+	    key, {Value::INTEGER(42), Value::INTEGER(84), Value::INTEGER(42), Value::INTEGER(84)}, true));
+	variants.push_back(make_uniq<BoundConjunctionExpression>(
+	    ExpressionType::CONJUNCTION_AND, FiniteSelectionList(alias, {Value::INTEGER(42), Value::INTEGER(84)}, true),
+	    FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42)));
+	variants.push_back(FiniteSelectionNot(make_uniq<BoundConjunctionExpression>(
+	    ExpressionType::CONJUNCTION_OR, FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+	    FiniteSelectionComparison(alias, ExpressionType::COMPARE_EQUAL, 84))));
+	variants.push_back(FiniteSelectionNot(
+	    FiniteSelectionNot(FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true))));
+	for (auto &predicate : variants) {
+		auto output = ApplyFiniteFilter(input, std::move(predicate));
+		REQUIRE(output);
+		CHECK(output->cardinality.GetDouble() == Approx(980));
+		CHECK(output->row_retention.GetDouble() == Approx(0.98));
+		CHECK_FALSE(output->IsEmpty());
+		CHECK(output->max_cardinality.GetIndex() == 1000);
+		for (auto &column : output->columns) {
+			CHECK(column.total_domain.distinct_count.GetDouble() == Approx(98));
+			CHECK(column.current_domain.distinct_count.GetDouble() == Approx(98));
+			CHECK(column.total_domain.source == DistinctCountSource::DERIVED);
+			CHECK(column.PopulationBound().GetIndex() == 100);
+			CHECK(column.semi_anti_join_domain_evidence.GetDomainBound().GetIndex() == 100);
+			CHECK_FALSE(column.support_identities);
+		}
+	}
+}
+
+TEST_CASE("Negated finite predicates preserve NULL truth sets and typed literals",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	for (auto value : {Value::INTEGER(42), Value("forty-two"), Value::LIST({Value::INTEGER(42)})}) {
+		auto type = value.type();
+		for (bool nullable : {false, true}) {
+			for (idx_t variant = 0; variant < 4; variant++) {
+				CAPTURE(type, nullable, variant);
+				auto input = CreateStats({key}, {30}, 3000);
+				input.columns[0].can_have_null = nullable;
+				auto equality = [&](Value constant) {
+					return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+					                                         make_uniq<BoundColumnRefExpression>(type, key),
+					                                         make_uniq<BoundConstantExpression>(std::move(constant)));
+				};
+				unique_ptr<Expression> predicate;
+				if (variant < 2) {
+					predicate = FiniteSelectionNot(make_uniq<BoundConjunctionExpression>(
+					    variant == 0 ? ExpressionType::CONJUNCTION_AND : ExpressionType::CONJUNCTION_OR,
+					    equality(value), equality(Value(type))));
+				} else {
+					predicate = FiniteSelectionNot(FiniteSelectionList(key, {value, Value(type)}, variant == 2, type));
+					if (variant == 3) {
+						predicate = FiniteSelectionNot(std::move(predicate));
+					}
+				}
+				auto output = ApplyFiniteFilter(input, std::move(predicate), type);
+				REQUIRE(output);
+				auto &restriction = output->columns[0].value_restriction;
+				REQUIRE(restriction);
+				CHECK_FALSE(output->columns[0].can_have_null);
+				CHECK(output->IsEmpty() == (variant == 1));
+				CHECK(restriction->excluded == (variant == 0));
+				CHECK(restriction->values == (variant == 1 ? value_set_t {} : value_set_t {value}));
+				if (!nullable) {
+					CHECK(output->cardinality.GetDouble() == Approx(variant == 0 ? 2900 : variant == 1 ? 0 : 100));
+				}
+			}
+		}
+	}
+}
+
+TEST_CASE("Rewritten exclusions condition retained finite history only once",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {100}, 10000);
+	input.columns[0].can_have_null = false;
+	auto selected = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, false));
+	REQUIRE(selected);
+	CHECK(selected->cardinality.GetDouble() == Approx(200));
+	for (bool overlap : {false, true}) {
+		auto predicate = FiniteSelectionNot(make_uniq<BoundConjunctionExpression>(
+		    ExpressionType::CONJUNCTION_OR, FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 1),
+		    FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, overlap ? 42 : 2)));
+		auto filtered = ApplyFiniteFilter(*selected, predicate->Copy());
+		REQUIRE(filtered);
+		CHECK(filtered->cardinality.GetDouble() == Approx(overlap ? 100 : 200));
+		CHECK(filtered->columns[0].current_domain.distinct_count.GetDouble() == Approx(overlap ? 1 : 2));
+		auto repeated = ApplyFiniteFilter(*filtered, std::move(predicate));
+		REQUIRE(repeated);
+		CHECK(repeated->cardinality == filtered->cardinality);
+		CHECK(repeated->columns[0].value_restriction == filtered->columns[0].value_restriction);
+	}
+}
+
+TEST_CASE("Negation retains finite predicate eligibility gates",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	DuckDB db;
+	Connection connection(db);
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto other = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (idx_t variant = 0; variant < 4; variant++) {
+		CAPTURE(variant);
+		auto input = CreateStats({key, other}, {100, 100}, 10000);
+		unique_ptr<Expression> predicate;
+		if (variant == 0) {
+			predicate = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_OR, FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+			    FiniteSelectionComparison(other, ExpressionType::COMPARE_EQUAL, 84));
+		} else if (variant == 1) {
+			predicate = BoundComparisonExpression::Create(
+			    ExpressionType::COMPARE_EQUAL,
+			    BoundCastExpression::AddCastToType(*connection.context,
+			                                       make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key),
+			                                       LogicalType::BIGINT),
+			    make_uniq<BoundConstantExpression>(Value::BIGINT(42)));
+		} else if (variant == 2) {
+			predicate = BoundComparisonExpression::Create(
+			    ExpressionType::COMPARE_EQUAL, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key),
+			    make_uniq<BoundParameterExpression>(Identifier("value")));
+		} else {
+			predicate = CreateOptionalFilterExpression(
+			    FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42), LogicalType::INTEGER);
+		}
+		auto output = ApplyFiniteFilter(input, FiniteSelectionNot(std::move(predicate)));
+		REQUIRE(output);
+		for (auto &column : output->columns) {
+			CHECK_FALSE(column.value_restriction);
+		}
+		CHECK_FALSE(output->IsEmpty());
+	}
+}
+
+TEST_CASE("Finite and cofinite TRUE sets share AND and OR algebra",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {100}, 1000);
+	input.columns[0].can_have_null = false;
+	for (bool conjunction : {false, true}) {
+		for (bool left_excluded : {false, true}) {
+			for (bool right_excluded : {false, true}) {
+				CAPTURE(conjunction, left_excluded, right_excluded);
+				// A={42,84}, B={84,105}; enumerate the eight set operations independently.
+				auto predicate = make_uniq<BoundConjunctionExpression>(
+				    conjunction ? ExpressionType::CONJUNCTION_AND : ExpressionType::CONJUNCTION_OR,
+				    FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, left_excluded),
+				    FiniteSelectionList(key, {Value::INTEGER(84), Value::INTEGER(105)}, right_excluded));
+				idx_t survivors = 0;
+				for (idx_t value = 0; value < 100; value++) {
+					// Use a 100-value universe that includes the three named literals.
+					auto literal = value == 99 ? idx_t(105) : value;
+					bool left = literal == 42 || literal == 84;
+					bool right = literal == 84 || literal == 105;
+					left = left != left_excluded;
+					right = right != right_excluded;
+					survivors += conjunction ? left && right : left || right;
+				}
+				auto output = ApplyFiniteFilter(input, std::move(predicate));
+				REQUIRE(output);
+				CHECK(output->cardinality.GetDouble() == Approx(10 * survivors));
+				CHECK(output->columns[0].total_domain.distinct_count.GetDouble() == Approx(survivors));
+				auto finite_result =
+				    conjunction ? !left_excluded || !right_excluded : !left_excluded && !right_excluded;
+				CHECK(output->columns[0].PopulationBound().IsValid() == finite_result);
+			}
+		}
+	}
+	for (bool conjunction : {false, true}) {
+		auto predicate = make_uniq<BoundConjunctionExpression>(
+		    conjunction ? ExpressionType::CONJUNCTION_AND : ExpressionType::CONJUNCTION_OR,
+		    FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 42),
+		    FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42));
+		auto output = ApplyFiniteFilter(input, std::move(predicate));
+		REQUIRE(output);
+		CHECK(output->IsEmpty() == conjunction);
+		CHECK(output->cardinality == (conjunction ? 0 : 1000));
+		if (!conjunction) {
+			CHECK(output->columns[0].total_domain.source == DistinctCountSource::EXACT);
+			CHECK(output->columns[0].total_domain.distinct_count == 100);
+			CHECK_FALSE(output->columns[0].PopulationBound().IsValid());
+		}
+	}
+	auto tautology = ApplyFiniteFilter(
+	    input, make_uniq<BoundConjunctionExpression>(
+	               ExpressionType::CONJUNCTION_OR, FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42),
+	               FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 84)));
+	REQUIRE(tautology);
+	CHECK(tautology->cardinality == 1000);
+	CHECK(tautology->columns[0].total_domain.source == DistinctCountSource::EXACT);
+}
+
+TEST_CASE("Finite complements condition independent coordinates and retained key populations once",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto x = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto y = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (bool recorded_key : {false, true}) {
+		for (bool include_x : {false, true}) {
+			CAPTURE(recorded_key, include_x);
+			auto input = CreateStats({x, y}, {100, 100}, recorded_key ? 5000 : 10000);
+			for (auto &column : input.columns) {
+				column.can_have_null = false;
+			}
+			if (recorded_key) {
+				input.AddUniqueKey({0, 1});
+				input.joint_stats.push_back({{0, 1},
+				                             DistinctCount(10000, DistinctCountSource::EXACT),
+				                             DistinctCount(5000, DistinctCountSource::EXACT),
+				                             nullptr});
+				input.row_retention = CardinalityValue(0.5);
+			}
+			auto predicate = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND,
+			    FiniteSelectionList(x, {Value::INTEGER(42), Value::INTEGER(84)}, !include_x),
+			    FiniteSelectionComparison(y, ExpressionType::COMPARE_NOTEQUAL, 42));
+			auto output = ApplyFiniteFilter(input, std::move(predicate));
+			REQUIRE(output);
+			auto population = (include_x ? 2 : 98) * 99;
+			auto rows = recorded_key ? population / 2.0 : double(population);
+			CHECK(output->cardinality.GetDouble() == Approx(rows));
+			CHECK(output->row_retention.GetDouble() == Approx(rows / 10000.0));
+			CHECK(output->HasUniqueKey({0, 1}) == recorded_key);
+			CHECK_FALSE(output->HasUniqueKey({0}));
+			CHECK_FALSE(output->columns[1].PopulationBound().IsValid());
+			CHECK(output->columns[0].PopulationBound().IsValid() == include_x);
+			if (recorded_key) {
+				REQUIRE(output->joint_stats.size() == 1);
+				CHECK(output->joint_stats[0].total_domain.distinct_count.GetDouble() == Approx(population));
+				CHECK(output->joint_stats[0].current_domain.distinct_count.GetDouble() == Approx(rows));
+				CHECK(output->joint_stats[0].total_domain.source == DistinctCountSource::DERIVED);
+				CHECK_FALSE(output->joint_stats[0].identities);
+			}
+		}
+	}
+}
+
+TEST_CASE("Finite complement points preserve fractional retention without proving emptiness",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto input = CreateStats({key}, {1}, 10);
+	input.columns[0].can_have_null = false;
+	input.columns[0].total_domain.distinct_count = CardinalityValue(2.5);
+	input.columns[0].current_domain.distinct_count = CardinalityValue(1.25);
+	input.row_retention = CardinalityValue(0.5);
+	auto output = ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+	REQUIRE(output);
+	CHECK(output->cardinality.GetDouble() == Approx(2));
+	CHECK(output->row_retention.GetDouble() == Approx(0.1));
+	CHECK(output->columns[0].total_domain.distinct_count.GetDouble() == Approx(0.5));
+	CHECK(output->columns[0].current_domain.distinct_count.GetDouble() == Approx(0.25));
+	CHECK_FALSE(output->columns[0].PopulationBound().IsValid());
+	CHECK_FALSE(output->IsEmpty());
+	for (double population : {0.5, 2.0}) {
+		input.columns[0].total_domain.distinct_count = CardinalityValue(population);
+		input.columns[0].current_domain.distinct_count = CardinalityValue(population / 2);
+		auto exhausted =
+		    ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+		REQUIRE(exhausted);
+		// The NDV point does not prove that either literal occurs. Keep the existing positive cost guard.
+		CHECK_FALSE(exhausted->IsEmpty());
+		CHECK(exhausted->max_cardinality.GetIndex() == 10);
+		CHECK(exhausted->cardinality == 0);
+		CHECK(exhausted->GetCardinalityForCost() == 1);
+		CHECK_FALSE(exhausted->columns[0].PopulationBound().IsValid());
+		CHECK_FALSE(exhausted->columns[0].semi_anti_join_domain_evidence.GetDomainBound().IsValid());
+	}
+}
+
+TEST_CASE("Finite complements keep NULL semantics and unknown population fallback",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	for (bool nullable : {false, true}) {
+		for (bool unknown : {false, true}) {
+			CAPTURE(nullable, unknown);
+			auto input = CreateStats({key}, {100}, 1000);
+			input.columns[0].can_have_null = nullable;
+			if (unknown) {
+				input.columns[0].total_domain.source = DistinctCountSource::CARDINALITY;
+				input.columns[0].total_domain.has_usable_domain = false;
+			}
+			auto predicate = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 42),
+			    FiniteSelectionComparison(key, ExpressionType::COMPARE_NOTEQUAL, 84));
+			auto output = ApplyFiniteFilter(input, std::move(predicate));
+			REQUIRE(output);
+			CHECK(output->cardinality.GetDouble() == Approx(unknown ? 800 : nullable ? 990 : 980));
+			CHECK(output->columns[0].total_domain.distinct_count == (unknown || nullable ? 100 : 98));
+			if (unknown) {
+				CHECK(output->columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
+			}
+			auto null_list = ApplyFiniteFilter(
+			    input, FiniteSelectionList(key, {Value::INTEGER(42), Value(LogicalType::INTEGER)}, true));
+			REQUIRE(null_list);
+			CHECK(null_list->IsEmpty());
+			CHECK(null_list->cardinality == 0);
+		}
+	}
+	auto input = CreateStats({key}, {100}, 1000);
+	input.columns[0].can_have_null = false;
+	auto null_union =
+	    ApplyFiniteFilter(input, make_uniq<BoundConjunctionExpression>(
+	                                 ExpressionType::CONJUNCTION_OR,
+	                                 FiniteSelectionList(key, {Value::INTEGER(42), Value(LogicalType::INTEGER)}, true),
+	                                 FiniteSelectionComparison(key, ExpressionType::COMPARE_EQUAL, 84)));
+	REQUIRE(null_union);
+	CHECK(null_union->cardinality == 10);
+	CHECK_FALSE(null_union->IsEmpty());
+}
+
+TEST_CASE("Finite selection requires usable evidence independently of derived population scope",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	for (bool known : {false, true}) {
+		auto input = CreateStats({key}, {100}, 1000);
+		input.columns[0].can_have_null = false;
+		input.columns[0].total_domain = DistinctCount(100, DistinctCountSource::DERIVED, known);
+		input.columns[0].current_domain = input.columns[0].total_domain;
+		auto output =
+		    ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+		REQUIRE(output);
+		REQUIRE(output->cardinality.GetDouble() == Approx(known ? 980 : 200));
+		REQUIRE(output->columns[0].total_domain.distinct_count == (known ? 98 : 100));
+		REQUIRE(output->columns[0].total_domain.has_usable_domain == known);
+	}
+}
+
+TEST_CASE("Raw scan exclusions retain pruning before finite conditioning",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool also_inside : {false, true}) {
+		auto scan = CreateCardinalityProvider(1000, 1000);
+		scan->function.statistics = [](ClientContext &, auto, column_t) -> unique_ptr<BaseStatistics> {
+			auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			statistics.SetDistinctCount(100);
+			statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			NumericStats::SetMin(statistics, Value::INTEGER(0));
+			NumericStats::SetMax(statistics, Value::INTEGER(99));
+			return statistics.ToUnique();
+		};
+		scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+		                                                       ExpressionType::COMPARE_NOTEQUAL, Value::INTEGER(9999)));
+		if (also_inside) {
+			scan->table_filters.PushFilter(
+			    ProjectionIndex(0),
+			    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_NOTEQUAL, Value::INTEGER(42)));
+		}
+		auto output = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+		CHECK(output.cardinality.GetDouble() == Approx(also_inside ? 990 : 1000));
+		CHECK(output.columns[0].total_domain.distinct_count == (also_inside ? 99 : 100));
+		CHECK_FALSE(output.IsEmpty());
+	}
+}
+
+TEST_CASE("Scan ranges exclude impossible literals before finite conditioning",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool rewritten : {false, true}) {
+		for (idx_t variant = 0; variant < 5; variant++) {
+			CAPTURE(rewritten, variant);
+			auto scan = CreateCardinalityProvider(3000, 3000);
+			auto &data = scan->bind_data.write().Cast<CardinalityProviderData>();
+			auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			statistics.SetDistinctCount(3);
+			if (variant != 3) {
+				statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			}
+			if (variant != 2) {
+				NumericStats::SetMin(statistics, Value::INTEGER(0));
+				NumericStats::SetMax(statistics, Value::INTEGER(84));
+			}
+			data.column_statistics = statistics.ToUnique();
+			scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+				auto &data = bind_data->template Cast<CardinalityProviderData>();
+				(*data.column_calls)++;
+				return data.column_statistics->Copy().ToUnique();
+			};
+			vector<Value> values {Value::INTEGER(variant == 1 ? 42 : 1000),
+			                      variant == 4 ? Value(LogicalType::INTEGER) : Value::INTEGER(1001)};
+			unique_ptr<Expression> predicate;
+			if (rewritten) {
+				auto equality = [&](const Value &value) {
+					return BoundComparisonExpression::Create(
+					    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+					    make_uniq<BoundConstantExpression>(value));
+				};
+				predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, equality(values[0]),
+				                                                  equality(values[1]));
+			} else {
+				predicate = ExpressionFilter::CreateInExpression(
+				    make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0), values);
+			}
+			scan->table_filters.PushFilter(ProjectionIndex(0),
+			                               make_uniq<ExpressionFilter>(FiniteSelectionNot(std::move(predicate))));
+			auto output = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+			CHECK(*data.column_calls == 1);
+			CHECK(output.IsEmpty() == (variant == 4));
+			REQUIRE(output.columns[0].value_restriction);
+			CHECK_FALSE(output.columns[0].can_have_null);
+			if (variant == 3) {
+				// NULLs prevent proving that this filter preserves every row.
+				CHECK(output.cardinality < 3000);
+			} else {
+				auto expected = variant == 0 ? 3000 : variant == 1 ? 2000 : variant == 2 ? 1000 : 0;
+				CHECK(output.cardinality.GetDouble() == Approx(expected));
+				CHECK(output.columns[0].total_domain.distinct_count.GetDouble() ==
+				      Approx(variant == 4 ? 3 : expected / 1000));
+			}
+			auto repeated = ApplyFiniteFilter(
+			    output, FiniteSelectionNot(FiniteSelectionList(output.columns[0].binding, values, false)));
+			REQUIRE(repeated);
+			CHECK(repeated->cardinality == output.cardinality);
+			CHECK(repeated->columns[0].value_restriction == output.columns[0].value_restriction);
+		}
+	}
+}
+
+TEST_CASE("Positive finite scan filters discard source-impossible literals",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool rewritten : {false, true}) {
+		for (idx_t variant = 0; variant < 7; variant++) {
+			CAPTURE(rewritten, variant);
+			auto scan = CreateCardinalityProvider(3000, 3000);
+			auto &data = scan->bind_data.write().Cast<CardinalityProviderData>();
+			auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			statistics.SetDistinctCount(3);
+			if (variant != 3) {
+				statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			}
+			if (variant != 2) {
+				NumericStats::SetMin(statistics, Value::INTEGER(0));
+				NumericStats::SetMax(statistics, Value::INTEGER(84));
+			}
+			data.column_statistics = statistics.ToUnique();
+			scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+				auto &data = bind_data->template Cast<CardinalityProviderData>();
+				(*data.column_calls)++;
+				return data.column_statistics->Copy().ToUnique();
+			};
+			vector<Value> values {Value::INTEGER(variant == 1 ? 1002 : 42), Value::INTEGER(1000),
+			                      variant == 4 ? Value(LogicalType::INTEGER) : Value::INTEGER(1001)};
+			if (variant == 6) {
+				values = {Value::INTEGER(42), Value::INTEGER(84)};
+			}
+			auto equality = [&](const Value &value) {
+				return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+				                                         make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+				                                         make_uniq<BoundConstantExpression>(value));
+			};
+			unique_ptr<Expression> predicate;
+			if (rewritten) {
+				predicate = equality(values[0]);
+				for (idx_t i = 1; i < values.size(); i++) {
+					predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
+					                                                  std::move(predicate), equality(values[i]));
+				}
+			} else {
+				predicate = ExpressionFilter::CreateInExpression(
+				    make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0), values);
+			}
+			if (variant == 5) {
+				predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicate),
+				                                                  FiniteSelectionNot(equality(Value::INTEGER(42))));
+			}
+			scan->table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(predicate)));
+			auto output = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+			CHECK(*data.column_calls == 1);
+			CHECK(output.IsEmpty() == (variant == 1 || variant == 5));
+			REQUIRE(output.columns[0].value_restriction);
+			CHECK_FALSE(output.columns[0].value_restriction->excluded);
+			CHECK_FALSE(output.columns[0].can_have_null);
+			if (variant == 3) {
+				// A nullable source stays on its existing fallback and retains the untrimmed predicate.
+				CHECK(output.cardinality > 0);
+				CHECK(output.cardinality < 3000);
+				CHECK(output.columns[0].value_restriction->values.size() == 3);
+			} else {
+				auto expected = variant == 1 || variant == 5 ? 0 : variant == 2 ? 3000 : variant == 6 ? 2000 : 1000;
+				CHECK(output.cardinality.GetDouble() == Approx(expected));
+				CHECK(output.columns[0].value_restriction->values.size() == expected / 1000);
+			}
+			auto repeated = ApplyFiniteFilter(output, FiniteSelectionList(output.columns[0].binding, values, false));
+			REQUIRE(repeated);
+			CHECK(repeated->cardinality == output.cardinality);
+			CHECK(repeated->columns[0].value_restriction == output.columns[0].value_restriction);
+		}
+	}
+}
+
+TEST_CASE("Optional finite scan filters export only source-proven absences",
+          "[optimizer][relation_statistics][finite_selection][finite_history]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool rewritten : {false, true}) {
+		for (idx_t variant = 0; variant < 8; variant++) {
+			CAPTURE(rewritten, variant);
+			auto scan = CreateCardinalityProvider(3000, 3000);
+			auto &data = scan->bind_data.write().Cast<CardinalityProviderData>();
+			auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			statistics.SetDistinctCount(3);
+			if (variant != 3) {
+				statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			}
+			if (variant != 2) {
+				NumericStats::SetMin(statistics, Value::INTEGER(0));
+				NumericStats::SetMax(statistics, Value::INTEGER(84));
+			}
+			data.column_statistics = statistics.ToUnique();
+			scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+				auto &data = bind_data->template Cast<CardinalityProviderData>();
+				(*data.column_calls)++;
+				return data.column_statistics->Copy().ToUnique();
+			};
+			vector<Value> values {Value::INTEGER(variant == 1 ? 1002 : 42), Value::INTEGER(1000),
+			                      variant == 4 ? Value(LogicalType::INTEGER) : Value::INTEGER(1001)};
+			if (variant == 6) {
+				values = {Value::INTEGER(42), Value::INTEGER(84)};
+			}
+			auto equality = [&](const Value &value) {
+				return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+				                                         make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+				                                         make_uniq<BoundConstantExpression>(value));
+			};
+			unique_ptr<Expression> predicate;
+			if (rewritten) {
+				predicate = equality(values[0]);
+				for (idx_t i = 1; i < values.size(); i++) {
+					predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
+					                                                  std::move(predicate), equality(values[i]));
+				}
+			} else {
+				predicate = ExpressionFilter::CreateInExpression(
+				    make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0), values);
+			}
+			predicate = CreateOptionalFilterExpression(std::move(predicate), LogicalType::INTEGER);
+			if (variant == 5) {
+				predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicate),
+				                                                  FiniteSelectionNot(equality(Value::INTEGER(42))));
+			} else if (variant == 7) {
+				// Keep the existing decline for compound optional wrappers that have no single child predicate.
+				predicate = make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(predicate),
+				    CreateOptionalFilterExpression(equality(Value::INTEGER(1002)), LogicalType::INTEGER));
+			}
+			scan->table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(predicate)));
+			auto output = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+			CHECK(*data.column_calls == 1);
+			CHECK_FALSE(output.IsEmpty());
+			CHECK(output.cardinality == (variant == 5 ? 2000 : 3000));
+			CHECK(output.max_cardinality == optional_idx(3000));
+			CHECK(output.columns[0].can_have_null == (variant == 3));
+			CHECK(output.columns[0].total_domain.distinct_count == (variant == 5 ? 2 : 3));
+			CHECK(output.columns[0].current_domain.distinct_count == (variant == 5 ? 2 : 3));
+			if (variant == 2 || variant == 3 || variant == 6 || variant == 7) {
+				CHECK_FALSE(output.columns[0].value_restriction);
+			} else {
+				REQUIRE(output.columns[0].value_restriction);
+				CHECK(output.columns[0].value_restriction->excluded);
+				CHECK(output.columns[0].value_restriction->values.size() == (variant == 1 || variant == 5 ? 3
+				                                                             : variant == 4               ? 1
+				                                                                                          : 2));
+			}
+			auto filtered = ApplyFiniteFilter(output, FiniteSelectionList(output.columns[0].binding, values, false));
+			REQUIRE(filtered);
+			CHECK(filtered->IsEmpty() == (variant == 1 || variant == 5));
+			if (variant != 3) {
+				auto expected = variant == 1 || variant == 5   ? 0
+				                : variant == 2 || variant == 7 ? 3000
+				                : variant == 6                 ? 2000
+				                                               : 1000;
+				CHECK(filtered->cardinality.GetDouble() == Approx(expected));
+			}
+		}
+	}
+}
+
+TEST_CASE("Finite selection preserves usable source populations independently of their provenance",
+          "[optimizer][relation_statistics][finite_selection][finite_complement]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto other = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (auto source : {DistinctCountSource::MIN_MAX, DistinctCountSource::HLL, DistinctCountSource::EXACT,
+	                    DistinctCountSource::DERIVED}) {
+		auto input = CreateStats({key, other}, {100, 10}, 10000);
+		for (auto &column : input.columns) {
+			column.total_domain.source = source;
+			column.current_domain.source = source;
+			column.can_have_null = false;
+		}
+		for (bool excluded : {false, true}) {
+			CAPTURE(source, excluded);
+			auto output =
+			    ApplyFiniteFilter(input, FiniteSelectionList(key, {Value::INTEGER(42), Value::INTEGER(84)}, excluded));
+			REQUIRE(output);
+			CHECK(output->cardinality.GetDouble() == Approx(excluded ? 9800 : 200));
+			CHECK(output->columns[0].total_domain.distinct_count.GetDouble() == Approx(excluded ? 98 : 2));
+			CHECK_FALSE(output->IsEmpty());
+			auto repeated = ApplyFiniteFilter(
+			    *output, FiniteSelectionList(key, {Value::INTEGER(84), Value::INTEGER(42)}, excluded));
+			REQUIRE(repeated);
+			CHECK(repeated->cardinality == output->cardinality);
+		}
+		auto independent = input;
+		RelationStatisticsHelper::ApplyFiniteSelection(independent, {{0, 1}, {1, 2}});
+		CHECK(independent.cardinality.GetDouble() == Approx(20));
+		for (auto joint_domain : {idx_t(100), idx_t(1000)}) {
+			CAPTURE(source, joint_domain);
+			auto joint = input;
+			joint.joint_stats.push_back({{0, 1},
+			                             DistinctCount(joint_domain, source, true),
+			                             DistinctCount(joint_domain, source, true),
+			                             nullptr});
+			RelationStatisticsHelper::ApplyFiniteSelection(joint, {{0, 1}, {1, 2}});
+			CHECK(joint.cardinality.GetDouble() == Approx(joint_domain == 100 ? 100 : 20));
+		}
+		CHECK(input.cardinality == 10000);
+		CHECK(input.columns[0].total_domain.distinct_count == 100);
+		CHECK(input.columns[0].total_domain.source == source);
+	}
+}
+
+TEST_CASE("Range-only scan populations retain their finite filter denominator",
+          "[optimizer][relation_statistics][finite_selection]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreateCardinalityProvider(10000, 10000);
+	auto &data = scan->bind_data->Cast<CardinalityProviderData>();
+	scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+		auto &data = bind_data->template Cast<CardinalityProviderData>();
+		(*data.column_calls)++;
+		auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+		statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		NumericStats::SetMin(statistics, Value::INTEGER(0));
+		NumericStats::SetMax(statistics, Value::INTEGER(9999));
+		return statistics.ToUnique();
+	};
+	scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                       ExpressionType::COMPARE_EQUAL, Value::INTEGER(42)));
+	JoinOrderSourceStats source(*connection.context, *scan);
+	auto filtered = source.FindScanStats(*scan);
+	REQUIRE(filtered);
+	CHECK(filtered->cardinality.GetDouble() == Approx(1));
+	CHECK(filtered->columns[0].total_domain.distinct_count == 1);
+	auto raw = source.Resolve(*scan);
+	REQUIRE(raw.size() == 1);
+	CHECK(raw.begin()->second.direct.domain.distinct_count == 10000);
+	CHECK(raw.begin()->second.direct.domain.source == DistinctCountSource::MIN_MAX);
+	CHECK(*data.calls == 1);
+	CHECK(*data.column_calls == 1);
+}
+
+TEST_CASE("Raw scan source evidence precedes finite selection without duplicate provider calls",
+          "[optimizer][relation_statistics][finite_selection]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreateCardinalityProvider(100, 100);
+	auto &data = scan->bind_data->Cast<CardinalityProviderData>();
+	scan->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+		auto &data = bind_data->template Cast<CardinalityProviderData>();
+		(*data.column_calls)++;
+		auto statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+		statistics.SetDistinctCount(10);
+		statistics.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		REQUIRE_FALSE(statistics.CanHaveNull());
+		return statistics.ToUnique();
+	};
+	scan->table_filters.PushFilter(
+	    ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(3)));
+	JoinOrderSourceStats source(*connection.context, *scan);
+	auto filtered = source.FindScanStats(*scan);
+	REQUIRE(filtered);
+	REQUIRE(filtered->cardinality == 10);
+	REQUIRE(filtered->columns[0].total_domain.distinct_count == 1);
+	auto raw = source.Resolve(*scan);
+	REQUIRE(raw.size() == 1);
+	REQUIRE(raw.begin()->second.direct.domain.distinct_count == 10);
+	REQUIRE(raw.begin()->second.direct.domain.source == DistinctCountSource::HLL);
+	REQUIRE(raw.begin()->second.direct.scan_cardinality == 10);
+	REQUIRE(*data.calls == 1);
+	REQUIRE(*data.column_calls == 1);
+}
+
+TEST_CASE("Finite Cartesian candidates cover retained proper-subset joints",
+          "[optimizer][relation_statistics][finite_selection]") {
+	vector<ColumnBinding> bindings;
+	for (idx_t c = 0; c < 3; c++) {
+		bindings.emplace_back(TableIndex(0), ProjectionIndex(c));
+	}
+	auto stats = CreateStats(bindings, {5, 5, 10}, 50);
+	stats.joint_stats.push_back(
+	    {{0, 1}, DistinctCount(5, DistinctCountSource::EXACT), DistinctCount(5, DistinctCountSource::EXACT), nullptr});
+	RelationStatisticsHelper::ApplyFiniteSelection(stats, {{0, 1}, {1, 5}, {2, 2}});
+	REQUIRE(stats.cardinality.GetDouble() == Approx(2));
+	REQUIRE(stats.joint_stats.size() == 1);
+	REQUIRE((stats.joint_stats[0].columns == vector<idx_t> {0, 1}));
+	REQUIRE(stats.joint_stats[0].total_domain.distinct_count == 1);
+	REQUIRE_FALSE(stats.HasUniqueKey({0, 1, 2}));
+}
+
+TEST_CASE("Finite conjunctions use represented dependencies and preserve fractional rows",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto id = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto n = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (auto rows : {idx_t(200), idx_t(2000)}) {
+		for (bool recorded_key : {false, true}) {
+			if (recorded_key && rows != 200) {
+				continue;
+			}
+			for (bool reverse : {false, true}) {
+				auto input = CreateStats({id, n}, {200, 10}, rows);
+				for (auto &column : input.columns) {
+					column.can_have_null = false;
+				}
+				if (recorded_key) {
+					input.AddUniqueKey({0});
+				}
+				auto equality = [&](ColumnBinding binding) {
+					return BoundComparisonExpression::Create(
+					    ExpressionType::COMPARE_EQUAL,
+					    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+					    make_uniq<BoundConstantExpression>(Value::INTEGER(3)));
+				};
+				LogicalFilter filter(make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, equality(reverse ? n : id), equality(reverse ? id : n)));
+				filter.children.push_back(make_uniq<LogicalExpressionGet>(
+				    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER},
+				    vector<vector<unique_ptr<Expression>>> {}));
+				filter.projection_map = {ProjectionIndex(1)};
+				auto selected = RelationStatisticsHelper::ExtractFilterStats(filter, input);
+				REQUIRE(selected);
+				double expected = recorded_key ? 1 : double(rows) / 2000;
+				REQUIRE(selected->cardinality.GetDouble() == Approx(expected));
+				REQUIRE(selected->columns.size() == 1);
+				REQUIRE(selected->columns[0].binding == n);
+				REQUIRE(selected->columns[0].total_domain.distinct_count == 1);
+				REQUIRE_FALSE(selected->IsEmpty());
+				REQUIRE_FALSE(selected->tuple_identities);
+				// Displaying a positive fraction must not alter the next join's costing input.
+				REQUIRE(selected->cardinality.GetIndex() == 1);
+				REQUIRE(selected->cardinality.GetDouble() == Approx(expected));
+
+				auto finite = CreateStats({ColumnBinding(TableIndex(1), ProjectionIndex(0)),
+				                           ColumnBinding(TableIndex(1), ProjectionIndex(1))},
+				                          {1, 1}, 1);
+				finite.AddUniqueKey({0, 1});
+				// The literal candidate has one complete tuple, independently of its row-uniqueness proof.
+				finite.joint_stats.push_back({{0, 1},
+				                              DistinctCount(1, DistinctCountSource::EXACT),
+				                              DistinctCount(1, DistinctCountSource::EXACT),
+				                              nullptr});
+				vector<RelationStats> inputs {input, finite};
+				EqualityCardinalityModel model(inputs);
+				vector<EqualityComponent> components {
+				    {{ColumnBinding(TableIndex(0), ProjectionIndex(0)), finite.columns[0].binding}},
+				    {{ColumnBinding(TableIndex(0), ProjectionIndex(1)), finite.columns[1].binding}}};
+				auto joined = input.cardinality * model.Estimate(components, {0, 1}).selectivity;
+				REQUIRE(joined.GetDouble() == Approx(expected));
+
+				auto dimension = CreateStats({ColumnBinding(TableIndex(1), ProjectionIndex(0))}, {1}, 100);
+				selected->columns[0].binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+				vector<RelationStats> downstream {*selected, dimension};
+				EqualityCardinalityModel downstream_model(downstream);
+				auto downstream_components =
+				    downstream_model.Components({{downstream[0].columns[0].binding, dimension.columns[0].binding}});
+				REQUIRE((selected->cardinality * dimension.cardinality *
+				         downstream_model.Estimate(downstream_components, {0, 1}).selectivity)
+				            .GetDouble() == Approx(expected * 100));
+			}
+		}
+	}
+}
+
+TEST_CASE("Unknown source populations and observed NDVs remain distinct",
+          "[optimizer][relation_statistics][source_domain_fallback]") {
+	for (bool observed : {false, true}) {
+		for (bool reverse : {false, true}) {
+			JoinRelationSetManager sets;
+			JoinPredicateModel predicates;
+			auto left = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+			auto right = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+			auto &lhs = sets.GetJoinRelation(RelationIndex(0));
+			auto &rhs = sets.GetJoinRelation(RelationIndex(1));
+			auto &joined = sets.Union(lhs, rhs);
+			FilterInfo filter(CreateJoinComparison(left, right, ExpressionType::COMPARE_EQUAL), joined, 0);
+			filter.SetLeftSet(lhs);
+			filter.SetRightSet(rhs);
+			filter.left_binding = left;
+			filter.right_binding = right;
+			auto &predicate = predicates.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, left, right);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			JoinEqualityClass group;
+			group.index = 0;
+			group.columns = {left, right};
+			group.relations = {RelationIndex(0), RelationIndex(1)};
+			group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), left, right);
+			predicates.AddEqualityClass(std::move(group));
+			vector<RelationStats> inputs;
+			join_column_sources_t sources;
+			const idx_t source_index = reverse ? 1 : 0;
+			const idx_t source_domain = observed ? 50 : 50000;
+			for (idx_t r = 0; r < 2; r++) {
+				auto binding = ColumnBinding(TableIndex(r), ProjectionIndex(0));
+				const bool is_source = r == source_index;
+				const idx_t rows = is_source ? 50000 : 6;
+				const idx_t domain = is_source ? source_domain : 6;
+				inputs.push_back(CreateStats({binding}, {domain}, rows));
+				inputs.back().columns[0].can_have_null = false;
+				auto kind = is_source && observed ? DistinctCountSource::EXACT : DistinctCountSource::CARDINALITY;
+				inputs.back().columns[0].total_domain = DistinctCount(domain, kind);
+				inputs.back().columns[0].current_domain = DistinctCount(domain, kind);
+				REQUIRE(inputs.back().columns[0].total_domain.has_usable_domain == (is_source && observed));
+				REQUIRE(inputs.back().columns[0].current_domain.has_usable_domain == (is_source && observed));
+				if (is_source) {
+					sources.emplace(binding, JoinColumnSources({ColumnBinding(TableIndex(10), ProjectionIndex(0)), rows,
+					                                            rows, inputs.back().columns[0].total_domain}));
+				}
+			}
+			CardinalityEstimator estimator(sets, predicates);
+			estimator.Initialize(inputs, {}, sources);
+			auto source_binding = ColumnBinding(TableIndex(source_index), ProjectionIndex(0));
+			auto source_stats =
+			    estimator.ProjectStats(sets.GetJoinRelation(RelationIndex(source_index)), {source_binding});
+			REQUIRE(source_stats);
+			REQUIRE(source_stats->columns[0].total_domain.distinct_count == source_domain);
+			REQUIRE_FALSE(source_stats->HasUniqueKey({0}));
+			REQUIRE(estimator.EstimateCardinality(joined).GetDouble() == Approx(observed ? 6000.0 : 30.0));
+		}
+	}
+}
+
+TEST_CASE("Retained filter subsets isolate finite selection and preserve the original layout",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto payload = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	for (idx_t variant = 0; variant < 3; variant++) {
+		auto input = CreateStats({key, payload}, {10, 10}, 100);
+		for (auto &column : input.columns) {
+			column.can_have_null = false;
+		}
+		LogicalFilter filter(BoundComparisonExpression::Create(
+		    ExpressionType::COMPARE_EQUAL, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, key),
+		    make_uniq<BoundConstantExpression>(Value::INTEGER(7))));
+		filter.expressions.push_back(BoundComparisonExpression::Create(
+		    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+		    make_uniq<BoundConstantExpression>(Value::INTEGER(3))));
+		filter.children.push_back(make_uniq<LogicalExpressionGet>(
+		    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER},
+		    vector<vector<unique_ptr<Expression>>> {}));
+		filter.projection_map = {ProjectionIndex(1), ProjectionIndex(0), ProjectionIndex(1)};
+		vector<unique_ptr<Expression>> expressions;
+		if (variant > 0) {
+			expressions.push_back(filter.expressions[1]->Copy());
+		}
+		if (variant == 2) {
+			expressions.push_back(filter.expressions[0]->Copy());
+		}
+		auto output = RelationStatisticsHelper::ExtractFilterStats(filter, input, expressions);
+		REQUIRE(output);
+		REQUIRE(output->MatchesBindings(filter.GetColumnBindings()));
+		REQUIRE(output->columns.size() == 3);
+		REQUIRE(output->columns[0].binding == payload);
+		REQUIRE(output->columns[1].binding == key);
+		REQUIRE(output->columns[2].binding == payload);
+		REQUIRE(filter.expressions.size() == 2);
+		REQUIRE(output->cardinality == (variant == 0 ? 100 : variant == 1 ? 10 : 0));
+		REQUIRE(output->IsEmpty() == (variant == 2));
+		if (variant < 2) {
+			REQUIRE(output->columns[1].total_domain.distinct_count == (variant == 0 ? 10 : 1));
+			REQUIRE(output->columns[1].current_domain.distinct_count == (variant == 0 ? 10 : 1));
+		}
+	}
+}
+
+TEST_CASE("Finite populations do not replace raw observations during missing-NDV refinement",
+          "[optimizer][relation_statistics][finite_selection]") {
+	for (bool known_unique : {false, true}) {
+		for (bool reverse : {false, true}) {
+			for (bool duplicate_source : {false, true}) {
+				JoinRelationSetManager sets;
+				JoinPredicateModel model;
+				auto left = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+				auto right = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+				auto &lhs = sets.GetJoinRelation(RelationIndex(0));
+				auto &rhs = sets.GetJoinRelation(RelationIndex(1));
+				auto &joined = sets.Union(lhs, rhs);
+				FilterInfo filter(CreateJoinComparison(left, right, ExpressionType::COMPARE_EQUAL), joined, 0);
+				filter.SetLeftSet(lhs);
+				filter.SetRightSet(rhs);
+				filter.left_binding = left;
+				filter.right_binding = right;
+				auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, left, right);
+				predicate.SetEqualityClassIndex(optional_idx(0));
+				JoinEqualityClass group;
+				group.index = 0;
+				group.columns = {left, right};
+				group.relations = {RelationIndex(0), RelationIndex(1)};
+				group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), left, right);
+				model.AddEqualityClass(std::move(group));
+				vector<RelationStats> inputs;
+				join_column_sources_t sources;
+				for (idx_t r = 0; r < 2; r++) {
+					bool known = r == (reverse ? 1 : 0);
+					auto binding = ColumnBinding(TableIndex(r), ProjectionIndex(0));
+					auto rows = known ? (known_unique ? 1 : 20) : 40;
+					inputs.push_back(CreateStats({binding}, {1}, rows));
+					inputs.back().columns[0].total_domain =
+					    DistinctCount(known ? 1 : 200,
+					                  known ? DistinctCountSource::DERIVED : DistinctCountSource::CARDINALITY, known);
+					if (known && known_unique) {
+						inputs.back().AddUniqueKey({0});
+					}
+					JoinColumnSource original {
+					    ColumnBinding(TableIndex(100 + r), ProjectionIndex(3)), 200, idx_t(rows),
+					    DistinctCount(known && !known_unique ? 10 : 200,
+					                  known ? DistinctCountSource::EXACT : DistinctCountSource::CARDINALITY)};
+					sources.emplace(binding, JoinColumnSources(original));
+					if (duplicate_source) {
+						sources.at(binding).equivalents.push_back(original);
+						sources.at(binding).equivalents.push_back(original);
+					}
+				}
+				CardinalityEstimator estimator(sets, model);
+				estimator.Initialize(inputs, {}, sources);
+				REQUIRE(estimator.EstimateCardinality(joined).GetDouble() == Approx(known_unique ? 0.2 : 80));
+			}
+		}
+	}
+}
+
+TEST_CASE("Finite selection leaves unsupported and optional populations unconditioned",
+          "[optimizer][relation_statistics][finite_selection]") {
+	auto key = ColumnBinding(TableIndex(10), ProjectionIndex(0));
+	auto other = ColumnBinding(TableIndex(10), ProjectionIndex(1));
+	auto comparison = [&](ColumnBinding binding, ExpressionType type, unique_ptr<Expression> value) {
+		return BoundComparisonExpression::Create(
+		    type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding), std::move(value));
+	};
+	for (idx_t variant = 0; variant < 6; variant++) {
+		auto input = CreateStats({key, other}, {10, 10}, 100);
+		for (auto &column : input.columns) {
+			column.can_have_null = variant == 0;
+			column.current_domain.distinct_count = 5;
+		}
+		unique_ptr<Expression> predicate;
+		if (variant == 1) {
+			predicate = comparison(key, ExpressionType::COMPARE_LESSTHAN,
+			                       make_uniq<BoundConstantExpression>(Value::INTEGER(3)));
+		} else if (variant == 2) {
+			predicate = comparison(key, ExpressionType::COMPARE_EQUAL,
+			                       make_uniq<BoundConstantExpression>(Value(LogicalType::INTEGER)));
+		} else if (variant == 3) {
+			predicate =
+			    comparison(key, ExpressionType::COMPARE_EQUAL, make_uniq<BoundParameterExpression>(Identifier("1")));
+		} else {
+			predicate =
+			    comparison(key, ExpressionType::COMPARE_EQUAL, make_uniq<BoundConstantExpression>(Value::INTEGER(3)));
+			if (variant == 4) {
+				predicate = CreateOptionalFilterExpression(std::move(predicate), LogicalType::INTEGER);
+			} else if (variant == 5) {
+				predicate = make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_OR, std::move(predicate),
+				    comparison(other, ExpressionType::COMPARE_EQUAL,
+				               make_uniq<BoundConstantExpression>(Value::INTEGER(7))));
+			}
+		}
+		LogicalFilter filter(std::move(predicate));
+		filter.children.push_back(make_uniq<LogicalExpressionGet>(
+		    TableIndex(10), vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER},
+		    vector<vector<unique_ptr<Expression>>> {}));
+		auto output = RelationStatisticsHelper::ExtractFilterStats(filter, input);
+		REQUIRE(output);
+		for (auto &column : output->columns) {
+			REQUIRE(column.total_domain.distinct_count == 10);
+			REQUIRE(column.total_domain.source == DistinctCountSource::EXACT);
+		}
+		REQUIRE(output->IsEmpty() == (variant == 2));
+		if (variant == 4) {
+			REQUIRE(output->cardinality == input.cardinality);
+		}
+	}
+}
+
+TEST_CASE("INNER value evidence survives moving its executable predicate",
+          "[optimizer][relation_statistics][finite_history][reconstruction]") {
+	for (bool earlier_projection : {false, true}) {
+		JoinRelationSetManager sets;
+		JoinPredicateModel predicates;
+		auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+		auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+		auto &left = sets.GetJoinRelation(RelationIndex(0));
+		auto &right = sets.GetJoinRelation(RelationIndex(1));
+		auto &joined = sets.Union(left, right);
+		FilterInfo filter(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), joined, 0);
+		filter.SetLeftSet(left);
+		filter.SetRightSet(right);
+		filter.left_binding = a;
+		filter.right_binding = b;
+		auto &predicate = predicates.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+		predicate.SetEqualityClassIndex(optional_idx(0));
+		JoinEqualityClass group;
+		group.index = 0;
+		group.columns = {a, b};
+		group.relations = {RelationIndex(0), RelationIndex(1)};
+		group.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a, b);
+		predicates.AddEqualityClass(std::move(group));
+		auto first = CreateStats({a}, {98}, 98);
+		auto second = CreateStats({b}, {100}, 100);
+		first.columns[0].can_have_null = false;
+		second.columns[0].can_have_null = false;
+		vector<Value> excluded {Value::INTEGER(42), Value::INTEGER(84)};
+		first.columns[0].value_restriction =
+		    ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, true);
+		CardinalityEstimator estimator(sets, predicates);
+		estimator.Initialize({first, second}, {}, {});
+		REQUIRE(estimator.EstimateCardinality(joined) == 98);
+		if (earlier_projection) {
+			auto before = estimator.ProjectStats(joined, {a, b});
+			REQUIRE(before);
+			REQUIRE((before->value_equivalent_columns == vector<vector<idx_t>> {{0, 1}}));
+			REQUIRE(before->columns[1].value_restriction);
+			auto repeat = ApplyFiniteFilter(*before, FiniteSelectionList(b, excluded, true));
+			REQUIRE(repeat);
+			CHECK(repeat->cardinality == 98);
+		}
+		// Same unique_ptr ownership transition as ordinary GenerateJoins.
+		auto condition = std::move(filter.filter);
+		REQUIRE(condition);
+		REQUIRE_FALSE(filter.filter);
+		auto after = estimator.ProjectStats(joined, {a, b});
+		REQUIRE(after);
+		CHECK(after->cardinality == 98);
+		CHECK((after->equivalent_columns == vector<vector<idx_t>> {{0, 1}}));
+		CHECK((after->value_equivalent_columns == vector<vector<idx_t>> {{0, 1}}));
+		CHECK(after->columns[1].value_restriction);
+		auto repeated = ApplyFiniteFilter(*after, FiniteSelectionList(b, excluded, true));
+		REQUIRE(repeated);
+		CHECK(repeated->cardinality == 98);
+	}
+}
+
+TEST_CASE("Reconstructed INNER joins preserve repeated finite exclusions",
+          "[optimizer][relation_statistics][finite_history][reconstruction]") {
+	DuckDB db;
+	Connection connection(db);
+	auto left = CreateDomainProvider(TableIndex(10), 100, DistinctCount(100, DistinctCountSource::EXACT));
+	auto right = CreateDomainProvider(TableIndex(20), 100, DistinctCount(100, DistinctCountSource::EXACT));
+	for (auto &scan : vector<reference<LogicalGet>> {*left, *right}) {
+		scan.get().function.statistics = [](ClientContext &, auto, column_t) -> unique_ptr<BaseStatistics> {
+			auto result = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+			result.SetDistinctCount(100);
+			result.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			return result.ToUnique();
+		};
+	}
+	for (auto value : {42, 84}) {
+		left->table_filters.PushFilter(
+		    ProjectionIndex(0),
+		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_NOTEQUAL, Value::INTEGER(value)));
+	}
+	auto a = left->GetColumnBindings()[0];
+	auto b = right->GetColumnBindings()[0];
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, a),
+	                              make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, b),
+	                              ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+	unique_ptr<LogicalOperator> plan = std::move(join);
+	plan->ResolveOperatorTypes();
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, *plan));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel cost(estimator);
+	PlanEnumerator enumeration(graph, cost, graph.GetQueryGraphEdges());
+	enumeration.InitLeafPlans();
+	REQUIRE(enumeration.SolveJoinOrder());
+	unordered_set<RelationIndex> all;
+	for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
+		all.insert(RelationIndex(i));
+	}
+	auto &set = graph.set_manager.GetJoinRelation(all);
+	auto before = graph.ProjectStats(estimator, set, {a, b});
+	REQUIRE(before);
+	INFO("before_rows=" << StringUtil::Format("%.17g", before->cardinality.GetDouble()));
+	REQUIRE(before->cardinality.GetDouble() == Approx(98).epsilon(1e-12));
+	REQUIRE(before->columns[1].value_restriction);
+	graph.plans = enumeration.GetPlans();
+	auto reconstructed = graph.Reconstruct(std::move(plan), estimator);
+	auto after = RelationStatisticsHelper::ProjectOutputStats(reconstructed.stats, {a, b});
+	REQUIRE(after);
+	CHECK(after->cardinality == before->cardinality);
+	CHECK(after->max_cardinality == before->max_cardinality);
+	CHECK(after->row_retention == before->row_retention);
+	CHECK(after->equivalent_columns == before->equivalent_columns);
+	CHECK(after->value_equivalent_columns == before->value_equivalent_columns);
+	for (idx_t c = 0; c < 2; c++) {
+		auto &previous = before->columns[c];
+		auto &current = after->columns[c];
+		REQUIRE(current.value_restriction);
+		CHECK(current.value_restriction->excluded == previous.value_restriction->excluded);
+		CHECK(current.value_restriction->values == previous.value_restriction->values);
+		CHECK(current.total_domain.distinct_count == previous.total_domain.distinct_count);
+		CHECK(current.current_domain.distinct_count == previous.current_domain.distinct_count);
+		CHECK(current.can_have_null == previous.can_have_null);
+	}
+	for (auto &output : vector<reference<RelationStats>> {*before, *after}) {
+		auto repeat = ApplyFiniteFilter(output, FiniteSelectionList(b, {Value::INTEGER(42), Value::INTEGER(84)}, true));
+		REQUIRE(repeat);
+		CHECK(repeat->cardinality == output.get().cardinality);
+	}
 }

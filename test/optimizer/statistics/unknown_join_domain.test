@@ -24,7 +24,7 @@ EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USI
 ----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"500"\s*}\s*}\s*\]\s*$
 
-# Two distinct keys replace the discounted domain only once for this relation pair.
+# Wholly unknown coordinates share one connected-block prior for this relation pair.
 query I
 SELECT count(*) FROM unknown_domain a JOIN unknown_domain b USING (k, k2);
 ----
@@ -33,7 +33,7 @@ SELECT count(*) FROM unknown_domain a JOIN unknown_domain b USING (k, k2);
 query II
 EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USING (k, k2);
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"100"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"500"\s*}\s*}\s*\]\s*$
 
 query I
 SELECT count(*) FROM unknown_domain a, unknown_domain b, unknown_domain c

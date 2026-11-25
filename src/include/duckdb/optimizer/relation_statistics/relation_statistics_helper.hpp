@@ -23,6 +23,7 @@ class LogicalAggregate;
 class LogicalColumnDataGet;
 class LogicalComparisonJoin;
 class LogicalDelimGet;
+class LogicalDistinct;
 class LogicalDummyScan;
 class LogicalEmptyResult;
 class LogicalExpressionGet;
@@ -33,6 +34,8 @@ class LogicalProjection;
 class LogicalWindow;
 class RelationStatsExtractor;
 class NodeStatistics;
+
+enum class EqualitySelection : uint8_t;
 
 struct SemiAntiJoinDomain {
 	CardinalityValue total_domain;
@@ -51,14 +54,25 @@ struct TupleDomainRestrictionEstimate {
 	double groups;
 };
 
+struct ColumnValueSelection {
+	idx_t column;
+	idx_t count;
+	bool excluded = false;
+};
+
 class RelationStatisticsHelper {
 public:
+	//! Capture generic proofs while the plan is stable. Only a statistics source establishes a new population.
+	static void CaptureUniqueKeys(LogicalOperator &op, RelationStats &stats, ClientContext &context,
+	                              optional<CardinalityValue> source_population = {});
+
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, idx_t source_cardinality);
-	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, const NodeStatistics &source_stats);
+	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, const NodeStatistics &source_stats,
+	                                     optional_ptr<column_binding_map_t<DistinctCount>> source_domains = nullptr);
 	static RelationStats ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context);
 	static RelationStats ExtractDummyScanStats(LogicalDummyScan &dummy_scan, ClientContext &context);
 	static RelationStats ExtractExpressionGetStats(LogicalExpressionGet &expression_get, ClientContext &context);
@@ -75,6 +89,10 @@ public:
 	                                                       const RelationStats &child_stats,
 	                                                       RelationStatsExtractor &extractor);
 	static optional<RelationStats> ExtractWindowStats(LogicalWindow &window, const RelationStats &child_stats);
+	static optional<RelationStats> ExtractDistinctStats(LogicalDistinct &distinct, const RelationStats &child_stats,
+	                                                    RelationStatsExtractor &extractor);
+	static optional<RelationStats> ExtractDistinctStats(LogicalDistinct &distinct, const RelationStats &child_stats,
+	                                                    ClientContext &context);
 	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats);
 	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats,
 	                                                  const vector<unique_ptr<Expression>> &expressions);
@@ -85,6 +103,8 @@ public:
 	static optional<RelationStats> ExtractLimitStats(LogicalLimit &limit, const RelationStats &child_stats);
 	static RelationStats ExtractEmptyResultStats(LogicalEmptyResult &empty);
 	static optional<RelationStats> ProjectOutputStats(const RelationStats &stats, LogicalOperator &op);
+	static optional<RelationStats> ProjectOutputStats(const RelationStats &stats,
+	                                                  const vector<ColumnBinding> &bindings);
 	static optional<RelationStats> RebindOutputStats(const RelationStats &stats, LogicalOperator &op);
 	static optional<DistinctCount> SelectTotalDomain(const vector<DistinctCount> &domains);
 	static void ApplySemiAntiJoinStats(LogicalComparisonJoin &join, const RelationStats &left,
@@ -96,6 +116,13 @@ public:
 	                                                 vector<idx_t> groups, RelationStatsExtractor &extractor);
 	static DistinctCount EstimateCurrentDomain(const DistinctCount &current_domain, CardinalityValue input_cardinality,
 	                                           CardinalityValue output_cardinality);
+	static CardinalityValue EstimateEqualitySelectionSupport(CardinalityValue current_domain,
+	                                                         CardinalityValue input_rows,
+	                                                         CardinalityValue direct_retention,
+	                                                         CardinalityValue conditional_retention,
+	                                                         EqualitySelection selection);
+	//! Select finite alternatives or their complements on normalized coordinates, using the equality factor model.
+	static void ApplyFiniteSelection(RelationStats &stats, const vector<ColumnValueSelection> &coordinates);
 	static void ApplyCardinality(RelationStats &stats, CardinalityValue output_cardinality);
 	static optional_idx AddCardinalityBounds(optional_idx left, optional_idx right);
 	static optional_idx MultiplyCardinalityBounds(optional_idx left, optional_idx right);

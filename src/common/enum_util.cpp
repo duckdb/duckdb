@@ -2160,19 +2160,20 @@ const StringUtil::EnumStringLiteral *GetDistinctCountSourceValues() {
 		{ static_cast<uint32_t>(DistinctCountSource::CARDINALITY), "CARDINALITY" },
 		{ static_cast<uint32_t>(DistinctCountSource::MIN_MAX), "MIN_MAX" },
 		{ static_cast<uint32_t>(DistinctCountSource::HLL), "HLL" },
-		{ static_cast<uint32_t>(DistinctCountSource::EXACT), "EXACT" }
+		{ static_cast<uint32_t>(DistinctCountSource::EXACT), "EXACT" },
+		{ static_cast<uint32_t>(DistinctCountSource::DERIVED), "DERIVED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value) {
-	return StringUtil::EnumToString(GetDistinctCountSourceValues(), 4, "DistinctCountSource", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDistinctCountSourceValues(), 5, "DistinctCountSource", static_cast<uint32_t>(value));
 }
 
 template<>
 DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value) {
-	return static_cast<DistinctCountSource>(StringUtil::StringToEnum(GetDistinctCountSourceValues(), 4, "DistinctCountSource", value));
+	return static_cast<DistinctCountSource>(StringUtil::StringToEnum(GetDistinctCountSourceValues(), 5, "DistinctCountSource", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {

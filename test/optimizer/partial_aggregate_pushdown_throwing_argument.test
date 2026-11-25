@@ -228,13 +228,14 @@ EXPLAIN SELECT a, b, sum(price * (1 - discount)) FROM (SELECT * FROM fact_rev WH
 physical_plan	<REGEX>:.*combine_aggr.*
 
 # Without base table statistics the bounds are unknown and the argument stays above the join.
+# Both controls have real dimension fanout so that the cardinality heuristic permits preaggregation.
 query II
-EXPLAIN SELECT a, b, sum(price * (1 - discount)) FROM (SELECT * FROM fact_rev UNION ALL SELECT * FROM fact_rev) r JOIN dim USING (id) GROUP BY a, b
+EXPLAIN SELECT a, b, sum(price * (1 - discount)) FROM (SELECT * FROM fact_rev UNION ALL SELECT * FROM fact_rev) r JOIN (SELECT * FROM dim UNION ALL SELECT * FROM dim) d USING (id) GROUP BY a, b
 ----
 physical_plan	<!REGEX>:.*combine_aggr.*
 
 query II
-EXPLAIN SELECT a, b, sum(price) FROM (SELECT * FROM fact_rev UNION ALL SELECT * FROM fact_rev) r JOIN dim USING (id) GROUP BY a, b
+EXPLAIN SELECT a, b, sum(price) FROM (SELECT * FROM fact_rev UNION ALL SELECT * FROM fact_rev) r JOIN (SELECT * FROM dim UNION ALL SELECT * FROM dim) d USING (id) GROUP BY a, b
 ----
 physical_plan	<REGEX>:.*combine_aggr.*
 

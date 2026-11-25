@@ -1,5 +1,5 @@
 # name: test/optimizer/joins/fkpk_composite_key_ce.test
-# description: Cardinality estimation for composite FK/PK joins with transitive equality conditions
+# description: Independent equality components and transitive conditions on composite-key-shaped data
 # group: [joins]
 
 statement ok
@@ -24,6 +24,7 @@ set disabled_optimizers='statistics_propagation';
 #   For each li row i: l_suppkey = i%10000, l_partkey = i%200000.
 #   By construction: l_partkey%10000 == l_suppkey (always), so each li row
 #   matches exactly one ps row and one su row → join count = 600K.
+# These CTAS tables declare no key or dependency; scalar statistics do not prove the correlations.
 # --------------------------------------------------------------------------
 
 statement ok
@@ -41,9 +42,8 @@ create table li as select
     range % 200000 l_partkey
 from range(600000);
 
-# Same-pair composite equalities should not be counted as unused edges after
-# the composite-key cap has already been applied. The estimate should remain
-# at the one-to-one join size rather than being divided by an extra penalty.
+# The generator makes x and y equal but publishes no dependency or joint key.
+# Equal scalar NDVs alone cannot remove either independent equality factor.
 
 statement ok
 create table ck_a as select range::integer x, range::integer y from range(1000);
@@ -54,18 +54,16 @@ create table ck_b as select range::integer x, range::integer y from range(1000);
 query II
 explain select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*~1.000 rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~1 row.*
 
 query I
 select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 ----
 1000
 
-# If one same-pair key is already more selective than the FK/PK floor, the
-# composite cap should not weaken that estimate or suppress the second
-# condition. Here each side is estimated at ~2K rows after filtering, so the
-# FK/PK floor would produce ~2K rows. The x key alone has a 10K-row raw domain,
-# and the y condition should behave like an extra same-pair inequality.
+# Each side is estimated at 2K rows after filtering. Both informed equality
+# domains contribute independently: 4M / (NDV(x) * NDV(y)), about 37 rows.
+# Replacing the second equality with an inequality uses its separate fallback.
 
 statement ok
 create table ck_sel_a as select range::integer x, (range % 10)::integer y from range(10000);
@@ -78,18 +76,17 @@ explain select count(*)
 from ck_sel_a join ck_sel_b on ck_sel_a.x = ck_sel_b.x and ck_sel_a.y = ck_sel_b.y
 where ck_sel_a.x < 100 and ck_sel_b.x < 100;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*~[12][0-9]{2} rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[1-9][0-9] rows.*
 
 query II
 explain select count(*)
 from ck_sel_a join ck_sel_b on ck_sel_a.x = ck_sel_b.x and ck_sel_a.y < ck_sel_b.y
 where ck_sel_a.x < 100 and ck_sel_b.x < 100;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*~[12][0-9]{2} rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[12][0-9]{2} rows.*
 
-# Same-pair predicates are not always composite keys. If both inputs have many
-# rows per observed single-column domain, the row-count cap would make a broad
-# fact-to-fact join look like a key lookup and hide useful local filters.
+# The same independent-domain rule applies to fact-to-fact joins. The exact
+# result reflects a correlation that is not present in the input statistics.
 
 statement ok
 create table ff_a as select (range % 1000)::integer x, (range % 1000)::integer y from range(100000);
@@ -100,7 +97,7 @@ create table ff_b as select (range % 1000)::integer x, (range % 1000)::integer y
 query II
 explain select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*~[1-9].[0-9]{3}.[0-9]{3} rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[1-9],[0-9]{3} rows.*
 
 query I
 select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
@@ -112,25 +109,20 @@ select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
 # ps_partkey=l_partkey. DuckDB derives the transitive condition
 # ps_suppkey=s_suppkey, enabling the plan {ps JOIN su} JOIN li.
 #
-# Before the fix: MarkEdgeEquivalences was called before CreateHyperGraphEdges,
-# so left_binding/right_binding were unset and all filters failed the validity
-# check. No equivalence index was ever assigned. The transitive edge
-# ps_suppkey=s_suppkey then landed in unused_edge_tdoms, doubling the
-# denominator and halving the estimate (~300K instead of ~600K).
-#
-# After the fix: equivalence indices are correctly assigned, the transitive
-# edge is recognised as redundant and skipped, and the FK/PK multi-key cap
-# keeps the estimate at ~|li| rows (~600K).
+# The transitive supplier equality contributes no additional binding.
+# The independent part and supplier factors still apply: the generator's
+# cross-column correlation is not a published joint or functional dependency.
 # --------------------------------------------------------------------------
 
-# Estimate for the 3-way join should be approximately |li| rows (~600K).
+# Both selected joins have points in the tens under the independent scalar model.
+# JSON keeps each estimate within its join's own extra_info object.
 query II
-explain select count(*) from ps, su, li
+explain (format json) select count(*) from ps, su, li
 where su.s_suppkey = li.l_suppkey
   and ps.ps_suppkey = li.l_suppkey
   and ps.ps_partkey = li.l_partkey;
 ----
-physical_plan	<REGEX>:.*~600.000 rows.*
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*
 
 # Correctness: actual join count (1 ps row + 1 su row per li row = 600K)
 query I
@@ -142,12 +134,11 @@ where su.s_suppkey = li.l_suppkey
 600000
 
 # --------------------------------------------------------------------------
-# Q9 can also expose the composite key indirectly. If ps joins su first, the
+# Q9 can also expose the second equality indirectly. If ps joins su first, the
 # final join to li can be written as li.partkey=ps.partkey and
 # li.suppkey=su.suppkey. Since ps.suppkey=su.suppkey was already applied,
-# this implies a second li<->ps equality and should still trigger the
-# composite FK/PK floor. Without that, the estimate is roughly 4x too high
-# because ps4 has four suppliers per part.
+# this implies a second li<->ps equality. Both informed domains contribute;
+# four suppliers per part is a data property, not a recorded joint-key proof.
 # --------------------------------------------------------------------------
 
 statement ok
@@ -166,12 +157,12 @@ create table li4 as select
 from range(60000);
 
 query II
-explain select count(*) from ps4, su4, li4
+explain (format json) select count(*) from ps4, su4, li4
 where ps4.ps_suppkey = su4.s_suppkey
   and ps4.ps_partkey = li4.l_partkey
   and su4.s_suppkey = li4.l_suppkey;
 ----
-physical_plan	<REGEX>:.*~6[0-9],[0-9]{3} rows.*
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*
 
 query I
 select count(*) from ps4, su4, li4

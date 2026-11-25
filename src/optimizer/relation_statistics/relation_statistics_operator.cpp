@@ -2,29 +2,52 @@
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/optimizer/join_order/join_predicate.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include <algorithm>
+#include <map>
+
 namespace duckdb {
+
+static void CopyBoundValueRestrictions(RelationStats &result, const RelationStats &child) {
+	vector<optional_idx> source_columns;
+	for (auto &column : result.columns) {
+		source_columns.push_back(child.FindColumn(column.binding));
+	}
+	result.CopyValueRestrictions(child, source_columns);
+}
 
 static optional<RelationStats> ProjectChildStats(LogicalOperator &op,
                                                  const vector<reference<const RelationStats>> &children,
-                                                 CardinalityValue cardinality, optional_idx maximum = {}) {
+                                                 CardinalityValue cardinality, optional_idx maximum = {},
+                                                 const vector<bool> &null_extended = {}) {
+	D_ASSERT(null_extended.empty() || null_extended.size() == children.size());
 	RelationStats result;
 	result.cardinality = cardinality;
 	result.max_cardinality = maximum;
 	result.stats_initialized = true;
 	result.table_name = Identifier(op.GetName());
-	RelationColumnStatsLookup child_columns;
-	for (auto &child : children) {
-		child_columns.AddRelation(child.get());
+	column_binding_map_t<pair<reference<const RelationColumnStats>, bool>> child_columns;
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto extended = !null_extended.empty() && null_extended[i];
+		for (auto &column : children[i].get().columns) {
+			child_columns.emplace(column.binding, make_pair(reference<const RelationColumnStats>(column),
+			                                                column.can_have_null || extended));
+		}
 	}
 	for (auto &binding : op.GetColumnBindings()) {
-		auto source = child_columns.Find(binding);
-		if (!source) {
+		auto entry = child_columns.find(binding);
+		if (entry == child_columns.end()) {
 			return {};
 		}
-		result.columns.emplace_back(binding, source->total_domain, source->current_domain, source->name);
+		auto &source = entry->second.first.get();
+		result.columns.emplace_back(binding, source.total_domain, source.current_domain, source.name);
+		result.columns.back().can_have_null = entry->second.second;
+	}
+	for (auto &child : children) {
+		CopyBoundValueRestrictions(result, child);
 	}
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(op.GetColumnBindings());
@@ -95,7 +118,7 @@ static vector<SemiAntiJoinDomain> ExtractSemiAntiJoinDomains(LogicalComparisonJo
 			continue;
 		}
 		// Row-count fallbacks bound domains but do not estimate membership coverage.
-		if (total_domain->source == DistinctCountSource::CARDINALITY) {
+		if (!total_domain->has_usable_domain) {
 			has_residual = true;
 		}
 		domains.push_back(
@@ -158,10 +181,47 @@ void RelationStatisticsHelper::ApplySemiAntiJoinStats(LogicalComparisonJoin &joi
 		auto source = preserved.GetColumnStats(column.binding);
 		if (source) {
 			column.semi_anti_join_domain_evidence = source->semi_anti_join_domain_evidence;
+			column.can_have_null = source->can_have_null;
 		}
 	}
 	ApplyCardinality(result, estimate.cardinality);
 	if (join.join_type == JoinType::SEMI || join.join_type == JoinType::RIGHT_SEMI) {
+		std::map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
+		std::map<idx_t, vector<idx_t>> witnessed_aliases;
+		auto rhs_aliases = rhs.GetValueAliases();
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+			    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+			    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+			    !condition.GetLHS().GetReturnType().EqualsIncludingCollation(condition.GetRHS().GetReturnType())) {
+				continue;
+			}
+			auto column = GetJoinColumn(condition.GetLHS(), preserved);
+			auto witness = GetJoinColumn(condition.GetRHS(), rhs);
+			if (!column || !witness) {
+				column = GetJoinColumn(condition.GetRHS(), preserved);
+				witness = GetJoinColumn(condition.GetLHS(), rhs);
+			}
+			auto index = column ? result.FindColumn(column->binding) : optional_idx();
+			if (index.IsValid() && witness) {
+				restrictions[index.GetIndex()].push_back(witness->value_restriction);
+				auto rhs_index = rhs.FindColumn(witness->binding).GetIndex();
+				witnessed_aliases[rhs_aliases[rhs_index]].push_back(index.GetIndex());
+			}
+		}
+		for (auto &entry : restrictions) {
+			auto &column = result.columns[entry.first];
+			entry.second.push_back(column.value_restriction);
+			column.value_restriction = ColumnValueRestriction::Combine(entry.second, true);
+		}
+		for (auto &entry : witnessed_aliases) {
+			auto &group = entry.second;
+			std::sort(group.begin(), group.end());
+			group.erase(std::unique(group.begin(), group.end()), group.end());
+			if (group.size() > 1) {
+				result.value_equivalent_columns.push_back(std::move(group));
+			}
+		}
 		for (auto &domain : domains) {
 			auto column_index = result.FindColumn(domain.preserved_binding);
 			if (!column_index.IsValid()) {
@@ -192,7 +252,9 @@ static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientC
 		}
 		result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
 		                            child_column->name);
+		result.columns.back().can_have_null = child_column->can_have_null;
 	}
+	CopyBoundValueRestrictions(result, child_stats);
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(get.GetColumnBindings());
 	return result;
@@ -210,6 +272,7 @@ static optional<RelationStats> ExtractUnnestStats(LogicalOperator &op, const Rel
 		if (child_column) {
 			result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
 			                            child_column->name);
+			result.columns.back().can_have_null = child_column->can_have_null;
 		} else if (binding.table_index == unnest.unnest_index) {
 			result.columns.emplace_back(binding, DistinctCount(result.cardinality, DistinctCountSource::CARDINALITY),
 			                            Identifier("unnest"));
@@ -217,6 +280,7 @@ static optional<RelationStats> ExtractUnnestStats(LogicalOperator &op, const Rel
 			return {};
 		}
 	}
+	CopyBoundValueRestrictions(result, child_stats);
 	result.Verify(op.GetColumnBindings());
 	return result;
 }
@@ -242,7 +306,10 @@ static optional<RelationStats> ExtractComparisonJoinStats(LogicalComparisonJoin 
 	auto maximum = RelationStatisticsHelper::JoinCardinalityBound(join.join_type, child_stats[0].get().max_cardinality,
 	                                                              child_stats[1].get().max_cardinality);
 	if (join.join_type != JoinType::MARK) {
-		return ProjectChildStats(join, child_stats, cardinality, maximum);
+		vector<bool> null_extended {join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER,
+		                            join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER ||
+		                                join.join_type == JoinType::SINGLE};
+		return ProjectChildStats(join, child_stats, cardinality, maximum, null_extended);
 	}
 
 	RelationStats mark_result;
@@ -263,6 +330,11 @@ static optional<RelationStats> ExtractComparisonJoinStats(LogicalComparisonJoin 
 			return {};
 		}
 	}
+	vector<optional_idx> source_columns;
+	for (auto &column : mark_result.columns) {
+		source_columns.push_back(child_stats[0].get().FindColumn(column.binding));
+	}
+	mark_result.CopyEvidence(child_stats[0], source_columns);
 	mark_result.CapCurrentDomainsToCardinality();
 	mark_result.Verify(join.GetColumnBindings());
 	return mark_result;
@@ -327,24 +399,58 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 		auto &first_column = child_stats[0].get().columns[column_idx];
 		auto total_domain = first_column.total_domain;
 		auto current_domain = first_column.current_domain;
+		auto population_bound = first_column.PopulationBound();
+		vector<shared_ptr<const ColumnValueRestriction>> restrictions;
+		if (setop.type != LogicalOperatorType::LOGICAL_UNION || !child_stats[0].get().IsEmpty()) {
+			restrictions.push_back(first_column.value_restriction);
+		}
+		auto is_empty_population = [&](idx_t child_idx) {
+			auto bound = child_stats[child_idx].get().columns[column_idx].PopulationBound();
+			return child_stats[child_idx].get().IsEmpty() && bound.IsValid() && bound.GetIndex() == 0;
+		};
+		bool empty_population = is_empty_population(0);
 		for (idx_t child_idx = 1; child_idx < child_stats.size(); child_idx++) {
 			if (column_idx >= child_stats[child_idx].get().columns.size()) {
 				return {};
 			}
 			auto &child_column = child_stats[child_idx].get().columns[column_idx];
+			if (setop.type == LogicalOperatorType::LOGICAL_INTERSECT ||
+			    (setop.type == LogicalOperatorType::LOGICAL_UNION && !child_stats[child_idx].get().IsEmpty())) {
+				restrictions.push_back(child_column.value_restriction);
+			}
 			switch (setop.type) {
 			case LogicalOperatorType::LOGICAL_UNION:
+				population_bound =
+				    RelationStatisticsHelper::AddCardinalityBounds(population_bound, child_column.PopulationBound());
+				if (is_empty_population(child_idx)) {
+					break;
+				}
+				if (empty_population) {
+					total_domain = child_column.total_domain;
+					current_domain = child_column.current_domain;
+					empty_population = false;
+					break;
+				}
 				total_domain.distinct_count += child_column.total_domain.distinct_count;
 				current_domain.distinct_count += child_column.current_domain.distinct_count;
-				total_domain.source = DistinctCountSource::CARDINALITY;
+				total_domain.source = DistinctCountSource::DERIVED;
+				total_domain.has_usable_domain &= child_column.total_domain.has_usable_domain;
+				current_domain.has_usable_domain &= child_column.current_domain.has_usable_domain;
 				current_domain.source = DistinctCountSource::CARDINALITY;
 				break;
 			case LogicalOperatorType::LOGICAL_INTERSECT:
+				if (child_column.PopulationBound().IsValid()) {
+					population_bound = population_bound.IsValid() ? MinValue(population_bound.GetIndex(),
+					                                                         child_column.PopulationBound().GetIndex())
+					                                              : child_column.PopulationBound();
+				}
 				total_domain.distinct_count =
 				    MinValue(total_domain.distinct_count, child_column.total_domain.distinct_count);
 				current_domain.distinct_count =
 				    MinValue(current_domain.distinct_count, child_column.current_domain.distinct_count);
-				total_domain.source = DistinctCountSource::CARDINALITY;
+				total_domain.source = DistinctCountSource::DERIVED;
+				total_domain.has_usable_domain &= child_column.total_domain.has_usable_domain;
+				current_domain.has_usable_domain &= child_column.current_domain.has_usable_domain;
 				current_domain.source = DistinctCountSource::CARDINALITY;
 				break;
 			case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -355,6 +461,11 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 		}
 		total_domain.distinct_count = MaxValue(total_domain.distinct_count, current_domain.distinct_count);
 		result.columns.emplace_back(bindings[column_idx], total_domain, current_domain, first_column.name);
+		result.columns.back().value_restriction =
+		    ColumnValueRestriction::Combine(restrictions, setop.type != LogicalOperatorType::LOGICAL_UNION);
+		if (population_bound.IsValid()) {
+			result.columns.back().TightenPopulationBound(population_bound.GetIndex());
+		}
 	}
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(bindings);
@@ -406,6 +517,8 @@ RelationStatisticsHelper::ExtractOperatorStats(LogicalOperator &op, ClientContex
 		return ExtractProjectionStats(op.Cast<LogicalProjection>(), child_stats[0].get());
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return ExtractAggregationStats(op.Cast<LogicalAggregate>(), child_stats[0].get(), context);
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		return ExtractDistinctStats(op.Cast<LogicalDistinct>(), child_stats[0].get(), context);
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return ExtractWindowStats(op.Cast<LogicalWindow>(), child_stats[0].get());
 	case LogicalOperatorType::LOGICAL_FILTER: {
