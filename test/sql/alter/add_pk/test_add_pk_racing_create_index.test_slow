@@ -41,6 +41,18 @@ SELECT count(*) FROM db{attempt}.t WHERE c = 1;
 ----
 500000
 
+# a loaded primary key still rejects duplicates
+statement maybe
+INSERT INTO db{attempt}.t VALUES (1, 1);
+----
+violates primary key constraint
+
+query I
+SELECT (SELECT count(*) FROM duckdb_constraints() WHERE database_name = 'db{attempt}' AND constraint_type = 'PRIMARY KEY') = 0
+    OR (SELECT count(*) FROM db{attempt}.t WHERE id = 1) = 1;
+----
+true
+
 statement ok
 DETACH db{attempt};
 
@@ -84,6 +96,18 @@ query I
 SELECT count(*) FROM db{attempt}.t WHERE c = 1;
 ----
 500000
+
+# a loaded primary key still rejects duplicates
+statement maybe
+INSERT INTO db{attempt}.t VALUES (1, 1);
+----
+violates primary key constraint
+
+query I
+SELECT (SELECT count(*) FROM duckdb_constraints() WHERE database_name = 'db{attempt}' AND constraint_type = 'PRIMARY KEY') = 0
+    OR (SELECT count(*) FROM db{attempt}.t WHERE id = 1) = 1;
+----
+true
 
 statement ok
 DETACH db{attempt};
