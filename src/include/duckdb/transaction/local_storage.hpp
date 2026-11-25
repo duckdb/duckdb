@@ -63,10 +63,13 @@ public:
 	Allocator &allocator;
 	//! The main row group collection.
 	unique_ptr<OptimisticWriteCollection> row_groups;
+	//! The transaction-local indexes are shared with the storage of the next version of the table after an ALTER
+	shared_ptr<TableIndexList> shared_append_indexes;
+	shared_ptr<TableIndexList> shared_delete_indexes;
 	//! The set of unique append indexes.
-	TableIndexList append_indexes;
+	TableIndexList &append_indexes;
 	//! The set of delete indexes.
-	TableIndexList delete_indexes;
+	TableIndexList &delete_indexes;
 	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows (parallel DELETEs update it concurrently)
@@ -100,6 +103,10 @@ public:
 	bool WritesToDisk() const;
 	//! Whether this storage holds optimistically written (flushed) row groups
 	bool HasFlushedRowGroups() const;
+	//! Whether an ALTER took over the row groups: the storage of the altered version of the table owns them now
+	bool IsSuperseded() const {
+		return !row_groups;
+	}
 	void Rollback();
 	idx_t EstimatedSize() const;
 
@@ -133,6 +140,8 @@ private:
 class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
+	//! Returns the storage of the table (also if it was superseded by an ALTER)
+	shared_ptr<LocalTableStorage> GetEntry(const DataTable &table) const;
 	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
 	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;

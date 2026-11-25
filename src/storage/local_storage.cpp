@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
@@ -22,7 +23,9 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(Context &context, DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table) {
+    : table_ref(table), allocator(Allocator::Get(table.db)), shared_append_indexes(make_shared_ptr<TableIndexList>()),
+      shared_delete_indexes(make_shared_ptr<TableIndexList>()), append_indexes(*shared_append_indexes),
+      delete_indexes(*shared_delete_indexes), deleted_rows(0), optimistic_writer(table) {
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
 	row_groups = optimistic_writer.CreateCollection(context, table, types, OptimisticWritePartialManagers::GLOBAL);
@@ -37,7 +40,9 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
                                      const idx_t alter_column_index, const LogicalType &target_type,
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr,
                                      TransactionData transaction)
-    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows.load()),
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), shared_append_indexes(parent.shared_append_indexes),
+      shared_delete_indexes(parent.shared_delete_indexes), append_indexes(*shared_append_indexes),
+      delete_indexes(*shared_delete_indexes), deleted_rows(parent.deleted_rows.load()),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer) {
 	// Alter the column type.
@@ -49,13 +54,13 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	row_groups->collection = std::move(new_collection);
 	row_groups->ResetCollectionAccounting();
 
-	append_indexes.Move(parent.append_indexes);
-	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent,
                                      const idx_t drop_column_index)
-    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows.load()),
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), shared_append_indexes(parent.shared_append_indexes),
+      shared_delete_indexes(parent.shared_delete_indexes), append_indexes(*shared_append_indexes),
+      delete_indexes(*shared_delete_indexes), deleted_rows(parent.deleted_rows.load()),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer) {
 	// Remove the column from the previous table storage.
@@ -66,13 +71,13 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 	row_groups->collection = std::move(new_collection);
 	row_groups->ResetCollectionAccounting();
 
-	append_indexes.Move(parent.append_indexes);
-	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      ColumnDefinition &new_column, ExpressionExecutor &default_executor)
-    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows.load()),
+    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), shared_append_indexes(parent.shared_append_indexes),
+      shared_delete_indexes(parent.shared_delete_indexes), append_indexes(*shared_append_indexes),
+      delete_indexes(*shared_delete_indexes), deleted_rows(parent.deleted_rows.load()),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_dt, parent.optimistic_writer) {
 	auto &parent_collection = *parent.row_groups->collection;
@@ -80,8 +85,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
 	row_groups->ResetCollectionAccounting();
-	append_indexes.Move(parent.append_indexes);
-	delete_indexes.Move(parent.delete_indexes);
 }
 
 LocalTableStorage::~LocalTableStorage() {
@@ -325,7 +328,16 @@ void LocalTableStorage::Rollback() {
 optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(const DataTable &table) const {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
-	return entry == table_storage.end() ? nullptr : entry->second.get();
+	if (entry == table_storage.end() || entry->second->IsSuperseded()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
+shared_ptr<LocalTableStorage> LocalTableManager::GetEntry(const DataTable &table) const {
+	lock_guard<mutex> l(table_storage_lock);
+	auto entry = table_storage.find(table);
+	return entry == table_storage.end() ? nullptr : entry->second;
 }
 
 LocalTableStorage &LocalTableManager::GetOrCreateStorage(Context &context, DataTable &table) {
@@ -336,9 +348,11 @@ LocalTableStorage &LocalTableManager::GetOrCreateStorage(Context &context, DataT
 		auto storage = new_storage.get();
 		table_storage.insert(make_pair(reference<const DataTable>(table), std::move(new_storage)));
 		return *storage;
-	} else {
-		return *entry->second.get();
 	}
+	if (entry->second->IsSuperseded()) {
+		throw TransactionException("The table \"%s\" was altered", table.GetTableName());
+	}
+	return *entry->second.get();
 }
 
 bool LocalTableManager::IsEmpty() const {
@@ -359,6 +373,14 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 
 reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
 	lock_guard<mutex> l(table_storage_lock);
+	// the storages of altered versions of a table were taken over by the storage of the new version
+	for (auto entry = table_storage.begin(); entry != table_storage.end();) {
+		if (entry->second->IsSuperseded()) {
+			entry = table_storage.erase(entry);
+		} else {
+			++entry;
+		}
+	}
 	return std::move(table_storage);
 }
 
@@ -367,7 +389,9 @@ vector<shared_ptr<LocalTableStorage>> LocalTableManager::GetEntries() const {
 	vector<shared_ptr<LocalTableStorage>> result;
 	result.reserve(table_storage.size());
 	for (auto &entry : table_storage) {
-		result.push_back(entry.second);
+		if (!entry.second->IsSuperseded()) {
+			result.push_back(entry.second);
+		}
 	}
 	return result;
 }
@@ -376,7 +400,9 @@ idx_t LocalTableManager::EstimatedSize() const {
 	lock_guard<mutex> l(table_storage_lock);
 	idx_t estimated_size = 0;
 	for (auto &storage : table_storage) {
-		estimated_size += storage.second->EstimatedSize();
+		if (!storage.second->IsSuperseded()) {
+			estimated_size += storage.second->EstimatedSize();
+		}
 	}
 	return estimated_size;
 }
@@ -797,8 +823,9 @@ void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
 void LocalStorage::AddColumn(ClientContext &context, DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
                              ExpressionExecutor &default_executor) {
 	// check if there are any pending appends for the old version of the table
-	auto storage = table_manager.MoveEntry(old_dt);
-	if (!storage) {
+	// the storage of the old version stays in the manager: it hands the row groups over to the new version
+	auto storage = table_manager.GetEntry(old_dt);
+	if (!storage || storage->IsSuperseded()) {
 		return;
 	}
 	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, new_column, default_executor);
@@ -807,8 +834,9 @@ void LocalStorage::AddColumn(ClientContext &context, DataTable &old_dt, DataTabl
 
 void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index) {
 	// check if there are any pending appends for the old version of the table
-	auto storage = table_manager.MoveEntry(old_dt);
-	if (!storage) {
+	// the storage of the old version stays in the manager: it hands the row groups over to the new version
+	auto storage = table_manager.GetEntry(old_dt);
+	if (!storage || storage->IsSuperseded()) {
 		return;
 	}
 	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, drop_column_index);
@@ -819,8 +847,9 @@ void LocalStorage::ChangeType(ClientContext &context, DataTable &old_dt, DataTab
                               const LogicalType &target_type, const vector<StorageIndex> &bound_columns,
                               Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
-	auto storage = table_manager.MoveEntry(old_dt);
-	if (!storage) {
+	// the storage of the old version stays in the manager: it hands the row groups over to the new version
+	auto storage = table_manager.GetEntry(old_dt);
+	if (!storage || storage->IsSuperseded()) {
 		return;
 	}
 	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, changed_idx, target_type,
