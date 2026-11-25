@@ -4,12 +4,14 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb_test/test_bundle.hpp"
 #include "test_config.hpp"
+#include "test_environment.hpp"
 #include "test_helpers.hpp"
 #include "test_reporter.hpp"
 
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <sstream>
 
 #ifdef DUCKDB_TEST_BUNDLE_DEBUG_FS
@@ -35,9 +37,6 @@ struct CapturedFailure {
 struct CaptureState {
 	string test_name;
 	vector<CapturedFailure> failures;
-	idx_t assertions = 0;
-	bool skipped = false;
-	string skip_reason;
 	std::chrono::steady_clock::time_point start;
 };
 
@@ -65,13 +64,23 @@ struct StreamCapture {
 
 struct TempDirReclaimer {
 	~TempDirReclaimer() {
-		DestroyTempDir(success);
+		DestroyTempDir(success && std::uncaught_exceptions() == 0);
 	}
 
 	bool success = false;
 };
 
 static thread_local optional_ptr<RunContext> current_run;
+
+struct RunContextScope {
+	explicit RunContextScope(RunContext &context) {
+		current_run = context;
+	}
+
+	~RunContextScope() {
+		current_run = nullptr;
+	}
+};
 
 struct CatchTestReporter : public TestReporter {
 	string CurrentTestName() override {
@@ -102,7 +111,9 @@ static void ReportResult(RunContext &run_context, const string &test_name, TestS
 
 class TestBundleReporter : public Catch::StreamingReporterBase<TestBundleReporter> {
 public:
-	using StreamingReporterBase::StreamingReporterBase;
+	explicit TestBundleReporter(const Catch::ReporterConfig &config) : StreamingReporterBase(config) {
+		m_reporterPrefs.shouldRedirectStdOut = true;
+	}
 
 	static std::string getDescription() {
 		return "DuckDB test bundle reporter";
@@ -116,7 +127,6 @@ public:
 			return true;
 		}
 		auto &capture = current_run->capture;
-		capture.assertions++;
 		auto &result = stats.assertionResult;
 		if (!result.isOk()) {
 			auto source = result.getSourceInfo();
@@ -126,6 +136,15 @@ public:
 			failure.expression =
 			    result.hasExpandedExpression() ? result.getExpandedExpression() : result.getExpression();
 			failure.message = result.getMessage();
+			for (auto &message : stats.infoMessages) {
+				if (message.type == result.getResultType() && message.message == result.getMessage()) {
+					continue;
+				}
+				if (!failure.message.empty()) {
+					failure.message += "\n";
+				}
+				failure.message += message.message;
+			}
 			capture.failures.push_back(std::move(failure));
 			if (result.getResultType() == Catch::ResultWas::FatalErrorCondition) {
 				std::fprintf(stderr, "DuckDB test process received a fatal signal while running cpp:%s:%s\n%s\n",
@@ -150,23 +169,25 @@ public:
 	void testCaseEnded(Catch::TestCaseStats const &stats) override {
 		if (current_run && current_run->test_active) {
 			auto &capture = current_run->capture;
-			if (stats.totals.skippedTests > 0) {
-				capture.skipped = true;
-				if (!stats.totals.skippedTestReasons.empty()) {
-					capture.skip_reason = stats.totals.skippedTestReasons.begin()->first;
-				}
-			}
 			auto status = TestStatus::PASSED;
-			if (capture.skipped) {
-				status = TestStatus::SKIPPED;
-			} else if (stats.totals.testCases.failed > 0 || stats.totals.assertions.failed > 0 ||
-			           stats.totals.error != 0) {
+			if (stats.totals.testCases.failed > 0 || stats.totals.assertions.failed > 0 || stats.totals.error != 0) {
 				status = TestStatus::FAILED;
+			} else if (stats.totals.skippedTests > 0) {
+				status = TestStatus::SKIPPED;
+			}
+			string message = stats.skipReason;
+			if (status == TestStatus::FAILED) {
+				if (!stats.stdOut.empty()) {
+					message += "\n--- test stdout ---\n" + stats.stdOut;
+				}
+				if (!stats.stdErr.empty()) {
+					message += "\n--- test stderr ---\n" + stats.stdErr;
+				}
 			}
 			auto end = std::chrono::steady_clock::now();
 			auto duration = std::chrono::duration<double, std::milli>(end - capture.start).count();
-			ReportResult(*current_run, capture.test_name, status, duration, capture.assertions,
-			             std::move(capture.failures), capture.skip_reason);
+			ReportResult(*current_run, capture.test_name, status, duration, stats.totals.assertions.total(),
+			             std::move(capture.failures), message);
 			current_run->test_active = false;
 		}
 		StreamingReporterBase::testCaseEnded(stats);
@@ -195,10 +216,6 @@ static string QuoteCatchTest(const string &name) {
 }
 
 static void InitializeTestEnvironment() {
-	static bool initialized = false;
-	if (initialized) {
-		return;
-	}
 	auto &config = TestConfiguration::Get();
 	config.ChangeWorkingDirectory(TestRootDirectory());
 	string error;
@@ -220,9 +237,12 @@ static void InitializeTestEnvironment() {
 	}
 #endif
 #ifdef DUCKDB_TEST_BUNDLE_DEBUG_FS
-	SetStaticExtensionLoader([](DuckDB &db) { db.LoadStaticExtension<DebugFsExtension>(); });
+	static bool loader_initialized = false;
+	if (!loader_initialized) {
+		SetStaticExtensionLoader([](DuckDB &db) { db.LoadStaticExtension<DebugFsExtension>(); });
+		loader_initialized = true;
+	}
 #endif
-	initialized = true;
 }
 
 static void EnumerateTests(void *, test_case_callback_t callback, void *callback_data) {
@@ -276,12 +296,13 @@ static void RunTests(void *, const char *const *test_names, uint64_t test_count,
 	static mutex run_lock;
 	lock_guard<mutex> guard(run_lock);
 	ConfigureTestFlags(test_flags, test_flag_count);
-	InitializeTestEnvironment();
+	TestEnvironmentScope environment_scope;
 	TempDirReclaimer temp_dir_reclaimer;
+	InitializeTestEnvironment();
 	temp_dir_reclaimer.success = true;
 
 	RunContext run_context {{}, callback, callback_data, temp_dir_reclaimer.success};
-	current_run = run_context;
+	RunContextScope run_scope(run_context);
 
 	// Catch destroys its global test registry with a Session, so keep the embedded session process-local.
 	static auto session = new Catch::Session();
@@ -302,9 +323,13 @@ static void RunTests(void *, const char *const *test_names, uint64_t test_count,
 		CatchTestReporter reporter;
 		TestReporterScope reporter_scope(reporter);
 		StreamCapture stream_capture;
-		session->run();
+		auto session_result = session->run();
+		if (session_result != 0) {
+			temp_dir_reclaimer.success = false;
+			throw InvalidInputException("C++ test bundle '%s' failed (Catch exit code %d):\n%s",
+			                            DUCKDB_TEST_BUNDLE_NAME, session_result, stream_capture.output.str());
+		}
 	}
-	current_run = nullptr;
 }
 
 static TestBundle bundle {DUCKDB_TEST_BUNDLE_NAME, nullptr, EnumerateTests, RunTests};

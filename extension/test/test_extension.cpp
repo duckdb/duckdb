@@ -15,6 +15,7 @@
 #include "debug_fs_extension.hpp"
 #include "sqllogic_test_executor.hpp"
 #include "test_config.hpp"
+#include "test_environment.hpp"
 #include "test_helpers.hpp"
 #include "test_reporter.hpp"
 
@@ -87,13 +88,39 @@ struct TestRunData : public TableFunctionData {
 	string state_database;
 };
 
+static atomic<bool> test_execution_active {false};
+
+class TestExecutionGuard {
+public:
+	TestExecutionGuard() {
+		if (test_execution_active.exchange(true)) {
+			throw InvalidInputException("A test run is already active in this process");
+		}
+	}
+
+	~TestExecutionGuard() {
+		test_execution_active.store(false);
+	}
+
+	TestExecutionGuard(const TestExecutionGuard &) = delete;
+	TestExecutionGuard &operator=(const TestExecutionGuard &) = delete;
+};
+
 struct TestRunState : public GlobalTableFunctionState {
+	TestRunState()
+	    : execution_guard(make_uniq<TestExecutionGuard>()), environment_scope(make_uniq<TestEnvironmentScope>()) {
+	}
+
 	~TestRunState() override {
+		state_connection.reset();
+		state_db.reset();
 		if (environment_initialized) {
 			DestroyTempDir(success);
 		}
 	}
 
+	unique_ptr<TestExecutionGuard> execution_guard;
+	unique_ptr<TestEnvironmentScope> environment_scope;
 	string state_database;
 	idx_t test_count = 0;
 	bool output_emitted = false;
@@ -833,6 +860,7 @@ static vector<TestDescription> DiscoverTests(ClientContext &context, TestRegistr
 
 static unique_ptr<FunctionData> TestScanBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
+	TestExecutionGuard guard;
 	auto selectors = ReadStringList(input.inputs[0], "selectors");
 	auto test_roots = ReadNamedStringList(input, "test_roots");
 	auto extension_roots = ReadNamedStringList(input, "extension_roots");
@@ -876,10 +904,6 @@ static void TestScanFunction(ClientContext &, TableFunctionInput &input, DataChu
 }
 
 static void InitializeSQLTestEnvironment() {
-	static bool initialized = false;
-	if (initialized) {
-		return;
-	}
 	auto &config = TestConfiguration::Get();
 	string error;
 	if (!ValidateEnvPassthrough(error) || !config.ValidateTestEnv(error)) {
@@ -902,8 +926,11 @@ static void InitializeSQLTestEnvironment() {
 		throw IOException("Failed to set HOME environment variable");
 	}
 #endif
-	SetStaticExtensionLoader([](DuckDB &db) { db.LoadStaticExtension<DebugFsExtension>(); });
-	initialized = true;
+	static bool loader_initialized = false;
+	if (!loader_initialized) {
+		SetStaticExtensionLoader([](DuckDB &db) { db.LoadStaticExtension<DebugFsExtension>(); });
+		loader_initialized = true;
+	}
 }
 
 static TestResult RunSQLTest(const TestDescription &test) {
@@ -1023,6 +1050,7 @@ static void AddBundleResult(void *data, const duckdb_test::TestResult *bundle_re
 
 static unique_ptr<FunctionData> TestRunBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
+	TestExecutionGuard guard;
 	auto test_ids = ReadStringList(input.inputs[0], "test_ids");
 	auto test_roots = ReadNamedStringList(input, "test_roots");
 	auto extension_roots = ReadNamedStringList(input, "extension_roots");
@@ -1098,40 +1126,45 @@ static void InitializeStateDatabase(ClientContext &context, TestRunState &state,
 static unique_ptr<GlobalTableFunctionState> TestRunInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<TestRunState>();
 	auto &data = input.bind_data->Cast<TestRunData>();
-	InitializeSQLTestEnvironment();
 	result->environment_initialized = true;
-	InitializeStateDatabase(context, *result, data);
-	result->success = true;
+	try {
+		InitializeSQLTestEnvironment();
+		InitializeStateDatabase(context, *result, data);
+		result->success = true;
 
-	unordered_map<string, vector<string>> bundle_tests;
-	for (auto &test : data.tests) {
-		if (test.kind == "sql") {
-			PersistResult(*result, RunSQLTest(test));
-		} else {
-			bundle_tests[test.bundle].push_back(test.name);
+		unordered_map<string, vector<string>> bundle_tests;
+		for (auto &test : data.tests) {
+			if (test.kind == "sql") {
+				PersistResult(*result, RunSQLTest(test));
+			} else {
+				bundle_tests[test.bundle].push_back(test.name);
+			}
 		}
-	}
 
-	auto &registry = GetTestRegistry(context);
-	for (auto &entry : GetRegisteredBundles(registry)) {
-		auto selected = bundle_tests.find(entry.name);
-		if (selected == bundle_tests.end()) {
-			continue;
+		auto &registry = GetTestRegistry(context);
+		for (auto &entry : GetRegisteredBundles(registry)) {
+			auto selected = bundle_tests.find(entry.name);
+			if (selected == bundle_tests.end()) {
+				continue;
+			}
+			vector<const char *> names;
+			for (auto &name : selected->second) {
+				names.push_back(name.c_str());
+			}
+			vector<const char *> test_flags;
+			for (auto &test_flag : data.test_flags) {
+				test_flags.push_back(test_flag.c_str());
+			}
+			BundleResultContext callback_context {*result, entry.name};
+			entry.bundle->run(entry.bundle->data, names.data(), names.size(), test_flags.data(), test_flags.size(),
+			                  AddBundleResult, &callback_context);
 		}
-		vector<const char *> names;
-		for (auto &name : selected->second) {
-			names.push_back(name.c_str());
-		}
-		vector<const char *> test_flags;
-		for (auto &test_flag : data.test_flags) {
-			test_flags.push_back(test_flag.c_str());
-		}
-		BundleResultContext callback_context {*result, entry.name};
-		entry.bundle->run(entry.bundle->data, names.data(), names.size(), test_flags.data(), test_flags.size(),
-		                  AddBundleResult, &callback_context);
+		result->state_connection.reset();
+		result->state_db.reset();
+	} catch (...) {
+		result->success = false;
+		throw;
 	}
-	result->state_connection.reset();
-	result->state_db.reset();
 	return std::move(result);
 }
 
