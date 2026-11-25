@@ -50,6 +50,11 @@ public:
 		return {OpenFileInfo(path)};
 	}
 
+	//! The extended glob of the local file system would list the file with its stats
+	bool SupportsGlobExtended() const override {
+		return false;
+	}
+
 	//! Without the direct IO of remote reads, which needs aligned buffers on a local file
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override {
 		FileOpenFlags read_flags = FileFlags::FILE_FLAGS_READ;
