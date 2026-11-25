@@ -370,7 +370,10 @@ int64_t ChineseCalendar::ComputeMonthStart(int32_t eyear, int32_t month, bool is
 	}
 
 	const auto new_year = NewYear(eyear);
-	auto new_moon = NewMoonNear(new_year + month * 29, true);
+        if (HasFailedInternal()){
+		return 0;
+	}
+	auto new_moon = NewMoonNear(double(new_year) + month * 29, true);
 	if (HasFailedInternal()) {
 		return 0;
 	}
