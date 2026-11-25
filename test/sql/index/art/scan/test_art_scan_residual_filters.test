@@ -212,3 +212,54 @@ SELECT i, w, s FROM skipped_batch WHERE i BETWEEN 0 AND 6143 AND w = 1 AND s = '
 
 statement ok
 ROLLBACK;
+
+# A cast of a projected struct field must not run on rows that the filters reject.
+
+statement ok
+CREATE TABLE cast_tbl(i INTEGER, j INTEGER, s STRUCT(x VARCHAR), n STRUCT(y STRUCT(x VARCHAR)));
+
+statement ok
+INSERT INTO cast_tbl VALUES
+	(0, 0, {'x': '1'}, {'y': {'x': '1'}}),
+	(5, 1, {'x': 'bad'}, {'y': {'x': 'bad'}}),
+	(6, 0, {'x': '2'}, {'y': {'x': '2'}});
+
+statement ok
+CREATE INDEX idx_cast ON cast_tbl(i);
+
+query I
+SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
+----
+
+query I
+SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i BETWEEN 5 AND 6 AND j = 0;
+----
+2
+
+query I
+SELECT CAST(n.y.x AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
+----
+
+# The additional predicate on the indexed column rejects the row.
+
+query I
+SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i >= 5 AND i <= 6 AND i <> 5;
+----
+2
+
+# The index covers the filter exactly, so every fetched row is a result.
+
+query II
+EXPLAIN ANALYZE SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i = 6;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i = 6;
+----
+2
+
+statement error
+SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i = 5;
+----
+<REGEX>:.*Could not convert string 'bad' to INT32.*

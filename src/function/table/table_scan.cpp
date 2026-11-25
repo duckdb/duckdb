@@ -1023,7 +1023,7 @@ static bool ExtractValuesFromExpression(const Expression &expr, const LogicalTyp
 
 static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<ART> &art, const Expression &index_expr,
                                                          const ColumnDefinition &col, const TableFilter &filter,
-                                                         ProjectionIndex storage_index) {
+                                                         ProjectionIndex storage_index, bool require_exact) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TryInitializeIndexScan");
 	ColumnBinding binding(TableIndex(0), storage_index);
 	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
@@ -1031,13 +1031,13 @@ static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<A
 	auto key_columns = make_uniq<DataChunk>();
 	if (!ExtractValuesFromExpression(*expr_filter.expr, col.Type(), *key_columns)) {
 		auto filter_expr = expr_filter.ToExpression(bound_ref);
-		return art->TryInitializeScan(index_expr, *filter_expr);
+		return art->TryInitializeScan(index_expr, *filter_expr, require_exact);
 	}
 	if (key_columns->size() == 1) {
 		auto filter_expr =
 		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
 		                                      make_uniq<BoundConstantExpression>(key_columns->GetValue(0, 0)));
-		return art->TryInitializeScan(index_expr, *filter_expr);
+		return art->TryInitializeScan(index_expr, *filter_expr, require_exact);
 	}
 
 	if (!bound_ref.Equals(index_expr)) {
@@ -1047,7 +1047,7 @@ static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<A
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
-                  TableFilterSet &filter_set, RowIdVectorOutput &row_ids) {
+                  TableFilterSet &filter_set, RowIdVectorOutput &row_ids, bool require_exact) {
 	row_ids.Reset();
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
@@ -1094,7 +1094,7 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		return false;
 	}
 
-	auto scan_state = TryInitializeIndexScan(art, *index_expr, col, *filter, storage_index);
+	auto scan_state = TryInitializeIndexScan(art, *index_expr, col, *filter, storage_index, require_exact);
 	if (!scan_state) {
 		return false;
 	}
@@ -1108,6 +1108,26 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 		}
 	}
 	return true;
+}
+
+//! Returns true, if the scan casts an extracted struct or variant field while reading it.
+static bool HasPushdownCast(const ColumnIndex &index) {
+	if (index.IsPushdownExtract()) {
+		auto &child = index.GetChildIndex(0);
+		if (!child.HasChildren()) {
+			auto &source_type = index.GetType();
+			auto &field_type = child.HasPrimaryIndex()
+			                       ? StructType::GetChildTypes(source_type)[child.GetPrimaryIndex()].second
+			                       : source_type;
+			return child.GetType() != field_type;
+		}
+	}
+	for (auto &child : index.GetChildIndexes()) {
+		if (HasPushdownCast(child)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
@@ -1141,6 +1161,20 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// FIXME: We use the first ART within the thresholds, not the most selective one. Each failed probe can scan up
 	// to max_count row IDs before falling back to a table scan.
 	if (!filter_set.HasFilters()) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
+	// Pushed-down casts run while fetching, before the filters, so they can fail on rows that the filters remove.
+	// With a pushed-down cast, we only use an index scan that returns exactly the matching rows.
+	bool require_exact = false;
+	for (auto &col_idx : input.column_indexes) {
+		if (HasPushdownCast(col_idx)) {
+			require_exact = true;
+			break;
+		}
+	}
+	// The ART cannot apply filters on other columns, so we do not use an index scan.
+	if (require_exact && filter_set.FilterCount() != 1) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -1180,7 +1214,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		}
 		{
 			auto index = entry->GetReadHandle<ART>();
-			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids);
+			index_scan = TryScanIndex(index, column_list, input, filter_set, row_ids, require_exact);
 		}
 		if (index_scan) {
 			// found an index - break
