@@ -216,7 +216,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		types.clear();
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_TRAMPOLINE: {
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
 

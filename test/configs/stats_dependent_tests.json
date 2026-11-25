@@ -110,6 +110,12 @@
         "test/optimizer/statistics/statistics_cast_time_of_day.test",
         "test/parquet/parquet_schema_time_of_day_cast.test"
       ]
+    },
+    {
+      "reason": "Trampoline independent-source wave parallelism is sized by optimizer cardinality estimates.",
+      "paths": [
+        "test/sql/cte/trampoline/trampoline_source_sizing_estimates.test"
+      ]
     }
   ]
 }

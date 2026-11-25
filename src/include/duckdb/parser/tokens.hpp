@@ -54,6 +54,7 @@ class QueryNode;
 class SelectNode;
 class SetOperationNode;
 class RecursiveCTENode;
+class TrampolineCTENode;
 class CTENode;
 class StatementNode;
 class UpdateQueryNode;

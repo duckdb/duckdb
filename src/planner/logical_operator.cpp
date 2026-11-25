@@ -132,7 +132,8 @@ static bool ContainsDML(const LogicalOperator &op) {
 
 // A top-level DML statement is not flagged. COPY TO does not invalidate table statistics.
 bool LogicalOperator::CTEContainsDML() const {
-	if (type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE || type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+	if (type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE || type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+	    type == LogicalOperatorType::LOGICAL_TRAMPOLINE) {
 		if (!children.empty() && ContainsDML(*children[0])) {
 			return true;
 		}

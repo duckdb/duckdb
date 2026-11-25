@@ -35,7 +35,8 @@ RemovedSubtreeEffects::RemovedSubtreeEffects(LogicalOperator &plan) {
 void RemovedSubtreeEffects::CollectDefinitions(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		materialized_ctes.emplace(op.Cast<LogicalCTE>().table_index, op);
-	} else if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+	           op.type == LogicalOperatorType::LOGICAL_TRAMPOLINE) {
 		recursive_ctes.insert(op.Cast<LogicalCTE>().table_index);
 	}
 	for (auto &child : op.children) {

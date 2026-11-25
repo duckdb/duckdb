@@ -1,0 +1,71 @@
+# name: test/sql/cte/trampoline/trampoline_join_rewrites.test
+# description: Join elimination and INNER-to-SEMI rewrites treat a trampoline like a recursive CTE
+# group: [trampoline]
+
+statement ok
+CREATE TABLE a AS SELECT i AS x, i AS y FROM range(5) t(i);
+
+statement ok
+CREATE SEQUENCE seq;
+
+# a LEFT JOIN whose inner side reads the wave and is unread below max() is eliminated, as in a recursive member
+query II
+EXPLAIN WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1)
+	BRANCH 1: (SELECT CASE WHEN max(w.n) < 2 THEN 1 ELSE 0 END, max(w.n) + 1 FROM t w LEFT JOIN t x ON w.n = x.n)
+) SELECT n FROM t;
+----
+physical_plan	<!REGEX>:.*Join Type: LEFT.*
+
+query I
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1)
+	BRANCH 1: (SELECT CASE WHEN max(w.n) < 2 THEN 1 ELSE 0 END, max(w.n) + 1 FROM t w LEFT JOIN t x ON w.n = x.n)
+) SELECT n FROM t;
+----
+3
+
+# the wave is only read by a range predicate below DISTINCT: the join becomes a SEMI join
+query II
+EXPLAIN WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1::BIGINT)
+	BRANCH 1: (SELECT DISTINCT 0, a.x FROM a, t w WHERE a.y > w.n AND a.x < 4)
+) SELECT n FROM t;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+query I rowsort
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1::BIGINT)
+	BRANCH 1: (SELECT DISTINCT 0, a.x FROM a, t w WHERE a.y > w.n AND a.x < 4)
+) SELECT n FROM t;
+----
+2
+3
+
+# a volatile seed makes the trampoline's wave unstable, as a volatile anchor does for a recursive CTE: no SEMI join
+query II
+EXPLAIN WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1::BIGINT + nextval('seq') * 0)
+	BRANCH 1: (SELECT DISTINCT 0, a.x FROM a, t w WHERE a.y > w.n AND a.x < 4)
+) SELECT n FROM t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query II
+EXPLAIN WITH RECURSIVE r(n) AS (
+	SELECT 1::BIGINT + nextval('seq') * 0
+	UNION ALL
+	(SELECT DISTINCT a.x FROM a, r w WHERE a.y > w.n AND a.x < 4)
+) SELECT n FROM r;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query I rowsort
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(SELECT 1, 1::BIGINT + nextval('seq') * 0)
+	BRANCH 1: (SELECT DISTINCT 0, a.x FROM a, t w WHERE a.y > w.n AND a.x < 4)
+) SELECT n FROM t;
+----
+2
+3
