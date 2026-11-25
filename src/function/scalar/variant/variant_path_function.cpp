@@ -86,6 +86,46 @@ optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node,
 	return elements[length - 1 - from_end];
 }
 
+vector<optional<string_t>> VariantPathFunction::GetSingleKeys(const vector<vector<VariantPathComponent>> &paths) {
+	vector<optional<string_t>> keys(paths.size());
+	for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
+		const auto &path = paths[path_idx];
+		if (path.size() == 1 && path[0].lookup_mode == VariantChildLookupMode::BY_KEY) {
+			keys[path_idx] = string_t(path[0].key.c_str(), NumericCast<uint32_t>(path[0].key.size()));
+		}
+	}
+	return keys;
+}
+
+void VariantPathFunction::ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
+                                       const vector<optional<string_t>> &keys,
+                                       vector<optional<VariantNode>> &selected) {
+	idx_t pending = 0;
+	for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
+		if (keys[path_idx]) {
+			selected[path_idx].reset();
+			pending++;
+		} else {
+			selected[path_idx] = ResolvePath(root, paths[path_idx]);
+		}
+	}
+	if (pending == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
+		return;
+	}
+	for (const auto &entry : root.GetObjectChildren()) {
+		for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
+			auto &value = selected[path_idx];
+			if (keys[path_idx] && !value && *keys[path_idx] == entry.key) {
+				value = entry.value;
+				pending--;
+			}
+		}
+		if (pending == 0) {
+			break;
+		}
+	}
+}
+
 void VariantPathFunction::ExecuteVariantUnary(const Vector &input, const vector<VariantPathComponent> &path,
                                               Vector &result, idx_t count, variant_node_filter_t keep) {
 	const VectorIterator<VectorVariantType> variants(input);

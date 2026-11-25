@@ -94,26 +94,34 @@ private:
 	static void ExecuteMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths, Vector &result,
 	                        const idx_t count, const WRITE_FUNCTION &write_fn) {
 		const VectorIterator<VectorVariantType> variants(input);
+		const auto keys = GetSingleKeys(paths);
 
 		result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 		auto result_writer = FlatVector::Writer<VectorListType<RESULT_TYPE>>(result, count);
 
+		//! The value of the current row at each of the paths
+		vector<optional<VariantNode>> selected(paths.size());
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!variants.RowIsValid(row_idx)) {
 				result_writer.WriteNull();
 				continue;
 			}
 
-			auto row_writer = result_writer.WriteList(paths.size());
-			const auto variant = variants[row_idx];
+			ResolvePaths(variants[row_idx], paths, keys, selected);
 
 			idx_t path_idx = 0;
-			for (auto &path_writer : row_writer) {
-				write_fn(ResolvePath(variant, paths[path_idx]), path_writer);
+			for (auto &path_writer : result_writer.WriteList(paths.size())) {
+				write_fn(selected[path_idx], path_writer);
 				path_idx++;
 			}
 		}
 	}
+
+	//! Returns the key of each path that is a single key lookup, and an empty optional for the other paths
+	static vector<optional<string_t>> GetSingleKeys(const vector<vector<VariantPathComponent>> &paths);
+	//! Resolves every path for 'root' into 'selected', the single key paths in one pass over the children of the object
+	static void ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
+	                         const vector<optional<string_t>> &keys, vector<optional<VariantNode>> &selected);
 
 	//! Executes a single path and writes the selected VARIANT value per input row.
 	static void ExecuteVariantUnary(const Vector &input, const vector<VariantPathComponent> &path, Vector &result,
