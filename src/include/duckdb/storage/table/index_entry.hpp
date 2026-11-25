@@ -266,7 +266,7 @@ private:
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
 	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
-	ConstraintCheckMode check_mode;
+	atomic<ConstraintCheckMode> check_mode;
 	IndexDeltas deltas;
 	//! Whether the index is being built: commits write to its deltas and readers skip it
 	atomic<bool> building;
