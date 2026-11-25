@@ -66,5 +66,24 @@ final class DecimalUtilityTests: XCTestCase {
       XCTAssertEqual(Decimal(-1 - IntHuge(value >> 1)).description, "\(-1 - IntHuge(value >> 1))")
     }
   }
+
+  /// Values of up to 64 bits take a shorter path than wider ones
+  func test_decimal_huge_around_64_bits() throws {
+    let twoToThe64th = UIntHuge(1) << 64
+    let magnitudes: [UIntHuge] = [
+      0, 1, UIntHuge(UInt64.max) - 1, twoToThe64th - 1, twoToThe64th, twoToThe64th + 1,
+      twoToThe64th + UIntHuge(UInt64.max), twoToThe64th << 1, (twoToThe64th << 1) - 1, (twoToThe64th << 1) + 1,
+    ]
+    for magnitude in magnitudes {
+      XCTAssertEqual(Decimal(magnitude).description, "\(magnitude)")
+      XCTAssertEqual(Decimal(magnitude), Decimal(string: "\(magnitude)"))
+      let positive = IntHuge(magnitude)
+      XCTAssertEqual(Decimal(positive).description, "\(positive)")
+      let negative = -positive
+      XCTAssertEqual(Decimal(negative).description, "\(negative)")
+      XCTAssertEqual(Decimal(negative), Decimal(string: "\(negative)"))
+      XCTAssertEqual(Decimal(negative).isSignMinus, magnitude != 0)
+    }
+  }
 }
 

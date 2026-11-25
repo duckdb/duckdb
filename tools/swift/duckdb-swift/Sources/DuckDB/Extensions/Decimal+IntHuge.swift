@@ -37,8 +37,18 @@ public extension Decimal {
   /// every platform. It is exact: both halves and their combination fit the
   /// 128-bit significand of a `Decimal`.
   init(_ source: UIntHuge) {
-    let twoToThe64th = Decimal(UInt64.max) + 1
-    self = Decimal(UInt64(truncatingIfNeeded: source >> 64)) * twoToThe64th
-      + Decimal(UInt64(truncatingIfNeeded: source))
+    let low = UInt64(truncatingIfNeeded: source)
+    let high = UInt64(truncatingIfNeeded: source >> 64)
+    guard high != 0 else {
+      // most values fit 64 bits: no arithmetic needed
+      self = Decimal(low)
+      return
+    }
+    self = Decimal(high) * Self.twoToThe64th + Decimal(low)
   }
+}
+
+private extension Decimal {
+
+  static let twoToThe64th = Decimal(UInt64.max) + 1
 }

@@ -307,7 +307,9 @@ public extension Column {
   /// elements will always be equal to `nil`.
   ///
   /// A decimal column also casts to `String`: its elements are the exact
-  /// digits of the values, whatever the width of the decimal.
+  /// digits of the values, for a decimal of up to 255 digits. The width and
+  /// scale of a wider decimal are not available to the client, so its elements
+  /// are `nil`: cast such a column to `VARCHAR` in the query instead.
   ///
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``

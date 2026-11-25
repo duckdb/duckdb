@@ -101,7 +101,7 @@ extension Vector {
   
   func unwrap(_ type: String.Type, at index: Int) throws -> String {
     if logicalType.dataType == .decimal {
-      // the exact digits of a decimal of any width
+      // the exact digits of a decimal of up to 255 digits; a wider one throws
       return try unwrapDecimalString(at: index)
     }
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .varchar)

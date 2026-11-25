@@ -66,7 +66,10 @@ struct WideDecimal {
   /// it exactly
   ///
   /// A `Decimal` has a 128-bit significand and a decimal exponent in the range
-  /// of an `Int8`.
+  /// of an `Int8`. Foundation keeps trailing zeros in the exponent, not in the
+  /// significand, so a value with more than 127 trailing zeros has no
+  /// `Decimal` that the public API creates reliably: with swift-foundation
+  /// `Decimal(sign: .plus, exponent: 127, significand: 1000)` is `NaN`.
   func decimal(scale: Int) -> Decimal? {
     var significandDigits = digits[...]
     while significandDigits.count > 1, significandDigits.last == Self.asciiZero {
@@ -78,15 +81,12 @@ struct WideDecimal {
       significand = next
     }
     guard significand != 0 else { return Decimal(0) }
-    var exponent = digits.count - significandDigits.count - scale
-    guard exponent >= Int(Int8.min) else { return nil }
-    while exponent > Int(Int8.max) {
-      guard let next = Self.appending(digit: 0, to: significand) else { return nil }
-      significand = next
-      exponent -= 1
-    }
-    return Decimal(
+    let exponent = digits.count - significandDigits.count - scale
+    guard exponent >= Int(Int8.min), exponent <= Int(Int8.max) else { return nil }
+    let decimal = Decimal(
       sign: isNegative ? .minus : .plus, exponent: exponent, significand: Decimal(significand))
+    // never hand out a value that Foundation could not represent
+    return decimal.isNaN ? nil : decimal
   }
 }
 

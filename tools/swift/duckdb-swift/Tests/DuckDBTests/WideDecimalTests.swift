@@ -168,6 +168,52 @@ final class WideDecimalTests: XCTestCase {
     }
   }
 
+  /// The exponent of a `Decimal` ends at 127, and Foundation keeps trailing
+  /// zeros in the exponent: a value with up to 127 trailing zeros converts,
+  /// one with more does not
+  func test_values_with_many_trailing_zeros() throws {
+    let fitting: [(type: String, value: String, expected: Decimal)] = [
+      ("DECIMAL(128,0)", "1" + String(repeating: "0", count: 127),
+       Decimal(sign: .plus, exponent: 127, significand: 1)),
+      ("DECIMAL(130,0)", "-907" + String(repeating: "0", count: 127),
+       Decimal(sign: .minus, exponent: 127, significand: 907)),
+      // the significand uses all of the 128 bits
+      ("DECIMAL(166,0)", Self.largestSignificand + String(repeating: "0", count: 127),
+       Decimal(sign: .plus, exponent: 127, significand: Decimal(string: Self.largestSignificand)!)),
+      ("DECIMAL(140,2)", "-123456789" + String(repeating: "0", count: 127) + ".00",
+       Decimal(sign: .minus, exponent: 127, significand: 123_456_789)),
+    ]
+    let connection = try Database(store: .inMemory).connect()
+    for (type, value, expected) in fitting {
+      let result = try connection.query("SELECT '\(value)'::\(type)")
+      let decimal = try XCTUnwrap(result[0].cast(to: Decimal.self).element(at: 0), "\(type) \(value)")
+      XCTAssertFalse(decimal.isNaN, "\(type) \(value)")
+      XCTAssertEqual(decimal, expected, "\(type) \(value)")
+      XCTAssertEqual(decimal.isSignMinus, value.hasPrefix("-"))
+      XCTAssertEqual(Self.plainString(decimal), Self.trimmed(value), "\(type) \(value)")
+      XCTAssertEqual(result[0].cast(to: String.self)[0], value)
+    }
+    let notFitting: [(type: String, value: String)] = [
+      ("DECIMAL(129,0)", "1" + String(repeating: "0", count: 128)),
+      ("DECIMAL(131,0)", "1" + String(repeating: "0", count: 130)),
+      ("DECIMAL(131,0)", "-1" + String(repeating: "0", count: 130)),
+      ("DECIMAL(138,0)", "-123456789" + String(repeating: "0", count: 129)),
+      ("DECIMAL(165,0)", String(Self.largestSignificand.prefix(36)) + String(repeating: "0", count: 129)),
+    ]
+    for (type, value) in notFitting {
+      let result = try connection.query("SELECT '\(value)'::\(type)")
+      let column = result[0].cast(to: Decimal.self)
+      XCTAssertNil(column[0], "\(type) \(value)")
+      XCTAssertThrowsError(try column.element(at: 0), "\(type) \(value)") { error in
+        guard case DatabaseError.decimalNotConvertible(let reason) = error else {
+          return XCTFail("unexpected error: \(error)")
+        }
+        XCTAssertEqual(reason?.contains(value), true, reason ?? "")
+      }
+      XCTAssertEqual(try result[0].cast(to: String.self).element(at: 0), value)
+    }
+  }
+
   func test_values_that_do_not_fit_decimal() throws {
     let cases: [(type: String, value: String)] = [
       ("DECIMAL(39,0)", Self.smallestOverflow),
