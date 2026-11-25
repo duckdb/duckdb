@@ -302,6 +302,7 @@ bool DebugFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpe
 
 void DebugFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
 	vector<string> inner_filenames;
+	inner_filenames.reserve(filenames.size());
 	for (auto &filename : filenames) {
 		inner_filenames.push_back(ToInner(filename));
 	}
