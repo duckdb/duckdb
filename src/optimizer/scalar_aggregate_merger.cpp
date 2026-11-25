@@ -22,30 +22,6 @@
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// Branch: [projection ->] ungrouped aggregate -> filters -> plain scan(s)
-//===--------------------------------------------------------------------===//
-//! One leaf of a cross-product tree that can be merged with its siblings
-struct ScalarAggregateMerger::Branch {
-	//! The leaf's position in the collected cross-product leaves
-	idx_t leaf_index;
-	//! The projection over the aggregate, if any
-	optional_ptr<LogicalProjection> projection;
-	reference<LogicalAggregate> aggregate;
-	//! The slot under the filters: the scan, or the cross product of scans of different tables (a FROM list)
-	reference<unique_ptr<LogicalOperator>> relation;
-	vector<reference<LogicalGet>> scans;
-	//! The filters' predicates, with ANDs split into their conjuncts
-	vector<reference<const Expression>> conjuncts;
-};
-
-//! One of the first branch's scans, which the merged leaf keeps, and the columns it gains for the other branches
-struct ScalarAggregateMerger::MergeTarget {
-	reference<LogicalGet> scan;
-	//! A column the scan gains, and the binding that column lands on
-	vector<std::pair<column_t, ColumnBinding>> added_columns;
-};
-
 //! The aggregates that are merged: FILTER (WHERE p) feeds exactly the rows where p holds, so the result over the rows
 //! where p holds equals the result with FILTER (WHERE p) over any superset of them, for empty input too
 //! (0 for the counts, NULL otherwise). min(x, n) and max(x, n) take two arguments and are not matched.
@@ -139,6 +115,7 @@ static bool SameNamedParameters(const named_argument_map_t &a, const named_argum
 
 //! Two plain scans that read the same rows: the same catalog table, or the same table function (read_parquet,
 //! read_csv, ...) called with the same arguments. What a call without arguments reads is known to its bind data alone.
+//! HashRelation must stay consistent with changes to this comparison.
 static bool IsSameRelation(const LogicalGet &a, const LogicalGet &b) {
 	if (a.function != b.function || !SameValues(a.parameters, b.parameters) ||
 	    !SameNamedParameters(a.named_parameters, b.named_parameters)) {
@@ -197,9 +174,9 @@ static hash_t HashScanParameter(const Value &value) {
 	return CombineHash(result, value.Hash());
 }
 
-//! Compatible scans must hash alike. ReadSameTables checks collisions before grouping branches.
-//! Omit values without a compatible hash: bind data without arguments has no generic hash.
-static hash_t HashScan(const LogicalGet &scan) {
+//! Equal relations must hash alike. Bind data without arguments has no generic hash and is omitted.
+//! Column selection is excluded: a target may gain columns without changing which relation it reads.
+static hash_t HashRelation(const LogicalGet &scan) {
 	auto result = CombineHash(scan.function.GetName().Hash(), Hash(CastPointerToValue(scan.GetTable().get())));
 	for (auto &parameter : scan.parameters) {
 		result = CombineHash(Hash(result), HashScanParameter(parameter));
@@ -208,7 +185,12 @@ static hash_t HashScan(const LogicalGet &scan) {
 	for (auto &entry : scan.named_parameters) {
 		named_parameters += Hash(CombineHash(entry.first.Hash(), HashScanParameter(entry.second)));
 	}
-	result = CombineHash(result, named_parameters);
+	return CombineHash(result, named_parameters);
+}
+
+//! Compatible scans must hash alike. ReadSameTables checks collisions before grouping branches.
+static hash_t HashScan(const LogicalGet &scan) {
+	auto result = HashRelation(scan);
 	if (HasOption(scan, "ignore_errors")) {
 		for (auto column : ReadColumns(scan)) {
 			result = CombineHash(Hash(result), Hash(column));
@@ -216,6 +198,63 @@ static hash_t HashScan(const LogicalGet &scan) {
 	}
 	return result;
 }
+
+//! The ordered scans of one branch, indexed by relation identity. The scans outlive this collection.
+//! Adding columns during merging does not change relation identity or invalidate the index.
+class ScalarAggregateScans {
+public:
+	bool TryAdd(LogicalGet &scan) {
+		auto &candidates = relation_index[HashRelation(scan)];
+		for (auto index : candidates) {
+			if (IsSameRelation(scans[index].get(), scan)) {
+				return false;
+			}
+		}
+		candidates.push_back(scans.size());
+		scans.push_back(scan);
+		return true;
+	}
+
+	idx_t size() const {
+		return scans.size();
+	}
+
+	using const_iterator = vector<reference<LogicalGet>>::const_iterator;
+	const_iterator begin() const {
+		return scans.begin();
+	}
+	const_iterator end() const {
+		return scans.end();
+	}
+
+private:
+	vector<reference<LogicalGet>> scans;
+	unordered_map<hash_t, vector<idx_t>> relation_index;
+};
+
+//===--------------------------------------------------------------------===//
+// Branch: [projection ->] ungrouped aggregate -> filters -> plain scan(s)
+//===--------------------------------------------------------------------===//
+//! One leaf of a cross-product tree that can be merged with its siblings
+struct ScalarAggregateMerger::Branch {
+	//! The leaf's position in the collected cross-product leaves
+	idx_t leaf_index;
+	//! The projection over the aggregate, if any
+	optional_ptr<LogicalProjection> projection;
+	reference<LogicalAggregate> aggregate;
+	//! The slot under the filters: the scan, or the cross product of scans of different tables (a FROM list)
+	reference<unique_ptr<LogicalOperator>> relation;
+	ScalarAggregateScans scans;
+	//! The filters' predicates, with ANDs split into their conjuncts
+	vector<reference<const Expression>> conjuncts;
+};
+
+//! One of the first branch's scans, which the merged leaf keeps, and the columns it gains for the other branches
+struct ScalarAggregateMerger::MergeTarget {
+	reference<LogicalGet> scan;
+	//! A column the scan gains, and the binding that column lands on
+	vector<std::pair<column_t, ColumnBinding>> added_columns;
+};
 
 static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
 	auto result = Hash(branch.scans.size());
@@ -228,7 +267,7 @@ static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
 
 //! The plain scans under `op`: one scan, or a cross product of scans of different relations (a self-join's copies of
 //! a table would not pair one to one with another branch's)
-static bool CollectScans(LogicalOperator &op, vector<reference<LogicalGet>> &scans) {
+static bool CollectScans(LogicalOperator &op, ScalarAggregateScans &scans) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		for (auto &child : op.children) {
 			if (!CollectScans(*child, scans)) {
@@ -245,13 +284,7 @@ static bool CollectScans(LogicalOperator &op, vector<reference<LogicalGet>> &sca
 	if (!IsPlainScan(scan) || RecordsRejects(scan)) {
 		return false;
 	}
-	for (auto &other : scans) {
-		if (IsSameRelation(other.get(), scan)) {
-			return false;
-		}
-	}
-	scans.push_back(scan);
-	return true;
+	return scans.TryAdd(scan);
 }
 
 //! Two branches read the same tables when their scans pair up one to one as scans that can be shared
@@ -554,7 +587,7 @@ void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<Log
 			return;
 		}
 	}
-	vector<reference<LogicalGet>> scans;
+	ScalarAggregateScans scans;
 	if (!CollectScans(*relation.get(), scans)) {
 		return;
 	}
