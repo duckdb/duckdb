@@ -44,6 +44,31 @@ SELECT x, is_histogram_other_bin(x) FROM (SELECT unnest(map_keys(histogram(x, [0
 1.50	false
 9999999.99	true
 
+# the bucket of the other values is keyed by the largest value of the key type, so a bin of that value cannot be told
+# apart from it when there are other values: that is an error, as it is for the largest value of an integer type and
+# for an infinite DOUBLE bin
+statement error
+SELECT histogram_exact(x, [99.99::DECIMAL(4,2)]) FROM (VALUES (50.00::DECIMAL(4,2)), (99.99::DECIMAL(4,2))) t(x)
+----
+<REGEX>:.*Histogram bin 99.99 collides with the key of the "other values" bucket.*
+
+statement error
+SELECT histogram_exact(x, [127::TINYINT]) FROM (VALUES (50::TINYINT), (127::TINYINT)) t(x)
+----
+<REGEX>:.*Histogram bin 127 collides with the key of the "other values" bucket.*
+
+statement error
+SELECT histogram_exact(x, ['inf'::DOUBLE]) FROM (VALUES (50::DOUBLE), ('inf'::DOUBLE)) t(x)
+----
+<REGEX>:.*collides with the key of the "other values" bucket.*
+
+# without other values the bin is reported, and a key type with more digits than the bin avoids the collision
+query III
+SELECT histogram_exact(x, [99.99::DECIMAL(4,2)]) FILTER (WHERE x > 60), histogram(x, [99.99::DECIMAL(4,2)]), histogram_exact(x, [99.99::DECIMAL(5,2)])
+FROM (VALUES (99.99::DECIMAL(4,2)), (50.00::DECIMAL(4,2))) t(x)
+----
+{99.99=1}	{99.99=2}	{99.99=1, 999.99=1}
+
 # a DOUBLE cannot tell these values apart, the bins can
 query II
 SELECT histogram(x, [12345678901234567890.12]), histogram_exact(x, [12345678901234567890.12, 12345678901234567890.14])
