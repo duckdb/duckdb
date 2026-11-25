@@ -127,11 +127,9 @@ RadixPartitionedColumnData::~RadixPartitionedColumnData() {
 void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_append_states.reserve(num_partitions);
-	state.partition_buffers.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
-		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
 
 	// Initialize fixed-size map
@@ -140,7 +138,7 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 
 void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
-	D_ASSERT(state.partition_buffers.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
+	D_ASSERT(state.partition_append_states.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
 	                                                      input.size(), *FlatVector::IncrementalSelectionVector(),
 	                                                      input.size());

@@ -30,18 +30,11 @@ PartitionedColumnData::~PartitionedColumnData() {
 
 void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) const {
 	state.partition_sel.Initialize();
-	state.slice_chunk.Initialize(BufferAllocator::Get(context), types);
 	InitializeAppendStateInternal(state);
 }
 
 bool PartitionedColumnData::UseFixedSizeMap() const {
 	return MaxPartitionIndex() < PartitionedTupleDataAppendState::MAP_THRESHOLD;
-}
-
-unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
-	auto result = make_uniq<DataChunk>();
-	result->Initialize(BufferAllocator::Get(context), types, BufferSize());
-	return result;
 }
 
 void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
@@ -145,56 +138,17 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
 	const auto &partition_entries = state.GetMap<fixed>();
 
-	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
-	SelectionVector partition_sel;
+	// Each partition receives its stretch of the partition selection, all in one append.  BuildPartitionSel left each
+	// entry's offset at the end of its stretch.
+	auto &targets = state.partition_targets;
+	targets.clear();
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
-		const auto &partition_index = GETTER::GetKey(it);
-
-		// Partition, buffer, and append state for this partition index
-		auto &partition = *partitions[partition_index];
-		auto &partition_buffer = *state.partition_buffers[partition_index];
-		auto &partition_append_state = *state.partition_append_states[partition_index];
-
-		// Length and offset into the selection vector for this chunk, for this partition
-		const auto &partition_entry = GETTER::GetValue(it);
-		const auto &partition_length = partition_entry.length;
-		const auto partition_offset = partition_entry.offset - partition_length;
-
-		// Create a selection vector for this partition using the offset into the single selection vector
-		partition_sel.Initialize(state.partition_sel.data() + partition_offset,
-		                         state.partition_sel.Capacity() - partition_offset);
-
-		if (partition_length >= HalfBufferSize()) {
-			// Slice the input chunk using the selection vector
-			state.slice_chunk.Reset();
-			state.slice_chunk.Slice(input, partition_sel, partition_length);
-
-			// Append it to the partition directly
-			partition.Append(partition_append_state, state.slice_chunk);
-		} else {
-			// Append the input chunk to the partition buffer using the selection vector
-			partition_buffer.Append(input, partition_sel, partition_length);
-
-			if (partition_buffer.size() >= HalfBufferSize()) {
-				// Next batch won't fit in the buffer, flush it to the partition
-				partition.Append(partition_append_state, partition_buffer);
-				partition_buffer.Reset();
-			}
-		}
+		const auto partition_index = GETTER::GetKey(it);
+		const auto &entry = GETTER::GetValue(it);
+		targets.push_back({*partitions[partition_index], *state.partition_append_states[partition_index],
+		                   entry.offset - entry.length, entry.offset});
 	}
-}
-
-void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
-	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
-		if (!state.partition_buffers[i]) {
-			continue;
-		}
-		auto &partition_buffer = *state.partition_buffers[i];
-		if (partition_buffer.size() > 0) {
-			partitions[i]->Append(partition_buffer);
-			partition_buffer.Reset();
-		}
-	}
+	ColumnDataCollection::AppendBatch(input, state.partition_sel, input.size(), targets);
 }
 
 void PartitionedColumnData::Combine(PartitionedColumnData &other) {
