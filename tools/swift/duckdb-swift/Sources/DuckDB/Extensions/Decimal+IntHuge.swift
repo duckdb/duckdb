@@ -23,64 +23,22 @@
 //  IN THE SOFTWARE.
 
 import Foundation
-
 public extension Decimal {
-  
+
+  /// Creates the decimal that is equal to the given 128-bit integer
   init(_ source: IntHuge) {
-#if !canImport(Darwin)
-    // swift-foundation keeps the storage of Decimal internal: go through the public arithmetic, which is exact here
-    // because every intermediate value fits the 128-bit mantissa
     let magnitude = Decimal(source.magnitude)
     self = source.signum() < 0 ? -magnitude : magnitude
-#else
-    let magnitude =  source.magnitude
-    let mantissa: (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
-    let significantBitCount = magnitude.bitWidth - magnitude.leadingZeroBitCount
-    let length = (significantBitCount + (UInt16.bitWidth - 1)) / UInt16.bitWidth
-    mantissa.0 = UInt16(truncatingIfNeeded: magnitude >> (0 * 16))
-    mantissa.1 = UInt16(truncatingIfNeeded: magnitude >> (1 * 16))
-    mantissa.2 = UInt16(truncatingIfNeeded: magnitude >> (2 * 16))
-    mantissa.3 = UInt16(truncatingIfNeeded: magnitude >> (3 * 16))
-    mantissa.4 = UInt16(truncatingIfNeeded: magnitude >> (4 * 16))
-    mantissa.5 = UInt16(truncatingIfNeeded: magnitude >> (5 * 16))
-    mantissa.6 = UInt16(truncatingIfNeeded: magnitude >> (6 * 16))
-    mantissa.7 = UInt16(truncatingIfNeeded: magnitude >> (7 * 16))
-    self = .init(
-      _exponent: 0,
-      _length: UInt32(length),
-      _isNegative: source.signum() < 0 ? 1 : 0,
-      _isCompact: 0,
-      _reserved: 0,
-      _mantissa: mantissa
-    )
-#endif
   }
-  
+
+  /// Creates the decimal that is equal to the given unsigned 128-bit integer
+  ///
+  /// Only public `Decimal` arithmetic is used, so that the same code runs on
+  /// every platform. It is exact: both halves and their combination fit the
+  /// 128-bit significand of a `Decimal`.
   init(_ source: UIntHuge) {
-#if !canImport(Darwin)
     let twoToThe64th = Decimal(UInt64.max) + 1
     self = Decimal(UInt64(truncatingIfNeeded: source >> 64)) * twoToThe64th
       + Decimal(UInt64(truncatingIfNeeded: source))
-#else
-    let mantissa: (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
-    let significantBitCount = source.bitWidth - source.leadingZeroBitCount
-    let length = (significantBitCount + (UInt16.bitWidth - 1)) / UInt16.bitWidth
-    mantissa.0 = UInt16(truncatingIfNeeded: source >> (0 * 16))
-    mantissa.1 = UInt16(truncatingIfNeeded: source >> (1 * 16))
-    mantissa.2 = UInt16(truncatingIfNeeded: source >> (2 * 16))
-    mantissa.3 = UInt16(truncatingIfNeeded: source >> (3 * 16))
-    mantissa.4 = UInt16(truncatingIfNeeded: source >> (4 * 16))
-    mantissa.5 = UInt16(truncatingIfNeeded: source >> (5 * 16))
-    mantissa.6 = UInt16(truncatingIfNeeded: source >> (6 * 16))
-    mantissa.7 = UInt16(truncatingIfNeeded: source >> (7 * 16))
-    self = .init(
-      _exponent: 0,
-      _length: UInt32(length),
-      _isNegative: 0,
-      _isCompact: 0,
-      _reserved: 0,
-      _mantissa: mantissa
-    )
-#endif
   }
 }
