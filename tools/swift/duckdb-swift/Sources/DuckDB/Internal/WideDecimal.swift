@@ -44,13 +44,13 @@ struct WideDecimal {
   init(bignumStorage storage: Data) throws {
     let bytes = [UInt8](storage)
     guard bytes.count > Self.headerSize else {
-      throw DatabaseError.decimalNotRepresentable(reason: "malformed DECIMAL storage: \(bytes.count) bytes")
+      throw DatabaseError.decimalNotConvertible(reason: "malformed DECIMAL storage: \(bytes.count) bytes")
     }
     let isNegative = bytes[0] & 0x80 == 0
     let mask: UInt8 = isNegative ? 0xFF : 0x00
     let header = bytes[..<Self.headerSize].reduce(0) { ($0 << 8) | Int($1 ^ mask) }
     guard header & 0x7FFFFF == bytes.count - Self.headerSize else {
-      throw DatabaseError.decimalNotRepresentable(reason: "malformed DECIMAL storage: unexpected header")
+      throw DatabaseError.decimalNotConvertible(reason: "malformed DECIMAL storage: unexpected header")
     }
     self.isNegative = isNegative
     self.digits = Self.decimalDigits(magnitude: bytes[Self.headerSize...].map { $0 ^ mask })

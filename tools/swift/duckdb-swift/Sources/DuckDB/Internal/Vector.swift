@@ -188,7 +188,7 @@ extension Vector {
       let (value, scale) = try unwrapWideDecimal(properties: props, at: index)
       guard let decimal = value.decimal(scale: scale) else {
         let digits = value.string(width: Int(props.width), scale: scale)
-        throw DatabaseError.decimalNotRepresentable(
+        throw DatabaseError.decimalNotConvertible(
           reason: "DECIMAL(\(props.width),\(props.scale)) value \(digits) does not fit "
             + "a Foundation Decimal exactly; cast the column to String for its digits")
       }
@@ -240,7 +240,7 @@ extension Vector {
     guard properties.width > 0 else {
       // DuckDB's C API reports width and scale as UInt8, and both as zero for
       // a type that does not fit: the position of the decimal point is unknown
-      throw DatabaseError.decimalNotRepresentable(
+      throw DatabaseError.decimalNotConvertible(
         reason: "the scale of a DECIMAL of more than 255 digits is not available; cast it to VARCHAR in the query")
     }
     let storage = unsafelyUnwrapElement(as: duckdb_blob.self, at: index) { $0.asData }

@@ -47,6 +47,58 @@ final class WideDecimalTests: XCTestCase {
     XCTAssertEqual(result[0].cast(to: String.self)[0], "3.00")
   }
 
+  /// A session with `max_decimal_width = 38` still takes a bound value of
+  /// more than 38 digits exactly, as a wide DECIMAL; the limit applies to
+  /// what the query then computes from it.
+  func test_bind_wide_value_in_compatibility_session() throws {
+    let connection = try Database(store: .inMemory).connect()
+    try connection.execute("SET max_decimal_width = 38")
+    let wide: [(value: Decimal, type: String, text: String)] = [
+      // a significand of 39 digits
+      (Decimal(string: "170141183460469231731687303715884105727")!, "DECIMAL(39,0)",
+       "170141183460469231731687303715884105727"),
+      (Decimal(sign: .minus, exponent: 38, significand: 1), "DECIMAL(39,0)",
+       "-1" + String(repeating: "0", count: 38)),
+      // more than 38 fractional digits
+      (Decimal(sign: .plus, exponent: -40, significand: 1), "DECIMAL(40,40)",
+       "." + String(repeating: "0", count: 39) + "1"),
+    ]
+    let select = try PreparedStatement(connection: connection, query: "SELECT $1, typeof($1), ($1)::VARCHAR")
+    let addition = try PreparedStatement(connection: connection, query: "SELECT $1 + 1")
+    for (value, type, text) in wide {
+      try select.bind(value, at: 1)
+      let result = try select.execute()
+      XCTAssertEqual(result[1].cast(to: String.self)[0], type)
+      XCTAssertEqual(result[2].cast(to: String.self)[0], text)
+      XCTAssertEqual(result[0].cast(to: String.self)[0], text)
+      XCTAssertEqual(result[0].cast(to: Decimal.self)[0], value)
+      // arithmetic that needs a wider decimal is refused by the database
+      try addition.bind(value, at: 1)
+      XCTAssertThrowsError(try addition.execute(), "\(value)") { error in
+        guard case DatabaseError.preparedStatementQueryError(let reason) = error else {
+          return XCTFail("unexpected error: \(error)")
+        }
+        XCTAssertTrue(reason?.contains("the maximum DECIMAL width is 38") == true, "\(String(describing: reason))")
+      }
+    }
+    // a value of up to 38 digits binds as before
+    try select.bind(Decimal(string: "-1.5")!, at: 1)
+    let narrow = try select.execute()
+    XCTAssertEqual(narrow[1].cast(to: String.self)[0], "DECIMAL(38,1)")
+    XCTAssertEqual(narrow[0].cast(to: Decimal.self)[0], Decimal(string: "-1.5"))
+    // a value that does not fit the target column is refused, not truncated
+    try connection.execute("CREATE TABLE t1(d DECIMAL(38,10))")
+    let insert = try PreparedStatement(connection: connection, query: "INSERT INTO t1 VALUES ($1)")
+    try insert.bind(wide[0].value, at: 1)
+    XCTAssertThrowsError(try insert.execute()) { error in
+      guard case DatabaseError.preparedStatementQueryError(let reason) = error else {
+        return XCTFail("unexpected error: \(error)")
+      }
+      XCTAssertTrue(reason?.contains("value is out of range") == true, "\(String(describing: reason))")
+    }
+    XCTAssertEqual(try connection.query("SELECT count(*) FROM t1")[0].cast(to: Int.self)[0], 0)
+  }
+
   func test_compatibility_session_arithmetic_result() throws {
     let connection = try Database(store: .inMemory).connect()
     try connection.execute("SET max_decimal_width = 38")
@@ -134,7 +186,7 @@ final class WideDecimalTests: XCTestCase {
       let column = result[0].cast(to: Decimal.self)
       XCTAssertNil(column[0], "\(type) \(value)")
       XCTAssertThrowsError(try column.element(at: 0), "\(type) \(value)") { error in
-        guard case DatabaseError.decimalNotRepresentable(let reason) = error else {
+        guard case DatabaseError.decimalNotConvertible(let reason) = error else {
           return XCTFail("unexpected error: \(error)")
         }
         // the error names the exact value
@@ -171,12 +223,12 @@ final class WideDecimalTests: XCTestCase {
     XCTAssertNil(result[0].cast(to: Decimal.self)[0])
     XCTAssertNil(result[0].cast(to: String.self)[0])
     XCTAssertThrowsError(try result[0].cast(to: Decimal.self).element(at: 0)) { error in
-      guard case DatabaseError.decimalNotRepresentable = error else {
+      guard case DatabaseError.decimalNotConvertible = error else {
         return XCTFail("unexpected error: \(error)")
       }
     }
     XCTAssertThrowsError(try result[0].cast(to: String.self).element(at: 0)) { error in
-      guard case DatabaseError.decimalNotRepresentable = error else {
+      guard case DatabaseError.decimalNotConvertible = error else {
         return XCTFail("unexpected error: \(error)")
       }
     }
@@ -263,7 +315,7 @@ final class WideDecimalTests: XCTestCase {
     XCTAssertEqual(negative.decimal(scale: 2), Decimal(string: "-2.56"))
     for malformed in [Data(), Data([0x80, 0x00, 0x01]), Data([0x80, 0x00, 0x02, 0x01])] {
       XCTAssertThrowsError(try WideDecimal(bignumStorage: malformed)) { error in
-        guard case DatabaseError.decimalNotRepresentable = error else {
+        guard case DatabaseError.decimalNotConvertible = error else {
           return XCTFail("unexpected error: \(error)")
         }
       }
