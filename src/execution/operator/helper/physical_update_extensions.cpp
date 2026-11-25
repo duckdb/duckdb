@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_update_extensions.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/callback_async_task.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -15,17 +14,7 @@ static SourceResultType ScheduleUpdates(ExecutionContext &context, UpdateExtensi
 		tasks.push_back(make_uniq<CallbackAsyncTask>(
 		    [&client, &pending, &result]() { ExtensionHelper::ExecuteExtensionUpdate(client, pending, result); }));
 	}
-	auto async_result = AsyncResult::FromTasks(std::move(tasks), TaskSchedulerType::ASYNC);
-
-	if (input.interrupt_state.CanCallback()) {
-		annotated_lock_guard<annotated_mutex> guard(data.lock);
-		if (data.CanBlock()) {
-			async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
-			return SourceResultType::BLOCKED;
-		}
-	}
-	async_result.ExecuteTasksSynchronously(client);
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(std::move(tasks), TaskSchedulerType::ASYNC).ScheduleOrExecute(context, input, data);
 }
 
 SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
