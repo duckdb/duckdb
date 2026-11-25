@@ -1,7 +1,14 @@
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -106,6 +113,183 @@ struct DecimalAvgOperation {
 };
 
 //===--------------------------------------------------------------------===//
+// The bignum_t tier: decimals wider than 38 digits
+//
+// The state is an exact BIGNUM sum and a non-NULL row count; the sum is divided once at the end with the rounding of
+// the fixed-size tiers (half to even). The sum has no bound, so this tier cannot overflow.
+//===--------------------------------------------------------------------===//
+
+struct WideDecimalAvgState {
+	uint64_t count;
+	BignumIntermediate sum;
+};
+
+struct WideDecimalAvgOperation {
+	static bool IgnoreNull() {
+		return true;
+	}
+
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.sum = BignumIntermediate();
+	}
+
+	template <class INPUT, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT &input, AggregateUnaryInput &unary_input) {
+		if (state.count == 0) {
+			state.sum.Initialize(unary_input.input.allocator);
+		}
+		state.count++;
+		const BignumIntermediate value(input);
+		state.sum.AddInPlace(unary_input.input.allocator, value);
+	}
+
+	template <class INPUT, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT &input, AggregateUnaryInput &unary_input, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT, STATE, OP>(state, input, unary_input);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
+		if (source.count == 0) {
+			return;
+		}
+		if (target.count == 0) {
+			target.sum.Initialize(input.allocator);
+		}
+		target.count += source.count;
+		target.sum.AddInPlace(input.allocator, source.sum);
+	}
+
+	template <class RESULT, class STATE>
+	static void Finalize(STATE &state, RESULT &target, AggregateFinalizeData &finalize_data) {
+		// the state is only read: it is exported while other threads may still read it
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		StringHeap heap;
+		BignumArithmeticState arithmetic;
+		const string count_blob = DecimalHelper<bignum_t>::FromInteger(uhugeint_t(state.count));
+		const bignum_t count_value {string_t(count_blob)};
+		const BignumIntermediate divisor(count_value);
+		string_t quotient;
+		string_t remainder;
+		if (!BignumIntermediate::TryDivMod(heap, arithmetic, state.sum, divisor, quotient, remainder)) {
+			throw InternalException("decimal_average: division of the sum by the count failed");
+		}
+		if (!DecimalHelper<bignum_t>::IsZero(bignum_t(remainder))) {
+			// the quotient is truncated towards zero: round half to even, away from zero in the sign of the sum
+			const bignum_t remainder_value(remainder);
+			const BignumIntermediate remainder_intermediate(remainder_value);
+			const bignum_t twice_remainder {
+			    BignumIntermediate::Add(heap, remainder_intermediate, remainder_intermediate)};
+			const BignumIntermediate twice_remainder_intermediate(twice_remainder);
+			const bignum_t quotient_value(quotient);
+			const BignumIntermediate quotient_intermediate(quotient_value);
+			const auto comparison = twice_remainder_intermediate.IsAbsoluteBigger(divisor);
+			const bool quotient_is_odd =
+			    quotient_intermediate.GetAbsoluteByte(NumericCast<int64_t>(quotient_intermediate.size) - 1) & 1;
+			if (comparison == GREATER || (comparison == EQUAL && quotient_is_odd)) {
+				const bool negative = DecimalHelper<bignum_t>::IsNegative(remainder_value);
+				const string step_blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(negative ? -1 : 1));
+				const bignum_t step_value {string_t(step_blob)};
+				const BignumIntermediate step(step_value);
+				quotient = BignumIntermediate::Add(heap, quotient_intermediate, step);
+			}
+		}
+		// the average of values of the width fits the width, but an imported state can carry any sum
+		const auto &result_type = finalize_data.result.GetType();
+		if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(quotient), DecimalType::GetWidth(result_type))) {
+			throw OutOfRangeException("decimal_average: the result does not fit in %s", result_type.ToString());
+		}
+		// the result outlives the scratch heap in the arena of the aggregate
+		auto result_data = finalize_data.input.allocator.Allocate(quotient.GetSize());
+		memcpy(result_data, quotient.GetData(), quotient.GetSize());
+		target = bignum_t(string_t(const_char_ptr_cast(result_data), UnsafeNumericCast<uint32_t>(quotient.GetSize())));
+	}
+};
+
+//! The states are exported as STRUCT(sum BIGNUM, count UBIGINT), the sum is NULL for an empty state
+static AggregateStateLayout WideDecimalAvgStateLayout(AggregateLayoutInput &input) {
+	return AggregateStateLayout(LogicalType::STRUCT({{"sum", LogicalType::BIGNUM}, {"count", LogicalType::UBIGINT}}),
+	                            AlignValue<idx_t>(sizeof(WideDecimalAvgState)));
+}
+
+static void WideDecimalAvgExportState(Vector &state_vector, AggregateFinalizeInputData &input, Vector &result,
+                                      idx_t count, idx_t offset) {
+	auto states = state_vector.Values<WideDecimalAvgState *>();
+	auto writer = FlatVector::Writer<VectorStructType<string_t, uint64_t>>(result, count, offset);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		writer.WriteValue([&](auto &sum_writer, auto &count_writer) {
+			if (state.count == 0) {
+				sum_writer.WriteNull();
+			} else {
+				// the sum is trimmed on the way out, the state itself is only read
+				sum_writer.WriteValue(state.sum.ToBignum(input.allocator).data);
+			}
+			count_writer.WriteValue(state.count);
+		});
+	}
+}
+
+static void WideDecimalAvgImportState(AggregateImportInputData &input) {
+	auto entries = input.input_vec.Values<VectorStructType<string_t, uint64_t>>();
+	for (idx_t i = 0; i < input.input_vec.size(); i++) {
+		auto &state = *reinterpret_cast<WideDecimalAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
+		WideDecimalAvgOperation::Initialize(state);
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
+			// an empty state
+			continue;
+		}
+		const auto sum_entry = entry.template GetChildValue<0>();
+		const auto count_entry = entry.template GetChildValue<1>();
+		if (!count_entry.IsValid() || count_entry.GetValue() == 0) {
+			continue;
+		}
+		if (!sum_entry.IsValid()) {
+			throw InvalidInputException(
+			    "Invalid decimal_average state - the sum cannot be NULL when the count is not 0");
+		}
+		const auto blob = sum_entry.GetValue();
+		const auto size = blob.GetSize();
+		if (size < Bignum::BIGNUM_HEADER_SIZE + 1) {
+			throw InvalidInputException(
+			    "Invalid decimal_average state - the sum is shorter than a BIGNUM header and a byte");
+		}
+		// the header holds the data size, inverted for negative values (see Bignum::SetHeader)
+		auto header = const_data_ptr_cast(blob.GetData());
+		uint32_t data_size = (uint32_t(header[0]) << 16) | (uint32_t(header[1]) << 8) | uint32_t(header[2]);
+		if ((header[0] & 0x80) == 0) {
+			data_size = ~data_size;
+		}
+		data_size &= 0x7FFFFF;
+		if (size != data_size + Bignum::BIGNUM_HEADER_SIZE) {
+			throw InvalidInputException(
+			    "Invalid decimal_average state - the BIGNUM header of the sum does not match its size");
+		}
+		// the state owns a copy of the sum in the arena
+		auto ptr = input.allocator.Allocate(size);
+		memcpy(ptr, blob.GetData(), size);
+		state.count = count_entry.GetValue();
+		state.sum = BignumIntermediate(ptr, size);
+	}
+}
+
+static AggregateFunction MakeWideDecimalAvgFunction(const LogicalType &type) {
+	auto function =
+	    AggregateFunction::UnaryAggregate<WideDecimalAvgState, bignum_t, bignum_t, WideDecimalAvgOperation>(type, type);
+	function.SetFallible(); // the finalize throws when the average of an imported state does not fit the width
+	function.SetStateExportCallbacks(WideDecimalAvgStateLayout, WideDecimalAvgExportState, WideDecimalAvgImportState);
+	return function;
+}
+
+//===--------------------------------------------------------------------===//
 // Registration
 //===--------------------------------------------------------------------===//
 
@@ -159,8 +343,9 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		    MakeDecimalAvgFunction<hugeint_t>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, scale), return_type));
 		break;
 	case PhysicalType::VARCHAR:
-		throw NotImplementedException("decimal_average over DECIMAL types wider than %d digits is not supported yet",
-		                              Decimal::MAX_WIDTH_INT128);
+		// decimals wider than 38 digits sum their BIGNUM blobs
+		function.ReplaceImplementation(MakeWideDecimalAvgFunction(return_type));
+		break;
 	default:
 		throw InternalException("decimal_average: unexpected physical type");
 	}
