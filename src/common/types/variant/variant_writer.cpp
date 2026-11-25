@@ -1,41 +1,20 @@
 #include "duckdb/common/types/variant_writer.hpp"
-#include "duckdb/common/types/variant/variant_builder.hpp"
 
 namespace duckdb {
 
-//! A row written to a VectorWriter<VectorVariantType>, the entries are relative to the start of the builder
-struct VariantWriterRow {
-	list_entry_t keys;
-	list_entry_t children;
-	list_entry_t values;
-	//! the encoded value, owned by the heap of the data vector
-	string_t blob;
-	bool is_null;
-};
-
-struct VariantWriterState {
-	VariantWriterState() : keys_arena(Allocator::DefaultAllocator()), builder(dictionary, keys_arena) {
-	}
-
-	//! owns the keys of the dictionary, they are copied into the keys vector when the rows are written
-	ArenaAllocator keys_arena;
-	OrderedOwningStringMap<uint32_t> dictionary;
-	VariantBuilder builder;
-	vector<VariantWriterRow> rows;
-};
-
 namespace {
 
-//! Primitives are emitted directly, only containers need the traversal of EmitIterator
-void EmitVariantNode(const VariantNode &node, VariantBuilder &builder) {
-	if (!node.IsNull() && !node.IsMissing()) {
-		const auto type = node.GetTypeId();
-		if (type != VariantLogicalType::OBJECT && type != VariantLogicalType::ARRAY) {
-			builder.EmitPrimitiveNode(node, type);
-			return;
-		}
+//! Copies the list entries of the rows to 'target', moved to start at 'offset'
+void CopyListEntries(list_entry_t *target, const vector<list_entry_t> &entries, idx_t offset) {
+	const auto count = entries.size();
+	const auto source = entries.data();
+	if (offset == 0) {
+		memcpy(target, source, count * sizeof(list_entry_t));
+		return;
 	}
-	EmitIterator(node, builder);
+	for (idx_t i = 0; i < count; i++) {
+		target[i] = list_entry_t(source[i].offset + offset, source[i].length);
+	}
 }
 
 } // namespace
@@ -57,54 +36,36 @@ VectorWriter<VectorVariantType>::~VectorWriter() { // NOLINT(bugprone-exception-
 	}
 }
 
-VariantWriterState &VectorWriter<VectorVariantType>::GetState() {
-	if (!state) {
-		state = make_uniq<VariantWriterState>();
-	}
-	return *state;
+void VectorWriter<VectorVariantType>::InitializeState() {
+	state = make_uniq<VariantWriterState>();
+	const auto row_count = count - current_idx;
+	state->keys.reserve(row_count);
+	state->children.reserve(row_count);
+	state->values.reserve(row_count);
+	state->blobs.reserve(row_count);
 }
 
-void VectorWriter<VectorVariantType>::WriteNull() {
-	D_ASSERT(current_idx < count);
-	auto &writer_state = GetState();
-	auto &builder = writer_state.builder;
-	VariantWriterRow row;
-	row.keys = list_entry_t(builder.key_slots.size(), 0);
-	row.children = list_entry_t(builder.child_value_ids.size(), 0);
-	row.values = list_entry_t(builder.type_ids.size(), 0);
-	row.blob = string_t(0U);
-	row.is_null = true;
-	writer_state.rows.push_back(row);
-	current_idx++;
+StringHeap &VectorWriter<VectorVariantType>::InitializeBlobHeap() {
+	state->blob_heap = StringVector::GetStringHeap(VariantVector::GetData(variant));
+	return *state->blob_heap;
 }
 
-void VectorWriter<VectorVariantType>::WriteValue(const VariantNode &node) {
-	D_ASSERT(current_idx < count);
-	auto &writer_state = GetState();
-	auto &builder = writer_state.builder;
-	builder.BeginRow();
-	EmitVariantNode(node, builder);
-	if (builder.blob.size() > NumericLimits<uint32_t>::Maximum()) {
-		throw InvalidInputException(
-		    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
-		    NumericLimits<uint32_t>::Maximum());
-	}
-	VariantWriterRow row;
-	row.keys = list_entry_t(builder.row_keys, builder.LocalKey());
-	row.children = list_entry_t(builder.row_children, builder.LocalChild());
-	row.values = list_entry_t(builder.row_values, builder.LocalValue());
-	row.blob = StringVector::AddStringOrBlob(VariantVector::GetData(variant),
-	                                         string_t(builder.blob.data(), NumericCast<uint32_t>(builder.blob.size())));
-	row.is_null = false;
-	writer_state.rows.push_back(row);
-	current_idx++;
+void VectorWriter<VectorVariantType>::ThrowRowTooLarge() {
+	throw InvalidInputException(
+	    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+	    NumericLimits<uint32_t>::Maximum());
+}
+
+void VectorWriter<VectorVariantType>::EmitContainer(const VariantNode &node, VariantBuilder &builder) {
+	EmitIterator(node, builder);
 }
 
 void VectorWriter<VectorVariantType>::Finalize() {
-	auto &rows = state->rows;
-	auto &builder = state->builder;
-	D_ASSERT(rows.size() == current_idx - start_idx);
-	if (rows.empty()) {
+	auto &writer_state = *state;
+	auto &builder = writer_state.builder;
+	const auto row_count = writer_state.blobs.size();
+	D_ASSERT(row_count == current_idx - start_idx);
+	if (row_count == 0) {
 		return;
 	}
 
@@ -131,17 +92,14 @@ void VectorWriter<VectorVariantType>::Finalize() {
 	ListVector::Reserve(values, values_offset + total_values);
 	ListVector::SetListSize(values, values_offset + total_values);
 
+	//! rows
 	VariantVectorData variant_data(variant);
-	for (idx_t i = 0; i < rows.size(); i++) {
-		auto &row = rows[i];
-		const auto row_idx = start_idx + i;
-		variant_data.keys_data[row_idx] = list_entry_t(keys_offset + row.keys.offset, row.keys.length);
-		variant_data.children_data[row_idx] = list_entry_t(children_offset + row.children.offset, row.children.length);
-		variant_data.values_data[row_idx] = list_entry_t(values_offset + row.values.offset, row.values.length);
-		variant_data.blob_data[row_idx] = row.blob;
-		if (row.is_null) {
-			FlatVector::SetNull(variant, row_idx, true);
-		}
+	CopyListEntries(variant_data.keys_data + start_idx, writer_state.keys, keys_offset);
+	CopyListEntries(variant_data.children_data + start_idx, writer_state.children, children_offset);
+	CopyListEntries(variant_data.values_data + start_idx, writer_state.values, values_offset);
+	memcpy(variant_data.blob_data + start_idx, writer_state.blobs.data(), row_count * sizeof(string_t));
+	for (auto row : writer_state.null_rows) {
+		FlatVector::SetNull(variant, start_idx + row, true);
 	}
 
 	//! values
@@ -152,24 +110,28 @@ void VectorWriter<VectorVariantType>::Finalize() {
 	}
 
 	//! children
+	const auto child_value_ids = builder.child_value_ids.data();
+	const auto child_key_ids = builder.child_key_ids.data();
 	for (idx_t i = 0; i < total_children; i++) {
 		const auto child_idx = children_offset + i;
-		variant_data.values_index_data[child_idx] = builder.child_value_ids[i];
-		if (builder.child_key_ids[i] == VARIANT_INVALID_KEY) {
+		variant_data.values_index_data[child_idx] = child_value_ids[i];
+		if (child_key_ids[i] == VARIANT_INVALID_KEY) {
 			variant_data.keys_index_validity.SetInvalid(child_idx);
 		} else {
-			variant_data.keys_index_data[child_idx] = builder.child_key_ids[i];
+			variant_data.keys_index_data[child_idx] = child_key_ids[i];
 		}
 	}
 
 	//! keys: copy each distinct key into the keys vector once, then point every key slot at its copy
-	vector<string_t> dictionary_keys(state->dictionary.size());
-	for (auto &entry : state->dictionary) {
-		dictionary_keys[entry.second] = StringVector::AddStringOrBlob(keys_entry, entry.first);
+	vector<string_t> dictionary_keys(writer_state.dictionary.size());
+	const auto dictionary_data = dictionary_keys.data();
+	for (auto &entry : writer_state.dictionary) {
+		dictionary_data[entry.second] = StringVector::AddStringOrBlob(keys_entry, entry.first);
 	}
+	const auto key_slots = builder.key_slots.data();
 	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 	for (idx_t i = 0; i < total_keys; i++) {
-		keys_entry_data[keys_offset + i] = dictionary_keys[builder.key_slots[i]];
+		keys_entry_data[keys_offset + i] = dictionary_data[key_slots[i]];
 	}
 }
 

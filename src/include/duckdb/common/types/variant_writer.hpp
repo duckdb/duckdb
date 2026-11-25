@@ -9,12 +9,30 @@
 #pragma once
 
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/common/types/variant/variant_builder.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
-class VariantNode;
-struct VariantWriterState;
+//! The rows collected by a VectorWriter<VectorVariantType>
+struct VariantWriterState {
+	VariantWriterState() : keys_arena(Allocator::DefaultAllocator()), builder(dictionary, keys_arena) {
+	}
+
+	//! owns the keys of the dictionary, they are copied into the keys vector when the rows are written
+	ArenaAllocator keys_arena;
+	OrderedOwningStringMap<uint32_t> dictionary;
+	VariantBuilder builder;
+	//! per row: its keys, children and values in the builder, and its encoded value (owned by the data vector)
+	vector<list_entry_t> keys;
+	vector<list_entry_t> children;
+	vector<list_entry_t> values;
+	vector<string_t> blobs;
+	//! the rows written as SQL NULL, relative to the first row of the writer
+	vector<idx_t> null_rows;
+	//! the heap of the data vector, looked up when the first blob that is not inlined is written
+	optional_ptr<StringHeap> blob_heap;
+};
 
 //! Specialization of VectorWriter for VectorVariantType.
 //! The rows are collected in a single VariantBuilder and written to the vector when the writer is destroyed. The
@@ -26,9 +44,45 @@ struct VectorWriter<VectorVariantType> {
 	DUCKDB_API ~VectorWriter();
 
 	//! Write a SQL NULL
-	DUCKDB_API void WriteNull();
+	void WriteNull() {
+		D_ASSERT(current_idx < count);
+		auto &writer_state = GetState();
+		auto &builder = writer_state.builder;
+		writer_state.null_rows.push_back(current_idx - start_idx);
+		writer_state.keys.emplace_back(builder.key_slots.size(), 0);
+		writer_state.children.emplace_back(builder.child_value_ids.size(), 0);
+		writer_state.values.emplace_back(builder.type_ids.size(), 0);
+		writer_state.blobs.emplace_back(0U);
+		current_idx++;
+	}
+
 	//! Write a copy of the value 'node' points at. A NULL or missing node is written as a VARIANT null value.
-	DUCKDB_API void WriteValue(const VariantNode &node);
+	void WriteValue(const VariantNode &node) {
+		if (node.IsNull() || node.IsMissing()) {
+			D_ASSERT(current_idx < count);
+			auto &builder = GetState().builder;
+			builder.BeginRow();
+			builder.EmitNull();
+			FinishRow();
+			return;
+		}
+		WriteValue(node, node.GetTypeId());
+	}
+
+	//! Write a copy of the value 'node' points at, for a node that is not NULL or missing and whose type is 'type_id'.
+	//! Saves looking up the type again when the caller already has it.
+	void WriteValue(const VariantNode &node, VariantLogicalType type_id) {
+		D_ASSERT(current_idx < count);
+		D_ASSERT(!node.IsNull() && !node.IsMissing() && node.GetTypeId() == type_id);
+		auto &builder = GetState().builder;
+		builder.BeginRow();
+		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
+			EmitContainer(node, builder);
+		} else {
+			builder.EmitPrimitiveNode(node, type_id);
+		}
+		FinishRow();
+	}
 
 	void Truncate() noexcept {
 		count = current_idx;
@@ -42,7 +96,38 @@ private:
 	void Extend(idx_t n) {
 		count += n;
 	}
-	VariantWriterState &GetState();
+
+	VariantWriterState &GetState() {
+		if (!state) {
+			InitializeState();
+		}
+		return *state;
+	}
+
+	//! Records the row the builder just emitted
+	void FinishRow() {
+		auto &writer_state = *state;
+		auto &builder = writer_state.builder;
+		const auto blob_size = builder.blob.size();
+		if (blob_size > NumericLimits<uint32_t>::Maximum()) {
+			ThrowRowTooLarge();
+		}
+		writer_state.keys.emplace_back(builder.row_keys, builder.key_slots.size() - builder.row_keys);
+		writer_state.children.emplace_back(builder.row_children, builder.child_value_ids.size() - builder.row_children);
+		writer_state.values.emplace_back(builder.row_values, builder.type_ids.size() - builder.row_values);
+		string_t blob(builder.blob.data(), static_cast<uint32_t>(blob_size));
+		if (!blob.IsInlined()) {
+			auto &heap = writer_state.blob_heap ? *writer_state.blob_heap : InitializeBlobHeap();
+			blob = heap.AddBlob(blob);
+		}
+		writer_state.blobs.push_back(blob);
+		current_idx++;
+	}
+
+	DUCKDB_API void InitializeState();
+	DUCKDB_API StringHeap &InitializeBlobHeap();
+	DUCKDB_API static void ThrowRowTooLarge();
+	DUCKDB_API static void EmitContainer(const VariantNode &node, VariantBuilder &builder);
 	void Finalize();
 
 private:

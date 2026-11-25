@@ -37,22 +37,28 @@ vector<optional<string_t>> VariantPathFunction::GetSingleKeys(const vector<vecto
 void VariantPathFunction::ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
                                        const vector<optional<string_t>> &keys,
                                        vector<optional<VariantNode>> &selected) {
+	//! Copied into locals so the matching loop keeps them in registers
+	const auto path_count = paths.size();
+	const auto key_data = keys.data();
+	const auto selected_data = selected.data();
+
 	idx_t pending = 0;
-	for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
-		if (keys[path_idx]) {
-			selected[path_idx].reset();
+	for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
+		if (key_data[path_idx]) {
+			selected_data[path_idx].reset();
 			pending++;
 		} else {
-			selected[path_idx] = ResolvePath(root, paths[path_idx]);
+			selected_data[path_idx] = ResolvePath(root, paths[path_idx]);
 		}
 	}
 	if (pending == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
 		return;
 	}
 	for (const auto &entry : root.GetObjectChildren()) {
-		for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
-			auto &value = selected[path_idx];
-			if (keys[path_idx] && !value && *keys[path_idx] == entry.key) {
+		for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
+			auto &value = selected_data[path_idx];
+			const auto &key = key_data[path_idx];
+			if (key && !value && *key == entry.key) {
 				value = entry.value;
 				pending--;
 			}

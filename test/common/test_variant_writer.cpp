@@ -89,10 +89,21 @@ TEST_CASE("VectorWriter<VectorVariantType> copies VARIANT values", "[variant][va
 	const VectorIterator<VectorVariantType> variants(input);
 
 	Vector result(LogicalType::VARIANT(), count);
-	{
+	SECTION("WriteValue(node)") {
 		auto writer = FlatVector::Writer<VectorVariantType>(result, count);
 		for (idx_t row = 0; row < count; row++) {
 			WriteRow(variants, row, writer);
+		}
+	}
+	SECTION("WriteValue(node, type_id)") {
+		auto writer = FlatVector::Writer<VectorVariantType>(result, count);
+		for (idx_t row = 0; row < count; row++) {
+			if (!variants.RowIsValid(row)) {
+				writer.WriteNull();
+				continue;
+			}
+			const auto node = variants[row];
+			writer.WriteValue(node, node.GetTypeId());
 		}
 	}
 	result.Verify();
