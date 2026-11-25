@@ -1110,26 +1110,6 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 	return true;
 }
 
-//! Returns true, if the scan casts an extracted struct or variant field while reading it.
-static bool HasPushdownCast(const ColumnIndex &index) {
-	if (index.IsPushdownExtract()) {
-		auto &child = index.GetChildIndex(0);
-		if (!child.HasChildren()) {
-			auto &source_type = index.GetType();
-			auto &field_type = child.HasPrimaryIndex()
-			                       ? StructType::GetChildTypes(source_type)[child.GetPrimaryIndex()].second
-			                       : source_type;
-			return child.GetType() != field_type;
-		}
-	}
-	for (auto &child : index.GetChildIndexes()) {
-		if (HasPushdownCast(child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	D_ASSERT(input.bind_data);
 
@@ -1168,7 +1148,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// With a pushed-down cast, we only use an index scan that returns exactly the matching rows.
 	bool require_exact = false;
 	for (auto &col_idx : input.column_indexes) {
-		if (HasPushdownCast(col_idx)) {
+		if (col_idx.HasPushdownCast()) {
 			require_exact = true;
 			break;
 		}

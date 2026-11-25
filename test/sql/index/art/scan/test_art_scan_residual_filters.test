@@ -216,13 +216,13 @@ ROLLBACK;
 # A cast of a projected struct field must not run on rows that the filters reject.
 
 statement ok
-CREATE TABLE cast_tbl(i INTEGER, j INTEGER, s STRUCT(x VARCHAR), n STRUCT(y STRUCT(x VARCHAR)));
+CREATE TABLE cast_tbl(i INTEGER, j INTEGER, s STRUCT(x VARCHAR), n STRUCT(y STRUCT(x VARCHAR)), v VARIANT, sv STRUCT(v VARIANT));
 
 statement ok
 INSERT INTO cast_tbl VALUES
-	(0, 0, {'x': '1'}, {'y': {'x': '1'}}),
-	(5, 1, {'x': 'bad'}, {'y': {'x': 'bad'}}),
-	(6, 0, {'x': '2'}, {'y': {'x': '2'}});
+	(0, 0, {'x': '1'}, {'y': {'x': '1'}}, {'x': '1', 'y': {'z': '1'}}::VARIANT, {'v': {'x': '1'}::VARIANT}),
+	(5, 1, {'x': 'bad'}, {'y': {'x': 'bad'}}, {'x': 'bad', 'y': {'z': 'bad'}}::VARIANT, {'v': {'x': 'bad'}::VARIANT}),
+	(6, 0, {'x': '2'}, {'y': {'x': '2'}}, {'x': '2', 'y': {'z': '2'}}::VARIANT, {'v': {'x': '2'}::VARIANT});
 
 statement ok
 CREATE INDEX idx_cast ON cast_tbl(i);
@@ -239,6 +239,28 @@ SELECT CAST(s.x AS INTEGER) FROM cast_tbl WHERE i BETWEEN 5 AND 6 AND j = 0;
 query I
 SELECT CAST(n.y.x AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
 ----
+
+query I
+SELECT CAST(v.x AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
+----
+
+query I
+SELECT CAST(v.y.z AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
+----
+
+query I
+SELECT CAST(sv.v.x AS INTEGER) FROM cast_tbl WHERE i = 5 AND j = 0;
+----
+
+statement error
+SELECT CAST(v.y.z AS INTEGER) FROM cast_tbl WHERE i = 5;
+----
+<REGEX>:.*Could not convert string 'bad'.*
+
+statement error
+SELECT CAST(sv.v.x AS INTEGER) FROM cast_tbl WHERE i = 5;
+----
+<REGEX>:.*Could not convert string 'bad'.*
 
 # The additional predicate on the indexed column rejects the row.
 

@@ -156,6 +156,8 @@ public:
 	}
 	void SetPushdownExtractType(const LogicalType &type_information,
 	                            optional_ptr<const LogicalType> cast_type = nullptr);
+	//! Whether the scan casts the extracted field, i.e., the cast_type passed to SetPushdownExtractType
+	bool HasPushdownCast() const;
 	const LogicalType &GetScanType() const;
 	const LogicalType &GetType() const;
 	void AddChildIndex(ColumnIndex new_index);
