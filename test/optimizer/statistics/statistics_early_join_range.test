@@ -20,14 +20,15 @@ ANALYZE range_dimension;
 statement ok
 ANALYZE range_fact;
 
-# The multi-binding OR enables early statistics simplification. The join's domain estimate already
-# accounts for the unmatched dimension keys; an inferred k <= 999 must not add another selectivity.
+# The multi-binding OR enables early statistics simplification. Its output estimate includes its
+# selectivity once; an inferred k <= 999 must not add another reduction. Check the OR's estimate
+# rather than its input join, whose estimate can include the OR when MARK joins move below it.
 query II
 EXPLAIN (FORMAT JSON)
 SELECT count(*) FROM range_fact f JOIN range_dimension d USING (k)
 WHERE d.grp = 1 AND (d.v = 1 OR f.v IN (SELECT v FROM range_dimension WHERE grp = 2));
 ----
-physical_plan	<REGEX>:.*"Join Type":\s*"INNER",\s*"Conditions":\s*"k = k",\s*"Estimated Cardinality":\s*"(?:[89][0-9]{3}|1[01][0-9]{3})".*
+physical_plan	<REGEX>:.*"Expression":\s*"[^"]*SUBQUERY[^"]*",\s*"Estimated Cardinality":\s*"(?:1[6-9][0-9]{2}|2[0-3][0-9]{2})".*
 
 # The full statistics pass still adds the range filter after join ordering.
 query II

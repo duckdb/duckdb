@@ -91,3 +91,14 @@ GROUP BY user_id;
 ----
 1	[Social, Health, Environmental]
 
+# the finalized strings of the inner aggregate outlive the finalize call
+query II
+SELECT string_agg(x, ',' ORDER BY x), string_agg(x, '|' ORDER BY x DESC) FROM (VALUES ('a string that is not inlined'), ('b'), ('c')) t(x);
+----
+a string that is not inlined,b,c	c|b|a string that is not inlined
+
+# the grouped strings remain valid while the results are scanned
+query I
+SELECT count(*) FROM (SELECT i % 1000 g, string_agg(md5(i::VARCHAR), ',' ORDER BY i) s FROM range(3000) r(i) GROUP BY g) WHERE s != concat_ws(',', md5(g::VARCHAR), md5((g + 1000)::VARCHAR), md5((g + 2000)::VARCHAR));
+----
+0

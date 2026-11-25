@@ -30,6 +30,10 @@ struct ExtensionRepositoryResolution {
 	string url;
 };
 
+//! Who asked a host where its repository is, which decides how a failure is phrased: the statement can suggest
+//! naming the location with WITH PREFIX instead, a plain lookup has nothing to suggest
+enum class ExtensionRepositoryHostCaller : uint8_t { CREATE_STATEMENT, LOOKUP };
+
 class ExtensionRepositoryManager {
 public:
 	//! The file extension used for the stored repository definitions
@@ -103,16 +107,18 @@ public:
 	//! Convert a compact public key back into the PEM representation used for signature verification
 	static string ToPEMPublicKey(const string &compact_key);
 
-private:
 	//! Resolve `CREATE EXTENSION REPOSITORY <name>` (no prefix): the name is the publisher's host, and the metadata
 	//! file it serves (https://<name>/METADATA_FILE) names the repository url. Only the url is taken from the host;
 	//! the keys come from the prefix, as with WITH PREFIX. Called by CreateRepository after the access and conflict
-	//! checks
+	//! checks, and by the extension_repository_url function, which answers where a host would send DuckDB without
+	//! creating anything. Nothing is trusted on the strength of this call alone: it only reads a public file
 	static ExtensionRepositoryResolution
-	ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &name);
+	ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &name,
+	                          ExtensionRepositoryHostCaller caller = ExtensionRepositoryHostCaller::CREATE_STATEMENT);
 
+private:
 	//! Throws unless adding a repository is currently allowed (opt-in and configuration lock)
-	static void CheckCanCreate(DatabaseInstance &db, bool from_host);
+	static void CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host);
 	//! Throws if the configuration is locked, freezing the trust store
 	static void CheckNotLocked(DatabaseInstance &db);
 	static string GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name);

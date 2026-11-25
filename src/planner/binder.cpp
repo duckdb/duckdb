@@ -87,8 +87,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
 		return Bind(statement.Cast<UpdateStatement>());
-	case StatementType::RELATION_STATEMENT:
-		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
 		return Bind(statement.Cast<CreateStatement>());
 	case StatementType::DROP_STATEMENT:
@@ -179,9 +177,6 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
-		break;
-	case TableReferenceType::DELIM_GET:
-		result = Bind(ref.Cast<DelimGetRef>());
 		break;
 	case TableReferenceType::MATCH_RECOGNIZE:
 		result = Bind(ref.Cast<MatchRecognizeRef>());
@@ -300,6 +295,21 @@ void Binder::SetBindingIndexKey(bool binding_index_key_p) {
 
 bool Binder::IsBindingIndexKey() const {
 	return binding_index_key;
+}
+
+DecimalWidthLimit Binder::GetDecimalWidthLimit() const {
+	if (decimal_width_limit) {
+		return *decimal_width_limit;
+	}
+	return DecimalWidthLimit::FromSetting(context);
+}
+
+optional_ptr<const DecimalWidthLimit> Binder::GetFixedDecimalWidthLimit() const {
+	return decimal_width_limit;
+}
+
+void Binder::SetDecimalWidthLimit(optional_ptr<const DecimalWidthLimit> limit) {
+	decimal_width_limit = limit;
 }
 
 void Binder::SetBindingTrySubquery() {

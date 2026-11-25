@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
@@ -75,6 +76,8 @@ private:
 	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
+	//! The query number of the query currently running on this connection (MAXIMUM_QUERY_ID if none)
+	atomic<transaction_t> active_query_id = MAXIMUM_QUERY_ID;
 	ErrorData autocheckpoint_error;
 
 	TransactionContext(const TransactionContext &) = delete;

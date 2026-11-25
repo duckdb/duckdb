@@ -52,15 +52,15 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	// Transform scope
 	SetScope variable_scope = PhysicalSet::GetSettingScope(*option, scope);
 
-	if (option->default_value) {
+	if (option->IsGeneric()) {
+		auto setting_index = option->setting_idx.GetIndex();
 		if (option->set_callback) {
+			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
+			auto reset_val = option->GetDefaultValue(config).CastAs(context.client, parameter_type);
 			SettingCallbackInfo info(context.client, variable_scope);
 			info.is_reset = true;
-			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
-			Value reset_val = Value(option->default_value).CastAs(context.client, parameter_type);
 			option->set_callback(info, reset_val);
 		}
-		auto setting_index = option->setting_idx.GetIndex();
 		if (variable_scope == SetScope::SESSION) {
 			auto &client_config = ClientConfig::GetConfig(context.client);
 			client_config.user_settings.ClearSetting(setting_index);

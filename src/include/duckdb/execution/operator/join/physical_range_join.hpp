@@ -152,6 +152,8 @@ public:
 
 	//!	The full set of types (left + right child)
 	vector<LogicalType> unprojected_types;
+	//! The conditions that are not sort keys, over [left tail keys..., right tail keys...] (can be nullptr)
+	unique_ptr<Expression> tail_predicate;
 
 public:
 	// Compare conditions for priority
@@ -161,9 +163,11 @@ public:
 	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
 	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx,
 	                               const unsafe_vector<idx_t> &result, SortedRunScanState &scan_state);
-	// Apply a tail condition to the current selection
-	static idx_t SelectJoinTail(const ExpressionType &condition, const Vector &left, const Vector &right,
-	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
+	//! The conjunction of the conditions from tail_begin on, over [left tail keys..., right tail keys...]
+	static unique_ptr<Expression> CreateTailPredicate(ClientContext &context, const vector<JoinCondition> &conditions,
+	                                                  idx_t tail_begin);
+	//! The input types of CreateTailPredicate
+	static vector<LogicalType> GetTailTypes(const vector<JoinCondition> &conditions, idx_t tail_begin);
 
 	//!	Utility to project full width internal chunks to projected results
 	void ProjectResult(DataChunk &chunk, DataChunk &result) const;

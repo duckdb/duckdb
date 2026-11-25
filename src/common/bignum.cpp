@@ -496,11 +496,7 @@ constexpr bignum_twodigit_t DIGIT_MASK = BASE - 1;
 constexpr idx_t INTERRUPT_CHECK_INTERVAL = idx_t(1) << 20;
 
 void AccountWork(BignumArithmeticState &state, idx_t work) {
-	state.work_since_interrupt_check += work;
-	if (state.work_since_interrupt_check >= INTERRUPT_CHECK_INTERVAL) {
-		state.work_since_interrupt_check = 0;
-		state.context.InterruptCheck();
-	}
+	state.AccountWork(work);
 }
 
 void TrimMagnitude(bignum_magnitude_t &digits) {
@@ -897,9 +893,97 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 
 } // namespace
 
+BignumArithmeticState::BignumArithmeticState(optional_ptr<ClientContext> client_context)
+    : context(client_context ? &client_context->GetContext() : nullptr) {
+}
+
+void BignumArithmeticState::AccountWork(idx_t work) {
+	if (!context) {
+		return;
+	}
+	work_since_interrupt_check += work;
+	if (work_since_interrupt_check >= INTERRUPT_CHECK_INTERVAL) {
+		work_since_interrupt_check = 0;
+		// the calls are already a millisecond of work apart, so the deadline is read on every one of them
+		context->InterruptCheck();
+	}
+}
+
+void BignumIntermediate::MultiplyMagnitudes(BignumArithmeticState &state, const unsafe_vector<bignum_digit_t> &lhs,
+                                            const unsafe_vector<bignum_digit_t> &rhs,
+                                            unsafe_vector<bignum_digit_t> &result) {
+	if (lhs.empty() || rhs.empty()) {
+		result.clear();
+		return;
+	}
+	duckdb::MultiplyMagnitudes(state, lhs, rhs, result);
+	TrimMagnitude(result);
+}
+
+//! The full product of two 128-bit magnitudes fits four limbs.
+static string_t MultiplySmall(StringHeap &heap, uhugeint_t lhs, uhugeint_t rhs, bool is_negative) {
+	uint64_t product[4];
+	product[0] = BignumLimb::MultiplyAdd(lhs.lower, rhs.lower, 0, product[1]);
+	product[2] = 0;
+	product[3] = 0;
+	if (lhs.upper) {
+		product[1] = BignumLimb::MultiplyAdd(lhs.upper, rhs.lower, product[1], product[2]);
+	}
+	if (rhs.upper) {
+		uint64_t carry;
+		product[1] = BignumLimb::MultiplyAdd(lhs.lower, rhs.upper, product[1], carry);
+		product[2] = BignumLimb::MultiplyAdd(lhs.upper, rhs.upper, product[2], product[3]);
+		product[2] += carry;
+		product[3] += product[2] < carry;
+	}
+	idx_t count = 4;
+	while (count > 1 && product[count - 1] == 0) {
+		count--;
+	}
+	if (count == 1 && product[0] == 0) {
+		return WriteZero(heap);
+	}
+	const auto top_bytes = BignumLimb::ByteCount(product[count - 1]);
+	const auto byte_count = (count - 1) * BignumLimb::BYTES + top_bytes;
+	auto target = heap.EmptyString(byte_count + Bignum::BIGNUM_HEADER_SIZE);
+	auto ptr = target.GetDataWriteable();
+	Bignum::SetHeader(ptr, byte_count, is_negative);
+	auto out = reinterpret_cast<data_ptr_t>(ptr + Bignum::BIGNUM_HEADER_SIZE);
+	BignumLimb::StoreMagnitudePartial(out, top_bytes, product[--count], is_negative);
+	out += top_bytes;
+	while (count > 0) {
+		BignumLimb::StoreMagnitude(out, product[--count], is_negative);
+		out += BignumLimb::BYTES;
+	}
+	target.Finalize();
+	return target;
+}
+
+string_t BignumIntermediate::Multiply(StringHeap &heap, hugeint_t lhs, hugeint_t rhs) {
+	const bool lhs_negative = lhs.upper < 0;
+	const bool rhs_negative = rhs.upper < 0;
+	uhugeint_t lhs_magnitude(static_cast<uint64_t>(lhs.upper), lhs.lower);
+	uhugeint_t rhs_magnitude(static_cast<uint64_t>(rhs.upper), rhs.lower);
+	if (lhs_negative) {
+		lhs_magnitude = ~lhs_magnitude + uhugeint_t(1);
+	}
+	if (rhs_negative) {
+		rhs_magnitude = ~rhs_magnitude + uhugeint_t(1);
+	}
+	return MultiplySmall(heap, lhs_magnitude, rhs_magnitude, lhs_negative != rhs_negative);
+}
+
 string_t BignumIntermediate::Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
                                       const BignumIntermediate &rhs) {
 	const bool is_result_negative = lhs.is_negative != rhs.is_negative;
+	if (lhs.size <= 2 * BignumLimb::BYTES && rhs.size <= 2 * BignumLimb::BYTES) {
+		state.AccountWork(4);
+		const uhugeint_t lhs_magnitude(LoadAbsoluteLimb(lhs, int64_t(lhs.size) - int64_t(BignumLimb::BYTES)),
+		                               LoadAbsoluteLimb(lhs, lhs.size));
+		const uhugeint_t rhs_magnitude(LoadAbsoluteLimb(rhs, int64_t(rhs.size) - int64_t(BignumLimb::BYTES)),
+		                               LoadAbsoluteLimb(rhs, rhs.size));
+		return MultiplySmall(heap, lhs_magnitude, rhs_magnitude, is_result_negative);
+	}
 	auto &lhs_digits = state.lhs_digits;
 	auto &rhs_digits = state.rhs_digits;
 	auto &product = state.result_digits;
@@ -937,6 +1021,24 @@ bool BignumIntermediate::TryDivMod(StringHeap &heap, BignumArithmeticState &stat
 		// truncating division: the quotient is negative when the signs differ
 		result = WriteMagnitude(heap, quotient, lhs.is_negative != rhs.is_negative);
 	}
+	return true;
+}
+
+bool BignumIntermediate::TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+                                   const BignumIntermediate &rhs, string_t &quotient_result,
+                                   string_t &remainder_result) {
+	auto &lhs_digits = state.lhs_digits;
+	auto &rhs_digits = state.rhs_digits;
+	auto &quotient = state.result_digits;
+	auto &remainder = state.remainder_digits;
+	GetMagnitude(lhs, lhs_digits);
+	GetMagnitude(rhs, rhs_digits);
+	if (rhs_digits.empty()) {
+		return false;
+	}
+	DivModMagnitudes(state, lhs_digits, rhs_digits, quotient, remainder, true);
+	quotient_result = WriteMagnitude(heap, quotient, lhs.is_negative != rhs.is_negative);
+	remainder_result = WriteMagnitude(heap, remainder, lhs.is_negative);
 	return true;
 }
 

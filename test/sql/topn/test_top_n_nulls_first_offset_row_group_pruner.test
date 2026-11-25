@@ -1,0 +1,115 @@
+# name: test/sql/topn/test_top_n_nulls_first_offset_row_group_pruner.test
+# description: Offset pruning of NULL-only row groups when a second sort key orders the NULL rows
+# group: [topn]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Alternative verify disables the offset pruning in the optimizer rule
+require no_alternative_verify
+
+load {TEST_DIR}/top_n_nulls_first_offset_row_group_pruner_main.duckdb
+
+# Set this after load so pruning counts do not depend on parallel scheduling.
+statement ok
+SET threads TO 1
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_nulls_first_offset_row_group_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# Row groups 0 and 2 hold only NULL values
+statement ok
+CREATE TABLE db.null_groups AS
+SELECT i AS id, CASE WHEN (i // 2048) % 2 = 1 THEN i END AS k, CASE WHEN (i // 2048) % 2 = 1 THEN 'a' END AS s
+FROM range(8192) t(i)
+
+# Row group 0 holds only NULL values, row group 1 holds NULL values and other values
+statement ok
+CREATE TABLE db.mixed_groups AS
+SELECT i AS id, CASE WHEN i >= 2048 AND (i >= 4096 OR i % 2 = 1) THEN i END AS k FROM range(8192) t(i)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_nulls_first_offset_row_group_pruner_data.duckdb' AS db
+
+# The offset ends in the NULL rows: the second sort key orders the NULL rows of all row groups
+query II
+SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 2048
+----
+NULL	2047
+
+query II
+SELECT k, id FROM db.null_groups ORDER BY k DESC NULLS FIRST, id DESC LIMIT 2 OFFSET 2049
+----
+NULL	2046
+NULL	2045
+
+query II
+SELECT s, id FROM db.null_groups ORDER BY s NULLS FIRST, id DESC LIMIT 1 OFFSET 2048
+----
+NULL	2047
+
+query II
+SELECT count(*), min(id) FROM (SELECT id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC OFFSET 2048)
+----
+6144	0
+
+query II
+SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 2048
+----
+NULL	1023
+
+# The offset contains all NULL rows: we can skip the NULL-only row groups
+query II
+EXPLAIN ANALYZE SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4097
+----
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
+
+query II
+SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4097
+----
+2049	2049
+
+# The offset is equal to the number of NULL rows
+query II
+EXPLAIN ANALYZE SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
+----
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
+
+query II
+SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
+----
+2048	2048
+
+# The offset contains all rows that can be NULL: we can skip the NULL-only row group
+query II
+EXPLAIN ANALYZE SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
+----
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
+
+query II
+SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 2 OFFSET 4095
+----
+4095	4095
+4096	4096
+
+# One sort key: all NULL rows are equal, so we can skip a NULL-only row group
+query II
+EXPLAIN ANALYZE SELECT k FROM db.null_groups ORDER BY k NULLS FIRST LIMIT 1 OFFSET 2048
+----
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
+
+query I
+SELECT k FROM db.null_groups ORDER BY k NULLS FIRST LIMIT 1 OFFSET 2048
+----
+NULL
+
+# The statistics still report values for a row group after an UPDATE sets all its values to NULL
+statement ok
+UPDATE db.mixed_groups SET k = NULL WHERE id < 4096
+
+query II
+SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4095
+----
+NULL	0

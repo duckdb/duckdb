@@ -194,7 +194,7 @@ TEST_CASE("An opening callback exception does not register the connection", "[ap
 	Connection anchor(db);
 	auto callback = make_shared_ptr<ThrowingConnectionCallback>();
 	ExtensionCallback::Register(DBConfig::GetConfig(*db.instance), callback);
-	REQUIRE_THROWS_AS(make_uniq<Connection>(db), InvalidInputException);
+	REQUIRE_THROWS_WITH(make_uniq<Connection>(db), Catch::Contains("connection callback rejected open"));
 	CHECK(ConnectionManager::Get(*db.instance).GetConnectionCount() == 1);
 	CHECK(ConnectionManager::Get(*db.instance).GetConnectionList().size() == 1);
 	Connection next(db);

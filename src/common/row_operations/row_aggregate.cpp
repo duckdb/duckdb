@@ -75,9 +75,18 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	if (count == 0) {
 		return;
 	}
+	if (filter_data.all_selected) {
+		// every row passes the filter: the payload has not been sliced
+		UpdateStates(state, aggr, addresses, filter_data.filtered_payload, arg_idx);
+		return;
+	}
 
-	Vector filtered_addresses(addresses, filter_data.true_sel, count);
-	filtered_addresses.Flatten();
+	if (!state.addresses) {
+		state.addresses = make_uniq<Vector>(LogicalType::POINTER);
+	}
+	auto &filtered_addresses = *state.addresses;
+	VectorOperations::Copy(addresses, filtered_addresses, filter_data.true_sel, count, 0, 0);
+	FlatVector::SetSize(filtered_addresses, count_t(count));
 
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx);
 }

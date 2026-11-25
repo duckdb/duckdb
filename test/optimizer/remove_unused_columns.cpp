@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -129,6 +130,53 @@ TEST_CASE("Column pruning remaps retained projection map entries", "[optimizer][
 	        vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0)),
 	                               ColumnBinding(child_table, ProjectionIndex(1))});
 	REQUIRE(filter_ref.GetColumnBindings() == vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(1))});
+}
+
+TEST_CASE("Column pruning composes join key substitution with projection maps", "[optimizer][unused_columns]") {
+	DuckDB db;
+	Connection connection(db);
+	const auto left_table = TableIndex(1000);
+	const auto right_table = TableIndex(1001);
+	const auto output_table = TableIndex(1002);
+	idx_t right_key_index = 0;
+	bool project_left_key = true;
+	SECTION("Left key is renumbered onto a removed column") {
+	}
+	SECTION("Both join keys are renumbered") {
+		right_key_index = 1;
+	}
+	SECTION("The join initially projects out the left key") {
+		project_left_key = false;
+	}
+
+	auto column = [](TableIndex table, idx_t index) -> unique_ptr<Expression> {
+		return make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, ColumnBinding(table, ProjectionIndex(index)));
+	};
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(column(left_table, 1), column(right_table, right_key_index),
+	                              ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(CreatePrunableProjection(left_table));
+	join->children.push_back(CreatePrunableProjection(right_table));
+	if (!project_left_key) {
+		join->left_projection_map = {ProjectionIndex(2)};
+	}
+	auto filter = make_uniq<LogicalFilter>(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+	filter->projection_map = {ProjectionIndex((project_left_key ? 3 : 1) + right_key_index),
+	                          ProjectionIndex(project_left_key ? 2 : 0)};
+	filter->children.push_back(std::move(join));
+	auto &filter_ref = *filter;
+
+	vector<unique_ptr<Expression>> output_expressions;
+	output_expressions.push_back(column(right_table, right_key_index));
+	output_expressions.push_back(column(left_table, 2));
+	auto output = make_uniq<LogicalProjection>(output_table, std::move(output_expressions));
+	output->children.push_back(std::move(filter));
+	unique_ptr<LogicalOperator> plan = std::move(output);
+
+	ApplyColumnPruning(connection, plan);
+
+	REQUIRE(filter_ref.GetColumnBindings() == vector<ColumnBinding> {ColumnBinding(left_table, ProjectionIndex(0)),
+	                                                                 ColumnBinding(left_table, ProjectionIndex(1))});
 }
 
 TEST_CASE("Column pruning follows replacements before matching projection map bindings",

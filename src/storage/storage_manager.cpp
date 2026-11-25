@@ -4,6 +4,16 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -247,6 +257,196 @@ bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, Storage
 		return false;
 	}
 	return true;
+}
+
+//! The argument types recorded in the signature of an AGGREGATE_STATE type (see EncodeStateParameters)
+static vector<LogicalType> AggregateStateArgumentTypes(const LogicalType &state_type) {
+	vector<LogicalType> result;
+	auto ext_info = state_type.GetExtensionInfo();
+	if (!ext_info) {
+		return result;
+	}
+	auto entry = ext_info->properties.find("parameters");
+	if (entry == ext_info->properties.end() || entry->second.IsNull() ||
+	    entry->second.type().id() != LogicalTypeId::LIST) {
+		return result;
+	}
+	for (auto &parameter : ListValue::GetChildren(entry->second)) {
+		if (parameter.IsNull()) {
+			continue;
+		}
+		if (parameter.type().id() == LogicalTypeId::TYPE) {
+			result.push_back(TypeValue::GetType(parameter));
+		} else if (parameter.type().id() == LogicalTypeId::STRUCT) {
+			// a (type, value) pair of a parameter bound to a constant
+			auto &children = StructValue::GetChildren(parameter);
+			if (!children.empty() && !children[0].IsNull() && children[0].type().id() == LogicalTypeId::TYPE) {
+				result.push_back(TypeValue::GetType(children[0]));
+			}
+		}
+	}
+	return result;
+}
+
+static string UnsupportedAtStorageVersion(AttachedDatabase &db, StorageVersion storage_version, const string &what,
+                                          StorageVersion required) {
+	return StringUtil::Format("%s are not supported in storage versions prior to %s (database %s is using storage "
+	                          "version %s)",
+	                          what, GetStorageVersionName(required, false), db.GetName(),
+	                          GetStorageVersionName(storage_version, false));
+}
+
+static string WideDecimalUnsupportedReason(AttachedDatabase &db, StorageVersion storage_version,
+                                           const string &subject) {
+	auto what = StringUtil::Format("DECIMAL %s wider than %d digits", subject, Decimal::MAX_WIDTH_INT128);
+	return UnsupportedAtStorageVersion(db, storage_version, what, Decimal::WIDE_VERSION_ADDED);
+}
+
+bool StorageManager::ContainsWideDecimal(const LogicalType &logical_type) {
+	return TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			for (auto &argument_type : AggregateStateArgumentTypes(type)) {
+				if (ContainsWideDecimal(argument_type)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		return type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type));
+	});
+}
+
+string StorageManager::GetUnsupportedPriorToVersionReason(const string &what, StorageVersion required) const {
+	D_ASSERT(IsPriorToVersion(required, GetStorageVersion()));
+	return UnsupportedAtStorageVersion(db, GetStorageVersion(), what, required);
+}
+
+string StorageManager::GetUnsupportedTypeReason(const LogicalType &logical_type) const {
+	const auto storage_version = GetStorageVersion();
+	auto unsupported = [&](const string &what, StorageVersion required) {
+		return UnsupportedAtStorageVersion(db, storage_version, what, required);
+	};
+	string reason;
+	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			if (storage_version < StorageVersion::V2_0_0) {
+				reason = unsupported("Aggregate state columns", StorageVersion::V2_0_0);
+				return true;
+			}
+			// the argument types of the aggregate are stored with the state
+			for (auto &argument_type : AggregateStateArgumentTypes(type)) {
+				reason = GetUnsupportedTypeReason(argument_type);
+				if (!reason.empty()) {
+					return true;
+				}
+			}
+			return false;
+		}
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			if (storage_version < StorageVersion::V2_0_0 && StructType::GetChildCount(type) == 0) {
+				reason = unsupported("Empty STRUCT columns", StorageVersion::V2_0_0);
+			}
+			break;
+		case LogicalTypeId::TUPLE:
+			// TUPLEs are stored as unnamed STRUCTs, which older engines reject; the unnamed STRUCTs of an older file
+			// are deserialized as TUPLE while loading and must stay attachable
+			if (storage_version < StorageVersion::V2_0_0 && IsLoaded()) {
+				reason = unsupported("TUPLE columns", StorageVersion::V2_0_0);
+			}
+			break;
+		case LogicalTypeId::DECIMAL:
+			// decimals wider than 38 digits are stored as BIGNUM blobs, which older engines cannot read
+			if (storage_version < Decimal::WIDE_VERSION_ADDED && Decimal::IsWide(DecimalType::GetWidth(type))) {
+				reason = WideDecimalUnsupportedReason(db, storage_version, "columns");
+			}
+			break;
+		case LogicalTypeId::VARIANT:
+			if (storage_version < Variant::VERSION_ADDED) {
+				reason = unsupported("VARIANT columns", Variant::VERSION_ADDED);
+			}
+			break;
+		case LogicalTypeId::GEOMETRY:
+			if (GeoType::HasCRS(type) && storage_version < Geometry::VERSION_ADDED) {
+				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				// TODO: Turn this into a hard error
+				auto &logger = Logger::Get(db.GetDatabase());
+				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
+				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
+				                "storage versions prior "
+				                "to %s (database %s is using storage version %s). CRS will not be persisted.",
+				                required, db.GetName(), current);
+			}
+			break;
+		case LogicalTypeId::GEOGRAPHY:
+			if (storage_version < Geometry::GEOGRAPHY_VERSION_ADDED) {
+				reason = unsupported("GEOGRAPHY columns", Geometry::GEOGRAPHY_VERSION_ADDED);
+			}
+			break;
+		default:
+			break;
+		}
+		return !reason.empty();
+	});
+	return reason;
+}
+
+void StorageManager::CheckTypeIsSupported(const LogicalType &type) const {
+	auto reason = GetUnsupportedTypeReason(type);
+	if (!reason.empty()) {
+		throw InvalidInputException(reason);
+	}
+}
+
+string StorageManager::GetUnsupportedDecimalWidthReason(const LogicalType &type, const string &subject) const {
+	const auto storage_version = GetStorageVersion();
+	if (storage_version >= Decimal::WIDE_VERSION_ADDED || !ContainsWideDecimal(type)) {
+		return string();
+	}
+	return WideDecimalUnsupportedReason(db, storage_version, subject);
+}
+
+void StorageManager::CheckDecimalWidthIsSupported(const LogicalType &type) const {
+	auto reason = GetUnsupportedDecimalWidthReason(type);
+	if (!reason.empty()) {
+		throw InvalidInputException(reason);
+	}
+}
+
+void StorageManager::CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const {
+	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
+		// from v2.0.0 on a CAST stores its target as a type expression, which the reading engine binds itself
+		return;
+	}
+	// a work list instead of recursion, the expression tree is user data
+	vector<reference<const ParsedExpression>> work;
+	work.emplace_back(expression);
+	while (!work.empty()) {
+		auto &expr = work.back().get();
+		work.pop_back();
+		switch (expr.GetExpressionClass()) {
+		case ExpressionClass::CAST:
+			CheckDecimalWidthIsSupported(UnboundType::TryDefaultBind(expr.Cast<CastExpression>().TargetType()));
+			break;
+		case ExpressionClass::SUBQUERY:
+			CheckQueryDecimalsAreSupported(*expr.Cast<SubqueryExpression>().Subquery()->node);
+			break;
+		default:
+			break;
+		}
+		ParsedExpressionIterator::EnumerateChildren(expr,
+		                                            [&](const ParsedExpression &child) { work.emplace_back(child); });
+	}
+}
+
+void StorageManager::CheckQueryDecimalsAreSupported(QueryNode &node) const {
+	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
+		return;
+	}
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { CheckExpressionDecimalsAreSupported(*child); });
 }
 
 bool StorageManager::HasWAL() const {
@@ -636,7 +836,7 @@ public:
 	//! Revert the commit
 	void RevertCommit() override;
 	// Make the commit persistent
-	idx_t FlushCommit(bool sync_now) override;
+	idx_t FlushCommit(transaction_t commit_id, bool sync_now) override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -698,7 +898,7 @@ void SingleFileStorageCommitState::RevertCommit() {
 	state = WALCommitState::TRUNCATED;
 }
 
-idx_t SingleFileStorageCommitState::FlushCommit(bool sync_now) {
+idx_t SingleFileStorageCommitState::FlushCommit(transaction_t commit_id, bool sync_now) {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return 0;
 	}
@@ -723,6 +923,17 @@ idx_t SingleFileStorageCommitState::FlushCommit(bool sync_now) {
 		wal_sync_offset = wal.FlushMarker();
 	}
 	state = WALCommitState::FLUSHED;
+	// checkpoints whose bound is past the commit include the blocks of its optimistically written row groups
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsCommitted(block_id, commit_id);
+				}
+			}
+		}
+	}
 	return wal_sync_offset;
 }
 
@@ -779,25 +990,26 @@ SingleFileStorageManager::CreateCheckpointWriter(QueryContext context, Checkpoin
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options, checkpoint_context);
 }
 
-static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
-	vector<reference<DuckTableEntry>> tables;
+//! The storage of the tables, which outlives their catalog entries: a commit after the scan can destroy those.
+static vector<shared_ptr<DataTable>> GetCommittedTables(AttachedDatabase &db) {
+	vector<shared_ptr<DataTable>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	auto bound = VisibilityBound::AllCommitted();
 	catalog.ScanSchemas(bound, [&](DuckSchemaEntry &schema) {
 		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<DuckTableEntry>());
+				tables.push_back(entry.Cast<DuckTableEntry>().GetStorage().shared_from_this());
 			}
 		});
 	});
 	return tables;
 }
 
-static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
+static vector<shared_ptr<DataTable>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
-	vector<reference<DuckTableEntry>> result;
+	vector<shared_ptr<DataTable>> result;
 	for (auto &table : GetCommittedTables(db)) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasUnbound()) {
 			result.push_back(table);
 		}
 	}
@@ -817,9 +1029,9 @@ static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
 	return ErrorData();
 }
 
-static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) {
+static bool HasBufferedReplays(const vector<shared_ptr<DataTable>> &tables) {
 	for (auto &table : tables) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
 			return true;
 		}
 	}
@@ -858,7 +1070,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(optional_ptr<ClientConte
 	ErrorData failure;
 	string failed_table;
 	for (auto &table : tables) {
-		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		auto &info = *table->GetDataTableInfo();
 		if (!explicit_checkpoint && !info.GetIndexes().HasBufferedReplays()) {
 			continue;
 		}
@@ -966,7 +1178,7 @@ void SingleFileStorageManager::Destroy() {
 		return;
 	}
 	for (auto &table : GetCommittedTables(db)) {
-		table.get().GetStorage().Destroy();
+		table->Destroy();
 	}
 }
 

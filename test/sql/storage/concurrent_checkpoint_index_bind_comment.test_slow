@@ -1,0 +1,84 @@
+# name: test/sql/storage/concurrent_checkpoint_index_bind_comment.test_slow
+# description: A table gets a new catalog entry while a checkpoint is about to bind its indexes
+# group: [storage]
+
+load {TEST_DIR}/concurrent_checkpoint_index_bind_comment.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+CREATE TABLE c (i INTEGER, s VARCHAR)
+
+statement ok
+INSERT INTO c SELECT i, 's' || i FROM range(100000) t(i)
+
+statement ok
+CREATE INDEX c_s ON c(s)
+
+statement ok
+CREATE TABLE keep AS SELECT i FROM range(1000) t(i)
+
+statement ok
+CHECKPOINT
+
+# the index is unbound after a restart
+restart
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET debug_verify_blocks=true
+
+# the checkpoint sleeps for three seconds before it binds the indexes, and again before it scans the catalog
+statement ok
+SET debug_checkpoint_sleep_ms=3000
+
+concurrentloop threadid 0 2
+
+onlyif threadid=0
+statement ok
+INSERT INTO keep VALUES (-1)
+
+onlyif threadid=0
+statement ok
+CHECKPOINT
+
+sleep 1000 millisecond
+
+# during the first sleep: the commit destroys the catalog entry that the checkpoint found
+onlyif threadid=1
+statement ok
+COMMENT ON TABLE c IS 'during'
+
+endloop
+
+statement ok
+SET debug_checkpoint_sleep_ms=0
+
+query I
+SELECT i FROM c WHERE s = 's777'
+----
+777
+
+restart
+
+statement ok
+SET debug_verify_blocks=true
+
+query II
+SELECT table_name, comment FROM duckdb_tables() WHERE table_name = 'c'
+----
+c	during
+
+query II
+SELECT COUNT(*), SUM(i) FROM c
+----
+100000	4999950000
+
+statement ok
+INSERT INTO keep VALUES (-2)
+
+statement ok
+CHECKPOINT

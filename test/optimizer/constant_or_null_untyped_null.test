@@ -1,0 +1,68 @@
+# name: test/optimizer/constant_or_null_untyped_null.test
+# description: A rewrite to constant_or_null keeps the type of the constant when its child is an untyped NULL
+# group: [optimizer]
+
+# the needle is a column of type "NULL": list_contains over a list without non-NULL elements is rewritten to
+# constant_or_null(false, needle), which must stay a BOOLEAN
+query I
+SELECT list_contains([NULL], c1) FROM (VALUES (NULL), (NULL)) t(c1);
+----
+NULL
+NULL
+
+query I
+SELECT typeof(list_contains([NULL], c1)) FROM (VALUES (NULL), (NULL)) t(c1);
+----
+BOOLEAN
+BOOLEAN
+
+query I
+SELECT list_contains([NULL], c1) AND true FROM (VALUES (NULL), (NULL)) t(c1);
+----
+NULL
+NULL
+
+statement ok
+CREATE TABLE contains_null AS SELECT array_contains([NULL], c1) AS l FROM (VALUES (NULL), (NULL)) t(c1);
+
+query II
+SELECT l, typeof(l) FROM contains_null;
+----
+NULL	BOOLEAN
+NULL	BOOLEAN
+
+query I
+WITH c AS MATERIALIZED (SELECT array_contains([NULL], c1) AS l FROM (VALUES (NULL), (NULL)) t(c1)) SELECT * FROM c;
+----
+NULL
+NULL
+
+query I
+SELECT list_contains([NULL], c1) AS l FROM (VALUES (NULL), (NULL)) t(c1) UNION ALL SELECT true;
+----
+NULL
+NULL
+true
+
+query III
+SELECT list_has([NULL, NULL], c1), array_has([NULL], c1), contains([NULL], c1) FROM (VALUES (NULL)) t(c1);
+----
+NULL	NULL	NULL
+
+query I
+SELECT count(*) FROM (VALUES (NULL), (NULL)) t(c1) WHERE list_contains([NULL], c1) IS NULL;
+----
+2
+
+# a typed needle goes through constant_or_null itself
+query II
+SELECT list_contains([NULL], c1), typeof(list_contains([NULL], c1)) FROM (VALUES (1), (NULL)) t(c1);
+----
+false	BOOLEAN
+NULL	BOOLEAN
+
+# the connection is still usable
+query I
+SELECT 42;
+----
+42

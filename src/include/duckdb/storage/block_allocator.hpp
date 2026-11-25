@@ -29,6 +29,31 @@ class TaskScheduler;
 struct ProducerToken;
 struct BlockQueue;
 struct BlockAllocatorLifetimeState;
+class BlockAllocator;
+class BlockAllocatorThreadLocalState;
+
+//! The block cache of a worker thread. While it is initialized, the thread allocates through it instead of through the
+//! thread_local cache, whose first use registers a destructor that glibc cannot fail to allocate without ending the
+//! process
+class BlockAllocatorWorkerState {
+public:
+	BlockAllocatorWorkerState();
+	~BlockAllocatorWorkerState();
+	BlockAllocatorWorkerState(const BlockAllocatorWorkerState &) = delete;
+	BlockAllocatorWorkerState &operator=(const BlockAllocatorWorkerState &) = delete;
+	BlockAllocatorWorkerState(BlockAllocatorWorkerState &&) = delete;
+	BlockAllocatorWorkerState &operator=(BlockAllocatorWorkerState &&) = delete;
+
+public:
+	bool IsInitialized() const;
+	//! Create the cache, this allocates
+	void Initialize(const BlockAllocator &block_allocator);
+
+private:
+	unique_ptr<BlockAllocatorThreadLocalState> state;
+	//! The state the thread allocated through before, restored when this one goes away
+	optional_ptr<BlockAllocatorThreadLocalState> previous;
+};
 
 class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
@@ -57,6 +82,16 @@ public:
 	//! Free backing retained in global queues, thread-local caches, and ongoing reclamation.
 	idx_t GetCachedMemory() const;
 
+	//! Approximate locality of fixed-pool backing, unknown for other allocations
+	optional_idx GetAllocationShard(const_data_ptr_t pointer) const;
+	idx_t GetPoolShardCount() const;
+	idx_t GetLocalPoolShard() const;
+	idx_t GetFallbackShardCount() const;
+	//! Approximate cache locality by grouping adjacent CPUs in fours, wrapping at shard_count.
+	static idx_t GetLocalShard(idx_t shard_count);
+	static idx_t GetShardGroup(idx_t shard, idx_t shard_count);
+	static idx_t GetLocalShardGroup(idx_t shard_count);
+
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
@@ -79,8 +114,10 @@ private:
 	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t pool_size, idx_t shard_count);
 
 	//! The buffer allocator's huge-page backend keeps matching allocation and release ownership.
-	data_ptr_t AllocateHugeData(idx_t size) const;
-	void FreeHugeData(data_ptr_t pointer, idx_t size) const;
+	data_ptr_t AllocateHugeData(idx_t size, optional_idx &home) const;
+	void FreeHugeData(data_ptr_t pointer, idx_t size, optional_idx home) const;
+	data_ptr_t AllocateFallbackData(idx_t size) const;
+	void FreeFallbackData(data_ptr_t pointer, idx_t size, optional_idx home) const;
 
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
 	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };
@@ -98,7 +135,6 @@ private:
 	idx_t ModuloBlockSize(idx_t n) const;
 	idx_t DivBlockSize(idx_t n) const;
 
-	idx_t GetLocalPoolShard() const;
 	uint32_t GetBlockID(data_ptr_t pointer) const;
 	data_ptr_t GetPointer(uint32_t block_id) const;
 

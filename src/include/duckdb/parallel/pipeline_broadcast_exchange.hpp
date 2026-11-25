@@ -60,6 +60,7 @@ public:
 
 private:
 	friend class PipelineBroadcastExchange;
+	PipelineExecutor &GetOrCreateDirectExecutor(idx_t index);
 	SinkResultType Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
 	                    const InterruptState &interrupt_state);
 	SinkNextBatchType NextBatch(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
@@ -72,6 +73,8 @@ private:
 	OperatorPartitionData GetSourcePartitionData(const SourcePartitionInfo &partition_info) const;
 	optional_idx GetSourceMinBatchIndex(const SourcePartitionInfo &partition_info) const;
 
+	ClientContext &context;
+	vector<reference<Pipeline>> direct_pipeline_refs;
 	vector<unique_ptr<PipelineExecutor>> direct_executors;
 	vector<unique_ptr<DataChunk>> direct_input_chunks;
 	idx_t direct_idx = 0;

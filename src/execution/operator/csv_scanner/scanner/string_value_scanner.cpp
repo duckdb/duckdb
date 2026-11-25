@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -108,6 +110,13 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		}
 	}
 
+	// only values stored as strings reach the check, the directly cast types never do; a scan that reads its first
+	// column only to count rows validates a few bytes per row, less than the tracking would cost
+	const bool counts_rows_only = csv_file_scan && csv_file_scan->reads_first_column_to_count_rows;
+	for (idx_t i = 0; i < logical_types.size() && !counts_rows_only; i++) {
+		validates_utf8 =
+		    validates_utf8 || (parse_types[i].validate_utf8 && parse_types[i].type_id == LogicalTypeId::VARCHAR);
+	}
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	// one slot more, the cast error search of Flush can stop one past the last row
@@ -216,11 +225,8 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 		result.first_line_is_comment = true;
 	}
 	result.comment = false;
-	if (result.state_machine.dialect_options.state_machine_options.new_line.GetValue() != NewLineIdentifier::CARRY_ON) {
-		result.last_position.buffer_pos = buffer_pos + 1;
-	} else {
-		result.last_position.buffer_pos = buffer_pos + 2;
-	}
+	// The next line starts behind the line break that ended the comment
+	result.SetLastPositionAfterNewline(buffer_pos);
 	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
 	                                   result.buffer_size};
 	result.current_line_position.begin = result.current_line_position.end;
@@ -235,6 +241,18 @@ void FullLinePosition::SanitizeError(string &value) {
 	char_array.push_back('\0'); // Null-terminate the character array
 	Utf8Proc::MakeValid(&char_array[0], char_array.size());
 	value = {char_array.begin(), char_array.end() - 1};
+}
+
+//! Parses a decimal of the tier into the target slot of the vector, with the separator of the CSV
+template <class T>
+static bool ParseDecimal(const char *value_ptr, idx_t size, const ParseTypeInfo &parse_type, char decimal_separator,
+                         Vector &vector, T &target) {
+	typename DecimalHelper<T>::OWNED parsed;
+	if (!DecimalHelper<T>::TryParse(value_ptr, size, parse_type.width, parse_type.scale, parsed, decimal_separator)) {
+		return false;
+	}
+	target = DecimalHelper<T>::Store(vector, parsed);
+	return true;
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
@@ -424,68 +442,43 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (decimal_separator == ',') {
-			switch (parse_types[chunk_col_id].internal_type) {
-			case PhysicalType::INT16:
-				success = TryDecimalStringCast<int16_t, ','>(
-				    value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT32:
-				success = TryDecimalStringCast<int32_t, ','>(
-				    value_ptr, size, static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT64:
-				success = TryDecimalStringCast<int64_t, ','>(
-				    value_ptr, size, static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT128:
-				success = TryDecimalStringCast<hugeint_t, ','>(
-				    value_ptr, size, static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
-			}
-
-		} else if (decimal_separator == '.') {
-			switch (parse_types[chunk_col_id].internal_type) {
-			case PhysicalType::INT16:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT32:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT64:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT128:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
-			}
-		} else {
+		auto &parse_type = parse_types[chunk_col_id];
+		auto &vector = parse_chunk.data[chunk_col_id];
+		auto target = vector_ptr[chunk_col_id];
+		if (decimal_separator != ',' && decimal_separator != '.') {
 			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
+		}
+		switch (parse_type.internal_type) {
+		case PhysicalType::INT16:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int16_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT32:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int32_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT64:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int64_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT128:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<hugeint_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::VARCHAR:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<bignum_t *>(target)[number_of_rows]);
+			break;
+		default:
+			throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+			                        TypeIdToString(parse_type.internal_type));
 		}
 		break;
 	}
 	default: {
 		// By default, we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
-		if (parse_types[chunk_col_id].validate_utf8 &&
+		if (parse_types[chunk_col_id].validate_utf8 && !ascii_value &&
 		    !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors.GetValue() && sniffing;
 			// Invalid unicode, we must error
@@ -1027,6 +1020,17 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	}
 }
 
+void StringValueResult::StartLineAfterEmptyLine() {
+	// The empty lines before a row are not part of its size: the next line starts at the last byte of this line break
+	idx_t line_break_pos = iterator.pos.buffer_pos;
+	if (states.IsCarriageReturn() &&
+	    state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		line_break_pos++;
+	}
+	current_line_position.begin = current_line_position.end;
+	current_line_position.end = {iterator.pos.buffer_idx, line_break_pos, buffer_size};
+}
+
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos + 1, result.buffer_size};
@@ -1034,6 +1038,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position.buffer_pos++;
 	}
+	result.StartLineAfterEmptyLine();
 	if (result.number_of_columns == 1) {
 		bool empty_is_null = false;
 		for (idx_t i = 0; i < result.null_str_count && !empty_is_null; i++) {
@@ -1488,7 +1493,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		if (!iterator.IsBoundarySet()) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+			// Skip the line feed of a \r\n that the buffer end split, a line feed of its own ends a line
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
+			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
 				iterator.pos.buffer_pos++;
 			}
 		} else {
@@ -1537,6 +1544,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 			if (state_machine->dialect_options.num_cols == 1) {
 				break;
 			}
+			if (result.cur_col_id == 0) {
+				result.StartLineAfterEmptyLine();
+			}
 			continue;
 		}
 		if (states.NewRow() || states.NewValue()) {
@@ -1563,6 +1573,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// the file ended inside a quoted value: record that before the value itself is added
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
+	// With a single column, a record separator read right after a state reset is an empty line only when it does not
+	// end an open row or comment
+	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
+	const bool empty_line = single_column_empty_line && result.cur_col_id == 0 && !result.comment;
 	bool skip_value = false;
 	if (result.projecting_columns) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
@@ -1652,8 +1666,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 			}
 		}
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
+		if (single_column_empty_line) {
+			if (empty_line) {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+			}
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
@@ -1665,16 +1681,14 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 			result.AddValueToVector(value.GetData(), value_size, true);
 		}
-	} else {
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
-		}
+	} else if (empty_line) {
+		result.EmptyLine(result, iterator.pos.buffer_pos);
 	}
 
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
-		} else {
+		} else if (!empty_line) {
 			result.AddRowInternal();
 		}
 		lines_read++;
@@ -1754,6 +1768,14 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 		result.current_line_position.begin = result.current_line_position.end;
 		result.current_line_position.end = current_line_start;
 		result.InvalidState(result);
+		if (!iterator.IsBoundarySet()) {
+			// without a boundary there is no FinishBoundaryScan to handle the error of this row
+			const auto chunk_col_id_before = result.chunk_col_id;
+			if (result.current_errors.HandleErrors(result)) {
+				result.InvalidateUnwrittenColumns(chunk_col_id_before);
+				result.number_of_rows++;
+			}
+		}
 	} else {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
@@ -1881,8 +1903,8 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::DECIMAL:
 	case LogicalType::BOOLEAN:
+	case LogicalTypeId::DECIMAL:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go

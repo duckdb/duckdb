@@ -12,6 +12,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -20,16 +21,21 @@ class ClientContext;
 
 class FunctionSerializer {
 private:
+	//! The name a reader looks the function up with: a function that does not say where it lives is a built-in one
+	static QualifiedName ResolveQualifiedName(const QualifiedName &qname) {
+		if (qname.Schema().empty()) {
+			return QualifiedName(qname.Catalog().empty() ? Identifier::SystemCatalog() : qname.Catalog(),
+			                     Identifier::DefaultSchema(), qname.Name());
+		}
+		return qname.Catalog().empty() ? qname.WithCatalog(Identifier::SystemCatalog()) : qname;
+	}
+
 	static QualifiedName DeserializeQualifiedName(Deserializer &deserializer, Identifier name) {
 		auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
 		auto schema = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		auto qname = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(507, "qname", QualifiedName());
 		if (!qname.Name().empty()) {
-			if (qname.Schema().empty()) {
-				return QualifiedName(qname.Catalog().empty() ? Identifier::SystemCatalog() : qname.Catalog(),
-				                     Identifier::DefaultSchema(), qname.Name());
-			}
-			return qname.Catalog().empty() ? qname.WithCatalog(Identifier::SystemCatalog()) : qname;
+			return ResolveQualifiedName(qname);
 		}
 		return QualifiedName(catalog.empty() ? Identifier::SystemCatalog() : catalog,
 		                     schema.empty() ? Identifier::DefaultSchema() : schema, std::move(name));
@@ -75,7 +81,7 @@ private:
 
 public:
 	template <class FUNC>
-	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
+	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<const FunctionData> bind_info) {
 		D_ASSERT(!function.GetName().empty());
 		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 			serializer.WriteProperty(500, "name", function.GetName());
@@ -88,7 +94,9 @@ public:
 		}
 
 		if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-			serializer.WriteProperty(507, "qname", function.GetQualifiedName());
+			// Written the way it is read back, so that a function serializes to the same bytes before and after a
+			// round trip: a plan and its copy have to compare equal as common subplans
+			serializer.WriteProperty(507, "qname", ResolveQualifiedName(function.GetQualifiedName()));
 		} else {
 			serializer.WritePropertyWithDefault(505, "catalog_name", function.GetCatalogName(), Identifier());
 			serializer.WritePropertyWithDefault(506, "schema_name", function.GetSchemaName(), Identifier());
@@ -452,10 +460,12 @@ public:
 			}
 		}
 
-		// Lookup the function (and the correct overload)
-		FunctionBinder binder(context);
+		// Lookup the function (and the correct overload), binding within the decimal width the function was bound in
+		const auto decimal_width_limit = DecimalWidthLimit::FromReturnType(return_type);
+		FunctionBinder binder(context, &decimal_width_limit);
 		binder.arguments_collated = true;
-		const auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types});
+		const auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types},
+		                                                     false, binder.FixedDecimalWidthLimit());
 		optional_idx overload;
 		if (func_idx.IsSuccess()) {
 			overload = func_idx.GetBinding().GetOverloadIndex();
@@ -490,7 +500,8 @@ public:
 				// arguments it is called with
 				std::decay_t<decltype(functions)> overload(functions.name);
 				overload.AddFunction(function);
-				auto rebind = FunctionBinder::SelectFunction(context, overload, {children, keyword_args}, true);
+				auto rebind = FunctionBinder::SelectFunction(context, overload, {children, keyword_args}, true,
+				                                             binder.FixedDecimalWidthLimit());
 				if (!rebind) {
 					rebind.GetError().Throw();
 				}

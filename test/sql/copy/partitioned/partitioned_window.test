@@ -94,3 +94,55 @@ FROM (
 WHERE col1 - prev_p1 <> 2
 ----
 0
+
+# Window fusion
+statement ok
+CREATE TABLE fusion_tbl AS 
+	SELECT 
+		i%11 AS partition, 
+		i col1, 
+		i // 7 col2, 
+		(i%3)::VARCHAR col3 
+	FROM range(10000) t(i)
+
+statement ok
+COPY fusion_tbl TO '{TEST_DIR}/fusion_tbl' (FORMAT parquet, PARTITION_BY (partition))
+
+statement ok
+DROP TABLE fusion_tbl
+
+statement ok
+CREATE VIEW fusion_tbl AS FROM '{TEST_DIR}/fusion_tbl/**/*.parquet'
+
+query II
+EXPLAIN
+SELECT COUNT(*)
+FROM (
+	FROM fusion_tbl
+	WINDOW w AS (PARTITION BY partition ORDER BY col1)
+	QUALIFY row_number() OVER w BETWEEN 2 AND 4
+);
+----
+physical_plan	<REGEX>:.*Filter.*Window.*Limit.*
+
+query I
+SELECT COUNT(*)
+FROM (
+	FROM fusion_tbl
+	WINDOW w AS (PARTITION BY partition ORDER BY col1)
+	QUALIFY row_number() OVER w BETWEEN 2 AND 4
+);
+----
+33
+
+query II
+EXPLAIN
+SELECT COUNT(*)
+FROM (
+	FROM fusion_tbl
+	WINDOW w AS (PARTITION BY partition ORDER BY col1)
+	QUALIFY row_number() OVER w = 1
+);
+----
+physical_plan	<!REGEX>:.*Window.*
+

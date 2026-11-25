@@ -447,6 +447,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 		chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset);
 	}
 	ValidateColumnMetadata(row_group_num_rows, *chunk);
+	Schema().ValidateNullCount(*chunk, Reader().GetFileName().c_str());
 	group_rows_available = NumericCast<idx_t>(chunk->meta_data.num_values);
 }
 
@@ -1209,13 +1210,14 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 	auto &repeat_out = input.repeat_out;
 
 	auto to_read = num_values;
+	dictionary_decoder.ResetFilter(filter_state);
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
 	auto read_now = ReadPageHeaders(to_read, &filter, &filter_state);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
-	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
+	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter(filter_state)) {
 		BlockPinGuard pin_guard(*this);
 		if (page_is_filtered_out) {
 			// the page has been filtered out entirely - skip
@@ -1322,6 +1324,9 @@ static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader,
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	case PhysicalType::INT128:
 		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+	case PhysicalType::VARCHAR:
+		// a wide decimal (a BIGNUM blob) backed by an integer column
+		return ParquetDecimalUtils::CreateReader(reader, schema);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
