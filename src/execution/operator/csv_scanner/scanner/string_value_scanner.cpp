@@ -1768,6 +1768,14 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 		result.current_line_position.begin = result.current_line_position.end;
 		result.current_line_position.end = current_line_start;
 		result.InvalidState(result);
+		if (!iterator.IsBoundarySet()) {
+			// without a boundary there is no FinishBoundaryScan to handle the error of this row
+			const auto chunk_col_id_before = result.chunk_col_id;
+			if (result.current_errors.HandleErrors(result)) {
+				result.InvalidateUnwrittenColumns(chunk_col_id_before);
+				result.number_of_rows++;
+			}
+		}
 	} else {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);

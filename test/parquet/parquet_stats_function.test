@@ -75,6 +75,7 @@ EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/nan_count_zero.parquet', can_have
 ----
 physical_plan	<REGEX>:.*Empty Result.*
 
+# NaN-containing file: the finite bounds are kept, and a positive nan_count keeps NaN as the upper bound
 foreach encoding dict plain bss
 
 foreach column f d
@@ -82,7 +83,7 @@ foreach column f d
 query I
 SELECT stats({column}) FROM read_parquet('{TEST_DIR}/nan_count_{encoding}.parquet', can_have_nan=false) LIMIT 1
 ----
-{'has_no_null': true, 'has_null': true}
+{'has_no_null': true, 'has_null': true, 'max': nan, 'min': 1.0}
 
 endloop
 
@@ -98,14 +99,3 @@ query II
 SELECT stats(f), stats(d) FROM read_parquet('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan=true) LIMIT 1
 ----
 {'has_no_null': true, 'has_null': false, 'max': nan, 'min': -1.0}	{'has_no_null': true, 'has_null': false, 'max': nan, 'min': -1.0}
-
-# Positive nan_count with finite bounds must retain NaN in the optimizer statistics
-foreach column f d
-
-# the optimizer statistics keep NaN as the upper bound
-query I
-SELECT stats({column}) FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) LIMIT 1
-----
-{'has_no_null': true, 'has_null': true, 'max': nan, 'min': 1.0}
-
-endloop

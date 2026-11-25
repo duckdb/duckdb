@@ -187,7 +187,7 @@ TEST_CASE("Read-ahead reports an async I/O failure instead of hanging or ending 
 		file_list +=
 		    (file_list.empty() ? "" : ", ") + StringUtil::Format("'%s%s'", ReadAheadFaultFileSystem::Prefix(), name);
 	}
-	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(fault_fs));
+	VirtualFileSystem::Get(*con.context).RegisterSubSystem(std::move(fault_fs));
 
 	// with the worker parked the scan thread drains the queue itself, in order: the first file's I/O fails and
 	// records the error, and the file open queued behind it is retired instead of run, leaving that reader in

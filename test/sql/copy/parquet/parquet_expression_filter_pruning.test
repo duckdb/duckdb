@@ -133,7 +133,7 @@ SkipRowGroup	9
 statement ok
 CALL truncate_duckdb_logs()
 
-# NaN at row 95000 -> its row group has no min/max stats and is never pruned; the others are pruned
+# NaN at row 95000 sits in the last row group, which matches the filter anyway; the others are pruned
 statement ok
 CALL enable_logging('PhysicalOperator')
 

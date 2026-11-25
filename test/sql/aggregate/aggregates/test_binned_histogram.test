@@ -399,3 +399,17 @@ query I
 EXECUTE binned_arg(25)
 ----
 {10=0, 20=0, 30=15, 40=0, 50=0}
+
+# NaN bins and values are ordered after all other values, also when parallel aggregation combines states
+statement ok
+CREATE TABLE nan_obs AS SELECT CASE WHEN i % 7 = 0 THEN 'NaN' ELSE (i % 20)::DOUBLE END v FROM range(1000000) r(i)
+
+query I
+SELECT histogram(v, [5::DOUBLE, 'NaN', 15]) FROM nan_obs
+----
+{5.0=257142, 15.0=428572, nan=314286}
+
+query I
+SELECT histogram_exact(v, [1.0::DOUBLE, 'NaN']) FROM (VALUES (1.0::DOUBLE), (2.0), ('NaN'), ('NaN')) t(v)
+----
+{1.0=1, nan=2, inf=1}
