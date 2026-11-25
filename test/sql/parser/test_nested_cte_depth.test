@@ -16,10 +16,10 @@ WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (SELECT 1 AS x) SELECT * F
 ----
 1
 
-# common table expressions next to each other do not nest: every body peaks at six levels, six of them would
+# common table expressions next to each other do not nest: every body peaks at seven levels, six of them would
 # exceed the limit if a finished definition kept its level
 query I
-WITH a AS (SELECT + + + + 1), b AS (SELECT + + + + 1), c AS (SELECT + + + + 1), d AS (SELECT + + + + 1), e AS (SELECT + + + + 1), f AS (SELECT + + + + 1) SELECT 1;
+WITH a AS (SELECT abs(abs(abs(abs(abs(1)))))), b AS (SELECT abs(abs(abs(abs(abs(1)))))), c AS (SELECT abs(abs(abs(abs(abs(1)))))), d AS (SELECT abs(abs(abs(abs(abs(1)))))), e AS (SELECT abs(abs(abs(abs(abs(1)))))), f AS (SELECT abs(abs(abs(abs(abs(1)))))) SELECT 1;
 ----
 1
 
