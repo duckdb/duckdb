@@ -277,6 +277,23 @@ SELECT count(*) FROM (SELECT k, sum(v) s FROM wide GROUP BY k LIMIT 3)
 ----
 3
 
+# a binned histogram (the update rejects NULL bins of the row that initializes a group) and a volatile aggregate
+# argument (the filter below the aggregate would evaluate it for fewer rows) are declined as well
+query II
+EXPLAIN SELECT k, histogram_exact(v > 0, [true]) FROM wide GROUP BY k LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top N.*
+
+query II
+EXPLAIN SELECT k, sum((random() > 2)::INTEGER) FROM wide GROUP BY k LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top N.*
+
+query I
+SELECT count(*) FROM (SELECT k, histogram_exact(v > 0, [true]) h FROM wide GROUP BY k LIMIT 3)
+----
+3
+
 query II
 SELECT count(*), sum(c) FROM (SELECT random() r, k, count(*) c FROM many GROUP BY k LIMIT 9000)
 ----

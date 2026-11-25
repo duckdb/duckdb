@@ -359,8 +359,9 @@ EXPLAIN SELECT k1, string_agg(k2) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
 ----
 logical_opt	<!REGEX>:.*Top Key Filter.*
 
-# the binned histograms of a type with an "other values" bucket (finalize throws when a bin is its key), with and
-# without an aggregate ORDER BY. A BOOLEAN bin type has no such bucket and keeps the filter
+# the binned histograms, with and without an aggregate ORDER BY: the update throws on a NULL bin list or entry of the
+# row that initializes a group, and the finalize when a bin is the key of the "other values" bucket. A BOOLEAN bin
+# type has no such bucket, but its bins can be NULL all the same
 query II
 EXPLAIN SELECT k, histogram_exact(v, [1]) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
 ----
@@ -373,6 +374,40 @@ logical_opt	<!REGEX>:.*Top Key Filter.*
 
 query II
 EXPLAIN SELECT k, histogram(v = 1, [true]) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k, histogram_exact(v = 1, [true] ORDER BY other_key) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+# aggregates with a state of their own that cannot throw keep the filter (the unbinned histogram is rewritten into a
+# map_from_entries projection, which can throw, and is declined for that)
+query II
+EXPLAIN SELECT k, approx_count_distinct(v), arg_max(v, other_key), list(v) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
+# a volatile expression that the aggregate evaluates (an argument, a FILTER, a group key that is not the ORDER BY
+# key): the filter below the aggregate would evaluate it for fewer rows. The sibling without the volatile term fires
+query II
+EXPLAIN SELECT k1, sum((random() > 2)::INTEGER) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, count(*) FILTER (WHERE random() > 2) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, count(*) FROM t GROUP BY k1, (random() > 2)::INTEGER ORDER BY k1 LIMIT 3
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k1, sum((v > 2)::INTEGER), count(*) FILTER (WHERE v > 2) FROM t GROUP BY k1, (v > 2)::INTEGER ORDER BY k1 LIMIT 3
 ----
 logical_opt	<REGEX>:.*Top Key Filter.*
 
@@ -486,6 +521,21 @@ query II
 SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k LIMIT 1
 ----
 0	0
+
+# a BOOLEAN histogram whose bins are NULL on the rows of k = 2 that a filter had cut off (v = 1): under the ORDER BY
+# the group takes its bins from a row with v = -1, which the filter had dropped
+query II
+SELECT k, histogram_exact(v = 1, CASE WHEN v = 1 THEN [NULL::BOOLEAN] ELSE [true] END ORDER BY v) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+0	{true=0}
+
+# volatile terms in the aggregate
+query III
+SELECT k1, sum((random() > 2)::INTEGER), count(*) FILTER (WHERE random() > 2) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
+----
+0	0	0
+1	0	0
+2	0	0
 
 # empty input
 query II

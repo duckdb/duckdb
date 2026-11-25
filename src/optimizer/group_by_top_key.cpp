@@ -63,12 +63,30 @@ bool IsPlainGroupedAggregate(const LogicalAggregate &aggregate) {
 }
 
 //! Whether an aggregate function of the aggregate can throw. The groups after the bound lose rows to the filter and
-//! are finalized before the Top-N drops them, so sum(DECIMAL(38,0)) overflows on a group whose cancelling rows are
-//! gone. The arguments of the aggregates are not checked, they see unchanged input rows, only fewer of them.
+//! are updated, combined and finalized before the Top-N drops them, so sum(DECIMAL(38,0)) overflows on a group whose
+//! cancelling rows are gone and histogram(v, bins) takes its bins from a row that was not the first before. The
+//! arguments of the aggregates are not checked, they see unchanged input rows, only fewer of them.
 bool AggregateFunctionCanThrow(const LogicalAggregate &aggregate) {
 	for (auto &expr : aggregate.expressions) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		if (aggr.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Whether the aggregate evaluates a volatile expression: an aggregate function, one of its arguments, a FILTER or a
+//! group expression. The filter below the aggregate evaluates them for fewer rows, which a side effect (a sequence)
+//! would show.
+bool AggregateIsVolatile(const LogicalAggregate &aggregate) {
+	for (auto &expr : aggregate.expressions) {
+		if (expr->IsVolatile()) {
+			return true;
+		}
+	}
+	for (auto &group : aggregate.groups) {
+		if (group->IsVolatile()) {
 			return true;
 		}
 	}
@@ -275,7 +293,7 @@ unique_ptr<LogicalOperator> GroupByTopKey::LimitToTopN(unique_ptr<LogicalOperato
 	// an aggregate without aggregate functions is a DISTINCT: the LIMIT stops it early
 	if (!IsPlainGroupedAggregate(aggregate) || aggregate.expressions.empty() ||
 	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER ||
-	    AggregateFunctionCanThrow(aggregate)) {
+	    AggregateFunctionCanThrow(aggregate) || AggregateIsVolatile(aggregate)) {
 		return op;
 	}
 	// order by the first group key that is a column, preferring one that the scans can filter on
@@ -361,7 +379,7 @@ bool GroupByTopKey::TryMatch(LogicalOperator &op, TopKeyMatch &match) {
 	auto &aggregate = child.get().Cast<LogicalAggregate>();
 	if (!IsPlainGroupedAggregate(aggregate) ||
 	    aggregate.children[0]->type == LogicalOperatorType::LOGICAL_TOP_KEY_FILTER ||
-	    AggregateFunctionCanThrow(aggregate)) {
+	    AggregateFunctionCanThrow(aggregate) || AggregateIsVolatile(aggregate)) {
 		return false;
 	}
 	// the groups after the bound are incomplete until the Top-N drops them, and the projections and the ORDER BY are
