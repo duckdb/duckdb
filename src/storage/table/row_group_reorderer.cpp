@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 
+#include "duckdb/storage/table/column_data.hpp"
+
 namespace duckdb {
 
 namespace {
