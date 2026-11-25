@@ -112,7 +112,38 @@ SELECT decimal_division(1::HUGEINT, 3::BIGINT), typeof(decimal_division(1::HUGEI
 ----
 0.33333333333333333333	DECIMAL(58,20)
 
-# the HUGEINT and UHUGEINT values of 39 digits divide as DECIMAL(39,0)
+# wide arguments from a column with a fixed-size result, in each physical type of the result
+statement ok
+CREATE TABLE w (a DECIMAL(41,40));
+
+statement ok
+INSERT INTO w VALUES ('0.25'), ('-0.25'), (NULL);
+
+query IIIIIIII
+SELECT decimal_division(a, 3::DECIMAL(1,0), 3) AS q16, typeof(q16),
+       decimal_division(a, 3::DECIMAL(1,0), 8) AS q32, typeof(q32),
+       decimal_division(a, 3::DECIMAL(1,0), 17) AS q64, typeof(q64),
+       decimal_division(a, 3::DECIMAL(1,0), 30) AS q128, typeof(q128)
+FROM w ORDER BY a DESC NULLS LAST;
+----
+0.083	DECIMAL(4,3)	0.08333333	DECIMAL(9,8)	0.08333333333333333	DECIMAL(18,17)	0.083333333333333333333333333333	DECIMAL(31,30)
+-0.083	DECIMAL(4,3)	-0.08333333	DECIMAL(9,8)	-0.08333333333333333	DECIMAL(18,17)	-0.083333333333333333333333333333	DECIMAL(31,30)
+NULL	DECIMAL(4,3)	NULL	DECIMAL(9,8)	NULL	DECIMAL(18,17)	NULL	DECIMAL(31,30)
+
+# an uncast HUGEINT or UHUGEINT argument is bound as DECIMAL(38,0) as long as these types report 38 digits: a value of
+# 39 digits fails the cast at execution. Once they report 39 digits (duckdb/duckdb#29340, which lands after this
+# change) the argument is a DECIMAL(39,0) and these statements divide, which is to be pinned there
+statement error
+SELECT decimal_division(170141183460469231731687303715884105727::HUGEINT, 7);
+----
+<REGEX>:Conversion Error:.*Could not cast value 170141183460469231731687303715884105727 to DECIMAL\(38,0\).*
+
+statement error
+SELECT decimal_division(340282366920938463463374607431768211455::UHUGEINT, 7);
+----
+<REGEX>:Conversion Error:.*Could not cast value.*
+
+# cast explicitly, the HUGEINT and UHUGEINT values of 39 digits divide as DECIMAL(39,0)
 query II
 SELECT decimal_division(170141183460469231731687303715884105727::HUGEINT::DECIMAL(39,0), 2::DECIMAL(1,0), 0),
        decimal_division(340282366920938463463374607431768211455::UHUGEINT::DECIMAL(39,0), 5::DECIMAL(1,0), 0);
