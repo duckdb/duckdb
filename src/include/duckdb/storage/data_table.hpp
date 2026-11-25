@@ -303,12 +303,11 @@ public:
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
+	//! AddIndex moves an index to this table's index list, between commits.
+	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 	//! Applies the commits made during the build to the index, then makes it usable in the index list.
-	//! Without a building entry, fails if a commit changed the table while a CREATE INDEX scan ran.
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
 	                                idx_t index_oid, ConstraintCheckMode check_mode);
-	//! Records the table's change count in the transaction when a CREATE INDEX scan without deltas starts
-	void AddIndexScan(DuckTransaction &transaction);
 	//! Starts building an index in place: later commits change the deltas of its entry
 	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
@@ -337,8 +336,6 @@ private:
 	void RebuildIndexes();
 	//! Takes the commit lock and the append lock, and fails if an ALTER replaced the table
 	unique_lock<mutex> LockMainTableForIndex(unique_lock<mutex> &table_lock);
-	//! Fails with a retryable error if a commit changed the table while a CREATE INDEX scan without deltas ran
-	void VerifyNoChangesDuringIndexScan(DuckTransaction &transaction, const Index &index);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,

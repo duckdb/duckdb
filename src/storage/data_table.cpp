@@ -439,24 +439,10 @@ static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
 //! The most consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
-void DataTable::AddIndexScan(DuckTransaction &transaction) {
-	// under the commit lock no commit is in progress: every row the scan can read was counted before its start
-	auto commit_lock = db.GetStorageManager().GetCommitLock();
-	transaction.SetIndexScanStart(*info, info->GetChangeCount());
-}
-
-void DataTable::VerifyNoChangesDuringIndexScan(DuckTransaction &transaction, const Index &index) {
-	auto start_change_count = transaction.TakeIndexScanStart(*info);
-	if (!start_change_count.IsValid()) {
-		throw TransactionException("CREATE INDEX %s on table %s did not scan the table", index.GetIndexName(),
-		                           GetTableName());
-	}
-	if (info->GetChangeCount() != start_change_count.GetIndex()) {
-		// without deltas, the build cannot apply the commits made after its scan started
-		throw TransactionException("Transaction conflict: table %s was changed while CREATE INDEX built %s, which "
-		                           "cannot apply concurrent changes. Retry the CREATE INDEX",
-		                           GetTableName(), index.GetIndexName());
-	}
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	unique_lock<mutex> table_lock;
+	auto commit_lock = LockMainTableForIndex(table_lock);
+	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
 shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
@@ -468,7 +454,6 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 		// an ALTER while the index was not yet in the index list did not see it
 		unique_lock<mutex> table_lock;
 		auto commit_lock = LockMainTableForIndex(table_lock);
-		VerifyNoChangesDuringIndexScan(transaction, *index);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
@@ -1194,8 +1179,6 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	// a CREATE INDEX scan without deltas can read the rows from here on, even if the commit reverts them
-	info->AddChange();
 	state.row_start = NumericCast<row_t>(row_groups->GetNextRowId());
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();

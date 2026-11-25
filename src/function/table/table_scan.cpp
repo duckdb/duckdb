@@ -362,8 +362,6 @@ public:
 		// start before the scan fixes its row range, so that it reads every row committed up to the start
 		if (bind_data.index_template) {
 			index_build = storage.AddBuildingIndex(tx, *bind_data.index_template);
-		} else if (bind_data.is_create_index) {
-			storage.AddIndexScan(tx);
 		}
 	}
 

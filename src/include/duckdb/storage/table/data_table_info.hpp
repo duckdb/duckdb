@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 
@@ -57,13 +56,6 @@ public:
 	const vector<Identifier> &GetSchemaPath() const;
 	Identifier GetTableName();
 	void SetTableName(Identifier name);
-	//! Counts a change to rows of the table, under the commit lock: an append (even if reverted), delete or update
-	void AddChange() {
-		++change_count;
-	}
-	idx_t GetChangeCount() const {
-		return change_count;
-	}
 
 private:
 	//! The database instance of the table
@@ -84,8 +76,6 @@ private:
 	optional_idx last_seen_checkpoint;
 	//! The amount of row groups the checkpoint is processing
 	optional_idx checkpoint_row_group_count;
-	//! See AddChange()
-	atomic<idx_t> change_count {0};
 };
 
 } // namespace duckdb
