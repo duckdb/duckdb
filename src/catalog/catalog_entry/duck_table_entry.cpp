@@ -1419,7 +1419,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
 	// dependency yet, so the new storage checks the indexes registered with it.
-	// FIXME: constraint indexes are loaded by position; load them explicitly and allow this with other indexes
 	idx_t constraint_index_count = 0;
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
