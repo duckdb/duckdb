@@ -240,14 +240,13 @@ static void ApplyIndexRemovalToDeltas(BoundIndex &index, IndexDeltas &deltas, Da
 	switch (removal_type) {
 	case IndexRemovalType::MAIN_INDEX_ONLY:
 	case IndexRemovalType::MAIN_INDEX: {
-		// Removing from the main index cannot happen directly due to the concurrent checkpoint; add the removal to a
+		// Removing from the main index cannot happen directly during a checkpoint or a build; add the removal to a
 		// delta index.
 		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA);
 		auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA);
 
-		// If we have also added data during this checkpoint, we might need to remove from there instead.
-		// We FIRST try to remove from "added_data_during_checkpoint"; any rows that are not there are added to
-		// "removed_data_during_checkpoint".
+		// If we have also added data to the deltas, we might need to remove from there instead.
+		// We FIRST try to remove from "added_data"; any rows that are not there are added to "removed_data".
 		if (added_data) {
 			DeleteOrAppend(*added_data, removed_data, chunk, row_ids);
 		} else {
@@ -264,11 +263,11 @@ static void ApplyIndexRemovalToDeltas(BoundIndex &index, IndexDeltas &deltas, Da
 	case IndexRemovalType::REVERT_MAIN_INDEX: {
 		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA);
 		// Revert adding to the main index.
-		// We have added data during this checkpoint as well, so the removal might have EITHER:
-		// (1) added data to "removed_data_during_checkpoint" or
-		// (2) removed data from "added_data_during_checkpoint".
-		// Revert by first trying to remove from "removed_data_during_checkpoint"; any rows that were not removed are
-		// re-added to "added_data_during_checkpoint".
+		// We have added data to the deltas as well, so the removal might have EITHER:
+		// (1) added data to "removed_data" or
+		// (2) removed data from "added_data".
+		// Revert by first trying to remove from "removed_data"; any rows that were not removed are re-added to
+		// "added_data".
 		if (auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 			DeleteOrAppend(removed_data, *added_data, chunk, row_ids);
 		} else {

@@ -190,7 +190,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// Add the index to the storage.
 	auto &transaction = DuckTransaction::Get(context, storage.db);
-	// an ALTER publishes to the table it replaced, which shares the index list
+	// an ALTER publishes to the new table, which shares the index list
 	auto &target = alter_table_info ? table.Parent().Cast<DuckTableEntry>().GetStorage() : storage;
 	auto index_entry = target.AddIndex(context, transaction, std::move(bound_index), index_oid, check_mode);
 	if (local_table_storage) {

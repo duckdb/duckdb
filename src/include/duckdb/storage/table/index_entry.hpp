@@ -191,7 +191,7 @@ public:
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds the required transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
-	//! Takes the deltas of a building entry, leaving empty ones for later commits
+	//! Takes the deltas of a building entry; later commits create new ones
 	IndexBuildDeltas TakeBuildDeltas();
 	//! Merges taken deltas into the built index, checking its constraint
 	static void MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas);
