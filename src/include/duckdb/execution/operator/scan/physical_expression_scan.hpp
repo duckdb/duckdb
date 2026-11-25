@@ -41,11 +41,7 @@ public:
 public:
 	bool IsFoldable() const;
 	void EvaluateExpression(ClientContext &context, idx_t expression_idx, optional_ptr<DataChunk> child_chunk,
-	                        DataChunk &result, optional_ptr<DataChunk> temp_chunk_ptr = nullptr) const;
-
-private:
-	void EvaluateExpressionInternal(ClientContext &context, idx_t expression_idx, optional_ptr<DataChunk> child_chunk,
-	                                DataChunk &result, DataChunk &temp_chunk) const;
+	                        DataChunk &result, DataChunk &temp_chunk) const;
 };
 
 } // namespace duckdb

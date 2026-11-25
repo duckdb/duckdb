@@ -140,3 +140,125 @@ statement error
 SELECT COLUMNS([x for x in (* REPLACE (i AS i))]) FROM integers
 ----
 only allowed as the root element
+
+# Qualified stars retain their relation when used as lists of column names.
+query I
+SELECT COLUMNS([x FOR x IN c.* IF x LIKE 'b'])
+FROM (SELECT 0 a, 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+1
+
+query I
+SELECT COLUMNS([x FOR x IN c.* IF x LIKE 'b'])
+FROM (SELECT 2 b) d CROSS JOIN (SELECT 0 a, 1 b) c
+----
+1
+
+# Separate COLUMNS expressions may select from different relations.
+query II
+SELECT current_b, previous_b FROM (
+    SELECT COLUMNS([x FOR x IN c.* IF x LIKE 'b']) AS 'current_\0',
+           COLUMNS([x FOR x IN d.* IF x LIKE 'b']) AS 'previous_\0'
+    FROM (SELECT 0 a, 1 b) c CROSS JOIN (SELECT 2 b) d
+)
+----
+1	2
+
+# Repeated stars from the same relation compare identifiers case-insensitively.
+query I
+SELECT COLUMNS([x FOR x IN "C table".* IF x LIKE 'b'] || [x FOR x IN "c TABLE".* IF x LIKE 'b'])
+FROM (SELECT 0 a, 1 b) "C table" CROSS JOIN (SELECT 2 b) d
+----
+1
+
+# Unqualified stars and literal lists still select matching names from all relations.
+query II
+SELECT COLUMNS([x FOR x IN * IF x LIKE 'b'] || [x FOR x IN * IF x LIKE 'b'])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+1	2
+
+query II
+SELECT COLUMNS(['b']) FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+1	2
+
+# Different scopes within one COLUMNS expression are rejected in either order.
+statement error
+SELECT COLUMNS([x FOR x IN c.*] || [x FOR x IN d.*])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+COLUMNS cannot combine stars from different relations
+
+statement error
+SELECT COLUMNS([x FOR x IN d.*] || [x FOR x IN c.*])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+COLUMNS cannot combine stars from different relations
+
+statement error
+SELECT COLUMNS([x FOR x IN c.*] || [x FOR x IN *])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+COLUMNS cannot mix qualified and unqualified stars
+
+statement error
+SELECT COLUMNS([x FOR x IN *] || [x FOR x IN c.*])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+COLUMNS cannot mix qualified and unqualified stars
+
+# All resulting names resolve within the selected relation, including literal names.
+query II
+SELECT COLUMNS([x FOR x IN (c.* EXCLUDE (b))] || ['b'])
+FROM (SELECT 0 a, 1 b) c CROSS JOIN (SELECT 2 b) d
+----
+0	1
+
+query I
+SELECT COLUMNS([replace(x, 'b', 'z') FOR x IN c.*])
+FROM (SELECT 1 b, 4 z) c CROSS JOIN (SELECT 3 z) d
+----
+4
+
+statement error
+SELECT COLUMNS([x FOR x IN c.*] || ['z'])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 z) d
+----
+Column "z" was selected but was not found
+
+statement error
+SELECT COLUMNS([x FOR x IN c.* IF x LIKE 'z'])
+FROM (SELECT 1 b) c CROSS JOIN (SELECT 2 z) d
+----
+resulted in an empty set of columns
+
+# Struct fields must not select unrelated top-level columns with the same name.
+query I
+SELECT COLUMNS([x FOR x IN s.* IF x LIKE 'b'])
+FROM (SELECT {'a': 0, 'b': 1} s, 2 b) t
+----
+1
+
+# A qualified USING column retains the value from its own side of an outer join.
+query I rowsort
+SELECT COLUMNS([x FOR x IN c.* IF x LIKE 'b'])
+FROM (SELECT 1 b) c FULL JOIN (SELECT 2 b) d USING (b)
+----
+1
+NULL
+
+# WHERE must not test the nullability of another relation's columns.
+query II
+SELECT c.b, d.b
+FROM (SELECT 1 b) c CROSS JOIN (SELECT NULL::INTEGER b) d
+WHERE COLUMNS([x FOR x IN c.* IF x LIKE 'b']) IS NOT NULL
+----
+1	NULL
+
+# Unpacking must not introduce arguments from another relation.
+query I
+SELECT coalesce(*COLUMNS([x FOR x IN c.* IF x LIKE 'b']))
+FROM (SELECT NULL::INTEGER b) c CROSS JOIN (SELECT 2 b) d
+----
+NULL
