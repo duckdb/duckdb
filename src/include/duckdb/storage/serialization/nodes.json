@@ -210,6 +210,44 @@
     "pointer_type": "none"
   },
   {
+    "class": "ComparisonExpressionTail",
+    "includes": [
+      "duckdb/parser/expression/case_expression.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "comparison_type",
+        "type": "ExpressionType"
+      },
+      {
+        "id": 101,
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "SimpleCaseCheck",
+    "includes": [
+      "duckdb/parser/expression/case_expression.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "when",
+        "type": "vector<ComparisonExpressionTail>"
+      },
+      {
+        "id": 101,
+        "name": "then_expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"

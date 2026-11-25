@@ -1,15 +1,10 @@
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
 namespace duckdb {
 
 struct IsDistinctFromTail {
-	ExpressionType comparison_type;
-	unique_ptr<ParsedExpression> expression;
-};
-
-struct ComparisonExpressionTail {
 	ExpressionType comparison_type;
 	unique_ptr<ParsedExpression> expression;
 };
@@ -57,11 +52,6 @@ struct IsExpressionTail {
 	ComparisonExpressionTail comparison;
 	OtherOperatorTail other;
 	unique_ptr<ParsedExpression> cast;
-};
-
-struct SimpleCaseCheck {
-	vector<ComparisonExpressionTail> when;
-	unique_ptr<ParsedExpression> then_expr;
 };
 
 struct BinaryExpressionTail {

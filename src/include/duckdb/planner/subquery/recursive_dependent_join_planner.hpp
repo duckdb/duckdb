@@ -44,6 +44,7 @@ private:
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);
+	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	unique_ptr<LogicalOperator> root;

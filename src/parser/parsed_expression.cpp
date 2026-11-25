@@ -144,9 +144,7 @@ void ParsedExpression::VerifyDeserialized() {
 		}
 		break;
 	case ExpressionClass::CASE:
-		if (Cast<CaseExpression>().CaseChecks().empty()) {
-			throw invalid("no WHEN clauses");
-		}
+		Cast<CaseExpression>().VerifyShape();
 		break;
 	case ExpressionClass::FUNCTION:
 		if (!Cast<FunctionExpression>().OrderBy()) {

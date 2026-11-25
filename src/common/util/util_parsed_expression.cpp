@@ -56,6 +56,15 @@ ConstChildrenView ParsedExpression::Children() const {
 			result.Append(*check.then_expr);
 		}
 		result.Append(cast_expr.Else());
+		if (cast_expr.CaseOperand()) {
+			result.Append(*cast_expr.CaseOperand());
+		}
+		for (auto &check : cast_expr.SimpleChecks()) {
+			for (auto &alternative : check.when) {
+				result.Append(*alternative.expression);
+			}
+			result.Append(*check.then_expr);
+		}
 		break;
 	}
 	case ExpressionClass::CAST: {
@@ -214,6 +223,15 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 			result.Append(check.then_expr);
 		}
 		result.Append(cast_expr.ElseMutable());
+		if (cast_expr.CaseOperandMutable()) {
+			result.Append(cast_expr.CaseOperandMutable());
+		}
+		for (auto &check : cast_expr.SimpleChecksMutable()) {
+			for (auto &alternative : check.when) {
+				result.Append(alternative.expression);
+			}
+			result.Append(check.then_expr);
+		}
 		break;
 	}
 	case ExpressionClass::CAST: {
@@ -409,9 +427,29 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(else_expr, other_p.else_expr)) {
 		return false;
 	}
+	if (!ParsedExpression::Equals(case_operand, other_p.case_operand)) {
+		return false;
+	}
+	if (simple_checks.size() != other_p.simple_checks.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < simple_checks.size(); i++) {
+		if (!simple_checks[i].Equals(other_p.simple_checks[i])) {
+			return false;
+		}
+	}
 	return true;
 }
 
+hash_t CaseExpression::Hash() const {
+	hash_t hash = ParsedExpression::Hash();
+	for (auto &arm : simple_checks) {
+		for (auto &alternative : arm.when) {
+			hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(alternative.comparison_type)));
+		}
+	}
+	return hash;
+}
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
@@ -422,6 +460,11 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 		copy->case_checks.push_back(std::move(new_check));
 	}
 	copy->else_expr = else_expr ? else_expr->Copy() : nullptr;
+	copy->case_operand = case_operand ? case_operand->Copy() : nullptr;
+	for (auto &arg : simple_checks) {
+		copy->simple_checks.emplace_back(arg.Copy());
+	}
+	copy->single_comparison = single_comparison;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

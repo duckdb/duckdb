@@ -641,7 +641,8 @@ BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, b
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }
 
-void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+bool ExpressionBinder::IsUnnestColumn(const ColumnBinding &column_binding) {
+	return false;
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

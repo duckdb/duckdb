@@ -2,6 +2,8 @@
 # description: Test simple CASE with a comma-separated list of WHEN operands
 # group: [generic]
 
+load {TEST_DIR}/case_when_list.db readwrite v2.1.0
+
 statement ok
 CREATE TABLE tbl AS SELECT * FROM (VALUES (0), (2), (3), (5), (9), (NULL)) tbl(i)
 

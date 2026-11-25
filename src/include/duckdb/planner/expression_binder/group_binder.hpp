@@ -29,7 +29,7 @@ public:
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
-	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
+	bool IsUnnestColumn(const ColumnBinding &column_binding) override;
 
 	string UnsupportedAggregateMessage() override;
 

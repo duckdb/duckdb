@@ -336,6 +336,18 @@ CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &des
 	return result;
 }
 
+void ComparisonExpressionTail::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ExpressionType>(100, "comparison_type", comparison_type);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", expression);
+}
+
+ComparisonExpressionTail ComparisonExpressionTail::Deserialize(Deserializer &deserializer) {
+	ComparisonExpressionTail result;
+	deserializer.ReadProperty<ExpressionType>(100, "comparison_type", result.comparison_type);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", result.expression);
+	return result;
+}
+
 void ExportedTableData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(1, "table_name", qualified_name.Name());
 	serializer.WritePropertyWithDefault<Identifier>(2, "schema_name", qualified_name.Schema());
@@ -842,6 +854,18 @@ SerializedReadCSVData SerializedReadCSVData::Deserialize(Deserializer &deseriali
 	deserializer.ReadProperty<SerializedCSVReaderOptions>(106, "options", result.options);
 	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result.reader_bind);
 	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result.column_info);
+	return result;
+}
+
+void SimpleCaseCheck::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<ComparisonExpressionTail>>(100, "when", when);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "then_expr", then_expr);
+}
+
+SimpleCaseCheck SimpleCaseCheck::Deserialize(Deserializer &deserializer) {
+	SimpleCaseCheck result;
+	deserializer.ReadPropertyWithDefault<vector<ComparisonExpressionTail>>(100, "when", result.when);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "then_expr", result.then_expr);
 	return result;
 }
 

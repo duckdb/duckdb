@@ -31,14 +31,15 @@ string GroupBinder::UnsupportedAggregateMessage() {
 	return "GROUP BY clause cannot contain aggregates!";
 }
 
-void GroupBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+bool GroupBinder::IsUnnestColumn(const ColumnBinding &column_binding) {
 	for (auto &node_pair : node.unnests.GroupBy()) {
 		auto &unnest_node = node_pair.second;
 		if (unnest_node.index == column_binding.table_index &&
 		    column_binding.column_index < unnest_node.expressions.size()) {
-			throw BinderException("UNNEST in lambda expressions is not supported");
+			return true;
 		}
 	}
+	return false;
 }
 
 void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state, ProjectionIndex group_index,

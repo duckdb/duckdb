@@ -21,7 +21,7 @@ public:
 	                              unique_ptr<ParsedExpression> &expr_ptr) override;
 
 protected:
-	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
+	bool IsUnnestColumn(const ColumnBinding &column_binding) override;
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
 
 protected:
