@@ -6,6 +6,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -285,14 +286,46 @@ static bool IsSameConjunct(const Expression &a, const Expression &b) {
 	       BoundComparisonExpression::Right(left).Equals(BoundComparisonExpression::Left(right));
 }
 
-static bool ContainsConjunct(const vector<unique_ptr<Expression>> &conjuncts, const Expression &expr) {
-	for (auto &conjunct : conjuncts) {
-		if (IsSameConjunct(*conjunct, expr)) {
-			return true;
-		}
+//! Borrows immutable expressions. Keep the index within the lifetime of the expressions it searches.
+class ScalarAggregateMerger::ConjunctIndex {
+public:
+	void Add(const Expression &expr) {
+		conjuncts[HashConjunct(expr)].push_back(expr);
 	}
-	return false;
-}
+
+	bool Contains(const Expression &expr) const {
+		auto entry = conjuncts.find(HashConjunct(expr));
+		return entry != conjuncts.end() && Contains(entry->second, expr);
+	}
+
+private:
+	static hash_t HashConjunct(const Expression &expr) {
+		if (!BoundComparisonExpression::IsComparison(expr)) {
+			return expr.Hash();
+		}
+		// IsSameConjunct also matches flipped comparisons, without comparing their function bind data.
+		auto type = expr.GetExpressionType();
+		auto flipped_type = FlipComparisonExpression(type);
+		if (flipped_type < type) {
+			type = flipped_type;
+		}
+		auto &comparison = expr.Cast<BoundFunctionExpression>();
+		auto operands = Hash(BoundComparisonExpression::Left(comparison).Hash()) +
+		                Hash(BoundComparisonExpression::Right(comparison).Hash());
+		return CombineHash(Hash(static_cast<uint32_t>(type)), operands);
+	}
+
+	static bool Contains(const vector<const_reference<Expression>> &bucket, const Expression &expr) {
+		for (auto &conjunct : bucket) {
+			if (IsSameConjunct(conjunct.get(), expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	unordered_map<hash_t, vector<const_reference<Expression>>> conjuncts;
+};
 
 static void CollectBindings(const Expression &expr, column_binding_set_t &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
@@ -569,20 +602,35 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 		}
 	}
 	vector<unique_ptr<Expression>> shared;
-	for (auto &conjunct : conjuncts[0]) {
-		bool everywhere = !ContainsConjunct(shared, *conjunct);
-		for (idx_t k = 1; everywhere && k < group.size(); k++) {
-			everywhere = ContainsConjunct(conjuncts[k], *conjunct);
-		}
-		if (everywhere) {
-			shared.push_back(conjunct->Copy());
-		}
-	}
 	vector<vector<unique_ptr<Expression>>> own(group.size());
-	for (idx_t k = 0; k < group.size(); k++) {
-		for (auto &conjunct : conjuncts[k]) {
-			if (!ContainsConjunct(shared, *conjunct)) {
-				own[k].push_back(std::move(conjunct));
+	{
+		vector<ConjunctIndex> conjunct_indexes(group.size());
+		for (idx_t k = 1; k < group.size(); k++) {
+			for (auto &conjunct : conjuncts[k]) {
+				conjunct_indexes[k].Add(*conjunct);
+			}
+		}
+		ConjunctIndex shared_index;
+		expression_set_t tested;
+		for (auto &conjunct : conjuncts[0]) {
+			// Do not repeat failed searches for identical conjuncts either.
+			if (!tested.insert(*conjunct).second || shared_index.Contains(*conjunct)) {
+				continue;
+			}
+			bool everywhere = true;
+			for (idx_t k = 1; everywhere && k < group.size(); k++) {
+				everywhere = conjunct_indexes[k].Contains(*conjunct);
+			}
+			if (everywhere) {
+				shared.push_back(conjunct->Copy());
+				shared_index.Add(*shared.back());
+			}
+		}
+		for (idx_t k = 0; k < group.size(); k++) {
+			for (auto &conjunct : conjuncts[k]) {
+				if (!shared_index.Contains(*conjunct)) {
+					own[k].push_back(std::move(conjunct));
+				}
 			}
 		}
 	}
@@ -684,9 +732,13 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	if (every_branch_restricted) {
 		// branches with the same predicate (q9 has three per range) contribute one alternative
 		vector<unique_ptr<Expression>> alternatives;
-		for (auto &predicate : predicates) {
-			if (!ContainsConjunct(alternatives, *predicate)) {
-				alternatives.push_back(predicate->Copy());
+		{
+			ConjunctIndex alternative_index;
+			for (auto &predicate : predicates) {
+				if (!alternative_index.Contains(*predicate)) {
+					alternatives.push_back(predicate->Copy());
+					alternative_index.Add(*alternatives.back());
+				}
 			}
 		}
 		// the OR is a new expression: the rewrite rules that ran before the merge (predicate factoring) derive from it

@@ -118,6 +118,16 @@ SELECT (SELECT sum(paid) FROM sales, dim1 WHERE sales.k = dim1.dk AND dim1.dname
 ----
 42481.00	50.0009375	98
 
+# flipped shared comparisons and repeated branch predicates keep the same common and private conjuncts
+query IIII
+SELECT a.v, b.v, c.v, d.v FROM
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) a,
+    (SELECT count(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) b,
+    (SELECT count(*) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) c,
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) d
+----
+3	2	3	4
+
 # the merged columns are read by a filter above the cross product, next to a table that is no branch
 query III
 SELECT r_sk, a, b FROM reason, (SELECT count(*) AS a FROM sales WHERE q < 10) x, (SELECT count(*) AS b FROM sales WHERE q > 90) y

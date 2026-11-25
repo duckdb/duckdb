@@ -227,6 +227,16 @@ EXPLAIN SELECT (SELECT sum(paid) FROM sales, dim1 WHERE sales.k = dim1.dk AND di
 ----
 physical_plan	<!REGEX>:[\s\S]*Table: (\S*\.)?dim1\b[\s\S]*Table: (\S*\.)?dim1\b[\s\S]*
 
+# flipped comparisons still identify the common join predicate: each table is read once
+query II
+EXPLAIN SELECT a.v, b.v, c.v, d.v FROM
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) a,
+    (SELECT count(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) b,
+    (SELECT count(*) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) c,
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) d
+----
+physical_plan	<!REGEX>:[\s\S]*Table: (\S*\.)?(two_keys|reason)\b[\s\S]*Table: (\S*\.)?(two_keys|reason)\b[\s\S]*Table: (\S*\.)?(two_keys|reason)\b[\s\S]*
+
 # ---- shapes that are left alone keep their scans -----------------------------------------------------------------
 
 # a grouped subquery is no one-row branch

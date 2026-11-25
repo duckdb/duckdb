@@ -39,6 +39,8 @@ public:
 	struct MergeTarget;
 
 private:
+	class ConjunctIndex;
+
 	void VisitOperator(unique_ptr<LogicalOperator> &op);
 	//! Merges the eligible leaves of the cross-product tree rooted at `op`
 	void MergeCrossProduct(unique_ptr<LogicalOperator> &op);
