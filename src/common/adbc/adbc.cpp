@@ -1732,6 +1732,67 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	return create_table.str();
 }
 
+// Wraps an ingestion in a transaction when the connection is in autocommit mode, and rolls back unless committed.
+// A cancel can interrupt BEGIN, COMMIT or ROLLBACK after the transaction changed, so the connection's state decides.
+class IngestTransaction {
+public:
+	IngestTransaction(duckdb_connection connection,
+	                  duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrapper> conn_wrapper)
+	    : connection(connection), conn_wrapper(conn_wrapper), owned(false) {
+	}
+	~IngestTransaction() {
+		for (idx_t attempt = 0; owned && attempt < MAX_ROLLBACK_ATTEMPTS; attempt++) {
+			Execute("ROLLBACK", nullptr);
+			owned = Connection().HasActiveTransaction();
+		}
+	}
+
+	AdbcStatusCode Begin(struct AdbcError *error) {
+		if (!Connection().IsAutoCommit()) {
+			return ADBC_STATUS_OK;
+		}
+		auto status = Execute("BEGIN TRANSACTION", error);
+		owned = Connection().HasActiveTransaction();
+		return status;
+	}
+	AdbcStatusCode Commit(struct AdbcError *error) {
+		if (!owned) {
+			return ADBC_STATUS_OK;
+		}
+		auto status = Execute("COMMIT", error);
+		owned = Connection().HasActiveTransaction();
+		return status;
+	}
+
+private:
+	static constexpr idx_t MAX_ROLLBACK_ATTEMPTS = 10;
+
+	duckdb::Connection &Connection() {
+		return *reinterpret_cast<duckdb::Connection *>(connection);
+	}
+
+	AdbcStatusCode Execute(const char *query, struct AdbcError *error) {
+		duckdb_result result;
+		if (duckdb_query(connection, query, &result) == DuckDBSuccess) {
+			duckdb_destroy_result(&result);
+			return ADBC_STATUS_OK;
+		}
+		auto error_type = duckdb_result_error_type(&result);
+		if (error) {
+			SetError(error, duckdb_result_error(&result));
+			AppendDuckDBErrorDetails(error, error_type);
+		}
+		duckdb_destroy_result(&result);
+		return IsCancellation(conn_wrapper, duckdb::ErrorTypeFromC(error_type)) ? ADBC_STATUS_CANCELLED
+		                                                                        : ADBC_STATUS_INTERNAL;
+	}
+
+private:
+	duckdb_connection connection;
+	duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrapper> conn_wrapper;
+	bool owned;
+};
+
 AdbcStatusCode Ingest(duckdb_connection connection,
                       duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrapper> conn_wrapper, const char *catalog,
                       const char *table_name, const char *schema, struct ArrowArrayStream *input,
@@ -1829,6 +1890,12 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableSchema *>(out_types.Get());
 	auto types = d_converted_schema.GetTypes();
 	auto names = d_converted_schema.GetNames();
+
+	IngestTransaction transaction(connection, conn_wrapper);
+	auto begin_status = transaction.Begin(error);
+	if (begin_status != ADBC_STATUS_OK) {
+		return begin_status;
+	}
 
 	// Handle different ingestion modes
 	switch (ingestion_mode) {
@@ -1954,6 +2021,10 @@ AdbcStatusCode Ingest(duckdb_connection connection,
 	// The appender writes the rows it still holds when it closes, so a failure there must fail the ingestion
 	if (duckdb_appender_close(appender.Get()) != DuckDBSuccess) {
 		return appender_error();
+	}
+	auto commit_status = transaction.Commit(error);
+	if (commit_status != ADBC_STATUS_OK) {
+		return commit_status;
 	}
 	if (rows_affected) {
 		*rows_affected = affected;
