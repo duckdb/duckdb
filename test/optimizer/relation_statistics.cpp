@@ -2113,6 +2113,57 @@ static unique_ptr<LogicalGet> CreateDomainProvider(TableIndex index, idx_t rows,
 	return get;
 }
 
+TEST_CASE("Equality filter estimates retain their ceiling at scan and filter boundaries",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	for (idx_t rows : {idx_t(113), idx_t(210)}) {
+		auto scan = CreateDomainProvider(TableIndex(10), rows, DistinctCount(105, DistinctCountSource::HLL));
+		auto child = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context, rows);
+		auto binding = scan->GetColumnBindings()[0];
+		vector<unique_ptr<Expression>> expressions;
+		expressions.push_back(BoundComparisonExpression::Create(
+		    ExpressionType::COMPARE_EQUAL, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+		    make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
+		auto filtered = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
+		REQUIRE(filtered.cardinality == 2);
+		scan->table_filters.PushFilter(
+		    ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(42)));
+		auto pushed = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context, rows);
+		REQUIRE(pushed.cardinality == filtered.cardinality);
+	}
+}
+
+TEST_CASE("Equality filter compatibility preserves fractional and scaled arithmetic",
+          "[optimizer][relation_statistics][cardinality_arithmetic]") {
+	ColumnBinding binding(TableIndex(10), ProjectionIndex(0));
+	auto estimate = [&](CardinalityValue rows, CardinalityValue ndv, ExpressionType type,
+	                    DistinctCountSource source = DistinctCountSource::HLL) {
+		RelationStats child;
+		child.cardinality = rows;
+		child.columns.emplace_back(binding, DistinctCount(ndv, source), DistinctCount(MinValue(rows, ndv), source),
+		                           Identifier("key"));
+		vector<unique_ptr<Expression>> expressions;
+		expressions.push_back(BoundComparisonExpression::Create(
+		    type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+		    make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
+		auto result = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
+		REQUIRE(result.cardinality <= rows);
+		return result.cardinality;
+	};
+	auto equal = ExpressionType::COMPARE_EQUAL;
+	REQUIRE(estimate(0.5, 1, equal) == 0.5);
+	REQUIRE(estimate(2.5, 1, equal) == 2.5);
+	CardinalityValue small(std::ldexp(1.0, -600));
+	CardinalityValue large(std::ldexp(1.0, 600));
+	for (auto rows : {small * small, large, large * large}) {
+		auto expected = rows < 1 ? rows : rows / 3;
+		REQUIRE(estimate(rows, 3, equal) == expected);
+	}
+	REQUIRE(estimate(113, 105, ExpressionType::COMPARE_NOTEQUAL).GetDouble() == Approx(113.0 * 104 / 105));
+	REQUIRE(estimate(113, 105, equal, DistinctCountSource::CARDINALITY).GetDouble() == Approx(22.6));
+}
+
 TEST_CASE("Grouped membership statistics reach enumeration and parent cost before reconstruction",
           "[optimizer][relation_statistics]") {
 	DuckDB db;

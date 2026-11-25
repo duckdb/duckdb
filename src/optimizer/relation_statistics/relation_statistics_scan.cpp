@@ -23,6 +23,8 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 static idx_t CapMinMaxDistinctCount(uint64_t distinct_count, idx_t base_table_cardinality) {
@@ -248,7 +250,19 @@ static FilterEstimate EstimateEqualityRows(CardinalityValue cardinality, Express
 		return {cardinality, false};
 	}
 	auto fraction = MinValue(CardinalityValue(1), CardinalityValue(1) / domain);
-	return {cardinality * (equal ? fraction : CardinalityValue(1) - fraction), true};
+	auto rows = cardinality * (equal ? fraction : CardinalityValue(1) - fraction);
+	// Retain the existing equality-filter ceiling independently of fractional join estimates.
+	// Do not inflate a fractional input or materialize a scaled estimate outside double's range.
+	if (equal && rows > 1) {
+		auto value = rows.GetDouble();
+		if (std::isfinite(value)) {
+			auto rounded = std::ceil(value);
+			if (rounded > value) {
+				rows = MinValue(cardinality, CardinalityValue(rounded));
+			}
+		}
+	}
+	return {rows, true};
 }
 
 static FilterEstimate EstimateComparisonRows(CardinalityValue cardinality, const BoundFunctionExpression &comparison,
