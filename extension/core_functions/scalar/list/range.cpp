@@ -207,6 +207,7 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	RangeInfoStruct<OP, INCLUSIVE_BOUND> info(args);
 	auto args_size = args.size();
 	auto list_writer = FlatVector::Writer<VectorListType<typename OP::TYPE>>(result, args_size);
+	idx_t written_since_check = 0;
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
 			list_writer.WriteNull();
@@ -217,15 +218,19 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		const auto length = info.ListLength(context, i);
 
 		typename OP::TYPE range_value = start_value;
-		idx_t written = 0;
+		bool seen_value = false;
 		for (auto &child_writer : list_writer.WriteList(length)) {
-			if (written > 0) {
+			if (seen_value) {
 				OP::Increment(range_value, increment);
 			}
 			child_writer.WriteValue(range_value);
-			if (++written % STANDARD_VECTOR_SIZE == 0) {
-				context.FastInterruptCheck();
-			}
+			seen_value = true;
+		}
+		// writing long lists can take billions of steps
+		written_since_check += length;
+		if (written_since_check >= STANDARD_VECTOR_SIZE) {
+			context.FastInterruptCheck();
+			written_since_check = 0;
 		}
 	}
 }

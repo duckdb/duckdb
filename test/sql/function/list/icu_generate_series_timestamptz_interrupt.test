@@ -29,6 +29,6 @@ RESET max_execution_time;
 
 # short ranges are unaffected
 query I
-SELECT len(generate_series('2021-03-14 02:30:00'::TIMESTAMPTZ, '2021-03-14 02:30:01'::TIMESTAMPTZ, INTERVAL '1 microsecond'));
+SELECT len(generate_series(c0, c1, c2)) FROM (VALUES ('2021-03-14 02:30:00'::TIMESTAMPTZ, '2021-03-14 02:30:01'::TIMESTAMPTZ, INTERVAL '1 microsecond')) t(c0, c1, c2);
 ----
 1000001
