@@ -63,8 +63,9 @@ public:
 	//! Initialize a local scan
 	void InitializeScan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate);
 
-	//! Perform the scan
-	void Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result);
+	//! Perform the scan: the rows without a match, or with `matched` the rows with one
+	void Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result,
+	          bool matched = false);
 
 	//! Read-only matches vector
 	const bool *GetMatches() const {

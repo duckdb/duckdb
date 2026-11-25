@@ -3,12 +3,13 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 
 namespace duckdb {
 
-RecursiveCTEPartialKeyIndex::RecursiveCTEPartialKeyIndex(Allocator &allocator,
+RecursiveCTEPartialKeyIndex::RecursiveCTEPartialKeyIndex(ClientContext &context,
                                                          const vector<LogicalType> &full_key_types,
                                                          vector<idx_t> key_indices_p)
     : key_indices(std::move(key_indices_p)), hashes(LogicalType::HASH) {
@@ -17,8 +18,10 @@ RecursiveCTEPartialKeyIndex::RecursiveCTEPartialKeyIndex(Allocator &allocator,
 		D_ASSERT(key_idx < full_key_types.size());
 		partial_key_types.push_back(full_key_types[key_idx]);
 	}
+	auto &allocator = Allocator::Get(context);
 	partial_keys.Initialize(allocator, partial_key_types);
 	selected_keys.Initialize(allocator, partial_key_types);
+	hasher = make_uniq<ChunkHasher>(context, partial_key_types);
 	Resize(1024);
 }
 
@@ -49,7 +52,7 @@ void RecursiveCTEPartialKeyIndex::AddGroups(DataChunk &full_keys, const Selectio
 	partial_keys.CheckCardinality(full_keys.size());
 	selected_keys.Reset();
 	selected_keys.Slice(partial_keys, key_selection, group_count);
-	selected_keys.Hash(hashes);
+	hasher->Hash(selected_keys, hashes);
 
 	const auto hash_values = hashes.Values<hash_t>();
 	const auto addresses = FlatVector::GetData<data_ptr_t>(group_addresses);
@@ -217,7 +220,7 @@ void RecursiveCTEEpochMetrics::RecordPipelineExecution(RecursiveCTEPipelineMetri
 }
 
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
-    : logger(context.logger),
+    : logger(context.GetContext().GetLoggerPtr()),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
 	if (enabled) {
 		identity = make_uniq<RecursiveCTELogIdentity>(op_p.type, op_p.NextMetricsInvocation());
@@ -407,6 +410,16 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"invariant_build_execute_work_ns", to_string(epoch_metrics.invariant_build_execute_work_ns.load())},
 	     {"invariant_cte_materialization_execute_work_ns",
 	      to_string(epoch_metrics.invariant_cte_materialization_execute_work_ns.load())}});
+}
+
+RecursiveCTEEpochProgress::RecursiveCTEEpochProgress() {
+}
+
+RecursiveCTEEpochProgress::~RecursiveCTEEpochProgress() {
+}
+
+void RecursiveCTEEpochProgress::Reset() {
+	*this = RecursiveCTEEpochProgress();
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

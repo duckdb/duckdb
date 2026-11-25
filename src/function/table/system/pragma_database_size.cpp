@@ -6,6 +6,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -17,7 +18,8 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	}
 
 	idx_t index;
-	vector<shared_ptr<AttachedDatabase>> databases;
+	//! Rows are materialized at init so that no database reference outlives it
+	vector<pair<Identifier, DatabaseSize>> databases;
 	Value memory_usage;
 	Value memory_limit;
 };
@@ -56,7 +58,14 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<PragmaDatabaseSizeData>();
-	result->databases = DatabaseManager::Get(context).GetDatabases(context);
+	for (auto &entry : DatabaseManager::Get(context).GetDatabases(context)) {
+		auto &db = *entry;
+		if (!db.IsSystem() && !db.IsTemporary() && db.GetVisibility() != AttachVisibility::HIDDEN) {
+			result->databases.emplace_back(db.GetName(), db.GetCatalog().GetDatabaseSize(context));
+		}
+		// a concurrent DETACH can have left this as the last reference
+		AttachedDatabase::InvokeCloseIfLastReference(entry, context);
+	}
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	result->memory_usage = Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory()));
 	auto max_memory = buffer_manager.GetMaxMemory();
@@ -81,12 +90,8 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 	auto &memory_limit = output.data[8];
 
 	for (; data.index < data.databases.size() && row < STANDARD_VECTOR_SIZE; data.index++) {
-		auto &db = *data.databases[data.index];
-		if (db.IsSystem() || db.IsTemporary() || db.GetVisibility() == AttachVisibility::HIDDEN) {
-			continue;
-		}
-		auto ds = db.GetCatalog().GetDatabaseSize(context);
-		database_name.Append(Value(db.GetName()));
+		auto &ds = data.databases[data.index].second;
+		database_name.Append(Value(data.databases[data.index].first));
 		database_size.Append(Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
 		block_size.Append(Value::BIGINT(NumericCast<int64_t>(ds.block_size)));
 		total_blocks.Append(Value::BIGINT(NumericCast<int64_t>(ds.total_blocks)));
@@ -101,8 +106,11 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 }
 
 void PragmaDatabaseSize::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_database_size", {}, PragmaDatabaseSizeFunction, PragmaDatabaseSizeBind,
-	                              PragmaDatabaseSizeInit));
+	TableFunction database_size_fun("pragma_database_size", {}, PragmaDatabaseSizeFunction, PragmaDatabaseSizeBind,
+	                                PragmaDatabaseSizeInit);
+	// reads live storage, WAL, and memory statistics
+	database_size_fun.stability = FunctionStability::VOLATILE;
+	set.AddFunction(std::move(database_size_fun));
 }
 
 } // namespace duckdb

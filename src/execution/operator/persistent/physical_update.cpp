@@ -3,6 +3,9 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -24,13 +27,12 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
                                vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
-                               bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns,
-                               RowIdHandling row_id_handling)
+                               bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
       return_chunk(return_chunk), capture_old_rows(capture_old_rows), old_row_columns(std::move(old_row_columns)),
-      row_id_handling(row_id_handling), index_update(false) {
+      index_update(false) {
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetIndexedColumns();
 
@@ -58,17 +60,43 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
 class UpdateGlobalState : public GlobalSinkState {
 public:
 	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
-	                           RowIdHandling row_id_handling)
+	                           bool update_is_del_and_insert, const vector<unique_ptr<Expression>> &expressions)
 	    : updated_count(0), return_collection(context, return_types) {
-		if (row_id_handling != RowIdHandling::ASSUME_UNIQUE) {
+		if (update_is_del_and_insert) {
 			updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
+			return;
 		}
+		// in-place updates are staged (followed by their row ids) and applied sorted by row id
+		for (auto &expr : expressions) {
+			staged_types.push_back(expr->GetReturnType());
+		}
+		staged_types.push_back(LogicalType::ROW_TYPE);
+		vector<BoundOrderByNode> orders;
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+		                    make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, staged_types.size() - 1));
+		vector<idx_t> projection_map;
+		for (idx_t i = 0; i < staged_types.size(); i++) {
+			projection_map.push_back(i);
+		}
+		staged_sort = make_uniq<Sort>(context, orders, staged_types, std::move(projection_map));
+		// every thread stages at most an equal share of a fraction of the memory limit
+		auto max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+		auto threads = MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(), 1);
+		staged_memory_budget = MinValue(max_memory / PhysicalUpdate::STAGED_UPDATE_MEMORY_FRACTION / threads,
+		                                PhysicalUpdate::STAGED_UPDATE_MAX_MEMORY);
+		staged_memory_budget = MaxValue(staged_memory_budget, PhysicalUpdate::STAGED_UPDATE_MIN_MEMORY);
 	}
 
 	mutex lock;
 	atomic<idx_t> updated_count;
 	unique_ptr<RowIdDeduplicator> updated_rows;
 	ColumnDataCollection return_collection;
+	//! The types of the staged in-place updates: the updated columns followed by the row ids
+	vector<LogicalType> staged_types;
+	//! Sorts the staged in-place updates of each thread by row id
+	unique_ptr<Sort> staged_sort;
+	//! The memory a thread stages before it applies its staged updates
+	idx_t staged_memory_budget = 0;
 };
 
 class UpdateLocalState : public LocalSinkState {
@@ -137,6 +165,15 @@ public:
 	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
+	//! The sort of the in-place updates this thread staged since its last flush
+	unique_ptr<GlobalSinkState> staged_sort_gstate;
+	unique_ptr<LocalSinkState> staged_sort_lstate;
+	idx_t staged_count = 0;
+	//! References the update chunk and its row ids, to sink them into the staged sort
+	DataChunk staging_input;
+	//! A chunk of the sorted staged updates and the references to its update columns
+	DataChunk sorted_chunk;
+	DataChunk sorted_updates;
 
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
 		if (!delete_state) {
@@ -203,71 +240,43 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	// Regular in-place update.
 	if (!update_is_del_and_insert) {
-		// Apply the duplicate row-id policy: ASSUME_UNIQUE keeps the lock-free path; KEEP_FIRST (UPDATE ... FROM)
-		// deduplicates so each row is updated at most once, keeping RETURNING and transition tables predictable.
-		idx_t update_count = update_chunk.size();
-		SelectionVector sel;
-		Vector update_row_ids(Vector::Ref(row_ids));
-		const bool deduplicate = row_id_handling != RowIdHandling::ASSUME_UNIQUE;
-		if (deduplicate) {
-			sel.Initialize(update_chunk.size());
-			lock_guard<mutex> glock(g_state.lock);
-			D_ASSERT(g_state.updated_rows);
-			update_count = g_state.updated_rows->Register(row_ids, update_chunk.size(), sel);
-			if (row_id_handling == RowIdHandling::ERROR && update_count != update_chunk.size()) {
-				throw InvalidInputException("UPDATE command cannot update the same row more than once");
-			}
-			if (update_count != update_chunk.size()) {
-				update_chunk.Slice(sel, update_count);
-				update_row_ids.Slice(row_ids, sel, update_count);
-			}
-		}
-
 		if (return_chunk) {
 			// (re)reference all output columns first, then validate + set the cardinality. mock_chunk is not reset
 			// here, but with return_chunk the update projects every table column, so all columns are referenced.
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
-			mock_chunk.CheckCardinality(update_count);
+			mock_chunk.CheckCardinality(update_chunk.size());
 		}
-		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
-		table.Update(update_state, context.client, tableref, update_row_ids, columns, update_chunk);
+		StageUpdates(context, g_state, l_state, update_chunk, row_ids, input.interrupt_state);
 
 		if (return_chunk) {
 			lock_guard<mutex> glock(g_state.lock);
 			if (capture_old_rows) {
-				// When we deduplicated, apply the selection vector to the OLD columns so they line up with NEW.
+				// In-place update: every input row is affected, so no selection vector is needed.
 				AppendReturnRows(g_state.return_collection, l_state.combined_chunk, mock_chunk, chunk,
-				                 mock_chunk.ColumnCount(), old_row_columns, update_count, deduplicate ? &sel : nullptr);
+				                 mock_chunk.ColumnCount(), old_row_columns, update_chunk.size(), nullptr);
 			} else {
 				g_state.return_collection.Append(mock_chunk);
 			}
 		}
-		g_state.updated_count += update_count;
+		g_state.updated_count += chunk.size();
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	// We update an index or a complex type, so we need to split the UPDATE into DELETE + INSERT.
 
-	// Apply the duplicate row-id policy. This path holds the lock for its whole body (the append is serialized),
-	// so deduplication runs under it. ASSUME_UNIQUE (plain UPDATE and MERGE-driven updates) keeps every row;
-	// KEEP_FIRST (UPDATE ... FROM) drops repeated row-ids so we never delete+insert the same row twice.
+	// Keep track of the rows that have not yet been deleted in this UPDATE.
+	// This is required since we might see the same row_id multiple times, e.g.,
+	// during an UPDATE containing joins.
 	SelectionVector sel(update_chunk.size());
 	lock_guard<mutex> glock(g_state.lock);
-	idx_t update_count = update_chunk.size();
-	const bool deduplicate = row_id_handling != RowIdHandling::ASSUME_UNIQUE;
-	if (deduplicate) {
-		D_ASSERT(g_state.updated_rows);
-		update_count = g_state.updated_rows->Register(row_ids, update_chunk.size(), sel);
-		if (row_id_handling == RowIdHandling::ERROR && update_count != update_chunk.size()) {
-			throw InvalidInputException("UPDATE command cannot update the same row more than once");
-		}
-	}
+	D_ASSERT(g_state.updated_rows);
+	auto update_count = g_state.updated_rows->Register(row_ids, update_chunk.size(), sel);
 
 	// The update chunk now contains exactly those rows that we are deleting.
 	Vector del_row_ids(Vector::Ref(row_ids));
-	if (deduplicate && update_count != update_chunk.size()) {
+	if (update_count != update_chunk.size()) {
 		update_chunk.Slice(sel, update_count);
 		del_row_ids.Slice(row_ids, sel, update_count);
 	}
@@ -310,20 +319,20 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, del_row_ids, delete_chunk);
 	if (return_chunk) {
 		if (capture_old_rows) {
-			// Apply the dedup selection vector to the OLD columns so they line up with the NEW image.
+			// Apply the dedup/del+insert selection vector to the OLD columns so they line up with the NEW image.
 			AppendReturnRows(g_state.return_collection, l_state.combined_chunk, mock_chunk, chunk,
-			                 mock_chunk.ColumnCount(), old_row_columns, update_count, deduplicate ? &sel : nullptr);
+			                 mock_chunk.ColumnCount(), old_row_columns, update_count, &sel);
 		} else {
 			g_state.return_collection.Append(mock_chunk);
 		}
 	}
 
-	g_state.updated_count += update_count;
+	g_state.updated_count += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<UpdateGlobalState>(context, GetTypes(), row_id_handling);
+	return make_uniq<UpdateGlobalState>(context, GetTypes(), update_is_del_and_insert, expressions);
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
@@ -331,7 +340,119 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &c
 	                                   bound_constraints, capture_old_rows, index_update);
 }
 
+static bool RowIdsAreSorted(Vector &row_ids, idx_t count) {
+	auto ids = row_ids.Values<row_t>();
+	for (idx_t i = 1; i < count; i++) {
+		if (ids[i].GetValueUnsafe() < ids[i - 1].GetValueUnsafe()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! Keeps one entry per row id of a chunk sorted by row id. Updating a row id more than once in a single chunk would
+//! let every column pick its value from a different entry; across chunks, every entry still overwrites the whole row.
+static idx_t SelectLastPerRowId(Vector &row_ids, idx_t count, SelectionVector &sel) {
+	auto ids = row_ids.Values<row_t>();
+	idx_t kept = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (i + 1 == count || ids[i + 1].GetValueUnsafe() != ids[i].GetValueUnsafe()) {
+			sel.set_index(kept++, i);
+		}
+	}
+	return kept;
+}
+
+void PhysicalUpdate::StageUpdates(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                  DataChunk &updates, Vector &row_ids, InterruptState &interrupt_state) const {
+	auto &g_state = gstate.Cast<UpdateGlobalState>();
+	auto &l_state = lstate.Cast<UpdateLocalState>();
+	if (l_state.staged_count == 0 && RowIdsAreSorted(row_ids, updates.size())) {
+		// already clustered (e.g. updates driven by a scan of the table) - staging would not help
+		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
+		table.Update(update_state, context.client, tableref, row_ids, columns, updates);
+		return;
+	}
+	auto &sort = *g_state.staged_sort;
+	if (!l_state.staged_sort_gstate) {
+		l_state.staged_sort_gstate = sort.GetGlobalSinkState(context.client);
+		l_state.staged_sort_lstate = sort.GetLocalSinkState(context);
+	}
+	auto &input = l_state.staging_input;
+	if (input.ColumnCount() == 0) {
+		input.InitializeEmpty(g_state.staged_types);
+	}
+	for (idx_t c = 0; c < updates.ColumnCount(); c++) {
+		input.data[c].Reference(updates.data[c]);
+	}
+	input.data.back().Reference(row_ids);
+	input.CheckCardinality(updates.size());
+	OperatorSinkInput sink_input {*l_state.staged_sort_gstate, *l_state.staged_sort_lstate, interrupt_state};
+	sort.Sink(context, input, sink_input);
+	l_state.staged_count += updates.size();
+	// a completed run leaves the local state, so flush then too: staged runs would otherwise pile up until Combine
+	if (sort.GetSortedCount(*l_state.staged_sort_gstate) > 0 ||
+	    sort.GetLocalSizeInBytes(*l_state.staged_sort_lstate) >= g_state.staged_memory_budget) {
+		FlushStagedUpdates(context, gstate, lstate, interrupt_state);
+	}
+}
+
+void PhysicalUpdate::FlushStagedUpdates(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                        InterruptState &interrupt_state) const {
+	auto &g_state = gstate.Cast<UpdateGlobalState>();
+	auto &l_state = lstate.Cast<UpdateLocalState>();
+	if (l_state.staged_count == 0) {
+		return;
+	}
+	// sort by row id, so that every update chunk touches as few vectors of the table as possible
+	auto &sort = *g_state.staged_sort;
+	auto &sort_gstate = *l_state.staged_sort_gstate;
+	OperatorSinkCombineInput combine_input {sort_gstate, *l_state.staged_sort_lstate, interrupt_state};
+	sort.Combine(context, combine_input);
+	OperatorSinkFinalizeInput finalize_input {sort_gstate, interrupt_state};
+	sort.Finalize(context.client, finalize_input);
+	auto source_gstate = sort.GetGlobalSourceState(context.client, sort_gstate);
+	auto source_lstate = sort.GetLocalSourceState(context, *source_gstate);
+	OperatorSourceInput source_input {*source_gstate, *source_lstate, interrupt_state};
+
+	auto &sorted_chunk = l_state.sorted_chunk;
+	auto &sorted_updates = l_state.sorted_updates;
+	if (sorted_chunk.ColumnCount() == 0) {
+		sorted_chunk.Initialize(context.client, g_state.staged_types);
+		vector<LogicalType> update_types(g_state.staged_types.begin(), g_state.staged_types.end() - 1);
+		sorted_updates.InitializeEmpty(update_types);
+	}
+	auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
+	SelectionVector unique_sel(STANDARD_VECTOR_SIZE);
+	while (true) {
+		context.client.InterruptCheck();
+		sorted_chunk.Reset();
+		auto result = sort.GetData(context, sorted_chunk, source_input);
+		if (result == SourceResultType::BLOCKED) {
+			throw InternalException("Sorting the staged updates of an UPDATE unexpectedly blocked");
+		}
+		if (sorted_chunk.size() > 0) {
+			auto unique_count = SelectLastPerRowId(sorted_chunk.data.back(), sorted_chunk.size(), unique_sel);
+			if (unique_count < sorted_chunk.size()) {
+				sorted_chunk.Slice(unique_sel, unique_count);
+			}
+			for (idx_t c = 0; c < sorted_updates.ColumnCount(); c++) {
+				sorted_updates.data[c].Reference(sorted_chunk.data[c]);
+			}
+			sorted_updates.CheckCardinality(sorted_chunk.size());
+			table.Update(update_state, context.client, tableref, sorted_chunk.data.back(), columns, sorted_updates);
+		}
+		if (result == SourceResultType::FINISHED) {
+			break;
+		}
+	}
+	l_state.staged_sort_lstate.reset();
+	l_state.staged_sort_gstate.reset();
+	l_state.staged_count = 0;
+}
+
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	FlushStagedUpdates(context, input.global_state, input.local_state, input.interrupt_state);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
@@ -383,6 +504,14 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	state.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+InsertionOrderPreservingMap<string> PhysicalUpdate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Table"] =
+	    tableref.schema.GetQualifiedName(tableref.name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	result["Update Mode"] = update_is_del_and_insert ? "Delete + Insert" : "In Place";
+	return result;
 }
 
 } // namespace duckdb

@@ -127,18 +127,16 @@ SELECT
 ----
 false	false	false	false
 
-# Every supported primitive VARIANT value contains itself.
-statement ok
-CREATE MACRO variant_contains_self(value) AS variant_contains(value::VARIANT, value::VARIANT);
+# Every value of test_all_types, nested ones included, contains itself, is found in a list, and is found by a nested
+# needle inside nested objects.
+foreach haystack,needle COLUMNS(*),COLUMNS(*) [COLUMNS(*)],COLUMNS(*) {'a':{'b':[COLUMNS(*)]}},{'b':[COLUMNS(*)]}
 
 query I
 SELECT list_bool_and(results) AND list_count(results) = length(results)
 FROM (
 	SELECT [*COLUMNS(*)] AS results
 	FROM (
-		SELECT variant_contains_self(
-			COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))
-		)
+		SELECT variant_contains({haystack}::VARIANT, {needle}::VARIANT)
 		FROM test_all_types()
 		WHERE bool IS NOT NULL
 	)
@@ -146,6 +144,8 @@ FROM (
 ----
 true
 true
+
+endloop
 
 # Primitive values can occur at any depth, but object keys are not values.
 query IIII
@@ -208,6 +208,57 @@ SELECT
     variant_contains('[{"a": 1}]'::JSON::VARIANT, '[{"a": 2}]'::JSON::VARIANT);
 ----
 true	true	false
+
+# A failed object candidate must return control to the enclosing array search.
+query III
+SELECT
+    variant_contains('[{"a": 0, "b": 2}, {"a": 1, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1}, {"a": 1, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1, "b": 0}, {"a": 0, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT);
+----
+true	true	false
+
+# Nested array results must propagate through their object to the outer array.
+query II
+SELECT
+    variant_contains('[{"a": [0], "b": 2}, {"a": [1, 2], "b": 2}]'::JSON::VARIANT,
+                     '[{"a": [2], "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": [1], "b": 0}, {"a": [2], "b": 2}]'::JSON::VARIANT,
+                     '[{"a": [1], "b": 2}]'::JSON::VARIANT);
+----
+true	false
+
+# Object failures discard pending fields, while array retries preserve them.
+query IIII
+SELECT
+    variant_contains('{"a": 1, "b": {"x": 2, "y": 0}}'::JSON::VARIANT,
+                     '{"a": 1, "b": {"x": 2, "y": 3}}'::JSON::VARIANT),
+    variant_contains('[{"a": 0, "b": {"x": 2}}, {"a": 1, "b": {"x": 2, "y": 3}}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": {"x": 2, "y": 3}}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1, "b": [0, 2]}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": [2]}]'::JSON::VARIANT),
+    variant_contains('[{"a": 0, "b": [0, 2]}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": [2]}]'::JSON::VARIANT);
+----
+false	true	true	false
+
+# Deep nested objects are compared without recursive calls.
+query I
+WITH RECURSIVE nested(i, v) AS (
+    SELECT 0, 42::VARIANT
+    UNION ALL
+    SELECT i + 1, struct_pack(a := v)::VARIANT
+    FROM nested
+    WHERE i < 5000
+)
+SELECT variant_contains(v, v)
+FROM nested
+WHERE i = 5000;
+----
+true
 
 # Empty arrays are contained only where an array occurs.
 query III
@@ -341,6 +392,26 @@ ORDER BY ALL;
 ----
 0	0
 1	2048
+
+# One needle is compared with every element: an integer, a DECIMAL and a BIGNUM needle, and a DOUBLE, which is not a
+# NUMBER.
+query IIIII
+SELECT variant_contains([1, 2, 3]::BIGINT[]::VARIANT, 3::UTINYINT::VARIANT),
+       variant_contains([1, 2, 3]::BIGINT[]::VARIANT, 3.00::DECIMAL(5, 2)::VARIANT),
+       variant_contains([1, 2, 3]::BIGINT[]::VARIANT, 2.50::DECIMAL(5, 2)::VARIANT),
+       variant_contains([1.0, 2.0, 3.5]::DECIMAL(4, 1)[]::VARIANT, 2::BIGNUM::VARIANT),
+       variant_contains([1, 2, 3]::BIGINT[]::VARIANT, 3::DOUBLE::VARIANT);
+----
+true	true	false	true	false
+
+# The search goes on with the next sibling after a nested value does not match, also past NULL values.
+query IIII
+SELECT variant_contains([{'a': [NULL, 1]}, {'b': [2, 3]}]::VARIANT, 3::VARIANT),
+       variant_contains({'a': [NULL, 1], 'b': [2, 3]}::VARIANT, 3::VARIANT),
+       variant_contains({'a': [NULL, 1], 'b': [2, 3]}::VARIANT, 4::VARIANT),
+       variant_contains([{'a': [NULL, 1]}, {'b': [2, 3]}]::VARIANT, {'b': [3]}::VARIANT);
+----
+true	true	false	true
 
 # Incorrect parameter counts should produce binder errors.
 statement error

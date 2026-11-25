@@ -17,6 +17,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -53,6 +54,8 @@ public:
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
 	DataChunk group_chunk;
+	//! Executes the hash table's hash expression over the groups
+	unique_ptr<ExpressionExecutor> hash_executor;
 	optional_ptr<const GroupedAggregateHashTable> owner;
 	bool initialized = false;
 };
@@ -77,7 +80,8 @@ public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
 	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
-	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES,
+	                          idx_t trailing_region_width = 0);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	~GroupedAggregateHashTable() override;
@@ -162,6 +166,8 @@ public:
 	idx_t GetRadixBits() const;
 	//! Get the total number of tuples materialized currently in this HT
 	idx_t GetMaterializedCount() const;
+	//! Materialized row and heap bytes, including rows awaiting partitioning
+	idx_t GetMaterializedSize() const;
 	//! Read-only adaptivity observations; mutations follow the HT's lifecycle.
 	const AggregateHTAdaptivityState &GetAdaptivityState() const {
 		return adaptivity;
@@ -182,8 +188,14 @@ public:
 
 private:
 	ClientContext &context;
+	//! Zeroes the layout's trailing region of freshly created rows so owners find defined bytes
+	void ZeroTrailingRegion(Vector &row_locations, idx_t count) const;
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
+	//! "hash(#0, #1, ...)" over the groups
+	unique_ptr<Expression> hash_expression;
+	//! Hash the groups into hashes, with the executor of the given probe state
+	void HashGroups(DataChunk &groups, AggregateHTProbeState &probe_state, Vector &hashes) const;
 
 	struct AggregateDictionaryState {
 		AggregateDictionaryState();
@@ -288,8 +300,10 @@ private:
 	                                 optional_ptr<TupleDataChunkState> source_rows = nullptr);
 	void InitializeLookupState(AggregateHTLookupState &lookup_state) const;
 
-	//! Verify the pointer table of the HT
+	//! Verify the whole pointer table of the HT: a scan of every entry, so only run where the table is rebuilt
 	void Verify();
+	//! Verify the entries of the rows of a chunk after FindOrCreateGroups
+	void VerifyEntries(const Vector &group_hashes, const Vector &addresses, idx_t count);
 };
 
 } // namespace duckdb

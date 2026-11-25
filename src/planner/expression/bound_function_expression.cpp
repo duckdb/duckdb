@@ -21,17 +21,20 @@ static optional_ptr<const Expression> GetLambdaExpression(const BoundFunctionExp
 
 BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
-                                                 unique_ptr<FunctionData> bind_info_p, bool is_operator)
+                                                 cow_ptr<FunctionData> bind_info_p, bool is_operator,
+                                                 Identifier alias_p, QueryLocation location)
     : Expression(GetFunctionExpressionType(bound_function, arguments, bind_info_p.get()),
                  ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
       function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info_p)),
       is_operator(is_operator) {
 	D_ASSERT(!function.GetName().empty());
+	alias = std::move(alias_p);
+	query_location = location;
 }
 
 ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundScalarFunction &bound_function,
                                                                   const vector<unique_ptr<Expression>> &arguments,
-                                                                  optional_ptr<FunctionData> bind_info_p) {
+                                                                  optional_ptr<const FunctionData> bind_info_p) {
 	FunctionToStringInput input(bound_function, bind_info_p.get(), arguments);
 	return bound_function.GetExpressionType(input);
 }
@@ -185,7 +188,7 @@ namespace {
 
 //! Plans serialized before the lambda expression was kept in the children do not contain it. Recover it from
 //! the bind data, so that the children line up with the function's arguments either way.
-void RestoreErasedLambdaChild(const BoundScalarFunction &function, optional_ptr<FunctionData> bind_info,
+void RestoreErasedLambdaChild(const BoundScalarFunction &function, optional_ptr<const FunctionData> bind_info,
                               vector<unique_ptr<Expression>> &children) {
 	if (!function.HasBindLambdaCallback() || !bind_info) {
 		return;
@@ -223,7 +226,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
-		auto bind_input = FunctionBindExpressionInput(context, entry.first, entry.second, children);
+		auto bind_input = FunctionBindExpressionInput(context, entry.first, entry.second.get(), children);
 		// replace the function expression with the bound expression
 		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {

@@ -16,6 +16,7 @@
 
 namespace duckdb {
 class ClientContext;
+class Context;
 class ExtensionCallbackManager;
 class ParserExtension;
 struct CompiledGrammar;
@@ -38,8 +39,11 @@ public:
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
 	shared_ptr<CompiledGrammar> compiled_grammar;
-	//! The client context the statement is parsed for (not set when parsing without a client context)
-	optional_ptr<ClientContext> context;
+	//! Only check that the statements match the grammar: each yields a PassthroughStatement holding its text, and
+	//! nothing is transformed. For a client that sends the text on to an engine that knows the grammar's rules.
+	bool match_only = false;
+	//! The services the statement is parsed for (not set when parsing without a context)
+	optional_ptr<Context> context;
 };
 
 } // namespace duckdb

@@ -22,6 +22,7 @@ class SchemaCatalogEntry;
 class AttachedDatabase;
 class ColumnData;
 class ClientContext;
+class Context;
 class CatalogEntry;
 class DataTable;
 class DatabaseInstance;
@@ -40,14 +41,10 @@ struct DatabaseModificationType;
 //! transaction
 class Transaction {
 public:
-	DUCKDB_API Transaction(TransactionManager &manager, ClientContext &context);
+	DUCKDB_API Transaction(TransactionManager &manager, Context &context);
 	DUCKDB_API virtual ~Transaction();
 
 	TransactionManager &manager;
-	weak_ptr<ClientContext> context;
-	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
-	//! no query is active.
-	atomic<transaction_t> active_query;
 
 public:
 	DUCKDB_API static Transaction &Get(ClientContext &context, AttachedDatabase &db);
@@ -83,7 +80,7 @@ public:
 	}
 
 private:
-	bool is_read_only;
+	atomic<bool> is_read_only;
 };
 
 } // namespace duckdb

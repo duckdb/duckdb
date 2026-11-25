@@ -123,6 +123,7 @@ public:
 	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
+	//! Borrows source data and metadata: keep their storage and selection alive and stable until the final read.
 	DUCKDB_API void ToUnifiedFormat(UnifiedVectorFormat &data) const;
 
 	[[deprecated("RecursiveToUnifiedFormat no longer requires a count - use RecursiveToUnifiedFormat(input, data) "
@@ -197,7 +198,10 @@ public:
 	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
 	}
-	void SetBuffer(buffer_ptr<VectorBuffer> buffer_p) {
+	void SetBuffer(const buffer_ptr<VectorBuffer> &buffer_p) {
+		buffer = buffer_p;
+	}
+	void SetBuffer(buffer_ptr<VectorBuffer> &&buffer_p) {
 		buffer = std::move(buffer_p);
 	}
 

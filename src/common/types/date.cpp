@@ -87,50 +87,76 @@ const int32_t Date::CUMULATIVE_YEAR_DAYS[] = {
     138061, 138427, 138792, 139157, 139522, 139888, 140253, 140618, 140983, 141349, 141714, 142079, 142444, 142810,
     143175, 143540, 143905, 144271, 144636, 145001, 145366, 145732, 146097};
 
+namespace {
+
+// Days since 1970-01-01 to a civil date, using the Euclidean affine functions of Neri & Schneider (2022).
+// The computation uses a calendar that starts on March 1st, so January and February belong to the previous year.
+struct CivilDate {
+	int32_t year;
+	int32_t month;
+	int32_t day;
+};
+
+//! The 32-bit path is valid for days in [-FAST_DATE_RANGE, FAST_DATE_RANGE) (roughly +/- 1.4 million years)
+constexpr int32_t FAST_DATE_RANGE = 536000000;
+//! Shifts (in 400-year eras) that make the shifted day number non-negative and keep 4 * N + 3 in range
+constexpr uint64_t FAST_DATE_ERA_SHIFT = 3670;
+constexpr uint64_t FULL_DATE_ERA_SHIFT = 14704;
+
+inline bool IsInFastDateRange(int32_t days) {
+	return uint32_t(days) + uint32_t(FAST_DATE_RANGE) < uint32_t(2 * FAST_DATE_RANGE);
+}
+
+template <class UINT, uint64_t ERA_SHIFT>
+inline CivilDate CivilFromDaysInternal(int32_t days) {
+	constexpr UINT DAY_SHIFT = 719468 + 146097 * ERA_SHIFT;
+	const UINT n1 = 4 * (UINT(int64_t(days)) + DAY_SHIFT) + 3;
+	const UINT century = n1 / 146097;
+	const uint32_t n2 = 4 * (uint32_t(n1 % 146097) / 4) + 3;
+	const uint64_t p2 = uint64_t(2939745) * n2;
+	const uint32_t year_of_century = uint32_t(p2 >> 32);
+	const uint32_t day_of_year = uint32_t(p2) / 2939745 / 4;
+	const uint32_t n3 = 2141 * day_of_year + 197913;
+	const uint32_t month = n3 >> 16;
+	const uint32_t day = (n3 & 0xFFFF) / 2141;
+	const uint32_t january_or_february = day_of_year >= 306;
+	CivilDate result;
+	result.year =
+	    static_cast<int32_t>(int64_t(100 * century + year_of_century + january_or_february) - int64_t(400 * ERA_SHIFT));
+	result.month = static_cast<int32_t>(january_or_february ? month - 12 : month);
+	result.day = static_cast<int32_t>(day + 1);
+	return result;
+}
+
+inline CivilDate CivilFromDays(int32_t days) {
+	if (DUCKDB_LIKELY(IsInFastDateRange(days))) {
+		return CivilFromDaysInternal<uint32_t, FAST_DATE_ERA_SHIFT>(days);
+	}
+	return CivilFromDaysInternal<uint64_t, FULL_DATE_ERA_SHIFT>(days);
+}
+
+} // namespace
+
 void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
-	year = Date::EPOCH_YEAR;
-	// first we normalize n to be in the year range [1970, 2370]
-	// since leap years repeat every 400 years, we can safely normalize just by "shifting" the CumulativeYearDays array
-	while (n < 0) {
-		n += Date::DAYS_PER_YEAR_INTERVAL;
-		year -= Date::YEAR_INTERVAL;
+	year = CivilFromDays(n).year;
+	// leap years repeat every 400 years: normalize n to the years [1970, 2370)
+	auto era = (year - Date::EPOCH_YEAR) / Date::YEAR_INTERVAL;
+	year_offset = (year - Date::EPOCH_YEAR) % Date::YEAR_INTERVAL;
+	if (year_offset < 0) {
+		era--;
+		year_offset += Date::YEAR_INTERVAL;
 	}
-	while (n >= Date::DAYS_PER_YEAR_INTERVAL) {
-		n -= Date::DAYS_PER_YEAR_INTERVAL;
-		year += Date::YEAR_INTERVAL;
-	}
-	// interpolation search
-	// we can find an upper bound of the year by assuming each year has 365 days
-	year_offset = n / 365;
-	// because of leap years we might be off by a little bit: compensate by decrementing the year offset until we find
-	// our year
-	while (n < Date::CUMULATIVE_YEAR_DAYS[year_offset]) {
-		year_offset--;
-		D_ASSERT(year_offset >= 0);
-	}
-	year += year_offset;
-	D_ASSERT(n >= Date::CUMULATIVE_YEAR_DAYS[year_offset]);
+	n = static_cast<int32_t>(int64_t(n) - int64_t(era) * Date::DAYS_PER_YEAR_INTERVAL);
+	D_ASSERT(n >= Date::CUMULATIVE_YEAR_DAYS[year_offset] && n < Date::CUMULATIVE_YEAR_DAYS[year_offset + 1]);
 }
 
 void Date::Convert(date_t d, int32_t &year, int32_t &month, int32_t &day) {
-	auto n = d.days;
-	int32_t year_offset;
-	Date::ExtractYearOffset(n, year, year_offset);
-
-	day = n - Date::CUMULATIVE_YEAR_DAYS[year_offset];
-	D_ASSERT(day >= 0 && day <= 365);
-
-	bool is_leap_year = (Date::CUMULATIVE_YEAR_DAYS[year_offset + 1] - Date::CUMULATIVE_YEAR_DAYS[year_offset]) == 366;
-	if (is_leap_year) {
-		month = Date::LEAP_MONTH_PER_DAY_OF_YEAR[day];
-		day -= Date::CUMULATIVE_LEAP_DAYS[month - 1];
-	} else {
-		month = Date::MONTH_PER_DAY_OF_YEAR[day];
-		day -= Date::CUMULATIVE_DAYS[month - 1];
-	}
-	day++;
-	D_ASSERT(day > 0 && day <= (is_leap_year ? Date::LEAP_DAYS[month] : Date::NORMAL_DAYS[month]));
+	auto result = CivilFromDays(d.days);
+	year = result.year;
+	month = result.month;
+	day = result.day;
 	D_ASSERT(month > 0 && month <= 12);
+	D_ASSERT(day > 0 && day <= (Date::IsLeapYear(year) ? Date::LEAP_DAYS[month] : Date::NORMAL_DAYS[month]));
 }
 
 bool Date::TryFromDate(int32_t year, int32_t month, int32_t day, date_t &result) {
@@ -466,21 +492,15 @@ int64_t Date::EpochMilliseconds(date_t date) {
 }
 
 int32_t Date::ExtractYear(date_t d) {
-	int32_t year, year_offset;
-	Date::ExtractYearOffset(d.days, year, year_offset);
-	return year;
+	return CivilFromDays(d.days).year;
 }
 
 int32_t Date::ExtractMonth(date_t date) {
-	int32_t out_year, out_month, out_day;
-	Date::Convert(date, out_year, out_month, out_day);
-	return out_month;
+	return CivilFromDays(date.days).month;
 }
 
 int32_t Date::ExtractDay(date_t date) {
-	int32_t out_year, out_month, out_day;
-	Date::Convert(date, out_year, out_month, out_day);
-	return out_day;
+	return CivilFromDays(date.days).day;
 }
 
 int32_t Date::ExtractDayOfTheYear(date_t date) {

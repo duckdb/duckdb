@@ -6,17 +6,33 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/grammar_change.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
 namespace duckdb {
 
-static bool IsActiveGrammarExtension(const ClientContext &context, const string &name) {
-	for (auto &active : ClientConfig::GetConfig(context).active_grammar_extensions) {
+//! The selection these functions read and modify is the effective one, matching the parse path:
+//! the session selection when set, otherwise the database-wide default
+static shared_ptr<const vector<string>> EffectiveGrammarExtensions(const ClientContext &context) {
+	auto selection = ClientConfig::GetConfig(context).active_grammar_extensions.atomic_load();
+	if (!selection) {
+		selection = DBConfig::GetConfig(context).default_grammar_extensions.atomic_load();
+	}
+	return selection;
+}
+
+static bool ListContainsGrammarExtension(const vector<string> &list, const string &name) {
+	for (auto &active : list) {
 		if (StringUtil::CIEquals(active, name)) {
 			return true;
 		}
 	}
 	return false;
+}
+
+static bool IsActiveGrammarExtension(const ClientContext &context, const string &name) {
+	auto active_list = EffectiveGrammarExtensions(context);
+	return active_list && ListContainsGrammarExtension(*active_list, name);
 }
 
 struct GrammarExtensionData {
@@ -77,6 +93,94 @@ void DuckDBGrammarExtensionsFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 //===--------------------------------------------------------------------===//
+// duckdb_grammar_changes
+//===--------------------------------------------------------------------===//
+//! The grammar changes of the grammar extensions active in this connection, in the order they are applied. This is
+//! what a client that parses on its own needs to parse the same grammar: the definitions are data, while a change
+//! with `has_code` also depends on a function that cannot be described.
+struct GrammarChangeRow {
+	string extension;
+	idx_t position;
+	string type;
+	string rule_name;
+	string definition;
+	bool collapsible;
+	bool suppress_suggestions;
+	bool has_code;
+};
+
+struct DuckDBGrammarChangesData : public GlobalTableFunctionState {
+	vector<GrammarChangeRow> rows;
+	idx_t offset = 0;
+};
+
+static unique_ptr<FunctionData> DuckDBGrammarChangesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                         vector<LogicalType> &return_types, vector<Identifier> &names) {
+	names.emplace_back("extension");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("position");
+	return_types.emplace_back(LogicalType::BIGINT);
+	names.emplace_back("type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("rule_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("definition");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("collapsible");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("suppress_suggestions");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("has_code");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	return nullptr;
+}
+
+static unique_ptr<GlobalTableFunctionState> DuckDBGrammarChangesInit(ClientContext &context,
+                                                                     TableFunctionInitInput &input) {
+	auto result = make_uniq<DuckDBGrammarChangesData>();
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	auto selection = EffectiveGrammarExtensions(context);
+	if (!selection) {
+		return std::move(result);
+	}
+	for (auto &name : *selection) {
+		auto extension = callback_manager.FindGrammarExtension(name);
+		if (!extension) {
+			continue;
+		}
+		idx_t position = 0;
+		for (auto &change : extension->GetChanges()) {
+			result->rows.push_back({extension->Name(), position++, change.TypeName(), change.RuleName(),
+			                        change.Definition(), change.Collapsible(), change.SuppressSuggestions(),
+			                        change.HasCode()});
+		}
+	}
+	return std::move(result);
+}
+
+static void DuckDBGrammarChangesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.global_state->Cast<DuckDBGrammarChangesData>();
+	idx_t count = 0;
+	while (data.offset < data.rows.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &row = data.rows[data.offset++];
+		output.data[0].Append(Value(row.extension));
+		output.data[1].Append(Value::BIGINT(NumericCast<int64_t>(row.position)));
+		output.data[2].Append(Value(row.type));
+		output.data[3].Append(Value(row.rule_name));
+		output.data[4].Append(Value(row.definition));
+		output.data[5].Append(Value::BOOLEAN(row.collapsible));
+		output.data[6].Append(Value::BOOLEAN(row.suppress_suggestions));
+		output.data[7].Append(Value::BOOLEAN(row.has_code));
+		count++;
+	}
+}
+
+void DuckDBGrammarChangesFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("duckdb_grammar_changes", {}, DuckDBGrammarChangesFunction, DuckDBGrammarChangesBind,
+	                              DuckDBGrammarChangesInit));
+}
+
+//===--------------------------------------------------------------------===//
 // add_grammar_extension / remove_grammar_extension
 //===--------------------------------------------------------------------===//
 struct GrammarExtensionNameData : public TableFunctionData {
@@ -121,10 +225,16 @@ static void SetActiveGrammarExtensions(ClientContext &context, const vector<stri
 //! Appends the grammar extension to the active grammar extensions, keeping the ones that are already active
 static void AddGrammarExtension(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &name = data.bind_data->Cast<GrammarExtensionNameData>().name;
-	if (IsActiveGrammarExtension(context, name)) {
+	// one retained snapshot serves both the membership check and the modification, so a
+	// concurrent change to the database default cannot split the two
+	auto current = EffectiveGrammarExtensions(context);
+	if (current && ListContainsGrammarExtension(*current, name)) {
 		return;
 	}
-	auto extensions = ClientConfig::GetConfig(context).active_grammar_extensions;
+	vector<string> extensions;
+	if (current) {
+		extensions = *current;
+	}
 	extensions.push_back(name);
 	SetActiveGrammarExtensions(context, extensions);
 }
@@ -132,11 +242,13 @@ static void AddGrammarExtension(ClientContext &context, TableFunctionInput &data
 //! Removes the grammar extension from the active grammar extensions, keeping the other ones
 static void RemoveGrammarExtension(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &name = data.bind_data->Cast<GrammarExtensionNameData>().name;
-	if (!IsActiveGrammarExtension(context, name)) {
+	// same single-snapshot discipline as the add path
+	auto current = EffectiveGrammarExtensions(context);
+	if (!current || !ListContainsGrammarExtension(*current, name)) {
 		return;
 	}
 	vector<string> extensions;
-	for (auto &active : ClientConfig::GetConfig(context).active_grammar_extensions) {
+	for (auto &active : *current) {
 		if (!StringUtil::CIEquals(active, name)) {
 			extensions.push_back(active);
 		}

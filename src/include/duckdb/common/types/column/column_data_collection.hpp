@@ -15,6 +15,7 @@ namespace duckdb {
 class BufferManager;
 class BlockHandle;
 class ClientContext;
+class Context;
 struct ColumnDataCopyFunction;
 class ColumnDataAllocator;
 class ColumnDataCollection;
@@ -45,6 +46,11 @@ public:
 	//! Constructs either an in-memory or a buffer-managed column data collection
 	DUCKDB_API
 	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
+	//! Constructs either an in-memory or a buffer-managed column data collection
+	DUCKDB_API
+	ColumnDataCollection(Context &context, vector<LogicalType> types,
 	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
 	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
@@ -157,6 +163,9 @@ public:
 	//! Materializes every row on each call, so read many values through GetRows instead
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
+	//! Truncates the collection in place. NOP if it is already smaller.
+	void Truncate(idx_t new_count);
+
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.
 	//! If they are not equal, return false and fill in the error message.
@@ -202,7 +211,7 @@ private:
 
 private:
 	//! The Column Data Allocator
-	buffer_ptr<ColumnDataAllocator> allocator;
+	shared_ptr<ColumnDataAllocator> allocator;
 	//! The types of the stored entries
 	vector<LogicalType> types;
 	//! The number of entries stored in the column data collection

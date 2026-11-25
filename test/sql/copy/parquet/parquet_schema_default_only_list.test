@@ -1,0 +1,342 @@
+# name: test/sql/copy/parquet/parquet_schema_default_only_list.test
+# description: Nested lists and maps retain their entries when their children all come from defaults
+# group: [parquet]
+
+require parquet
+
+# field ids: the schema refers to the lists and maps of the file, but not to their children
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(1, {'l': [1, 2], 'll': [[1, 2], [], NULL], 'ls': [{'a': 1}, NULL], 'ml': MAP {1: [1, 2], 2: NULL, 3: []},
+		     'in': {'l': [5, 6], 'm': MAP {8: 80, 9: 90}}, 'lll': [[[1, 2], []], [], NULL],
+		     'mm': MAP {1: MAP {10: 100}, 2: MAP {}, 3: NULL}, 'm': MAP {1: 10, 2: 20}, 'lm': [MAP {1: 1, 2: 2}, NULL, MAP {}]},
+		 [1, 2], [[1], [2, 3]], MAP {1: [1]}, [MAP {1: 1, 2: 2}], MAP {1: 10, 2: 20}),
+		(2, NULL, NULL, NULL, NULL, NULL, NULL),
+		(3, {'l': [], 'll': [], 'ls': [], 'ml': MAP {}, 'in': {'l': [], 'm': MAP {}}, 'lll': [], 'mm': MAP {}, 'm': MAP {}, 'lm': []}, [], [], MAP {}, [], MAP {}),
+		(4, {'l': NULL, 'll': NULL, 'ls': NULL, 'ml': NULL, 'in': NULL, 'lll': NULL, 'mm': NULL, 'm': NULL, 'lm': NULL}, [3], [NULL], MAP {4: NULL}, [NULL], MAP {4: 40})
+	) t(id, s, rl, rll, rml, rlm, rm)
+) TO '{TEST_DIR}/default_only_list.parquet'
+(FIELD_IDS {id: 1, s: {__duckdb_field_id: 2,
+	l: {__duckdb_field_id: 3, element: 4},
+	ll: {__duckdb_field_id: 5, element: {__duckdb_field_id: 6, element: 7}},
+	ls: {__duckdb_field_id: 8, element: {__duckdb_field_id: 9, a: 10}},
+	ml: {__duckdb_field_id: 11, key: 12, value: {__duckdb_field_id: 13, element: 14}},
+	"in": {__duckdb_field_id: 15, l: {__duckdb_field_id: 16, element: 17}, m: {__duckdb_field_id: 25, key: 26, value: 27}},
+	m: {__duckdb_field_id: 18, key: 19, value: 20},
+	lm: {__duckdb_field_id: 21, element: {__duckdb_field_id: 22, key: 23, value: 24}},
+	lll: {__duckdb_field_id: 50, element: {__duckdb_field_id: 51, element: {__duckdb_field_id: 52, element: 53}}},
+	mm: {__duckdb_field_id: 54, key: 55, value: {__duckdb_field_id: 56, key: 57, value: 58}}},
+	rl: {__duckdb_field_id: 30, element: 31},
+	rll: {__duckdb_field_id: 32, element: {__duckdb_field_id: 33, element: 34}},
+	rml: {__duckdb_field_id: 35, key: 36, value: {__duckdb_field_id: 37, element: 38}},
+	rlm: {__duckdb_field_id: 39, element: {__duckdb_field_id: 40, key: 41, value: 42}},
+	rm: {__duckdb_field_id: 43, key: 44, value: 45}});
+
+# the list elements (99) and the keys (98) and values (99) of the maps that are not read by their ids are missing
+# from the file
+statement ok
+CREATE TEMPORARY VIEW defaults AS
+FROM read_parquet('{TEST_DIR}/default_only_list.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(l INTEGER[], ll INTEGER[][], ls STRUCT(b INTEGER)[], ml MAP(INTEGER, INTEGER[]), "in" STRUCT(l INTEGER[]), lll INTEGER[][][], mm MAP(INTEGER, MAP(INTEGER, INTEGER)))', default_value: NULL, children: MAP {
+		3: {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}},
+		5: {name: 'll', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+			6: {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+				99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		8: {name: 'ls', type: 'STRUCT(b INTEGER)[]', default_value: NULL, children: MAP {
+			9: {name: 'element', type: 'STRUCT(b INTEGER)', default_value: NULL, children: MAP {
+				99: {name: 'b', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		11: {name: 'ml', type: 'MAP(INTEGER, INTEGER[])', default_value: NULL, children: MAP {
+			12: {name: 'key', type: 'INTEGER', default_value: NULL, children: NULL},
+			13: {name: 'value', type: 'INTEGER[]', default_value: NULL, children: MAP {
+				99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		15: {name: 'in', type: 'STRUCT(l INTEGER[])', default_value: NULL, children: MAP {
+			16: {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+				99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		50: {name: 'lll', type: 'INTEGER[][][]', default_value: NULL, children: MAP {
+			51: {name: 'element', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+				52: {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+					99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}}}},
+		54: {name: 'mm', type: 'MAP(INTEGER, MAP(INTEGER, INTEGER))', default_value: NULL, children: MAP {
+			55: {name: 'key', type: 'INTEGER', default_value: NULL, children: NULL},
+			56: {name: 'value', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+				98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+				99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}}}}},
+	30: {name: 'rl', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}},
+	32: {name: 'rll', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+		33: {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+	35: {name: 'rml', type: 'MAP(INTEGER, INTEGER[])', default_value: NULL, children: MAP {
+		36: {name: 'key', type: 'INTEGER', default_value: NULL, children: NULL},
+		37: {name: 'value', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+	39: {name: 'rlm', type: 'MAP(INTEGER, INTEGER)[]', default_value: NULL, children: MAP {
+		40: {name: 'element', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+			98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+			99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}}}
+});
+
+query II
+SELECT id, s FROM defaults ORDER BY id;
+----
+1	{'l': [7, 7], 'll': [[7, 7], [], NULL], 'ls': [{'b': 7}, NULL], 'ml': {1=[7, 7], 2=NULL, 3=[]}, 'in': {'l': [7, 7]}, 'lll': [[[7, 7], []], [], NULL], 'mm': {1={1=2}, 2={}, 3=NULL}}
+2	NULL
+3	{'l': [], 'll': [], 'ls': [], 'ml': {}, 'in': {'l': []}, 'lll': [], 'mm': {}}
+4	{'l': NULL, 'll': NULL, 'ls': NULL, 'ml': NULL, 'in': NULL, 'lll': NULL, 'mm': NULL}
+
+# the root of a column is the input of the remap, the lists and maps below a root list or map lost their entries
+# (rl on its own passes without the fix, it is repeated in the protection queries below)
+query IIIII
+SELECT id, rl, rll, rml, [map_entries(e) for e in rlm] FROM defaults ORDER BY id;
+----
+1	[7, 7]	[[7], [7, 7]]	{1=[7]}	[[{'key': 1, 'value': 2}, {'key': 1, 'value': 2}]]
+2	NULL	NULL	NULL	NULL
+3	[]	[]	{}	[]
+4	[7]	[NULL]	{4=NULL}	[NULL]
+
+query II
+SELECT id, s FROM defaults WHERE id = 3;
+----
+3	{'l': [], 'll': [], 'ls': [], 'ml': {}, 'in': {'l': []}, 'lll': [], 'mm': {}}
+
+query II
+SELECT id, s FROM defaults WHERE s."in".l = [7, 7] OR s.ll IS NULL ORDER BY id;
+----
+1	{'l': [7, 7], 'll': [[7, 7], [], NULL], 'ls': [{'b': 7}, NULL], 'ml': {1=[7, 7], 2=NULL, 3=[]}, 'in': {'l': [7, 7]}, 'lll': [[[7, 7], []], [], NULL], 'mm': {1={1=2}, 2={}, 3=NULL}}
+2	NULL
+4	{'l': NULL, 'll': NULL, 'ls': NULL, 'ml': NULL, 'in': NULL, 'lll': NULL, 'mm': NULL}
+
+# a pushed-down extract makes ll and ml the root of the remap, the lists they hold are still below it
+query III
+SELECT id, s.ll, s.ml FROM defaults ORDER BY id;
+----
+1	[[7, 7], [], NULL]	{1=[7, 7], 2=NULL, 3=[]}
+2	NULL	NULL
+3	[]	{}
+4	NULL	NULL
+
+# protection: these pass without the fix, the extracted or filtered list is the root of the remap
+query IIII
+SELECT id, rl, s.l, s."in".l FROM defaults ORDER BY id;
+----
+1	[7, 7]	[7, 7]	[7, 7]
+2	NULL	NULL	NULL
+3	[]	[]	[]
+4	[7]	NULL	NULL
+
+query II
+SELECT id, s.l FROM defaults WHERE len(s.l) = 2;
+----
+1	[7, 7]
+
+query I
+SELECT id FROM defaults WHERE s.l IS NULL ORDER BY id;
+----
+2
+4
+
+# the key and the value of a map are both missing: the default key is repeated for every entry of the file,
+# which is what the root map rm returns without the fix (map_entries, a MAP value with duplicate keys cannot be printed)
+statement ok
+CREATE TEMPORARY VIEW map_defaults AS
+FROM read_parquet('{TEST_DIR}/default_only_list.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(m MAP(INTEGER, INTEGER), lm MAP(INTEGER, INTEGER)[], "in" STRUCT(m MAP(INTEGER, INTEGER)))', default_value: NULL, children: MAP {
+		18: {name: 'm', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+			98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+			99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}},
+		21: {name: 'lm', type: 'MAP(INTEGER, INTEGER)[]', default_value: NULL, children: MAP {
+			22: {name: 'element', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+				98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+				99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}}},
+		15: {name: 'in', type: 'STRUCT(m MAP(INTEGER, INTEGER))', default_value: NULL, children: MAP {
+			25: {name: 'm', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+				98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+				99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}}}}},
+	43: {name: 'rm', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+		98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+		99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}
+});
+
+query IIIIII
+SELECT id, s IS NULL, map_entries(s.m), [map_keys(e) for e in s.lm], map_entries(s."in".m), map_entries(rm) FROM map_defaults ORDER BY id;
+----
+1	false	[{'key': 1, 'value': 2}, {'key': 1, 'value': 2}]	[[1, 1], NULL, []]	[{'key': 1, 'value': 2}, {'key': 1, 'value': 2}]	[{'key': 1, 'value': 2}, {'key': 1, 'value': 2}]
+2	true	NULL	NULL	NULL	NULL
+3	false	[]	[]	[]	[]
+4	false	NULL	NULL	NULL	[{'key': 1, 'value': 2}]
+
+# the list or map itself is missing (98) and takes its own default, and a map with only the value missing
+statement ok
+CREATE TEMPORARY VIEW missing AS
+FROM read_parquet('{TEST_DIR}/default_only_list.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(l INTEGER[], ll INTEGER[][], ls STRUCT(b INTEGER)[], m MAP(INTEGER, INTEGER))', default_value: NULL, children: MAP {
+		98: {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			4: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}},
+		5: {name: 'll', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+			98: {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+				99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		8: {name: 'ls', type: 'STRUCT(b INTEGER)[]', default_value: NULL, children: MAP {
+			98: {name: 'element', type: 'STRUCT(b INTEGER)', default_value: NULL, children: MAP {
+				99: {name: 'b', type: 'INTEGER', default_value: 7, children: NULL}}}}},
+		18: {name: 'm', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+			19: {name: 'key', type: 'INTEGER', default_value: NULL, children: NULL},
+			99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}}}}
+});
+
+query II
+SELECT id, s FROM missing ORDER BY id;
+----
+1	{'l': NULL, 'll': [NULL, NULL, NULL], 'ls': [NULL, NULL], 'm': {1=2, 2=2}}
+2	NULL
+3	{'l': NULL, 'll': [], 'ls': [], 'm': {}}
+4	{'l': NULL, 'll': NULL, 'ls': NULL, 'm': NULL}
+
+# several files in one scan: the element is in the first, missing from the second, the third has no list,
+# the fourth has no rows
+statement ok
+COPY (SELECT 1 AS id, {'a': 1, 'l': [1, 2]} AS s UNION ALL SELECT 2, {'a': 2, 'l': NULL} UNION ALL SELECT 3, NULL)
+TO '{TEST_DIR}/default_only_list_f1.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, a: 3, l: {__duckdb_field_id: 4, element: 5}}});
+
+statement ok
+COPY (SELECT 4 AS id, {'a': 4, 'l': [3, 4, 5]} AS s UNION ALL SELECT 5, {'a': 5, 'l': []} UNION ALL SELECT 6, NULL)
+TO '{TEST_DIR}/default_only_list_f2.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, a: 3, l: {__duckdb_field_id: 4, element: 6}}});
+
+statement ok
+COPY (SELECT 7 AS id, {'a': 7} AS s UNION ALL SELECT 8, NULL)
+TO '{TEST_DIR}/default_only_list_f3.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, a: 3}});
+
+statement ok
+COPY (SELECT 9 AS id, {'a': 9, 'l': [9]} AS s LIMIT 0)
+TO '{TEST_DIR}/default_only_list_f4.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, a: 3, l: {__duckdb_field_id: 4, element: 6}}});
+
+query II
+SELECT id, s
+FROM read_parquet(['{TEST_DIR}/default_only_list_f1.parquet', '{TEST_DIR}/default_only_list_f2.parquet',
+                   '{TEST_DIR}/default_only_list_f3.parquet', '{TEST_DIR}/default_only_list_f4.parquet'], schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(a INTEGER, l INTEGER[])', default_value: NULL, children: MAP {
+		3: {name: 'a', type: 'INTEGER', default_value: NULL, children: NULL},
+		4: {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			5: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}}}
+}) ORDER BY id;
+----
+1	{'a': 1, 'l': [1, 2]}
+2	{'a': 2, 'l': NULL}
+3	NULL
+4	{'a': 4, 'l': [7, 7, 7]}
+5	{'a': 5, 'l': []}
+6	NULL
+7	{'a': 7, 'l': NULL}
+8	NULL
+
+# names: the list elements of the file are NULL-typed, also in a list in a struct in a list in a struct
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		({'l': [NULL, NULL]}, {'o': [{'l': [NULL, NULL], 'k': 1}, NULL, {'l': NULL, 'k': 2}, {'l': [], 'k': 3}]}),
+		(NULL, NULL),
+		({'l': []}, {'o': []}),
+		({'l': NULL}, {'o': NULL})
+	) t(s, d)
+) TO '{TEST_DIR}/default_only_null_list.parquet' (FORMAT parquet);
+
+query II
+SELECT s, d FROM read_parquet('{TEST_DIR}/default_only_null_list.parquet', schema = MAP {
+	's': {name: 's', type: 'STRUCT(l STRUCT(z INTEGER)[])', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(z INTEGER)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(z INTEGER)', default_value: NULL, children: NULL}}}}},
+	'd': {name: 'd', type: 'STRUCT(o STRUCT(l INTEGER[], k INTEGER)[])', default_value: NULL, children: MAP {
+		'o': {name: 'o', type: 'STRUCT(l INTEGER[], k INTEGER)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(l INTEGER[], k INTEGER)', default_value: NULL, children: MAP {
+				'l': {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+					'list': {name: 'element', type: 'INTEGER', default_value: NULL, children: NULL}}},
+				'k': {name: 'k', type: 'INTEGER', default_value: NULL, children: NULL}}}}}}}
+});
+----
+{'l': [NULL, NULL]}	{'o': [{'l': [NULL, NULL], 'k': 1}, NULL, {'l': NULL, 'k': 2}, {'l': [], 'k': 3}]}
+NULL	NULL
+{'l': []}	{'o': []}
+{'l': NULL}	{'o': NULL}
+
+# without children the column is cast as a whole
+query I
+SELECT s FROM read_parquet('{TEST_DIR}/default_only_null_list.parquet', schema = MAP {
+	's': {name: 's', type: 'STRUCT(l STRUCT(z INTEGER)[])', default_value: NULL, children: NULL}
+});
+----
+{'l': [NULL, NULL]}
+NULL
+{'l': []}
+{'l': NULL}
+
+# several row groups and vectors, lists longer than a vector, compared with the same values computed from a plain read
+statement ok
+COPY (
+	SELECT i AS id, CASE WHEN i % 7 = 0 THEN NULL ELSE {
+		'l': CASE WHEN i % 11 = 0 THEN NULL WHEN i % 13 = 0 THEN [] WHEN i % 100 = 1 THEN range(5000) ELSE range(i % 50) END,
+		'm': CASE WHEN i % 17 = 0 THEN NULL ELSE map_from_entries([{'k': j, 'v': j + i} for j in range(i % 37)]) END,
+		'ls': CASE WHEN i % 19 = 0 THEN NULL ELSE [CASE WHEN j % 3 = 0 THEN NULL ELSE {'a': j} END for j in range(i % 23)] END,
+		'll': CASE WHEN i % 29 = 0 THEN NULL ELSE [CASE WHEN j % 4 = 0 THEN NULL ELSE range(j) END for j in range(i % 9)] END
+	} END AS s
+	FROM range(20000) t(i)
+) TO '{TEST_DIR}/default_only_list_large.parquet' (ROW_GROUP_SIZE 4096, FIELD_IDS {id: 1, s: {__duckdb_field_id: 2,
+	l: {__duckdb_field_id: 3, element: 4},
+	m: {__duckdb_field_id: 5, key: 6, value: 7},
+	ls: {__duckdb_field_id: 8, element: {__duckdb_field_id: 9, a: 10}},
+	ll: {__duckdb_field_id: 11, element: {__duckdb_field_id: 12, element: 13}}}});
+
+statement ok
+CREATE TEMPORARY VIEW large AS
+FROM read_parquet('{TEST_DIR}/default_only_list_large.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(l INTEGER[], m MAP(INTEGER, INTEGER), ls STRUCT(b INTEGER)[], ll INTEGER[][])', default_value: NULL, children: MAP {
+		3: {name: 'l', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			99: {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}},
+		5: {name: 'm', type: 'MAP(INTEGER, INTEGER)', default_value: NULL, children: MAP {
+			98: {name: 'key', type: 'INTEGER', default_value: 1, children: NULL},
+			99: {name: 'value', type: 'INTEGER', default_value: 2, children: NULL}}},
+		8: {name: 'ls', type: 'STRUCT(b INTEGER)[]', default_value: NULL, children: MAP {
+			9: {name: 'element', type: 'STRUCT(b INTEGER)', default_value: NULL, children: MAP {
+				99: {name: 'b', type: 'INTEGER', default_value: 9, children: NULL}}}}},
+		11: {name: 'll', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+			12: {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+				99: {name: 'element', type: 'INTEGER', default_value: 5, children: NULL}}}}}}}
+});
+
+statement ok
+CREATE VIEW large_expected AS
+SELECT id, CASE WHEN s IS NULL THEN NULL ELSE {
+	'l': [7 for x in s.l],
+	'm': [{'key': 1, 'value': 2} for x in map_entries(s.m)],
+	'ls': [CASE WHEN x IS NULL THEN NULL ELSE {'b': 9} END for x in s.ls],
+	'll': [[5 for x in y] for y in s.ll]} END AS s
+FROM read_parquet('{TEST_DIR}/default_only_list_large.parquet');
+
+query IIIIIII
+SELECT count(*), count(s), count(s.l), sum(len(s.l)), sum(cardinality(s.m)), sum(len(s.ls)), sum(len(s.ll)) FROM large;
+----
+20000	17142	15583	1077550	290223	178583	66204
+
+query I
+SELECT count(*)
+FROM (SELECT id, s IS NULL AS s_null, s.l AS l, map_entries(s.m) AS m, s.ls AS ls, s.ll AS ll FROM large) g
+JOIN large_expected e USING (id)
+WHERE g.s_null IS DISTINCT FROM (e.s IS NULL) OR g.l IS DISTINCT FROM e.s.l OR g.m IS DISTINCT FROM e.s.m
+   OR g.ls IS DISTINCT FROM e.s.ls OR g.ll IS DISTINCT FROM e.s.ll;
+----
+0
+
+query III
+SELECT count(*), sum(len(s.l)), sum(len(s.ll)) FROM large WHERE id > 15000 AND s.ls[2].b = 9;
+----
+3706	231226	14309
+
+query III
+SELECT count(*), sum(len(l)), sum(len(ll)) FROM (SELECT s.l AS l, s.ll AS ll FROM large_expected WHERE id > 15000 AND s.ls[2].b = 9);
+----
+3706	231226	14309

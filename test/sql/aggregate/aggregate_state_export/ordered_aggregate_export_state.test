@@ -159,7 +159,7 @@ WHERE d.direct IS DISTINCT FROM e.exported;
 ----
 0
 
-# many groups via the perfect hash aggregate (small integer keys)
+# ordered list states with small integer group keys
 statement ok
 CREATE TABLE narrow AS SELECT (range % 8)::TINYINT AS g, range AS v FROM range(1000);
 

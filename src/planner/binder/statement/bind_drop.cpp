@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
@@ -28,7 +29,7 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, base_table_ref.GetQualifiedName());
 	// the trigger lives in the same (possibly nested) schema as its base table
 	stmt.info->SetQualifiedName(table_entry.ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
-	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
+	properties.RegisterDBModify(table_entry.ParentCatalog(), context, stmt.info->GetModifications());
 }
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
@@ -99,7 +100,16 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
 		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
-		properties.RegisterDBModify(entry->ParentCatalog(), context, stmt.info->GetModifications());
+		auto modifications = stmt.info->GetModifications();
+		// FIXME: temporary, until the drops that involve indexes run alongside checkpoints as well
+		if (entry->type == CatalogType::TABLE_ENTRY && !stmt.info->cascade) {
+			auto &table = entry->Cast<TableCatalogEntry>();
+			if (table.IsDuckTable() && !table.GetStorage().HasIndexes()) {
+				// no modification type: DuckTransaction::SetModifications then takes no checkpoint lock for the drop
+				modifications = DatabaseModificationType();
+			}
+		}
+		properties.RegisterDBModify(entry->ParentCatalog(), context, modifications);
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {
