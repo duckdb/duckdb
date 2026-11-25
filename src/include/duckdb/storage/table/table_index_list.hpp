@@ -44,14 +44,14 @@ public:
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode,
 	                                transaction_t last_commit = 0);
-	//! Adds an entry for an index that the transaction builds; the commit lock must be held.
+	//! Adds the entry of an index being built (requires the commit lock)
 	shared_ptr<IndexEntry> AddBuildingIndex(const BoundIndex &index_template, transaction_t build_commit,
 	                                        transaction_t build_transaction);
-	//! Returns the entry of the index that the transaction builds, if any.
+	//! Returns the entry being built by the transaction, if any
 	shared_ptr<IndexEntry> FindBuildingIndex(transaction_t build_transaction) const;
-	//! Removes the entry, if its build did not finish.
+	//! Removes the entry if it is still being built
 	void RemoveBuildingIndex(const IndexEntry &entry);
-	//! Returns the number of indexes that are not being built.
+	//! Returns the number of indexes that are not being built
 	idx_t CountBuiltIndexes() const;
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;

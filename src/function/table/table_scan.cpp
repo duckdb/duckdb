@@ -359,7 +359,7 @@ public:
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
-		// start before the scan fixes its row range, so that it reads every row committed up to the start
+		// add the entry before the scan fixes its row range, so the scan sees every row up to the build commit
 		if (bind_data.index_template) {
 			index_build = storage.AddBuildingIndex(tx, *bind_data.index_template);
 		}
@@ -393,7 +393,7 @@ private:
 	//! Preallocated counters spread progress updates without registering local states
 	vector<PaddedAtomic<idx_t>> progress;
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
-	//! The entry of the index that a CREATE INDEX scan builds in place
+	//! The entry of the index that this CREATE INDEX scan builds in place
 	shared_ptr<IndexEntry> index_build;
 
 private:

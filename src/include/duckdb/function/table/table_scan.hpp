@@ -32,7 +32,7 @@ struct TableScanBindData : public TableFunctionData {
 	bool is_index_scan;
 	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
-	//! An empty copy of the index that CREATE INDEX builds while the table changes (only for an online build)
+	//! An empty copy of the index to build in place (only for indexes with delta support)
 	shared_ptr<const BoundIndex> index_template;
 	//! In what order to scan the row groups
 	unique_ptr<RowGroupOrderOptions> order_options;

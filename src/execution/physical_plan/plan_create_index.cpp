@@ -28,7 +28,7 @@ static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCrea
 	return cindex;
 }
 
-//! An empty index for the scan to start the build from, for indexes that commits can change while they are built
+//! Returns an empty index to build in place, or nullptr if the index type does not support it
 static shared_ptr<const BoundIndex> CreateIndexTemplate(ClientContext &context, LogicalCreateIndex &op,
                                                         const IndexType &index_type) {
 	if (index_type.create_plan || !index_type.create_instance) {
@@ -46,7 +46,6 @@ static shared_ptr<const BoundIndex> CreateIndexTemplate(ClientContext &context, 
 	                       op.info->options);
 	auto index = index_type.create_instance(input);
 	if (!index || !index->SupportsDeltaIndexes()) {
-		// without deltas, the build fails if the table changes while it runs
 		return nullptr;
 	}
 	return shared_ptr<const BoundIndex>(std::move(index));

@@ -375,7 +375,7 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, option
 	if (build) {
 		ScanOptions options(
 		    TransactionData(build->GetBuildTransaction(), VisibilityBound::Through(build->GetLastCommit())));
-		// the transaction's own deletes reach the index through its commit
+		// the transaction's own deletes reach the index when it commits
 		options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 		options.update_type = UpdateScanType::DISALLOW_UPDATES;
 		return state.table_state.Scan(options, result);
@@ -405,7 +405,7 @@ bool DataTable::HasUniqueIndexes() const {
 unique_lock<mutex> DataTable::LockMainTableForIndex(unique_lock<mutex> &table_lock) {
 	while (true) {
 		auto commit_lock = db.GetStorageManager().GetCommitLock();
-		// an ALTER replaces the table while holding the append lock; never wait for it under the commit lock
+		// an ALTER holds the append lock while replacing the table: don't wait for it under the commit lock
 		table_lock = unique_lock<mutex>(append_lock, std::try_to_lock);
 		if (!table_lock.owns_lock()) {
 			commit_lock.unlock();
@@ -413,7 +413,7 @@ unique_lock<mutex> DataTable::LockMainTableForIndex(unique_lock<mutex> &table_lo
 			continue;
 		}
 		if (!IsMainTable()) {
-			// the commits to the table that replaced this one cannot maintain an index on this one's columns
+			// commits to the new table cannot maintain an index on the old columns
 			throw TransactionException(
 			    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 		}
@@ -423,20 +423,20 @@ unique_lock<mutex> DataTable::LockMainTableForIndex(unique_lock<mutex> &table_lo
 
 shared_ptr<IndexEntry> DataTable::AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template) {
 	auto &transaction_manager = DuckTransactionManager::Get(db);
-	// under the commit lock no commit is in progress: every later commit sees the entry
+	// no commit is in progress: every later commit sees the entry
 	unique_lock<mutex> table_lock;
 	auto commit_lock = LockMainTableForIndex(table_lock);
-	// the transaction holds the checkpoint lock, so no checkpoint uses the deltas during the build
+	// the transaction holds the checkpoint lock, so no checkpoint runs during the build
 	D_ASSERT(!transaction_manager.GetActiveCheckpoint().IsValid());
 	return info->indexes.AddBuildingIndex(index_template, transaction_manager.GetLastCommit(),
 	                                      transaction.GetTransactionId());
 }
 
-//! The most changed rows that CREATE INDEX merges while holding the commit lock
+//! The maximum changed rows merged while holding the commit lock
 static constexpr idx_t INDEX_BUILD_LOCKED_ROWS = DEFAULT_ROW_GROUP_SIZE;
-//! The most rounds that CREATE INDEX merges outside the commit lock
+//! The maximum merge rounds outside the commit lock
 static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
-//! The most consecutive rounds in which the changed rows grow
+//! The maximum consecutive rounds in which the changed rows grow
 static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
 
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
@@ -451,17 +451,17 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
 	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	if (!entry) {
-		// an ALTER while the index was not yet in the index list did not see it
+		// no building entry: publish between commits
 		unique_lock<mutex> table_lock;
 		auto commit_lock = LockMainTableForIndex(table_lock);
 		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
 	}
 	auto commit_lock = db.GetStorageManager().GetCommitLock();
-	// the commit lock keeps a commit's changes and their reverts in the same deltas
+	// under the commit lock, a commit and its revert always land in the same deltas
 	auto deltas = entry->TakeBuildDeltas();
 	idx_t rounds = 0;
 	idx_t growing_rounds = 0;
-	// merge outside the commit lock until few enough changed rows are left
+	// merge outside the commit lock until few changed rows are left
 	while (deltas.changed_rows > INDEX_BUILD_LOCKED_ROWS) {
 		if (rounds == INDEX_BUILD_MAX_ROUNDS || growing_rounds == INDEX_BUILD_MAX_GROWING_ROUNDS) {
 			throw TransactionException(

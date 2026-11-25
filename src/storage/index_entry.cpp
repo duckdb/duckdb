@@ -169,7 +169,7 @@ static void AppendIndexEntries(BoundIndex &index, DataChunk &chunk, Vector &row_
 	}
 }
 
-//! Deletes the rows from the delta that are in it, and appends the other rows to the target
+//! Deletes the rows that are in the delta, and appends the others to the target
 static void DeleteOrAppend(BoundIndex &delta, BoundIndex &target, DataChunk &chunk, Vector &row_ids) {
 	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
 	const auto delete_count = delta.TryDelete(chunk, row_ids, nullptr, remaining_sel);
@@ -180,7 +180,7 @@ static void DeleteOrAppend(BoundIndex &delta, BoundIndex &target, DataChunk &chu
 		AppendIndexEntries(target, chunk, row_ids);
 		return;
 	}
-	// a delete can cover rows from before and after the delta was created
+	// the delete covers rows from both before and after the delta was created
 	const auto remaining_count = chunk.size() - delete_count;
 	DataChunk remaining_chunk;
 	remaining_chunk.InitializeEmpty(chunk.GetTypes());
@@ -304,7 +304,7 @@ void IndexEntry::RemoveFromIndex(DataChunk &chunk, Vector &row_ids, const IndexR
 		// Cleanup always removes directly from "deleted_rows_in_use", even during a checkpoint.
 		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
 	} else if (bound_index.SupportsDeltaIndexes() && (building || deltas.ShouldUse(active_checkpoint))) {
-		// During a checkpoint or a build, route changes through the deltas instead of the main index.
+		// During a checkpoint or a build, route changes through the deltas.
 		if (building) {
 			build_changed_rows += chunk.size();
 		}
@@ -589,7 +589,7 @@ void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 }
 
 void IndexEntry::MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas) {
-	// remove first: a key that moved to another row must not look like a duplicate
+	// remove first, so that a key moved to another row is not a duplicate
 	for (const auto type :
 	     {IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
 		auto &delta = type == IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT ? deltas.removed : deltas.added;

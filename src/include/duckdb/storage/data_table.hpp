@@ -265,7 +265,7 @@ public:
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result);
 
-	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit if the index is built in place
+	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit when building in place
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexEntry> build);
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
@@ -303,12 +303,12 @@ public:
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
-	//! AddIndex moves an index to this table's index list, between commits.
+	//! AddIndex moves an index to this table's index list, between commits
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
-	//! Applies the commits made during the build to the index, then makes it usable in the index list.
+	//! Merges the commits made during the build into the index, then publishes it
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
 	                                idx_t index_oid, ConstraintCheckMode check_mode);
-	//! Starts building an index in place: later commits change the deltas of its entry
+	//! Adds a building entry for the index, whose deltas receive later commits
 	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
 	//! Returns a list of the partition stats
@@ -334,7 +334,7 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
-	//! Takes the commit lock and the append lock, and fails if an ALTER replaced the table
+	//! Takes the commit and append locks; throws if an ALTER replaced the table
 	unique_lock<mutex> LockMainTableForIndex(unique_lock<mutex> &table_lock);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,

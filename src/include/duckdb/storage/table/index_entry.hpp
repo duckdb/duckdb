@@ -46,7 +46,7 @@ public:
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
 	void MarkWritten(optional_idx checkpoint_id);
-	//! Takes the delta out, leaving none in its place
+	//! Removes the delta of the given type and returns it
 	unique_ptr<BoundIndex> Take(IndexDeltaType type);
 	void Reset();
 
@@ -112,11 +112,11 @@ private:
 	unique_ptr<StorageLockKey> lock;
 };
 
-//! The changes that commits made to a building index entry, taken out of the entry
+//! The deltas taken from a building index entry, merged outside the commit lock
 struct IndexBuildDeltas {
 	unique_ptr<BoundIndex> added;
 	unique_ptr<BoundIndex> removed;
-	//! The number of rows that commits appended or removed
+	//! The number of appended and removed rows
 	idx_t changed_rows = 0;
 };
 
@@ -125,7 +125,7 @@ struct IndexBuildDeltas {
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
 	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode, transaction_t last_commit);
-	//! Creates a building entry with an empty copy of the index: commits change its deltas, and readers skip it
+	//! Creates the entry of an index that is being built, from an empty copy of the template
 	IndexEntry(const BoundIndex &index_template, transaction_t build_commit, transaction_t build_transaction);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
@@ -191,11 +191,11 @@ public:
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds the required transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
-	//! Takes the changes that commits made to the building entry since the last take
+	//! Takes the deltas of a building entry, leaving empty ones for later commits
 	IndexBuildDeltas TakeBuildDeltas();
-	//! Merges the taken changes into the built index, checking its constraint
+	//! Merges taken deltas into the built index, checking its constraint
 	static void MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas);
-	//! Replaces the empty index of the building entry with the built index, which readers can then use
+	//! Installs the built index, making it visible to readers
 	void FinishBuild(unique_ptr<BoundIndex> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Adds only the transaction-local delete index.
 	void InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const;
@@ -220,19 +220,19 @@ public:
 	idx_t GetIndexOid() const {
 		return index_oid;
 	}
-	//! Whether CREATE INDEX is still building the index: commits change its deltas, and readers skip it
+	//! Whether the index is being built: commits write to its deltas and readers skip it
 	bool IsBuilding() const {
 		return building;
 	}
-	//! The transaction that builds the index
+	//! The transaction building the index
 	transaction_t GetBuildTransaction() const {
 		return build_transaction;
 	}
-	//! The last commit before the index was added to the table's index list
+	//! The last commit before the index was added to the index list
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	//! Whether a snapshot at the bound can scan the index: it sees every commit the index was built from.
+	//! Whether a snapshot with this bound sees every commit the index contains
 	bool ScannableAt(VisibilityBound bound) const {
 		return last_commit < bound;
 	}
@@ -250,9 +250,9 @@ private:
 
 private:
 	atomic<IndexBindState> bind_state;
-	//! The OID of this index (set when a build finishes).
+	//! The OID of this index (set when a build finishes)
 	atomic<idx_t> index_oid;
-	//! The last commit before the index was added to the table's index list (0: added before every commit).
+	//! The last commit before the index was added to the index list (0 if before any commit)
 	const transaction_t last_commit;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
@@ -261,11 +261,11 @@ private:
 	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
 	ConstraintCheckMode check_mode;
 	IndexDeltas deltas;
-	//! Whether the index is being built, see IsBuilding()
+	//! See IsBuilding()
 	atomic<bool> building;
-	//! The transaction that builds the index (0 if the entry was not built in place)
+	//! The transaction building the index (0 if not built in place)
 	const transaction_t build_transaction;
-	//! The rows that commits appended or removed since the build last took the deltas
+	//! The rows appended or removed since the last TakeBuildDeltas()
 	idx_t build_changed_rows = 0;
 };
 
