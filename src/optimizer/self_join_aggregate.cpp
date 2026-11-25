@@ -20,11 +20,13 @@
 // the left side of a RIGHT_SEMI or RIGHT_ANTI one), whose rows only decide whether a match exists -- a MARK join's NULL
 // included, which depends on whether a NULL occurs, not how often; a DISTINCT, whose targets it reads through
 // expressions, a DISTINCT ON passing its other columns through by position, which therefore all count as read; and a
-// GROUP BY whose aggregates are min, max or DISTINCT ones (`min(x, n)`, the n smallest values, counts duplicates and
-// is not one of them). Below such a parent the property passes through projections and filters without volatile
-// expressions, cross products and INNER joins: their output, as a set, depends only on their inputs as sets. Anything
-// else stops it, a UNION among them: it reads its inputs' columns by position rather than through expressions, so what
-// it reads would not be seen. A materialized CTE's definition ignores duplicates when every one of its references does.
+// GROUP BY whose aggregates ignore duplicates (LogicalAggregate::IgnoresDuplicates: DISTINCT ones, and the ones that
+// depend neither on duplicates nor on input order, min, max, bool_and, bool_or; `min(x, n)`, the n smallest values,
+// counts duplicates and is not one of them). Below such a parent the property passes through projections and filters
+// without volatile expressions, cross products and INNER joins: their output, as a set, depends only on their inputs as
+// sets. Anything else stops it, a UNION among them: it reads its inputs' columns by position rather than through
+// expressions, so what it reads would not be seen. A materialized CTE's definition ignores duplicates when every one of
+// its references does.
 //
 // What must hold of the join, in the plan as bound (the rewrite runs before filter pushdown, which would move the
 // conditions into the scans; the later optimizers then push the new filter into the scan and order the joins around
@@ -87,27 +89,6 @@ bool JoinConditionsVolatile(const LogicalOperator &op) {
 		}
 	}
 	return false;
-}
-
-//! A GROUP BY whose result is the same over its input with or without repeated rows
-bool AggregateIgnoresDuplicates(const LogicalAggregate &aggregate) {
-	if (AnyVolatile(aggregate.groups)) {
-		return false;
-	}
-	for (auto &expr : aggregate.expressions) {
-		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE || expr->IsVolatile()) {
-			return false;
-		}
-		auto &bound = expr->Cast<BoundAggregateExpression>();
-		if (bound.IsDistinct()) {
-			continue;
-		}
-		auto &name = bound.Function().GetName().GetIdentifierName();
-		if ((name != "min" && name != "max") || bound.GetChildren().size() != 1) {
-			return false;
-		}
-	}
-	return true;
 }
 
 //! The column bindings the plan reads, visited from the root down so that a candidate projection's expressions count
@@ -334,7 +315,7 @@ private:
 			return;
 		}
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			Walk(op.children[0], AggregateIgnoresDuplicates(op.Cast<LogicalAggregate>()));
+			Walk(op.children[0], op.Cast<LogicalAggregate>().IgnoresDuplicates());
 			return;
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 			// its references are all below its second child, so they are all seen before its definition is
@@ -498,8 +479,8 @@ private:
 		auto scan = std::move(join.children[0]);
 		auto not_null = make_uniq<LogicalFilter>();
 		for (auto &key : keys) {
-			auto check = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-			check->GetChildrenMutable().push_back(
+			auto check = make_uniq<BoundOperatorExpression>(
+			    ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN,
 			    make_uniq<BoundColumnRefExpression>(key.type, ColumnBinding(scan_index, key.left)));
 			not_null->expressions.push_back(std::move(check));
 		}
@@ -539,11 +520,10 @@ private:
 			unique_ptr<Expression> replacement;
 			if (key_of[k] != DConstants::INVALID_INDEX) {
 				replacement = make_uniq<BoundColumnRefExpression>(
-				    expr->GetReturnType(), ColumnBinding(group_index, ProjectionIndex(key_of[k])));
+				    expr->GetAlias(), expr->GetReturnType(), ColumnBinding(group_index, ProjectionIndex(key_of[k])));
 			} else {
-				replacement = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
+				replacement = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()), expr->GetAlias());
 			}
-			replacement->SetAlias(expr->GetAlias());
 			expr = std::move(replacement);
 		}
 		// drops the filters, the join and the other scan

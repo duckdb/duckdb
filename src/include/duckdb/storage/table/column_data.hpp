@@ -55,6 +55,7 @@ struct ColumnCheckpointInfo {
 	idx_t column_idx;
 
 public:
+	Context &GetContext();
 	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
 
@@ -208,7 +209,7 @@ public:
 
 	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group, Context &context,
 	                                                                PartialBlockManager &partial_block_manager);
 	//! If this is a nested column, "stats" are the corresponding statistics from the parent column
 	//! Otherwise, "stats" == this->statistics->stats

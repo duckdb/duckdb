@@ -3,7 +3,6 @@
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
@@ -11,9 +10,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/query_node/update_query_node.hpp"
-#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -287,25 +283,26 @@ void Parser::ParseQuery(const string &query_p) {
 	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
-	auto owned_tokens = make_uniq<vector<MatcherToken>>();
-	ParserTokenizerBehavior behavior(query, *owned_tokens);
+	ParserTokenizerBehavior behavior(query);
 	auto &tokenizer = GetGrammar().GetTokenizer();
 	tokenizer.TokenizeInput(behavior);
-	TokenIterator token_iterator(std::move(owned_tokens));
+	TokenIterator token_iterator(behavior);
+	// A statement's text starts where the previous one ended, so comments and whitespace before its
+	// first token belong to it; the last statement runs to the end of the input.
+	idx_t stmt_start = 0;
 	while (token_iterator.Current()) {
 		auto stmt = ParseTopLevelStatement(token_iterator, query);
+		auto stmt_end = token_iterator.ConsumedEndOffset();
 		if (stmt) {
+			stmt->stmt_location = QueryLocation(stmt_start, stmt_end - stmt_start);
 			statements.push_back(std::move(stmt));
 		}
+		stmt_start = stmt_end;
 	}
 
 	if (!statements.empty()) {
-		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto start = statements[i]->stmt_location.offset;
-			statements[i]->stmt_location = QueryLocation(start, statements[i + 1]->stmt_location.offset - start);
-		}
-		statements.back()->stmt_location = QueryLocation(statements.back()->stmt_location.offset,
-		                                                 query.size() - statements.back()->stmt_location.offset);
+		auto &last_location = statements.back()->stmt_location;
+		last_location = QueryLocation(last_location.offset, query.size() - last_location.offset);
 		for (auto &statement : statements) {
 			statement->query = query.substr(statement->stmt_location.offset, statement->stmt_location.length);
 			statement->stmt_location = QueryLocation(0, statement->query.size());
@@ -427,8 +424,7 @@ bool Parser::IsQueryComplete(const string &query_p) {
 		return true;
 	}
 	auto &grammar = GetGrammar();
-	auto owned_tokens = make_uniq<vector<MatcherToken>>();
-	CompletenessTokenizerBehavior behavior(query, *owned_tokens);
+	CompletenessTokenizerBehavior behavior(query);
 	grammar.GetTokenizer().TokenizeInput(behavior);
 	if (behavior.fatal_token) {
 		// no continuation can repair the input - submit it so the error surfaces
@@ -439,7 +435,7 @@ bool Parser::IsQueryComplete(const string &query_p) {
 	}
 	// the final statement must be terminated by a top-level semicolon
 	bool terminated = false;
-	for (auto &token : *owned_tokens) {
+	for (auto &token : behavior.tokens) {
 		switch (token.type) {
 		case TokenType::END_OF_INPUT:
 		case TokenType::END_OF_INPUT_AUTOCOMPLETE:
@@ -456,7 +452,7 @@ bool Parser::IsQueryComplete(const string &query_p) {
 	if (!terminated) {
 		return false;
 	}
-	TokenIterator token_iterator(std::move(owned_tokens));
+	TokenIterator token_iterator(behavior);
 	while (!token_iterator.AtEnd()) {
 		// match one TopLevelStatement without transforming it - statements that match but cannot be
 		// transformed classify as complete either way, and the transformer can expand matched input
@@ -504,10 +500,10 @@ bool Parser::IsQueryComplete(const string &query_p) {
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	auto &keyword_helper = DuckDBKeywordHelper::Instance();
-	vector<MatcherToken> tokens;
-	HighlightTokenizerBehavior behavior(query, tokens);
+	HighlightTokenizerBehavior behavior(query);
 	Tokenizer tokenizer(keyword_helper);
 	tokenizer.TokenizeInput(behavior);
+	auto &tokens = behavior.tokens;
 
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
@@ -756,22 +752,6 @@ unique_ptr<ParsedExpression> Parser::ParseSingleExpression(const string &express
 	return std::move(expressions[0]);
 }
 
-GroupByNode Parser::ParseGroupByList(const string &group_by) {
-	// construct a mock SELECT query with our group_by expressions
-	string mock_query = StringUtil::Format("SELECT 42 GROUP BY %s", group_by);
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the result
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException("Expected a single SELECT statement");
-	}
-	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
-	auto &select_node = select.node->Cast<SelectNode>();
-	return std::move(select_node.groups);
-}
-
 vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
@@ -791,44 +771,6 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 	}
 	auto &order = select_node.modifiers[0]->Cast<OrderModifier>();
 	return std::move(order.orders);
-}
-
-void Parser::ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
-                             vector<unique_ptr<ParsedExpression>> &expressions) {
-	// construct a mock query
-	string mock_query = "UPDATE tbl SET " + update_list;
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
-		throw ParserException("Expected a single UPDATE statement");
-	}
-	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = update.node->set_info->columns;
-	expressions = std::move(update.node->set_info->expressions);
-}
-
-vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list) {
-	// construct a mock query
-	string mock_query = "VALUES " + value_list;
-	// parse the query
-	Parser parser(options);
-	parser.ParseQuery(mock_query);
-	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException("Expected a single SELECT statement");
-	}
-	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw ParserException("Expected a single SELECT node");
-	}
-	auto &select_node = select.node->Cast<SelectNode>();
-	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
-		throw ParserException("Expected a single VALUES statement");
-	}
-	auto &values_list = select_node.from_table->Cast<ExpressionListRef>();
-	return std::move(values_list.values);
 }
 
 ColumnList Parser::ParseColumnList(const string &column_list) {

@@ -5,6 +5,13 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;
@@ -494,16 +501,35 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		if (!input) {
 			return DuckDBError;
 		}
+		// a CONNECT-ed connection routes a statement as its SQL text, which a statement built from parser nodes lacks
+		if (cconn->context->IsConnected()) {
+			return DuckDBError;
+		}
+		// construct the `arrow_scan(...)` function expression
 		auto factory = duckdb::make_shared_ptr<CArrowScanFactory>(*input);
-		cconn->TableFunction("arrow_scan", {}, {}, std::move(factory))
-		    ->CreateView(duckdb::Identifier(table_name), true, true);
+		auto scan = duckdb::make_uniq<duckdb::TableFunctionRef>();
+		scan->function = duckdb::make_uniq<duckdb::FunctionExpression>(
+		    "arrow_scan", duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>());
+		scan->bind_info = std::move(factory);
+		// construct the `SELECT * FROM arrow_scan(...)` statement
+		auto node = duckdb::make_uniq<duckdb::SelectNode>();
+		node->select_list.push_back(duckdb::make_uniq<duckdb::StarExpression>());
+		node->from_table = std::move(scan);
+		auto select = duckdb::make_uniq<duckdb::SelectStatement>();
+		select->node = std::move(node);
+		// construct the `CREATE TEMP VIEW AS` statement using the select statement
+		auto info = duckdb::make_uniq<duckdb::CreateViewInfo>(duckdb::QualifiedName(
+		    duckdb::Identifier(), duckdb::Identifier::InvalidSchema(), duckdb::Identifier(table_name)));
+		info->query = std::move(select);
+		info->temporary = true;
+		info->on_conflict = duckdb::OnCreateConflict::REPLACE_ON_CONFLICT;
+		auto statement = duckdb::make_uniq<duckdb::CreateStatement>();
+		statement->info = std::move(info);
+		// Execute the CREATE VIEW
+		if (cconn->Query(std::move(statement))->HasError()) {
+			return DuckDBError;
+		}
 	} catch (...) { // LCOV_EXCL_START
-		// Tried covering this in tests, but it proved harder than expected. At the time of writing:
-		// - Passing any name to `CreateView` worked without throwing an exception
-		// - Passing a null Arrow array worked without throwing an exception
-		// - Passing an invalid schema (without any columns) led to an InternalException with SIGABRT, which is meant to
-		//   be un-catchable. This case likely needs to be handled gracefully within `arrow_scan`.
-		// Ref: https://discord.com/channels/909674491309850675/921100573732909107/1115230468699336785
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 

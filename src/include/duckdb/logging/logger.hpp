@@ -19,9 +19,10 @@ class DatabaseInstance;
 class DataChunk;
 class LogManager;
 class ColumnDataCollection;
+class Context;
 class ThreadContext;
 class FileOpener;
-class LogStorage;
+class LogSink;
 class ExecutionContext;
 struct FileHandle;
 
@@ -83,6 +84,7 @@ public:
 	DUCKDB_API static Logger &Get(const ThreadContext &thread_context);
 	DUCKDB_API static Logger &Get(const ExecutionContext &execution_context);
 	DUCKDB_API static Logger &Get(const ClientContext &client_context);
+	DUCKDB_API static Logger &Get(const Context &context);
 	DUCKDB_API static Logger &Get(const FileOpener &opener);
 	DUCKDB_API static Logger &Get(const DatabaseInstance &db);
 	DUCKDB_API static Logger &Get(const shared_ptr<Logger> &logger);

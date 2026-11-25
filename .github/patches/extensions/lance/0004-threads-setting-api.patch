@@ -1,0 +1,21 @@
+diff --git a/src/lance_scan.cpp b/src/lance_scan.cpp
+index 26b983a..0b30ef3 100644
+--- a/src/lance_scan.cpp
++++ b/src/lance_scan.cpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/function/table_function.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
++#include "duckdb/main/settings.hpp"
+ #include "duckdb/optimizer/optimizer.hpp"
+ #include "duckdb/optimizer/optimizer_extension.hpp"
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+@@ -3280,7 +3281,7 @@ LanceExecLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
+   result->global_state = &global;
+   LanceExecContext exec_ctx;
+   exec_ctx.threads = NumericCast<uint32_t>(
+-      DBConfig::GetConfig(context.client).options.maximum_threads);
++      Settings::Get<ThreadsSetting>(context.client));
+   result->stream = lance_create_dataset_exec_stream_ir(
+       bind_data.dataset,
+       bind_data.exec_ir.empty()

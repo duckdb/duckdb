@@ -2,6 +2,7 @@
 duckdb_extension_load(sqlite_scanner
         LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG e223dc01493414cef6d5960744f1e048d59fc592
+        GIT_TAG 4072b28f8ded96acf1fc7c31c2ad9a552eaf0f77
+        APPLY_PATCHES
         SUBMODULES database-connector
         )

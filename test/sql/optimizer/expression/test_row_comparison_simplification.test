@@ -65,11 +65,15 @@ statement ok
 RESET disabled_optimizers;
 
 # Scalarized key equality is visible to recursive physical planning.
+# The specialized probe depends on the exact enumerator's join orientation.
+statement ok
+SET approximate_join_order_threshold=12;
+
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-PRAGMA explain_output='physical_only';
+SET explain_output='physical_only';
 
 query II
 EXPLAIN WITH RECURSIVE

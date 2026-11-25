@@ -3,32 +3,33 @@
 # group: [statistics]
 
 statement ok
-PRAGMA explain_output='optimized_only';
+SET explain_output='optimized_only';
 
-# Each range has 2^60 distinct values. The 20-way equality join still has 2^60 rows.
+# Materialized inputs isolate overflowing arithmetic from scan-domain heuristics.
 # Match the root's final cardinality field, rather than a leaf's range estimate.
 query II
 EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT range AS k FROM range(1152921504606846976))
 SELECT t0.k
-FROM range(1152921504606846976) t0(k)
-JOIN range(1152921504606846976) t1(k) ON t0.k=t1.k
-JOIN range(1152921504606846976) t2(k) ON t1.k=t2.k
-JOIN range(1152921504606846976) t3(k) ON t2.k=t3.k
-JOIN range(1152921504606846976) t4(k) ON t3.k=t4.k
-JOIN range(1152921504606846976) t5(k) ON t4.k=t5.k
-JOIN range(1152921504606846976) t6(k) ON t5.k=t6.k
-JOIN range(1152921504606846976) t7(k) ON t6.k=t7.k
-JOIN range(1152921504606846976) t8(k) ON t7.k=t8.k
-JOIN range(1152921504606846976) t9(k) ON t8.k=t9.k
-JOIN range(1152921504606846976) t10(k) ON t9.k=t10.k
-JOIN range(1152921504606846976) t11(k) ON t10.k=t11.k
-JOIN range(1152921504606846976) t12(k) ON t11.k=t12.k
-JOIN range(1152921504606846976) t13(k) ON t12.k=t13.k
-JOIN range(1152921504606846976) t14(k) ON t13.k=t14.k
-JOIN range(1152921504606846976) t15(k) ON t14.k=t15.k
-JOIN range(1152921504606846976) t16(k) ON t15.k=t16.k
-JOIN range(1152921504606846976) t17(k) ON t16.k=t17.k
-JOIN range(1152921504606846976) t18(k) ON t17.k=t18.k
-JOIN range(1152921504606846976) t19(k) ON t18.k=t19.k;
+FROM source t0
+JOIN source t1 ON t0.k=t1.k
+JOIN source t2 ON t1.k=t2.k
+JOIN source t3 ON t2.k=t3.k
+JOIN source t4 ON t3.k=t4.k
+JOIN source t5 ON t4.k=t5.k
+JOIN source t6 ON t5.k=t6.k
+JOIN source t7 ON t6.k=t7.k
+JOIN source t8 ON t7.k=t8.k
+JOIN source t9 ON t8.k=t9.k
+JOIN source t10 ON t9.k=t10.k
+JOIN source t11 ON t10.k=t11.k
+JOIN source t12 ON t11.k=t12.k
+JOIN source t13 ON t12.k=t13.k
+JOIN source t14 ON t13.k=t14.k
+JOIN source t15 ON t14.k=t15.k
+JOIN source t16 ON t15.k=t16.k
+JOIN source t17 ON t16.k=t17.k
+JOIN source t18 ON t17.k=t18.k
+JOIN source t19 ON t18.k=t19.k;
 ----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1152921504606846976"\s*}\s*}\s*\]\s*$

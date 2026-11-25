@@ -285,6 +285,11 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 				continue;
 			}
+			// A NULL bound matches no rows.
+			if (lower_bound.Cast<BoundConstantExpression>().GetValue().IsNull() ||
+			    upper_bound.Cast<BoundConstantExpression>().GetValue().IsNull()) {
+				return nullptr;
+			}
 			if (low_value.IsNull()) {
 				low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
 				low_comparison_type = BoundBetweenExpression::LowerComparisonType(between);
@@ -675,14 +680,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 	l.AssertHeld(*this);
-	// Execute all column expressions before inserting the data chunk.
-	DataChunk expr_chunk;
-	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(chunk, expr_chunk);
-
-	// Now insert the data chunk.
 	IndexAppendInfo info;
-	return Insert(l, expr_chunk, row_ids, info);
+	return Append(l, chunk, row_ids, info);
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
@@ -690,7 +689,12 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(chunk, expr_chunk);
+	try {
+		ExecuteExpressions(chunk, expr_chunk);
+	} catch (std::exception &ex) {
+		// nothing was inserted yet: return the error instead of throwing
+		return ErrorData(ex);
+	}
 
 	// Now insert the data chunk.
 	return Insert(l, expr_chunk, row_ids, info);
@@ -1604,9 +1608,11 @@ void ART::Verify(IndexLock &l) {
 }
 
 void ART::VerifyInternal() {
+#ifdef D_ASSERT_IS_ENABLED
 	if (root_ptr.HasMetadata()) {
 		root_ptr.Verify(*this);
 	}
+#endif
 }
 
 void ART::VerifyAllocations(IndexLock &l) {

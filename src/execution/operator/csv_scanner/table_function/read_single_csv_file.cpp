@@ -6,6 +6,7 @@
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -17,11 +18,20 @@ struct ReadSingleCSVFileData : public ReadCSVData {
 	vector<LogicalType> csv_types;
 };
 
+static idx_t GetCSVFileCount(ClientContext &context, const TableFunctionInitInput &input) {
+	auto &file_input = TableFunctionFileInitInput::Get(input);
+	if (!file_input.file_list) {
+		return 1;
+	}
+	// Parallelism only needs to know whether there are more than twice as many files as threads.
+	return file_input.file_list->GetFileCount(context.db->NumberOfThreads() * 2 + 1).count;
+}
+
 struct ReadSingleCSVFileGlobalState : public GlobalTableFunctionState {
 public:
 	ReadSingleCSVFileGlobalState(ClientContext &context, ReadSingleCSVFileData &csv_data,
 	                             const TableFunctionInitInput &input)
-	    : state(context, csv_data, csv_data.csv_names, TableFunctionFileInitInput::Get(input).file_count, input.op) {
+	    : state(context, csv_data, csv_data.csv_names, GetCSVFileCount(context, input), input.op) {
 	}
 
 public:

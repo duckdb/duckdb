@@ -31,7 +31,7 @@ TEST_CASE("Deserialize HyperLogLog sketches with out-of-range registers", "[seri
 	for (uint8_t value : {uint8_t(HyperLogLog::Q + 2), uint8_t(200), uint8_t(255)}) {
 		HyperLogLog invalid;
 		invalid.Update(HyperLogLog::M - 1, value);
-		REQUIRE_THROWS_AS(RoundTripHyperLogLog(invalid), SerializationException);
+		REQUIRE_THROWS_WITH(RoundTripHyperLogLog(invalid), Catch::Contains("Invalid HyperLogLog register value"));
 	}
 }
 

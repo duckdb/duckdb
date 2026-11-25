@@ -52,10 +52,13 @@ public:
 	//! to print (the default renderer writes straight to the output stream), so it is never created for the
 	//! string-producing paths. Formats can override this to provide a highlighting-aware sink.
 	virtual unique_ptr<BaseTreeRenderer> GetPrintRenderer();
-	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
-	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
+	//! Create a renderer for the given format, consulting the pluggable registry, and configure it from the client's
+	//! "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
 	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name);
 	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format);
+	//! As above, but configures the renderer from the given renderer settings
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name,
+	                                               const unordered_map<string, Value> &settings);
 
 	//! Create a built-in renderer without configuring it or consulting the registry (no ClientContext available)
 	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
@@ -66,6 +69,13 @@ public:
 	//! setting values. Unrecognized settings are ignored - they may be intended for a different renderer.
 	virtual void Configure(const unordered_map<string, Value> &settings) {
 	}
+
+	//! The "profiling_renderer_settings" of the client, as passed to Configure
+	static unordered_map<string, Value> GetRendererSettings(ClientContext &context);
+	//! Overwrites the "profiling_renderer_settings" of the client without validating them
+	static void SetRendererSettings(ClientContext &context, const unordered_map<string, Value> &settings);
+	//! Converts renderer settings to the MAP(VARCHAR, VARCHAR) value of the setting, sorted by name
+	static Value RendererSettingsToValue(const unordered_map<string, Value> &settings);
 
 	virtual bool UsesRawKeyNames() {
 		return false;

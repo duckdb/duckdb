@@ -10,7 +10,8 @@ struct DuckDBDatabasesData : public GlobalTableFunctionState {
 	DuckDBDatabasesData() : offset(0) {
 	}
 
-	vector<shared_ptr<AttachedDatabase>> entries;
+	//! Rows are materialized at init so that no database reference outlives it
+	vector<vector<Value>> rows;
 	idx_t offset;
 };
 
@@ -51,85 +52,72 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 	return nullptr;
 }
 
+static vector<Value> DuckDBDatabasesRow(AttachedDatabase &attached) {
+	auto &catalog = attached.GetCatalog();
+	bool is_internal = attached.IsSystem() || attached.IsTemporary();
+	string cipher_str;
+	Value db_path;
+	if (!is_internal) {
+		bool in_memory = catalog.InMemory();
+		if (!in_memory) {
+			db_path = Value(catalog.GetDBPath());
+		}
+		if (catalog.IsEncrypted()) {
+			cipher_str = catalog.GetEncryptionCipher();
+		}
+	}
+	InsertionOrderPreservingMap<string> options_map;
+	for (const auto &option : attached.GetAttachOptions()) {
+		options_map.insert(option.first, option.second.ToString());
+	}
+	vector<Value> row;
+	// database_name, VARCHAR
+	row.push_back(Value(attached.GetName()));
+	// database_oid, BIGINT
+	row.push_back(Value::BIGINT(NumericCast<int64_t>(attached.oid)));
+	// path, VARCHAR
+	row.push_back(std::move(db_path));
+	// comment, VARCHAR
+	row.push_back(Value(attached.comment));
+	// tags, MAP
+	row.push_back(Value::MAP(attached.tags));
+	// internal, BOOLEAN
+	row.push_back(Value::BOOLEAN(is_internal));
+	// type, VARCHAR
+	row.push_back(Value(catalog.GetCatalogType()));
+	// readonly, BOOLEAN
+	row.push_back(Value::BOOLEAN(attached.IsReadOnly()));
+	// encrypted, BOOLEAN
+	row.push_back(Value::BOOLEAN(catalog.IsEncrypted()));
+	// cipher, VARCHAR
+	row.push_back(cipher_str.empty() ? Value() : Value(cipher_str));
+	// options, MAP
+	row.push_back(Value::MAP(options_map));
+	return row;
+}
+
 unique_ptr<GlobalTableFunctionState> DuckDBDatabasesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBDatabasesData>();
 
-	// scan all the schemas for tables and collect them and collect them
 	auto &db_manager = DatabaseManager::Get(context);
-	result->entries = db_manager.GetDatabases(context);
+	for (auto &entry : db_manager.GetDatabases(context)) {
+		if (entry->GetVisibility() != AttachVisibility::HIDDEN) {
+			result->rows.push_back(DuckDBDatabasesRow(*entry));
+		}
+		// a concurrent DETACH can have left this as the last reference
+		AttachedDatabase::InvokeCloseIfLastReference(entry, context);
+	}
 	return std::move(result);
 }
 
 void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBDatabasesData>();
-	if (data.offset >= data.entries.size()) {
-		// finished returning values
-		return;
-	}
-	// start returning values
-	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
-
-	// database_name, VARCHAR
-	auto &database_name = output.data[0];
-	// database_oid, BIGINT
-	auto &database_oid = output.data[1];
-	// path, VARCHAR
-	auto &path = output.data[2];
-	// comment, VARCHAR
-	auto &comment = output.data[3];
-	// tags, MAP
-	auto &tags = output.data[4];
-	// internal, BOOLEAN
-	auto &internal = output.data[5];
-	// type, VARCHAR
-	auto &type = output.data[6];
-	// readonly, BOOLEAN
-	auto &readonly = output.data[7];
-	// encrypted, BOOLEAN
-	auto &encrypted = output.data[8];
-	// cipher, VARCHAR
-	auto &cipher = output.data[9];
-	// options, MAP
-	auto &options = output.data[10];
-
-	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
-		auto &attached = *entry;
-		auto &catalog = attached.GetCatalog();
-		if (attached.GetVisibility() == AttachVisibility::HIDDEN) {
-			continue;
+	while (data.offset < data.rows.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &row = data.rows[data.offset++];
+		for (idx_t col = 0; col < row.size(); col++) {
+			output.data[col].Append(row[col]);
 		}
-
-		database_name.Append(Value(attached.GetName()));
-		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(attached.oid)));
-		bool is_internal = attached.IsSystem() || attached.IsTemporary();
-		bool is_readonly = attached.IsReadOnly();
-		string cipher_str;
-		Value db_path;
-		if (!is_internal) {
-			bool in_memory = catalog.InMemory();
-			if (!in_memory) {
-				db_path = Value(catalog.GetDBPath());
-			}
-			if (catalog.IsEncrypted()) {
-				cipher_str = catalog.GetEncryptionCipher();
-			}
-		}
-		path.Append(db_path);
-		comment.Append(Value(attached.comment));
-		tags.Append(Value::MAP(attached.tags));
-		internal.Append(Value::BOOLEAN(is_internal));
-		type.Append(Value(catalog.GetCatalogType()));
-		readonly.Append(Value::BOOLEAN(is_readonly));
-		encrypted.Append(Value::BOOLEAN(catalog.IsEncrypted()));
-		cipher.Append(cipher_str.empty() ? Value() : Value(cipher_str));
-		InsertionOrderPreservingMap<string> options_map;
-		for (const auto &option : attached.GetAttachOptions()) {
-			options_map.insert(option.first, option.second.ToString());
-		}
-		options.Append(Value::MAP(options_map));
-
 		count++;
 	}
 }

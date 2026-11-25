@@ -274,6 +274,18 @@ optional_ptr<QueryProfiler> Context::TryGetQueryProfiler(optional_ptr<Context> c
 	return context->TryGetQueryProfiler();
 }
 
+void Context::FastInterruptCheck() const {
+	if (context) {
+		context->FastInterruptCheck();
+	}
+}
+
+void Context::InterruptCheck() const {
+	if (context) {
+		context->InterruptCheck();
+	}
+}
+
 bool Context::IsClient() const {
 	return context != nullptr;
 }
@@ -369,8 +381,8 @@ const shared_ptr<QueryProfiler> &Context::GetQueryProfilerPtr() const {
 	return profiler;
 }
 
-shared_ptr<Context> DatabaseInstance::Services() {
-	return make_shared_ptr<Context>(*this);
+Context &DatabaseInstance::GetContext() {
+	return *services;
 }
 
 } // namespace duckdb

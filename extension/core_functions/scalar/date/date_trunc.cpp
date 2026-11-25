@@ -611,7 +611,10 @@ ScalarFunctionSet DateTruncFun::GetFunctions() {
 	    ScalarFunction({}, LogicalType::INTERVAL, DateTruncFunction<interval_t, interval_t>), LogicalType::INTERVAL));
 	date_trunc.ApplyToFunctions([](ScalarFunction &func) {
 		func.SetFallible();
-		func.SetArgProperties(1, ArgProperties().NonDecreasing());
+		// Truncated interval components need not preserve the normalized interval ordering.
+		if (func.GetSignature().GetParameter(1).GetType() != LogicalType::INTERVAL) {
+			func.SetArgProperties(1, ArgProperties().NonDecreasing());
+		}
 	});
 	return date_trunc;
 }

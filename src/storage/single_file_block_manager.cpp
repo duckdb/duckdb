@@ -610,6 +610,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.storage_compatibility = options.storage_version;
+	header_buffer.Clear();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -623,6 +624,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.storage_compatibility = options.storage_version;
+	header_buffer.Clear();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -904,7 +906,7 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 		multi_use_blocks[block_id] = usage_count;
 	}
 	GetMetadataManager().Read(reader);
-	GetMetadataManager().MarkBlocksAsModified();
+	GetMetadataManager().MarkBlocksAsModified(false);
 }
 
 bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
@@ -924,7 +926,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	}
 	// add the entry to the list of newly used blocks
 	if (type == FreeBlockType::NEWLY_USED_BLOCK) {
-		newly_used_blocks.insert(block_id);
+		newly_used_blocks[block_id] = MAX_TRANSACTION_ID;
 	}
 	if (BlockIsRegistered(block_id)) {
 		throw InternalException("Free block %d is already registered", block_id);
@@ -953,6 +955,17 @@ void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
+}
+
+void SingleFileBlockManager::MarkBlockAsCommitted(block_id_t block_id, transaction_t commit_id) {
+	lock_guard<mutex> lock(single_file_block_lock);
+	auto entry = newly_used_blocks.find(block_id);
+	// optimistic writes keep their blocks newly used until their commit
+	if (entry == newly_used_blocks.end()) {
+		throw InternalException("MarkBlockAsCommitted called with block id %d that is not newly used", block_id);
+	}
+	D_ASSERT(entry->second == MAX_TRANSACTION_ID || entry->second == commit_id);
+	entry->second = commit_id;
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -998,11 +1011,12 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	if (modified_blocks.find(block_id) != modified_blocks.end()) {
 		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
 	}
-	if (free_list.find(block_id) != free_list.end()) {
+	if (free_list.find(block_id) != free_list.end() ||
+	    free_blocks_pending_reuse.find(block_id) != free_blocks_pending_reuse.end()) {
 		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
 	}
 	auto newly_used_entry = newly_used_blocks.find(block_id);
-	if (newly_used_entry != newly_used_blocks.end()) {
+	if (newly_used_entry != newly_used_blocks.end() && newly_used_entry->second == MAX_TRANSACTION_ID) {
 		// this block was newly used - and now we are labeling it as no longer being required
 		// we can directly add it back to the free list
 		newly_used_blocks.erase(block_id);
@@ -1010,6 +1024,8 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	} else {
 		// this block was used in storage, we cannot directly re-use it
 		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		// so is a committed newly used block, which the WAL of its commit refers to until a header includes it
+		newly_used_blocks.erase(block_id);
 		modified_blocks.insert(block_id);
 	}
 }
@@ -1040,6 +1056,9 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			                        max_block);
 		}
 		referenced_blocks.insert(block.first);
+		if (free_blocks_pending_reuse.find(block.first) != free_blocks_pending_reuse.end()) {
+			throw InternalException("Block %lld was used, but a header lists it as free", block.first);
+		}
 		if (block.second > 1) {
 			// multi-use block
 			auto entry = multi_use_blocks.find(block.first);
@@ -1061,12 +1080,15 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 		}
 	}
 	for (auto &newly_used_block : newly_used_blocks) {
-		referenced_blocks.insert(newly_used_block);
+		referenced_blocks.insert(newly_used_block.first);
 	}
 	for (auto &free_block : free_list) {
 		referenced_blocks.insert(free_block);
 	}
 	for (auto &free_block : free_blocks_in_use) {
+		referenced_blocks.insert(free_block);
+	}
+	for (auto &free_block : free_blocks_pending_reuse) {
 		referenced_blocks.insert(free_block);
 	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
@@ -1106,7 +1128,7 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			if (!newly_used_blocks_str.empty()) {
 				newly_used_blocks_str += ", ";
 			}
-			newly_used_blocks_str += to_string(block);
+			newly_used_blocks_str += to_string(block.first);
 		}
 
 		throw InternalException(
@@ -1172,7 +1194,13 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 }
 
 idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) const {
-	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+	const auto block_index = NumericCast<idx_t>(block_id);
+	const auto block_alloc_size = GetBlockAllocSize();
+	// block ids are read from the file: the location of a block (and its end) must not wrap around
+	if (block_index >= (NumericLimits<idx_t>::Maximum() - BLOCK_START) / block_alloc_size) {
+		throw DataCorruptionException("Corrupt database file: block id %lld is out of range", block_id);
+	}
+	return BLOCK_START + block_index * block_alloc_size;
 }
 
 void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header) const {
@@ -1277,8 +1305,8 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 		idx_t multi_use_blocks_count;
 		{
 			lock_guard<mutex> guard(single_file_block_lock);
-			free_list_count =
-			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+			free_list_count = free_list.size() + modified_blocks.size() + free_blocks_in_use.size() +
+			                  newly_used_blocks.size() + free_blocks_pending_reuse.size();
 			multi_use_blocks_count = multi_use_blocks.size();
 		}
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
@@ -1338,13 +1366,18 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	lock.lock();
 	return false;
 }
-void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound,
+                                         transaction_t read_stamp, transaction_t lowest_active_start) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
-	// add all modified blocks to the free list: they can now be written to again
-	metadata_manager.MarkBlocksAsModified();
+	// a transaction that started before the header can still read what the header frees
+	bool has_readers = lowest_active_start < read_stamp;
+	auto freed_metadata_blocks = metadata_manager.MarkBlocksAsModified(has_readers);
+	// serialized here: the metadata manager's lock is taken before the lock below, never under it
+	MemoryStream metadata_stream;
+	metadata_manager.Write(metadata_stream);
 
 	unique_lock<mutex> lock(single_file_block_lock);
 	// set the iteration count
@@ -1352,15 +1385,22 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	set<block_id_t> all_free_blocks = free_list;
 	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
+	all_free_blocks.insert(free_blocks_pending_reuse.begin(), free_blocks_pending_reuse.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
 	}
 	auto written_multi_use_blocks = multi_use_blocks;
-	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
-	for (auto &newly_used_block : newly_used_blocks) {
-		all_free_blocks.insert(newly_used_block);
-		written_multi_use_blocks.erase(newly_used_block);
+	for (auto entry = newly_used_blocks.begin(); entry != newly_used_blocks.end();) {
+		if (entry->second < bound) {
+			// committed before the bound: this checkpoint includes the block
+			entry = newly_used_blocks.erase(entry);
+			continue;
+		}
+		// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
+		all_free_blocks.insert(entry->first);
+		written_multi_use_blocks.erase(entry->first);
+		entry++;
 	}
 
 	if (!free_list_blocks.empty()) {
@@ -1382,7 +1422,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
-		GetMetadataManager().Write(writer);
+		writer.WriteData(metadata_stream.GetData(), metadata_stream.GetPosition());
 		writer.Flush();
 	} else {
 		// no blocks in the free list
@@ -1427,15 +1467,52 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	set<block_id_t> fully_freed_blocks;
-	{
-		unique_lock<mutex> release_lock(single_file_block_lock);
+	if (!checkpoint_freed_blocks.empty() || !freed_metadata_blocks.empty()) {
+		lock_guard<mutex> release_lock(single_file_block_lock);
+		auto &freed = pending_reuse_batches[read_stamp];
 		for (auto &block : checkpoint_freed_blocks) {
 			modified_blocks.erase(block);
-			if (AddFreeBlock(release_lock, block)) {
+			freed.blocks.push_back(block);
+			free_blocks_pending_reuse.insert(block);
+		}
+		for (auto &metadata_block : freed_metadata_blocks) {
+			freed.metadata_blocks[metadata_block.first] |= metadata_block.second;
+		}
+		lowest_pending_reuse_stamp = pending_reuse_batches.begin()->first;
+	}
+	// reused right away unless a transaction that started before the header is active
+	ReuseFreedBlocks(lowest_active_start);
+}
+
+void SingleFileBlockManager::ReuseFreedBlocks(transaction_t lowest_active_start) {
+	if (lowest_pending_reuse_stamp > lowest_active_start) {
+		// nothing waits, or a transaction that started before the first batch is still active
+		return;
+	}
+	set<block_id_t> fully_freed_blocks;
+	vector<unordered_map<block_id_t, idx_t>> metadata_blocks;
+	{
+		unique_lock<mutex> lock(single_file_block_lock);
+		// the batches are ordered by stamp
+		auto end = pending_reuse_batches.upper_bound(lowest_active_start);
+		vector<block_id_t> blocks;
+		for (auto entry = pending_reuse_batches.begin(); entry != end; entry++) {
+			blocks.insert(blocks.end(), entry->second.blocks.begin(), entry->second.blocks.end());
+			metadata_blocks.push_back(std::move(entry->second.metadata_blocks));
+		}
+		pending_reuse_batches.erase(pending_reuse_batches.begin(), end);
+		lowest_pending_reuse_stamp =
+		    pending_reuse_batches.empty() ? MAX_TRANSACTION_ID : pending_reuse_batches.begin()->first;
+		// AddFreeBlock can give up the lock: no batch is looked at from here on
+		for (auto &block : blocks) {
+			free_blocks_pending_reuse.erase(block);
+			if (AddFreeBlock(lock, block)) {
 				fully_freed_blocks.insert(block);
 			}
 		}
+	}
+	for (auto &freed : metadata_blocks) {
+		GetMetadataManager().ReuseFreedBlocks(freed);
 	}
 	// Release the free fully freed blocks to the filesystem.
 	TrimFreeBlocks(fully_freed_blocks);
@@ -1487,7 +1564,7 @@ void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end
 }
 
 void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
-	if (!DBConfig::Get(db).options.trim_free_blocks) {
+	if (!Settings::Get<TrimFreeBlocksSetting>(DBConfig::Get(db))) {
 		return;
 	}
 	lock_guard<mutex> lock(single_file_block_lock);

@@ -3,6 +3,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -294,7 +295,7 @@ TEST_CASE("Hash buffers reuse live eviction entries without changing tracked or 
 	const auto tag = GENERATE(MemoryTag::HASH_TABLE, MemoryTag::EXTENSION);
 	const auto track_timestamps = GENERATE(false, true);
 	DBConfig config;
-	config.options.buffer_manager_track_eviction_timestamps = track_timestamps;
+	config.SetOption(BufferManagerTrackEvictionTimestampsSetting::SettingIndex, Value::BOOLEAN(track_timestamps));
 	DuckDB db(nullptr, &config);
 	auto &manager = BufferManager::GetBufferManager(*db.instance);
 	auto &pool = manager.GetBufferPool();
@@ -351,7 +352,8 @@ TEST_CASE("Hash buffer unpin restores an entry consumed while pinned", "[storage
 	auto block = pin.GetBlockHandle();
 	pin.Destroy();
 	pin = manager.Pin(block);
-	REQUIRE_THROWS_AS(manager.Allocate(MemoryTag::HASH_TABLE, size, true), OutOfMemoryException);
+	REQUIRE_THROWS_WITH(manager.Allocate(MemoryTag::HASH_TABLE, size, true),
+	                    Catch::Matchers::Contains("could not allocate block"));
 	{
 		auto lock = block->GetMemory().GetLock();
 		REQUIRE_FALSE(block->GetMemory().HasLiveQueueEntry(lock));

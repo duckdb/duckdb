@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "json_common.hpp"
 
 namespace duckdb {
 
@@ -142,17 +144,17 @@ JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
     : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
+JSONFunctionLocalState::JSONFunctionLocalState(Context &context)
     : JSONFunctionLocalState(BufferAllocator::Get(context)) {
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data) {
+                                                            optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<JSONFunctionLocalState>(state.GetContext());
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
-	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(parameters.context->GetContext())
 	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 
@@ -363,7 +365,9 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 					        JSONCommon::FormatParseError(input.GetDataWriteable(), input.GetSize(), error), parameters);
 				    } else if (!unsafe_yyjson_is_arr(doc->root)) {
 					    auto truncated_input =
-					        input.GetSize() > 50 ? string(input.GetData(), 47) + "..." : input.GetString();
+					        input.GetSize() > 50
+					            ? StringUtil::TruncateUTF8TOByteLength(input.GetData(), input.GetSize(), 47)
+					            : input.GetString();
 					    HandleCastError::AssignError(
 					        StringUtil::Format("Cannot cast to list of JSON. Input \"%s\"", truncated_input),
 					        parameters);

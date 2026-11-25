@@ -1,0 +1,78 @@
+# name: test/parquet/corrupt/required_column_all_null_statistics.test
+# description: Reject statistics that count NULL values for a column that cannot hold NULL values
+# group: [corrupt]
+
+require parquet
+
+# The file is data/parquet-testing/required_dictionary_single_page.parquet (6001 rows of a REQUIRED BIGINT column,
+# all 1) with statistics added to the column chunk in the footer: null_count = 6001.
+# The column was read as 6001 NULL values, and a filter on it pruned the row group.
+statement error
+SELECT count(*), count(x), sum(x)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_column_all_null_statistics.parquet');
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
+statement error
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_column_all_null_statistics.parquet')
+WHERE x = 1;
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
+# The same for a REQUIRED column in a REQUIRED struct: the statistics of the struct are built from those of the
+# column, and a filter on it pruned the row group (6001 rows with s.x = 1).
+statement error
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_nested_column_all_null_statistics.parquet')
+WHERE s.x = 1;
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
+statement error
+SELECT count(s.x), sum(s.x)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_nested_column_all_null_statistics.parquet');
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
+# A REQUIRED GEOMETRY column (10 rows) with null_count = 10: the schema of the column wraps its BLOB column.
+statement error
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_geometry_column_all_null_statistics.parquet')
+WHERE g IS NOT NULL;
+----
+Column "g" cannot hold NULL values but its statistics count 10 NULL values
+
+statement error
+SELECT count(g)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_geometry_column_all_null_statistics.parquet');
+----
+Column "g" cannot hold NULL values but its statistics count 10 NULL values
+
+# The REQUIRED 'metadata' column of a REQUIRED shredded VARIANT with null_count = 10.
+statement error
+SELECT count(var)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_variant_metadata_null_count.parquet');
+----
+Column "metadata" cannot hold NULL values but its statistics count 10 NULL values
+
+# A REQUIRED column below an OPTIONAL group has definition levels: the null count of the 'metadata' column of this
+# OPTIONAL VARIANT (1 of 7) is left alone.
+query II
+SELECT count(*), count(PAYLOAD) FROM read_parquet('{DATA_DIR}/parquet-testing/snowflake_variant.parquet');
+----
+7	6
+
+# So has a REQUIRED column below a REPEATED group: the keys of this MAP have a null count of 18.
+query III
+SELECT count(*), count(raw_header), sum(cardinality(raw_header))
+FROM read_parquet('{DATA_DIR}/parquet-testing/map.parquet');
+----
+1127	1109	14396
+
+# the unchanged file
+query III
+SELECT count(*), count(x), sum(x)
+FROM read_parquet('{DATA_DIR}/parquet-testing/required_dictionary_single_page.parquet');
+----
+6001	6001	6001
