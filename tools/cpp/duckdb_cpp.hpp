@@ -2157,7 +2157,8 @@ public:
 	/// typed alternative.
 	/// @param factory The factory to create the value with.
 	/// @param value The unscaled value, e.g. 12345 for 123.45 at scale 2.
-	/// @param width The number of digits, at least 1; widths above 38 are stored as BIGNUM.
+	/// @param width The number of digits, at least 1 and at most the `max_decimal_width` setting of the factory's
+	/// connection (its default, 1000000, for the factory of an instance); widths above 38 are stored as BIGNUM.
 	/// @param scale The number of digits after the decimal point, at most `width`.
 	/// @throws Exception When the width or scale is out of range, or the value does not fit in `width` digits.
 	static auto CreateDecimal(Factory &factory, int128_t value, uint32_t width, uint32_t scale) -> Value;

@@ -107,15 +107,18 @@ LogicalType RequireValueType(duckdb_v2_logical_type_handle type) {
 // constructor covers only the widest one, so the narrower tiers go through the
 // int64 form. Width, scale and the value's digit count are gated here: either
 // would otherwise build a broken value. The width is the uint32_t of the
-// engine, so every DECIMAL type is reachable; a wide decimal whose backing
-// integer needs more than 128 bits is built through value_cast.
-Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint32_t width, uint32_t scale) {
+// engine, bounded by the factory like the types it creates: a value of a huge
+// width takes time and memory in proportion to the width wherever it is
+// formatted or cast. A wide decimal whose backing integer needs more than
+// 128 bits is built through value_cast.
+Value BuildDecimal(CV2Factory &factory, const duckdb_v2_hugeint_t *in_value, uint32_t width, uint32_t scale) {
 	if (width < 1) {
 		throw InvalidInputException(": DECIMAL width must be at least 1");
 	}
 	if (scale > width) {
 		throw InvalidInputException(": DECIMAL scale cannot exceed the width");
 	}
+	CheckDecimalWidthV2(factory, LogicalType::DECIMAL(width, scale));
 	auto value = Convert(in_value);
 	// a 128-bit value has at most 39 digits, so only narrower widths can be exceeded
 	if (width < Hugeint::CACHED_POWERS_OF_TEN &&
@@ -726,7 +729,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_decimal(duckdb_v2_factory_handle factory,
 	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(in_value, width, scale)); });
+	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(*Convert(factory), in_value, width, scale)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_value_create_uuid(duckdb_v2_factory_handle factory, const duckdb_v2_hugeint_t *in_value,

@@ -1789,6 +1789,13 @@ functions:
       digits. Widths above 38 build a wide decimal stored as BIGNUM, for which
       the 128-bit backing integer always fits; a wide decimal whose backing
       integer needs more than 128 bits is built through value_cast.
+
+      The width is bounded like the width of a DECIMAL type the factory
+      creates (see factory_create_type_from_name): by the max_decimal_width
+      setting of the factory's connection, and by the default of that setting,
+      1000000, for an instance's factory. A wider width returns
+      ERROR_INPUT_INVALID; use the factory of a connection that raised the
+      setting.
     role: constructor
     belongs_to: value
     parameters:
@@ -1802,7 +1809,7 @@ functions:
         description: The backing integer, scaled by 10^scale.
       width:
         type: u32
-        description: Total digit count, at least 1; widths above 38 are wide decimals.
+        description: Total digit count, at least 1 and at most the factory's maximum DECIMAL width; widths above 38 are wide decimals.
       scale:
         type: u32
         description: Digits after the decimal point; must not exceed width.

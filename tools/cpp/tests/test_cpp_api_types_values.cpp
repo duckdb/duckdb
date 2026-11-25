@@ -515,6 +515,15 @@ TEST_CASE("Stable C++API: DECIMAL Values of a runtime width and scale", "[cpp_ap
 	// the backing integer 10^44 needs 147 bits
 	REQUIRE(beyond_backing.magnitude.size() == 19);
 
+	// The width is bounded by the max_decimal_width setting of the connection, for values and for types.
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {1, 0}, 1000001, 10), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(factory.ParseType("DECIMAL(1000001,10)"), Exception);
+	conn.Execute("SET max_decimal_width = 1000001").Drain();
+	REQUIRE(Value::CreateDecimal(factory, int128_t {1, 0}, 1000001, 10).GetDecimal().width == 1000001);
+	REQUIRE(factory.ParseType("DECIMAL(1000001,10)").GetDecimalWidth() == 1000001);
+	conn.Execute("RESET max_decimal_width").Drain();
+
 	// The same value as the typed constructor.
 	REQUIRE(Value::Create(factory, decimal_t<9, 3> {123456789}).GetDecimal().value.lower == 123456789);
 	// And from a query.

@@ -10925,6 +10925,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
  * built-in kinds live. A qualified name is resolved exactly as written, with no system-catalog fallback, so it names
  * the type in that catalog or schema or fails.
  *
+ * The width of a DECIMAL, also one nested in another type, is bounded by the max_decimal_width setting of the factory's
+ * connection, and by the default of that setting, 1000000, for an instance's factory, which has no settings: the time
+ * and memory a wide decimal takes grow with its width. A wider type returns ERROR_INPUT_INVALID; create it with the
+ * factory of a connection that raised the setting. factory_create_type_from_id and factory_create_type_from_text apply
+ * the same bound.
+ *
  * Parameters are (name, value) pairs in two parallel arrays. param_names may be NULL to make every parameter
  * positional, and an empty entry makes that one parameter positional. Child types cross as TYPE values, built with
  * value_create_type. The built-in shapes are: decimal(width, scale); list(T); array(T, size); map(K, V); struct(fields,
@@ -18102,12 +18108,17 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_h
  * as BIGNUM, for which the 128-bit backing integer always fits; a wide decimal whose backing integer needs more than
  * 128 bits is built through value_cast.
  *
+ * The width is bounded like the width of a DECIMAL type the factory creates (see factory_create_type_from_name): by the
+ * max_decimal_width setting of the factory's connection, and by the default of that setting, 1000000, for an instance's
+ * factory. A wider width returns ERROR_INPUT_INVALID; use the factory of a connection that raised the setting.
+ *
  * history:
  * - unstable: v2.0.0
  *
  * @param factory The factory to create with.
  * @param in_value The backing integer, scaled by 10^scale.
- * @param width Total digit count, at least 1; widths above 38 are wide decimals.
+ * @param width Total digit count, at least 1 and at most the factory's maximum DECIMAL width; widths above 38 are wide
+ * decimals.
  * @param scale Digits after the decimal point; must not exceed width.
  * @param out_value Receives the new DECIMAL value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
