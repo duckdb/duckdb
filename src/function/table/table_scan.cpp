@@ -1158,7 +1158,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	auto &transaction = DuckTransaction::Get(context, storage.GetAttached());
-	for (auto entry : indexes.IndexEntries()) {
+	for (auto entry : indexes.BuiltIndexEntries()) {
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}

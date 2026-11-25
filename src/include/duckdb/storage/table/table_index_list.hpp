@@ -40,8 +40,9 @@ public:
 	~TableIndexList();
 
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
-	//! Skips the entries of indexes that are being built.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
+	//! Same as IndexEntries(), skipping the entries of indexes that are being built.
+	TableIndexIterationHelper<shared_ptr<IndexEntry>> BuiltIndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode,
 	                                transaction_t last_commit = 0);
@@ -169,19 +170,21 @@ private:
 template <class T>
 class TableIndexIterationHelper {
 public:
-	explicit TableIndexIterationHelper(const TableIndexList &index_list);
+	TableIndexIterationHelper(const TableIndexList &index_list, bool skip_building_p);
 
 private:
 	annotated_unique_lock<annotated_mutex> lock;
 	const vector<shared_ptr<IndexEntry>> &index_entries;
+	bool skip_building;
 
 private:
 	class TableIndexIterator {
 	public:
-		explicit TableIndexIterator(optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries);
+		TableIndexIterator(optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries, bool skip_building_p);
 
 		optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries;
 		optional_idx index;
+		bool skip_building;
 
 	public:
 		TableIndexIterator &operator++();
@@ -195,10 +198,10 @@ private:
 
 public:
 	TableIndexIterator begin() { // NOLINT: match stl API
-		return TableIndexIterator(&index_entries);
+		return TableIndexIterator(&index_entries, skip_building);
 	}
 	TableIndexIterator end() { // NOLINT: match stl API
-		return TableIndexIterator(nullptr);
+		return TableIndexIterator(nullptr, skip_building);
 	}
 };
 

@@ -28,14 +28,14 @@
 namespace duckdb {
 
 template <class T>
-TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list)
-    : lock(index_list.index_entries_lock), index_entries(index_list.index_entries) {
+TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list, bool skip_building_p)
+    : lock(index_list.index_entries_lock), index_entries(index_list.index_entries), skip_building(skip_building_p) {
 }
 
 template <class T>
 TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
-    optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries_p)
-    : index_entries(index_entries_p) {
+    optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries_p, bool skip_building_p)
+    : index_entries(index_entries_p), skip_building(skip_building_p) {
 	if (index_entries) {
 		if (index_entries->empty()) {
 			index_entries = nullptr;
@@ -63,7 +63,7 @@ void TableIndexIterationHelper<T>::TableIndexIterator::Advance() {
 
 template <class T>
 void TableIndexIterationHelper<T>::TableIndexIterator::SkipBuilding() {
-	while (index_entries && index_entries->at(index.GetIndex())->IsBuilding()) {
+	while (skip_building && index_entries && index_entries->at(index.GetIndex())->IsBuilding()) {
 		Advance();
 	}
 }
@@ -82,7 +82,11 @@ bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableInd
 }
 
 TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries() const {
-	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
+	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this, false);
+}
+
+TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::BuiltIndexEntries() const {
+	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this, true);
 }
 
 template <>
@@ -148,7 +152,7 @@ void TableIndexList::RemoveBuildingIndex(const IndexEntry &entry) {
 
 idx_t TableIndexList::CountBuiltIndexes() const {
 	idx_t count = 0;
-	for (auto entry : IndexEntries()) {
+	for (auto entry : BuiltIndexEntries()) {
 		(void)entry;
 		count++;
 	}
@@ -319,7 +323,7 @@ void TableIndexList::Vacuum() {
 }
 
 void TableIndexList::Rebuild(const IndexRebuildScan &scan) {
-	for (auto entry : IndexEntries()) {
+	for (auto entry : BuiltIndexEntries()) {
 		entry->Rebuild(scan);
 	}
 }
@@ -579,7 +583,7 @@ private:
 
 vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
 	vector<shared_ptr<const IndexStorageInfo>> infos;
-	for (auto entry : IndexEntries()) {
+	for (auto entry : BuiltIndexEntries()) {
 		auto checkpoint = entry->Checkpoint(writer);
 		if (checkpoint.shadow_index) {
 			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
@@ -629,7 +633,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
-	for (auto entry : IndexEntries()) {
+	for (auto entry : BuiltIndexEntries()) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }
