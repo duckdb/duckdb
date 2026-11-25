@@ -167,7 +167,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else if (type.id() == LogicalTypeId::UHUGEINT && options.arrow_output_version >= ArrowFormatVersion::V1_1) {
-			// a decimal128 is signed, so it reads a UHUGEINT of 2^127 or more as a negative number: the full range
+			// a decimal128 is signed, so it reads a UHUGEINT of 2^127 or more as a negative number. The full range
 			// needs the 39 digits of a decimal256 (format version 1.1)
 			child.format = "d:39,0,256";
 		} else {

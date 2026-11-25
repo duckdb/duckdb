@@ -281,7 +281,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, uhugeint_t, ArrowUhugeintDecimal256Converter>>(
 			    append_data);
 		} else {
-			// decimal128 (format version 1.0): values of 2^127 and above would be read as negative
+			// the decimal128 of format version 1.0 would read values of 2^127 and above as negative
 			InitializeAppenderForType<ArrowScalarData<uhugeint_t, uhugeint_t, ArrowUhugeintDecimal128Converter>>(
 			    append_data);
 		}

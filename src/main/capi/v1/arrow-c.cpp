@@ -112,10 +112,10 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *arrow_options_wrapper->properties.client_context, dchunk->GetTypes());
 
 	try {
+		auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
+		    *arrow_options_wrapper->properties.client_context, dchunk->GetTypes());
 		ArrowConverter::ToArrowArray(*dchunk, out_arrow_array, arrow_options_wrapper->properties, extension_type_cast);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
@@ -294,7 +294,11 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		D_ASSERT(!result_schema->release);
 	}
 
-	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
+	try {
+		ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
 }
 
@@ -327,11 +331,19 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
 	auto &client_properties = result_data.GetClientProperties();
-	auto extension_type_cast =
-	    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_properties.client_context, result_data.GetTypes());
-
-	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array), client_properties,
-	                             extension_type_cast);
+	auto arrow_array = reinterpret_cast<ArrowArray *>(*out_array);
+	try {
+		auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_properties.client_context,
+		                                                                             result_data.GetTypes());
+		ArrowConverter::ToArrowArray(*dchunk, arrow_array, client_properties, extension_type_cast);
+	} catch (...) {
+		// The conversion can fail, for example on a value that has no representation in the requested Arrow format
+		// version. This function has no way to report an error, so the array is left released, which is how the
+		// Arrow C data interface marks an array that holds nothing
+		if (arrow_array) {
+			arrow_array->release = nullptr;
+		}
+	}
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {

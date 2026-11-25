@@ -201,7 +201,8 @@ static string ArrowSchemaFormat(Connection &con, const LogicalType &type) {
 }
 
 TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
-	// values of 10^38 and above exceed the 38 digits a HUGEINT declares: only exported with lossless conversion
+	// values of 10^38 and above exceed the 38 digits a HUGEINT declares, so they only round trip with lossless
+	// conversion
 	const string hugeint_query =
 	    "SELECT v::HUGEINT AS v FROM (VALUES ('170141183460469231731687303715884105727'), "
 	    "('-170141183460469231731687303715884105728'), ('100000000000000000000000000000000000000'), "
@@ -217,12 +218,12 @@ TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
 	const string small_uhugeint_query =
 	    "SELECT v::UHUGEINT AS v FROM (VALUES ('99999999999999999999999999999999999999'), ('0'), ('42'), (NULL)) t(v)";
 
-	SECTION("Default: HUGEINT stays a decimal128, UHUGEINT is a decimal256 with 39 digits") {
+	SECTION("By default HUGEINT stays a decimal128 and UHUGEINT is a decimal256 with 39 digits") {
 		DuckDB db;
 		Connection con(db);
 		// HUGEINT (e.g. the result of a sum over integers) keeps the type every decimal128 consumer reads
 		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "d:38,0");
-		// a decimal128 cannot hold a UHUGEINT of 2^127 or more: the full range needs a decimal256
+		// a decimal128 cannot hold a UHUGEINT of 2^127 or more, so the full range needs a decimal256
 		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "d:39,0,256");
 		// which is read back as an exact DECIMAL(39,0)
 		string format = "d:39,0,256";
@@ -236,7 +237,7 @@ TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
 		         "{'u': 340282366920938463463374607431768211455 - i::UHUGEINT} AS s FROM range(10000) tbl(i)"));
 	}
 
-	SECTION("Format version 1.0: decimal128") {
+	SECTION("Format version 1.0 only has decimal128") {
 		DuckDB db;
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("SET arrow_output_version = '1.0'"));
@@ -244,13 +245,46 @@ TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
 		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "d:38,0");
 		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_hugeint_query));
 		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_uhugeint_query));
-		// a UHUGEINT of 2^127 or more would be read as a negative decimal128: this is an error instead
-		auto result = con.context->Query(uhugeint_query, make_shared_ptr<ArrowFormat>(10000));
+		// the largest UHUGEINT a decimal128 holds is 2^127 - 1, which is exported
+		auto result = con.context->Query("SELECT 170141183460469231731687303715884105727::UHUGEINT AS v",
+		                                 make_shared_ptr<ArrowFormat>(10000));
+		REQUIRE(!result->HasError());
+		// 2^127 would be read as a negative decimal128, so it is an error instead
+		result = con.context->Query("SELECT 170141183460469231731687303715884105728::UHUGEINT AS v",
+		                            make_shared_ptr<ArrowFormat>(10000));
 		REQUIRE(result->HasError());
 		REQUIRE(StringUtil::Contains(result->GetError(), "SET arrow_output_version to 1.1 or later"));
+		result = con.context->Query(uhugeint_query, make_shared_ptr<ArrowFormat>(10000));
+		REQUIRE(result->HasError());
+		// nested types whose NULL rows stand where the 2^127 would be
+		REQUIRE(ArrowTestHelper::RunArrowComparison(
+		    con, "SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE {'u': i::UHUGEINT} END AS s, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE [i::UHUGEINT] END AS l, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE MAP {i: i::UHUGEINT} END AS m, "
+		         "CASE WHEN i % 2 = 0 THEN NULL ELSE [i::UHUGEINT, 7]::UHUGEINT[2] END AS a "
+		         "FROM (SELECT CASE WHEN r % 2 = 0 THEN 170141183460469231731687303715884105728::UHUGEINT ELSE "
+		         "r::UHUGEINT END AS i "
+		         "FROM range(3000) t(r))"));
+		// a sliced vector only exports the rows of its selection, the 2^127 in the row that is not selected is not
+		// looked at
+		DataChunk chunk;
+		chunk.Initialize(*con.context, {LogicalType::UHUGEINT});
+		auto data = FlatVector::GetDataMutable<uhugeint_t>(chunk.data[0]);
+		data[0] = uhugeint_t(uint64_t(1) << 63, 0);
+		data[1] = uhugeint_t(0, 42);
+		chunk.SetCardinality(2);
+		SelectionVector sel(1);
+		sel.set_index(0, 1);
+		chunk.Slice(sel, 1);
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		ArrowConverter::ToArrowArray(chunk, &arrow_array, con.context->GetClientProperties(), {});
+		REQUIRE(arrow_array.length == 1);
+		REQUIRE(static_cast<const uhugeint_t *>(arrow_array.children[0]->buffers[1])[0] == uhugeint_t(0, 42));
+		arrow_array.release(&arrow_array);
 	}
 
-	SECTION("Lossless conversion: extension types, unchanged") {
+	SECTION("Lossless conversion keeps the extension types") {
 		DuckDB db;
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("SET arrow_lossless_conversion = true"));
