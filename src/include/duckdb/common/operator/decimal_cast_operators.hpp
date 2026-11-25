@@ -635,18 +635,15 @@ struct DecimalCastTraits<uhugeint_t> {
 template <class T>
 struct DecimalCastData {
 	using StoreType = T;
-	StoreType result;
-	uint32_t width;
-	uint32_t scale;
-	uint32_t digit_count;
-	uint32_t decimal_count;
-	//! Whether we have determined if the result should be rounded
-	bool round_set;
-	//! If the result should be rounded
-	bool should_round;
-	//! Only set when ALLOW_EXPONENT is enabled
-	uint32_t excessive_decimals;
-	ExponentType exponent_type;
+	StoreType result;     // holds the digits as we collect them
+	uint32_t width;       // the width required in the result
+	uint32_t scale;       // the scale required in the result
+	uint32_t digit_count; // total number of digits collected so far
+	int32_t digit_scale;  // scale of the recorded digits.
+	                      // negative if we've skipped some digits
+	                      // positive if we've recorded some decimals
+	bool round_set;       // whether we've recorded a rounding digit ...
+	bool round_up;        // ... and was the rounding digit >= 5
 	StoreType limit;
 };
 
@@ -668,11 +665,24 @@ struct DecimalCastOperation {
 			// leading zero's don't count towards the digit count
 			return true;
 		}
-		if (state.digit_count == state.width - state.scale) {
-			// width of decimal type is exceeded!
-			return false;
+		if (state.digit_count < state.width) {
+			// record digits up to the maximum width
+			state.digit_count++;
+			return AppendDigit<T, NEGATIVE>(state, digit);
+		} else {
+			// when we reach maximum width, record rounding
+			// and ignore all subsequent digits.
+			if (!state.round_set) {
+				state.round_set = true;
+				state.round_up = digit >= 5;
+			}
+			state.digit_scale--;
+			return true;
 		}
-		state.digit_count++;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool AppendDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
 			if (state.result < DecimalCastLimits<typename T::StoreType>::MinimumDiv10) {
 				return false;
@@ -708,113 +718,60 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
-		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
-		if (exponent > 0) {
-			state.exponent_type = ExponentType::POSITIVE;
-			// Positive exponents need up to 'exponent' amount of digits
-			// Everything beyond that amount needs to be truncated
-			if (decimal_excess > UnsafeNumericCast<uint32_t>(exponent)) {
-				// We've allowed too many decimals
-				state.excessive_decimals = UnsafeNumericCast<uint32_t>(decimal_excess - exponent);
-				exponent = 0;
-			} else {
-				exponent -= UnsafeNumericCast<int32_t>(decimal_excess);
-			}
-			D_ASSERT(exponent >= 0);
-		} else if (exponent < 0) {
-			state.exponent_type = ExponentType::NEGATIVE;
-		}
-		if (!Finalize<T, NEGATIVE>(state)) {
-			return false;
-		}
-		if (exponent < 0) {
-			bool round_up = false;
-			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
-				auto mod = state.result % 10;
-				round_up = NEGATIVE ? mod <= -5 : mod >= 5;
-				state.result /= 10;
-				if (state.result == 0 && mod == 0) {
-					break;
-				}
-			}
-			if (round_up) {
-				RoundUpResult<T, NEGATIVE>(state);
-			}
-			return true;
-		} else {
-			// positive exponent: append 0's
-			for (idx_t i = 0; i < idx_t(exponent); i++) {
-				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
-					return false;
-				}
-			}
-			// decimals moved before the decimal point by the exponent do not count towards the digit count
-			return WithinLimit<T, NEGATIVE>(state);
-		}
+		// note this is called *instead of* Finalize if
+		// there's an exponent part.
+		state.digit_scale -= exponent;
+		return Finalize<T, NEGATIVE>(state);
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (state.decimal_count == state.scale && !state.round_set) {
-			// Determine whether the last registered decimal should be rounded or not
-			state.round_set = true;
-			state.should_round = digit >= 5;
-		}
-		if (!ALLOW_EXPONENT && state.decimal_count == state.scale) {
-			// we exceeded the amount of supported decimals
-			// however, we don't throw an error here
-			// we just truncate the decimal
+		if (state.result == 0 && digit == 0) {
+			// if this is a leading zero decimal point, don't
+			// record it just increase the count of decimals.
+			state.digit_scale++;
 			return true;
 		}
-		//! If we expect an exponent, we need to preserve the decimals
-		//! But we don't want to overflow, so we prevent overflowing the result with this check
-		if (state.digit_count + state.decimal_count >= DecimalWidth<decltype(state.result)>::max) {
-			return true;
-		}
-		state.decimal_count++;
-		if (NEGATIVE) {
-			state.result = state.result * 10 - digit;
+		if (state.digit_count < state.width) {
+			// keep recording digits up to the maximum width.
+			state.digit_scale++;
+			state.digit_count++;
+			return AppendDigit<T, NEGATIVE>(state, digit);
 		} else {
-			state.result = state.result * 10 + digit;
+			// if we've reached the maximum width, record
+			// if we need to round up the last digit and
+			// ignore all subsequent digits.
+			if (!state.round_set) {
+				state.round_set = true;
+				state.round_up = digit >= 5;
+			}
+			return true;
 		}
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool TruncateExcessiveDecimals(T &state) {
-		D_ASSERT(state.excessive_decimals);
-		bool round_up = false;
-		for (idx_t i = 0; i < state.excessive_decimals; i++) {
-			auto mod = state.result % 10;
-			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
-			state.result /= static_cast<typename T::StoreType>(10.0);
-		}
-		//! Only round up when exponents are involved
-		if (state.exponent_type == ExponentType::POSITIVE && round_up) {
-			RoundUpResult<T, NEGATIVE>(state);
-		}
-		D_ASSERT(state.decimal_count > state.scale);
-		state.decimal_count = state.scale;
-		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (state.exponent_type != ExponentType::POSITIVE && state.decimal_count > state.scale) {
-			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
-			state.excessive_decimals = state.decimal_count - state.scale;
+		int32_t signed_state_scale = UnsafeNumericCast<int32_t>(state.scale);
+		for (int32_t i = 0; i < state.digit_scale - signed_state_scale; i++) {
+			// divide by tens to get rid of excessive decimals, updating
+			// the rounding flag as we chop digits off
+			auto mod = state.result % 10;
+			state.round_up = NEGATIVE ? mod <= -5 : mod >= 5;
+			state.result /= static_cast<typename T::StoreType>(10.0);
+			if (state.result == 0)
+				break;
 		}
-		if (state.excessive_decimals && !TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
-			return false;
-		}
-		if (state.exponent_type == ExponentType::NONE && state.round_set && state.should_round) {
+		// if the first digit past our width cutoff was >= 5, we need
+		// to round up our least digit.
+		if (state.round_up) {
 			RoundUpResult<T, NEGATIVE>(state);
 		}
-		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
-		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
-		//  but we have only gotten the value "10" so far, so we multiply by 1000
-		for (uint32_t i = state.decimal_count; i < state.scale; i++) {
-			state.result *= 10;
+		for (int32_t i = 0; i < signed_state_scale - state.digit_scale; i++) {
+			// if our current scale is too small, add zeros to pad
+			// the scale out by adding zeros.  Note that either the
+			// previous loop or this loop run, never both.
+			if (!AppendDigit<T, NEGATIVE>(state, 0))
+				return false;
 		}
 		return WithinLimit<T, NEGATIVE>(state);
 	}
@@ -843,11 +800,9 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.width = width;
 	state.scale = scale;
 	state.digit_count = 0;
-	state.decimal_count = 0;
-	state.excessive_decimals = 0;
-	state.exponent_type = ExponentType::NONE;
+	state.digit_scale = 0;
 	state.round_set = false;
-	state.should_round = false;
+	state.round_up = false;
 	state.limit = UnsafeNumericCast<T>(DecimalCastTraits<T>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[width]);
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
 	        string_ptr, string_size, state, false)) {
@@ -868,11 +823,9 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.width = width;
 	state.scale = scale;
 	state.digit_count = 0;
-	state.decimal_count = 0;
-	state.excessive_decimals = 0;
-	state.exponent_type = ExponentType::NONE;
+	state.digit_scale = 0;
 	state.round_set = false;
-	state.should_round = false;
+	state.round_up = false;
 	state.limit = UnsafeNumericCast<T>(DecimalCastTraits<T>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[width]);
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
 	        string_ptr, string_size, state, false)) {
