@@ -154,25 +154,77 @@ FROM (VALUES (('1' || repeat('0', 399))::DECIMAL(400,0)), (('-1' || repeat('0', 
 ----
 0	true
 
-# the approximate quantile sketches the unscaled values as DOUBLE, like the fixed-size decimals
+# the approximate quantile sketches the values as DOUBLE: their magnitude decides whether the sketch holds them, not
+# the digits of the width or the scale
 query II
 SELECT approx_quantile(x, 0.5), approx_quantile(x, [0.5]) FROM (VALUES ('12345.67'::DECIMAL(400,2))) t(x)
 ----
 12345.67	[12345.67]
 
+# a small value at a scale beyond 308 digits
+query III
+SELECT approx_quantile(x, 0.5) = 1, approx_quantile(x, [0.5]) = [1], typeof(approx_quantile(x, 0.5)) FROM (VALUES ('1'::DECIMAL(310,309))) t(x)
+----
+true	true	DECIMAL(310,309)
+
+# small values at a high scale: the quantile lies between them
+query III
+SELECT approx_quantile(x, 0.49) BETWEEN min(x) AND max(x), approx_quantile(x, 0.49)::DOUBLE BETWEEN -0.61 AND -0.59, approx_quantile(x, [0.01, 0.99])::DOUBLE[] = [-0.9, 0.9]
+FROM (SELECT (CASE WHEN i < 200 THEN '-0.9' ELSE '0.9' END)::DECIMAL(310,308) AS x FROM range(400) r(i))
+----
+true	true	true
+
+# tiny values at a high scale keep their digits
+query I
+SELECT approx_quantile(x, 0.5) FROM (VALUES ('0.000000000000000000000000000000000000000000000001'::DECIMAL(60,50)), ('0.000000000000000000000000000000000000000000000003'), ('0.000000000000000000000000000000000000000000000002')) t(x)
+----
+0.00000000000000000000000000000000000000000000000200
+
+# large values at a low scale, and at a scale that leaves more than 308 digits in the unscaled value
+query II
+SELECT approx_quantile(x, 0.5)::DOUBLE, approx_quantile(y, 0.5)::DOUBLE
+FROM (SELECT (i::VARCHAR || repeat('0', 305))::DECIMAL(400,0) AS x, (i::VARCHAR || repeat('0', 299))::DECIMAL(400,100) AS y FROM range(1, 4) r(i))
+----
+2e+305	2e+299
+
+# a value whose magnitude is beyond the DOUBLE range does not fit the sketch
 statement error
 SELECT approx_quantile(x, 0.5) FROM (VALUES (('1' || repeat('0', 399))::DECIMAL(400,0))) t(x)
 ----
-approx_quantile sketches its input as DOUBLE, which cannot hold a DECIMAL value of more than 308 digits
+approx_quantile sketches its input as DOUBLE: a DECIMAL(400,0) value with a magnitude beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch
 
 statement error
 SELECT approx_quantile(x, [0.5]) FROM (VALUES (('-1' || repeat('0', 399))::DECIMAL(400,0))) t(x)
 ----
-approx_quantile sketches its input as DOUBLE, which cannot hold a DECIMAL value of more than 308 digits
+approx_quantile sketches its input as DOUBLE: a DECIMAL(400,0) value with a magnitude beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch
 
-# a sketched value that rounds beyond the width is clamped to the width
+# the DOUBLE nearest to a value at the top of the width lies just beyond the width: the quantile is that value
 query II
 SELECT approx_quantile(x, 0.5) = x, approx_quantile(-x, 0.5) = -x FROM (VALUES (repeat('9', 40)::DECIMAL(40,0))) t(x) GROUP BY x
+----
+true	true
+
+# a quantile of the sketch is rounded to the nearest value of the type
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 12.5, 'max': 12.5, 'centroids': [{'mean': 12.5, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+13
+
+# an imported sketch can carry any value: a quantile out of the range of the type or not finite is an error, not a limit
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 1e45, 'max': 1e45, 'centroids': [{'mean': 1e45, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+is out of the range of DECIMAL(40,0)
+
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 'inf'::DOUBLE, 'max': 'inf'::DOUBLE, 'centroids': [{'mean': 'inf'::DOUBLE, 'weight': 1.0}]}, 'approx_quantile', ['DECIMAL(40,0)', 'FLOAT'], [NULL, 0.5::FLOAT]))
+----
+the approximate quantile is not a finite value
+
+# the reservoir quantile samples the values themselves, at any scale and magnitude
+query II
+SELECT reservoir_quantile(x, 0.5) = any_value(x), reservoir_quantile(y, 0.5) = any_value(y)
+FROM (VALUES ('1'::DECIMAL(310,309), ('1' || repeat('0', 399))::DECIMAL(400,0))) t(x, y)
 ----
 true	true
 
