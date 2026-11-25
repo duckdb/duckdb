@@ -70,8 +70,8 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 	if (building) {
 		build_changed_rows += chunk.size();
 	}
-	if (bound_index.SupportsDeltaIndexes() && (building || deltas.ShouldUse(active_checkpoint))) {
-		append_index = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
+	if (bound_index.SupportsDeltaIndexes() && UseDeltas(active_checkpoint)) {
+		append_index = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA);
 		if (bound_index.IsUnique()) {
 			lookup_main_index = true;
 		}
@@ -83,7 +83,7 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 			if (delete_index) {
 				lookup_append_info.delete_indexes.push_back(*delete_index);
 			}
-			if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+			if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA)) {
 				lookup_append_info.delete_indexes.push_back(*delta);
 			}
 			bound_index.VerifyAppend(chunk, lookup_append_info, optional_ptr<ConflictManager>());
@@ -105,7 +105,7 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 
 void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 		delta->Delete(chunk, row_ids);
 		return;
 	}
@@ -233,8 +233,8 @@ static void ApplyIndexRemoval(BoundIndex &index, IndexDeltas &deltas, DataChunk 
 	}
 }
 
-static void ApplyIndexRemovalDuringCheckpoint(BoundIndex &index, IndexDeltas &deltas, DataChunk &chunk, Vector &row_ids,
-                                              const IndexRemovalType removal_type) {
+static void ApplyIndexRemovalToDeltas(BoundIndex &index, IndexDeltas &deltas, DataChunk &chunk, Vector &row_ids,
+                                      const IndexRemovalType removal_type) {
 	D_ASSERT(removal_type != IndexRemovalType::DELETED_ROWS_IN_USE);
 
 	switch (removal_type) {
@@ -242,8 +242,8 @@ static void ApplyIndexRemovalDuringCheckpoint(BoundIndex &index, IndexDeltas &de
 	case IndexRemovalType::MAIN_INDEX: {
 		// Removing from the main index cannot happen directly due to the concurrent checkpoint; add the removal to a
 		// delta index.
-		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
-		auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
+		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA);
+		auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA);
 
 		// If we have also added data during this checkpoint, we might need to remove from there instead.
 		// We FIRST try to remove from "added_data_during_checkpoint"; any rows that are not there are added to
@@ -262,14 +262,14 @@ static void ApplyIndexRemovalDuringCheckpoint(BoundIndex &index, IndexDeltas &de
 	}
 	case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
 	case IndexRemovalType::REVERT_MAIN_INDEX: {
-		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
+		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA);
 		// Revert adding to the main index.
 		// We have added data during this checkpoint as well, so the removal might have EITHER:
 		// (1) added data to "removed_data_during_checkpoint" or
 		// (2) removed data from "added_data_during_checkpoint".
 		// Revert by first trying to remove from "removed_data_during_checkpoint"; any rows that were not removed are
 		// re-added to "added_data_during_checkpoint".
-		if (auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+		if (auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 			DeleteOrAppend(removed_data, *added_data, chunk, row_ids);
 		} else {
 			removed_data.Delete(chunk, row_ids);
@@ -303,12 +303,12 @@ void IndexEntry::RemoveFromIndex(DataChunk &chunk, Vector &row_ids, const IndexR
 	if (removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
 		// Cleanup always removes directly from "deleted_rows_in_use", even during a checkpoint.
 		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
-	} else if (bound_index.SupportsDeltaIndexes() && (building || deltas.ShouldUse(active_checkpoint))) {
+	} else if (bound_index.SupportsDeltaIndexes() && UseDeltas(active_checkpoint)) {
 		// During a checkpoint or a build, route changes through the deltas.
 		if (building) {
 			build_changed_rows += chunk.size();
 		}
-		ApplyIndexRemovalDuringCheckpoint(bound_index, deltas, chunk, row_ids, removal_type);
+		ApplyIndexRemovalToDeltas(bound_index, deltas, chunk, row_ids, removal_type);
 	} else {
 		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
 	}
@@ -405,12 +405,12 @@ void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataCh
 		index_append_info.delete_indexes.push_back(delete_entry->owned_index->Cast<BoundIndex>());
 	}
 	if (!manager) {
-		if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+		if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA)) {
 			index_append_info.delete_indexes.push_back(*delta);
 		}
 	}
 	bound_index.VerifyAppend(chunk, index_append_info, manager);
-	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 		// rows committed while a checkpoint runs are only in this delta
 		delta->VerifyAppend(chunk, index_append_info, manager);
 	}
@@ -429,12 +429,12 @@ void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, Da
 		D_ASSERT(delete_entry->owned_index->IsBound());
 		index_append_info.delete_indexes.push_back(delete_entry->owned_index->Cast<BoundIndex>());
 	}
-	if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA)) {
 		index_append_info.delete_indexes.push_back(*delta);
 	}
 
 	bound_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
-	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 		// if we have added any rows during checkpoint - check in that index as well
 		IndexAppendInfo added_during_checkpoint_info;
 		delta->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
@@ -590,13 +590,12 @@ void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 
 void IndexEntry::MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &deltas) {
 	// remove first, so that a key moved to another row is not a duplicate
-	for (const auto type :
-	     {IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
-		auto &delta = type == IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT ? deltas.removed : deltas.added;
+	for (const auto type : {IndexDeltaType::REMOVED_DATA, IndexDeltaType::ADDED_DATA}) {
+		auto &delta = type == IndexDeltaType::REMOVED_DATA ? deltas.removed : deltas.added;
 		if (!delta) {
 			continue;
 		}
-		auto error = index.MergeCheckpointDelta(type, *delta, IndexAppendMode::DEFAULT);
+		auto error = index.MergeDelta(type, *delta, IndexAppendMode::DEFAULT);
 		if (error.HasError()) {
 			if (error.Type() == ExceptionType::CONSTRAINT) {
 				throw ConstraintException("Data contains duplicates on indexed column(s)");
@@ -610,8 +609,8 @@ IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(building);
 	IndexBuildDeltas result;
-	result.added = deltas.Take(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
-	result.removed = deltas.Take(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
+	result.added = deltas.Take(IndexDeltaType::ADDED_DATA);
+	result.removed = deltas.Take(IndexDeltaType::REMOVED_DATA);
 	result.changed_rows = build_changed_rows;
 	build_changed_rows = 0;
 	return result;
@@ -620,8 +619,8 @@ IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 void IndexEntry::FinishBuild(unique_ptr<BoundIndex> index, idx_t index_oid_p, ConstraintCheckMode check_mode_p) {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(building);
-	D_ASSERT(!deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT));
-	D_ASSERT(!deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT));
+	D_ASSERT(!deltas.Find(IndexDeltaType::ADDED_DATA));
+	D_ASSERT(!deltas.Find(IndexDeltaType::REMOVED_DATA));
 	owned_index = std::move(index);
 	index_oid = index_oid_p;
 	check_mode = check_mode_p;
@@ -632,9 +631,9 @@ const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type)
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
 		return deleted_rows_in_use;
-	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
+	case IndexDeltaType::ADDED_DATA:
 		return checkpoint.added_data;
-	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
+	case IndexDeltaType::REMOVED_DATA:
 		return checkpoint.removed_data;
 	}
 	throw InternalException("Unsupported index delta type");
@@ -644,9 +643,9 @@ unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
 		return deleted_rows_in_use;
-	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
+	case IndexDeltaType::ADDED_DATA:
 		return checkpoint.added_data;
-	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
+	case IndexDeltaType::REMOVED_DATA:
 		return checkpoint.removed_data;
 	}
 	throw InternalException("Unsupported index delta type");
@@ -686,14 +685,13 @@ bool IndexDeltas::ShouldUse(const optional_idx active_checkpoint) const {
 }
 
 ErrorData IndexDeltas::MergeCheckpointDeltas(BoundIndex &index) {
-	for (const auto type :
-	     {IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+	for (const auto type : {IndexDeltaType::REMOVED_DATA, IndexDeltaType::ADDED_DATA}) {
 		auto &delta = GetPointer(type);
 		if (!delta) {
 			continue;
 		}
 		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
-		auto error = index.MergeCheckpointDelta(type, *delta, IndexAppendMode::INSERT_DUPLICATES);
+		auto error = index.MergeDelta(type, *delta, IndexAppendMode::INSERT_DUPLICATES);
 		if (error.HasError()) {
 			return error;
 		}

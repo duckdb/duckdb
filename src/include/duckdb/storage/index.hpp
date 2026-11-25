@@ -29,7 +29,7 @@ struct IndexCheckpointResult;
 //! IMMEDIATE (default): flush buffers under the index lock.
 //! DEFERRED: share blocks across indexes and finish flushing after releasing the lock. Return a logically equivalent
 //! shadow with independent backing for modified buffers; keep the live index usable until installation after flushing.
-//! Concurrent changes use deltas, requiring SupportsDeltaIndexes(), CreateEmptyCopy(), and MergeCheckpointDelta().
+//! Concurrent changes use deltas, requiring SupportsDeltaIndexes(), CreateEmptyCopy(), and MergeDelta().
 enum class IndexCheckpointMode : uint8_t { IMMEDIATE, DEFERRED };
 
 //! The index is an abstract base class that serves as the basis for indexes

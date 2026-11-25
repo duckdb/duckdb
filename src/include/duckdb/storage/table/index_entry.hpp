@@ -224,6 +224,10 @@ public:
 	bool IsBuilding() const {
 		return building;
 	}
+	//! Whether changes go to the deltas instead of the index: during a checkpoint or a build
+	bool UseDeltas(optional_idx active_checkpoint) const {
+		return building || deltas.ShouldUse(active_checkpoint);
+	}
 	//! The transaction building the index
 	transaction_t GetBuildTransaction() const {
 		return build_transaction;

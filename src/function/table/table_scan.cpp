@@ -1082,7 +1082,7 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 	if (!art->Scan(*scan_state, row_ids)) {
 		return false;
 	}
-	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA}) {
 		auto delta_index = art.FindDelta(delta);
 		if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
 			return false;

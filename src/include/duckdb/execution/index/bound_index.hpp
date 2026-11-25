@@ -50,11 +50,8 @@ public:
 };
 
 //! Identifies the logical purpose of a delta owned by an index entry.
-enum class IndexDeltaType : uint8_t {
-	DELETED_ROWS_IN_USE,
-	ADDED_DATA_DURING_CHECKPOINT,
-	REMOVED_DATA_DURING_CHECKPOINT
-};
+//! ADDED_DATA and REMOVED_DATA hold the changes made during a checkpoint or while CREATE INDEX builds the index.
+enum class IndexDeltaType : uint8_t { DELETED_ROWS_IN_USE, ADDED_DATA, REMOVED_DATA };
 
 //! The index is an abstract base class that serves as the basis for indexes
 class BoundIndex : public Index {
@@ -222,7 +219,7 @@ protected:
 	//! Creates an empty physical copy with the requested constraint type.
 	virtual unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const;
 	//! Merges a delta into this index, using the append mode for added rows
-	virtual ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index, IndexAppendMode append_mode);
+	virtual ErrorData MergeDelta(IndexDeltaType type, BoundIndex &delta_index, IndexAppendMode append_mode);
 
 	//! Lock used for any changes to the index
 	mutable annotated_mutex lock;
