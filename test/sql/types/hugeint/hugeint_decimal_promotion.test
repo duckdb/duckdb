@@ -3,9 +3,6 @@
 # group: [hugeint]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers AS SELECT
 	170141183460469231731687303715884105727::HUGEINT AS h_max,
 	(-170141183460469231731687303715884105727 - 1)::HUGEINT AS h_min,
