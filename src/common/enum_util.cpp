@@ -2687,6 +2687,7 @@ const StringUtil::EnumStringLiteral *GetExtensionUpdateResultTagValues() {
 		{ static_cast<uint32_t>(ExtensionUpdateResultTag::REPOSITORY_NOT_FOUND), "REPOSITORY_NOT_FOUND" },
 		{ static_cast<uint32_t>(ExtensionUpdateResultTag::REPOSITORY_NOT_TRUSTED), "REPOSITORY_NOT_TRUSTED" },
 		{ static_cast<uint32_t>(ExtensionUpdateResultTag::REPOSITORY_UNREADABLE), "REPOSITORY_UNREADABLE" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::UPDATE_FAILED), "UPDATE_FAILED" },
 		{ static_cast<uint32_t>(ExtensionUpdateResultTag::REDOWNLOADED), "REDOWNLOADED" },
 		{ static_cast<uint32_t>(ExtensionUpdateResultTag::UPDATED), "UPDATED" }
 	};
@@ -2695,12 +2696,12 @@ const StringUtil::EnumStringLiteral *GetExtensionUpdateResultTagValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value) {
-	return StringUtil::EnumToString(GetExtensionUpdateResultTagValues(), 11, "ExtensionUpdateResultTag", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtensionUpdateResultTagValues(), 12, "ExtensionUpdateResultTag", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
-	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 11, "ExtensionUpdateResultTag", value));
+	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 12, "ExtensionUpdateResultTag", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExternalFileCacheRequestSizingValues() {

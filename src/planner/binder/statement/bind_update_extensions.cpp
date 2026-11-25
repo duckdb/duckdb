@@ -19,6 +19,8 @@ BoundStatement Binder::Bind(UpdateExtensionsStatement &stmt) {
 	result.types.emplace_back(LogicalType::VARCHAR);
 	result.names.emplace_back("current_version");
 	result.types.emplace_back(LogicalType::VARCHAR);
+	result.names.emplace_back("error");
+	result.types.emplace_back(LogicalType::VARCHAR);
 
 	result.plan = make_uniq<LogicalUpdateExtensions>(std::move(stmt.info));
 

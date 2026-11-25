@@ -32,7 +32,7 @@ public:
 	                                  idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE_EXTENSIONS,
 	                       {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                        LogicalType::VARCHAR},
+	                        LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}

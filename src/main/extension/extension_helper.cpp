@@ -342,7 +342,10 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 		install_result = ExtensionHelper::InstallExtension(context, extension_name, options);
 	} catch (std::exception &e) {
 		ErrorData error(e);
-		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
+		result.tag = ExtensionUpdateResultTag::UPDATE_FAILED;
+		result.installed_version = result.prev_version;
+		result.error = error.Message();
+		return result;
 	}
 
 	result.installed_version = install_result->version;

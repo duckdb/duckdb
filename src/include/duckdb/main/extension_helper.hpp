@@ -69,6 +69,8 @@ enum class ExtensionUpdateResultTag : uint8_t {
 	REPOSITORY_NOT_TRUSTED = 7,
 	// The file of the user-provided repository the extension was installed from could not be read
 	REPOSITORY_UNREADABLE = 8,
+	// Downloading or installing the extension from its repository failed, see the error
+	UPDATE_FAILED = 9,
 
 	// The extension was re-downloaded from the repository, but due to a lack of version information
 	// its impossible to tell if the extension is actually updated
@@ -86,6 +88,8 @@ struct ExtensionUpdateResult {
 	string extension_version;
 	string prev_version;
 	string installed_version;
+	//! The error message when the tag is UPDATE_FAILED
+	string error;
 };
 
 struct ExtensionInstallOptions {

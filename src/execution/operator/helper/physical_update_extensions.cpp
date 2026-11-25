@@ -24,6 +24,8 @@ SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &con
 	auto &previous_version = chunk.data[3];
 	// current_version VARCHAR
 	auto &current_version = chunk.data[4];
+	// error VARCHAR
+	auto &error = chunk.data[5];
 
 	while (data.offset < data.update_result_entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.update_result_entries[data.offset];
@@ -33,6 +35,11 @@ SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &con
 		update_result.Append(Value(EnumUtil::ToString(entry.tag)));
 		previous_version.Append(Value(entry.prev_version));
 		current_version.Append(Value(entry.installed_version));
+		if (entry.tag == ExtensionUpdateResultTag::UPDATE_FAILED) {
+			error.Append(Value(entry.error));
+		} else {
+			error.Append(Value(LogicalType::VARCHAR));
+		}
 
 		data.offset++;
 		count++;
