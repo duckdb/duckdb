@@ -391,7 +391,7 @@ TEST_CASE("Repeated multi-column pushdown retains projection mappings and its re
 	Connection con(db);
 	REQUIRE_FALSE(con.Query("CREATE TABLE multi (a INTEGER, b INTEGER)")->HasError());
 	con.BeginTransaction();
-	auto plan = con.ExtractPlan("SELECT b, a FROM multi");
+	auto plan = TestExtractPlan(con, "SELECT b, a FROM multi");
 	REQUIRE(plan->children.size() == 1);
 	auto child = std::move(plan->children[0]);
 	plan = std::move(child);
