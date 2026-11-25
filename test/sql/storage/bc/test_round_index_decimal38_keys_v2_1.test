@@ -1,0 +1,94 @@
+# name: test/sql/storage/bc/test_round_index_decimal38_keys_v2_1.test
+# description: An index over round(DECIMAL(38,0), -1) stored at storage version v2.1.0 with DECIMAL(38,0) keys is not used with the DECIMAL(39,0) keys this engine computes
+# group: [bc]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+# data/storage/round_index_decimal38_keys_v2_1_0.db.gz was written by a DuckDB whose round(DECIMAL(38,0), -1) returned
+# DECIMAL(38,0) and that recorded the physical types of index keys (v2.1.0-dev95663 with the key type record), with:
+#   ATTACH 'round_index_decimal38_keys_v2_1_0.db' AS d (STORAGE_VERSION 'v2.1.0');
+#   CREATE TABLE d.t (x DECIMAL(38,0), y DECIMAL(18,0));
+#   CREATE UNIQUE INDEX ix ON d.t ((round(x, -1)));
+#   CREATE UNIQUE INDEX iy ON d.t ((round(y, -1)));
+#   INSERT INTO d.t VALUES (11, 11), (1234, 1234);
+#   CHECKPOINT d;
+# The stored keys of ix are 128-bit integers. This engine binds round(x, -1) to DECIMAL(39,0), whose keys are BIGNUM
+# blobs: used with those, the index would accept the duplicate 12 and miss the row 1234. The keys of iy were
+# DECIMAL(19,0) in both engines.
+
+unzip data/storage/round_index_decimal38_keys_v2_1_0.db.gz {TEST_DIR}/round_index_decimal38_keys_v2_1_0.db
+
+statement ok
+ATTACH '{TEST_DIR}/round_index_decimal38_keys_v2_1_0.db' AS old
+
+query I
+SELECT typeof(round(x, -1)) FROM old.t LIMIT 1
+----
+DECIMAL(39,0)
+
+# reads do without the index
+query I
+SELECT x FROM old.t WHERE round(x, -1) = 1230
+----
+1234
+
+query I
+SELECT y FROM old.t WHERE round(y, -1) = 1230
+----
+1234
+
+# writes need every index of the table
+statement error
+INSERT INTO old.t VALUES (12, 500)
+----
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the stored keys of round\(x, -1\) have the physical type INT128, the expression binds to DECIMAL\(39,0\) \(physical type VARCHAR\) now.*DROP INDEX "ix" and CREATE it again.*
+
+query I
+SELECT count(*) FROM old.t
+----
+2
+
+statement ok
+DROP INDEX old.ix
+
+statement ok
+CREATE UNIQUE INDEX ix ON old.t ((round(x, -1)))
+
+statement error
+INSERT INTO old.t VALUES (12, 500)
+----
+<REGEX>:.*Duplicate key.*round\(x, -1\): 10.*
+
+# the index whose keys kept their physical type was usable all along
+statement error
+INSERT INTO old.t VALUES (500, 12)
+----
+<REGEX>:.*Duplicate key.*round\(y, -1\): 10.*
+
+statement ok
+INSERT INTO old.t VALUES (99999999999999999999999999999999999999, 500)
+
+statement error
+INSERT INTO old.t VALUES (99999999999999999999999999999999999996, 600)
+----
+<REGEX>:.*Duplicate key.*round\(x, -1\): 100000000000000000000000000000000000000.*
+
+statement ok
+CHECKPOINT old
+
+statement ok
+DETACH old
+
+statement ok
+ATTACH '{TEST_DIR}/round_index_decimal38_keys_v2_1_0.db' AS old
+
+statement error
+INSERT INTO old.t VALUES (1231, 700)
+----
+<REGEX>:.*Duplicate key.*round\(x, -1\): 1230.*
+
+query I
+SELECT x FROM old.t WHERE round(x, -1) = 1230
+----
+1234
