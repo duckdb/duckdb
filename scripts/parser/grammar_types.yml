@@ -121,6 +121,7 @@ SQLStatement:
     - DestroyExternalResourceStmt
     - ExtensionRepositoryStatement
     - CreateExtensionRepositoryStmt
+    - CreateExtensionRepositoryFromHostStmt
     - DropExtensionRepositoryStmt
 
 SelectStatement:
@@ -155,6 +156,7 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
+    - ShowExternalResourceTypes
     - ShowExternalResources
     - ShowDeprecatedSelect
     - DescribeSelect
@@ -622,6 +624,8 @@ TableRef:
     - SubqueryReference
     - BaseTableRef
     - ParensTableRef
+    - JoinedTableRef
+    - JoinedTableRefChain
     - ValuesRef
     - MergeIntoUsingClause
     - UpdateTarget
@@ -1082,6 +1086,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1819,7 +1826,10 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
-    - ShowExternalResourcesType
+    - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
+    - FromSourceName
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
@@ -1928,6 +1938,8 @@ matcher_rule_overrides:
   NumberLiteral:
     allow_type_overlap: true
     matcher: number_literal
+  DottedName:
+    matcher: dotted_name
   StringLiteral:
     allow_type_overlap: true
     matcher: string_literal
@@ -2001,11 +2013,13 @@ collapsible_rules:
 packrat_memoized_rules:
   - Expression
   - TableRef
+  - ParensTableRef
   - Identifier
   - ColId
   - CatalogQualification
   - SchemaQualification
   - ReservedSchemaQualification
+  - SelectParens
 
 # rule_labels: see Matcher::SetLabel. When a syntax error lists what the parser expected at the failure point,
 # every alternative inside a labelled rule is summarised by the label instead of being spelled out. Only label

@@ -1,0 +1,46 @@
+diff --git a/test/native_catalog/test_native_catalog.cpp b/test/native_catalog/test_native_catalog.cpp
+index 95dcca2..3fe3654 100644
+--- a/test/native_catalog/test_native_catalog.cpp
++++ b/test/native_catalog/test_native_catalog.cpp
+@@ -2,6 +2,7 @@
+ #include "catch.hpp"
+ #include "catalog_model.hpp"
+ #include "duckdb.hpp"
++#include "duckdb/common/local_file_system.hpp"
+ #include "duckdb/common/types/uuid.hpp"
+ 
+ using namespace duckdb;
+@@ -9,16 +10,21 @@ using iceberg_test::Json;
+ 
+ namespace {
+ 
++FileSystem &TestLocalFileSystem() {
++	static LocalFileSystem fs;
++	return fs;
++}
++
+ string TestRoot() {
+-	auto fs = FileSystem::CreateLocal();
+-	return fs->JoinPath(FileSystem::GetWorkingDirectory(), "duckdb_unittest_tempdir",
++	auto &fs = TestLocalFileSystem();
++	return fs.JoinPath(FileSystem::GetWorkingDirectory(), "duckdb_unittest_tempdir",
+ 	                    "native-api-" + UUID::ToString(UUID::GenerateRandomUUID()));
+ }
+ 
+ //! Fail at the filesystem boundary after one metadata file has already been completed.
+ class FailingFileSystem : public FileSystem {
+ public:
+-	FailingFileSystem() : local(FileSystem::CreateLocal()) {
++	FailingFileSystem() : local(make_uniq<LocalFileSystem>()) {
+ 	}
+ 	string GetName() const override {
+ 		return "NativeCatalogFailingFileSystem";
+@@ -137,7 +143,7 @@ TEST_CASE("Native catalog state belongs to the database, not its initializing co
+ 		                    "SELECT status FROM iceberg_test_catalog_request('GET', '/v1/namespaces/survives', NULL)");
+ 		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 404);
+ 	}
+-	FileSystem::CreateLocal()->RemoveDirectory(root);
++	TestLocalFileSystem().RemoveDirectory(root);
+ }
+ 
+ int main(int argc, char **argv) {

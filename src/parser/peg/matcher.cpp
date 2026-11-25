@@ -80,6 +80,11 @@ void Matcher::Print() const {
 	Printer::Print(ToString());
 }
 
+void ParseResult::ThrowCastError(ParseResultType target) const {
+	throw InternalException("Failed to cast parse result of type %s to type %s for rule %s",
+	                        ParseResultToString(target), ParseResultToString(type), Name());
+}
+
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
 	suggestion.label = context.active_label;
 	context.suggestions.push_back(std::move(suggestion));
@@ -123,8 +128,8 @@ static bool CanGroupList(const ListMatcher &list) {
 }
 
 static bool SameFirstPredicate(const MatcherFirstSet &left, const MatcherFirstSet &right) {
-	return left.computed && right.computed && left.any == right.any && left.nullable == right.nullable &&
-	       left.class_mask == right.class_mask && left.table == right.table && left.literals == right.literals;
+	return left.computed && right.computed && left.nullable == right.nullable && left.table == right.table &&
+	       left.Equals(right);
 }
 
 void MatcherAllocator::InitializeListChains() {
@@ -199,6 +204,8 @@ void MatcherAllocator::InitializeListChains() {
 				}
 			}
 		}
+		chain->tail_first_set.Finalize();
+		chain->prefix_first_set.Finalize();
 		// Publish the owner before installing borrowed pointers: vector growth can throw.
 		auto chain_ptr = chain.get();
 		list_chains.push_back(std::move(chain));
@@ -210,7 +217,11 @@ void MatcherAllocator::InitializeListChains() {
 	}
 }
 
-ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator()), pending_destructors(arena) {
+ParseResultAllocator::ParseResultAllocator() : ParseResultAllocator(Allocator::DefaultAllocator()) {
+}
+
+ParseResultAllocator::ParseResultAllocator(Allocator &allocator)
+    : arena(allocator, PARSER_ARENA_INITIAL_CAPACITY), pending_destructors(arena) {
 }
 
 ParseResultAllocator::~ParseResultAllocator() = default;

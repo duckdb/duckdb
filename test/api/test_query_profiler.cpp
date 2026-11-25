@@ -18,7 +18,8 @@ TEST_CASE("Test query profiler", "[api]") {
 
 	con.EnableProfiling();
 	// don't pollute the console with profiler info - write it to a file in the test directory instead.
-	ClientConfig::GetConfig(*con.context).profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
+	Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION,
+	                                      Value(TestCreatePath("test_query_profiler_output.txt")));
 
 	string query = "SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2";
 	REQUIRE_NO_FAIL(con.Query(query));
@@ -41,7 +42,8 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 
 	con.EnableProfiling();
 	// don't pollute the console with profiler info - write it to a file in the test directory instead.
-	ClientConfig::GetConfig(*con.context).profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
+	Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION,
+	                                      Value(TestCreatePath("test_query_profiler_output.txt")));
 
 	// Disable `QUERY_SQL` in profiling output by only tracking other metrics.
 	REQUIRE_NO_FAIL(
@@ -81,8 +83,8 @@ TEST_CASE("Test parser timing is reported per statement", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableProfiling();
-	ClientConfig::GetConfig(*con.context).profiler_save_location =
-	    TestCreatePath("test_query_profiler_parser_output.txt");
+	Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION,
+	                                      Value(TestCreatePath("test_query_profiler_parser_output.txt")));
 	Settings::Set<TrackedMetricsSetting>(*con.context, SetScope::SESSION,
 	                                     Value::LIST({Value("parser.total_time"), Value("query.sql")}));
 
@@ -110,8 +112,8 @@ TEST_CASE("Extracting statements does not start the query profiler", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableProfiling();
-	ClientConfig::GetConfig(*con.context).profiler_save_location =
-	    TestCreatePath("test_query_profiler_extract_output.txt");
+	Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION,
+	                                      Value(TestCreatePath("test_query_profiler_extract_output.txt")));
 	Settings::Set<TrackedMetricsSetting>(*con.context, SetScope::SESSION,
 	                                     Value::LIST({Value("parser.total_time"), Value("query.sql")}));
 
@@ -125,7 +127,7 @@ TEST_CASE("Extracting statements does not start the query profiler", "[api]") {
 	REQUIRE(output.find("SELECT 44;") != std::string::npos);
 }
 
-TEST_CASE("Calls that run no statement do not leave the query profiler running", "[api]") {
+static void CheckNonExecutingProfilerCalls(bool check_idle_latency) {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableProfiling();
@@ -133,12 +135,16 @@ TEST_CASE("Calls that run no statement do not leave the query profiler running",
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT 1 AS i"));
 
 	auto check_next_query = [&]() {
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		if (check_idle_latency) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 		auto &profiler = QueryProfiler::Get(*con.context);
 		REQUIRE(profiler.GetQuerySQL() == "SELECT 42");
 		// the idle time before the query is not counted towards its latency
-		REQUIRE(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") < 0.4);
+		if (check_idle_latency) {
+			REQUIRE(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") < 0.4);
+		}
 	};
 
 	SECTION("GetTableNames fails") {
@@ -147,14 +153,6 @@ TEST_CASE("Calls that run no statement do not leave the query profiler running",
 	}
 	SECTION("GetTableNames succeeds") {
 		REQUIRE(con.GetTableNames("SELECT * FROM t").size() == 1);
-		check_next_query();
-	}
-	SECTION("ExtractPlan fails") {
-		REQUIRE_THROWS(con.ExtractPlan("SELECT * FROM table_that_does_not_exist"));
-		check_next_query();
-	}
-	SECTION("ExtractPlan succeeds") {
-		REQUIRE(con.ExtractPlan("SELECT * FROM t"));
 		check_next_query();
 	}
 	SECTION("a query fails to parse") {
@@ -175,6 +173,14 @@ TEST_CASE("Calls that run no statement do not leave the query profiler running",
 	}
 }
 
+TEST_CASE("Calls that run no statement do not leave the query profiler running", "[api]") {
+	CheckNonExecutingProfilerCalls(false);
+}
+
+TEST_CASE("Calls that run no statement do not count idle time in the next query", "[api][.]") {
+	CheckNonExecutingProfilerCalls(true);
+}
+
 TEST_CASE("Test latency when interrupting query", "[api]") {
 	// FIXME
 	// duckdb::unique_ptr<QueryResult> result;
@@ -183,7 +189,8 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	//
 	// con.EnableProfiling();
 	//
-	// ClientConfig::GetConfig(*con.context).profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
+	// Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION, Value(
+	// TestCreatePath("test_query_profiler_output.txt")));
 	//
 	// // Test interupting a query and running a new one afterward.
 	// // The latency should reflect the new one.

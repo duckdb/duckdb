@@ -1,0 +1,58 @@
+# name: test/sql/storage/compression/rle/rle_filter_selection_reuse.test
+# description: RLE filter selections remain valid across vectors, tails and materialized results
+# group: [rle]
+
+load {TEST_DIR}/rle_filter_selection_reuse.db
+
+statement ok
+SET threads=1
+
+foreach run_length 3 32 2049
+
+statement ok
+CREATE TABLE rle_input(i BIGINT, k BIGINT USING COMPRESSION RLE, n BIGINT USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO rle_input
+SELECT i, (i // {run_length}) % 11,
+       CASE WHEN i % 19 = 0 THEN NULL ELSE (i // {run_length}) % 11 END
+FROM range(41031) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok
+CREATE TABLE retained AS
+SELECT i, k, n FROM rle_input WHERE k >= 3 AND k <= 7 ORDER BY i DESC
+
+query I
+SELECT count(*) FROM (
+    (SELECT * FROM retained EXCEPT ALL
+     SELECT i, (i // {run_length}) % 11,
+            CASE WHEN i % 19 = 0 THEN NULL ELSE (i // {run_length}) % 11 END
+     FROM range(41031) t(i) WHERE (i // {run_length}) % 11 BETWEEN 3 AND 7)
+    UNION ALL
+    (SELECT i, (i // {run_length}) % 11,
+            CASE WHEN i % 19 = 0 THEN NULL ELSE (i // {run_length}) % 11 END
+     FROM range(41031) t(i) WHERE (i // {run_length}) % 11 BETWEEN 3 AND 7
+     EXCEPT ALL SELECT * FROM retained))
+----
+0
+
+query I
+SELECT count(*) FROM (
+    (SELECT i, k, n FROM rle_input WHERE i % 7 <> 0 AND n >= 3 AND n <= 7
+     EXCEPT ALL SELECT i, k, n FROM retained WHERE i % 7 <> 0 AND n IS NOT NULL)
+    UNION ALL
+    (SELECT i, k, n FROM retained WHERE i % 7 <> 0 AND n IS NOT NULL
+     EXCEPT ALL SELECT i, k, n FROM rle_input WHERE i % 7 <> 0 AND n >= 3 AND n <= 7))
+----
+0
+
+statement ok
+DROP TABLE retained
+
+statement ok
+DROP TABLE rle_input
+
+endloop

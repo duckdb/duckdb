@@ -54,7 +54,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 			}
 			auto &aggregate = *over_expr.AggregateFunctionMutable();
 			if (aggregate.GetCallbacks().HasStatisticsCallback()) {
-				AggregateStatisticsInput input(over_expr.BindInfo(), child_stats, node_stats.get());
+				AggregateStatisticsInput input(over_expr.BindInfoMutable(), child_stats, node_stats.get());
 				const idx_t child_count = agg_children.size();
 				// The callback takes a BoundAggregateExpression; a window aggregate has none, so
 				// synthesise one over the same function and children. Callbacks may rewrite both
@@ -64,7 +64,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 				                                                        : AggregateType::NON_DISTINCT);
 				aggregate.GetCallbacks().GetStatisticsCallback()(context, synthetic, input);
 				agg_children = std::move(synthetic.GetChildrenMutable());
-				aggregate = synthetic.FunctionMutable();
+				aggregate = synthetic.Function();
 				removed_expressions |= agg_children.size() < child_count;
 			}
 		}

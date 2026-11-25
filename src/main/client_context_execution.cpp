@@ -143,7 +143,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		error = ErrorData(ex);
 		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_inst, error.RawMessage());
+			ValidChecker::Invalidate(db_inst, error);
 		}
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
@@ -424,7 +424,7 @@ QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, Bas
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	try {
-		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
+		// Surface a pending interrupt even when this thread runs no task that reaches an InterruptCheck.
 		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
 		// Skip when the executor already has an error: ExecuteTask rethrows that with its original type.
 		if (IsInterrupted() && !active_query->executor->HasError()) {
@@ -482,9 +482,9 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 	} else if (!ErrorInvalidatesQueryTransaction(error.Type())) {
 		invalidate_transaction = false;
 	} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-		// fatal exceptions invalidate the entire database
+		// fatal exceptions invalidate the database instance, unless scoped to an attached database
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db_instance, error.RawMessage());
+		ValidChecker::Invalidate(db_instance, error);
 	}
 	ProcessError(error, active_query->query);
 	result.SetError(std::move(error));
@@ -611,7 +611,7 @@ ErrorData ClientContext::EndStatementInternal(ClientContextLock &lock, optional_
 			ErrorData state_error(ex);
 			if (Exception::InvalidatesDatabase(state_error.Type()) || state_error.Type() == ExceptionType::INTERNAL) {
 				// a fatal failure invalidates the database also when another failure is the one reported
-				ValidChecker::Invalidate(DatabaseInstance::GetDatabase(*this), state_error.RawMessage());
+				ValidChecker::Invalidate(DatabaseInstance::GetDatabase(*this), state_error);
 			}
 			if (!end_error.HasError()) {
 				end_error = std::move(state_error);

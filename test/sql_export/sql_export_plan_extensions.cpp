@@ -65,7 +65,8 @@ TEST_CASE("SQL verification fallback preserves extension reconstruction failures
 		LogicalExplain explain(std::move(plan), ExplainType::EXPLAIN_SQL, ProfilerPrintFormat::Default());
 		explain.allow_unsupported_sql = allow_unsupported;
 #ifndef DUCKDB_CRASH_ON_ASSERT
-		REQUIRE_THROWS_AS(explain.CreateSQLResult(*connection.context, TableIndex(83)), InternalException);
+		REQUIRE_THROWS_WITH(explain.CreateSQLResult(*connection.context, TableIndex(83)),
+		                    Catch::Contains("EXPLAIN (SQL) cannot render this query"));
 #endif
 	}
 }

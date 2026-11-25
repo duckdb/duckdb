@@ -42,7 +42,7 @@ enum class StatementType : uint8_t {
 	CALL_STATEMENT,         // CALL statement type
 	SET_STATEMENT,          // SET statement type
 	LOAD_STATEMENT,         // LOAD statement type
-	RELATION_STATEMENT,
+	RELATION_STATEMENT,     // nothing produces it, but the C API publishes its value
 	EXTENSION_STATEMENT,
 	LOGICAL_PLAN_STATEMENT,
 	ATTACH_STATEMENT,

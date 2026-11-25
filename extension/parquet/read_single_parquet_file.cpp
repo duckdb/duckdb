@@ -115,14 +115,14 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// the named parameters of this function are those of the multi-file parquet reader
-	ParquetMultiFileInfo interface;
+	ParquetMultiFileInfo file_info;
 	MultiFileOptions file_options;
 	if (file_input.multi_file_options) {
 		file_options = *file_input.multi_file_options;
 	}
 	ParquetFileReaderOptions options(context);
 	for (auto &kv : input.named_parameters) {
-		interface.ParseOption(context, kv.first, kv.second, file_options, options);
+		file_info.ParseOption(context, kv.first, kv.second, file_options, options);
 	}
 	result->options = std::move(options.options);
 
@@ -427,14 +427,18 @@ static virtual_column_map_t ReadSingleParquetFileVirtualColumns(ClientContext &c
 
 //! The row number within the file identifies a row of a single file
 static vector<column_t> ReadSingleParquetFileRowIdColumns(ClientContext &context,
-                                                          optional_ptr<FunctionData> bind_data) {
+                                                          optional_ptr<const FunctionData> bind_data) {
 	return {MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER};
 }
 
 //! The statistics of a column of this file, read from its metadata
-static unique_ptr<BaseStatistics>
-ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index) {
-	auto &parquet_data = bind_data_p->Cast<ReadSingleParquetFileData>();
+static unique_ptr<BaseStatistics> ReadSingleParquetFileStatistics(ClientContext &context,
+                                                                  TableFunctionGetStatisticsInput &input) {
+	auto &parquet_data = input.bind_data->Cast<ReadSingleParquetFileData>();
+	if (!input.column_index.HasPrimaryIndex() || input.column_index.HasChildren()) {
+		return nullptr;
+	}
+	const auto column_index = input.column_index.GetPrimaryIndex();
 	if (IsVirtualColumn(column_index)) {
 		return ParquetReader::ReadVirtualColumnStatistics(context, parquet_data.options, parquet_data.metadata,
 		                                                  column_index);
@@ -480,7 +484,7 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 	if (const Identifier &name = fn.Function().GetName(); name != "strlen" && name != "octet_length") {
 		return false;
 	}
-	auto &bind_data = input.get.bind_data->CastNoConst<MultiFileBindData>();
+	auto &bind_data = input.get.bind_data.write().Cast<MultiFileBindData>();
 	// Don't do pushdown on custom schema users like Ducklake, or when the schemas of several files are unified
 	if (!bind_data.reader_bind.schema.empty() || bind_data.file_options.union_by_name) {
 		return false;
@@ -566,7 +570,7 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	                           ReadSingleParquetFileInitGlobal, ReadSingleParquetFileInitLocal);
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;
 	read_parquet.cardinality = ReadSingleParquetFileCardinality;
-	read_parquet.statistics = ReadSingleParquetFileStatistics;
+	read_parquet.statistics_extended = ReadSingleParquetFileStatistics;
 	read_parquet.get_virtual_columns = ReadSingleParquetFileVirtualColumns;
 	read_parquet.get_partition_stats = ReadSingleParquetFilePartitionStats;
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;

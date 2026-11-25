@@ -61,6 +61,9 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 			if (deleter) {
 				db_manager.AddPendingTeardown(std::move(deleter));
 			}
+			// the last release closes it, which may be the MetaTransaction finalizing later
+			attached_db->MarkDetached(DatabaseCloseAction::SKIP_CHECKPOINT);
+			AttachedDatabase::InvokeCloseIfLastReference(attached_db, DatabaseCloseAction::SKIP_CHECKPOINT);
 		}
 		break;
 	}

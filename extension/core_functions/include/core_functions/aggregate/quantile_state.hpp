@@ -28,7 +28,7 @@ struct FlattenedQuantileValues : FunctionLocalState {
 	FlattenedQuantileValues() : capacity(0) {
 	}
 
-	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<FunctionData>) {
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<const FunctionData>) {
 		return make_uniq<FlattenedQuantileValues>();
 	}
 
@@ -369,6 +369,10 @@ inline Value QuantileNeg(const Value &v) {
 	const auto &type = v.type();
 	switch (type.id()) {
 	case LogicalTypeId::DECIMAL: {
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			// a wide decimal quantile has no HUGEINT representation, it is handled as DOUBLE
+			return Value::DOUBLE(QuantileNeg<double>(v.GetValue<double>()));
+		}
 		const auto integral = IntegralValue::Get(v);
 		const auto width = DecimalType::GetWidth(type);
 		const auto scale = DecimalType::GetScale(type);
@@ -413,7 +417,7 @@ template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
 AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	auto &function = input.function;
 	AggregateStateLayout layout;
-	if (function.GetReturnType().IsAggregateState()) {
+	if (function.ReturnsExportedState()) {
 		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
 		// its return type IS the state type already
 		layout.type = function.GetReturnType();

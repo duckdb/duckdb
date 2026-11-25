@@ -1,0 +1,84 @@
+# name: test/sql/storage/compression/rle/rle_scan_selection_types.test
+# description: RLE scans and selected filters across types, runs and segment boundaries
+# group: [rle]
+
+statement ok
+SET threads=1
+
+statement ok
+ATTACH '{TEST_DIR}/rle_scan_selection_types.db' AS db (BLOCK_SIZE 16384)
+
+foreach type INTEGER DOUBLE
+
+foreach run_length 3 2049
+
+statement ok
+CREATE OR REPLACE MACRO expected(i) AS (((i // {run_length}) % 7) * 17)::{type}
+
+statement ok
+CREATE TABLE db.runs(id INTEGER, f INTEGER USING COMPRESSION UNCOMPRESSED, v {type} USING COMPRESSION RLE, n {type} USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO db.runs SELECT i, i % 1000, expected(i), CASE WHEN i % 13 = 0 THEN NULL ELSE expected(i) END FROM range(12291) t(i)
+
+statement ok
+CHECKPOINT db
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/rle_scan_selection_types.db' AS db
+
+query I
+SELECT count(*) > 0 AND bool_and(compression = 'RLE') FROM pragma_storage_info('db.runs') WHERE column_name IN ('v', 'n') AND segment_type <> 'VALIDITY'
+----
+true
+
+query I
+SELECT count(*) = 12291 AND bool_and(v = expected(id)) AND bool_and(n IS NOT DISTINCT FROM CASE WHEN id % 13 = 0 THEN NULL ELSE expected(id) END) FROM db.runs
+----
+true
+
+foreach selected 500
+
+query I
+SELECT count(*) FROM (
+    (SELECT id, v, n FROM db.runs WHERE f < {selected}
+     EXCEPT ALL
+     SELECT i, expected(i), CASE WHEN i % 13 = 0 THEN NULL ELSE expected(i) END FROM range(12291) t(i) WHERE i % 1000 < {selected})
+    UNION ALL
+    (SELECT i, expected(i), CASE WHEN i % 13 = 0 THEN NULL ELSE expected(i) END FROM range(12291) t(i) WHERE i % 1000 < {selected}
+     EXCEPT ALL
+     SELECT id, v, n FROM db.runs WHERE f < {selected}))
+----
+0
+
+foreach filtered v n
+
+query I
+WITH expected_rows AS (
+    SELECT i AS id, expected(i) AS v,
+           CASE WHEN i % 13 = 0 THEN NULL ELSE expected(i) END AS n
+    FROM range(12291) t(i))
+SELECT count(*) FROM (
+    (SELECT id, v, n FROM db.runs WHERE f < {selected} AND {filtered} < 85
+     EXCEPT ALL
+     SELECT * FROM expected_rows WHERE id % 1000 < {selected} AND {filtered} < 85)
+    UNION ALL
+    (SELECT * FROM expected_rows WHERE id % 1000 < {selected} AND {filtered} < 85
+     EXCEPT ALL
+     SELECT id, v, n FROM db.runs WHERE f < {selected} AND {filtered} < 85))
+----
+0
+
+endloop
+
+endloop
+
+statement ok
+DROP TABLE db.runs
+
+endloop
+
+endloop

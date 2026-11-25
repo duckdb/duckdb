@@ -1,0 +1,18 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index 50cf08a..90e4319 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -234,10 +234,10 @@ std::string StatementGenerator::GetRandomAttachedDataBase() {
+ 
+ unique_ptr<AttachInfo> StatementGenerator::GenerateAttachInfo() {
+ 	auto info = make_uniq<AttachInfo>();
+-	auto fs = FileSystem::CreateLocal();
++	auto &fs = FileSystem::GetLocal(*context.db);
+ 	// check if the directory exists
+-	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
+-		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
++	if (!fs.DirectoryExists(TESTING_DIRECTORY_NAME)) {
++		fs.CreateDirectory(TESTING_DIRECTORY_NAME);
+ 	}
+ 	info->name = Identifier(RandomString(10));
+ 	info->path = TESTING_DIRECTORY_NAME + string("/fuzz_gen_db_") + info->name + string(".db");

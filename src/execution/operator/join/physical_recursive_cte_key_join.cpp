@@ -3,6 +3,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_keyed_state.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -129,7 +130,8 @@ public:
 	      matched_input_sel(STANDARD_VECTOR_SIZE), candidate_input_sel(STANDARD_VECTOR_SIZE),
 	      candidate_match_sel(STANDARD_VECTOR_SIZE), candidate_addresses(LogicalType::POINTER),
 	      matched_addresses(LogicalType::POINTER), probe_hashes(LogicalType::HASH),
-	      key_formats(op.Layout().ProbeKeyTypes().size()), arena(Allocator::Get(context)), row_state(arena) {
+	      probe_hasher(context, op.Layout().ProbeKeyTypes()), key_formats(op.Layout().ProbeKeyTypes().size()),
+	      arena(Allocator::Get(context)), row_state(arena) {
 		probe_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
 		if (!op.Layout().ProbeKeyNormalizers().empty()) {
 			probe_key_executor = make_uniq<ExpressionExecutor>(context);
@@ -187,6 +189,7 @@ private:
 	Vector candidate_addresses;
 	Vector matched_addresses;
 	Vector probe_hashes;
+	ChunkHasher probe_hasher;
 	vector<UnifiedVectorFormat> key_formats;
 	unique_ptr<ExpressionExecutor> probe_key_executor;
 	unique_ptr<RecursiveCTEKeyJoinHashTableState> hash_table_state;
@@ -314,7 +317,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		if (valid_probe_count == 0) {
 			return {0, OperatorResultType::NEED_MORE_INPUT};
 		}
-		probe_keys.Hash(probe_hashes);
+		probe_hasher.Hash(probe_keys, probe_hashes);
 		valid_probe_position = 0;
 		active_probe = false;
 		partial_input_initialized = true;

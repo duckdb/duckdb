@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/table/system_catalog_scanner.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -14,8 +15,9 @@ struct DuckDBSequencesData : public GlobalTableFunctionState {
 	DuckDBSequencesData() : offset(0) {
 	}
 
-	vector<reference<SequenceCatalogEntry>> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
+	SystemCatalogScannerStats stats;
 };
 
 static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -68,18 +70,17 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return nullptr;
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "sequence_name";
+	columns.entry_oid = "sequence_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBSequencesData>();
 
-	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetAllSchemas(context);
-	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::SEQUENCE_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<SequenceCatalogEntry>()); });
-	};
+	// collect the sequences that survive the pushed-down filters
+	result->entries = SystemCatalogScanner::GetEntries(context, input, CatalogType::SEQUENCE_ENTRY, result->stats);
 	return std::move(result);
 }
 
@@ -127,7 +128,7 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto &sql = output.data[15];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &seq = data.entries[data.offset++].get();
+		auto &seq = data.entries[data.offset++].get().Cast<SequenceCatalogEntry>();
 		auto seq_data = seq.GetData();
 
 		database_name.Append(Value(seq.catalog.GetName()));
@@ -155,9 +156,15 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 }
 
+static void DuckDBSequencesGetMetrics(TableFunctionGetMetricsInput &input) {
+	SystemCatalogScanner::ReportMetrics(input, input.global_state->Cast<DuckDBSequencesData>().stats);
+}
+
 void DuckDBSequencesFun::RegisterFunction(BuiltinFunctions &set) {
 	auto function =
 	    TableFunction("duckdb_sequences", {}, DuckDBSequencesFunction, DuckDBSequencesBind, DuckDBSequencesInit);
+	SystemCatalogScanner::RegisterPushdown(function);
+	function.get_metrics = DuckDBSequencesGetMetrics;
 	set.AddFunction(std::move(function));
 }
 

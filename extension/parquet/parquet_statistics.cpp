@@ -1,5 +1,7 @@
 #include "parquet_statistics.hpp"
 
+#include "duckdb/common/bignum.hpp"
+
 #include <cmath>
 #include <memory>
 #include <utility>
@@ -13,6 +15,7 @@
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -90,6 +93,27 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::CreateNumericStats(const Logi
 	return stats.ToUnique();
 }
 
+//! Decimals wider than 38 digits are BIGNUM blobs with min/max bounds, which are cut when the values are long
+static unique_ptr<BaseStatistics> CreateWideDecimalStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
+                                                         const duckdb_parquet::Statistics &parquet_stats) {
+	auto stats = BignumStats::CreateUnknown(type);
+	Value min;
+	Value max;
+	if (parquet_stats.__isset.min_value) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
+	} else if (parquet_stats.__isset.min) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
+	}
+	if (parquet_stats.__isset.max_value) {
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value);
+	} else if (parquet_stats.__isset.max) {
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max);
+	}
+	BignumStats::SetMin(stats, min);
+	BignumStats::SetMax(stats, max);
+	return stats.ToUnique();
+}
+
 static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &type,
                                                            const ParquetColumnSchema &schema_ele,
                                                            const duckdb_parquet::Statistics &parquet_stats) {
@@ -109,6 +133,16 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 	NumericStats::SetMin(stats, min);
 	NumericStats::SetMax(stats, max);
 	return stats.ToUnique();
+}
+
+//! Whether every non-NULL value of the column chunk is NaN, according to its nan_count and null_count
+static bool AllValuesAreNaN(const duckdb_parquet::Statistics &parquet_stats,
+                            optional_ptr<const ColumnChunk> column_chunk) {
+	if (!column_chunk || !parquet_stats.__isset.nan_count || !parquet_stats.__isset.null_count) {
+		return false;
+	}
+	const auto nan_count = parquet_stats.nan_count;
+	return nan_count > 0 && nan_count == column_chunk->meta_data.num_values - parquet_stats.null_count;
 }
 
 bool ParquetStatisticsUtils::CanHaveNaN(const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan) {
@@ -234,6 +268,15 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
+			case PhysicalType::VARCHAR: {
+				// wide decimal stored as a BIGNUM blob
+				auto blob = ParquetDecimalUtils::ReadWideDecimalValue(stats_data, stats.size());
+				bignum_t value {string_t(blob)};
+				if (!DecimalHelper<bignum_t>::FitsWidth(value, width)) {
+					return Value();
+				}
+				return Value::DECIMAL(value, width, scale);
+			}
 			default:
 				throw InvalidInputException("Unsupported internal type for decimal");
 			}
@@ -373,6 +416,12 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
@@ -522,11 +571,22 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformParquetStatistics(
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::UUID:
+		return CreateNumericStats(type, schema, parquet_stats);
+	case LogicalTypeId::DECIMAL:
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			return CreateWideDecimalStats(type, schema, parquet_stats);
+		}
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+		if (AllValuesAreNaN(parquet_stats, column_chunk)) {
+			auto nan_stats = NumericStats::CreateUnknown(type);
+			auto nan_value = Value("nan").DefaultCastAs(type);
+			NumericStats::SetMin(nan_stats, nan_value);
+			NumericStats::SetMax(nan_stats, nan_value);
+			return nan_stats.ToUnique();
+		}
 		if (CanHaveNaN(parquet_stats, can_have_nan)) {
 			// The column can contain NaN values - create stats without an upper max value, as NaN compares larger than
 			// anything else and is not included in the Parquet min/max
@@ -577,19 +637,32 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformParquetStatistics(
 		}
 		return string_stats.ToUnique();
 	}
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::GEOMETRY: {
 		if (!column_chunk) {
 			break;
 		}
+		const bool is_geography = type.id() == LogicalTypeId::GEOGRAPHY;
 		auto geo_stats = GeometryStats::CreateUnknown(type);
 		if (column_chunk->meta_data.__isset.geospatial_statistics) {
 			if (column_chunk->meta_data.geospatial_statistics.__isset.bbox) {
 				auto &bbox = column_chunk->meta_data.geospatial_statistics.bbox;
 				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
 
-				// xmin > xmax is allowed if the geometry crosses the antimeridian,
-				// but we don't handle this right now
-				if (bbox.xmin <= bbox.xmax) {
+				// For GEOGRAPHY the bbox is assumed to be a *coverage* bound: it bounds the geodesic edges
+				// and polygon interiors, not just the coordinate values (which is what we write ourselves,
+				// and what other spherical engines write - even though the Parquet spec's definition is
+				// coordinate-based). A file whose writer stored coordinate-only boxes for line/polygon
+				// geography data may prune incorrectly under this assumption.
+				//
+				// xmin > xmax means the bounding box wraps across the antimeridian. This is only valid for
+				// GEOGRAPHY (whose extent math is antimeridian-aware); for GEOMETRY we ignore such a box.
+				// The geodetic arc math requires X within [-180, 180], so a file-provided GEOGRAPHY bbox
+				// outside that range (or NaN) is ignored rather than trusted.
+				const bool valid_x = is_geography ? bbox.xmin >= -180.0 && bbox.xmin <= 180.0 && bbox.xmax >= -180.0 &&
+				                                        bbox.xmax <= 180.0
+				                                  : bbox.xmin <= bbox.xmax;
+				if (valid_x) {
 					stats_bbox.x_min = bbox.xmin;
 					stats_bbox.x_max = bbox.xmax;
 				}
@@ -714,6 +787,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);
@@ -725,7 +800,10 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
-			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+			row_group_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+			if (parquet_stats.null_count > 0) {
+				row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
 		}
 	}
 	return row_group_stats;
@@ -820,13 +898,28 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	bool child_has_constant = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child, hash_strategy);
-		}
-	});
-	return child_has_constant;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_child_has_constant = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (!any_child_has_constant) {
+				any_child_has_constant = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return any_child_has_constant;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_have_constants = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (all_children_have_constants) {
+				all_children_have_constants = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return all_children_have_constants;
+	}
+	default:
+		return false;
+	}
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter, ParquetBloomFilterHashStrategy hash_strategy) {
@@ -1248,7 +1341,7 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	}
 
 	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
-	transport.read(new_buffer->ptr, UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
+	transport.read(new_buffer->GetCurrentLoc(), UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter, schema, hash_strategy);
 }
@@ -1293,7 +1386,7 @@ static optional_idx BloomFilterSize(idx_t num_entries, double target) {
 
 static unique_ptr<ResizeableBuffer> AllocateBloomFilter(Allocator &allocator, idx_t size) {
 	auto buffer = make_uniq<ResizeableBuffer>(allocator, size);
-	buffer->zero();
+	buffer->Zero();
 	return buffer;
 }
 
@@ -1348,21 +1441,21 @@ void ParquetBloomFilter::ReleaseReservation() {
 }
 
 ParquetBloomFilter::ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p) {
-	D_ASSERT(data_p->len % sizeof(ParquetBloomBlock) == 0);
+	D_ASSERT(data_p->GetLength() % sizeof(ParquetBloomBlock) == 0);
 	data = std::move(data_p);
-	block_count = data->len / sizeof(ParquetBloomBlock);
-	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+	block_count = data->GetLength() / sizeof(ParquetBloomBlock);
+	D_ASSERT(data->GetLength() % sizeof(ParquetBloomBlock) == 0);
 }
 
 void ParquetBloomFilter::FilterInsert(uint64_t x) {
-	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->GetCurrentLoc());
 	uint64_t i = ((x >> 32) * block_count) >> 32;
 	auto &b = blocks[i];
 	ParquetBloomBlock::BlockInsert(b, x);
 }
 
 bool ParquetBloomFilter::FilterCheck(uint64_t x) {
-	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->GetCurrentLoc());
 	auto i = ((x >> 32) * block_count) >> 32;
 	return ParquetBloomBlock::BlockCheck(blocks[i], x);
 }
@@ -1377,19 +1470,20 @@ static uint8_t PopCnt64(uint64_t n) {
 }
 
 double ParquetBloomFilter::OneRatio() {
-	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->ptr);
+	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->GetCurrentLoc());
 	idx_t one_count = 0;
-	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
+	for (idx_t b_idx = 0; b_idx < data->GetLength() / sizeof(uint64_t); ++b_idx) {
 		one_count += PopCnt64(bloom_ptr[b_idx]);
 	}
-	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
+	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->GetLength()) * 8.0);
 }
 
 void ParquetBloomFilter::Shrink(Allocator &allocator, idx_t new_block_count) {
 	D_ASSERT(new_block_count > 0 && block_count % new_block_count == 0);
 	auto folded = AllocateBloomFilter(allocator, new_block_count * sizeof(ParquetBloomBlock));
-	array_ptr<ParquetBloomBlock> source(reinterpret_cast<ParquetBloomBlock *>(data->ptr), block_count);
-	array_ptr<ParquetBloomBlock> target(reinterpret_cast<ParquetBloomBlock *>(folded->ptr), new_block_count);
+	array_ptr<ParquetBloomBlock> source(reinterpret_cast<ParquetBloomBlock *>(data->GetCurrentLoc()), block_count);
+	array_ptr<ParquetBloomBlock> target(reinterpret_cast<ParquetBloomBlock *>(folded->GetCurrentLoc()),
+	                                    new_block_count);
 	const auto factor = block_count / new_block_count;
 	for (idx_t i = 0; i < new_block_count; i++) {
 		auto &merged = target[i];
@@ -1418,8 +1512,8 @@ void ParquetBloomFilter::FoldToTarget(Allocator &allocator, double target) {
 		Shrink(allocator, new_block_count);
 	}
 	if (memory) {
-		memory->Release(reserved_bytes - data->len);
-		reserved_bytes = data->len;
+		memory->Release(reserved_bytes - data->GetLength());
+		reserved_bytes = data->GetLength();
 	}
 }
 

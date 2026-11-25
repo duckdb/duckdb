@@ -18,3 +18,89 @@ query I
 SELECT remap_struct({a: 1}, NULL::STRUCT(a INT, s STRUCT(p INT, q VARCHAR)), {a:'a'}, {s: {q: 'hello', p: 5}});
 ----
 {'a': 1, 's': {'p': 5, 'q': hello}}
+
+# a NULL nested default over an input that has NULL rows
+query I
+SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: NULL::STRUCT(z INT)}) FROM (VALUES ({a: 1}), (NULL), ({a: 3})) t(x);
+----
+{'a': 1, 's': NULL}
+NULL
+{'a': 3, 's': NULL}
+
+query I
+SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: NULL::STRUCT(z INT)}) FROM (VALUES (NULL::STRUCT(a INT)), (NULL)) t(x);
+----
+NULL
+NULL
+
+# the NULL default keeps its fields NULL when the result is flattened
+query III
+SELECT r.a, r.s IS NULL, r.s.z FROM (
+	SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: NULL::STRUCT(z INT)}) AS r
+	FROM (VALUES ({a: 1}), (NULL), ({a: 3})) t(x)
+) ORDER BY ALL;
+----
+1	true	NULL
+3	true	NULL
+NULL	true	NULL
+
+# a non-NULL struct default whose fields are all NULL stays non-NULL in the rows where the input is not NULL
+query III
+SELECT r.a, r.s IS NULL, r.s.z FROM (
+	SELECT remap_struct(x, NULL::STRUCT(a INTEGER, s STRUCT(z INTEGER)), {a: 'a'}, {s: {z: NULL::INTEGER}}) AS r
+	FROM (VALUES ({a: 1}), (NULL), ({a: 3})) t(x)
+) ORDER BY ALL;
+----
+1	false	NULL
+3	false	NULL
+NULL	true	NULL
+
+# more than one vector, every third input row is NULL
+query IIIIII
+SELECT count(*), count(r), count(r.a), count(r.s), count(r.s.z), sum(r.a) FROM (
+	SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: NULL::STRUCT(z INT)}) AS r
+	FROM (SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE {a: i} END AS x FROM range(10000) t(i))
+);
+----
+10000	6666	6666	0	0	33326667
+
+# only the later vectors have NULL rows
+query IIIIII
+SELECT count(*), count(r), count(r.a), count(r.s), count(r.s.z), sum(r.a) FROM (
+	SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: NULL::STRUCT(z INT)}) AS r
+	FROM (SELECT CASE WHEN i >= 5000 AND i % 3 = 0 THEN NULL ELSE {a: i} END AS x FROM range(10000) t(i))
+);
+----
+10000	8333	8333	0	0	37492500
+
+# the same input with a non-NULL default whose field is NULL
+query IIIIII
+SELECT count(*), count(r), count(r.a), count(r.s), count(r.s.z), sum(r.a) FROM (
+	SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT)), {a: 'a'}, {s: {z: NULL::INT}}) AS r
+	FROM (SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE {a: i} END AS x FROM range(10000) t(i))
+);
+----
+10000	6666	6666	6666	0	33326667
+
+# a NULL struct default one level down, under a non-NULL struct default, is not affected by the NULL input row
+query I
+SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(p INT, t STRUCT(z INT))), {a: 'a'}, {s: {p: 5, t: NULL::STRUCT(z INT)}}) FROM (VALUES ({a: 1}), (NULL)) t(x);
+----
+{'a': 1, 's': {'p': 5, 't': NULL}}
+NULL
+
+# a NULL struct default for a field of a struct in a list whose input has NULL rows
+query I
+SELECT remap_struct(x, NULL::STRUCT(a INT, s STRUCT(z INT))[], {list: ('list', {a: 'a'})}, {list: {s: NULL::STRUCT(z INT)}}) FROM (VALUES ([{a: 1}, NULL]), (NULL), ([])) t(x);
+----
+[{'a': 1, 's': NULL}, NULL]
+NULL
+[]
+
+# a NULL struct default for a field of a struct that is a MAP value, with a NULL value and NULL rows
+query I
+SELECT remap_struct(x, NULL::MAP(INT, STRUCT(a INT, s STRUCT(z INT))), {key: 'key', value: ('value', {a: 'a'})}, {value: {s: NULL::STRUCT(z INT)}}) FROM (VALUES (MAP {1: {a: 1}, 2: NULL}), (NULL), (MAP {})) t(x);
+----
+{1={'a': 1, 's': NULL}, 2=NULL}
+NULL
+{}

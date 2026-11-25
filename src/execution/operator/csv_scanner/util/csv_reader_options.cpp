@@ -115,10 +115,6 @@ void CSVReaderOptions::SetCompression(const string &compression_p) {
 	this->compression = FileCompressionType(compression_p);
 }
 
-string CSVReaderOptions::GetEscape() const {
-	return std::string(1, this->dialect_options.state_machine_options.escape.GetValue());
-}
-
 void CSVReaderOptions::SetEscape(const string &input) {
 	auto escape_str = input;
 	if (escape_str.size() > 1) {
@@ -141,10 +137,6 @@ void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
 	dialect_options.skip_rows.Set(NumericCast<idx_t>(skip_rows));
 }
 
-string CSVReaderOptions::GetDelimiter() const {
-	return this->dialect_options.state_machine_options.delimiter.GetValue();
-}
-
 void CSVReaderOptions::SetDelimiter(const string &input) {
 	auto delim_str = StringUtil::Replace(input, "\\t", "\t");
 	if (delim_str.size() > 4) {
@@ -155,10 +147,6 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 		throw BinderException("CSV Reader function option delim and sep are aliases, only one can be supplied");
 	}
 	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
-}
-
-string CSVReaderOptions::GetQuote() const {
-	return std::string(1, this->dialect_options.state_machine_options.quote.GetValue());
 }
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
@@ -172,10 +160,6 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 	this->dialect_options.state_machine_options.quote.Set(quote_str[0]);
 }
 
-string CSVReaderOptions::GetComment() const {
-	return std::string(1, this->dialect_options.state_machine_options.comment.GetValue());
-}
-
 void CSVReaderOptions::SetComment(const string &comment_p) {
 	auto comment_str = comment_p;
 	if (comment_str.size() > 1) {
@@ -185,21 +169,6 @@ void CSVReaderOptions::SetComment(const string &comment_p) {
 		comment_str = string("\0", 1);
 	}
 	this->dialect_options.state_machine_options.comment.Set(comment_str[0]);
-}
-
-string CSVReaderOptions::GetNewline() const {
-	switch (dialect_options.state_machine_options.new_line.GetValue()) {
-	case NewLineIdentifier::CARRY_ON:
-		return "\\r\\n";
-	case NewLineIdentifier::SINGLE_R:
-		return "\\r";
-	case NewLineIdentifier::SINGLE_N:
-		return "\\n";
-	case NewLineIdentifier::NOT_SET:
-		return "";
-	default:
-		throw NotImplementedException("New line type not supported");
-	}
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
@@ -212,10 +181,6 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	} else {
 		throw InvalidInputException("This is not accepted as a newline: " + input);
 	}
-}
-
-bool CSVReaderOptions::GetRFC4180() const {
-	return this->dialect_options.state_machine_options.strict_mode.GetValue();
 }
 
 void CSVReaderOptions::SetRFC4180(bool input) {
@@ -552,15 +517,6 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	return error;
 }
 
-static Value StringVectorToValue(const vector<Identifier> &vec) {
-	vector<Value> content;
-	content.reserve(vec.size());
-	for (auto &item : vec) {
-		content.push_back(Value(item));
-	}
-	return Value::LIST(LogicalType::VARCHAR, std::move(content));
-}
-
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
@@ -590,6 +546,9 @@ bool StoreUserDefinedParameter(const Identifier &option) {
 	}
 	return true;
 }
+
+//! A buffer sized by a user maximum line size holds this many lines of that size
+static constexpr idx_t LINES_PER_BUFFER = 16;
 
 void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	if (rejects_table_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
@@ -624,16 +583,17 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			                      "must have always be set to value bigger than MAX_LINE_SIZE",
 			                      buffer_size_option.GetValue(), maximum_line_size.GetValue());
 		}
-	} else if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > max_line_size_default) {
-		// If the max line size is set by the user and bigger than we have by default, we make it part of our buffer
-		// size decision.
+	} else if (maximum_line_size.IsSetByUser()) {
+		// a buffer holds LINES_PER_BUFFER lines of a user maximum line size, but never shrinks below the default buffer
 		idx_t buffer_size;
-		if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(CSVBuffer::ROWS_PER_BUFFER,
-		                                                         maximum_line_size.GetValue(), buffer_size)) {
+		if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(LINES_PER_BUFFER, maximum_line_size.GetValue(),
+		                                                         buffer_size)) {
 			throw BinderException("MAX_LINE_SIZE option was set to %d, which is too large",
 			                      maximum_line_size.GetValue());
 		}
-		buffer_size_option.Set(buffer_size, false);
+		if (buffer_size > CSVBuffer::CSV_BUFFER_SIZE) {
+			buffer_size_option.Set(buffer_size, false);
+		}
 	}
 }
 
@@ -852,57 +812,6 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 	} else {
 		SetReadOption(context.GetContext(), key, val, name_list);
 	}
-}
-//! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
-void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) const {
-	auto &delimiter = dialect_options.state_machine_options.delimiter;
-	auto &quote = dialect_options.state_machine_options.quote;
-	auto &escape = dialect_options.state_machine_options.escape;
-	auto &comment = dialect_options.state_machine_options.comment;
-	auto &strict_mode = dialect_options.state_machine_options.strict_mode;
-	auto &header = dialect_options.header;
-	if (delimiter.IsSetByUser()) {
-		named_params["delim"] = Value(GetDelimiter());
-	}
-	if (dialect_options.state_machine_options.new_line.IsSetByUser()) {
-		named_params["new_line"] = Value(GetNewline());
-	}
-	if (quote.IsSetByUser()) {
-		named_params["quote"] = Value(GetQuote());
-	}
-	if (escape.IsSetByUser()) {
-		named_params["escape"] = Value(GetEscape());
-	}
-	if (comment.IsSetByUser()) {
-		named_params["comment"] = Value(GetComment());
-	}
-	if (header.IsSetByUser()) {
-		named_params["header"] = Value(GetHeader());
-	}
-	if (strict_mode.IsSetByUser()) {
-		named_params["strict_mode"] = Value(GetRFC4180());
-	}
-	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
-	if (dialect_options.skip_rows.IsSetByUser()) {
-		named_params["skip"] = Value::BIGINT(NumericCast<int64_t>(GetSkipRows()));
-	}
-	named_params["null_padding"] = Value::BOOLEAN(null_padding);
-	named_params["parallel"] = Value::BOOLEAN(parallel);
-	if (!dialect_options.date_format.at(LogicalType::DATE).GetValue().format_specifier.empty()) {
-		named_params["dateformat"] =
-		    Value(dialect_options.date_format.at(LogicalType::DATE).GetValue().format_specifier);
-	}
-	if (!dialect_options.date_format.at(LogicalType::TIMESTAMP).GetValue().format_specifier.empty()) {
-		named_params["timestampformat"] =
-		    Value(dialect_options.date_format.at(LogicalType::TIMESTAMP).GetValue().format_specifier);
-	}
-
-	named_params["normalize_names"] = Value::BOOLEAN(normalize_names);
-	if (!name_list.empty() && !named_params.count("columns") && !named_params.count("column_names") &&
-	    !named_params.count("names")) {
-		named_params["column_names"] = StringVectorToValue(name_list);
-	}
-	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);
 }
 
 } // namespace duckdb
