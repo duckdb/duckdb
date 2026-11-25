@@ -90,6 +90,52 @@ SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR'
 1	a"b
 2	p"q
 
+# an escape that does not work in a plain field stays data when a quote sends the field through unescaping
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a\b""c'), ('2,ab\c"'), ('3,"a\"b""c"'), ('4,a\""b')) t(line)) TO '{TEST_DIR}/rule_doubled_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach buffer_size 12 13 2000000
+
+foreach parallel true false
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled', new_line='\n', buffer_size={buffer_size}, parallel={parallel}) ORDER BY a;
+----
+1	a\b"c
+2	ab\c"
+3	a"b"c
+4	a\"b
+
+endloop
+
+endloop
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='doubled', unterminated_quote='null_at_line_end') WHERE a = 2;
+----
+2	ab\c"
+
+# where the escape works outside quotes it is consumed there
+foreach escape_mode anywhere quotes_only
+
+query IT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled_escape.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', embedded_quotes='doubled') WHERE a < 4 ORDER BY a;
+----
+1	ab"c
+2	abc"
+3	a"b"c
+
+endloop
+
+# without an escape character a NUL byte in a field with a doubled quote is data
+statement ok
+COPY (SELECT 'a' || chr(0) || 'b""c' AS line) TO '{TEST_DIR}/rule_doubled_nul.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT length(v), v = 'a' || chr(0) || 'b"c' FROM read_csv('{TEST_DIR}/rule_doubled_nul.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='', embedded_quotes='doubled');
+----
+5	true
+
 # a lone quote under doubled stays data, also when a line rule reads open quotes as NULL
 statement ok
 COPY (SELECT * FROM (VALUES ('1,ab"'), ('2,c')) t(line)) TO '{TEST_DIR}/rule_doubled_lone.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');

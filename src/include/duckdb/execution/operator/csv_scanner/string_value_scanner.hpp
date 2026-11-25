@@ -461,8 +461,8 @@ public:
 
 	bool FinishedIterator() const;
 
-	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote,
+	//! Creates a new string with all escaped values removed, an escape that does not work in the value stays data
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool escape_works,
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset

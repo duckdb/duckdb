@@ -678,8 +678,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
-				    !result.quoted && sm_opts.EscapeQuotesOnly(), sm_opts.DoubledQuotes(),
-				    result.parse_chunk.data[result.chunk_col_id]);
+				    sm_opts.EscapeWorksIn(result.quoted), !result.quoted && sm_opts.EscapeQuotesOnly(),
+				    sm_opts.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
 		}
@@ -1507,7 +1507,7 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote,
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool escape_works,
                                           bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector) {
 	idx_t start = 0;
 	if (escape_inert_at_field_start) {
@@ -1522,7 +1522,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	bool just_escaped = false;
 	for (idx_t cur_pos = start; cur_pos < end; cur_pos++) {
 		const char c = str_ptr[cur_pos];
-		if (c == escape && !just_escaped) {
+		if (escape_works && c == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (c == quote) {
 			if (doubled_quotes && !just_escaped && cur_pos + 1 < end && str_ptr[cur_pos + 1] == quote) {
@@ -1893,7 +1893,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 					} else {
 						value = RemoveEscape(
 						    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						    state_machine->dialect_options.state_machine_options.quote.GetValue(), false,
+						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						    state_machine->dialect_options.state_machine_options.EscapeWorksIn(result.quoted), false,
 						    result.state_machine.dialect_options.state_machine_options.DoubledQuotes(),
 						    result.parse_chunk.data[result.chunk_col_id]);
 					}
@@ -1935,6 +1936,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					} else {
 						value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
+						                     sm_options.EscapeWorksIn(result.quoted),
 						                     !result.quoted && sm_options.EscapeQuotesOnly(),
 						                     sm_options.DoubledQuotes(), result.parse_chunk.data[result.chunk_col_id]);
 					}

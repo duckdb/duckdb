@@ -50,6 +50,10 @@ struct CSVStateMachineOptions {
 	bool UnquotedEscapes() const {
 		return escape_mode.GetValue() != CSVEscapeMode::QUOTED;
 	}
+	//! Whether the escape works in a value, which in a plain field takes an escape that works outside quotes
+	bool EscapeWorksIn(const bool quoted) const {
+		return escape.GetValue() != '\0' && (quoted || UnquotedEscapes());
+	}
 	//! Whether the escape only escapes the quote and escape characters
 	bool EscapeQuotesOnly() const {
 		return escape_mode.GetValue() == CSVEscapeMode::QUOTES_ONLY;
