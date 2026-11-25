@@ -10,10 +10,11 @@ SELECT j FROM (SELECT '{}'::JSON AS j) ORDER BY j COLLATE nocase;
 ----
 COLLATE can only be applied to varchar columns
 
+# under prepared-statement verification the column number is a parameter, so the key binds as a COLLATE expression
 statement error
 SELECT '{}'::JSON AS j ORDER BY 1 COLLATE nocase;
 ----
-COLLATE can only be applied to varchar columns
+<REGEX>:Binder Error: (COLLATE can only be applied to varchar columns|collations are only supported for type varchar).*
 
 # the matching COLLATE expression form already errors this way
 statement error
