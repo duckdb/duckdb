@@ -279,6 +279,14 @@ extension duckdb_decimal {
 fileprivate extension Decimal {
   
   var hugeMantissa: UIntHuge {
+#if !canImport(Darwin)
+    // swift-foundation keeps the storage of Decimal internal: read the digits of the significand instead
+    var mantissa = UIntHuge(0)
+    for digit in significand.description.utf8 where digit >= 0x30 && digit <= 0x39 {
+      mantissa = mantissa * 10 + UIntHuge(digit - 0x30)
+    }
+    return mantissa
+#else
     let components = [
       _mantissa.0, _mantissa.1, _mantissa.2, _mantissa.3,
       _mantissa.4, _mantissa.5, _mantissa.6, _mantissa.7
@@ -288,6 +296,7 @@ fileprivate extension Decimal {
       mantissa += UIntHuge(components[i]) << (i * 16)
     }
     return mantissa
+#endif
   }
 }
 

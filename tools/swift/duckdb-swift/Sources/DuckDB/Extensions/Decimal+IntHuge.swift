@@ -27,6 +27,12 @@ import Foundation
 public extension Decimal {
   
   init(_ source: IntHuge) {
+#if !canImport(Darwin)
+    // swift-foundation keeps the storage of Decimal internal: go through the public arithmetic, which is exact here
+    // because every intermediate value fits the 128-bit mantissa
+    let magnitude = Decimal(source.magnitude)
+    self = source.signum() < 0 ? -magnitude : magnitude
+#else
     let magnitude =  source.magnitude
     let mantissa: (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
     let significantBitCount = magnitude.bitWidth - magnitude.leadingZeroBitCount
@@ -47,9 +53,15 @@ public extension Decimal {
       _reserved: 0,
       _mantissa: mantissa
     )
+#endif
   }
   
   init(_ source: UIntHuge) {
+#if !canImport(Darwin)
+    let twoToThe64th = Decimal(UInt64.max) + 1
+    self = Decimal(UInt64(truncatingIfNeeded: source >> 64)) * twoToThe64th
+      + Decimal(UInt64(truncatingIfNeeded: source))
+#else
     let mantissa: (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
     let significantBitCount = source.bitWidth - source.leadingZeroBitCount
     let length = (significantBitCount + (UInt16.bitWidth - 1)) / UInt16.bitWidth
@@ -69,5 +81,6 @@ public extension Decimal {
       _reserved: 0,
       _mantissa: mantissa
     )
+#endif
   }
 }
