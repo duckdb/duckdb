@@ -220,7 +220,6 @@ public:
 	idx_t GetIndexOid() const {
 		return index_oid;
 	}
-	//! Whether the index is being built: commits write to its deltas and readers skip it
 	bool IsBuilding() const {
 		return building;
 	}
@@ -265,7 +264,7 @@ private:
 	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
 	ConstraintCheckMode check_mode;
 	IndexDeltas deltas;
-	//! See IsBuilding()
+	//! Whether the index is being built: commits write to its deltas and readers skip it
 	atomic<bool> building;
 	//! The transaction building the index (0 if not built in place)
 	const transaction_t build_transaction;
