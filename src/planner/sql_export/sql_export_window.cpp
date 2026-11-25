@@ -202,11 +202,16 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		window->PartitionsMutable().push_back(std::move(children[ordinal++]));
 	}
 	// RANGE offsets and GROUPS frames are defined in terms of the ORDER BY
-	const bool frame_needs_order =
+	bool needs_order =
 	    IsOrderDependentBoundary(expression.WindowStart()) || IsOrderDependentBoundary(expression.WindowEnd());
+	// Some functions read the ORDER BY values, unless they have an argument ordering of their own
+	auto &window_function = expression.WindowFunction();
+	if (window_function && window_function->GetDefinition()->RequiresOrdering() && expression.ArgOrders().empty()) {
+		needs_order = true;
+	}
 	for (auto &order : expression.OrderBy()) {
 		auto &child = children[ordinal++];
-		if (!frame_needs_order && SQLExportHelpers::IsConstantOrderKey(*order.expression, *child)) {
+		if (!needs_order && SQLExportHelpers::IsConstantOrderKey(*order.expression, *child)) {
 			continue;
 		}
 		window->OrderByMutable().emplace_back(

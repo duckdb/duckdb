@@ -10,6 +10,14 @@ SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY 1) FROM range(3) AS r(c0) ORDER B
 1
 2
 
+# the same holds for a constant ordering without a partitioning
+query I
+SELECT fill(c0) OVER (ORDER BY 1) FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
 query I
 SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY c0) FROM range(3) AS r(c0) ORDER BY ALL;
 ----
@@ -27,7 +35,7 @@ SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY c0 + 1) FROM range(3) AS r(c0) OR
 statement ok
 CREATE TABLE fills AS FROM (VALUES (0, 0, 7), (0, 1, NULL), (0, 2, 7), (1, 0, 10), (1, 1, NULL), (1, 2, 30), (2, 0, NULL)) t(g, k, v);
 
-# all rows of a partition are peers: the missing value of partition 0 lies between two equal values
+# all rows of a partition are peers, so the missing value of partition 0 lies between two equal values
 query III
 SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY 1) FROM fills WHERE g <> 1 ORDER BY ALL;
 ----

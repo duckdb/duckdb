@@ -46,11 +46,14 @@ The binding flags are used by the binder to check whether the function can suppo
 | `can_order_by` | `true` | Does the function support using `ORDER BY` with its arguments? |
 | `can_exclude` | `false` | Does the function support frame exclusion? |
 | `can_ignore_nulls` | `true` | Can the function optionally `IGNORE` or `RESPECT NULLS`? |
+| `requires_ordering` | `false` | Does the function read the `ORDER BY` values, so that a redundant key must be kept? |
 
 Most of the builtin functions use the default values of the flags.
-Two notable exceptions are:
+Notable exceptions are:
 
 * `can_ignore_nulls` is not supported by `FILL` (interpolating `NULL`s is what it does);
+* `requires_ordering` is set by `FILL`, which interpolates along the `ORDER BY` values
+  (the optimizer and the SQL exporter then keep an `ORDER BY` key that is constant within the partition);
 * `can_order_by` is not supported by `DENSE_RANK`.
 
 ### Binding Function

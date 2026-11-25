@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/apply_functional_dependencies.hpp"
 
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -140,8 +141,9 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	if (range_offset(wexpr.WindowStart()) || range_offset(wexpr.WindowEnd())) {
 		return;
 	}
-	//	FILL interpolates along the ORDER BY value, so it needs the key as well - unless it brings its own ordering.
-	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_FILL && wexpr.ArgOrders().empty()) {
+	//	Some functions read the ORDER BY values, unless they have an argument ordering of their own.
+	auto &window_function = wexpr.WindowFunction();
+	if (window_function && window_function->GetDefinition()->RequiresOrdering() && wexpr.ArgOrders().empty()) {
 		return;
 	}
 	if (!partition_bys.empty() && order_bys.size() == 1) {
