@@ -128,6 +128,8 @@ public:
 	DUCKDB_API ParquetArrayIterator GetArrayChildren() const;
 
 private:
+	friend struct VariantNodeStorageAccess;
+
 	//! The storage-level type of the value
 	VariantLogicalType GetVariantType() const;
 

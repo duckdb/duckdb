@@ -11,7 +11,7 @@ void EmitSelectedNode(const VariantNode &node, VariantBuilder &builder) {
 	if (!node.IsNull() && !node.IsMissing()) {
 		const auto type = node.GetTypeId();
 		if (type != LogicalTypeId::STRUCT && type != LogicalTypeId::LIST) {
-			builder.EmitPrimitiveNode(node, type);
+			builder.EmitPrimitiveNode(node);
 			return;
 		}
 	}

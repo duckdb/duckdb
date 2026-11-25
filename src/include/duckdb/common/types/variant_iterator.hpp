@@ -135,6 +135,7 @@ private:
 
 class VariantArrayIterator;
 class VariantObjectIterator;
+struct VariantNodeStorageAccess;
 
 //! A lightweight cursor pointing at a single logical VARIANT value.
 class VariantNode {
@@ -170,7 +171,7 @@ public:
 	//! payload follows the (width, scale) prefix, so T must match the physical type implied by the width.
 	template <class T>
 	T GetData() const {
-		if (GetTypeId() == LogicalTypeId::DECIMAL) {
+		if (GetVariantType() == VariantLogicalType::DECIMAL) {
 			return Load<T>(GetDecimal().value_ptr);
 		}
 		return Load<T>(GetDataPointer());
@@ -233,6 +234,7 @@ private:
 	friend class VariantIterator;
 	friend class VariantArrayIterator;
 	friend class VariantObjectIterator;
+	friend struct VariantNodeStorageAccess;
 };
 
 //! Lazily iterates the element values of an ARRAY VariantNode. Random-access: no child cursor is

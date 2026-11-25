@@ -126,6 +126,8 @@ public:
 	Vector &keys;
 };
 
+//! The type tag of a value in the encoded VARIANT layout. Storage-level only: code that does not read or write the
+//! encoded bytes should use LogicalType / LogicalTypeId (see VariantNode::GetType)
 enum class VariantLogicalType : uint8_t {
 	VARIANT_NULL = 0,
 	BOOL_TRUE = 1,
