@@ -107,7 +107,7 @@ TEST_CASE("read_blob leaves last_modified NULL when the file system has no modif
 	handle.reset();
 	auto fs = make_uniq<NoModificationTimeFileSystem>(directory);
 	auto &no_time_fs = *fs;
-	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(fs));
+	VirtualFileSystem::Get(*con.context).RegisterSubSystem(std::move(fs));
 
 	for (auto prefix : {NoModificationTimeFileSystem::REMOTE_PREFIX, NoModificationTimeFileSystem::LOCAL_PREFIX}) {
 		string file = string(prefix) + "a.txt";
