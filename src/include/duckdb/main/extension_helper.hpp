@@ -108,6 +108,19 @@ struct ExtensionInstallOptions {
 	string extension_directory;
 };
 
+//! An installed extension that needs a download to be updated, prepared by PrepareExtensionUpdates
+struct PendingExtensionUpdate {
+	//! Index of the entry in the results that this update fills in
+	idx_t result_index;
+	string extension_name;
+	//! The repository the extension is updated from
+	ExtensionRepository repository;
+	//! Whether the repository is the one the extension was installed from, so its ETag can be reused
+	bool use_etags;
+	//! The extension directory the extension is installed in
+	string extension_directory;
+};
+
 struct InstalledExtensionDirectory {
 	string path;
 	//! The user-provided repository of a per-repository folder, empty for the flat folder
@@ -156,6 +169,15 @@ public:
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	//! Update a specific extension
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
+	//! Check all installed extensions: extensions that cannot be updated get a result, the others a pending update
+	static void PrepareExtensionUpdates(ClientContext &context, vector<ExtensionUpdateResult> &results,
+	                                    vector<PendingExtensionUpdate> &pending);
+	//! Check a specific extension, as PrepareExtensionUpdates does; throws when it is not installed
+	static void PrepareExtensionUpdate(ClientContext &context, const string &extension_name,
+	                                   vector<ExtensionUpdateResult> &results, vector<PendingExtensionUpdate> &pending);
+	//! Download and install a pending update, filling in its result; failures are reported as UPDATE_FAILED
+	static void ExecuteExtensionUpdate(ClientContext &context, const PendingExtensionUpdate &pending,
+	                                   ExtensionUpdateResult &result);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
