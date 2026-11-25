@@ -808,9 +808,8 @@ protected:
 	//! Early stop evaluation
 	idx_t partition_start = DConstants::INVALID_INDEX;
 	idx_t partition_end = DConstants::INVALID_INDEX;
-	DataChunk short_input;
-	DataChunk limit_input;
-	DataChunk limit_output;
+	DataChunk overlap_input;
+	SelectionVector overlap_sel;
 };
 
 idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
@@ -991,7 +990,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 	}
 	output_chunk.Initialize(gsource.client, output_types);
 	if (gsink.op.partition_limit.IsValid()) {
-		limit_output.Initialize(gsource.client, output_types);
+		overlap_sel.Initialize();
 	}
 	auto &shared = gsink.shared;
 	shared.PrepareCollection(coll_exec, coll_chunk);
@@ -1198,13 +1197,18 @@ void WindowLocalSourceState::CoEvaluate(ExecutionContext &context, DataChunk &re
 		auto limit_end = MinValue(partition_start + k, partition_end);
 
 		//	Lazy initialisation
-		if (!short_input.ColumnCount() && input_chunk.ColumnCount()) {
-			limit_input.Initialize(gsource.client, input_chunk.GetTypes());
-			short_input.Initialize(gsource.client, limit_input.GetTypes());
+		if (!overlap_input.ColumnCount() && input_chunk.ColumnCount()) {
+			overlap_input.Initialize(gsource.client, input_chunk.GetTypes());
 		}
 
 		//	Accumulate all the sub-partitions that intersect the chunk
-		short_input.Reset();
+		//	Profiling shows that a single call to Evaluate with gaps is preferable
+		//	to repeated small ranges. This should be revisited when the strategies
+		//	can implement the compaction during Sink and after we start allowing
+		//	compatible function evaluation, some of which may be expensive.
+		idx_t overlap_count = 0;
+		idx_t span_begin = DConstants::INVALID_INDEX;
+		idx_t span_end = 0;
 		for (idx_t input_start = input_base; input_start < input_end; input_start = limit_end) {
 			//	Scan forward until we have a limited partition that overlaps
 			while (limit_end <= input_start) {
@@ -1230,24 +1234,25 @@ void WindowLocalSourceState::CoEvaluate(ExecutionContext &context, DataChunk &re
 				return;
 			}
 
-			if (overlap_end <= overlap_begin) {
-				continue;
+			//	Accumulate the overlap in an SV
+			span_begin = MinValue(span_begin, overlap_begin);
+			span_end = overlap_end;
+			for (auto i = overlap_begin; i < overlap_end; ++i) {
+				overlap_sel.set_index(overlap_count++, i - span_begin);
 			}
-
-			limit_input.Slice(input_chunk, overlap_begin, overlap_end);
-			limit_output.Reset();
-			Evaluate(context, input_base + overlap_begin, limit_input, limit_output, interrupt);
-
-			short_input.Append(limit_input);
-			output_chunk.Append(limit_output);
 		}
 
 		//	If we didn't find anything, move to the next chunk
-		if (!short_input.size()) {
+		if (!overlap_count) {
 			continue;
 		}
 
-		BuildResult(context, short_input, output_chunk, result);
+		overlap_input.Slice(input_chunk, span_begin, span_end);
+		Evaluate(context, input_base + span_begin, overlap_input, output_chunk, interrupt);
+		BuildResult(context, overlap_input, output_chunk, result);
+		if (overlap_count != span_end - span_begin) {
+			result.Slice(overlap_sel, overlap_count);
+		}
 
 		// Move to the next chunk
 		++task->begin_idx;
