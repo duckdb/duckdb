@@ -342,6 +342,77 @@ static bool BuildIsIndependent(const LogicalOperator &op, const column_binding_s
 	return true;
 }
 
+static void PushDownMarkJoins(unique_ptr<LogicalOperator> &op) {
+	for (auto &child : op->children) {
+		PushDownMarkJoins(child);
+	}
+	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return;
+	}
+	auto &mark = op->Cast<LogicalComparisonJoin>();
+	if (mark.join_type != JoinType::MARK || !mark.duplicate_eliminated_columns.empty() || mark.HasProjectionMap() ||
+	    mark.filter_pushdown || HasVolatileExpressionsIgnoringError(mark)) {
+		return;
+	}
+	unordered_set<TableIndex> probe_tables;
+	for (auto &condition : mark.conditions) {
+		// Moving below an INNER join can evaluate the probe on rows that the join would discard.
+		if (!condition.IsComparison() || condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow() ||
+		    !CanDiscardMarkers(condition.GetLHS(), {}) || !CanDiscardMarkers(condition.GetRHS(), {})) {
+			return;
+		}
+		LogicalJoin::GetExpressionBindings(condition.GetLHS(), probe_tables);
+	}
+	if (probe_tables.empty()) {
+		return;
+	}
+	const auto probe_bindings = mark.children[0]->GetColumnBindings();
+	if (!BuildIsIndependent(*mark.children[1], column_binding_set_t(probe_bindings.begin(), probe_bindings.end()))) {
+		return;
+	}
+	auto target = &mark.children[0];
+	while (true) {
+		auto &input = **target;
+		if (input.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = input.Cast<LogicalComparisonJoin>();
+			if (join.join_type != JoinType::INNER || join.HasProjectionMap() || join.filter_pushdown) {
+				break;
+			}
+		} else if (input.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			break;
+		}
+		unordered_set<TableIndex> left_tables, right_tables;
+		LogicalJoin::GetTableReferences(*input.children[0], left_tables);
+		LogicalJoin::GetTableReferences(*input.children[1], right_tables);
+		auto side = JoinSide::GetJoinSide(probe_tables, left_tables, right_tables);
+		if (side != JoinSide::LEFT && side != JoinSide::RIGHT) {
+			break;
+		}
+		target = &input.children[side == JoinSide::LEFT ? 0 : 1];
+	}
+	if (target == &mark.children[0]) {
+		return;
+	}
+	const auto old_bindings = mark.GetColumnBindings();
+	// MARK(A JOIN B, keys from B) becomes A JOIN MARK(B), with the same marker and build input.
+	auto input = std::move(mark.children[0]);
+	mark.children[0] = std::move(*target);
+	mark.has_estimated_cardinality = false;
+	*target = std::move(op);
+	op = std::move(input);
+
+	const auto new_bindings = op->GetColumnBindings();
+	if (old_bindings != new_bindings) {
+		// Keep positional consumers intact when the marker moved into the left input.
+		vector<ProjectionIndex> projection_map;
+		for (idx_t i = 0; i < old_bindings.size(); i++) {
+			projection_map.emplace_back(i);
+		}
+		LogicalOperatorVisitor::RemapProjectionMap(projection_map, old_bindings, new_bindings);
+		op = LogicalJoin::PromoteJoinSide(std::move(op), std::move(projection_map));
+	}
+}
+
 static bool SameMarkJoinKeys(const LogicalComparisonJoin &join, const LogicalComparisonJoin &other) {
 	if (join.conditions.empty() || join.conditions.size() != other.conditions.size()) {
 		return false;
@@ -462,6 +533,8 @@ void MarkJoinSimplifier::Optimize(unique_ptr<LogicalOperator> &plan) {
 	BindingReplacementGraph replacements;
 	vector<reference<LogicalOperator>> ancestors;
 	Rewrite(plan, nullability, replacements, ancestors);
+	// First simplify filtering MARKs; relocating them can hide the filter/chain patterns above.
+	PushDownMarkJoins(plan);
 }
 
 } // namespace duckdb
