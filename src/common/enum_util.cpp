@@ -104,6 +104,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/topn_heap.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -3933,6 +3934,7 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PIVOT), "LOGICAL_PIVOT" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_DATABASE), "LOGICAL_COPY_DATABASE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SECURE_VIEW), "LOGICAL_SECURE_VIEW" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TOP_KEY_FILTER), "LOGICAL_TOP_KEY_FILTER" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_GET), "LOGICAL_GET" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CHUNK_GET), "LOGICAL_CHUNK_GET" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_GET), "LOGICAL_DELIM_GET" },
@@ -3991,12 +3993,12 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
-	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 67, "LogicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 68, "LogicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
-	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 67, "LogicalOperatorType", value));
+	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 68, "LogicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalPlanVerificationIssueCodeValues() {
@@ -4796,19 +4798,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::WINDOW_FUSION), "WINDOW_FUSION" },
 		{ static_cast<uint32_t>(OptimizerType::SET_OPERATION_AGGREGATE), "SET_OPERATION_AGGREGATE" },
 		{ static_cast<uint32_t>(OptimizerType::JOIN_TO_SEMI_JOIN), "JOIN_TO_SEMI_JOIN" },
-		{ static_cast<uint32_t>(OptimizerType::MARK_JOIN_SIMPLIFIER), "MARK_JOIN_SIMPLIFIER" }
+		{ static_cast<uint32_t>(OptimizerType::MARK_JOIN_SIMPLIFIER), "MARK_JOIN_SIMPLIFIER" },
+		{ static_cast<uint32_t>(OptimizerType::GROUP_BY_TOP_KEY), "GROUP_BY_TOP_KEY" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 59, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 60, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 59, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 60, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -5145,6 +5148,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::PARTITIONED_AGGREGATE), "PARTITIONED_AGGREGATE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::LIMITED_DISTINCT), "LIMITED_DISTINCT" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::FILTER), "FILTER" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::TOP_KEY_FILTER), "TOP_KEY_FILTER" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::PROJECTION), "PROJECTION" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::COPY_TO_FILE), "COPY_TO_FILE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_COPY_TO_FILE), "BATCH_COPY_TO_FILE" },
@@ -5226,12 +5230,12 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 89, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 90, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 89, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 90, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTableScanExecutionStrategyValues() {
@@ -7345,6 +7349,42 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
 	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 5, "TimestampCastResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTopNBoundaryRowOrderValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TopNBoundaryRowOrder::ANY), "ANY" },
+		{ static_cast<uint32_t>(TopNBoundaryRowOrder::INPUT_ORDER), "INPUT_ORDER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryRowOrder>(TopNBoundaryRowOrder value) {
+	return StringUtil::EnumToString(GetTopNBoundaryRowOrderValues(), 2, "TopNBoundaryRowOrder", static_cast<uint32_t>(value));
+}
+
+template<>
+TopNBoundaryRowOrder EnumUtil::FromString<TopNBoundaryRowOrder>(const char *value) {
+	return static_cast<TopNBoundaryRowOrder>(StringUtil::StringToEnum(GetTopNBoundaryRowOrderValues(), 2, "TopNBoundaryRowOrder", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTopNBoundaryTiesValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TopNBoundaryTies::EXCLUDE), "EXCLUDE" },
+		{ static_cast<uint32_t>(TopNBoundaryTies::INCLUDE), "INCLUDE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryTies>(TopNBoundaryTies value) {
+	return StringUtil::EnumToString(GetTopNBoundaryTiesValues(), 2, "TopNBoundaryTies", static_cast<uint32_t>(value));
+}
+
+template<>
+TopNBoundaryTies EnumUtil::FromString<TopNBoundaryTies>(const char *value) {
+	return static_cast<TopNBoundaryTies>(StringUtil::StringToEnum(GetTopNBoundaryTiesValues(), 2, "TopNBoundaryTies", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {

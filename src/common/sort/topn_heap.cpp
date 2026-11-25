@@ -1,7 +1,145 @@
 #include "duckdb/common/sorting/topn_heap.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// TopNBoundarySelector
+//===--------------------------------------------------------------------===//
+TopNBoundarySelector::TopNBoundarySelector(ClientContext &context, Allocator &allocator,
+                                           const vector<BoundOrderByNode> &orders_p,
+                                           const vector<unique_ptr<Expression>> &not_distinct_from_p)
+    : orders(orders_p), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE),
+      new_remaining_sel(STANDARD_VECTOR_SIZE) {
+	D_ASSERT(not_distinct_from_p.size() == orders.size());
+	vector<LogicalType> key_types;
+	for (auto &order : orders) {
+		key_types.push_back(order.expression->GetReturnType());
+		not_distinct_from.push_back(
+		    make_uniq<ExpressionExecutor>(context, *not_distinct_from_p[not_distinct_from.size()]));
+		modifiers.emplace_back(order.type, order.null_order);
+	}
+	compare_chunk.Initialize(allocator, key_types);
+	boundary_values.Initialize(allocator, key_types);
+	auto boundary_compare_types = key_types;
+	boundary_compare_types.insert(boundary_compare_types.end(), key_types.begin(), key_types.end());
+	boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
+}
+
+void TopNBoundarySelector::Decode(const string &sort_key, DataChunk &target) const {
+	target.Reset();
+	CreateSortKeyHelpers::DecodeSortKey(string_t(sort_key), target, 0, modifiers);
+	for (auto &col : target.data) {
+		col.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+}
+
+bool TopNBoundarySelector::Refresh(TopNBoundaryValue &global_boundary) {
+	// An older local boundary remains valid if refreshing it would block.
+	const auto boundary_updated = global_boundary.TryGetBoundaryValue(boundary_val);
+	if (boundary_val.empty()) {
+		// no boundary value (yet)
+		return false;
+	}
+	if (boundary_updated) {
+		// new boundary value - decode
+		Decode(boundary_val, boundary_values);
+	}
+	return true;
+}
+
+//! Selects the rows whose left value sorts strictly before the right value in the given order
+static idx_t SelectBefore(const BoundOrderByNode &order, Vector &left, Vector &right, SelectionVector &sel, idx_t count,
+                          SelectionVector &true_sel, SelectionVector &false_sel) {
+	if (order.null_order == OrderByNullType::NULLS_LAST) {
+		if (order.type == OrderType::ASCENDING) {
+			return VectorOperations::DistinctLessThan(left, right, &sel, count, &true_sel, &false_sel);
+		}
+		return VectorOperations::DistinctGreaterThanNullsFirst(left, right, &sel, count, &true_sel, &false_sel);
+	}
+	D_ASSERT(order.null_order == OrderByNullType::NULLS_FIRST);
+	if (order.type == OrderType::ASCENDING) {
+		return VectorOperations::DistinctLessThanNullsFirst(left, right, &sel, count, &true_sel, &false_sel);
+	}
+	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, &true_sel, &false_sel);
+}
+
+idx_t TopNBoundarySelector::Select(DataChunk &keys, DataChunk &bound, optional_ptr<const SelectionVector> sel,
+                                   idx_t count, TopNBoundaryTies ties, TopNBoundaryRowOrder row_order,
+                                   SelectionVector &result) {
+	const auto key_count = orders.size();
+	const auto row_count = keys.size();
+	bound.SetChildCardinality(row_count);
+	for (idx_t i = 0; i < key_count; i++) {
+		boundary_compare_chunk.data[i].Reference(keys.data[i]);
+		boundary_compare_chunk.data[key_count + i].Reference(bound.data[i]);
+	}
+	boundary_compare_chunk.CheckCardinality(row_count);
+
+	idx_t final_count = 0;
+	// the number of runs of rows that were appended to the result: each run is in the order of the input
+	idx_t appended_runs = 0;
+	SelectionVector remaining_sel(nullptr);
+	if (sel) {
+		remaining_sel.Initialize(*sel);
+	}
+	idx_t remaining_count = count;
+	for (idx_t i = 0; i < key_count && remaining_count > 0; i++) {
+		auto &order = orders[i];
+		if (remaining_sel.data()) {
+			compare_chunk.data[i].Slice(keys.data[i], remaining_sel, remaining_count);
+		} else {
+			compare_chunk.data[i].Reference(keys.data[i]);
+		}
+		const auto is_last = i + 1 == key_count;
+		if (is_last && ties == TopNBoundaryTies::INCLUDE) {
+			// before or equal to the boundary: the rows that the boundary does not sort before
+			const auto after_count = SelectBefore(order, bound.data[i], compare_chunk.data[i], remaining_sel,
+			                                      remaining_count, false_sel, true_sel);
+			const auto pass_count = remaining_count - after_count;
+			if (pass_count > 0) {
+				memcpy(result.data() + final_count, true_sel.data(), pass_count * sizeof(sel_t));
+				final_count += pass_count;
+				appended_runs++;
+			}
+			break;
+		}
+		const auto true_count = SelectBefore(order, compare_chunk.data[i], bound.data[i], remaining_sel,
+		                                     remaining_count, true_sel, false_sel);
+		if (true_count > 0) {
+			memcpy(result.data() + final_count, true_sel.data(), true_count * sizeof(sel_t));
+			final_count += true_count;
+			appended_runs++;
+		}
+		const auto false_count = remaining_count - true_count;
+		if (is_last || false_count == 0) {
+			break;
+		}
+		// the rows that are equal to the boundary on this key continue with the next key
+		remaining_count = not_distinct_from[i]->SelectExpression(boundary_compare_chunk, &new_remaining_sel, nullptr,
+		                                                         &false_sel, false_count);
+		remaining_sel.Initialize(new_remaining_sel);
+	}
+	if (row_order == TopNBoundaryRowOrder::INPUT_ORDER && appended_runs > 1) {
+		// the rows were selected key by key: restore the order of the input
+		if (!selected_rows) {
+			selected_rows = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
+		}
+		memset(selected_rows.get(), 0, row_count * sizeof(bool));
+		for (idx_t i = 0; i < final_count; i++) {
+			selected_rows[result.get_index(i)] = true;
+		}
+		idx_t result_idx = 0;
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			result.set_index(result_idx, row_idx);
+			result_idx += selected_rows[row_idx];
+		}
+		D_ASSERT(result_idx == final_count);
+	}
+	return final_count;
+}
 
 //===--------------------------------------------------------------------===//
 // TopOneFunc
@@ -154,16 +292,13 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), arena_allocator(allocator),
       heap(arena_allocator), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset),
       heap_size(limit + offset), executor(context), sort_key_heap(allocator), matching_sel(STANDARD_VECTOR_SIZE),
-      final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE),
-      new_remaining_sel(STANDARD_VECTOR_SIZE) {
+      final_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
 		auto &expr = order.expression;
 		sort_types.push_back(expr->GetReturnType());
 		executor.AddExpression(*expr);
-		not_distinct_from.push_back(
-		    make_uniq<ExpressionExecutor>(executor.GetContext(), *not_distinct_from_p[not_distinct_from.size()]));
 		modifiers.emplace_back(order.type, order.null_order);
 	}
 	vector<LogicalType> sort_keys_type {LogicalType::BLOB};
@@ -178,11 +313,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	} else {
 		//	Set up heap-only data structures
 		heap.reserve(InitialHeapAllocSize());
-		compare_chunk.Initialize(allocator, sort_types);
-		boundary_values.Initialize(allocator, sort_types);
-		auto boundary_compare_types = sort_types;
-		boundary_compare_types.insert(boundary_compare_types.end(), sort_types.begin(), sort_types.end());
-		boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
+		boundary_selector = make_uniq<TopNBoundarySelector>(context, allocator, orders, not_distinct_from_p);
 	}
 }
 
@@ -304,77 +435,17 @@ void TopNHeap::AddLargeHeap(DataChunk &input, const Vector &sort_keys_vec) {
 }
 
 bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &global_boundary) {
-	// An older local boundary remains valid if refreshing it would block.
-	const auto boundary_updated = global_boundary.TryGetBoundaryValue(boundary_val);
-	if (boundary_val.empty()) {
+	D_ASSERT(boundary_selector);
+	if (!boundary_selector->Refresh(global_boundary)) {
 		// no boundary value (yet) - don't do anything
 		return true;
 	}
-	if (boundary_updated) {
-		// new boundary value - decode
-		boundary_values.Reset();
-		CreateSortKeyHelpers::DecodeSortKey(string_t(boundary_val), boundary_values, 0, modifiers);
-		for (auto &col : boundary_values.data) {
-			col.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-	}
-	boundary_values.SetChildCardinality(sort_chunk.size());
-	for (idx_t i = 0; i < orders.size(); i++) {
-		boundary_compare_chunk.data[i].Reference(sort_chunk.data[i]);
-		boundary_compare_chunk.data[orders.size() + i].Reference(boundary_values.data[i]);
-	}
-	boundary_compare_chunk.CheckCardinality(sort_chunk.size());
-
 	// we have boundary values
-	// from these boundary values, determine which values we should insert (if any)
-	idx_t final_count = 0;
-
-	SelectionVector remaining_sel(nullptr);
-	idx_t remaining_count = sort_chunk.size();
-	for (idx_t i = 0; i < orders.size() && remaining_count > 0; i++) {
-		if (remaining_sel.data()) {
-			compare_chunk.data[i].Slice(sort_chunk.data[i], remaining_sel, remaining_count);
-		} else {
-			compare_chunk.data[i].Reference(sort_chunk.data[i]);
-		}
-		bool is_last = i + 1 == orders.size();
-		idx_t true_count;
-		if (orders[i].null_order == OrderByNullType::NULLS_LAST) {
-			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThan(compare_chunk.data[i], boundary_values.data[i],
-				                                                &remaining_sel, remaining_count, &true_sel, &false_sel);
-			} else {
-				true_count = VectorOperations::DistinctGreaterThanNullsFirst(compare_chunk.data[i],
-				                                                             boundary_values.data[i], &remaining_sel,
-				                                                             remaining_count, &true_sel, &false_sel);
-			}
-		} else {
-			D_ASSERT(orders[i].null_order == OrderByNullType::NULLS_FIRST);
-			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThanNullsFirst(compare_chunk.data[i],
-				                                                          boundary_values.data[i], &remaining_sel,
-				                                                          remaining_count, &true_sel, &false_sel);
-			} else {
-				true_count =
-				    VectorOperations::DistinctGreaterThan(compare_chunk.data[i], boundary_values.data[i],
-				                                          &remaining_sel, remaining_count, &true_sel, &false_sel);
-			}
-		}
-
-		if (true_count > 0) {
-			memcpy(final_sel.data() + final_count, true_sel.data(), true_count * sizeof(sel_t));
-			final_count += true_count;
-		}
-		idx_t false_count = remaining_count - true_count;
-		if (!is_last && false_count > 0) {
-			// check what we should continue to check
-			remaining_count = not_distinct_from[i]->SelectExpression(boundary_compare_chunk, &new_remaining_sel,
-			                                                         nullptr, &false_sel, false_count);
-			remaining_sel.Initialize(new_remaining_sel);
-		} else {
-			break;
-		}
-	}
+	// from these boundary values, determine which values we should insert (if any): the rows strictly before the
+	// boundary (the heap holds the boundary row itself), in any order
+	const auto final_count =
+	    boundary_selector->Select(sort_chunk, boundary_selector->BoundaryValues(), nullptr, sort_chunk.size(),
+	                              TopNBoundaryTies::EXCLUDE, TopNBoundaryRowOrder::ANY, final_sel);
 	if (final_count == 0) {
 		return false;
 	}
