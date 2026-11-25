@@ -259,7 +259,7 @@ private:
 	atomic<IndexBindState> bind_state;
 	//! The OID of this index (set when a build finishes)
 	atomic<idx_t> index_oid;
-	//! The last commit before the index was added to the index list (0 if before any commit)
+	//! The last commit before the index was added to the index list (0 if loaded or created with the table)
 	const transaction_t last_commit;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;

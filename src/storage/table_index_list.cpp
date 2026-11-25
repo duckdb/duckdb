@@ -233,8 +233,7 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		if (!entry->AddedBefore(bound)) {
-			// commits and reverts hold the commit lock, so only a cleanup can meet an index added after its commit
-			D_ASSERT(removal_type == IndexRemovalType::DELETED_ROWS_IN_USE);
+			// the index was added after this delete committed, so its build never inserted the deleted rows
 			continue;
 		}
 		entry->RemoveFromIndex(chunk, row_ids, removal_type, active_checkpoint);
