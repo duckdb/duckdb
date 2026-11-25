@@ -1049,3 +1049,44 @@ TEST_CASE("Preparing an extracted dynamic PIVOT in the C API", "[capi][expanding
 	REQUIRE(statement_type == DUCKDB_STATEMENT_TYPE_MULTI);
 	RequirePivotRows(*result);
 }
+
+static duckdb::unique_ptr<CAPIResult> RunStatement(CAPITester &tester, const string &sql, bool via_prepare) {
+	if (!via_prepare) {
+		return tester.Query(sql);
+	}
+	CAPIPrepared prepared;
+	REQUIRE(prepared.Prepare(tester, sql));
+	return tester.QueryPrepared(prepared.prepared);
+}
+
+TEST_CASE("A SQL PREPARE issued through duckdb_prepare is rebound after the data changes", "[capi]") {
+	// issue #28776: duckdb_prepare wraps every statement in another PREPARE, which used to keep the
+	// statistics-folded plan of the nested prepared statement alive across data changes
+	for (bool prepare_via_capi : {false, true}) {
+		for (bool execute_via_capi : {false, true}) {
+			CAPITester tester;
+			REQUIRE(tester.OpenDatabase(nullptr));
+			REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t AS SELECT * FROM range(100) r(i)"));
+
+			REQUIRE_NO_FAIL(RunStatement(tester, "PREPARE p AS SELECT count(*) FROM t", prepare_via_capi));
+			REQUIRE_NO_FAIL(
+			    RunStatement(tester, "PREPARE q AS SELECT count(*) FROM t WHERE i = 200", prepare_via_capi));
+
+			auto result = RunStatement(tester, "EXECUTE p", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 100);
+			result = RunStatement(tester, "EXECUTE q", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+
+			REQUIRE_NO_FAIL(tester.Query("INSERT INTO t VALUES (200)"));
+
+			result = RunStatement(tester, "EXECUTE p", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 101);
+			result = RunStatement(tester, "EXECUTE q", execute_via_capi);
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->Fetch<int64_t>(0, 0) == 1);
+		}
+	}
+}

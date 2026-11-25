@@ -142,6 +142,22 @@ static bool ContainsDataSource(const LogicalOperator &op) {
 	return false;
 }
 
+// Prepared statements may be nested (the C API wraps every statement in a PREPARE), so mark every
+// LogicalPrepare in the chain, not only the root
+static void MarkDataDependentPrepares(LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_PREPARE) {
+		return;
+	}
+	auto &prepared = op.Cast<LogicalPrepare>().prepared;
+	// Optimizers can embed the current database state in the executable plan.
+	if (!prepared->properties.read_databases.empty() && ContainsDataSource(op)) {
+		prepared->properties.always_require_rebind = true;
+	}
+	for (auto &child : op.children) {
+		MarkDataDependentPrepares(*child);
+	}
+}
+
 void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
 	if (!Settings::Get<EnableOptimizerSetting>(context)) {
 		return;
@@ -619,13 +635,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
-	if (plan->type == LogicalOperatorType::LOGICAL_PREPARE) {
-		auto &prepared = plan->Cast<LogicalPrepare>().prepared;
-		// Optimizers can embed the current database state in the executable plan.
-		if (!prepared->properties.read_databases.empty() && ContainsDataSource(*plan)) {
-			prepared->properties.always_require_rebind = true;
-		}
-	}
+	MarkDataDependentPrepares(*plan);
 
 	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
