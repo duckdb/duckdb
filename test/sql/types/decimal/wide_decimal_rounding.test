@@ -61,6 +61,38 @@ FROM (SELECT v::DECIMAL(38,0) AS x FROM (VALUES (repeat('9', 38)), ('-' || repea
 99999999999999999999999999999999999999	100000000000000000000000000000000000000	100000000000000000000000000000000000000
 NULL	NULL	NULL
 
+# every width follows the same rule, also where the digit of the carry needs the next physical type
+query IIII
+SELECT x, round(x, -1), typeof(round(x, -1)), typeof(round_even(x, -2))
+FROM (SELECT v::DECIMAL(4,0) AS x FROM (VALUES ('9999'), ('-9999'), ('125')) t(v)) ORDER BY x
+----
+-9999	-10000	DECIMAL(5,0)	DECIMAL(5,0)
+125	130	DECIMAL(5,0)	DECIMAL(5,0)
+9999	10000	DECIMAL(5,0)	DECIMAL(5,0)
+
+query IIII
+SELECT x, round(x, -1), typeof(round(x, -1)), typeof(round_even(x, -2))
+FROM (SELECT v::DECIMAL(9,0) AS x FROM (VALUES ('999999999'), ('-999999999'), ('125')) t(v)) ORDER BY x
+----
+-999999999	-1000000000	DECIMAL(10,0)	DECIMAL(10,0)
+125	130	DECIMAL(10,0)	DECIMAL(10,0)
+999999999	1000000000	DECIMAL(10,0)	DECIMAL(10,0)
+
+query IIII
+SELECT x, round(x, -1), typeof(round(x, -1)), typeof(round_even(x, -2))
+FROM (SELECT v::DECIMAL(18,0) AS x FROM (VALUES ('999999999999999999'), ('-999999999999999999'), ('125')) t(v)) ORDER BY x
+----
+-999999999999999999	-1000000000000000000	DECIMAL(19,0)	DECIMAL(19,0)
+125	130	DECIMAL(19,0)	DECIMAL(19,0)
+999999999999999999	1000000000000000000	DECIMAL(19,0)	DECIMAL(19,0)
+
+# a width inside a physical type
+query III
+SELECT round(x, -1), typeof(round(x, -1)), typeof(round(x, -40))
+FROM (SELECT v::DECIMAL(37,0) AS x FROM (VALUES (repeat('9', 37))) t(v))
+----
+10000000000000000000000000000000000000	DECIMAL(38,0)	DECIMAL(37,0)
+
 statement ok
 RESET debug_verify_serializer;
 
