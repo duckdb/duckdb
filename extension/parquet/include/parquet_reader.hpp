@@ -386,9 +386,8 @@ public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER = UINT64_C(9223372036854775820);
 
 public:
-	//! With [read_whole_small_file], a small file off local disk that the external file cache does not serve is read
-	//! whole by the footer's request, and the handle then serves the scans from it (see
-	//! CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE). Off for a reader that only needs the footer.
+	//! With [read_whole_small_file], the footer's request reads a small file whole if its handle keeps the file for the
+	//! scans (CachingFileHandle::RequestWholeFileRead). Off for a reader that only needs the footer.
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
 	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {},

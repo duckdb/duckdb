@@ -755,20 +755,57 @@ bool CachingFileHandle::IsCacheReuseProhibited() {
 	return validation_info.IsCacheReuseProhibited();
 }
 
-bool CachingFileHandle::HoldsWholeFile() {
+idx_t CachingFileHandle::RequestWholeFileRead() {
+	// keeping the file saves requests only for a file whose reads cost a round trip and that the cache does not serve;
+	// a file whose responses prohibit reuse is not kept (checked again for the response of the read itself)
+	if (ReadsAreCached() || OnDiskFile() || !CanSeek() || IsCacheReuseProhibited()) {
+		return 0;
+	}
 	const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
-	return whole_file.IsValid();
+	whole_file_requested = true;
+	return WHOLE_FILE_READ_MAXIMUM_SIZE;
+}
+
+//! Whether [block] still holds its data: a buffer that is destroyed upon eviction cannot be loaded again
+static bool IsLoadedBlock(BlockHandle &block) {
+	auto &memory = block.GetMemory();
+	auto lock = memory.GetLock();
+	return memory.GetState() == BlockState::BLOCK_LOADED;
+}
+
+bool CachingFileHandle::HoldsWholeFile() {
+	shared_ptr<BlockHandle> block;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
+		block = whole_file;
+	}
+	return block && IsLoadedBlock(*block);
 }
 
 FileBufferHandleGroup CachingFileHandle::ReadFromWholeFile(idx_t nr_bytes, idx_t location) {
-	BufferHandle pin;
+	shared_ptr<BlockHandle> block;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
-		if (!whole_file.IsValid() || location > whole_file_size || nr_bytes > whole_file_size - location) {
+		if (!whole_file || location > whole_file_size || nr_bytes > whole_file_size - location) {
 			return FileBufferHandleGroup();
 		}
-		auto block = whole_file.GetBlockHandle();
-		pin = external_file_cache.GetBufferManager().Pin(block);
+		block = whole_file;
+	}
+	BufferHandle pin;
+	if (IsLoadedBlock(*block)) {
+		try {
+			pin = external_file_cache.GetBufferManager().Pin(context, block);
+		} catch (const OutOfMemoryException &) {
+			// evicted after the check: pinning it again would need memory that is not there, read from the file instead
+		}
+	}
+	if (!pin.IsValid()) {
+		// the buffer manager evicted the file: read from the file again
+		const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
+		if (whole_file == block) {
+			whole_file.reset();
+		}
+		return FileBufferHandleGroup();
 	}
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 	mem_handles.push_back({std::move(pin), location, nr_bytes});
@@ -776,19 +813,26 @@ FileBufferHandleGroup CachingFileHandle::ReadFromWholeFile(idx_t nr_bytes, idx_t
 }
 
 void CachingFileHandle::KeepWholeFileRead(const BufferHandle &buffer, idx_t nr_bytes) {
-	// the reader asked for all of a small file that the cache does not serve: its later reads come from these bytes, as
-	// they would from the cache, instead of a request each. They stay with this handle, so no other open sees them.
-	if (nr_bytes > WHOLE_FILE_READ_MAXIMUM_SIZE || nr_bytes != GetFileSize() || !CanSeek() || OnDiskFile() ||
-	    IsCacheReuseProhibited()) {
+	// a reader asked for the whole of a small file that the cache does not serve: its later reads come from these
+	// bytes, as they would from the cache, instead of a request each. A reuse prohibition that came with this response
+	// is in the validation info by now (ReadAndRecord).
+	if (nr_bytes > WHOLE_FILE_READ_MAXIMUM_SIZE || nr_bytes != GetFileSize() || IsCacheReuseProhibited()) {
 		return;
 	}
-	auto block = buffer.GetBlockHandle();
-	auto pin = external_file_cache.GetBufferManager().Pin(block);
 	const annotated_lock_guard<annotated_mutex> guard(whole_file_lock);
-	if (!whole_file.IsValid()) {
-		whole_file = std::move(pin);
-		whole_file_size = nr_bytes;
+	if (!whole_file_requested || whole_file) {
+		return;
 	}
+	// destroy the buffer upon eviction rather than upon unpin: it stays in memory once the read is done, until the
+	// buffer manager needs the memory
+	auto &block = buffer.GetBlockHandle();
+	{
+		auto &memory = block->GetMemory();
+		auto block_lock = memory.GetLock();
+		memory.SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
+	}
+	whole_file = block;
+	whole_file_size = nr_bytes;
 }
 
 void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {

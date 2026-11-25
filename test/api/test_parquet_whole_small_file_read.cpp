@@ -175,6 +175,8 @@ map<string, vector<pair<idx_t, idx_t>>> RunCheck(Connection &con, OffDiskFileSys
 TEST_CASE("A small file off disk that the cache does not serve is read in one request", "[parquet]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	// several threads scan the row groups of a file, all through the one handle that holds it
+	REQUIRE_NO_FAIL(con.Query("SET threads = 4"));
 	auto off_disk_fs = make_uniq<OffDiskFileSystem>();
 	auto &fs = *off_disk_fs;
 	vector<string> files;
@@ -188,6 +190,10 @@ TEST_CASE("A small file off disk that the cache does not serve is read in one re
 		REQUIRE(size > 16384);
 		REQUIRE(size <= CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE);
 	}
+	// a file the footer prefetch reads whole already
+	const auto tiny_file = OffDiskFileSystem::Prefix() + "tiny.parquet";
+	WriteFile(con, fs.MapPath(tiny_file), 0, 100, 6);
+	REQUIRE(LocalFileSize(fs.MapPath(tiny_file)) <= 16384);
 	const auto &file = files[0];
 	auto metadata = con.Query(StringUtil::Format(
 	    "SELECT count(DISTINCT row_group_id), bool_or(path_in_schema = 'i' AND column_index_offset IS NOT NULL), "
@@ -231,6 +237,14 @@ TEST_CASE("A small file off disk that the cache does not serve is read in one re
 	SECTION("the page index function") {
 		check.query = "SELECT count(*), sum(num_rows), sum(compressed_page_size) FROM parquet_page_index(%s)%s";
 		check.options = "";
+	}
+	SECTION("the bloom filter probe function") {
+		check.query = "SELECT count(*), sum(bloom_filter_excludes::INTEGER) FROM parquet_bloom_probe(%s, 'd', 5)%s";
+		check.options = "";
+	}
+	SECTION("a file of at most 16 KiB") {
+		check.source = "'" + tiny_file + "'";
+		read_files = {tiny_file};
 	}
 
 	auto reads = RunCheck(con, fs, check);
@@ -291,12 +305,6 @@ TEST_CASE("A small file is read in ranges when it is not read whole with its foo
 	SECTION("the external file cache serves the file") {
 		REQUIRE_NO_FAIL(con.Query("SET cache_local_files = true"));
 	}
-	SECTION("more than half of the memory limit is in use") {
-		REQUIRE_NO_FAIL(con.Query("SET memory_limit = '64MB'"));
-		// without a temporary directory, the table stays in memory
-		REQUIRE_NO_FAIL(con.Query("SET temp_directory = ''"));
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE held AS SELECT hash(range) AS v FROM range(5000000)"));
-	}
 	SECTION("the bind opens the file for the schema") {
 		check.options = "";
 	}
@@ -324,4 +332,25 @@ TEST_CASE("A small file is read in ranges when it is not read whole with its foo
 		// that the cache splits into blocks would not
 		REQUIRE(BytesCovered(file_reads) < size);
 	}
+}
+
+TEST_CASE("Small files read whole under a small memory limit give the same answers", "[parquet]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto off_disk_fs = make_uniq<OffDiskFileSystem>();
+	auto &fs = *off_disk_fs;
+	vector<string> files;
+	for (idx_t f = 0; f < 200; f++) {
+		files.push_back(StringUtil::Format("%smany%llu.parquet", OffDiskFileSystem::Prefix(), f));
+		WriteFile(con, fs.MapPath(files.back()), f * 600, 600, 6);
+	}
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(off_disk_fs));
+	// the files opened ahead of the scan would hold more than the limit if they could not be evicted: those the
+	// buffer manager evicts are read in ranges instead
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit = '16MB'"));
+	REQUIRE_NO_FAIL(con.Query("SET threads = 8"));
+	ScanCheck check {"SELECT count(*), sum(c0), sum(c3), sum(c5) FROM read_parquet(%s%s)",
+	                 "['" + StringUtil::Join(files, "', '") + "']", ", " + PinnedSchema(6)};
+	auto reads = RunCheck(con, fs, check);
+	REQUIRE(reads.size() == files.size());
 }

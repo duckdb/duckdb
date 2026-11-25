@@ -1570,14 +1570,10 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	}
 
-	// a small file off local disk that the external file cache does not serve is read whole by the footer's request,
-	// and its handle keeps it for the scans. Not when the reader needs only the footer, nor while more than half of the
-	// memory limit is in use, since the handle holds the file until the reader is done with it
-	idx_t whole_file_max = 0;
-	if (read_whole_small_file && !file_handle->OnDiskFile() && !file_handle->ReadsAreCached() &&
-	    buffer_manager.GetUsedMemory() <= buffer_manager.GetMaxMemory() / 2) {
-		whole_file_max = CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE;
-	}
+	// the footer's request reads a small file whole when its handle keeps the file for the scans, which it does only
+	// for a file off local disk that the external file cache does not serve; not for a reader that needs only the
+	// footer
+	const idx_t whole_file_max = read_whole_small_file ? file_handle->RequestWholeFileRead() : 0;
 	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
