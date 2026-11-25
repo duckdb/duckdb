@@ -359,6 +359,23 @@ EXPLAIN SELECT k1, string_agg(k2) FROM t GROUP BY k1 ORDER BY k1 LIMIT 3
 ----
 logical_opt	<!REGEX>:.*Top Key Filter.*
 
+# the binned histograms of a type with an "other values" bucket (finalize throws when a bin is its key), with and
+# without an aggregate ORDER BY. A BOOLEAN bin type has no such bucket and keeps the filter
+query II
+EXPLAIN SELECT k, histogram_exact(v, [1]) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k, histogram(v, [1] ORDER BY other_key) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<!REGEX>:.*Top Key Filter.*
+
+query II
+EXPLAIN SELECT k, histogram(v = 1, [true]) FROM cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+logical_opt	<REGEX>:.*Top Key Filter.*
+
 # the statistics prove the sum of a DECIMAL(38,0) column safe, so it keeps the filter
 query II
 EXPLAIN SELECT k, sum(v) FROM small_decimal GROUP BY k ORDER BY k LIMIT 1
