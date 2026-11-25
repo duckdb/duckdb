@@ -201,6 +201,7 @@ static string ArrowSchemaFormat(Connection &con, const LogicalType &type) {
 }
 
 TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
+	// values of 10^38 and above exceed the 38 digits a HUGEINT declares: only exported with lossless conversion
 	const string hugeint_query =
 	    "SELECT v::HUGEINT AS v FROM (VALUES ('170141183460469231731687303715884105727'), "
 	    "('-170141183460469231731687303715884105728'), ('100000000000000000000000000000000000000'), "
@@ -216,19 +217,22 @@ TEST_CASE("Test Arrow HUGEINT and UHUGEINT export", "[arrow]") {
 	const string small_uhugeint_query =
 	    "SELECT v::UHUGEINT AS v FROM (VALUES ('99999999999999999999999999999999999999'), ('0'), ('42'), (NULL)) t(v)";
 
-	SECTION("Default: decimal256 with 39 digits holds the full range") {
+	SECTION("Default: HUGEINT stays a decimal128, UHUGEINT is a decimal256 with 39 digits") {
 		DuckDB db;
 		Connection con(db);
-		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "d:39,0,256");
+		// HUGEINT (e.g. the result of a sum over integers) keeps the type every decimal128 consumer reads
+		REQUIRE(ArrowSchemaFormat(con, LogicalType::HUGEINT) == "d:38,0");
+		// a decimal128 cannot hold a UHUGEINT of 2^127 or more: the full range needs a decimal256
 		REQUIRE(ArrowSchemaFormat(con, LogicalType::UHUGEINT) == "d:39,0,256");
-		// the column is read back as an exact DECIMAL(39,0)
+		// which is read back as an exact DECIMAL(39,0)
 		string format = "d:39,0,256";
 		REQUIRE(ArrowType::GetTypeFromFormat(format)->GetDuckType() == LogicalType::DECIMAL(39, 0));
-		REQUIRE(ArrowTestHelper::RunArrowComparison(con, hugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, small_hugeint_query));
 		REQUIRE(ArrowTestHelper::RunArrowComparison(con, uhugeint_query));
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT sum(i) AS s FROM range(-10, 5) tbl(i)"));
 		// nested, and more than one vector
 		REQUIRE(ArrowTestHelper::RunArrowComparison(
-		    con, "SELECT [i::HUGEINT - 5000, NULL, -170141183460469231731687303715884105728] AS l, "
+		    con, "SELECT [i::HUGEINT - 5000, NULL, -99999999999999999999999999999999999999] AS l, "
 		         "{'u': 340282366920938463463374607431768211455 - i::UHUGEINT} AS s FROM range(10000) tbl(i)"));
 	}
 

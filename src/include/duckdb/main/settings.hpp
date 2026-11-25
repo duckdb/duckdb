@@ -506,8 +506,8 @@ struct ArrowOutputVersionSetting {
 	static constexpr const char *Name = "arrow_output_version";
 	static constexpr const char *Description =
 	    "The Arrow format version (1.0 to 1.5) that the export to the Arrow format targets. It determines which Arrow "
-	    "types can be produced: 1.1 adds decimal256 (DECIMAL wider than 38 digits, HUGEINT and UHUGEINT), 1.4 adds the "
-	    "view types (BLOB as BinaryView, and Utf8View / ListView when enabled), 1.5 adds 32-bit and 64-bit decimals.";
+	    "types can be produced: 1.1 adds decimal256 (DECIMAL wider than 38 digits and UHUGEINT), 1.4 adds the view "
+	    "types (BLOB as BinaryView, and Utf8View / ListView when enabled), 1.5 adds 32-bit and 64-bit decimals.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

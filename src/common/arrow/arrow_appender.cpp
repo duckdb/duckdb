@@ -38,19 +38,15 @@ struct ArrowWideDecimalConverter {
 	}
 };
 
-//! Sign-extends a HUGEINT / zero-extends a UHUGEINT into an Arrow decimal256
-struct ArrowHugeintDecimal256Converter {
+//! Zero-extends a UHUGEINT into an Arrow decimal256
+struct ArrowUhugeintDecimal256Converter {
 	template <class TGT, class SRC>
 	static TGT Operation(SRC input) {
-		auto upper = static_cast<uint64_t>(input.upper);
-		// only a (signed) HUGEINT can be negative: a UHUGEINT is extended with zeros
-		const bool negative = std::is_signed<decltype(input.upper)>::value && (upper >> 63) != 0;
-		const uint64_t extension = negative ? ~uint64_t(0) : 0;
 		TGT result;
 		result.words[0] = input.lower;
-		result.words[1] = upper;
-		result.words[2] = extension;
-		result.words[3] = extension;
+		result.words[1] = input.upper;
+		result.words[2] = 0;
+		result.words[3] = 0;
 		return result;
 	}
 
@@ -275,20 +271,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::HUGEINT:
-		if (!append_data.options.arrow_lossless_conversion &&
-		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_1) {
-			// exported as decimal256 with precision 39, see ArrowConverter
-			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, hugeint_t, ArrowHugeintDecimal256Converter>>(
-			    append_data);
-		} else {
-			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
-		}
+		InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
 		break;
 	case LogicalTypeId::UHUGEINT:
 		if (append_data.options.arrow_lossless_conversion) {
 			InitializeAppenderForType<ArrowScalarData<uhugeint_t>>(append_data);
 		} else if (append_data.options.arrow_output_version >= ArrowFormatVersion::V1_1) {
-			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, uhugeint_t, ArrowHugeintDecimal256Converter>>(
+			// exported as decimal256 with precision 39, see ArrowConverter
+			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, uhugeint_t, ArrowUhugeintDecimal256Converter>>(
 			    append_data);
 		} else {
 			// decimal128 (format version 1.0): values of 2^127 and above would be read as negative
