@@ -40,6 +40,7 @@ public:
 	~TableIndexList();
 
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
+	//! Skips the entries of indexes that are being built.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode,
@@ -186,6 +187,10 @@ private:
 		TableIndexIterator &operator++();
 		bool operator!=(const TableIndexIterator &other) const;
 		T operator*() const;
+
+	private:
+		void Advance();
+		void SkipBuilding();
 	};
 
 public:

@@ -1418,7 +1418,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	}
 
 	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
-	// dependency yet, but it has already registered its index with the storage.
+	// dependency yet, but once its build finished it has registered its index with the storage.
 	idx_t constraint_index_count = 0;
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {

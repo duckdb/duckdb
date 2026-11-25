@@ -37,7 +37,7 @@ using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, 
 using IndexRemapApply = std::function<void(DataChunk &chunk, Vector &old_row_ids, Vector &new_row_ids)>;
 using IndexRemapScan = std::function<void(const IndexRemapApply &apply)>;
 
-//! Owns the optional indexes used to represent transaction and checkpoint deltas for an IndexEntry.
+//! Owns the optional indexes used to represent transaction, checkpoint and build deltas for an IndexEntry.
 class IndexDeltas {
 public:
 	optional_ptr<const BoundIndex> Find(IndexDeltaType type) const;
@@ -129,10 +129,10 @@ public:
 	IndexEntry(const BoundIndex &index_template, transaction_t build_commit, transaction_t build_transaction);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
-	//! Appends a chunk using delete and checkpoint indexes where required.
+	//! Appends a chunk using delete indexes and deltas where required.
 	ErrorData Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
 	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
-	//! Reverts an append to the physical index or its checkpoint delta.
+	//! Reverts an append to the physical index or its delta.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Appends deleted rows to the bound physical index if it enforces uniqueness.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);

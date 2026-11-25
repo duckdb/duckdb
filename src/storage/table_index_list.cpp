@@ -43,11 +43,11 @@ TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
 			index = 0;
 		}
 	}
+	SkipBuilding();
 }
 
 template <class T>
-typename TableIndexIterationHelper<T>::TableIndexIterator &
-TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+void TableIndexIterationHelper<T>::TableIndexIterator::Advance() {
 	if (index_entries) {
 		auto next_index = index.GetIndex() + 1;
 		if (next_index >= index_entries->size()) {
@@ -59,6 +59,20 @@ TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
 			index = next_index;
 		}
 	}
+}
+
+template <class T>
+void TableIndexIterationHelper<T>::TableIndexIterator::SkipBuilding() {
+	while (index_entries && index_entries->at(index.GetIndex())->IsBuilding()) {
+		Advance();
+	}
+}
+
+template <class T>
+typename TableIndexIterationHelper<T>::TableIndexIterator &
+TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+	Advance();
+	SkipBuilding();
 	return *this;
 }
 
@@ -133,12 +147,10 @@ void TableIndexList::RemoveBuildingIndex(const IndexEntry &entry) {
 }
 
 idx_t TableIndexList::CountBuiltIndexes() const {
-	annotated_lock_guard lock(index_entries_lock);
 	idx_t count = 0;
-	for (auto &entry : index_entries) {
-		if (!entry->IsBuilding()) {
-			count++;
-		}
+	for (auto entry : IndexEntries()) {
+		(void)entry;
+		count++;
 	}
 	return count;
 }
@@ -307,11 +319,7 @@ void TableIndexList::Vacuum() {
 }
 
 void TableIndexList::Rebuild(const IndexRebuildScan &scan) {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->IsBuilding()) {
-			continue;
-		}
+	for (auto entry : IndexEntries()) {
 		entry->Rebuild(scan);
 	}
 }
@@ -570,16 +578,8 @@ private:
 } // namespace
 
 vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
-
 	vector<shared_ptr<const IndexStorageInfo>> infos;
-	infos.reserve(index_entries.size());
-
-	for (const auto &entry : index_entries) {
-		if (entry->IsBuilding()) {
-			// not committed yet
-			continue;
-		}
+	for (auto entry : IndexEntries()) {
 		auto checkpoint = entry->Checkpoint(writer);
 		if (checkpoint.shadow_index) {
 			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
@@ -629,12 +629,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->IsBuilding()) {
-			// the build merges its own deltas
-			continue;
-		}
+	for (auto entry : IndexEntries()) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }

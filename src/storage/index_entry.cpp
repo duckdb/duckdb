@@ -435,8 +435,8 @@ void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, Da
 	bound_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
 	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 		// if we have added any rows during checkpoint - check in that index as well
-		IndexAppendInfo added_during_checkpoint_info;
-		delta->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
+		IndexAppendInfo added_data_info;
+		delta->VerifyConstraint(chunk, added_data_info, conflict_manager);
 	}
 }
 

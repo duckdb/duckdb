@@ -305,7 +305,7 @@ public:
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! AddIndex moves an index to this table's index list, between commits
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
-	//! Merges the commits made during the build into the index, then publishes it
+	//! Merges the commits made during an online build into the index, then publishes it between commits
 	shared_ptr<IndexEntry> AddIndex(ClientContext &context, DuckTransaction &transaction, unique_ptr<BoundIndex> index,
 	                                idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Adds a building entry for the index, whose deltas receive later commits
