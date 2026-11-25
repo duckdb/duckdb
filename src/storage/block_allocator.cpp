@@ -1288,28 +1288,26 @@ idx_t BlockAllocator::FlushAllocationCache(idx_t byte_limit, ReclaimMode mode) c
 	return freed;
 }
 
-idx_t BlockAllocator::TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit) const noexcept {
+void BlockAllocator::TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit) const noexcept {
 	const auto cached = allocation_cache->GetCachedMemory();
 	// Avoid reading the fixed pool's per-thread counters when even its capacity fits.
 	if (cached <= memory_headroom && (GetUsableBlockCount() * block_size <= memory_headroom - cached ||
 	                                  GetCachedPoolMemory() <= memory_headroom - cached)) {
-		return 0;
+		return;
 	}
-	idx_t freed = 0;
 	idx_t pool_headroom;
 	{
 		annotated_lock_guard<annotated_mutex> guard(flush_lock);
 		const auto total = GetCachedMemory();
 		if (total <= memory_headroom) {
-			return 0;
+			return;
 		}
-		freed = allocation_cache->Flush(total - memory_headroom);
+		const auto freed = allocation_cache->Flush(total - memory_headroom);
 		estimated_unflushed_memory.fetch_add(freed, std::memory_order_relaxed);
 		const auto remaining = allocation_cache->GetCachedMemory();
 		pool_headroom = memory_headroom - MinValue(memory_headroom, remaining);
 	}
 	FlushPool(pool_block_limit, optional_idx(), ReclaimMode::FORCE, DivBlockSize(pool_headroom));
-	return freed;
 }
 
 void BlockAllocator::FlushAll() const noexcept {
@@ -1329,10 +1327,8 @@ void BlockAllocator::FlushForAllocation(const idx_t extra_memory, const idx_t me
 }
 
 bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_headroom) const noexcept {
-	if (TrimCachedMemory(memory_headroom) > 0) {
-		FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-		return true;
-	}
+	// Trimmed allocations join the other fallback frees, and are purged with them.
+	TrimCachedMemory(memory_headroom);
 	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
 	if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
 		return false;
