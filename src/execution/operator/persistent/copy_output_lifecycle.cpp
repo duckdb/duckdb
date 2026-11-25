@@ -5,6 +5,7 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include <algorithm>
@@ -109,7 +110,8 @@ unique_ptr<FileHandle> CopyOutputLifecycle::OpenDirectory(const string &director
 	auto &client_fs = FileSystem::GetFileSystem(context).Cast<OpenerFileSystem>();
 	// the client file system checks an opened path as a file, so check the directory as one before opening it
 	client_fs.VerifyCanAccessDirectory(directory);
-	return client_fs.GetFileSystem().OpenFile(directory, FileFlags::FILE_FLAGS_READ, client_fs.GetOpener());
+	auto opener = context.GetContext().TryGetFileOpener();
+	return VirtualFileSystem::Get(context).OpenFile(directory, FileFlags::FILE_FLAGS_READ, opener);
 }
 
 bool CopyOutputLifecycle::IsSynced(const string &path) {
