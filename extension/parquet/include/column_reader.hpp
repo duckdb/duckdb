@@ -432,6 +432,8 @@ private:
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
+	//! Physical page ordinal within the column chunk, including its dictionary page.
+	uint16_t page_ordinal = 0;
 
 	//! The OffsetIndex of the column chunk and the rows of the row group that may match the filters (both owned by
 	//! the scan state), set only when the page index can be used to skip pages of this column chunk
