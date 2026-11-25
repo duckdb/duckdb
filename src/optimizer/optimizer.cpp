@@ -330,10 +330,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// Pull up projection from joins
-	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*this, plan);
-		projection_pullup.Optimize(plan);
-	});
+	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() { ProjectionPullup::Optimize(*this, plan); });
 
 	// Push down joins against windows
 	RunOptimizer(OptimizerType::WINDOW_JOIN_PUSHDOWN, [&]() {
