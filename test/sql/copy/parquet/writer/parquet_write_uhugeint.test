@@ -38,11 +38,12 @@ SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
 DECIMAL(39,0)
 
-# 39 digits hold the full UHUGEINT range, in a 17-byte big-endian two's complement value
+# 39 digits hold the full UHUGEINT range. The big-endian two's complement value needs 17 bytes, but is extended to 24:
+# DuckDB 1.x reads such a column as a DOUBLE, and only decodes lengths that are a multiple of 8 bytes correctly
 query IIIIII
 SELECT name, type, type_length, converted_type, precision, scale FROM parquet_schema('{TEST_DIR}/hugeints.parquet') WHERE name = 'h'
 ----
-h	FIXED_LEN_BYTE_ARRAY	17	DECIMAL	39	0
+h	FIXED_LEN_BYTE_ARRAY	24	DECIMAL	39	0
 
 # min/max statistics are written: values of 2^127 and above stay positive
 query III
@@ -95,6 +96,12 @@ query I
 SELECT DISTINCT encodings FROM parquet_metadata('{TEST_DIR}/uhugeints_dictionary.parquet')
 ----
 PLAIN_DICTIONARY
+
+# no bloom filter is written: a reader that sees the column as a DOUBLE would probe it with the hash of a DOUBLE
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/uhugeints_dictionary.parquet')
+----
+0
 
 query II
 SELECT h, count(*) FROM '{TEST_DIR}/uhugeints_dictionary.parquet' GROUP BY h ORDER BY h

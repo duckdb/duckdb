@@ -356,8 +356,14 @@ public:
 struct ParquetHugeintDecimalTargetType {
 	//! The decimal width that holds every HUGEINT and UHUGEINT value
 	static constexpr const uint32_t DECIMAL_WIDTH = 39;
-	//! A sign extension byte followed by the 16 bytes of the integer
-	static constexpr const idx_t PARQUET_SIZE = 17;
+	//! The number of sign extension bytes in front of the 16 bytes of the integer
+	static constexpr const idx_t SIGN_EXTENSION_SIZE = 8;
+	//! The length of the FIXED_LEN_BYTE_ARRAY. 39 digits need 17 bytes, but the length is deliberately not minimal:
+	//! DuckDB 1.x reads a decimal of more than 38 digits as a DOUBLE with a decoder that is only correct when the
+	//! length is a multiple of 8 bytes (it misreads the trailing partial chunk, without an error). The Parquet
+	//! format only requires the length to be large enough for the precision, so the values are sign-extended to 24
+	//! bytes, which those versions read as the (rounded) DOUBLE they got when these types were written as DOUBLE
+	static constexpr const idx_t PARQUET_SIZE = SIGN_EXTENSION_SIZE + 16;
 	data_t bytes[PARQUET_SIZE];
 
 	//! Numeric comparison: the bytes order like the values once the sign bit is flipped
