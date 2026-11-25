@@ -1,6 +1,8 @@
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
@@ -21,17 +23,26 @@ public:
 			return RunGuarded([&]() { task->Cancel(); }, "Unknown exception while cancelling a task");
 		}
 		TaskExecutionResult result;
+		// A failed task-start notification must retire work before the guard publishes completion.
+		bool task_body_started = false;
 		try {
 			TaskNotifier task_notifier {executor.context};
+			task_body_started = true;
 			// PROCESS_ALL must run to completion, so loop the steps; PROCESS_PARTIAL does one and yields
 			do {
 				result = task->ExecuteTaskStep();
 			} while (result == TaskExecutionResult::TASK_NOT_FINISHED && mode == TaskExecutionMode::PROCESS_ALL);
 		} catch (std::exception &ex) {
 			executor.PushTaskError(ex);
+			if (!task_body_started) {
+				Retire();
+			}
 			return TaskExecutionResult::TASK_ERROR;
 		} catch (...) { // LCOV_EXCL_START
 			executor.PushTaskError("Unknown exception during task execution");
+			if (!task_body_started) {
+				Retire();
+			}
 			return TaskExecutionResult::TASK_ERROR;
 		} // LCOV_EXCL_STOP
 		if (result == TaskExecutionResult::TASK_NOT_FINISHED) {
@@ -55,12 +66,12 @@ public:
 		return task->TaskType();
 	}
 
-	//! Retire a task that never made it into the queue, without touching the executor's accounting
+	//! Retire outstanding work without touching the executor's accounting
 	void Retire() noexcept {
 		try {
 			RunGuarded([&]() { task->Cancel(); }, "Unknown exception while cancelling a task");
 		} catch (...) {
-			// Preserve the submission exception if reporting a cancellation error fails.
+			// Preserve the original exception if reporting a cancellation error fails.
 		}
 	}
 
@@ -108,9 +119,13 @@ TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
     : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
 }
 
-TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
-    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p) {
-	context = context_p;
+TaskExecutor::TaskExecutor(ClientContext &context, TaskSchedulerType type_p)
+    : TaskExecutor(context.GetContext(), type_p) {
+}
+
+TaskExecutor::TaskExecutor(Context &context_p, TaskSchedulerType type_p)
+    : TaskExecutor(context_p.GetTaskScheduler(), type_p) {
+	context = &context_p;
 }
 
 TaskExecutor::~TaskExecutor() {

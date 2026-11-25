@@ -104,15 +104,16 @@ static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 				ret.like_string += "%";
 			}
 			break;
-		case duckdb_re2::kRegexpStar:
-			// .* is a Star operator is a anyChar operator as a child.
-			// any other child operator would represent a pattern LIKE cannot match.
-			if (subs[cur_sub_index]->nsub() == 1 && subs[cur_sub_index]->sub()[0]->op() == duckdb_re2::kRegexpAnyChar) {
+		case duckdb_re2::kRegexpStar: {
+			// a star at either edge can match the empty string; elsewhere only .* (with 's') maps to %
+			bool at_edge = cur_sub_index == 0 || cur_sub_index + 1 == num_subs;
+			if (at_edge || subs[cur_sub_index]->sub()[0]->op() == duckdb_re2::kRegexpAnyChar) {
 				ret.like_string += "%";
 				break;
 			}
 			ret.exists = false;
 			return ret;
+		}
 		case duckdb_re2::kRegexpLiteralString:
 		case duckdb_re2::kRegexpLiteral: {
 			// if this is the only matching op, we should have directly called
@@ -164,7 +165,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
                                                     bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
-	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
+	D_ASSERT(root.GetChildren().size() == 2 || root.GetChildren().size() == 3);
 	for (idx_t i = 0; i < 2; i++) {
 		const auto &type = root.GetChildren()[i]->GetReturnType();
 		if (type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(type).empty()) {
@@ -208,9 +209,9 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
-		if (root.GetChildrenMutable().size() == 3) {
+		if (root.GetChildren().size() == 3) {
 			root.GetChildrenMutable().pop_back();
-			D_ASSERT(root.GetChildrenMutable().size() == 2);
+			D_ASSERT(root.GetChildren().size() == 2);
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
@@ -230,9 +231,9 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	// if regexp had options, remove them so the new Like Expression can be matched for other optimizers.
-	if (root.GetChildrenMutable().size() == 3) {
+	if (root.GetChildren().size() == 3) {
 		root.GetChildrenMutable().pop_back();
-		D_ASSERT(root.GetChildrenMutable().size() == 2);
+		D_ASSERT(root.GetChildren().size() == 2);
 	}
 
 	auto like_expression = BindBuiltinScalarFunction(GetContext(), LikeFun::Name, std::move(root.GetChildrenMutable()));
@@ -306,7 +307,7 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 	}
 
 	string options_str = "k";
-	if (root.GetChildrenMutable().size() == 4) {
+	if (root.GetChildren().size() == 4) {
 		auto &options_const = root.GetChildrenMutable()[3]->Cast<BoundConstantExpression>();
 		if (options_const.GetValue().IsNull() || options_const.GetValue().type().id() != LogicalTypeId::VARCHAR) {
 			return nullptr;

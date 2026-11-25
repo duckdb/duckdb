@@ -7,7 +7,13 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -110,7 +116,41 @@ bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
 	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases &&
 	       requires_expression_names == rhs.requires_expression_names &&
-	       requires_ordered_execution == rhs.requires_ordered_execution;
+	       requires_ordered_execution == rhs.requires_ordered_execution && GenericPropertiesEqual(rhs);
+}
+
+bool FunctionProperties::GenericPropertiesEqual(const FunctionProperties &rhs) const {
+	if (generic_properties.size() != rhs.generic_properties.size()) {
+		return false;
+	}
+	for (auto &entry : generic_properties) {
+		auto other = rhs.GetProperty(entry.first);
+		if (!other || !Value::NotDistinctFrom(entry.second, *other)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void FunctionProperties::SetProperty(const string &name, Value value) {
+	generic_properties[name] = std::move(value);
+}
+
+optional_ptr<const Value> FunctionProperties::GetProperty(const string &name) const {
+	auto entry = generic_properties.find(name);
+	if (entry == generic_properties.end()) {
+		return nullptr;
+	}
+	return &entry->second;
+}
+
+bool FunctionProperties::GetBooleanProperty(const string &name) const {
+	auto value = GetProperty(name);
+	// only a BOOLEAN value is a flag - anything else reads as false rather than failing every lookup
+	if (!value || value->IsNull() || value->type().id() != LogicalTypeId::BOOLEAN) {
+		return false;
+	}
+	return BooleanValue::Get(*value);
 }
 
 bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {
@@ -171,6 +211,9 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 }
 
 string FunctionParameter::ToString() const {
+	if (!named) {
+		return type.ToString();
+	}
 	if (kind == FunctionParameterKind::VAR_POSITIONAL) {
 		return StringUtil::Format("*%s %s", SQLIdentifier(name), type.ToString());
 	}
@@ -215,12 +258,17 @@ string FunctionSignature::ToString() const {
 	vector<string> params;
 	params.reserve(parameters.size());
 	// A keyword-only parameter that no "*args" precedes closes the positional parameters by itself, which Python
-	// spells as a bare "*" in that position; a "/" likewise closes the positional-only parameters
+	// spells as a bare "*" in that position; a "/" likewise closes the positional-only parameters. It says that the
+	// names before it cannot be used, so it is left out when none of them is shown (see FunctionParameter::Unnamed)
 	const auto positional_only_count = GetPositionalOnlyParameterCount();
+	bool close_positional_only = false;
+	for (idx_t i = 0; i < positional_only_count; i++) {
+		close_positional_only = close_positional_only || parameters[i].IsNamed();
+	}
 	auto needs_separator = !GetArgs();
 	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto &param = parameters[i];
-		if (i == positional_only_count && positional_only_count > 0) {
+		if (i == positional_only_count && close_positional_only) {
 			params.push_back("/");
 		}
 		if (needs_separator && param.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
@@ -229,7 +277,7 @@ string FunctionSignature::ToString() const {
 		}
 		params.push_back(param.ToString());
 	}
-	if (positional_only_count > 0 && positional_only_count == parameters.size()) {
+	if (close_positional_only && positional_only_count == parameters.size()) {
 		params.push_back("/");
 	}
 	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
@@ -248,6 +296,31 @@ string SimpleFunction::ToString() const {
 }
 
 // add your initializer for new functions here
+void BuiltinFunctions::AddCollation(const string &name, ScalarFunction function, bool combinable) {
+	function.SetName(Identifier(name));
+	if (combinable) {
+		CollationFunctions::SetCombinable(function);
+	}
+	CreateScalarFunctionInfo info(std::move(function));
+	info.SetQualifiedName(
+	    QualifiedName(info.GetQualifiedName().Catalog(), CollationFunctions::GetSchema(), info.GetFunctionName()));
+	info.internal = true;
+	catalog.CreateFunction(transaction, info);
+}
+
+void BuiltinFunctions::RegisterCollations() {
+	// the collations are the scalar functions of their own schema
+	CreateSchemaInfo schema;
+	schema.SetQualifiedName(QualifiedName({CollationFunctions::GetSchema()}, Identifier()));
+	schema.internal = true;
+	schema.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	catalog.CreateSchema(transaction, schema);
+
+	AddCollation("nocase", LowerFun::GetFunction(), true);
+	AddCollation("noaccent", StripAccentsFun::GetFunction(), true);
+	AddCollation("nfc", NFCNormalizeFun::GetFunction());
+}
+
 void BuiltinFunctions::Initialize() {
 	RegisterTableScanFunctions();
 	RegisterSQLiteFunctions();
@@ -259,10 +332,9 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterCopyFunctions();
 
-	// initialize collations
-	AddCollation("nocase", LowerFun::GetFunction(), true);
-	AddCollation("noaccent", StripAccentsFun::GetFunction(), true);
-	AddCollation("nfc", NFCNormalizeFun::GetFunction());
+	RegisterCollations();
+
+	RegisterEncodingFunctions();
 
 	RegisterExtensionOverloads();
 }
@@ -636,8 +708,9 @@ Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	}
 	// Use the argument name if available, otherwise use the argument index
 	string argument_name;
-	if (argument_names && arg_idx < argument_names->size() && !argument_names->at(arg_idx).empty()) {
-		argument_name = StringUtil::Format("The %s argument", argument_names->at(arg_idx));
+	const auto resolved_count = function.GetPositionalArgumentCount() + function.GetNamedArguments().size();
+	if (arg_idx < resolved_count && !GetArgumentName(arg_idx).empty()) {
+		argument_name = StringUtil::Format("The %s argument", GetArgumentName(arg_idx));
 	} else {
 		argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
 	}
@@ -686,19 +759,56 @@ optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const 
 	return {};
 }
 
-optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
-	if (!argument_names) {
-		throw InternalException("Function %s was bound without argument names, cannot look up argument %s by name",
-		                        function.GetName(), name);
+const Identifier &BindFunctionInput::GetArgumentName(idx_t arg_idx) const {
+	static const Identifier UNNAMED;
+	// The binder lays the arguments out in the order of the signature: the positional ones fill the standard
+	// parameters, then "*args" - the named ones are keyword-only parameters or "**kwargs"
+	const auto positional_count = function.GetPositionalArgumentCount();
+	if (arg_idx >= positional_count) {
+		auto &named_arguments = function.GetNamedArguments();
+		if (arg_idx - positional_count >= named_arguments.size()) {
+			throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
+		}
+		return named_arguments[arg_idx - positional_count];
 	}
-	// The binder resolves every argument to a slot and reports its name: the signature parameter name for standard
-	// and keyword-only parameters, or the name the caller used for "**kwargs".
-	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
-		if ((*argument_names)[arg_idx] == name) {
+	if (arg_idx < signature.GetPositionalParameterCount()) {
+		return signature.GetParameter(arg_idx).GetName();
+	}
+	return UNNAMED;
+}
+
+optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
+	const auto resolved_count = function.GetPositionalArgumentCount() + function.GetNamedArguments().size();
+	for (idx_t arg_idx = 0; arg_idx < resolved_count; arg_idx++) {
+		if (GetArgumentName(arg_idx) == name) {
 			return optional_idx(arg_idx);
 		}
 	}
 	return optional_idx();
+}
+
+Binder &BindFunctionInput::GetBinder() {
+	if (!binder) {
+		throw InternalException("Function %s cannot be bound without a Binder", function.GetName());
+	}
+	return *binder;
+}
+
+FunctionBinder BindFunctionInput::NestedFunctionBinder() {
+	if (binder) {
+		return FunctionBinder(*binder);
+	}
+	return FunctionBinder(context, decimal_width_limit);
+}
+
+DecimalWidthLimit BindFunctionInput::GetDecimalWidthLimit() const {
+	if (binder) {
+		return binder->GetDecimalWidthLimit();
+	}
+	if (decimal_width_limit) {
+		return *decimal_width_limit;
+	}
+	return DecimalWidthLimit::FromSetting(context);
 }
 
 } // namespace duckdb

@@ -6,7 +6,7 @@ statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-pragma explain_output='optimized_only';
+SET explain_output='optimized_only';
 
 query II
 WITH t(a, b) AS (
@@ -43,7 +43,7 @@ SELECT a, b
 FROM   t
 WHERE  a < b;
 ----
-logical_opt	<REGEX>:.*FILTER.*CAST\(a AS INTEGER.*<.*b AS INTEGER\).*FILTER.*position.*
+logical_opt	<REGEX>:.*FILTER.*a < b.*PROJECTION.*CAST\(a AS INTEGER\).*CAST\(b AS INTEGER\).*FILTER.*position.*
 
 
 # INT can always be cast to varchar, so the filter a[1] = '1'

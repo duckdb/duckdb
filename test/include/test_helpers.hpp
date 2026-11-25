@@ -31,12 +31,18 @@
 
 namespace duckdb {
 
+class TableRef;
+
 void RegisterSqllogictests();
 void RegisterSqllogictests(const vector<string> &test_paths);
 void RegisterSqllogictestStdin();
 bool SummarizeFailures();
 //! Test directories of the extensions this build registered with LOAD_TESTS
 vector<string> LoadedExtensionTestPaths();
+//! The build directory of this build
+string TestBuildDirectory();
+//! The root directory that test paths are relative to (UNITTEST_ROOT_DIRECTORY, or the source directory)
+string TestRootDirectory();
 
 //! Test identity: the full test name sanitized to one filesystem/shell-safe path component (every char
 //! outside [A-Za-z0-9_-] -> '_', including '.'). The body suffix is kept, so siblings differing only by
@@ -46,6 +52,8 @@ string TestNameToId(const string &name);
 
 //! Delete a database file (+ its .wal). A no-op under --database-destroy off (retain).
 void DeleteDatabase(string path);
+//! A shared local file system obtained from a DuckDB instance (for tests that have no database of their own)
+FileSystem &TestLocalFileSystem();
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);
@@ -87,7 +95,7 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 // inherited down every level.
 //
 //   $ROOT    -- root; default "duckdb_unittest_tempdir" or --temp-dir-root <p>
-//   $RUN_ID  -- per-invocation isolation ($TS--$RANDTAG when auto, or a caller id)
+//   $RUN_ID  -- per-invocation isolation (a random UUID when auto, or a caller id)
 //   $TEST_ID -- per-test isolation (full test name, sanitized); resolved at test-run time
 //
 //! Destroy disposition: what to do about the dir at end-of-invocation / end-of-test.
@@ -119,7 +127,7 @@ string GetLocalTempDirRoot();
 //! Returns the resolved RUN_ID value ("" when RUN_ID is off).
 string GetTempDirRunId();
 //! --temp-dir-run-id {off|auto|<id>}: off => no RUN_ID level; auto => generated
-//! $TS--$RANDTAG (once per invocation); any other value is used literally as the RUN_ID.
+//! UUID (once per invocation); any other value is used literally as the RUN_ID.
 void SetRunId(const string &id);
 bool SetTempDirRunIdInPath(const string &mode);
 //! --temp-dir-test-id {on|off}. Returns false on an unrecognized value.
@@ -132,6 +140,8 @@ bool SetDatabaseDestroy(const string &mode);
 bool DatabaseDestroyFires(bool success);
 //! Materializes $ROOT + $RUN_ID once, at startup (main). Fills error + returns false on failure.
 bool PrepareTempDir(string &error);
+//! Reclaim the owned leaf and any empty ancestors created by the same lifecycle step.
+void ReclaimTestDirectoryLevels(FileSystem &fs, const string &leaf, const vector<string> &created);
 //! Executes the run-id-level destroy disposition (recursive, bottom-up "destroy only what I created").
 void DestroyTempDir(bool success);
 //! Executes the TEST_ID destroy disposition using THIS test's pass/fail (called at test end).
@@ -171,16 +181,12 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &con, const string &query);
 //! Drain a stream into a retained result, so it can be checked with CHECK_COLUMN
 duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream);
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary);
+//! Plan and optimize a single statement, returning the logical plan for inspection
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
-
-#define COMPARE_CSV(result, csv, header)                                                                               \
-	{                                                                                                                  \
-		auto res = compare_csv(*result, csv, header);                                                                  \
-		if (!res.empty())                                                                                              \
-			FAIL(res);                                                                                                 \
-	}
 
 #define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
 	{                                                                                                                  \

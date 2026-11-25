@@ -10,6 +10,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
@@ -41,6 +42,11 @@ idx_t GetEffectiveOffset(const ArrowArray &array, int64_t parent_offset, idx_t c
 	// 'chunk_offset' is how much of the chunk we've already scanned, in case the chunk size exceeds
 	// STANDARD_VECTOR_SIZE
 	return UnsafeNumericCast<idx_t>(array.offset + parent_offset) + chunk_offset;
+}
+
+//! The children of a struct or a sparse union share its slots, so below a list they start at its offset too
+static int64_t GetChildNestedOffset(const ArrowArray &array, int64_t nested_offset) {
+	return nested_offset == -1 ? -1 : nested_offset + array.offset;
 }
 
 template <class T>
@@ -142,7 +148,6 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 
 void ArrowToDuckDBConversion::SetValidityMask(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
                                               int64_t parent_offset, int64_t nested_offset, bool add_null) {
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &mask = FlatVector::ValidityMutable(vector);
 	GetValidityMask(mask, array, chunk_offset, size, parent_offset, nested_offset, add_null);
 }
@@ -366,8 +371,14 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 			// decoding sets the validity of every child row again
 			broadcast_validity();
 		} else {
+			// a nested list or array sets its validity again, so it takes the broadcast NULLs as its parent mask
+			ValidityMask child_parent_mask;
+			if (array_mask.CanHaveNull()) {
+				child_parent_mask.Copy(FlatVector::Validity(child_vector), child_count);
+			}
 			ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
-			                                             child_count, child_type, NumericCast<int64_t>(child_offset));
+			                                             child_count, child_type, NumericCast<int64_t>(child_offset),
+			                                             array_mask.CanHaveNull() ? &child_parent_mask : nullptr);
 		}
 	}
 }
@@ -869,6 +880,59 @@ static void ConvertDecimal(Vector &vector, ArrowArray &array, idx_t size, idx_t 
 	}
 }
 
+//! Converts 32-byte little-endian two's complement Arrow decimal256 values into wide or fixed-size decimals
+static void ConvertDecimal256(const_data_ptr_t src_ptr, Vector &vector, idx_t size, ValidityMask &val_mask) {
+	constexpr idx_t DECIMAL256_BYTES = 32;
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::VARCHAR: {
+		auto tgt_ptr = FlatVector::GetDataMutable<bignum_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (!val_mask.RowIsValid(row)) {
+				continue;
+			}
+			auto blob =
+			    DecimalHelper<bignum_t>::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
+			tgt_ptr[row] = bignum_t(StringVector::AddStringOrBlob(vector, blob.data(), blob.size()));
+		}
+		break;
+	}
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128: {
+		for (idx_t row = 0; row < size; row++) {
+			if (!val_mask.RowIsValid(row)) {
+				continue;
+			}
+			auto blob =
+			    DecimalHelper<bignum_t>::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
+			hugeint_t value;
+			if (!DecimalHelper<bignum_t>::TryToHugeint(bignum_t(string_t(blob)), value)) {
+				throw ConversionException("Arrow decimal256 value does not fit in %s", vector.GetType().ToString());
+			}
+			switch (vector.GetType().InternalType()) {
+			case PhysicalType::INT16:
+				FlatVector::GetDataMutable<int16_t>(vector)[row] = Cast::Operation<hugeint_t, int16_t>(value);
+				break;
+			case PhysicalType::INT32:
+				FlatVector::GetDataMutable<int32_t>(vector)[row] = Cast::Operation<hugeint_t, int32_t>(value);
+				break;
+			case PhysicalType::INT64:
+				FlatVector::GetDataMutable<int64_t>(vector)[row] = Cast::Operation<hugeint_t, int64_t>(value);
+				break;
+			default:
+				FlatVector::GetDataMutable<hugeint_t>(vector)[row] = value;
+				break;
+			}
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("Unsupported physical type for Decimal: %s",
+		                              TypeIdToString(vector.GetType().InternalType()));
+	}
+}
+
 void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset,
                                                   ArrowArrayScanState &array_state, idx_t size,
                                                   const ArrowType &arrow_type, int64_t nested_offset,
@@ -1200,6 +1264,12 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		case DecimalBitWidth::DECIMAL_128:
 			ConvertDecimal<hugeint_t>(vector, array, size, offset);
 			break;
+		case DecimalBitWidth::DECIMAL_256: {
+			auto src_ptr = ArrowBufferData<data_t>(array, 1) + 32 * offset;
+			auto &val_mask = FlatVector::ValidityMutable(vector);
+			ConvertDecimal256(src_ptr, vector, size, val_mask);
+			break;
+		}
 		default:
 			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
 		}
@@ -1227,14 +1297,16 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		auto &child_entries = StructVector::GetEntries(vector);
 		auto &struct_validity_mask = FlatVector::ValidityMutable(vector);
+		const auto child_offset = parent_offset + NumericCast<uint64_t>(array.offset);
+		const auto child_nested_offset = GetChildNestedOffset(array, nested_offset);
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
 			auto &child_entry = child_entries[child_idx];
 			auto &child_array = *array.children[child_idx];
 			auto &child_type = struct_info.GetChild(child_idx);
 			auto &child_state = array_state.GetChild(child_idx);
 
-			ArrowToDuckDBConversion::SetValidityMask(child_entry, child_array, chunk_offset, size, array.offset,
-			                                         nested_offset);
+			ArrowToDuckDBConversion::SetValidityMask(child_entry, child_array, chunk_offset, size,
+			                                         NumericCast<int64_t>(child_offset), child_nested_offset);
 			if (struct_validity_mask.CanHaveNull()) {
 				auto &child_validity_mark = FlatVector::ValidityMutable(child_entry);
 				for (idx_t i = 0; i < size; i++) {
@@ -1248,17 +1320,16 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(
-				    child_entry, child_array, chunk_offset, child_state, size, child_type, nested_offset,
-				    &struct_validity_mask, NumericCast<uint64_t>(array.offset));
+				    child_entry, child_array, chunk_offset, child_state, size, child_type, child_nested_offset,
+				    &struct_validity_mask, child_offset);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
 				ColumnArrowToDuckDBRunEndEncoded(child_entry, child_array, chunk_offset, child_state, size, child_type,
-				                                 nested_offset, &struct_validity_mask,
-				                                 NumericCast<uint64_t>(array.offset));
+				                                 child_nested_offset, &struct_validity_mask, child_offset);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ColumnArrowToDuckDB(child_entry, child_array, chunk_offset, child_state, size, child_type,
-				                    nested_offset, &struct_validity_mask, NumericCast<uint64_t>(array.offset), false);
+				                    child_nested_offset, &struct_validity_mask, child_offset, false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1277,6 +1348,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto &validity_mask = FlatVector::ValidityMutable(vector);
 		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		const auto member_offset = parent_offset + NumericCast<uint64_t>(array.offset);
+		const auto member_nested_offset = GetChildNestedOffset(array, nested_offset);
 		duckdb::vector<Vector> children;
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
 			Vector child(members[child_idx].second, size);
@@ -1286,23 +1358,24 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 			// the members of a sparse union have the same length as the union - they are scanned at the same offset
 			ArrowToDuckDBConversion::SetValidityMask(child, child_array, chunk_offset, size,
-			                                         NumericCast<int64_t>(member_offset), nested_offset);
+			                                         NumericCast<int64_t>(member_offset), member_nested_offset);
 			auto array_physical_type = child_type.GetPhysicalType();
 
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child, child_array, chunk_offset, child_state,
-				                                                       size, child_type, nested_offset, &validity_mask,
-				                                                       member_offset);
+				                                                       size, child_type, member_nested_offset,
+				                                                       &validity_mask, member_offset);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child, child_array, chunk_offset, child_state,
-				                                                          size, child_type, nested_offset,
+				                                                          size, child_type, member_nested_offset,
 				                                                          &validity_mask, member_offset);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child, child_array, chunk_offset, child_state, size,
-				                                             child_type, nested_offset, &validity_mask, member_offset);
+				                                             child_type, member_nested_offset, &validity_mask,
+				                                             member_offset);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");

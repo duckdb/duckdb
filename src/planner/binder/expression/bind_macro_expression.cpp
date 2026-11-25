@@ -7,6 +7,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -60,7 +61,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
 			return;
 		}
 
@@ -167,14 +168,15 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	expr = std::move(macro_copy);
 }
 
-void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-                                             unique_ptr<ParsedExpression> &expr, idx_t depth) {
+MacroFunction &ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function,
+                                                       ScalarMacroCatalogEntry &macro_func,
+                                                       unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 	binder.lambda_bindings = lambda_bindings;
 	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
-	                                                    positional_arguments, named_arguments, depth);
+	                                                    positional_arguments, named_arguments, depth, this);
 	if (!bind_result.error.empty()) {
 		throw BinderException(*expr, bind_result.error);
 	}
@@ -200,19 +202,29 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	// now replace the parameters
 	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+	return macro_def;
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
 	// expanding nested macros can take a long time, allow the query to be interrupted
-	context.InterruptCheck();
+	context.FastInterruptCheck();
 
 	// unfold the macro expression
-	UnfoldMacroExpression(function, macro_func, expr, depth);
+	auto &member = UnfoldMacroExpression(function, macro_func, expr, depth);
 
 	// bind the unfolded macro
-	return BindExpression(expr, depth);
+	auto result = BindExpression(expr, depth);
+	if (result.HasError()) {
+		return result;
+	}
+	// enforce a declared RETURNS type by casting the member's result to it
+	if (member.return_type.id() != LogicalTypeId::UNKNOWN) {
+		result.expression =
+		    BoundCastExpression::AddCastToType(context, std::move(result.expression), member.return_type);
+	}
+	return result;
 }
 
 } // namespace duckdb

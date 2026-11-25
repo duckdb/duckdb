@@ -15,6 +15,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -62,6 +63,10 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		expr = std::move(parameter);
 		return;
 	}
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery = expr->Cast<SubqueryExpression>().Subquery();
+		ConvertConstants(*subquery->node);
+	}
 	ParsedExpressionIterator::EnumerateChildren(*expr,
 	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 }
@@ -83,10 +88,6 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		}
 		ReplaceStatement(statement, statement->Copy());
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
-		if (statement->type == StatementType::RELATION_STATEMENT) {
-			// reparsing not supported for relation statements
-			return;
-		}
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
 		Parser parser(*this, IdentifierCaseMode::PRESERVE_CASE);

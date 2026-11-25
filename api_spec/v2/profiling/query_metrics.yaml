@@ -35,7 +35,8 @@ functions:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-10-12" ]
     description: |
-      Takes a snapshot of the metrics of the last query the connection finished.
+      Takes a snapshot of the metrics of the last query the connection profiled, which is not necessarily the last
+      query it ran: see `[[connection_get_profiling_information]]`.
 
       The snapshot is owned by the caller and does not change afterwards. It holds the metrics DuckDB's profiling
       configuration gathered: without profiling enabled, the root node carries no metrics and has no children. A
@@ -88,6 +89,55 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  connection_get_profiling_information:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-24" ]
+    description: |
+      Renders the profile of the last query the connection profiled.
+
+      That is not necessarily the last query the connection ran: the profiler keeps the last profile while profiling
+      is disabled. After profiling is enabled again, and until the next query finishes, the profile is still that of
+      the last query run while profiling was enabled.
+
+      The same profile `[[connection_get_query_metrics]]` takes a snapshot of, as the text DuckDB's profiler prints for
+      it: the query, its metrics and its operator tree. The text is delivered through `sink` in a single call.
+
+      `format` names the profiler format: `json`, `text`, `query_tree`, `query_tree_optimizer`, `html`, `graphviz`,
+      `yaml`, `mermaid` or `no_output`, which renders nothing. An empty `format` selects the connection's configured
+      format (the `enable_profiling` option), or a query tree when that is `no_output`. An unknown format fails with `ERROR_INPUT_INVALID`.
+
+      Without profiling enabled there is no profile: the text is the profiler's own note that profiling is disabled.
+
+      Fails with `ERROR_RESOURCE_IN_USE` while a query is running on the connection, i.e. while a result of it has
+      not yet been drained or destroyed.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to render the profile of.
+      format:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The profiler format name. Empty selects the configured format, or a query tree when that is `no_output`.
+      format_length:
+        type: idx
+        description: The length of `format` in bytes. `format` need not be null-terminated and may be NULL only when this is 0.
+      sink:
+        type: text_sink
+        description: Receives the rendered profile in a single call. Borrowed for the duration of that call; see text_sink for the full contract.
+      user_data:
+        type: void
+        indirection: 1
+        description: Opaque pointer passed through to sink untouched. May be NULL.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Query Metrics
   #---------------------------------------------------------------------------------------------------------------------
@@ -130,10 +180,16 @@ functions:
         type: query_metrics_node
         description: The node.
       name:
-        type: str
-        indirection: 1
+        type: char
+        indirection: 2
+        const: true
         kind: OUT_BORROW
-        description: Receives a borrowed view of the name. Valid until the snapshot is destroyed.
+        description: Receives a borrowed pointer to the name. Valid until the snapshot is destroyed.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
       err:
         type: error_info
         indirection: 1
@@ -227,10 +283,16 @@ functions:
         type: idx
         description: Zero-based metric index.
       name:
-        type: str
-        indirection: 1
+        type: char
+        indirection: 2
+        const: true
         kind: OUT_BORROW
-        description: Receives a borrowed view of the name. Valid until the snapshot is destroyed.
+        description: Receives a borrowed pointer to the name. Valid until the snapshot is destroyed.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
       err:
         type: error_info
         indirection: 1
@@ -276,11 +338,14 @@ functions:
         type: query_metrics_node
         description: The node.
       name:
-        type: str
+        type: char
         indirection: 1
         const: true
         kind: IN
         description: The name of the metric, matched exactly. Borrowed for the call only.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` need not be null-terminated and may be NULL only when this is 0.
       value:
         type: value
         indirection: 1

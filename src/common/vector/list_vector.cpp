@@ -4,7 +4,11 @@
 namespace duckdb {
 
 VectorListBuffer::VectorListBuffer(Allocator &allocator, capacity_t capacity, unique_ptr<Vector> vector)
-    : StandardVectorBuffer(allocator, capacity, sizeof(list_entry_t)), child(std::move(vector)) {
+    : VectorListBuffer(AllocatedData(allocator), capacity, std::move(vector)) {
+	EnsureDataAllocated();
+}
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data, capacity_t capacity, unique_ptr<Vector> vector)
+    : StandardVectorBuffer(std::move(allocated_data), capacity, sizeof(list_entry_t)), child(std::move(vector)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	FlatVector::SetSize(*child, 0ULL);
 }
@@ -135,11 +139,11 @@ void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 
 buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = data_ptr + type_size * offset;
+	auto offset_ptr = data_ptr ? data_ptr + type_size * offset : nullptr;
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorListBuffer>(offset_ptr, count, *this);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 
@@ -149,7 +153,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalTy
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	result->SetVectorSize(count);
-	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(buffer_from_this()));
 	return result;
 }
 
@@ -160,7 +164,7 @@ void VectorListBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = data_ptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
@@ -228,6 +232,7 @@ void VectorListBuffer::SetValue(const LogicalType &type, idx_t index, const Valu
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
 	}
+	EnsureDataAllocated();
 	validity.Set(index, !val.IsNull());
 	auto offset = GetChildSize();
 	if (val.IsNull()) {

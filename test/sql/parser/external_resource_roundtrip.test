@@ -81,6 +81,12 @@ CREATE EXTERNAL RESOURCE 'aws:ec2:it''s quacky' AS x
 ----
 <REGEX>:.*unknown resource type.*
 
+# a resource type spelled without quotes, as a dotted name: it prints quoted and reparses to the same string
+statement error
+CREATE EXTERNAL RESOURCE aws.ec2.quack AS x (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type "aws.ec2.quack".*
+
 # --- REGISTER: name plus an arbitrary handle expression ------------------------------------------------
 
 statement error
@@ -103,6 +109,21 @@ REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x FROM 'plain-handle'
 
 statement ok
 SHOW EXTERNAL RESOURCES
+
+# the optional type is a named argument of the table function, printed as a string literal
+statement ok
+SHOW EXTERNAL RESOURCES WITH TYPE 'aws:ec2:quack'
+
+statement ok
+SHOW EXTERNAL RESOURCES WITH TYPE 'aws:ec2:it''s quacky'
+
+statement ok
+SHOW EXTERNAL RESOURCES WITH TYPE quack
+
+statement error
+SHOW ALL EXTERNAL RESOURCES WITH TYPE 'aws:ec2:it''s quacky'
+----
+<REGEX>:.*unknown resource type "aws:ec2:it's quacky".*
 
 statement ok
 SELECT count(*) FROM duckdb_external_resources()

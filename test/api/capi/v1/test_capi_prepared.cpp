@@ -870,7 +870,7 @@ TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {
 	duckdb_close(&db);
 }
 
-TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[capi]") {
+static void CheckConcurrentPreparedExecution(idx_t iterations) {
 	// This test is a minimal reproducible example for the race condition described in #7187 (internal).
 	duckdb_database db;
 	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
@@ -882,12 +882,11 @@ TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[c
 	std::atomic<idx_t> completed {0};
 
 	constexpr idx_t NUM_THREADS = 4;
-	constexpr idx_t ITERATIONS = 1000;
 
 	duckdb::vector<std::thread> threads;
 	for (idx_t t = 0; t < NUM_THREADS; t++) {
 		threads.emplace_back([&]() {
-			for (idx_t i = 0; i < ITERATIONS; i++) {
+			for (idx_t i = 0; i < iterations; i++) {
 				duckdb_prepared_statement stmt = nullptr;
 				if (duckdb_prepare(conn, "SELECT 1", &stmt) != DuckDBSuccess) {
 					++failures;
@@ -914,10 +913,18 @@ TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[c
 
 	// All executions should succeed
 	REQUIRE(failures == 0);
-	REQUIRE(completed == NUM_THREADS * ITERATIONS);
+	REQUIRE(completed == NUM_THREADS * iterations);
 
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);
+}
+
+TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[capi]") {
+	CheckConcurrentPreparedExecution(100);
+}
+
+TEST_CASE("Stress concurrent prepared statement execution on one connection", "[capi][.]") {
+	CheckConcurrentPreparedExecution(1000);
 }
 
 static constexpr const char *SALES_PIVOT = "PIVOT sales ON year USING sum(amount) ORDER BY city";

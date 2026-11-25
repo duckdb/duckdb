@@ -48,7 +48,7 @@ struct BitstringAggBindData : public FunctionData {
 		return false;
 	}
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
 	                      const BoundAggregateFunction &) {
 		auto &bind_data = bind_data_p->Cast<BitstringAggBindData>();
 		serializer.WriteProperty(100, "min", bind_data.min);
@@ -227,7 +227,7 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
 	if (NumericStats::HasMinMax(input.child_stats[0])) {
-		auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
+		auto &bind_agg_data = input.bind_data.write().Cast<BitstringAggBindData>();
 		bind_agg_data.min = NumericStats::Min(input.child_stats[0]);
 		bind_agg_data.max = NumericStats::Max(input.child_stats[0]);
 	}
@@ -248,6 +248,7 @@ template <class TYPE>
 void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
 	auto function = AggregateFunction::UnaryAggregate<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	    type, LogicalType::BIT);
+	function.SetFallible(); // out-of-range inputs and invalid or missing min/max bounds throw at runtime
 	function.SetBindCallback(BindBitstringAgg); // create new a 'BitstringAggBindData'
 	function.SetSerializeCallback(BitstringAggBindData::Serialize);
 	function.SetDeserializeCallback(BitstringAggBindData::Deserialize);

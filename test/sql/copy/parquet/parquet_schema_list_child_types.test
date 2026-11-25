@@ -1,0 +1,142 @@
+# name: test/sql/copy/parquet/parquet_schema_list_child_types.test
+# description: The element of a list that a name-keyed schema declares is read from the file and cast to the declared type
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT [1, 2] AS li, ['a', 'b'] AS ls, ['1', '2'] AS ln, [{'a': 1, 'b': 2}] AS lst, [[1, 2], [3]] AS ll, [NULL, NULL] AS lnull
+) TO '{TEST_DIR}/list_child_types.parquet' (FORMAT parquet);
+
+# a declared element type the file's elements can be cast to, whatever the key of the child
+query III
+SELECT li, li2, ln FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'li': {name: 'li', type: 'BIGINT[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'BIGINT', default_value: 7, children: NULL}}},
+	'ln': {name: 'ln', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}
+}) AS a, (SELECT li AS li2 FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'li': {name: 'li', type: 'VARCHAR[]', default_value: NULL, children: MAP {
+		'item': {name: 'element', type: 'VARCHAR', default_value: 'x', children: NULL}}}})) AS b;
+----
+[1, 2]	[1, 2]	[1, 2]
+
+# an element that cannot be cast fails. These reads returned the default of the element for every entry
+# when the key of the child was not the name of the file's repeated group
+statement error
+SELECT ls FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'ls': {name: 'ls', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}});
+----
+<REGEX>:Conversion Error:.*Could not convert string 'a' to INT32.*
+
+statement error
+SELECT intArray FROM read_parquet('data/parquet-testing/bug2557.parquet', schema = MAP {
+	'intArray': {name: 'intArray', type: 'DATE[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'DATE', default_value: NULL, children: NULL}}}});
+----
+<REGEX>:Conversion Error:.*bug2557.parquet.*
+
+# an element of another shape fails as it does with the name of the repeated group as the key
+statement error
+SELECT lst FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'lst': {name: 'lst', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}});
+----
+<REGEX>:Binder Error:.*Can't change source type \(STRUCT\(a INTEGER, b INTEGER\)\) to target type \(INTEGER\).*
+
+statement error
+SELECT ll FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'll': {name: 'll', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}});
+----
+<REGEX>:Binder Error:.*Can't change source type \(INTEGER\[\]\) to target type \(INTEGER\).*
+
+statement error
+SELECT li FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'li': {name: 'li', type: 'STRUCT(a INTEGER)[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'STRUCT(a INTEGER)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'INTEGER', default_value: NULL, children: NULL}}}}}});
+----
+<REGEX>:Binder Error:.*Can't change source type \(INTEGER\) to target type \(STRUCT\(a INTEGER\)\).*
+
+# a NULL-typed element stays NULL, the default of the element is for an element the file does not have
+query I
+SELECT lnull FROM read_parquet('{TEST_DIR}/list_child_types.parquet', schema = MAP {
+	'lnull': {name: 'lnull', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: 7, children: NULL}}}});
+----
+[NULL, NULL]
+
+# one scan over files with different names for the repeated group: "array" and "list"
+statement ok
+COPY (SELECT {'names': ['a', 'b']} AS variant) TO '{TEST_DIR}/list_child_types_names.parquet' (FORMAT parquet);
+
+query I
+SELECT variant FROM read_parquet(['data/parquet-testing/adam_genotypes.parquet', '{TEST_DIR}/list_child_types_names.parquet'], schema = MAP {
+	'variant': {name: 'variant', type: 'STRUCT("names" VARCHAR[])', default_value: NULL, children: MAP {
+		'names': {name: 'names', type: 'VARCHAR[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}
+}) ORDER BY ALL;
+----
+{'names': [a, b]}
+{'names': [name]}
+
+# bare repeated groups of structs: the child of the list has the name of the column or of the field
+query III
+SELECT count(*), sum(len(tags)), count(DISTINCT t.key)
+FROM (SELECT tags, unnest(tags) AS t FROM read_parquet('data/parquet-testing/enum.parquet', schema = MAP {
+	'tags': {name: 'tags', type: 'STRUCT("key" VARCHAR, v_str VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT("key" VARCHAR, v_str VARCHAR)', default_value: NULL, children: MAP {
+			'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+			'v_str': {name: 'v_str', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}}));
+----
+16	128	8
+
+query II
+SELECT id, phoneNumbers FROM read_parquet('data/parquet-testing/arrow/repeated_no_annotation.parquet', schema = MAP {
+	'id': {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	'phoneNumbers': {name: 'phoneNumbers', type: 'STRUCT(phone STRUCT(number BIGINT, kind VARCHAR)[])', default_value: NULL, children: MAP {
+		'phone': {name: 'phone', type: 'STRUCT(number BIGINT, kind VARCHAR)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(number BIGINT, kind VARCHAR)', default_value: NULL, children: MAP {
+				'number': {name: 'number', type: 'BIGINT', default_value: NULL, children: NULL},
+				'kind': {name: 'kind', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}}}
+}) ORDER BY id;
+----
+1	NULL
+2	NULL
+3	{'phone': []}
+4	{'phone': [{'number': 5555555555, 'kind': NULL}]}
+5	{'phone': [{'number': 1111111111, 'kind': home}]}
+6	{'phone': [{'number': 1111111111, 'kind': home}, {'number': 2222222222, 'kind': NULL}, {'number': 3333333333, 'kind': mobile}]}
+
+# legacy two-level lists, nested
+query III
+SELECT id, int_array, int_array_Array FROM read_parquet('data/parquet-testing/arrow/nullable.impala.parquet', schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'int_array': {name: 'int_array', type: 'INTEGER[]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER', default_value: NULL, children: NULL}}},
+	'int_array_Array': {name: 'int_array_Array', type: 'INTEGER[][]', default_value: NULL, children: MAP {
+		'element': {name: 'element', type: 'INTEGER[]', default_value: NULL, children: MAP {
+			'element': {name: 'element', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+}) ORDER BY id;
+----
+1	[1, 2, 3]	[[1, 2], [3, 4]]
+2	[NULL, 1, 2, NULL, 3, NULL]	[[NULL, 1, 2, NULL], [3, NULL, 4], [], NULL]
+3	[]	[NULL]
+4	NULL	[]
+5	NULL	NULL
+6	NULL	NULL
+7	NULL	[NULL, [5, 6]]
+
+query III
+SELECT id, int_array, int_array_Array FROM 'data/parquet-testing/arrow/nullable.impala.parquet' ORDER BY id;
+----
+1	[1, 2, 3]	[[1, 2], [3, 4]]
+2	[NULL, 1, 2, NULL, 3, NULL]	[[NULL, 1, 2, NULL], [3, NULL, 4], [], NULL]
+3	[]	[NULL]
+4	NULL	[]
+5	NULL	NULL
+6	NULL	NULL
+7	NULL	[NULL, [5, 6]]

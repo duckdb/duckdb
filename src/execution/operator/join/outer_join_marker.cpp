@@ -65,12 +65,9 @@ void OuterJoinMarker::ConstructLeftJoinResult(DataChunk &left, DataChunk &result
 	}
 	D_ASSERT(count == STANDARD_VECTOR_SIZE);
 	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-	idx_t remaining_count = 0;
-	for (idx_t i = 0; i < left.size(); i++) {
-		if (!found_match[i]) {
-			remaining_sel.set_index(remaining_count++, i);
-		}
-	}
+	auto true_count = SelectionVector::SelectFromBoolean(
+	    found_match.get(), nullptr, left.size(), {}, array_ptr<sel_t>(remaining_sel.data(), remaining_sel.Capacity()));
+	auto remaining_count = left.size() - true_count;
 	if (remaining_count > 0) {
 		result.Slice(left, remaining_sel, remaining_count);
 		for (idx_t idx = left.ColumnCount(); idx < result.ColumnCount(); idx++) {
@@ -95,14 +92,15 @@ void OuterJoinMarker::InitializeScan(OuterJoinGlobalScanState &gstate, OuterJoin
 	gstate.data->InitializeScanChunk(lstate.scan_chunk);
 }
 
-void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result) {
+void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result,
+                           bool matched) {
 	D_ASSERT(gstate.data);
 	// fill in NULL values for the LHS
 	while (gstate.data->Scan(gstate.global_scan, lstate.local_scan, lstate.scan_chunk)) {
 		idx_t result_count = 0;
-		// figure out which tuples didn't find a match in the RHS
+		// figure out which tuples did (not) find a match in the RHS
 		for (idx_t i = 0; i < lstate.scan_chunk.size(); i++) {
-			if (!found_match[lstate.local_scan.current_row_index + i]) {
+			if (found_match[lstate.local_scan.current_row_index + i] == matched) {
 				lstate.match_sel.set_index(result_count++, i);
 			}
 		}

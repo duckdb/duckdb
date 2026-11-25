@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -84,15 +85,16 @@ public:
 					}
 					auto flushed_row_group_idx = result_collection.Append(scan_chunk, append_state);
 					if (flushed_row_group_idx.IsValid()) {
-						writer.WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
+						writer.WriteNewRowGroup(context.GetContext(), optimistic_collection,
+						                        flushed_row_group_idx.GetIndex());
 					}
 				}
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
-			result_collection.FinalizeAppend(TransactionData::Unversioned(), append_state);
-			writer.WriteUnflushedRowGroups(optimistic_collection);
+			result_collection.FinalizeAppend(DuckTransaction::Get(context, data_table.db), append_state);
+			writer.WriteUnflushedRowGroups(context.GetContext(), optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteUnflushedRowGroups(optimistic_collection);
+			writer.WriteUnflushedRowGroups(context.GetContext(), optimistic_collection);
 		}
 
 		collection_indexes.clear();

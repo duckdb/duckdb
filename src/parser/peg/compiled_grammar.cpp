@@ -109,6 +109,9 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	                        make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper));
 	AddTerminalRuleOverride(overrides, "TableFunctionName",
 	                        make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, keyword_helper));
+	AddTerminalRuleOverride(
+	    overrides, "ReservedTableFunctionName",
+	    make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, keyword_helper));
 	AddTerminalRuleOverride(overrides, "TypeName",
 	                        make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME, keyword_helper));
 	AddTerminalRuleOverride(overrides, "ReservedTypeName",
@@ -120,6 +123,7 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	AddTerminalRuleOverride(overrides, "CopyOptionName",
 	                        make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper));
 	AddTerminalRuleOverride(overrides, "NumberLiteral", make_uniq<NumberLiteralMatcher>());
+	AddTerminalRuleOverride(overrides, "DottedName", make_uniq<DottedNameMatcher>());
 	AddTerminalRuleOverride(overrides, "StringLiteral", make_uniq<StringLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "OperatorLiteral", make_uniq<OperatorMatcher>());
 	AddTerminalRuleOverride(overrides, "AnyOperatorLiteral",

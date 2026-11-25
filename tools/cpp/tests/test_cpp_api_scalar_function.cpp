@@ -733,6 +733,21 @@ TEST_CASE("Stable C++API: scalar function properties", "[cpp_api]") {
 	REQUIRE(volatile_rows >= 1000);
 	REQUIRE(consistent_rows < volatile_rows);
 
+	// The catalog reports CONSISTENT_WITHIN_QUERY, and index keys cannot contain the function.
+	auto within_query = ScalarFunction::Create(conn.GetFactory());
+	within_query.SetName("prop_query")
+	    .SetExecCallback(CountingOneExec)
+	    .SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
+	within_query.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	conn.Register(within_query);
+
+	REQUIRE(CollectInts(conn.Execute("SELECT count(*)::INTEGER FROM duckdb_functions() WHERE function_name = "
+	                                 "'prop_query' AND stability = 'CONSISTENT_WITHIN_QUERY'")) ==
+	        std::vector<int32_t> {1});
+	conn.Execute("CREATE TABLE prop_keys (a INTEGER)").Drain();
+	REQUIRE_THROWS_MATCHES(conn.Execute("CREATE INDEX prop_index ON prop_keys ((prop_query(a)))").Drain(), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
+
 	// SPECIAL null handling: the callback runs for a NULL argument and produces
 	// a value; with default handling the result would be NULL.
 	auto special = ScalarFunction::Create(conn.GetFactory());
@@ -881,4 +896,24 @@ TEST_CASE("Stable C++API: scalar function overloads carry their own description 
 	REQUIRE(chunk.GetVector(2).GetValue(1).ToText() == "[a, b]");
 	REQUIRE(chunk.GetVector(3).GetValue(0).ToText() == "numeric|example");
 	REQUIRE(chunk.GetVector(3).GetValue(1).ToText() == "");
+}
+
+TEST_CASE("Stable C++API: scalar function in a system schema", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
+
+	auto function = ScalarFunction::Create(factory);
+	function.SetName("cpp_in_schema").SetSchema("encodings").SetExecCallback(PlusOneExec);
+	function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	conn.Register(function);
+
+	REQUIRE(CollectInts(conn.Execute("SELECT system.encodings.cpp_in_schema(41)")) == std::vector<int32_t> {42});
+	REQUIRE_THROWS(conn.Execute("SELECT cpp_in_schema(41)"));
+
+	auto missing = ScalarFunction::Create(factory);
+	missing.SetName("cpp_in_missing_schema").SetSchema("no_such_schema").SetExecCallback(PlusOneExec);
+	missing.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	REQUIRE_THROWS(conn.Register(missing));
 }

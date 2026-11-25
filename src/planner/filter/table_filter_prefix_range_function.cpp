@@ -10,6 +10,7 @@
 #include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
 #include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
@@ -39,21 +40,30 @@
 
 namespace duckdb {
 
-AllocatedData AllocateBitmap(ClientContext &context, const idx_t word_count, uint64_t *&bitmap_begin) {
-	const idx_t size = word_count * sizeof(uint64_t);
-	BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-	auto buffer = buffer_manager.GetBufferAllocator().Allocate(64ULL + size);
+static idx_t BitmapAllocationSize(idx_t word_count) {
+	const auto size = word_count * sizeof(uint64_t) + 64;
+	if (size < 64ULL * 1024 * 1024 || size > 4ULL * 1024 * 1024 * 1024) {
+		return size;
+	}
+	const auto rounded = NextPowerOfTwo(size);
+	// Reuse allocator size classes only when padding adds at most 1/16.
+	return rounded - size <= size / 16 ? rounded : size;
+}
+
+static HugeAllocation AllocateBitmap(ClientContext &context, const idx_t word_count, uint64_t *&bitmap_begin) {
+	auto &allocator = BufferAllocator::Get(context);
+	auto buffer = allocator.AllocateHuge(BitmapAllocationSize(word_count));
 	bitmap_begin = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buffer.get())) & ~63ULL);
 	std::fill_n(bitmap_begin, word_count, 0);
 	return buffer;
 }
 
 struct PrefixRangeBitmapBuildState : public PrefixRangeFilter::BuildState {
-	explicit PrefixRangeBitmapBuildState(AllocatedData data_p, uint64_t *bitmap_p)
+	explicit PrefixRangeBitmapBuildState(HugeAllocation data_p, uint64_t *bitmap_p)
 	    : data(std::move(data_p)), bitmap(bitmap_p) {
 	}
 
-	AllocatedData data;
+	HugeAllocation data;
 	uint64_t *bitmap;
 };
 
@@ -72,7 +82,8 @@ public:
 		const idx_t buckets = UnsafeNumericCast<idx_t>((span >> shift) + 1);
 		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
 
-		buf_ = AllocateBitmap(context, word_count, bitmap);
+		buf_.Reset();
+		bitmap = nullptr;
 
 		// Only mark initialized as true when local bitmaps are merged.
 		initialized = false;
@@ -80,7 +91,7 @@ public:
 	}
 
 	unique_ptr<PrefixRangeBitmapBuildState> InitializeBuildState(ClientContext &context) const {
-		D_ASSERT(bitmap);
+		D_ASSERT(word_count > 0);
 		uint64_t *state_bitmap;
 		auto state_data = AllocateBitmap(context, word_count, state_bitmap);
 		return make_uniq<PrefixRangeBitmapBuildState>(std::move(state_data), state_bitmap);
@@ -112,16 +123,31 @@ public:
 	void MergeBuildState(PrefixRangeBitmapBuildState &state) {
 		const auto last_word_mask = ~uint64_t(0) >> (WORD_MASK - UnsafeNumericCast<idx_t>((span >> shift) & WORD_MASK));
 		dense = true;
-		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
-			bitmap[word_idx] |= state.bitmap[word_idx];
-			const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
-			dense &= bitmap[word_idx] == expected;
+		if (!bitmap) {
+			// Adopt the first completed lane instead of allocating and copying a second bitmap.
+			buf_ = std::move(state.data);
+			bitmap = state.bitmap;
+			// All bits are already present; one hole is enough to rule out a dense bitmap.
+			for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+				const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
+				if (bitmap[word_idx] != expected) {
+					dense = false;
+					break;
+				}
+			}
+		} else {
+			// Merge every word, even after finding a hole, so no keys from this lane are lost.
+			for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+				bitmap[word_idx] |= state.bitmap[word_idx];
+				const auto expected = word_idx + 1 == word_count ? last_word_mask : ~uint64_t(0);
+				dense &= bitmap[word_idx] == expected;
+			}
 		}
 		initialized = true;
 	}
 
 	idx_t GetBuildStateSize() const {
-		return word_count * sizeof(uint64_t) + 64;
+		return BitmapAllocationSize(word_count);
 	}
 
 	template <typename T, typename CONVERTER>
@@ -149,6 +175,9 @@ public:
 		if (dense) {
 			return LookupDense<T, CONVERTER>(key_entries, SelectionVector(), result_sel, count);
 		}
+		if (count >= PREFETCH_MIN_COUNT && ShouldPrefetch<T, CONVERTER>(key_entries, SelectionVector(), count)) {
+			return LookupPrefetched<T, CONVERTER>(key_entries, SelectionVector(), result_sel, count);
+		}
 		idx_t found_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			const auto key_entry = key_entries[i];
@@ -174,6 +203,9 @@ public:
 		if (dense) {
 			return LookupDense<T, CONVERTER>(key_entries, sel, result_sel, count);
 		}
+		if (count >= PREFETCH_MIN_COUNT && ShouldPrefetch<T, CONVERTER>(key_entries, sel, count)) {
+			return LookupPrefetched<T, CONVERTER>(key_entries, sel, result_sel, count);
+		}
 		idx_t found_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			const auto key_entry = key_entries[sel.get_index_unsafe(i)];
@@ -189,6 +221,84 @@ public:
 
 			result_sel.set_index(found_count, i);
 			found_count += bit & in_range;
+		}
+		return found_count;
+	}
+
+	template <typename T, typename CONVERTER>
+	bool ShouldPrefetch(const VectorIterator<T> &keys, const SelectionVector &sel, idx_t count) const {
+#if defined(__GNUC__) || defined(__clang__)
+		if (word_count * sizeof(uint64_t) < PREFETCH_MIN_BYTES) {
+			return false;
+		}
+		const auto step = MaxValue<idx_t>(count / 16, 1);
+		idx_t min_word = word_count;
+		idx_t max_word = 0;
+		for (idx_t i = 0; i < count; i += step) {
+			const auto entry = keys[sel.get_index(i)];
+			if (!entry.IsValid()) {
+				continue;
+			}
+			const U y = CONVERTER::Convert(entry.GetValue()) - min;
+			if (y > span) {
+				continue;
+			}
+			const auto word_idx = UnsafeNumericCast<idx_t>((y >> shift) >> WORD_SHIFT);
+			min_word = MinValue(min_word, word_idx);
+			max_word = MaxValue(max_word, word_idx);
+			if (max_word - min_word >= PREFETCH_MIN_BYTES / sizeof(uint64_t)) {
+				return true;
+			}
+		}
+#endif
+		return false;
+	}
+
+	template <bool HAS_NULL, typename T, typename CONVERTER>
+	void PreparePositions(const VectorIterator<T> &keys, const SelectionVector &sel, idx_t offset, idx_t count,
+	                      array<uint8_t, STANDARD_VECTOR_SIZE> &bit_offsets,
+	                      array<uint32_t, STANDARD_VECTOR_SIZE> &word_indices,
+	                      array<uint8_t, STANDARD_VECTOR_SIZE> &in_range) const {
+		for (idx_t i = 0; i < count; i++) {
+			const auto entry = keys[sel.get_index(offset + i)];
+			if (HAS_NULL && !entry.IsValid()) {
+				bit_offsets[i] = 0;
+				word_indices[i] = 0;
+				in_range[i] = 0;
+				continue;
+			}
+			const U y = CONVERTER::Convert(entry.GetValueUnsafe()) - min;
+			const U bit_idx = y >> shift;
+			const uint8_t valid = y <= span;
+			bit_offsets[i] = bit_idx & WORD_MASK;
+			word_indices[i] = (bit_idx >> WORD_SHIFT) & (0U - valid);
+			in_range[i] = valid;
+		}
+	}
+
+	template <typename T, typename CONVERTER>
+	idx_t LookupPrefetched(const VectorIterator<T> &key_entries, const SelectionVector &sel,
+	                       SelectionVector &result_sel, idx_t count) const {
+		array<uint8_t, STANDARD_VECTOR_SIZE> bit_offsets;
+		array<uint32_t, STANDARD_VECTOR_SIZE> word_indices;
+		array<uint8_t, STANDARD_VECTOR_SIZE> in_range;
+		idx_t found_count = 0;
+		for (idx_t offset = 0; offset < count;) {
+			const auto batch_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - offset);
+			if (key_entries.CanHaveNull()) {
+				PreparePositions<true, T, CONVERTER>(key_entries, sel, offset, batch_count, bit_offsets, word_indices,
+				                                     in_range);
+			} else {
+				PreparePositions<false, T, CONVERTER>(key_entries, sel, offset, batch_count, bit_offsets, word_indices,
+				                                      in_range);
+			}
+			for (idx_t i = 0; i < batch_count; i++) {
+				const uint8_t bit = (bitmap[word_indices[i]] >> bit_offsets[i]) & 1ULL;
+				result_sel.set_index(found_count, offset + i);
+				found_count += bit & in_range[i];
+				PrefetchHashTableEntry(i, batch_count, [&](idx_t next_idx) { return bitmap + word_indices[next_idx]; });
+			}
+			offset += batch_count;
 		}
 		return found_count;
 	}
@@ -255,6 +365,10 @@ public:
 		return initialized;
 	}
 
+	bool IsDense() const {
+		return dense;
+	}
+
 	U Min() const {
 		return min;
 	}
@@ -264,6 +378,9 @@ public:
 	}
 
 private:
+	// Staging only pays off once bitmap loads are expensive enough.
+	static constexpr idx_t PREFETCH_MIN_BYTES = 1024ULL * 1024ULL;
+	static constexpr idx_t PREFETCH_MIN_COUNT = 128;
 	static constexpr idx_t WORD_SHIFT = 6;
 	static constexpr idx_t WORD_MASK = 63;
 
@@ -274,7 +391,7 @@ private:
 	U span;
 	idx_t shift;
 	idx_t word_count;
-	AllocatedData buf_;
+	HugeAllocation buf_;
 	uint64_t *bitmap;
 };
 
@@ -321,6 +438,7 @@ private:
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = NumericConverter<T>::Convert(min_val.GetValueUnsafe<T>());
@@ -333,17 +451,20 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, true>(keys, bitmap_state.bitmap);
 	}
 
-	void MergeBuildState(BuildState &state) override {
-		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	void MergeBuildState(unique_ptr<BuildState> state) override {
+		D_ASSERT(!IsPublished());
+		bitmap.MergeBuildState(state->Cast<PrefixRangeBitmapBuildState>());
 	}
 
 	idx_t GetBuildStateSize() const override {
@@ -374,6 +495,9 @@ public:
 		if (ub < bitmap_min || lb > bitmap_max) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		if (bitmap.IsDense() && lb >= bitmap_min && ub <= bitmap_max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
 
 		const auto adjusted_lb = NumericConverter<T>::Convert(MaxValue<T>(lb, bitmap_min));
 		const auto adjusted_ub = NumericConverter<T>::Convert(MinValue<T>(ub, bitmap_max));
@@ -392,6 +516,7 @@ class StringPrefixRangeFilter : public PrefixRangeFilter {
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = StringPrefixConverter::Convert(min_val.GetValueUnsafe<string_t>());
@@ -405,17 +530,20 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, true>(keys, bitmap_state.bitmap);
 	}
 
-	void MergeBuildState(BuildState &state) override {
-		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	void MergeBuildState(unique_ptr<BuildState> state) override {
+		D_ASSERT(!IsPublished());
+		bitmap.MergeBuildState(state->Cast<PrefixRangeBitmapBuildState>());
 	}
 
 	idx_t GetBuildStateSize() const override {
@@ -627,8 +755,9 @@ static idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &fun
 	return result_count;
 }
 
-static unique_ptr<FunctionLocalState>
-PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> PrefixRangeInitLocalState(ExpressionState &state,
+                                                                const BoundFunctionExpression &expr,
+                                                                optional_ptr<const FunctionData> bind_data) {
 	auto &data = bind_data->Cast<PrefixRangeFunctionData>();
 	if (!data.filter) {
 		return nullptr;
@@ -707,7 +836,11 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 		if (min > max) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return data.filter->LookupRange(min, max);
+		const auto result = data.filter->LookupRange(min, max);
+		if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return result;
 	}
 	case StatisticsType::STRING_STATS: {
 		if (!StringStats::HasMinMax(stats)) {

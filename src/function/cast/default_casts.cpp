@@ -43,6 +43,7 @@ BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastDat
 BoundCastInfo BoundCastInfo::Copy() const {
 	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
 	result.statistics = statistics;
+	result.stability = stability;
 	return result;
 }
 
@@ -193,6 +194,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return GeoCastSwitch(input, source, target);
 	case LogicalTypeId::TYPE:
 		return TypeCastSwitch(input, source, target);

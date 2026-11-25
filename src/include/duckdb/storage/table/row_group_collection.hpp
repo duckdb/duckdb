@@ -98,6 +98,8 @@ public:
 	idx_t GetTotalRows() const;
 	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
+	//! The number of row groups, including the ones that are not loaded yet, without loading them
+	idx_t GetRowGroupCountWithoutLoading() const;
 	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentCollectionData &data);
@@ -149,6 +151,8 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
+	//! Reverts an append that failed before it was finalized
+	void RevertFailedAppend(TableAppendState &state);
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
@@ -245,6 +249,11 @@ public:
 
 	//! Get a ptr to the raw segment tree. This can be useful for some extensions to have directly exposed.
 	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
+
+	//! The metadata blocks of the table data of this collection, as read from disk or written by the last checkpoint
+	const vector<MetaBlockPointer> &GetMetadataPointers() const {
+		return metadata_pointers;
+	}
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,

@@ -94,6 +94,12 @@ public:
 	vector<ShreddedVariantIterator> children;
 	//! The logical type of this layer
 	LogicalType logical_type;
+	//! The type_id shared by all values of this layer, valid only if has_fixed_type_id is set
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	//! Whether type_id holds for every value of this layer (BOOLEAN resolves per value)
+	bool has_fixed_type_id = false;
+	//! The size of the physical payload of this layer
+	idx_t type_size = 0;
 };
 
 class VariantNode;
@@ -166,6 +172,8 @@ public:
 	}
 	//! Returns the (variable-length) string payload of a VARCHAR/BLOB/BIGNUM/GEOMETRY/BITSTRING value
 	string_t GetString() const;
+	//! Returns the BIGNUM blob of a DECIMAL value wider than 38 digits
+	string_t GetWideDecimal() const;
 	//! Returns the (width, scale) of a DECIMAL value
 	VariantDecimalProperties GetDecimalProperties() const {
 		auto decimal = GetDecimal();
@@ -322,9 +330,20 @@ public:
 		return Iterator(*this, EndPos());
 	}
 
-private:
+	//! The entries sorted by key, only for LEXICOGRAPHIC order
+	const vector<VariantObjectEntry> &GetOrderedEntries() const {
+		D_ASSERT(order == VariantIterationOrder::LEXICOGRAPHIC);
+		return ordered_entries;
+	}
+
+	//! The number of raw entries, including the fields missing in this row
+	idx_t GetRawCount() const {
+		return raw_count;
+	}
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
+
+private:
 	//! The end position in the iteration space
 	idx_t EndPos() const {
 		return order == VariantIterationOrder::LEXICOGRAPHIC ? ordered_entries.size() : raw_count;

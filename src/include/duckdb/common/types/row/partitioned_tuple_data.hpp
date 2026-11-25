@@ -117,7 +117,8 @@ public:
 	                   const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	                   const idx_t append_count = DConstants::INVALID_INDEX);
 	//! Appends rows to this PartitionedTupleData
-	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, const idx_t count);
+	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, const idx_t count,
+	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector());
 	//! Flushes any remaining data in the append state into this PartitionedTupleData
 	void FlushAppendState(PartitionedTupleDataAppendState &state);
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
@@ -137,6 +138,10 @@ public:
 	idx_t Count() const;
 	//! Get the size (in bytes) of this PartitionedTupleData
 	idx_t SizeInBytes() const;
+	//! Materialized row and heap bytes, excluding allocation overhead
+	idx_t GetDataSize() const {
+		return data_size;
+	}
 	//! Buffer-manager memory charged for row and heap blocks, plus allocator metadata
 	idx_t GetAllocatedSizeInBytes() const;
 	//! Get the number of partitions of this PartitionedTupleData
@@ -165,7 +170,7 @@ protected:
 	}
 	//! Compute partition indices from rows (similar to function above)
 	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices,
-	                                     unique_ptr<Vector> &utility_vector) const {
+	                                     unique_ptr<Vector> &utility_vector, const SelectionVector &append_sel) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Maximum partition index (optional)

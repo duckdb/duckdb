@@ -44,13 +44,14 @@
 #endif
 
 #include <stdlib.h>
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -58,8 +59,10 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -602,6 +605,8 @@ char *ShellState::OneInputLine(FILE *in, char *&zPrior, int isContinuation) {
 		}
 		free(zPrior);
 		zPrior = nullptr;
+		// probing the terminal inside the line editor is not possible - detect before editing
+		DetectDarkLightMode();
 		return linenoise(prompt_text);
 	}
 #endif
@@ -1064,8 +1069,9 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
 	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
 	if (stdin_is_interactive && stdout_is_console) {
-		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
-		    duckdb::Value::BOOLEAN(false);
+		auto renderer_settings = duckdb::TreeRenderer::GetRendererSettings(*conn->context);
+		renderer_settings["expand_all"] = duckdb::Value::BOOLEAN(false);
+		duckdb::TreeRenderer::SetRendererSettings(*conn->context, renderer_settings);
 	}
 	if (!stdout_is_console) {
 		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
@@ -1118,7 +1124,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			if (agent_mode_active) {
-				PrintQueryEstimate(zStmtSql, *statement);
+				PrintQueryEstimate(*statement);
 			}
 
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
@@ -1277,30 +1283,30 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateAgentProgressBar() {
 	return make_uniq<AgentProgressBarDisplay>();
 }
 
-static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
+static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogSink> sink_ptr) {
 	auto *db_instance = db.instance.get();
 	auto &log_manager = db_instance->GetLogManager();
-	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
-	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
+	log_manager.RegisterLogSink("shell_log_sink", sink_ptr);
+	log_manager.SetLogSink(*db_instance, "shell_log_sink");
 	log_manager.SetEnableLogging(db_instance);
 	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
 }
 
 void ShellState::OpenDB(ShellOpenFlags flags) {
-	// log storage to stdout
-	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
-	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
+	// log sink to stdout
+	auto shell_log_sink = duckdb::make_shared_ptr<ShellLogSink>(*this);
+	duckdb::shared_ptr<duckdb::LogSink> sink_ptr = shell_log_sink;
 
 	if (!db) {
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
-			RegisterShellLogger(*db, storage_ptr);
+			RegisterShellLogger(*db, sink_ptr);
 			conn = make_uniq<duckdb::Connection>(*db);
 		} catch (std::exception &ex) {
 			PrintDatabaseError(duckdb::ErrorData(ex));
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
 				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
-				RegisterShellLogger(*db, storage_ptr);
+				RegisterShellLogger(*db, sink_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
 				ShellState::Exit(1);
@@ -1318,7 +1324,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
 		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
-		ExecuteQuery("SET active_grammar_extensions=['shell']");
+		// appended rather than SET, so grammar extensions that activated themselves on this connection stay active
+		ExecuteQuery("CALL add_grammar_extension('shell')");
 		if (stdout_is_console || agent_mode_active) {
 			ExecuteQuery("PRAGMA enable_progress_bar");
 			ExecuteQuery("PRAGMA enable_print_progress_bar");
@@ -2252,8 +2259,8 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
-	duckdb::LocalFileSystem lfs;
-	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	auto canonical_file = lfs.CanonicalizePath(file);
 	if (!active_read_files.insert(canonical_file).second) {
 		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
 		return false;
@@ -2558,7 +2565,7 @@ LIMIT 5)");
 		if (!style.layout_on.empty()) {
 			style.layout_off = ShellHighlight::ResetTerminalCode();
 		}
-		if (linenoiseGetTerminalColorMode() == LINENOISE_LIGHT_MODE) {
+		if (highlight_mode == HighlightMode::LIGHT_MODE) {
 			style.heading_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::BOLD);
 			style.path_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::STANDARD);
 		} else {
@@ -2785,56 +2792,56 @@ MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &
 **
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
+static void SkipSpaces(const string &zLine, idx_t &pos) {
+	while (pos < zLine.size() && ShellState::IsSpace(zLine[pos])) {
+		pos++;
+	}
+}
+
+//! Parse one, optionally quoted, dot command argument starting at pos
+static string ParseMetaCommandArgument(const string &zLine, idx_t &pos) {
+	string arg;
+	if (zLine[pos] == '\'' || zLine[pos] == '"') {
+		// quoted argument - scan until next quote
+		auto quote = zLine[pos];
+		// skip over the initial quote
+		pos++;
+
+		while (pos < zLine.size() && zLine[pos] != quote) {
+			if (zLine[pos] == '\\' && quote == '"' && pos + 1 < zLine.size()) {
+				// skip over any escaped characters
+				arg += zLine[pos++];
+			}
+			arg += zLine[pos++];
+		}
+		if (pos < zLine.size()) {
+			// skip over the final quote
+			pos++;
+		}
+		if (quote == '"') {
+			arg = resolve_backslashes(arg);
+		}
+	} else {
+		// unquoted argument - scan until the next space
+		while (pos < zLine.size() && !ShellState::IsSpace(zLine[pos])) {
+			arg += zLine[pos];
+			pos++;
+		}
+		arg = resolve_backslashes(arg);
+	}
+	return arg;
+}
+
 int ShellState::DoMetaCommand(const string &zLine) {
 	int rc = 0;
 	vector<string> args;
 	// skip initial dot
 	idx_t pos = 1;
-	while (pos < zLine.size()) {
-		// skip initial spaces
-		while (pos < zLine.size() && IsSpace(zLine[pos])) {
-			pos++;
-		}
-		if (pos >= zLine.size()) {
-			break;
-		}
-		string arg;
-		if (zLine[pos] == '\'' || zLine[pos] == '"') {
-			// quoted argument - scan until next quote
-			auto quote = zLine[pos];
-			// skip over the initial quote
-			pos++;
-
-			while (pos < zLine.size() && zLine[pos] != quote) {
-				if (zLine[pos] == '\\' && quote == '"' && pos + 1 < zLine.size()) {
-					// skip over any escaped characters
-					arg += zLine[pos++];
-				}
-				arg += zLine[pos++];
-			}
-			if (pos < zLine.size()) {
-				// skip over the final quote
-				pos++;
-			}
-			if (quote == '"') {
-				arg = resolve_backslashes(arg);
-			}
-		} else {
-			// unquoted argument - scan until the next space
-			while (pos < zLine.size() && !IsSpace(zLine[pos])) {
-				arg += zLine[pos];
-				pos++;
-			}
-			arg = resolve_backslashes(arg);
-		}
-		args.push_back(std::move(arg));
-	}
-
-	/* Process the input line.
-	 */
-	if (args.empty()) {
+	SkipSpaces(zLine, pos);
+	if (pos >= zLine.size()) {
 		return 0; /* no tokens, no error */
 	}
+	args.push_back(ParseMetaCommandArgument(zLine, pos));
 	ClearTempFile();
 
 	string error_msg;
@@ -2845,6 +2852,18 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		rc = 1;
 	} else {
 		auto &command = *metadata_command;
+		SkipSpaces(zLine, pos);
+		if (command.raw_arguments) {
+			// e.g. a command line for .shell - the system shell does its own quoting
+			if (pos < zLine.size()) {
+				args.push_back(zLine.substr(pos));
+			}
+		} else {
+			while (pos < zLine.size()) {
+				args.push_back(ParseMetaCommandArgument(zLine, pos));
+				SkipSpaces(zLine, pos);
+			}
+		}
 		MetadataResult result = MetadataResult::PRINT_USAGE;
 		try {
 			if (!command.callback) {
@@ -2923,158 +2942,16 @@ static bool _all_whitespace(const char *z) {
 	return true;
 }
 
-enum class SQLParseState { SEMICOLON, WHITESPACE, NORMAL };
-
-static const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
-	for (; *zSql; zSql++) {
-		if (*zSql == '$') {
-			// found a dollar
-			// move forward and find the next dollar
-			zSql++;
-			auto start = zSql;
-			while (*zSql && *zSql != '$') {
-				zSql++;
-			}
-			if (!zSql[0]) {
-				// reached end of string while looking for the dollar
-				return nullptr;
-			}
-			// check if the dollar quoted string name matches
-			if (delimiterLength == idx_t(zSql - start)) {
-				if (memcmp(start, delimiterStart, delimiterLength) == 0) {
-					return zSql;
-				}
-			}
-			// dollar does not match - reset position to start and keep looking
-			zSql = start - 1;
-		}
-	}
-	// unterminated
-	return nullptr;
-}
-
 bool ShellState::SQLIsComplete(const char *zSql) {
-	auto state = SQLParseState::NORMAL;
-
-	for (; *zSql; zSql++) {
-		SQLParseState next_state;
-		switch (*zSql) {
-		case ';':
-			next_state = SQLParseState::SEMICOLON;
-			break;
-		case ' ':
-		case '\r':
-		case '\t':
-		case '\n':
-		case '\f': { /* White space is ignored */
-			next_state = SQLParseState::WHITESPACE;
-			break;
-		}
-		case '/': { /* C-style comments */
-			if (zSql[1] != '*') {
-				next_state = SQLParseState::NORMAL;
-				break;
-			}
-			zSql += 2;
-			while (zSql[0] && (zSql[0] != '*' || zSql[1] != '/')) {
-				zSql++;
-			}
-			if (zSql[0] == 0) {
-				// unterminated c-style string
-				return false;
-			}
-			zSql++;
-			next_state = SQLParseState::WHITESPACE;
-			break;
-		}
-		case '-': { /* SQL-style comments from "--" to end of line */
-			if (zSql[1] != '-') {
-				next_state = SQLParseState::NORMAL;
-				break;
-			}
-			while (*zSql && *zSql != '\n') {
-				zSql++;
-			}
-			if (*zSql == 0) {
-				// unterminated SQL-style comment - return whether or not we had a semicolon right before it
-				return state == SQLParseState::SEMICOLON;
-			}
-			next_state = SQLParseState::WHITESPACE;
-			break;
-		}
-		case '$': { /* Dollar-quoted strings */
-			// check if this is a dollar-quoted string
-			idx_t next_dollar = 0;
-			for (idx_t idx = 1; zSql[idx]; idx++) {
-				if (zSql[idx] == '$') {
-					// found the next dollar
-					next_dollar = idx;
-					break;
-				}
-				// all characters can be between A-Z, a-z, underscore, or \200 - \377
-				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
-					continue;
-				}
-				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
-					continue;
-				}
-				if (zSql[idx] == '_') {
-					continue;
-				}
-				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
-					continue;
-				}
-				// the first character CANNOT be a numeric, only subsequent characters
-				if (idx > 1 && zSql[idx] >= '0' && zSql[idx] <= '9') {
-					continue;
-				}
-				// not a dollar quoted string
-				break;
-			}
-			if (next_dollar == 0) {
-				// not a dollar quoted string
-				next_state = SQLParseState::NORMAL;
-				break;
-			}
-			auto start = zSql + 1;
-			zSql += next_dollar;
-			const char *delimiterStart = start;
-			idx_t delimiterLength = zSql - start;
-			zSql++;
-			// skip the dollar quoted string
-			zSql = skipDollarQuotedString(zSql, delimiterStart, delimiterLength);
-			if (!zSql) {
-				// unterminated dollar string
-				return false;
-			}
-			next_state = SQLParseState::WHITESPACE;
-			break;
-		}
-		case '`': /* backtick-quoted identifiers */
-		case '"': /* single- and double-quoted strings */
-		case '\'': {
-			int c = *zSql;
-			zSql++;
-			while (*zSql && *zSql != c) {
-				zSql++;
-			}
-			if (*zSql == 0) {
-				// unterminated single or double quoted string
-				return 0;
-			}
-			next_state = SQLParseState::WHITESPACE;
-			break;
-		}
-		default:
-			next_state = SQLParseState::NORMAL;
-		}
-		// white space is ignored (no change in state)
-		if (next_state != SQLParseState::WHITESPACE) {
-			state = next_state;
-		}
+	// completeness follows the grammar of the open connection, so statements a dialect or grammar
+	// extension adds (including bodies with embedded semicolons) frame exactly as they parse
+	auto &state = ShellState::Get();
+	if (state.conn && state.conn->context) {
+		duckdb::Parser parser(*state.conn->context);
+		return parser.IsQueryComplete(zSql);
 	}
-	// the statement is complete only if we end in a semicolon
-	return state == SQLParseState::SEMICOLON;
+	auto parser = duckdb::Parser::GetBuiltinParser();
+	return parser.IsQueryComplete(zSql);
 }
 
 void ShellState::ShellAddHistory(const char *history) {
@@ -3291,14 +3168,9 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
-}
-
 string ShellState::GetDefaultDuckDBRC() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	return lfs.JoinPath(lfs.GetHomeDirectory(), ".duckdbrc");
 }
 
 MetadataResult ShellState::FormatSQL(string &sql) {
@@ -3688,6 +3560,7 @@ struct ScanEstimate {
 	idx_t rows;
 };
 
+//! Collect the scans of a plan: the table and table function scans that read data
 static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::LogicalOperator &op,
                                  vector<ScanEstimate> &scans) {
 	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
@@ -3704,7 +3577,28 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 	}
 }
 
-void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
+//! Runs the estimate in a transaction of its own unless the connection already has one, and rolls it back
+struct EstimateTransaction {
+	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
+		if (started) {
+			con.BeginTransaction();
+		}
+	}
+	~EstimateTransaction() {
+		if (!started) {
+			return;
+		}
+		try {
+			con.Rollback();
+		} catch (...) { // NOLINT: the statement itself reports what is wrong with the connection
+		}
+	}
+
+	duckdb::Connection &con;
+	bool started;
+};
+
+void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
 	case duckdb::StatementType::SELECT_STATEMENT:
 	case duckdb::StatementType::INSERT_STATEMENT:
@@ -3719,9 +3613,21 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 	}
 	try {
 		auto &context = *conn->context;
-		auto plan = context.ExtractPlan(sql);
+		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
+		// plan, read the estimates and destroy the plan inside one transaction
+		EstimateTransaction transaction(*conn);
+		// planned directly rather than through a query, so neither settings that change EXPLAIN output nor the query
+		// log or the profiler see the estimate
 		vector<ScanEstimate> scans;
-		CollectScanEstimates(context, *plan, scans);
+		idx_t rows_returned = 0;
+		context.RunFunctionInTransaction([&]() {
+			duckdb::Planner planner(context);
+			planner.CreatePlan(statement.Copy());
+			duckdb::Optimizer optimizer(*planner.binder, context);
+			auto plan = optimizer.Optimize(std::move(planner.plan));
+			CollectScanEstimates(context, *plan, scans);
+			rows_returned = plan->EstimateCardinality(context);
+		});
 		if (scans.empty()) {
 			// e.g. a plain CREATE TABLE - not worth a line
 			return;
@@ -3750,7 +3656,7 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 		string line =
 		    StringUtil::Format("estimate: ~%llu rows read (%s)", total_rows, StringUtil::Join(scan_texts, ", "));
 		if (statement.type == duckdb::StatementType::SELECT_STATEMENT) {
-			line += StringUtil::Format(", ~%llu rows returned", plan->EstimateCardinality(context));
+			line += StringUtil::Format(", ~%llu rows returned", rows_returned);
 		}
 		PrintF(PrintOutput::STDERR, "%s\n", line);
 	} catch (std::exception &) {
@@ -3761,6 +3667,10 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
+	if (!ShellHighlight::IsEnabled()) {
+		// no colors are printed - no need to detect
+		return;
+	}
 	if (highlight_mode != HighlightMode::AUTOMATIC) {
 		// highlight mode is specified by the user - avoid setting manually
 		return;
@@ -3770,7 +3680,9 @@ void ShellState::DetectDarkLightMode() {
 		return;
 	}
 	// detect terminal colors
-	auto terminal_color = linenoiseGetTerminalColorMode();
+	// the terminal is not queried while stdin is read by the shell itself (-batch) - only COLORFGBG is used then
+	auto terminal_color =
+	    linenoiseGetTerminalColorMode(rl_version == ReadLineVersion::LINENOISE && (stdin_is_interactive || !readStdin));
 	if (terminal_color == LINENOISE_DARK_MODE) {
 		highlight_mode = HighlightMode::DARK_MODE;
 		highlight.ToggleMode(HighlightMode::DARK_MODE);
@@ -3840,6 +3752,12 @@ int RunShell(int argc, const char **argv) {
 	data.stderr_is_console = IsStdStreamAConsole(2);
 
 	data.Initialize();
+
+	auto no_color = getenv("NO_COLOR");
+	if (no_color && no_color[0]) {
+		// https://no-color.org - can still be turned on explicitly with .highlight on
+		ShellHighlight::SetHighlighting(false);
+	}
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
@@ -3958,8 +3876,6 @@ int RunShell(int argc, const char **argv) {
 		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
-	data.DetectDarkLightMode();
-
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
 	** file is processed so that the command-line arguments will override
@@ -4022,7 +3938,7 @@ int RunShell(int argc, const char **argv) {
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
-				zHome = GetHomeDirectory() + "/.duckdb_history";
+				zHome = duckdb::FileSystem::GetLocal(*data.db->instance).GetHomeDirectory() + "/.duckdb_history";
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {
@@ -4036,6 +3952,8 @@ int RunShell(int argc, const char **argv) {
 #endif
 			ShellHistory history(data, zHistory);
 			data.in = 0;
+			// the line editor needs the colors up front
+			data.DetectDarkLightMode();
 			rc = data.ProcessInput(InputMode::STANDARD);
 		} else {
 			data.in = stdin;

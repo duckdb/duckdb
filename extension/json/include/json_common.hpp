@@ -9,9 +9,7 @@
 #pragma once
 
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -146,6 +144,20 @@ public:
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 	static constexpr auto WRITE_PRETTY_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY;
 
+	//! Whether documents read into these types keep numbers as text (YYJSON_READ_NUMBER_AS_RAW): a DECIMAL needs it
+	static bool NumbersAsRaw(const LogicalType &type);
+	static bool NumbersAsRaw(const vector<LogicalType> &types);
+	//! The flags to read documents with, given NumbersAsRaw
+	static yyjson_read_flag GetReadFlag(yyjson_read_flag flag, bool numbers_as_raw);
+	//! Parses a number kept as text as the default flags would have; false if those keep it as text too (big numbers)
+	static inline bool ReadRawNumber(const char *str, yyjson_val &number) {
+		return yyjson_read_number(str, &number, READ_FLAG, nullptr, nullptr) && !unsafe_yyjson_is_raw(&number);
+	}
+	static inline bool ReadRawNumber(yyjson_val *val, yyjson_val &number) {
+		D_ASSERT(unsafe_yyjson_is_raw(val));
+		return ReadRawNumber(unsafe_yyjson_get_str(val), number);
+	}
+
 public:
 	//! Constant JSON type strings
 	static constexpr char const *TYPE_STRING_NULL = "NULL";
@@ -256,7 +268,7 @@ public:
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
 		// Truncate, so we don't print megabytes worth of JSON
-		auto input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		auto input = length > 50 ? StringUtil::TruncateUTF8TOByteLength(data, length, 47) : string(data, length);
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
 		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: \"%s\"", error.pos, error.msg,
@@ -414,5 +426,19 @@ struct yyjson_mut_doc_deleter {
 
 using yyjson_doc_ptr = unique_ptr<yyjson_doc, yyjson_doc_deleter>;
 using yyjson_mut_doc_ptr = unique_ptr<yyjson_mut_doc, yyjson_mut_doc_deleter>;
+
+//! Writes values whose numbers were kept as text (NumbersAsRaw) as if read with the default flags (ReadRawNumber)
+class JSONRawNumberWriter {
+public:
+	explicit JSONRawNumberWriter(yyjson_alc *alc) : alc(alc), doc(nullptr) {
+	}
+	string_t Write(yyjson_val *val);
+
+private:
+	yyjson_alc *alc;
+	//! Created by the first value that has a number to parse; holds the mutable copies
+	yyjson_mut_doc *doc;
+	vector<yyjson_mut_val *> containers;
+};
 
 } // namespace duckdb

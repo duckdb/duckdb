@@ -21,9 +21,11 @@ add_library_unity(
   combine_types_rules.cpp
   compression_config.cpp
   copy_function.cpp
+  builtin_encodings.cpp
   encoding_function.cpp
   function.cpp
   function_binder.cpp
+  function_binder_result.cpp
   function_list.cpp
   function_set.cpp
   pragma_function.cpp

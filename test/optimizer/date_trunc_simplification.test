@@ -6,7 +6,7 @@ statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
+SET explain_output = 'OPTIMIZED_ONLY';
 
 statement ok
 create table test(d TIMESTAMP);
@@ -209,6 +209,22 @@ select * from test2 where date_trunc('day', d) is not distinct from '2025-01-06'
 
 query I
 select * from test2 where date_trunc('day', d) is distinct from '2025-01-10';
+----
+2025-01-06
+
+# a part shorter than a day truncates a date to its own midnight
+query I
+select * from test2 where date_trunc('hour', d) = TIMESTAMP '2025-01-06';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('minute', d) <= TIMESTAMP '2025-01-06';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('epoch', d) < TIMESTAMP '2025-01-06 05:00';
 ----
 2025-01-06
 
@@ -421,6 +437,28 @@ select * from test where date_trunc('week', d) >= '2025-01-01';
 query I
 select * from test where date_trunc('quarter', d) >= '2025-04-01';
 ----
+
+# a bound past the last timestamp keeps the comparison
+statement ok
+create table max_test(d TIMESTAMP);
+
+statement ok
+insert into max_test values ('294247-01-01'), ('2025-01-01');
+
+query I
+select count(*) from max_test where date_trunc('month', d) = TIMESTAMP '294247-01-01';
+----
+1
+
+query I
+select count(*) from max_test where date_trunc('month', d) <= TIMESTAMP '294247-01-01';
+----
+2
+
+query I
+select count(*) from max_test where date_trunc('month', d) > TIMESTAMP '294247-01-01';
+----
+0
 
 #
 # check comparisons with infinity

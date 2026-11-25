@@ -151,6 +151,9 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
+			if (item.get().Equals(col)) {
+				continue;
+			}
 			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
 		}
 	}
@@ -213,7 +216,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
 					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
 					auto between =
-					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					    BoundBetweenExpression::Create(context, entries[i].get().Copy(), std::move(lower_constant),
 					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
 					callback(std::move(between));
 				}
@@ -288,6 +291,17 @@ static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Ex
 	return make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(child_expr), col_type));
 }
 
+static unique_ptr<ExpressionFilter> CreateAdaptiveInFilter(unique_ptr<Expression> in_expr, const LogicalType &type) {
+	// Keep large lists pruning-only; evaluating them per row is expensive.
+	if (in_expr->Cast<BoundOperatorExpression>().GetChildren().size() >=
+	        InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD ||
+	    !ExpressionFilterExecutor::TryCreate(*in_expr)) {
+		return CreateOptionalExpressionFilter(std::move(in_expr), type);
+	}
+	return ExpressionFilter::CreateSelectivityOptionalFilter(std::move(in_expr), type,
+	                                                         SelectivityOptionalFilterType::IN_FILTER);
+}
+
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
 	for (idx_t i = 0; i < in_list.size(); i++) {
 		if (in_list[i].IsNull()) {
@@ -337,6 +351,53 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 		return true;
 	default:
 		return false;
+	}
+}
+
+optional_ptr<const Expression> FilterCombiner::GetComparedExpression(const Expression &filter) {
+	const auto filter_type = filter.GetExpressionType();
+	// BETWEEN and IN compare their first child with the others
+	const bool compares_first_child =
+	    filter_type == ExpressionType::COMPARE_BETWEEN || filter_type == ExpressionType::COMPARE_IN;
+	if ((!SupportedFilterComparison(filter_type) && !compares_first_child) || filter.IsVolatile()) {
+		return nullptr;
+	}
+	optional_ptr<const Expression> compared;
+	bool valid = true;
+	idx_t child_idx = 0;
+	ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) {
+		if (!child.IsFoldable()) {
+			valid = valid && !compared && (!compares_first_child || child_idx == 0);
+			compared = &child;
+		}
+		child_idx++;
+	});
+	return valid ? compared : nullptr;
+}
+
+void FilterCombiner::GenerateJoinFilters(const vector<JoinCondition> &conditions,
+                                         const vector<reference<const Expression>> &filters, JoinSide target_side,
+                                         const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	D_ASSERT(target_side == JoinSide::LEFT || target_side == JoinSide::RIGHT);
+	for (auto &cond : conditions) {
+		// a comparison with constants is false for NULL, so NOT DISTINCT FROM acts as equality for it
+		if (!cond.IsComparison() || (cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
+		                             cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+			continue;
+		}
+		auto &source = target_side == JoinSide::LEFT ? cond.GetRHS() : cond.GetLHS();
+		auto &target = target_side == JoinSide::LEFT ? cond.GetLHS() : cond.GetRHS();
+		// the join evaluates both sides once per row, a generated filter must not evaluate them differently
+		if (source.IsVolatile() || target.IsVolatile() || target.CanThrow() || source.IsFoldable() ||
+		    target.IsFoldable()) {
+			continue;
+		}
+		for (auto &filter : filters) {
+			auto compared = GetComparedExpression(filter.get());
+			if (compared && compared->Equals(source)) {
+				callback(ExpressionIterator::ReplaceExpression(filter.get(), source, target));
+			}
+		}
 	}
 }
 
@@ -695,10 +756,10 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
-	// if this is not a dense range we can push an optional filter for zone-map pruning
+	// Keep the residual filter so scans can skip row filtering when it is not selective.
 	auto in_expr =
 	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.GetChildren()[0]), std::move(in_list));
-	table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(in_expr), type));
+	table_filters.PushFilter(proj_index, CreateAdaptiveInFilter(std::move(in_expr), type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -781,9 +842,15 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			    CreateComparisonExpression(*column_ref, comparison_type, const_val->GetValue()));
 		}
 	}
-	if (only_equalities && equality_column &&
-	    TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
-		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	if (only_equalities && equality_column) {
+		if (TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
+			return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		}
+		// Push the same filter as for `col IN (...)`, which index scans can use.
+		auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*equality_column),
+		                                                    std::move(equality_values));
+		table_filters.PushFilter(proj_id, CreateAdaptiveInFilter(std::move(in_expr), col_type));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
@@ -799,8 +866,9 @@ static bool IsLessThan(ExpressionType type) {
 
 //! Returns the relaxation margin in native units of the source type for a temporal cast.
 //! Returns -1 if the cast pair is not supported for relaxed pushdown.
-//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+//! Margins: 48h for timestamp casts that read the time zone, 1 day DATE->TIMESTAMPTZ, 24h for time of day, 1s rounding.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
+	static constexpr int64_t TIME_ZONE_MARGIN = 2LL * Interval::MICROS_PER_DAY; // microseconds
 	if (source == target) {
 		switch (source) {
 		case LogicalTypeId::DATE:
@@ -818,12 +886,10 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		// native unit: microseconds
 		switch (target) {
-		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return 2LL * Interval::MICROS_PER_HOUR;
+			return TIME_ZONE_MARGIN;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY;
 		case LogicalTypeId::TIMESTAMP_MS:
@@ -832,8 +898,18 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		default:
 			return -1;
 		}
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return TIME_ZONE_MARGIN;
+		default:
+			return -1;
+		}
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -842,6 +918,19 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return Interval::MICROS_PER_SEC * 1000LL;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		// ICU does not override these, so they only lose precision
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+			return TIME_ZONE_MARGIN * 1000LL;
 		default:
 			return -1;
 		}
@@ -1193,7 +1282,8 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 }
 
 FilterResult FilterCombiner::AddFilter(Expression &expr) {
-	if (expr.HasParameter()) {
+	// every occurrence of a volatile expression is its own evaluation, so it cannot share an equivalence set
+	if (expr.HasParameter() || expr.IsVolatile()) {
 		return FilterResult::UNSUPPORTED;
 	}
 	if (expr.IsFoldable()) {
@@ -1202,7 +1292,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
 			return FilterResult::UNSUPPORTED;
 		}
-		result = result.DefaultCastAs(LogicalType::BOOLEAN);
+		result = result.CastAs(context, LogicalType::BOOLEAN);
 		// check if the filter passes
 		if (result.IsNull() || !BooleanValue::Get(result)) {
 			// the filter does not pass the scalar test, create an empty result

@@ -393,7 +393,7 @@ static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, 
 	return std::move(result);
 }
 
-static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) -> optional_idx {
+static auto CV2CopyToBatchSize(ClientContext &context, const FunctionData &bind_data) -> optional_idx {
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToBatchSizeInfo args = {};
@@ -414,7 +414,7 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 	return args.out_target;
 }
 
-static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path)
+static auto CV2CopyToInitGlobal(ClientContext &context, const FunctionData &bind_data, const string &file_path)
     -> unique_ptr<GlobalFunctionData> {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -443,7 +443,7 @@ static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data,
 	return std::move(result);
 }
 
-static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToPrepareBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                                   unique_ptr<ColumnDataCollection> collection) -> unique_ptr<PreparedBatchData> {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -470,7 +470,7 @@ static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_dat
 	return std::move(result);
 }
 
-static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToFlushBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                                 PreparedBatchData &batch) -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 
@@ -490,8 +490,8 @@ static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data,
 	}
 }
 
-static auto CV2CopyToReportStatistics(ClientContext &context, FunctionData &bind_data, CV2CopyToGlobalState &gstate)
-    -> void {
+static auto CV2CopyToReportStatistics(ClientContext &context, const FunctionData &bind_data,
+                                      CV2CopyToGlobalState &gstate) -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToStatisticsInfo args = {};
@@ -511,7 +511,8 @@ static auto CV2CopyToReportStatistics(ClientContext &context, FunctionData &bind
 	gstate.written_statistics->file_size_bytes = args.out_file_size_bytes;
 }
 
-static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate_p) -> void {
+static auto CV2CopyToFinalize(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate_p)
+    -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 	auto &gstate = gstate_p.Cast<CV2CopyToGlobalState>();
 
@@ -538,8 +539,8 @@ static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, G
 }
 
 //! The engine asks where to report the statistics of a file right after creating it, before anything is written to it
-static auto CV2CopyToGetWrittenStatistics(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                                          CopyFunctionFileStatistics &statistics) -> void {
+static auto CV2CopyToGetWrittenStatistics(ClientContext &context, const FunctionData &bind_data,
+                                          GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics) -> void {
 	gstate.Cast<CV2CopyToGlobalState>().written_statistics = &statistics;
 }
 
@@ -549,11 +550,12 @@ static auto CV2CopyToGetWrittenStatistics(ClientContext &context, FunctionData &
 // COPY TO itself drives the function through its batch interface. These hooks serve callers that write a file through
 // the copy function directly, sinking chunks into it one at a time - every chunk is written as a batch of its own.
 
-static auto CV2CopyToInitLocal(ExecutionContext &context, FunctionData &bind_data) -> unique_ptr<LocalFunctionData> {
+static auto CV2CopyToInitLocal(ExecutionContext &context, const FunctionData &bind_data)
+    -> unique_ptr<LocalFunctionData> {
 	return make_uniq<CV2CopyToLocalState>();
 }
 
-static auto CV2CopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToSink(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                           LocalFunctionData &lstate, DataChunk &input) -> void {
 	if (input.size() == 0) {
 		return;
@@ -566,7 +568,7 @@ static auto CV2CopyToSink(ExecutionContext &context, FunctionData &bind_data, Gl
 	CV2CopyToFlushBatch(context.client, bind_data, gstate, *prepared);
 }
 
-static auto CV2CopyToCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static auto CV2CopyToCombine(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                              LocalFunctionData &lstate) -> void {
 }
 
@@ -843,12 +845,12 @@ static auto GetColumnType(INFO &args, idx_t index, const char *function) -> duck
 }
 
 template <class INFO>
-static auto GetColumnName(INFO &args, idx_t index, const char *function) -> duckdb_v2_identifier_t {
+static auto GetColumnName(INFO &args, idx_t index, const char *function) -> const auto & {
 	const auto &names = *args.in_names;
 	if (index >= names.size()) {
 		throw InvalidInputException("Index out of bounds in %s", function);
 	}
-	return Convert(names[index]);
+	return names[index];
 }
 
 template <class INFO>
@@ -897,20 +899,21 @@ DUCKDB_V2_ERROR duckdb_v2_copy_function_create(duckdb_v2_factory_handle factory,
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function, const duckdb_v2_str *name,
-                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function, const char *name,
+                                                 idx_t name_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
-	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
+	DUCKDB_CHECK_STR_ARG(name, name_length);
+	return WithErrorHandler(
+	    err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name, name_length)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_function_set_file_extension(duckdb_v2_copy_function_handle function,
-                                                           const duckdb_v2_str *extension,
+                                                           const char *extension, idx_t extension_length,
                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
-	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_STR_ARG(extension, extension_length);
 	return WithErrorHandler(err, [&]() {
-		duckdb::string value(extension->ptr, extension->len);
+		duckdb::string value(Convert(extension, extension_length));
 		if (!value.empty() && value[0] == '.') {
 			throw duckdb::InvalidInputException("The file extension of a copy function is set without its leading dot, "
 			                                    "e.g. \"parquet\" rather than \".parquet\".");
@@ -996,11 +999,12 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_set_bind_data(duckdb_v2_copy_to_bind_info
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_file_path(duckdb_v2_copy_to_bind_info_handle info, duckdb_v2_str *path,
-                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_file_path(duckdb_v2_copy_to_bind_info_handle info, const char **path,
+                                                     idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_count(duckdb_v2_copy_to_bind_info_handle info, idx_t *count,
@@ -1021,11 +1025,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_type(duckdb_v2_copy_to_bind_in
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_column_name(duckdb_v2_copy_to_bind_info_handle info, idx_t index,
-                                                       duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err) {
+                                                       const char **name, idx_t *name_length,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(
-	    err, [&]() { *name = GetColumnName(*Convert(info), index, "duckdb_v2_copy_to_bind_get_column_name"); });
+	DUCKDB_CHECK_ARG(name_length);
+	return WithErrorHandler(err, [&]() {
+		SetStringOut(name, name_length, GetColumnName(*Convert(info), index, "duckdb_v2_copy_to_bind_get_column_name"));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_count(duckdb_v2_copy_to_bind_info_handle info, idx_t *count,
@@ -1036,11 +1043,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_count(duckdb_v2_copy_to_bind_i
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_bind_get_option_name(duckdb_v2_copy_to_bind_info_handle info, idx_t index,
-                                                       duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err) {
+                                                       const char **name, idx_t *name_length,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(name_length);
 	return WithErrorHandler(err, [&]() {
-		*name = Convert(*GetOption(*Convert(info), index, "duckdb_v2_copy_to_bind_get_option_name").first);
+		SetStringOut(name, name_length,
+		             *GetOption(*Convert(info), index, "duckdb_v2_copy_to_bind_get_option_name").first);
 	});
 }
 
@@ -1096,11 +1106,12 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_bind_data(duckdb_v2_copy_to_init_info
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_file_path(duckdb_v2_copy_to_init_info_handle info, duckdb_v2_str *path,
-                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_to_init_get_file_path(duckdb_v2_copy_to_init_info_handle info, const char **path,
+                                                     idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_to_init_set_init_data(duckdb_v2_copy_to_init_info_handle info, duckdb_v2_opaque *data,
@@ -1274,11 +1285,12 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_set_bind_data(duckdb_v2_copy_from_bind_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_file_path(duckdb_v2_copy_from_bind_info_handle info, duckdb_v2_str *path,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_file_path(duckdb_v2_copy_from_bind_info_handle info, const char **path,
+                                                       idx_t *path_length, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(*Convert(info)->in_file_path); });
+	DUCKDB_CHECK_ARG(path_length);
+	return WithErrorHandler(err, [&]() { SetStringOut(path, path_length, *Convert(info)->in_file_path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_count(duckdb_v2_copy_from_bind_info_handle info, idx_t *count,
@@ -1299,12 +1311,15 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_type(duckdb_v2_copy_from_bin
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_column_name(duckdb_v2_copy_from_bind_info_handle info, idx_t index,
-                                                         duckdb_v2_identifier_t *name,
+                                                         const char **name, idx_t *name_length,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(
-	    err, [&]() { *name = GetColumnName(*Convert(info), index, "duckdb_v2_copy_from_bind_get_column_name"); });
+	DUCKDB_CHECK_ARG(name_length);
+	return WithErrorHandler(err, [&]() {
+		SetStringOut(name, name_length,
+		             GetColumnName(*Convert(info), index, "duckdb_v2_copy_from_bind_get_column_name"));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_count(duckdb_v2_copy_from_bind_info_handle info, idx_t *count,
@@ -1315,12 +1330,14 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_count(duckdb_v2_copy_from_bi
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_get_option_name(duckdb_v2_copy_from_bind_info_handle info, idx_t index,
-                                                         duckdb_v2_identifier_t *name,
+                                                         const char **name, idx_t *name_length,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(name_length);
 	return WithErrorHandler(err, [&]() {
-		*name = Convert(*GetOption(*Convert(info), index, "duckdb_v2_copy_from_bind_get_option_name").first);
+		SetStringOut(name, name_length,
+		             *GetOption(*Convert(info), index, "duckdb_v2_copy_from_bind_get_option_name").first);
 	});
 }
 

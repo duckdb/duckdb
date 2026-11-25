@@ -4,6 +4,26 @@ Typical entrypoints:
 - POSIX builds: `build/release/test/run`, `build/reldebug/test/run`, `build/debug/test/run`
 - Windows native layout: `build/release/test/run.py` or `build/release/test/run.bat`
 
+## Fast and slow tests
+
+Aim for fast SQL and C++ tests to take roughly 20–200 ms each with 1–2 CPU cores available.
+Treat 300 ms as a guideline for moving a test to the slow suite, rather than a strict limit.
+Measure with a release build and the runner's default worker concurrency:
+
+```bash
+make release
+build/release/test/run --track-runtime 0.3
+```
+
+The runner reports individual test runtimes within each batch. Repeat candidate tests before
+classifying them, since concurrent tests compete for CPU and disk. Network tests may need separate
+consideration.
+
+Use `.test_slow` for slow SQL tests and add `[.]` to the tags of slow C++ test cases. These tests
+remain available in the full suite (`build/release/test/run '*'`). When moving a stress test, keep
+a smaller fast case that exercises the same behavior where practical. Preserve the original scale
+in the slow case when it is needed to reproduce a bug or exercise a storage or execution boundary.
+
 ## Test Contract
 
 Within SQL tests, the test runner (unittest) guarantees that these environment variables will be set. Many can be overridden when needed.
@@ -14,7 +34,7 @@ Within SQL tests, the test runner (unittest) guarantees that these environment v
 | `TEST_NAME__NO_SLASH` | e.g. `test_path_filename.test` | N/A | is always `TEST_NAME s@/@_@g` (keeps the body suffix)                               |
 | `TEST_ID` | e.g. `test_path_filename_test` | N/A | per-test identity: the full `TEST_NAME` sanitized to one path component (every char outside `[A-Za-z0-9_-]` → `_`, including `.`); the body suffix is kept so siblings differing only by suffix (`foo.test` vs `foo.test_slow`) stay distinct; the `[TEST_ID]` path level under `TEMP_DIR_ROOT` |
 | `TEST_UUID` | random UUID (as string) | N/A | defined per invocation                                                             |
-| `RUN_ID` | generated (`<ts>--<mnemonic>`) | `unittest --run-id <id>`<br/>also `DUCKDB_TEST_RUN_ID`, config `run_id` | per-run identity; the `[RUN_ID]` path level; shared across a run's tests            |
+| `RUN_ID` | generated UUID | `unittest --run-id <id>`<br/>also `DUCKDB_TEST_RUN_ID`, config `run_id` | per-run identity; the `[RUN_ID]` path level; shared across a run's tests            |
 | `WORKING_DIR`    | e.g., `/Users/me/src/duckdb`     | `unittest --test-dir <path>`                                | default: wherever duckdb was sourced and built <br/> AKA: `{WORKING_DIRECTORY}`    |
 | `BUILD_DIR`      | `{WORKING_DIR}/build/release` | N/A                                                         | read-only; derived from unittest path <br/> AKA: `{BUILD_DIRECTORY}`               |
 | `DATA_DIR`  | `{WORKING_DIR}/data`        | `unittest --data-dir <path>`<br/>also `DUCKDB_TEST_DATA_DIR`, config `data_dir` | copy of `duckdb/data/**`, to test AWS/Azure/other VFS reads; may be relative or absolute/remote (e.g. `az://...`). See [Data directory](#data-directory). |
@@ -103,3 +123,8 @@ and buffer sizes.
 ### ADBC
 
 The ADBC tests are in `test/api/adbc/test_adbc.cpp`. To run them the DuckDB library path must be provided in the `DUCKDB_INSTALL_LIB` variable.
+
+### Timing test runs
+
+Check CPU utilization and wait for unrelated heavy compilation or test jobs to finish before
+measuring. Use a release build and the runner's default worker concurrency.

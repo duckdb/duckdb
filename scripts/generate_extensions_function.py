@@ -160,7 +160,8 @@ class Function(NamedTuple):
 class FunctionOverload(NamedTuple):
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
 
@@ -168,11 +169,12 @@ class ExtensionFunctionOverload(NamedTuple):
     extension: str
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
     @staticmethod
-    def create_map(input: List[Tuple[str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
+    def create_map(input: List[Tuple[str, str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
         output: Dict[Function, List["ExtensionFunctionOverload"]] = {}
         for x in input:
             function = Function(x[0], catalog_type_from_type(x[2]))
@@ -180,8 +182,11 @@ class ExtensionFunctionOverload(NamedTuple):
             signature = x[3]
             splits = signature.split('>')
             return_type = LogicalType(splits[1])
-            parameters = [LogicalType(param) for param in splits[0][1:-1].split(',')]
-            extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
+            parameter_types = tuple(LogicalType(param) for param in splits[0][1:-1].split(','))
+            parameter_names = tuple(x[4][1:-1].split(",")) if x[4][1:-1] else ()
+            extension_function = ExtensionFunctionOverload(
+                x[1], function.name, function.type, parameter_types, parameter_names, return_type
+            )
             if function not in output:
                 output[function] = []
             output[function].append(extension_function)
@@ -226,6 +231,18 @@ class ExtensionSecretType(NamedTuple):
         return output
 
 
+class ExtensionExternalResourceType(NamedTuple):
+    extension: str
+    name: str
+
+    @staticmethod
+    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionExternalResourceType"]:
+        output: Dict[str, "ExtensionExternalResourceType"] = {}
+        for x in input:
+            output[x[0]] = ExtensionExternalResourceType(x[1], x[0])
+        return output
+
+
 class ExtensionCopyFunction(NamedTuple):
     extension: str
     name: str
@@ -257,11 +274,12 @@ class ParsedEntries:
         self.function_overloads = {}
         self.settings = {}
         self.secret_types = {}
+        self.external_resource_types = {}
         self.types = {}
         self.copy_functions = {}
 
-        file = open(file_path, 'r')
-        file_blob = file.read()
+        with open(file_path, 'r') as file:
+            file_blob = file.read()
 
         # Get the extension functions
         ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
@@ -272,7 +290,7 @@ class ParsedEntries:
         # Get the extension function overloads
         ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
         res = parse_records(ext_function_overloads_file_blob)
-        res = [(x[0], x[1], x[2], x[3]) for x in res]
+        res = [(x[0], x[1], x[2], x[3], x[4] if len(x) > 4 else "[]") for x in res]
         self.function_overloads = ExtensionFunctionOverload.create_map(res)
 
         # Get the extension settings
@@ -286,6 +304,12 @@ class ParsedEntries:
         res = parse_records(ext_secret_types_file_blob)
         res = [(x[0], x[1]) for x in res]
         self.secret_types = ExtensionSecretType.create_map(res)
+
+        # Get the external resource types
+        ext_external_resource_types_file_blob = get_slice_of_file("EXTENSION_EXTERNAL_RESOURCE_TYPES", file_blob)
+        res = parse_records(ext_external_resource_types_file_blob)
+        res = [(x[0], x[1]) for x in res]
+        self.external_resource_types = ExtensionExternalResourceType.create_map(res)
 
         # Get the extension types
         ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
@@ -312,6 +336,9 @@ class ParsedEntries:
         self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
         self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
         self.secret_types = {k: v for k, v in self.secret_types.items() if v.extension not in extensions}
+        self.external_resource_types = {
+            k: v for k, v in self.external_resource_types.items() if v.extension not in extensions
+        }
         self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
 
 
@@ -387,9 +414,10 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             function_name,
             function_type,
             parameter_types,
+            parameters,
             return_type
         from duckdb_functions()
-        where function_type <> 'window'
+        where function_type <> 'window' and schema_name NOT IN ('collations', 'encodings')
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
@@ -401,12 +429,18 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         function_name = func["function_name"].lower()
         function_type = func["function_type"]
         parameter_types = func["parameter_types"]
+        parameter_names = func["parameters"]
         return_type = func["return_type"]
-        function_parameters = transform_parameters(parameter_types)
+        function_parameter_types = transform_parameters(parameter_types)
+        function_parameter_names = tuple(x for x in parameter_names.lstrip('[').rstrip(']').split(', ') if len(x) > 0)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
         function_overload = FunctionOverload(
-            function_name, catalog_type_from_string(function_type), function_parameters, function_return
+            function_name,
+            catalog_type_from_string(function_type),
+            function_parameter_types,
+            function_parameter_names,
+            function_return,
         )
         if function not in functions:
             functions.add(function)
@@ -446,6 +480,19 @@ def get_secret_types(load="") -> Set[str]:
     return res
 
 
+def get_external_resource_types(load="") -> Set[str]:
+    GET_EXTERNAL_RESOURCE_TYPES_QUERY = """
+        select distinct
+            name
+        from duckdb_external_resource_types();
+    """
+    resource_types = get_query(GET_EXTERNAL_RESOURCE_TYPES_QUERY, load)
+    res = set()
+    for resource_type in resource_types:
+        res.add(resource_type['name'])
+    return res
+
+
 class ExtensionData:
     def __init__(self):
         # Map of extension -> ExtensionFunction
@@ -454,6 +501,8 @@ class ExtensionData:
         self.settings_map: Dict[str, ExtensionSetting] = {}
         # Map of extension -> ExtensionSecretType
         self.secret_types_map: Dict[str, ExtensionSecretType] = {}
+        # Map of external resource type -> ExtensionExternalResourceType
+        self.external_resource_types_map: Dict[str, ExtensionExternalResourceType] = {}
         # Map of function -> extension function overloads
         self.function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
         # All function overloads (also ones that will not be written to the file)
@@ -461,10 +510,12 @@ class ExtensionData:
 
         self.base_settings: Set[str] = set()
         self.base_secret_types: Set[str] = set()
+        self.base_external_resource_types: Set[str] = set()
         self.base_functions: Set[Function] = set()
 
         self.extension_settings: Dict[str, Set[str]] = {}
         self.extension_secret_types: Dict[str, Set[str]] = {}
+        self.extension_external_resource_types: Dict[str, Set[str]] = {}
         self.extension_functions: Dict[str, Set[Function]] = {}
 
         self.added_extensions: Set[str] = set()
@@ -483,12 +534,14 @@ class ExtensionData:
         self.base_functions: Set[Function] = functions
         self.base_settings: Set[str] = get_settings()
         self.base_secret_types: Set[str] = get_secret_types()
+        self.base_external_resource_types: Set[str] = get_external_resource_types()
 
     def add_entries(self, entries: ParsedEntries):
         self.function_map.update(entries.functions)
         self.function_overloads.update(entries.function_overloads)
         self.settings_map.update(entries.settings)
         self.secret_types_map.update(entries.secret_types)
+        self.external_resource_types_map.update(entries.external_resource_types)
 
     def load_dependencies(self, extension_name: str) -> str:
         if extension_name not in EXTENSION_DEPENDENCIES:
@@ -523,9 +576,11 @@ class ExtensionData:
             extension_functions = list(functions)
             extension_settings = list(get_settings(load))
             extension_secret_types = list(get_secret_types(load))
+            extension_external_resource_types = list(get_external_resource_types(load))
 
             self.add_settings(extension_name, extension_settings)
             self.add_secret_types(extension_name, extension_secret_types)
+            self.add_external_resource_types(extension_name, extension_external_resource_types)
             self.add_functions(extension_name, extension_functions, function_overloads)
         elif extension_name in self.stored_functions or extension_name in self.stored_settings:
             # Retrieve the list of settings/functions from our hardcoded list
@@ -536,6 +591,7 @@ class ExtensionData:
             log(f"Loading {extension_name} from stored functions: {extension_functions}")
             self.add_settings(extension_name, extension_settings)
             self.add_secret_types(extension_name, extension_secret_types)
+            self.add_external_resource_types(extension_name, [])
             self.add_functions(extension_name, extension_functions)
         else:
             error = f"""Missing extension {extension_name} and not found in stored_functions/stored_settings/stored_secret_types
@@ -588,6 +644,26 @@ Please double check if '{args.extension_repository}' is the right location to lo
 
         self.secret_types_map.update(secret_types_to_add)
 
+    def add_external_resource_types(self, extension_name: str, resource_types_list: List[str]):
+        extension_name = extension_name.lower()
+
+        base_resource_types = set()
+        base_resource_types.update(self.base_external_resource_types)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            for item in EXTENSION_DEPENDENCIES[extension_name]:
+                assert item in self.extension_external_resource_types
+                base_resource_types.update(self.extension_external_resource_types[item])
+
+        # Type names are case-sensitive: stored as the extension registers them
+        added_resource_types: Set[str] = set(resource_types_list) - base_resource_types
+        self.extension_external_resource_types[extension_name] = added_resource_types
+
+        resource_types_to_add: Dict[str, ExtensionExternalResourceType] = {}
+        for resource_type in added_resource_types:
+            resource_types_to_add[resource_type] = ExtensionExternalResourceType(extension_name, resource_type)
+
+        self.external_resource_types_map.update(resource_types_to_add)
+
     def get_extension_overloads(
         self, extension_name: str, overloads: Dict[Function, List[FunctionOverload]]
     ) -> Dict[Function, List[ExtensionFunctionOverload]]:
@@ -597,7 +673,12 @@ Please double check if '{args.extension_repository}' is the right location to lo
             for overload in function_overloads:
                 extension_overloads.append(
                     ExtensionFunctionOverload(
-                        extension_name, overload.name, overload.type, overload.parameters, overload.return_type
+                        extension_name,
+                        overload.name,
+                        overload.type,
+                        overload.parameter_types,
+                        overload.parameter_names,
+                        overload.return_type,
                     )
                 )
             result[function] = extension_overloads
@@ -652,11 +733,16 @@ Please double check if '{args.extension_repository}' is the right location to lo
             log("SecretTypes map mismatches:")
             print_map_diff(self.secret_types_map, parsed_entries.secret_types)
             exit(1)
+        if self.external_resource_types_map != parsed_entries.external_resource_types:
+            log("ExternalResourceTypes map mismatches:")
+            print_map_diff(self.external_resource_types_map, parsed_entries.external_resource_types)
+            exit(1)
 
         log("All entries found: ")
         log(" > functions: " + str(len(parsed_entries.functions)))
         log(" > settings:  " + str(len(parsed_entries.settings)))
         log(" > secret_types:  " + str(len(parsed_entries.secret_types)))
+        log(" > external_resource_types:  " + str(len(parsed_entries.external_resource_types)))
 
     def verify_export(self):
         if len(self.function_map) == 0 or len(self.settings_map) == 0 or len(self.secret_types_map) == 0:
@@ -692,9 +778,14 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
                 signature = "["
-                signature += ",".join([parameter.type for parameter in overload.parameters])
-                signature += "]>" + overload.return_type.type
+                signature += ",".join([parameter.type for parameter in overload.parameter_types])
+                signature += f']>{overload.return_type.type}", "'
                 result += signature
+                # add parameter names
+                param_names = "["
+                param_names += ",".join(overload.parameter_names)
+                param_names += "]"
+                result += param_names
                 result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
         return result
@@ -723,6 +814,22 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {\n"""
             result += f'"{secret_types_name.lower()}", "{secret_type.extension}"'
             result += "},\n"
         result += "}; // END_OF_EXTENSION_SECRET_TYPES\n"
+        return result
+
+    def export_external_resource_types(self) -> str:
+        result = """
+// Resource types registered by extensions: CREATE/REGISTER EXTERNAL RESOURCE '<type>' autoloads the extension
+static constexpr ExtensionEntry EXTENSION_EXTERNAL_RESOURCE_TYPES[] = {\n"""
+        for resource_type_name in sorted(self.external_resource_types_map):
+            resource_type = self.external_resource_types_map[resource_type_name]
+            # ExtensionEntry stores the name in a char[48]
+            assert (
+                len(resource_type_name) < 48
+            ), f"external resource type name too long for ExtensionEntry: {resource_type_name}"
+            result += "\t{"
+            result += f'"{resource_type_name}", "{resource_type.extension}"'
+            result += "},\n"
+        result += "}; // END_OF_EXTENSION_EXTERNAL_RESOURCE_TYPES\n"
         return result
 
 
@@ -793,6 +900,7 @@ struct ExtensionFunctionOverloadEntry {
     char extension[48];
     CatalogType type;
     char signature[96];
+    char parameters[96];
 };
 """
 
@@ -921,6 +1029,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "encodings",
     "excel",
     "fts",
+    "glue",
     "httpfs",
     "iceberg",
     "icu",
@@ -929,6 +1038,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "legacy_parser",
     "motherduck",
     "mysql_scanner",
+    "odbc_scanner",
     "parquet",
     "postgres_scanner",
     "quack",
@@ -958,6 +1068,9 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
 
     exported_secret_types = data.export_secret_types()
     file.write(exported_secret_types)
+
+    exported_external_resource_types = data.export_external_resource_types()
+    file.write(exported_external_resource_types)
 
     file.write(INCLUDE_FOOTER)
     file.close()
@@ -989,7 +1102,8 @@ def main():
 
     for extension_name in extension_names:
         # For every extension, add the functions/settings added by the extension
-        extension_data.add_extension(extension_name)
+        if extension_name not in extension_data.added_extensions:
+            extension_data.add_extension(extension_name)
 
     # Add hardcoded extension entries (
     for key, value in HARDCODED_EXTENSION_FUNCTIONS.items():

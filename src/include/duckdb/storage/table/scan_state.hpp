@@ -23,6 +23,8 @@
 
 namespace duckdb {
 class AdaptiveFilter;
+class BlockAllocator;
+struct PrefetchState;
 class AsyncTask;
 class ColumnSegment;
 class LocalTableStorage;
@@ -79,8 +81,6 @@ struct IndexScanState {
 	}
 };
 
-typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
-
 struct PushedDownExpressionState {
 public:
 	explicit PushedDownExpressionState(ClientContext &context) : executor(context) {
@@ -134,6 +134,8 @@ struct ColumnScanState {
 	unique_ptr<PushedDownExpressionState> expression_state;
 	//! Whether or not updates should be allowed
 	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
+	//! Whether scans and selects copy strings into the result instead of pointing into the scanned blocks
+	StringScanType string_scan_type = StringScanType::STANDARD;
 
 public:
 	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
@@ -163,14 +165,10 @@ struct ColumnFetchState {
 	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
 	//! The query context for this fetch
 	QueryContext context;
-	//! The set of pinned block handles for this set of fetches
-	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
 	//! The current row group we are fetching from
 	optional_ptr<SegmentNode<RowGroup>> row_group;
-
-	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
 struct ScanFilter {
@@ -266,6 +264,33 @@ struct PreparedScanVector {
 	void Reset();
 };
 
+//! An unordered native scan range with its tree and exact row-group payload kept alive.
+class RowGroupScanAssignment {
+	friend class CollectionScanState;
+
+public:
+	idx_t RowCount() const;
+
+private:
+	QueryContext context;
+	shared_ptr<RowGroupSegmentTree> row_groups;
+	optional_ptr<SegmentNode<RowGroup>> row_group;
+	shared_ptr<RowGroup> pinned_row_group;
+	idx_t vector_index = 0;
+	idx_t max_row_group_row = 0;
+};
+
+enum class TableScanSource { PERSISTENT, TRANSACTION_LOCAL };
+
+//! A claimed table range with its source recorded by the storage claim.
+struct TableScanAssignment {
+	TableScanAssignment() = default;
+	TableScanAssignment(const CollectionScanState &scan_state, TableScanSource source);
+
+	RowGroupScanAssignment row_group;
+	TableScanSource source = TableScanSource::PERSISTENT;
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -300,6 +325,8 @@ public:
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Keeps the transaction-local row groups from being replaced while they are scanned
+	unique_ptr<StorageLockKey> local_row_groups_lock;
 
 public:
 	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
@@ -323,8 +350,22 @@ public:
 	idx_t RemainingAssignmentRows() const;
 	//! Initializes the column scans a claim deferred
 	void InitializeColumnScans();
+	//! Initializes a claimed range using its pinned payload, which may predate a checkpoint.
+	bool InitializeRowGroupScan(SegmentNode<RowGroup> &node, shared_ptr<RowGroup> payload, idx_t vector_offset,
+	                            idx_t end_row);
+	//! Captures an unprepared assignment without transferring decoding or filter state.
+	RowGroupScanAssignment GetAssignment() const;
+	//! Starts the assignment in this worker's scan state, rechecking its current filters.
+	bool SetAssignment(const RowGroupScanAssignment &assignment);
+	//! Whether this projection supports metadata-only assignment block discovery.
+	static bool SupportsAssignmentBlockDiscovery(const vector<StorageIndex> &column_ids,
+	                                             const vector<LogicalType> &types);
+	//! Collects assignment block handles and optionally prepares prefetch tasks.
+	void PrepareAssignmentBlocks(PrefetchState &blocks, vector<unique_ptr<AsyncTask>> &tasks, bool prefetch);
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
+	//! Drops the prepared row group and returns false when the current filters prune it
+	bool RecheckPreparedRowGroup();
 	//! Releases the row group and the blocks the column scans pin, the next assignment initializes them again
 	void ReleasePins();
 
@@ -355,7 +396,7 @@ struct ScanSamplingInfo {
 };
 
 struct TableScanOptions {
-	//! Fetch rows one-at-a-time instead of using the regular scans.
+	//! Read the rows of scans through the fetch by row id instead of scanning them
 	bool force_fetch_row = false;
 };
 
@@ -389,6 +430,8 @@ public:
 	void InitializeColumnScans();
 	//! Rows scanned from persistent and transaction-local storage
 	idx_t RowsScanned() const;
+	//! Starts a captured assignment in its source and releases the inactive collection's pins
+	bool StartAssignment(const TableScanAssignment &assignment, bool prefetch_attempted);
 	//! Releases what the scans of both storages pin, for a state that is kept around between assignments
 	void ReleasePins();
 
@@ -438,6 +481,7 @@ struct PrefetchState {
 	~PrefetchState();
 
 	void AddBlock(shared_ptr<BlockHandle> block);
+	optional_idx GetCachedShard(BlockAllocator &allocator);
 
 	vector<shared_ptr<BlockHandle>> blocks;
 };

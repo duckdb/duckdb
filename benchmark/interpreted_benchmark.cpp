@@ -17,9 +17,11 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 namespace duckdb {
 
@@ -520,9 +522,9 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
 			auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
 			if (extension_directory && extension_directory[0]) {
-				auto fs = FileSystem::CreateLocal();
-				auto extension_path = fs->JoinPath(extension_directory, extension + ".duckdb_extension");
-				if (!fs->FileExists(extension_path)) {
+				auto &fs = TestLocalFileSystem();
+				auto extension_path = fs.JoinPath(extension_directory, extension + ".duckdb_extension");
+				if (!fs.FileExists(extension_path)) {
 					throw InvalidInputException("Extension %s is not linked and was not found at %s", extension,
 					                            extension_path);
 				}
@@ -543,7 +545,7 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 	LoadExtensions(state, true);
 	auto result = state.con.Query(load_query);
 	for (idx_t i = 0; i < retry_load; i++) {
-		if (!result->HasError()) {
+		if (!FirstError(*result)) {
 			break;
 		}
 		result = state.con.Query(load_query);
@@ -551,11 +553,17 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 	return result;
 }
 
-unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
-	duckdb::unique_ptr<QueryResult> result;
-	LoadBenchmark();
-	duckdb::unique_ptr<InterpretedBenchmarkState> state;
-	auto full_db_path = GetDatabasePath();
+optional_ptr<QueryResult> InterpretedBenchmark::FirstError(QueryResult &result) {
+	for (optional_ptr<QueryResult> current = &result; current; current = current->next.get()) {
+		if (current->HasError()) {
+			return current;
+		}
+	}
+	return nullptr;
+}
+
+unique_ptr<InterpretedBenchmarkState> InterpretedBenchmark::OpenState(const string &full_db_path) {
+	unique_ptr<InterpretedBenchmarkState> state;
 	try {
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	} catch (Exception &e) {
@@ -564,18 +572,57 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		DeleteDatabase(full_db_path);
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	}
-	AddExtension("core_functions", false);
-	AddExtension("parquet", false);
-
 	LoadExtensions(*state, false);
 	if (queries.find("init") != queries.end()) {
-		string init_query = queries["init"];
-		result = state->con.Query(init_query);
+		auto result = state->con.Query(queries["init"]);
 		while (result) {
 			result->ThrowIfError();
 			result = std::move(result->next);
 		}
 	}
+	return state;
+}
+
+void InterpretedBenchmark::LoadData(unique_ptr<InterpretedBenchmarkState> &state, const string &full_db_path,
+                                    const string &load_query) {
+	static constexpr idx_t DEFAULT_HTTP_LOAD_RETRIES = 3;
+	auto &fs = TestLocalFileSystem();
+	for (idx_t attempt = 0;; attempt++) {
+		LoadExtensions(*state, true);
+		auto result = state->con.Query(load_query);
+		auto error_result = FirstError(*result);
+		if (!error_result) {
+			return;
+		}
+		auto error = error_result->GetErrorObject();
+		bool retry =
+		    attempt < retry_load || (attempt < DEFAULT_HTTP_LOAD_RETRIES && error.Type() == ExceptionType::HTTP);
+		// never leave a partially loaded cache behind: later runs would treat it as valid
+		result.reset();
+		state.reset();
+		if (!full_db_path.empty()) {
+			DeleteDatabase(full_db_path);
+		}
+		if (!cache_file.empty()) {
+			DeleteDatabase(fs.JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file));
+		}
+		if (!retry) {
+			error.Throw();
+		}
+		fprintf(stderr, "Load failed (attempt %llu), retrying: %s\n", static_cast<unsigned long long>(attempt + 1),
+		        error.Message().c_str());
+		std::this_thread::sleep_for(std::chrono::seconds(static_cast<int64_t>(2) << MinValue<idx_t>(attempt, 4)));
+		state = OpenState(full_db_path);
+	}
+}
+
+unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
+	duckdb::unique_ptr<QueryResult> result;
+	LoadBenchmark();
+	auto full_db_path = GetDatabasePath();
+	AddExtension("core_functions", false);
+	AddExtension("parquet", false);
+	auto state = OpenState(full_db_path);
 
 	string load_query;
 	if (queries.find("load") != queries.end()) {
@@ -587,17 +634,17 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 
 	if (!cache_file.empty()) {
-		auto fs = FileSystem::CreateLocal();
-		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
+		auto &fs = TestLocalFileSystem();
+		if (!fs.FileExists(fs.JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
-			result = RunLoadQuery(*state, load_query);
+			LoadData(state, full_db_path, load_query);
 		} else if (!reload_query.empty()) {
 			// run reload query
 			result = RunLoadQuery(*state, reload_query);
 		}
 	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
-		result = RunLoadQuery(*state, load_query);
+		LoadData(state, full_db_path, load_query);
 	} else {
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
@@ -613,7 +660,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
-			result = RunLoadQuery(*state, load_query);
+			LoadData(state, full_db_path, load_query);
 		} else if (!reload_query.empty()) {
 			// succeeded: run the reload query
 			result = RunLoadQuery(*state, reload_query);
@@ -747,14 +794,14 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	if (!cache_db.empty()) {
-		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
+		return fs.JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	}
 	if (in_memory) {
 		return "";
 	}
-	auto db_path = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
+	auto db_path = fs.JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
 	DeleteDatabase(db_path);
 	return db_path;
 }

@@ -1,8 +1,13 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
@@ -31,7 +36,7 @@ bool CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindi
 	return filter_on_all_partitions;
 }
 
-unique_ptr<Filter> CreateAuxiliaryFilter(const Expression &partition, const Filter &filter) {
+unique_ptr<Filter> CreateAuxiliaryFilter(ClientContext &context, const Expression &partition, const Filter &filter) {
 	//	Must be comparison
 	if (!BoundComparisonExpression::IsComparison(*filter.filter)) {
 		return nullptr;
@@ -103,20 +108,75 @@ unique_ptr<Filter> CreateAuxiliaryFilter(const Expression &partition, const Filt
 	auto e_b = partition_func.Copy();
 	auto c_b = partition_func.Copy();
 	c_b->Cast<BoundFunctionExpression>().GetChildrenMutable()[0] = children[const_idx]->Copy();
-	auto aux_comp = BoundComparisonExpression::Create(aux_type, std::move(e_b), std::move(c_b));
-	auto aux_filter = make_uniq<Filter>(std::move(aux_comp));
+	//	e can be NULL for a non-NULL argument (e.g. year(infinity)), which leaves nothing to compare e(b) with
+	Value c_value, e_c_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *children[const_idx], c_value) ||
+	    !ExpressionExecutor::TryEvaluateScalar(context, *c_b, e_c_value) || (e_c_value.IsNull() && !c_value.IsNull())) {
+		return nullptr;
+	}
+	//	and the rows where e(b) is NULL form a partition that has to be kept whole
+	auto e_b_is_null =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN, e_b->Copy());
+	auto e_c = make_uniq<BoundConstantExpression>(std::move(e_c_value));
+	auto aux_comp = BoundComparisonExpression::Create(aux_type, std::move(e_b), std::move(e_c));
+	auto aux_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(aux_comp),
+	                                                      std::move(e_b_is_null));
+	auto aux_filter = make_uniq<Filter>(std::move(aux_expr));
 	aux_filter->ExtractBindings();
 	aux_filter->ExtractBarrier();
 
 	return aux_filter;
 }
 
+bool IsPartition(const Expression &partition, const Expression &expr) {
+	if (partition.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	    expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return partition.Cast<BoundColumnRefExpression>().Binding() == expr.Cast<BoundColumnRefExpression>().Binding();
+	}
+	return partition.Equals(expr);
+}
+
 } // namespace
+
+bool FilterPushdown::ComparesWindowPartitions(const LogicalWindow &window, const Expression &filter) {
+	auto compared = FilterCombiner::GetComparedExpression(filter);
+	if (!compared || window.expressions.empty()) {
+		return false;
+	}
+	for (auto &expr : window.expressions) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_WINDOW) {
+			return false;
+		}
+		bool partitions_by_compared = false;
+		for (auto &partition : expr->Cast<BoundWindowExpression>().Partitions()) {
+			partitions_by_compared = partitions_by_compared || IsPartition(*partition, *compared);
+		}
+		if (!partitions_by_compared) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FilterPushdown::OnlyRanksWithoutArguments(const LogicalWindow &window) {
+	for (auto &expr : window.expressions) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_WINDOW || expr->IsVolatile() || expr->CanThrow()) {
+			return false;
+		}
+		auto &window_expr = expr->Cast<BoundWindowExpression>();
+		if (!window_expr.WindowFunction() || !window_expr.WindowFunction()->IsRanking() ||
+		    window_expr.AggregateFunction() || !window_expr.GetChildren().empty() || window_expr.Filter() ||
+		    window_expr.StartExpr() || window_expr.EndExpr()) {
+			return false;
+		}
+	}
+	return true;
+}
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
-	FilterPushdown pushdown(optimizer, convert_mark_joins, projection_mode);
+	FilterPushdown pushdown(optimizer, projection_mode);
 
 	// 1. Loop through the expressions, find the window expressions and investigate the partitions
 	// if a filter applies to a partition in each window expression then you can push the filter
@@ -168,12 +228,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		return FinishPushdown(std::move(op));
 	}
 
+	const auto only_ranks = OnlyRanksWithoutArguments(window);
 	vector<unique_ptr<Filter>> leftover_filters;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		// If a filter is on a partition in every window expression it can be pushed down.
 		vector<ColumnBinding> bindings;
 		ExtractFilterBindings(*filters.at(i)->filter, bindings);
-		if (CanPushdownFilter(window_exprs_partition_bindings, bindings) && !filters.at(i)->filter->IsVolatile()) {
+		// Also a filter that compares a partition expression of every window expression with constants, when the
+		// window expressions can run for fewer partitions.
+		if ((CanPushdownFilter(window_exprs_partition_bindings, bindings) ||
+		     (only_ranks && ComparesWindowPartitions(window, *filters.at(i)->filter))) &&
+		    !filters.at(i)->filter->IsVolatile()) {
 			pushdown.filters.push_back(std::move(filters.at(i)));
 			continue;
 		}
@@ -186,7 +251,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 			if (p.second != window_exprs_partition_bindings.size()) {
 				continue;
 			}
-			auto aux_filter = CreateAuxiliaryFilter(p.first, *filters.at(i));
+			auto aux_filter = CreateAuxiliaryFilter(GetContext(), p.first, *filters.at(i));
 			if (aux_filter) {
 				pushdown.filters.push_back(std::move(aux_filter));
 			}

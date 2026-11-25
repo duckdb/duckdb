@@ -23,10 +23,14 @@ static bool IsRemappable(const LogicalType &type) {
 struct RemapColumnInfo {
 	optional_idx index;
 	optional_idx default_index;
+	//! Whether the field is built from child_remap_info instead of being referenced as a whole.
+	//! A struct without fields is built from no children, so an empty child_remap_info does not tell the two apart.
+	bool is_nested = false;
 	vector<RemapColumnInfo> child_remap_info;
 
 	inline bool operator==(const RemapColumnInfo &rhs) const {
-		return index == rhs.index && default_index == rhs.default_index && child_remap_info == rhs.child_remap_info;
+		return index == rhs.index && default_index == rhs.default_index && is_nested == rhs.is_nested &&
+		       child_remap_info == rhs.child_remap_info;
 	};
 };
 
@@ -73,7 +77,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 	// set up the correct vector references
 	for (idx_t i = 0; i < remap_info.size(); i++) {
 		auto &remap = remap_info[i];
-		if (remap.index.IsValid() && !remap.child_remap_info.empty()) {
+		if (remap.index.IsValid() && remap.is_nested) {
 			// nested remap - recurse
 			auto &input_vector = input_vectors[remap.index.GetIndex()];
 			reference<Vector> child_default = default_vector;
@@ -86,12 +90,17 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 		}
 		if (!remap.index.IsValid() && remap.default_index.IsValid() && !remap.child_remap_info.empty()) {
 			// nested default without a source - remap the fields of the default to the target type
+			// (a default without fields has none to remap and is referenced below, so is_nested is not used here)
 			auto &defaults = StructVector::GetEntries(default_vector);
 			auto &nested_default = defaults[remap.default_index.GetIndex()];
 			if (nested_default.GetType().id() == LogicalTypeId::STRUCT &&
 			    result_vectors[i].get().GetType().id() == LogicalTypeId::STRUCT) {
-				RemapNested(nested_default, nested_default, result_vectors[i], count, remap.child_remap_info);
-				if (has_top_level_null) {
+				auto &nested_result = result_vectors[i].get();
+				RemapNested(nested_default, nested_default, nested_result, count, remap.child_remap_info);
+				// a NULL default leaves the result a constant NULL, which is already NULL in every row
+				bool default_is_null = nested_result.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+				                       ConstantVector::IsNull(nested_result);
+				if (has_top_level_null && !default_is_null) {
 					FlatVector::SetValidity(result_vectors[i], FlatVector::Validity(result));
 					PropagateStructNulls(result_vectors[i], FlatVector::Validity(result), count);
 				}
@@ -415,6 +424,12 @@ struct RemapEntry {
 			// add to the map at this level only if it does not yet exist
 			auto result_entry = result.find(Identifier(default_target));
 			if (result_entry == result.end()) {
+				if (target_type.id() != LogicalTypeId::STRUCT) {
+					// the defaults of a LIST or MAP fill the entries of the source - without a source there are none
+					throw BinderException("Default value for %s is a struct, but the target type '%s' is not mapped "
+					                      "to a source - map it to a source or provide a default of the target type",
+					                      default_target, target_type.ToString());
+				}
 				result.emplace(default_target, std::move(remap));
 				result_entry = result.find(Identifier(default_target));
 				result_entry->second.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
@@ -422,12 +437,13 @@ struct RemapEntry {
 				// the entry exists - add the default index
 				result_entry->second.default_index = default_idx;
 			}
+			if (!result_entry->second.child_remaps || !entry->second.child_map) {
+				// the field is mapped without a child mapping - a struct default would replace its source
+				throw BinderException("No child remaps found");
+			}
 			auto &child_types = StructType::GetChildTypes(default_type);
 			for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 				auto &child_default = child_types[child_idx];
-				if (!result_entry->second.child_remaps || !entry->second.child_map) {
-					throw BinderException("No child remaps found");
-				}
 				HandleDefault(child_idx, child_default.first.GetIdentifierName(), child_default.second,
 				              *entry->second.child_map, *result_entry->second.child_remaps);
 			}
@@ -459,6 +475,7 @@ struct RemapEntry {
 			info.default_index = entry->second.default_index;
 			if (IsRemappable(child_type) && entry->second.child_remaps) {
 				// type is nested and a mapping for it is given - recurse
+				info.is_nested = true;
 				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
 			}
 			result.push_back(std::move(info));
@@ -576,6 +593,13 @@ void VerifyRemapArgumentTypes(const vector<LogicalType> &types) {
 	}
 	auto &from_type = types[0];
 	auto &to_type = types[1];
+
+	auto &mapping_type = types[2];
+	if (mapping_type.id() != LogicalTypeId::SQLNULL && !StructType::IsStruct(mapping_type)) {
+		throw BinderException(
+		    "The mapping provided to 'remap_struct' should be of type STRUCT if it's not NULL, not '%s'",
+		    mapping_type.ToString());
+	}
 
 	auto &defaults_type = types[3];
 	if (defaults_type.id() != LogicalTypeId::SQLNULL && !StructType::IsStruct(defaults_type)) {

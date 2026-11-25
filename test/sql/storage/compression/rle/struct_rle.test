@@ -5,7 +5,7 @@
 load {TEST_DIR}/test_rle.db
 
 statement ok
-PRAGMA force_compression = 'rle'
+SET force_compression = 'rle'
 
 statement ok
 CREATE TABLE test (s ROW(a INTEGER));
@@ -29,3 +29,40 @@ query IIII
 SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
 ----
 21000	1	6	6000
+
+# Nullable fields and a NULL parent preserve values through dictionary execution.
+statement ok
+CREATE TABLE nullable_child AS
+SELECT CASE WHEN i = 4999 THEN NULL
+            ELSE {'a': CASE WHEN i < 2000 THEN NULL ELSE (i // 1000)::INTEGER END} END s
+FROM range(6000) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('nullable_child')
+WHERE segment_type = 'INTEGER' AND compression = 'RLE';
+----
+true
+
+query IIII
+SELECT count(*), count(s), count(s['a']), sum(-s['a']) FROM nullable_child;
+----
+6000	5999	3999	-13996
+
+query II
+SELECT s['a'], count(*) FROM nullable_child GROUP BY ALL ORDER BY ALL;
+----
+2	1000
+3	1000
+4	999
+5	1000
+NULL	2001
+
+query I
+SELECT count(*) FROM nullable_child WHERE s['a'] = 3;
+----
+1000

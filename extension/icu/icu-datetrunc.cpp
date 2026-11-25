@@ -10,14 +10,24 @@
 namespace duckdb {
 
 struct ICUDateTrunc : public ICUDateFunc {
+	static bool TruncatesToSecondOrFiner(DatePartSpecifier part) {
+		switch (part) {
+		case DatePartSpecifier::SECOND:
+		case DatePartSpecifier::EPOCH:
+		case DatePartSpecifier::MILLISECONDS:
+		case DatePartSpecifier::MICROSECONDS:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
 		auto part_value = input.TryGetConstant(0);
 		if (part_value && !part_value->IsNull()) {
 			DatePartSpecifier part;
-			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) &&
-			    (part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
-			     part == DatePartSpecifier::MILLENNIUM || part == DatePartSpecifier::ERA)) {
-				// date_trunc is not monotone for these parts because ICU years skip year 0 at the BC/AD boundary
+			if (!TryGetDatePartSpecifier(part_value->GetValue<string>(), part) || !TruncatesToSecondOrFiner(part)) {
+				// coarser parts follow the local time, which repeats or moves backwards when the UTC offset changes
 				input.GetBoundFunction().SetArgProperties({});
 			}
 		}
@@ -192,6 +202,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 		set.AddFunction(GetDateTruncFunction<timestamp_tz_ns_t>(LogicalType::TIMESTAMP_TZ_NS));
 		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
@@ -241,7 +252,7 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 }
 
 timestamp_tz_t ICUDateFunc::CurrentMidnight(Calendar *calendar, ExpressionState &state) {
-	const timestamp_tz_t current_timestamp(MetaTransaction::Get(state.GetContext()).start_timestamp);
+	const timestamp_tz_t current_timestamp(MetaTransaction::Get(state.GetClientContext()).start_timestamp);
 	auto current_micros = SetTime(calendar, current_timestamp);
 	ICUDateTrunc::TruncDay(calendar, current_micros);
 	return GetTime(calendar);

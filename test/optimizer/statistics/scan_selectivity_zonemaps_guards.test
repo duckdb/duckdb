@@ -1,0 +1,209 @@
+# name: test/optimizer/statistics/scan_selectivity_zonemaps_guards.test
+# description: The zonemap bound of a scan estimate for each column type, and the cases in which the estimate is left alone
+# group: [statistics]
+
+require parquet
+
+statement ok
+SET threads=4;
+
+statement ok
+SET explain_output='physical_only';
+
+# every column is sorted (one row group = 122,880 consecutive rows); n is NULL in the whole third row group (rows
+# 245,760..368,639)
+statement ok
+CREATE TABLE z AS SELECT range::INTEGER AS i, CASE WHEN range >= 245760 AND range < 368640 THEN NULL ELSE range::INTEGER END AS n, 'k' || lpad(range::VARCHAR, 7, '0') AS s, (range / 100.0)::DECIMAL(12,2) AS dec, TIMESTAMP '2020-01-01' + INTERVAL (range) SECOND AS ts, (range % 10)::INTEGER AS c10 FROM range(1000000);
+
+statement ok
+CREATE TABLE z_empty AS SELECT * FROM z LIMIT 0;
+
+statement ok
+COPY (SELECT i, c10 FROM z) TO '{TEST_DIR}/scan_selectivity_zonemaps_guards.parquet';
+
+# nine row groups, the first eight full
+query III
+SELECT count(*), min(c), max(c) FROM (SELECT row_group_id, sum(count) AS c FROM pragma_storage_info('z') WHERE column_name = 'i' AND segment_type = 'INTEGER' GROUP BY row_group_id);
+----
+9	16960	122880
+
+# ---------------------------------------------------------------------------------------------------------------
+# a filter that selects exactly one row group (every other row group is refuted by its min/max): the estimate is
+# the row count of that row group for every column type with zonemaps
+# ---------------------------------------------------------------------------------------------------------------
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i < 122880;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+# the row group that only holds NULLs cannot match
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE n >= 245760 AND n < 491520;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+# only the row group that holds NULLs can match
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE n IS NULL;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+# a VARCHAR range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE s < 'k0122880';
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE dec < 1228.80;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE ts < TIMESTAMP '2020-01-02 10:08:00';
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+query IIIIII
+SELECT (SELECT count(*) FROM z WHERE i < 122880), (SELECT count(*) FROM z WHERE n >= 245760 AND n < 491520), (SELECT count(*) FROM z WHERE n IS NULL), (SELECT count(*) FROM z WHERE s < 'k0122880'), (SELECT count(*) FROM z WHERE dec < 1228.80), (SELECT count(*) FROM z WHERE ts < TIMESTAMP '2020-01-02 10:08:00');
+----
+122880	122880	122880	122880	122880	122880
+
+# ---------------------------------------------------------------------------------------------------------------
+# a column type without min/max statistics: the row groups cannot be skipped on its filter and count whole, also
+# the ones that hold no matching row
+# ---------------------------------------------------------------------------------------------------------------
+
+# l, arr and st follow i (one row group = 122,880 consecutive rows)
+statement ok
+CREATE TABLE nested AS SELECT range::INTEGER AS i, [range::INTEGER] AS l, [range::INTEGER]::INTEGER[1] AS arr, {'a': range::INTEGER} AS st, (range % 10)::INTEGER AS c10 FROM range(1000000);
+
+# a LIST range: the statistics of a LIST carry no min/max, every row group counts whole and the estimate of the
+# table statistics stands (the default selectivity of a range)
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM nested WHERE l < [122880];
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
+
+# the same for an ARRAY
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM nested WHERE arr < [122880];
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
+
+# a filter on a STRUCT field is checked against the statistics of the field: one row group is left
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM nested WHERE st.a < 122880;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+# the range on i leaves the first row group; it holds no list above [122880], but without a zonemap for l it is
+# not skipped and counts whole (actual 0)
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM nested WHERE i < 122880 AND l > [122880];
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+query IIII
+SELECT (SELECT count(*) FROM nested WHERE l < [122880]), (SELECT count(*) FROM nested WHERE arr < [122880]), (SELECT count(*) FROM nested WHERE st.a < 122880), (SELECT count(*) FROM nested WHERE i < 122880 AND l > [122880]);
+----
+122880	122880	122880	0
+
+# ---------------------------------------------------------------------------------------------------------------
+# the estimate is left alone
+# ---------------------------------------------------------------------------------------------------------------
+
+# a scan without table filters
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(i) FROM z;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "1000000"[\s\S]*
+
+# a source without row group statistics at plan time: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM read_parquet('{TEST_DIR}/scan_selectivity_zonemaps_guards.parquet') WHERE i < 122880;
+----
+physical_plan	<REGEX>:[\s\S]*"READ_PARQUET"[^}]*"Estimated Cardinality": "200000"[\s\S]*
+
+# a filter that no zonemap refutes: all rows but the ones of one of about 1,000,000 distinct values
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i <> 5;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "99999[0-9]"[\s\S]*
+
+# a range on a column whose row groups all span its whole range: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(i) FROM z WHERE c10 < 2;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
+
+# a filter on the row id is not checked against the zonemaps: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE rowid < 122880;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
+
+# an empty table
+query II
+EXPLAIN SELECT sum(c10) FROM z_empty WHERE i < 5;
+----
+physical_plan	<REGEX>:(?s).*Empty Result.*
+
+# a filter that the statistics of the table refute keeps its 0 rows: the bound never replaces the proof
+statement ok
+SET disabled_optimizers = 'statistics_propagation';
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i > 2000000;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "0"[\s\S]*
+
+statement ok
+SET disabled_optimizers = '';
+
+# ---------------------------------------------------------------------------------------------------------------
+# a join: the estimate of the filtered scan decides which side is built
+# ---------------------------------------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE dim AS SELECT range::INTEGER AS k, range % 7 AS g FROM range(150000);
+
+# one row group of z is left by the filter (122,880 rows, below the 150,000 of dim): z is the build side
+query II
+EXPLAIN SELECT count(*) FROM z JOIN dim ON z.c10 = dim.k WHERE z.i < 30000;
+----
+physical_plan	<REGEX>:(?s).*Conditions: k = c10.*
+
+# two row groups are left (245,760 rows): the estimate of the table statistics (200,000 rows) stands and dim is
+# the build side
+query II
+EXPLAIN SELECT count(*) FROM z JOIN dim ON z.c10 = dim.k WHERE z.i < 130000;
+----
+physical_plan	<REGEX>:(?s).*Conditions: c10 = k.*
+
+# ---------------------------------------------------------------------------------------------------------------
+# a table that was just attached: the zonemaps of the filtered column are read for the estimate
+# ---------------------------------------------------------------------------------------------------------------
+
+statement ok
+ATTACH '{TEST_DIR}/scan_selectivity_zonemaps_guards.db' AS persistent;
+
+statement ok
+CREATE TABLE persistent.t AS SELECT range AS i, range // 100000 AS d FROM range(1000000);
+
+statement ok
+DETACH persistent;
+
+statement ok
+ATTACH '{TEST_DIR}/scan_selectivity_zonemaps_guards.db' AS persistent;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(d) FROM persistent.t WHERE i < 122880;
+----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
+
+query II
+SELECT count(*), sum(d) FROM persistent.t WHERE i < 122880;
+----
+122880	22880

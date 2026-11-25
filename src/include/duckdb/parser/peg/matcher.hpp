@@ -24,12 +24,15 @@
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 
+#include <map>
+
 namespace duckdb {
 class ClientContext;
 class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+struct ListMatchChain;
 class MatchProcess;
 
 enum class SuggestionState : uint8_t {
@@ -146,6 +149,8 @@ struct MatcherSuggestion {
 	AutoCompleteCandidate keyword;
 	SuggestionState type;
 	char extra_char = '\0';
+	//! Label of the enclosing labelled rule (e.g. "an expression"), if the suggestion was added inside one
+	optional_ptr<const string> label;
 };
 
 struct MatchContext {
@@ -166,6 +171,15 @@ struct MatchContext {
 	IdentifierCaseMode identifier_case_mode;
 	ParserPackratCache *packrat_cache;
 	MatchMode mode;
+	//! Label of the labelled rule currently being walked for suggestions, if any
+	optional_ptr<const string> active_label;
+	//! Ignore rule-level suggestion suppression, so the suggestions a rule adds depend only on its
+	//! position and the packrat cache stays valid while collecting them
+	bool memoizable_suggestions = false;
+	//! With memoizable_suggestions: walk labelled rules instead of summarising them by their label alone
+	bool expand_labels = false;
+	//! With memoizable_suggestions: suggestion walks already done, keyed by matcher and active label
+	std::map<std::pair<const Matcher *, const string *>, SuggestionType> walked_suggestions;
 };
 
 struct MatchState {
@@ -186,10 +200,10 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&... args);
+	MatcherResult AllocateParseResult(ARGS &&...args);
 
 	template <class PROCESS, class... ARGS>
-	arena_ptr<MatchProcess> Make(ARGS &&... args);
+	arena_ptr<MatchProcess> Make(ARGS &&...args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -266,29 +280,101 @@ enum class MatcherType {
 	CUSTOM
 };
 
-//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar. Lets the
-//! matcher skip sub-matchers that certainly cannot match at the current token.
-struct MatcherFirstSet {
-	bool computed = false;
-	//! the matcher can succeed without consuming a token
-	bool nullable = false;
-	//! no information: never skip
+//! A set of tokens: token classes plus grammar literal ids (keywords and symbols), or every token
+struct MatcherTokenSet {
+	//! no information: contains every token
 	bool any = false;
 	//! MatcherTokenClass bits
 	uint8_t class_mask = 0;
-	//! bitset over grammar literal ids (keywords and symbols)
+	//! bitset over grammar literal ids
 	vector<uint64_t> literals;
-	optional_ptr<const GrammarLiteralTable> table;
 
 	bool HasLiteral(idx_t literal_id) const {
 		auto word = literal_id / 64;
 		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
 	}
 	DUCKDB_API void AddLiteral(idx_t literal_id);
+	//! Merge the tokens of other into this set, returns whether anything changed
+	DUCKDB_API bool MergeTokens(const MatcherTokenSet &other);
+	DUCKDB_API bool IsEmpty() const;
+	DUCKDB_API bool Equals(const MatcherTokenSet &other) const;
+	void SetAny() {
+		any = true;
+	}
+	//! Whether the token can be in the set; GET_LITERAL supplies its literal info only when needed
+	template <class GET_LITERAL>
+	bool Contains(const MatcherToken &token, GET_LITERAL &&get_literal) const {
+		if (any) {
+			return true;
+		}
+		if (token.token_class & class_mask) {
+			return true;
+		}
+		auto literal_id = get_literal().LiteralId();
+		return literal_id && HasLiteral(literal_id);
+	}
+};
+
+//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar, together with
+//! the tokens for which it can match exactly one token (ONE) and the tokens it can see second (SECOND). Lets the
+//! matcher skip sub-matchers that certainly cannot match at the current token.
+struct MatcherFirstSet : public MatcherTokenSet {
+	bool computed = false;
+	//! the matcher can succeed without consuming a token
+	bool nullable = false;
+	//! every token in FIRST passes the lookahead check, so only FIRST has to be tested
+	bool first_suffices = true;
+	optional_ptr<const GrammarLiteralTable> table;
+	//! first tokens for which a match consuming exactly one token is possible
+	MatcherTokenSet one;
+	//! second tokens of matches consuming at least two tokens
+	MatcherTokenSet second;
+
 	//! Merge other into this set, returns whether anything changed
 	DUCKDB_API bool Merge(const MatcherFirstSet &other);
+	//! Derive first_suffices once the sets are final
+	DUCKDB_API void Finalize();
+	//! No information about any token
+	void SetAny() {
+		any = true;
+		one.any = true;
+		second.any = true;
+	}
+	//! The matcher consumes exactly one token, drawn from its FIRST set
+	void SetSingleToken() {
+		one.any = any;
+		one.class_mask = class_mask;
+		one.literals = literals;
+		second = MatcherTokenSet();
+	}
 	//! False only if the matcher certainly cannot match at the current token
-	DUCKDB_API bool MightMatch(MatchState &state) const;
+	bool MightMatch(MatchState &state) const {
+		if (!computed || any || nullable) {
+			return true;
+		}
+		auto &iterator = state.token_iterator;
+		auto token = iterator.Current();
+		if (!token) {
+			return false;
+		}
+		auto token_class = token->token_class;
+		if (!(token_class & class_mask)) {
+			auto literal_id = iterator.CurrentLiteralInfo(*table).LiteralId();
+			if (!literal_id || !HasLiteral(literal_id)) {
+				return false;
+			}
+			if (first_suffices || one.HasLiteral(literal_id)) {
+				return true;
+			}
+			return MightMatchSecond(state);
+		}
+		if (first_suffices || (token_class & one.class_mask)) {
+			return true;
+		}
+		return MightMatchSecond(state);
+	}
+	//! The lookahead check for a token in FIRST: a one-token match or a valid second token
+	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
 };
 
 class Matcher {
@@ -301,11 +387,14 @@ public:
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state with state.Make<PROCESS>() for incremental execution.
 	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
-	virtual bool IsAtomic() const {
-		return false;
+	//! Whether the matcher is an AtomicMatcher, which matches in one step without a process
+	bool IsAtomic() const {
+		return atomic;
 	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
+	//! AddSuggestionInternal, with the matcher's label (if any) applied to the suggestions it adds
+	SuggestionType AddLabelledSuggestion(MatchState &state) const;
 	virtual string ToString() const = 0;
 	void Print() const;
 
@@ -318,6 +407,13 @@ public:
 	void SetRule(const CompiledGrammarRule &rule_p) {
 		rule = rule_p;
 		name = rule_p.name;
+	}
+	//! A short description of what the matcher accepts, used to summarise it in syntax errors
+	void SetLabel(string label_p) {
+		label = std::move(label_p);
+	}
+	const string &GetLabel() const {
+		return label;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule() const {
 		return rule;
@@ -359,7 +455,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+			InternalException::Throw("Failed to cast matcher to type - matcher type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -367,23 +463,25 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+			InternalException::Throw("Failed to cast matcher to type - matcher type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
-public:
-	MatcherFirstSet first_set;
-
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
-	string name;
-	optional_idx packrat_id;
+	bool atomic = false;
 	bool packrat_memoized = false;
 	bool collapsible = false;
 	bool structural = false;
+	optional_idx packrat_id;
 	optional_ptr<const CompiledGrammarRule> rule;
+	string name;
+	string label;
+
+public:
+	MatcherFirstSet first_set;
 };
 
 //! Compute the FIRST sets of all matchers reachable from root
@@ -392,16 +490,14 @@ DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table
 class AtomicMatcher : public Matcher {
 public:
 	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
+		atomic = true;
 	}
 
-	bool IsAtomic() const final {
-		return true;
-	}
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
 	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
-		first_set.any = true;
+		first_set.SetAny();
 	}
 };
 
@@ -420,20 +516,31 @@ public:
 
 class MatcherAllocator {
 public:
+	DUCKDB_API MatcherAllocator();
+	DUCKDB_API MatcherAllocator(MatcherAllocator &&) noexcept;
+	DUCKDB_API MatcherAllocator &operator=(MatcherAllocator &&) noexcept;
+	DUCKDB_API ~MatcherAllocator();
+
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
 	void InitializeListChains();
 
 private:
 	vector<unique_ptr<Matcher>> matchers;
+	vector<unique_ptr<ListMatchChain>> list_chains;
 };
+
+//! The arenas of a parse (parse results, matcher frames, packrat entries, transform results) start with room for
+//! a typical statement, so that it does not grow them through several chunks first
+static constexpr idx_t PARSER_ARENA_INITIAL_CAPACITY = 8 * ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY;
 
 class ParseResultAllocator {
 public:
 	ParseResultAllocator();
+	explicit ParseResultAllocator(Allocator &allocator);
 	~ParseResultAllocator();
 
 	template <class RESULT, class... ARGS>
-	optional_ptr<ParseResult> Make(ARGS &&... args) {
+	optional_ptr<ParseResult> Make(ARGS &&...args) {
 		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
 		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
 		if (ParseResultNeedsDestructor<RESULT>::value) {
@@ -442,6 +549,14 @@ public:
 			pending_destructors.push_back(std::move(owned));
 		}
 		return optional_ptr<ParseResult>(result);
+	}
+
+	//! Uninitialized child storage owned by the result arena.
+	unsafe_array_ptr<reference<ParseResult>> AllocateChildren(idx_t capacity) {
+		arena.AlignNext();
+		return unsafe_array_ptr<reference<ParseResult>>(
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(capacity * sizeof(reference<ParseResult>))),
+		    capacity);
 	}
 
 	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
@@ -468,7 +583,7 @@ private:
 };
 
 template <class PROCESS, class... ARGS>
-arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
+arena_ptr<MatchProcess> MatchState::Make(ARGS &&...args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
@@ -482,7 +597,7 @@ void ParseResult::SetNameFrom(const Matcher &matcher_p) {
 }
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

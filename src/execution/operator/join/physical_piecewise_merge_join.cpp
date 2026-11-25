@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 
+#include <algorithm>
 #include <numeric>
 
 #include "duckdb/common/atomic.hpp"
@@ -14,10 +15,10 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                                       PhysicalOperator &left, PhysicalOperator &right,
-                                                       vector<JoinCondition> cond, JoinType join_type,
-                                                       idx_t estimated_cardinality,
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                                       LogicalComparisonJoin &op, PhysicalOperator &left,
+                                                       PhysicalOperator &right, vector<JoinCondition> cond,
+                                                       JoinType join_type, idx_t estimated_cardinality,
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
@@ -52,6 +53,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
 			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	}
+	tail_predicate = CreateTailPredicate(context, conditions, 1);
 }
 
 //===--------------------------------------------------------------------===//
@@ -85,10 +87,13 @@ public:
 	bool skip_filter_pushdown = false;
 	//! The global filter states to push down (if any)
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+	//! The first build row in sort order that a probe row matches (RIGHT SEMI)
+	atomic<idx_t> right_semi_boundary {0};
 
 private:
 	void ResetState(ClientContext &client) {
 		table->ResetForReuse(client);
+		right_semi_boundary = 0;
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
 			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
@@ -203,7 +208,10 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 
 	gstate.table->Finalize(client, input.interrupt_state);
 
-	if (PropagatesBuildSide(join_type)) {
+	if (join_type == JoinType::RIGHT_SEMI) {
+		// the matching build rows are a suffix of the non-NULL keys: probing moves its start down
+		gstate.right_semi_boundary = gstate.table->Count() - gstate.table->has_null;
+	} else if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.table->InitializeMatches();
 	}
@@ -231,7 +239,7 @@ public:
 	PiecewiseMergeJoinState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op)
 	    : client(client), allocator(Allocator::Get(client)), op(op), left_outer(IsLeftOuterJoin(op.join_type)),
 	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(client), pred_executor(client) {
+	      rhs_executor(client), tail_executor(client), pred_executor(client) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 
@@ -247,6 +255,10 @@ public:
 			condition_types.push_back(order.expression->GetReturnType());
 		}
 		rhs_keys.Initialize(client, condition_types);
+		if (op.tail_predicate) {
+			tail_executor.AddExpression(*op.tail_predicate);
+			tail_keys.InitializeEmpty(PhysicalRangeJoin::GetTailTypes(op.conditions, 1));
+		}
 		rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
@@ -291,6 +303,8 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
+	ExpressionExecutor tail_executor;
+	DataChunk tail_keys;
 
 	//! Arbitrary expressions
 	ExpressionExecutor pred_executor;
@@ -468,6 +482,10 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
+	if (!state.rhs_iterator) {
+		// the state was reset for reuse (a recursive CTE runs its pipelines once per iteration)
+		state.InitializeRightScanState(gstate);
+	}
 	state.ResolveJoinKeys(context, input);
 	auto &lhs_table = *state.lhs_global_table;
 	auto &lhs_keys = state.lhs_local_table->keys;
@@ -509,6 +527,66 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		break;
 	default:
 		throw NotImplementedException("Unimplemented join type for merge join");
+	}
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+static idx_t TemplatedMergeJoinRightSemiBoundary(PiecewiseMergeJoinState &lstate, const idx_t rhs_end,
+                                                 const bool strict) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
+
+	// the first sorted probe key matches every build row that a later one matches
+	const auto &lhs_val = lstate.lhs_iterator->template GetValueAtIndex<SORT_KEY>(idx_t(0), idx_t(0));
+
+	// only the keys are searched: keep them pinned for the search, but not the payload
+	auto &rhs_iterator = *lstate.rhs_iterator;
+	rhs_iterator.SetKeepPinned(true);
+	rhs_iterator.SetPinPayload(false);
+	const BLOCK_ITERATOR rhs_begin(rhs_iterator, idx_t(0));
+	const BLOCK_ITERATOR rhs_end_itr(rhs_iterator, rhs_end);
+	const auto boundary = std::partition_point(
+	    rhs_begin, rhs_end_itr, [&](const SORT_KEY &rhs_val) { return !MergeJoinBefore(lhs_val, rhs_val, strict); });
+	return NumericCast<idx_t>(boundary - rhs_begin);
+}
+
+static idx_t MergeJoinRightSemiBoundary(PiecewiseMergeJoinState &lstate, const idx_t rhs_end,
+                                        const ExpressionType comparison) {
+	const auto strict = MergeJoinStrictComparison(comparison);
+
+	switch (lstate.sort_key_type) {
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergeJoinRightSemiBoundary<SortKeyType::SORT_KEY_TYPE>(lstate, rhs_end, strict);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
+	default:
+		throw NotImplementedException("MergeJoinRightSemiBoundary for %s", EnumUtil::ToString(lstate.sort_key_type));
+	}
+}
+
+void PhysicalPiecewiseMergeJoin::ResolveRightSemiJoin(ExecutionContext &context, DataChunk &input,
+                                                      OperatorState &state_p) const {
+	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
+
+	// the build rows from the boundary on match already; the ones before it are searched
+	auto boundary = gstate.right_semi_boundary.load();
+	if (boundary == 0) {
+		return;
+	}
+	if (!state.rhs_iterator) {
+		// the state was reset for reuse (a recursive CTE runs its pipelines once per iteration)
+		state.InitializeRightScanState(gstate);
+	}
+	state.ResolveJoinKeys(context, input);
+	auto &lhs_table = *state.lhs_global_table;
+	if (lhs_table.count == lhs_table.has_null) {
+		return;
+	}
+
+	const auto new_boundary = MergeJoinRightSemiBoundary(state, boundary, conditions[0].GetComparisonType());
+	while (new_boundary < boundary && !gstate.right_semi_boundary.compare_exchange_weak(boundary, new_boundary)) {
 	}
 }
 
@@ -692,22 +770,18 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				state.rhs_executor.SetChunk(state.rhs_input);
 				state.rhs_keys.Reset();
 
-				auto tail_count = result_count;
-				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					Vector left(Vector::Ref(state.lhs_local_table->keys.data[cmp_idx]));
-					left.Slice(left_info.lhs, result_count);
+				auto &tail_keys = state.tail_keys;
+				for (idx_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
+					tail_keys.data[cmp_idx - 1].Slice(state.lhs_local_table->keys.data[cmp_idx], left_info.lhs,
+					                                  result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
 					state.rhs_executor.ExecuteExpression(cmp_idx, right);
-
-					if (tail_count < result_count) {
-						left.Slice(*sel, tail_count);
-						right.Slice(*sel, tail_count);
-					}
-					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
-					                            &state.sel);
-					sel = &state.sel;
+					tail_keys.data[tail_cols + cmp_idx - 1].Reference(right);
 				}
+				tail_keys.CheckCardinality(result_count);
+				const auto tail_count = state.tail_executor.SelectExpression(tail_keys, state.sel);
+				sel = &state.sel;
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
@@ -770,6 +844,10 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state);
+		return OperatorResultType::NEED_MORE_INPUT;
+	case JoinType::RIGHT_SEMI:
+		// the source phase emits the matching build rows
+		ResolveRightSemiJoin(context, input, state);
 		return OperatorResultType::NEED_MORE_INPUT;
 	case JoinType::LEFT:
 	case JoinType::INNER:
@@ -855,13 +933,41 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 		return SourceResultType::FINISHED;
 	}
 
-	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
-	// still need to output
-	const auto found_match = gsink.table->found_match.get();
-
 	auto &lsource = source.local_state.Cast<PiecewiseJoinLocalScanState>();
 	auto &rhs_chunk = lsource.rhs_chunk;
 	auto &rsel = lsource.rsel;
+	if (join_type == JoinType::RIGHT_SEMI) {
+		// the payload is in sort order: the matching rows run from the boundary up to the NULL tail
+		const auto boundary = gsink.right_semi_boundary.load();
+		const auto not_null = gsink.table->count - gsink.table->has_null;
+		for (;;) {
+			rhs_chunk.Reset();
+			const auto rhs_pos = gsource.Scan(lsource.scanner, rhs_chunk);
+			const auto count = rhs_chunk.size();
+			if (count == 0) {
+				return SourceResultType::FINISHED;
+			}
+			gsource.rows_scanned.fetch_add(count, std::memory_order_relaxed);
+			const auto begin = MaxValue(boundary, rhs_pos);
+			const auto end = MinValue(not_null, rhs_pos + count);
+			if (begin >= end) {
+				continue;
+			}
+			if (end - begin == count) {
+				result.Reference(rhs_chunk);
+			} else {
+				for (idx_t i = begin; i < end; i++) {
+					rsel.set_index(i - begin, i - rhs_pos);
+				}
+				result.Slice(rhs_chunk, rsel, end - begin);
+			}
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
+	}
+
+	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
+	// still need to output
+	const auto found_match = gsink.table->found_match.get();
 	for (;;) {
 		// Read the next sorted chunk
 		rhs_chunk.Reset();

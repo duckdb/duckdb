@@ -19,13 +19,13 @@ SET lock_configuration=true
 statement error
 CREATE EXTENSION REPOSITORY evil WITH PREFIX 'http://evil.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
-<REGEX>:Invalid Input Error.*configuration has been locked.*
+<REGEX>:Invalid Input Error.*Cannot add or drop extension repositories while the configuration is locked.*
 
 # removing a repository is blocked as well
 statement error
 DROP EXTENSION REPOSITORY acme
 ----
-<REGEX>:Invalid Input Error.*configuration has been locked.*
+<REGEX>:Invalid Input Error.*Cannot add or drop extension repositories while the configuration is locked.*
 
 # the repository that existed before the lock is unaffected
 query I

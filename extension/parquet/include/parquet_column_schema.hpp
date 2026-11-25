@@ -127,6 +127,8 @@ public:
 	                                 idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) const;
 	void ValidateColumnMetadata(const duckdb_parquet::ColumnChunk &column, int64_t row_group_num_rows,
 	                            bool validate_row_count, const char *file_name = nullptr) const;
+	//! Validates the null count of the statistics of the column chunk that this schema reads its values from
+	void ValidateNullCount(const duckdb_parquet::ColumnChunk &column, const char *file_name = nullptr) const;
 
 public:
 	optional_idx GetChildIndexByName(const string &name) const;

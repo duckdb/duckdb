@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_union_state.hpp"
 
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -24,6 +25,12 @@ RecursiveCTEUnionState::RecursiveCTEUnionState(ClientContext &context, const Phy
 	if (!op.UnionAll()) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
 	}
+	if (op.recurring_table) {
+		// the recurring collection is owned by the operator and must start empty for every
+		// invocation: a nested recursion re-entered per outer iteration, and a re-executed
+		// prepared plan, would otherwise read the previous invocation's rows
+		op.recurring_table->Reset();
+	}
 }
 
 RecursiveCTEUnionState::~RecursiveCTEUnionState() {
@@ -39,12 +46,14 @@ public:
 		output->InitializeAppend(append_state);
 		if (!op.UnionAll()) {
 			partition_chunk.Initialize(Allocator::Get(context), op.GetTypes());
+			hasher = make_uniq<ChunkHasher>(context, op.GetTypes());
 		}
 	}
 
 	const PhysicalRecursiveCTE &op;
 	unique_ptr<ColumnDataCollection> output;
 	ColumnDataAppendState append_state;
+	unique_ptr<ChunkHasher> hasher;
 	Vector hashes;
 	Vector partition_hashes;
 	Vector dummy_addresses;
@@ -165,7 +174,7 @@ void RecursiveCTEUnionState::SinkDistinct(DataChunk &chunk, RecursiveCTEUnionLoc
 	lstate.InitializePartitions(partitions.size());
 	std::fill(lstate.partition_counts.begin(), lstate.partition_counts.end(), 0);
 
-	chunk.Hash(lstate.hashes);
+	lstate.hasher->Hash(chunk, lstate.hashes);
 	auto hash_data = FlatVector::GetData<hash_t>(lstate.hashes);
 	const auto partition_mask = partitions.size() - 1;
 	for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
@@ -238,7 +247,7 @@ void RecursiveCTEUnionState::PromoteDistinctState(ClientContext &context, idx_t 
 	AggregateHTScanState scan_state;
 	ht->InitializeScan(scan_state);
 	while (ht->Scan(scan_state, groups, payload)) {
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		if (groups.size() > 0) {
 			SinkDistinct(groups, migration_state, false, false);
 		}
@@ -344,7 +353,8 @@ void RecursiveCTEUnionState::RebindRecursiveScans() {
 }
 
 SourceResultType RecursiveCTEUnionState::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 RecursiveCTEGlobalSourceState &source) {
+                                                 RecursiveCTEGlobalSourceState &source,
+                                                 const InterruptState &interrupt_state) {
 	if (source_phase == RecursiveCTESourcePhase::INITIAL) {
 		CurrentOutputTable().InitializeScan(scan_state);
 		source.StartIteration(CurrentOutputTable().Count());
@@ -360,11 +370,11 @@ SourceResultType RecursiveCTEUnionState::GetData(ExecutionContext &context, Data
 			}
 		} else if (source_phase == RecursiveCTESourcePhase::FINISHED) {
 			break;
-		} else {
+		} else if (source_phase != RecursiveCTESourcePhase::EXECUTING_RECURSION) {
 			throw InternalException("Unsupported recursive CTE union source phase");
 		}
 
-		if (chunk.size() == 0) {
+		if (source_phase != RecursiveCTESourcePhase::EXECUTING_RECURSION) {
 			// we have run out of chunks
 			// now we need to recurse
 			// we set up the working table as the data we gathered in this iteration of the recursion
@@ -407,20 +417,26 @@ SourceResultType RecursiveCTEUnionState::GetData(ExecutionContext &context, Data
 				}
 			}
 
-			// now we need to re-execute all of the pipelines that depend on the recursion
-			op.ExecuteRecursivePipelines(context);
-
-			// check if we obtained any results
-			// if not, we are done
-			if (CurrentOutputTable().Count() == 0) {
-				source_phase = RecursiveCTESourcePhase::FINISHED;
-				source.Finish();
-				break;
-			}
-			// set up the scan again
-			CurrentOutputTable().InitializeScan(scan_state);
-			source.StartIteration(CurrentOutputTable().Count());
+			source_phase = RecursiveCTESourcePhase::EXECUTING_RECURSION;
 		}
+
+		// now we need to re-execute all of the pipelines that depend on the recursion
+		if (op.ExecuteRecursivePipelines(context, interrupt_state) == RecursiveEpochResult::BLOCKED) {
+			// the epoch waits for blocked inner work; the interrupt state re-enters this source
+			return SourceResultType::BLOCKED;
+		}
+
+		// check if we obtained any results
+		// if not, we are done
+		if (CurrentOutputTable().Count() == 0) {
+			source_phase = RecursiveCTESourcePhase::FINISHED;
+			source.Finish();
+			break;
+		}
+		// set up the scan again
+		source_phase = RecursiveCTESourcePhase::SCANNING_UNION;
+		CurrentOutputTable().InitializeScan(scan_state);
+		source.StartIteration(CurrentOutputTable().Count());
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;

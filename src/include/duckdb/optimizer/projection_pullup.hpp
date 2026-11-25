@@ -25,9 +25,10 @@ private:
 	optional_ptr<LogicalOperator> FindParent(LogicalOperator &target, LogicalOperator &current);
 	void PopParents(const LogicalOperator &op);
 	void InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child, bool stop_at_op);
-	void CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map, bool &can_pull_through);
-	void PullUpColrefProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
-	                            vector<ColumnBinding> &proj_bindings);
+	void CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map, const LogicalProjection &proj,
+	                    bool &can_pull_through);
+	void RemoveProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
+	                      vector<ColumnBinding> &proj_bindings);
 	void PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op, LogicalProjection &proj,
 	                               vector<ColumnBinding> &proj_bindings, idx_t pull_up_to_here);
 };

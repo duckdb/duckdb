@@ -69,13 +69,8 @@ public:
 
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
-	                        OptionalOrderTypes order_types_p = nullptr, OptionalOrderTypes arg_order_types_p = nullptr);
-
-	//! Construct without argument names - looking arguments up by name is not available in this case.
-	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
-	                        OptionalOrderTypes arg_order_types_p = nullptr);
+	                        OptionalOrderTypes arg_order_types_p = nullptr, optional_ptr<Binder> binder_p = nullptr);
 
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
@@ -145,7 +140,7 @@ typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &i
                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
-typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                    const BoundWindowFunction &function);
 typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, BoundWindowFunction &function);
 
@@ -306,7 +301,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	auto SetExtraFunctionInfo(ARGS &&... args) -> void {
+	auto SetExtraFunctionInfo(ARGS &&...args) -> void {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	auto GetFunctionInfo() const -> shared_ptr<WindowFunctionInfo> {
@@ -321,6 +316,14 @@ protected:
 
 class WindowFunction : public BaseWindowFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	static constexpr const FunctionKind KIND = FunctionKind::WINDOW;
+	FunctionKind GetKind() const override {
+		return KIND;
+	}
+	//! The properties of the function, for code that only knows it as a SimpleFunction
+	auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> override {
+		return GetProperties();
+	}
 	WindowFunction(const Identifier &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,

@@ -8,6 +8,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <type_traits>
 
@@ -32,8 +33,11 @@ class VariantVisitor {
 	};
 
 public:
+	//! Root visits start at depth zero; child visits increment the parent depth.
 	template <typename... Args>
-	static ReturnType Visit(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, Args &&...args) {
+	static ReturnType Visit(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, idx_t depth,
+	                        Args &&...args) {
+		CheckDepth(depth);
 		if (!variant.RowIsValid(row)) {
 			VisitMetadata(VariantLogicalType::VARIANT_NULL, args...);
 			return Visitor::VisitNull(std::forward<Args>(args)...);
@@ -88,13 +92,18 @@ public:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY:
 			return VisitString(type_id, variant, row, values_idx, std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(variant, row, values_idx, std::forward<Args>(args)...);
-		case VariantLogicalType::ARRAY:
-			return VisitArray(variant, row, values_idx, std::forward<Args>(args)...);
-		case VariantLogicalType::OBJECT:
-			return VisitObject(variant, row, values_idx, std::forward<Args>(args)...);
+		case VariantLogicalType::ARRAY: {
+			auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
+			return Visitor::VisitArray(variant, row, nested_data, depth, std::forward<Args>(args)...);
+		}
+		case VariantLogicalType::OBJECT: {
+			auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
+			return Visitor::VisitObject(variant, row, nested_data, depth, std::forward<Args>(args)...);
+		}
 		case VariantLogicalType::TIME_MICROS:
 			return Visitor::VisitTime(Load<dtime_t>(ptr), std::forward<Args>(args)...);
 		case VariantLogicalType::TIME_NANOS:
@@ -119,7 +128,8 @@ public:
 	}
 
 	template <typename... Args>
-	static ReturnType Visit(const VariantNode &node, Args &&...args) {
+	static ReturnType Visit(const VariantNode &node, idx_t depth, Args &&...args) {
+		CheckDepth(depth);
 		if (node.IsNull() || node.IsMissing()) {
 			VisitMetadata(VariantLogicalType::VARIANT_NULL, args...);
 			return Visitor::VisitNull(std::forward<Args>(args)...);
@@ -170,13 +180,14 @@ public:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY:
 			return VisitString(type_id, node.GetString(), std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(node, std::forward<Args>(args)...);
 		case VariantLogicalType::ARRAY:
-			return Visitor::VisitArray(node, std::forward<Args>(args)...);
+			return Visitor::VisitArray(node, depth, std::forward<Args>(args)...);
 		case VariantLogicalType::OBJECT:
-			return Visitor::VisitObject(node, std::forward<Args>(args)...);
+			return Visitor::VisitObject(node, depth, std::forward<Args>(args)...);
 		case VariantLogicalType::TIME_MICROS:
 			return Visitor::VisitTime(node.GetData<dtime_t>(), std::forward<Args>(args)...);
 		case VariantLogicalType::TIME_NANOS:
@@ -204,12 +215,12 @@ public:
 	template <typename R = ReturnType, typename... Args>
 	static typename std::enable_if<!std::is_void<R>::value, vector<R>>::type
 	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
-	                Args &&...args) {
+	                idx_t depth, Args &&...args) {
 		vector<R> array_items;
 		array_items.reserve(array_data.child_count);
 		for (idx_t i = 0; i < array_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
-			array_items.emplace_back(Visit(variant, row, values_index, args...));
+			array_items.emplace_back(Visit(variant, row, values_index, depth + 1, args...));
 		}
 		return array_items;
 	}
@@ -218,39 +229,42 @@ public:
 	template <typename R = ReturnType, typename... Args>
 	static typename std::enable_if<std::is_void<R>::value, void>::type
 	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
-	                Args &&...args) {
+	                idx_t depth, Args &&...args) {
 		for (idx_t i = 0; i < array_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
-			Visit(variant, row, values_index, args...);
+			Visit(variant, row, values_index, depth + 1, args...);
 		}
 	}
 
 	// Non-void version
 	template <typename R = ReturnType, typename... Args>
-	static std::enable_if_t<!std::is_void_v<R>, vector<R>> VisitArrayItems(const VariantNode &array, Args &&...args) {
+	static std::enable_if_t<!std::is_void_v<R>, vector<R>> VisitArrayItems(const VariantNode &array, idx_t depth,
+	                                                                       Args &&...args) {
 		vector<R> array_items;
 		array_items.reserve(array.GetArrayChildren().size());
 		for (const auto &child : array.GetArrayChildren()) {
-			array_items.emplace_back(Visit(child, args...));
+			array_items.emplace_back(Visit(child, depth + 1, args...));
 		}
 		return array_items;
 	}
 
 	// Void version
 	template <typename R = ReturnType, typename... Args>
-	static std::enable_if_t<std::is_void_v<R>, void> VisitArrayItems(const VariantNode &array, Args &&...args) {
+	static std::enable_if_t<std::is_void_v<R>, void> VisitArrayItems(const VariantNode &array, idx_t depth,
+	                                                                 Args &&...args) {
 		for (const auto &child : array.GetArrayChildren()) {
-			Visit(child, args...);
+			Visit(child, depth + 1, args...);
 		}
 	}
 
 	template <typename... Args>
 	static child_list_t<ReturnType> VisitObjectItems(const UnifiedVariantVectorData &variant, idx_t row,
-	                                                 const VariantNestedData &object_data, Args &&...args) {
+	                                                 const VariantNestedData &object_data, idx_t depth,
+	                                                 Args &&...args) {
 		child_list_t<ReturnType> object_items;
 		for (idx_t i = 0; i < object_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, object_data.children_idx + i);
-			auto val = Visit(variant, row, values_index, args...);
+			auto val = Visit(variant, row, values_index, depth + 1, args...);
 
 			auto keys_index = variant.GetKeysIndex(row, object_data.children_idx + i);
 			auto &key = variant.GetKey(row, keys_index);
@@ -263,6 +277,17 @@ public:
 			    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
 		    });
 		return object_items;
+	}
+
+public:
+	//! Visit throws for a value nested this deep
+	static constexpr idx_t MAX_RECURSION_DEPTH = 128;
+
+private:
+	static void CheckDepth(idx_t depth) {
+		if (depth >= MAX_RECURSION_DEPTH) {
+			throw InvalidInputException("VARIANT exceeds maximum recursion depth of %d", MAX_RECURSION_DEPTH);
+		}
 	}
 
 private:
@@ -280,20 +305,6 @@ private:
 	}
 
 	template <typename... Args>
-	static ReturnType VisitArray(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx,
-	                             Args &&...args) {
-		auto decoded_nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
-		return Visitor::VisitArray(variant, row, decoded_nested_data, std::forward<Args>(args)...);
-	}
-
-	template <typename... Args>
-	static ReturnType VisitObject(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx,
-	                              Args &&...args) {
-		auto decoded_nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
-		return Visitor::VisitObject(variant, row, decoded_nested_data, std::forward<Args>(args)...);
-	}
-
-	template <typename... Args>
 	static ReturnType VisitString(VariantLogicalType type_id, const UnifiedVariantVectorData &variant, idx_t row,
 	                              uint32_t values_idx, Args &&...args) {
 		auto decoded_string = VariantUtils::DecodeStringData(variant, row, values_idx);
@@ -308,6 +319,9 @@ private:
 		}
 		if (type_id == VariantLogicalType::GEOMETRY) {
 			return Visitor::VisitGeometry(decoded_string, std::forward<Args>(args)...);
+		}
+		if (type_id == VariantLogicalType::GEOGRAPHY) {
+			return Visitor::VisitGeography(decoded_string, std::forward<Args>(args)...);
 		}
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(decoded_string, std::forward<Args>(args)...);
@@ -329,6 +343,9 @@ private:
 		if (type_id == VariantLogicalType::GEOMETRY) {
 			return Visitor::VisitGeometry(value, std::forward<Args>(args)...);
 		}
+		if (type_id == VariantLogicalType::GEOGRAPHY) {
+			return Visitor::VisitGeography(value, std::forward<Args>(args)...);
+		}
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(value, std::forward<Args>(args)...);
 		}
@@ -343,7 +360,9 @@ private:
 		auto &scale = decoded_decimal.scale;
 		auto &ptr = decoded_decimal.value_ptr;
 		if (width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			auto blob = VariantUtils::DecodeWideDecimalData(variant, row, values_idx);
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(blob), width, scale, std::forward<Args>(args)...);
 		} else if (width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(Load<hugeint_t>(ptr), width, scale,
 			                                                 std::forward<Args>(args)...);
@@ -363,7 +382,9 @@ private:
 	static ReturnType VisitDecimal(const VariantNode &node, Args &&...args) {
 		auto decimal = node.GetDecimal();
 		if (decimal.width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", decimal.width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(node.GetWideDecimal()), decimal.width,
+			                                                decimal.scale, std::forward<Args>(args)...);
 		} else if (decimal.width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(node.GetData<hugeint_t>(), decimal.width, decimal.scale,
 			                                                 std::forward<Args>(args)...);

@@ -1,5 +1,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -13,59 +14,50 @@ constexpr int64_t NANOS_PER_SEC = 1000000000;
 constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
 
 //! Build a number key from a sign, the decimal digits of the magnitude (no leading zeros, as e.g.
-//! produced by Uhugeint::ToString) and a base-10 scale (value = magnitude / 10^scale)
-VariantNumberKey BuildNumberKey(bool negative, const string &magnitude_digits, int64_t scale) {
+//! produced by NumericHelper::FormatUnsigned) and a base-10 scale (value = magnitude / 10^scale)
+VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, int64_t scale) {
 	VariantNumberKey key;
-	// find the first non-zero digit (magnitude strings have no leading zeros, but be defensive)
+	// find the first non-zero digit (magnitude digits have no leading zeros, but be defensive)
 	idx_t first = 0;
-	while (first < magnitude_digits.size() && magnitude_digits[first] == '0') {
+	while (first < count && digits[first] == '0') {
 		first++;
 	}
-	if (first == magnitude_digits.size()) {
+	if (first == count) {
 		// the value is zero
 		key.number_class = 1;
 		key.adjusted_exponent = 0;
+		key.digit_count = 0;
 		return key;
 	}
 	key.number_class = negative ? 0 : 2;
 	// position of the leading digit: (#digits after leading zeros - 1) - scale
-	key.adjusted_exponent = static_cast<int64_t>(magnitude_digits.size() - first) - 1 - scale;
+	key.adjusted_exponent = NumericCast<int64_t>(count - first) - 1 - scale;
 	// strip trailing zeros (keep at least the leading digit)
-	idx_t last = magnitude_digits.size();
-	while (last > first + 1 && magnitude_digits[last - 1] == '0') {
+	idx_t last = count;
+	while (last > first + 1 && digits[last - 1] == '0') {
 		last--;
 	}
-	key.digits = magnitude_digits.substr(first, last - first);
+	key.SetDigits(digits + first, last - first);
 	return key;
+}
+
+//! Build a number key from a 128-bit magnitude
+VariantNumberKey BuildNumberKey(bool negative, uhugeint_t magnitude, int64_t scale) {
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), scale);
 }
 
 //! Decompose a 128-bit signed value (hugeint) into (sign, magnitude)
 uhugeint_t HugeintMagnitude(const hugeint_t value, bool &negative) {
 	negative = value.upper < 0;
-	uint64_t hi = static_cast<uint64_t>(value.upper);
-	uint64_t lo = value.lower;
-	if (negative) {
-		// two's complement negate to get the magnitude
-		hi = ~hi;
-		lo = ~lo;
-		if (++lo == 0) {
-			++hi;
-		}
-	}
-	return uhugeint_t(hi, lo);
+	const uhugeint_t magnitude(static_cast<uint64_t>(value.upper), value.lower);
+	return negative ? -magnitude : magnitude;
 }
 
-//! Decimal-digit string of a 128-bit magnitude. Uses a cheap 64-bit conversion when the value fits in
-//! 64 bits, avoiding the slower 128-bit Uhugeint::ToString.
-string MagnitudeToString(uhugeint_t magnitude) {
-	if (magnitude.upper == 0) {
-		return to_string(magnitude.lower);
-	}
-	return Uhugeint::ToString(magnitude);
-}
-
-//! Build a number key from a native (<= 64-bit) integer value, computing the magnitude in 64-bit
-//! arithmetic instead of widening every value to uhugeint_t.
+//! Build a number key from a native (<= 64-bit) integer value, computing the magnitude and its
+//! decimal digits in 64-bit arithmetic instead of widening every value to uhugeint_t.
 template <class T>
 VariantNumberKey IntegerNumberKey(T value) {
 	bool negative = false;
@@ -76,7 +68,10 @@ VariantNumberKey IntegerNumberKey(T value) {
 			magnitude = static_cast<uint64_t>(0) - magnitude; // unsigned negate -> |value| (also handles the minimum)
 		}
 	}
-	return BuildNumberKey(negative, to_string(magnitude), 0);
+	char buffer[NumericLimits<uint64_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), 0);
 }
 } // namespace
 
@@ -135,6 +130,8 @@ VariantComparisonType GetVariantComparisonType(VariantLogicalType type) {
 		return VariantComparisonType::BITSTRING;
 	case VariantLogicalType::GEOMETRY:
 		return VariantComparisonType::GEOMETRY;
+	case VariantLogicalType::GEOGRAPHY:
+		return VariantComparisonType::GEOGRAPHY;
 	case VariantLogicalType::ARRAY:
 		return VariantComparisonType::ARRAY;
 	case VariantLogicalType::OBJECT:
@@ -161,6 +158,14 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 		const auto decimal_data = node.GetDecimal();
 		hugeint_t unscaled;
 		switch (decimal_data.GetPhysicalType()) {
+		case PhysicalType::VARCHAR: {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			const auto decimal_string = Bignum::BignumToVarchar(bignum_t(node.GetWideDecimal()));
+			const bool negative = !decimal_string.empty() && decimal_string[0] == '-';
+			const idx_t offset = negative ? 1 : 0;
+			return BuildNumberKey(negative, decimal_string.data() + offset, decimal_string.size() - offset,
+			                      decimal_data.scale);
+		}
 		case PhysicalType::INT16:
 			unscaled = hugeint_t(Load<int16_t>(decimal_data.value_ptr));
 			break;
@@ -176,14 +181,14 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 		}
 		bool negative;
 		const auto magnitude = HugeintMagnitude(unscaled, negative);
-		return BuildNumberKey(negative, MagnitudeToString(magnitude), decimal_data.scale);
+		return BuildNumberKey(negative, magnitude, decimal_data.scale);
 	}
 	case VariantLogicalType::BIGNUM: {
 		const auto bignum_blob = node.GetString();
 		const auto decimal_string = Bignum::BignumToVarchar(bignum_t(bignum_blob));
 		const bool negative = !decimal_string.empty() && decimal_string[0] == '-';
 		const idx_t offset = negative ? 1 : 0;
-		return BuildNumberKey(negative, decimal_string.substr(offset), 0);
+		return BuildNumberKey(negative, decimal_string.data() + offset, decimal_string.size() - offset, 0);
 	}
 	// integer types - use the native width for the magnitude, only widening to 128-bit when necessary
 	case VariantLogicalType::INT8:
@@ -205,10 +210,10 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 	case VariantLogicalType::INT128: {
 		bool negative;
 		const auto magnitude = HugeintMagnitude(Load<hugeint_t>(node.GetDataPointer()), negative);
-		return BuildNumberKey(negative, MagnitudeToString(magnitude), 0);
+		return BuildNumberKey(negative, magnitude, 0);
 	}
 	case VariantLogicalType::UINT128:
-		return BuildNumberKey(false, MagnitudeToString(Load<uhugeint_t>(node.GetDataPointer())), 0);
+		return BuildNumberKey(false, Load<uhugeint_t>(node.GetDataPointer()), 0);
 	default:
 		throw InternalException("VariantGetNumberKey called on non-number type %s", EnumUtil::ToString(type_id));
 	}

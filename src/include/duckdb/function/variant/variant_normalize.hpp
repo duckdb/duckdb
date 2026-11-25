@@ -1,14 +1,17 @@
 #pragma once
 
-#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
 struct VariantNormalizerState {
 public:
 	VariantNormalizerState(idx_t result_row, VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
-	                       SelectionVector &keys_selvec);
+	                       ArenaAllocator &keys_arena, SelectionVector &keys_selvec);
 
 public:
 	data_ptr_t GetDestination();
@@ -22,6 +25,7 @@ public:
 
 	VariantVectorData &source;
 	OrderedOwningStringMap<uint32_t> &dictionary;
+	ArenaAllocator &keys_arena;
 	SelectionVector &keys_selvec;
 
 	uint64_t keys_offset;
@@ -66,20 +70,26 @@ struct VariantNormalizer {
 	static void VisitBlob(const string_t &blob, VariantNormalizerState &state);
 	static void VisitBignum(const string_t &bignum, VariantNormalizerState &state);
 	static void VisitGeometry(const string_t &geom, VariantNormalizerState &state);
+	static void VisitGeography(const string_t &geog, VariantNormalizerState &state);
 	static void VisitBitstring(const string_t &bits, VariantNormalizerState &state);
 
 	template <typename T>
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantNormalizerState &state) {
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
-		Store<T>(val, state.GetDestination());
-		state.blob_size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			VisitString(val.data, state);
+		} else {
+			Store<T>(val, state.GetDestination());
+			state.blob_size += sizeof(T);
+		}
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                       VariantNormalizerState &state);
+	                       idx_t depth, VariantNormalizerState &state);
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                        VariantNormalizerState &state);
+	                        idx_t depth, VariantNormalizerState &state);
 	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state);
 
 public:

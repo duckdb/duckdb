@@ -94,6 +94,8 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+	buffer_ptr<VectorBuffer> ConstantReferenceInternal(const LogicalType &type, idx_t index,
+	                                                   count_t count) const override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
@@ -167,6 +169,10 @@ struct DictionaryVector {
 		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().global_dictionary;
 	}
 	static const Vector &GetCachedHashes(const Vector &input);
+	//! Combine row validity while preserving dictionary encoding and existing NULLs.
+	//! The mask must cover vector.size() rows and is not retained.
+	//! May replace the selection buffer or dictionary entry.
+	static void ApplyValidity(Vector &vector, const ValidityMask &mask);
 };
 
 } // namespace duckdb

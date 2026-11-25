@@ -6,6 +6,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -111,6 +112,44 @@ idx_t TupleDataCollection::SizeInBytes() const {
 	return data_size + stl_allocator->AllocationSize();
 }
 
+idx_t TupleDataCollection::GetMaxChunkPartRowSize() const {
+	idx_t max_heap_size = 0;
+	if (!layout.AllConstant()) {
+		for (const auto &segment : segments) {
+			for (const auto &part : segment->chunk_parts) {
+				if (part->count == 0) {
+					continue;
+				}
+				const auto heap_size = part->total_heap_size / part->count + (part->total_heap_size % part->count != 0);
+				max_heap_size = MaxValue(max_heap_size, heap_size);
+			}
+		}
+	}
+	const auto row_width = layout.GetRowWidth();
+	if (max_heap_size > NumericLimits<idx_t>::Maximum() - row_width) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return row_width + max_heap_size;
+}
+
+idx_t TupleDataCollection::GetChunkDataSize(idx_t chunk_idx) const {
+	for (const auto &segment : segments) {
+		if (chunk_idx >= segment->ChunkCount()) {
+			chunk_idx -= segment->ChunkCount();
+			continue;
+		}
+		const auto &chunk = *segment->chunks[chunk_idx];
+		auto result = chunk.count * layout.GetRowWidth();
+		if (!layout.AllConstant()) {
+			for (auto part_idx = chunk.part_ids.Start(); part_idx < chunk.part_ids.End(); part_idx++) {
+				result += segment->chunk_parts[part_idx]->total_heap_size;
+			}
+		}
+		return result;
+	}
+	throw InternalException("Chunk index out of range in TupleDataCollection::GetChunkDataSize");
+}
+
 idx_t TupleDataCollection::GetBlockAllocationSize() const {
 	if (segments.empty() || (segments.size() == 1 && segments[0] && segments[0]->allocator == allocator)) {
 		return allocator->GetBlockAllocationSize();
@@ -166,40 +205,61 @@ vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	return result;
 }
 
-void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end) {
+static idx_t FindChunkPart(const TupleDataSegment &segment, const idx_t chunk_idx, idx_t offset) {
+	if (chunk_idx == segment.ChunkCount()) {
+		D_ASSERT(offset == 0);
+		return segment.chunk_parts.size();
+	}
+	const auto &chunk = *segment.chunks[chunk_idx];
+	D_ASSERT(offset < chunk.count);
+	for (auto part_idx = chunk.part_ids.Start(); part_idx < chunk.part_ids.End(); part_idx++) {
+		const auto count = segment.chunk_parts[part_idx]->count;
+		if (offset < count) {
+			return part_idx;
+		}
+		offset -= count;
+	}
+	throw InternalException("Row offset out of range in TupleDataCollection::DestroyChunks");
+}
+
+static idx_t FindNextHeapBlock(const TupleDataSegment &segment, idx_t chunk_idx, idx_t part_idx, const idx_t part_end) {
+	for (; chunk_idx < segment.ChunkCount() && part_idx < part_end; chunk_idx++) {
+		const auto &chunk = *segment.chunks[chunk_idx];
+		part_idx = MaxValue<idx_t>(part_idx, chunk.part_ids.Start());
+		for (; part_idx < MinValue<idx_t>(chunk.part_ids.End(), part_end); part_idx++) {
+			const auto &part = *segment.chunk_parts[part_idx];
+			if (part.total_heap_size != 0) {
+				return part.heap_block_index;
+			}
+		}
+	}
+	return segment.allocator->HeapBlockCount();
+}
+
+void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end,
+                                        const idx_t begin_offset, const idx_t end_offset) {
 	D_ASSERT(segments.size() == 1); // Assume 1 segment for now (multi-segment destroys can be implemented if needed)
 	D_ASSERT(chunk_idx_begin <= chunk_idx_end && chunk_idx_end <= ChunkCount());
-	auto &segment = *segments[0];
-	auto &chunk_begin = *segment.chunks[chunk_idx_begin];
-
-	const auto row_block_begin = chunk_begin.row_block_ids.Start();
-	if (chunk_idx_end == ChunkCount()) {
-		segment.allocator->DestroyRowBlocks(row_block_begin, segment.allocator->RowBlockCount());
-	} else {
-		auto &chunk_end = *segment.chunks[chunk_idx_end];
-		const auto row_block_end = chunk_end.row_block_ids.Start();
-		segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
+	D_ASSERT(chunk_idx_begin != chunk_idx_end || begin_offset <= end_offset);
+	if (chunk_idx_begin == chunk_idx_end && begin_offset == end_offset) {
+		return;
 	}
+	auto &segment = *segments[0];
+	const auto part_begin = FindChunkPart(segment, chunk_idx_begin, begin_offset);
+	const auto part_end = FindChunkPart(segment, chunk_idx_end, end_offset);
 
-	if (!layout.AllConstant()) {
-		auto heap_chunk_begin = chunk_idx_begin;
-		while (heap_chunk_begin < chunk_idx_end && segment.chunks[heap_chunk_begin]->heap_block_ids.Empty()) {
-			heap_chunk_begin++;
-		}
-		if (heap_chunk_begin == chunk_idx_end) {
+	const auto row_block_begin = segment.chunk_parts[part_begin]->row_block_index;
+	const auto row_block_end = chunk_idx_end == segment.ChunkCount() ? segment.allocator->RowBlockCount()
+	                                                                 : segment.chunk_parts[part_end]->row_block_index;
+	segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
+
+	if (!layout.AllConstant() && segment.allocator->HeapBlockCount() != 0) {
+		// Preserve heaps shared with later parts, including across parts without heap data.
+		const auto heap_block_begin = FindNextHeapBlock(segment, chunk_idx_begin, part_begin, part_end);
+		if (heap_block_begin == segment.allocator->HeapBlockCount()) {
 			return;
 		}
-
-		// A later chunk can share a heap block across intervening chunks without heap data.
-		const auto chunk_count = segment.ChunkCount();
-		auto heap_chunk_end = chunk_idx_end;
-		while (heap_chunk_end < chunk_count && segment.chunks[heap_chunk_end]->heap_block_ids.Empty()) {
-			heap_chunk_end++;
-		}
-		const auto heap_block_begin = segment.chunks[heap_chunk_begin]->heap_block_ids.Start();
-		const auto heap_block_end = heap_chunk_end == chunk_count
-		                                ? segment.allocator->HeapBlockCount()
-		                                : segment.chunks[heap_chunk_end]->heap_block_ids.Start();
+		const auto heap_block_end = FindNextHeapBlock(segment, chunk_idx_end, part_end, segment.chunk_parts.size());
 		segment.allocator->DestroyHeapBlocks(heap_block_begin, heap_block_end);
 	}
 }
@@ -438,22 +498,80 @@ void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes
 }
 // LCOV_EXCL_STOP
 
+template <idx_t FIXED_WIDTH>
+static void CopyRowBytes(const data_ptr_t source_locations[], const data_ptr_t target_locations[],
+                         const SelectionVector &append_sel, idx_t append_count, idx_t variable_width) {
+	const auto width = FIXED_WIDTH ? FIXED_WIDTH : variable_width;
+	if (append_sel.IsSet()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			memcpy(target_locations[i], source_locations[append_sel[i]], width);
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			memcpy(target_locations[i], source_locations[i], width);
+		}
+	}
+}
+
 void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
                                    const SelectionVector &append_sel, const idx_t append_count) const {
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
-	// Copy rows
+	// Constant sizes let the compiler inline short row copies.
 	const auto row_width = layout.GetRowWidth();
-	if (append_sel.IsSet()) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto idx = append_sel[i];
-			memcpy(target_locations[i], source_locations[idx], row_width);
-		}
-	} else {
-		for (idx_t i = 0; i < append_count; i++) {
-			memcpy(target_locations[i], source_locations[i], row_width);
-		}
+	switch (row_width) {
+	case 8:
+		CopyRowBytes<8>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 16:
+		CopyRowBytes<16>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 24:
+		CopyRowBytes<24>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 32:
+		CopyRowBytes<32>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 40:
+		CopyRowBytes<40>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 48:
+		CopyRowBytes<48>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 56:
+		CopyRowBytes<56>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 64:
+		CopyRowBytes<64>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 72:
+		CopyRowBytes<72>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 80:
+		CopyRowBytes<80>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 88:
+		CopyRowBytes<88>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 96:
+		CopyRowBytes<96>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 104:
+		CopyRowBytes<104>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 112:
+		CopyRowBytes<112>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 120:
+		CopyRowBytes<120>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 128:
+		CopyRowBytes<128>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	default:
+		CopyRowBytes<0>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
 	}
 
 	// Copy heap if we need to
@@ -551,6 +669,8 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 }
 
 void TupleDataCollection::Reset() {
+	static constexpr idx_t PARALLEL_RESET_THRESHOLD = 512;
+	static constexpr idx_t MAX_RESET_TASKS = 8;
 	count = 0;
 	data_size = 0;
 	// Find the first non-null segment.
@@ -568,6 +688,12 @@ void TupleDataCollection::Reset() {
 		// match that segment allocator before resetting to preserve segment/allocator consistency.
 		if (live_idx > 0) {
 			segments[0] = std::move(segments[live_idx]);
+		}
+		if (segments.size() > PARALLEL_RESET_THRESHOLD && scheduler.NumberOfThreads() > 1) {
+			// Keep the first segment for reuse, and join before resetting its shared allocator.
+			const auto task_count = MinValue<idx_t>(MAX_RESET_TASKS, scheduler.NumberOfThreads());
+			ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments.begin() + 1, segments.end(),
+			                                                  task_count);
 		}
 		segments.resize(1);
 		allocator = segments[0]->allocator;

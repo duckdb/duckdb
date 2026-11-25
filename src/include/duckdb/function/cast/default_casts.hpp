@@ -18,6 +18,8 @@
 namespace duckdb {
 
 class CastFunctionSet;
+class Context;
+struct GetCastFunctionInput;
 class BaseStatistics;
 struct FunctionLocalState;
 struct BoundCastInfo;
@@ -147,6 +149,13 @@ public:
 	optional_ptr<BoundCastData> GetCastData() const {
 		return cast_data;
 	}
+	//! The stability of the cast and of the casts it applies to child values
+	FunctionStability GetStability() const {
+		return stability;
+	}
+	void SetStability(FunctionStability stability_p) {
+		stability = stability_p;
+	}
 	bool HasInitLocalState() const {
 		return init_local_state;
 	}
@@ -166,8 +175,14 @@ public:
 	bool HasStatisticsCallback() const {
 		return statistics;
 	}
+	bool HasSameStatisticsCallback(const BoundCastInfo &other) const {
+		return statistics && statistics == other.statistics;
+	}
 	void SetStatisticsCallback(cast_statistics_t new_statistics) {
 		statistics = new_statistics;
+	}
+	void SetInitLocalState(init_cast_local_state_t new_init_local_state) {
+		init_local_state = new_init_local_state;
 	}
 	DUCKDB_API unique_ptr<BaseStatistics> PropagateStatistics(const LogicalType &source_type,
 	                                                          const LogicalType &target_type,
@@ -184,24 +199,38 @@ private:
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
 	cast_statistics_t statistics = nullptr;
+	FunctionStability stability = FunctionStability::CONSISTENT;
 };
 
 struct BindCastInput {
 	DUCKDB_API BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info,
-	                         optional_ptr<ClientContext> context);
+	                         GetCastFunctionInput &get_input);
+
+	//! The services of the cast - throws for the default casts, which have none
+	DUCKDB_API Context &GetContext();
 
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
 	QueryLocation query_location;
+	//! The stability of the bound cast, lowered by a bind that reads settings such as TimeZone and by child casts
+	FunctionStability stability = FunctionStability::CONSISTENT;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
+
+private:
+	optional_ptr<Context> services;
 };
 
 struct DefaultCasts {
 	DUCKDB_API static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
 	                                                       const LogicalType &target);
+	//! Attaches a WideDecimalCastState to a cast whose source or target is a DECIMAL wider than 38 digits
+	DUCKDB_API static BoundCastInfo WideDecimalCast(BoundCastInfo info, const LogicalType &source,
+	                                                const LogicalType &target);
+	//! The client context of a cast with a WideDecimalCastState, null for a cast without one
+	DUCKDB_API static optional_ptr<ClientContext> WideDecimalCastContext(CastParameters &parameters);
 
 	DUCKDB_API static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 	DUCKDB_API static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);

@@ -106,3 +106,32 @@ query I
 SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(min(COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
 ----
 true
+
+# states keep the collation they were exported with, not the default collation of the session
+statement ok
+CREATE TEMP TABLE saved AS SELECT max(s) EXPORT_STATE st, max(s COLLATE nocase) EXPORT_STATE st_nocase FROM (VALUES ('a'), ('B')) t(s) GROUP BY s;
+
+statement ok
+SET default_collation = 'nocase';
+
+query TT
+SELECT finalize(combine_aggr(st)), finalize(combine_aggr(st_nocase)) FROM saved;
+----
+a	B
+
+require icu
+
+statement ok
+RESET default_collation;
+
+# a partly collated key keeps exactly its own collations: field b must not get the default ICU collation
+statement ok
+CREATE TEMP TABLE saved_icu AS SELECT max({'a': p COLLATE nocase, 'b': q}) EXPORT_STATE st, arg_max(q, {'a': p COLLATE nocase, 'b': q}) EXPORT_STATE st_arg FROM (VALUES ('x', 'a'), ('X', 'B')) t(p, q) GROUP BY q;
+
+statement ok
+SET default_collation = 'en';
+
+query TT
+SELECT finalize(combine_aggr(st)), finalize(combine_aggr(st_arg)) FROM saved_icu;
+----
+{'a': x, 'b': a}	a

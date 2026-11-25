@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class BaseSecret;
+class Context;
 struct SecretEntry;
 struct FileOpenerInfo;
 struct CreateSecretInfo;
@@ -26,6 +27,11 @@ class FileOpener;
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT, TRANSACTION };
 
 //! Input passed to a CreateSecretFunction
+//! State a CreateSecretFunction carries along, handed to its function through the CreateSecretInput
+struct CreateSecretFunctionInfo {
+	virtual ~CreateSecretFunctionInfo() = default;
+};
+
 struct CreateSecretInput {
 	//! type
 	Identifier type;
@@ -43,6 +49,8 @@ struct CreateSecretInput {
 	OnCreateConflict on_conflict;
 	//! lifetime of the secret
 	SecretPersistType persist_type;
+	//! the info of the function creating the secret, if it has any
+	optional_ptr<CreateSecretFunctionInfo> function_info;
 };
 
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
@@ -55,6 +63,7 @@ public:
 	Identifier provider;
 	create_secret_function_t function;
 	named_parameter_type_map_t named_parameters;
+	shared_ptr<CreateSecretFunctionInfo> info;
 };
 
 //! CreateSecretFunctionsSet contains multiple functions of a single type, identified by the provider. The provider
@@ -221,6 +230,9 @@ public:
 
 		Value redact_set_value;
 		deserializer.ReadProperty(202, "redact_keys", redact_set_value);
+		if (redact_set_value.IsNull() || redact_set_value.type().id() != LogicalTypeId::LIST) {
+			throw SerializationException("Secret redact_keys must be a non-NULL list");
+		}
 		for (const auto &entry : ListValue::GetChildren(redact_set_value)) {
 			result->redact_keys.insert(Identifier(entry.ToString()));
 		}
@@ -346,7 +358,7 @@ protected:
 	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance
 	//! (global only)
 	optional_ptr<DatabaseInstance> db;
-	optional_ptr<ClientContext> context;
+	optional_ptr<Context> context;
 
 	string path;
 };

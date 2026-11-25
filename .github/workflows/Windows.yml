@@ -135,13 +135,19 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
+        make cli-zip-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
         make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
         make static-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 STATIC_LIBRARIES="src/duckdb_static.lib src/duckdb_shell.lib src/main/http/duckdb_httplib.lib src/main/extension/duckdb_loadable_extensions.lib extension/*/*_extension.lib"
-        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz duckdb-static-libs-windows-amd64.tar.gz
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-cli-windows-amd64.zip duckdb-shared-libs-windows-amd64.tar.gz duckdb-static-libs-windows-amd64.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
         path: duckdb-cli-windows-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-cli-windows-amd64.zip
         archive: false
 
     - uses: actions/upload-artifact@v7
@@ -174,7 +180,7 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+    if: ${{ inputs.run_all }}
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
@@ -231,7 +237,7 @@ jobs:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+   if: ${{ inputs.run_all }}
    runs-on: windows-2025-vs2026
    env:
      GEN: ninja
@@ -256,9 +262,21 @@ jobs:
          arch: arm64
          host_arch: x64
 
+     # The MSVC STL on this image requires Clang 22+, newer than the preinstalled LLVM
+     - name: Install LLVM 22
+       shell: pwsh
+       run: |
+         python scripts/ci/retry.py -- choco upgrade llvm --version=22.1.8 --allow-downgrade -y --no-progress
+         $version = clang-cl --version | Select-Object -First 1
+         Write-Output $version
+         if ($version -notmatch 'clang version 22\.') {
+           throw "Expected clang-cl 22, got: $version"
+         }
+
      - name: Build
        shell: bash
        run: |
+         PATH="$(cygpath -u "$llvmX64"):$PATH"
          clang-cl --version
          python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
 
@@ -299,13 +317,19 @@ jobs:
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          make cli-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
+         make cli-zip-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
          make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
          make static-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 STATIC_LIBRARIES="src/duckdb_static.lib src/duckdb_shell.lib src/main/http/duckdb_httplib.lib src/main/extension/duckdb_loadable_extensions.lib extension/*/*_extension.lib"
-         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz duckdb-static-libs-windows-arm64.tar.gz
+         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-cli-windows-arm64.zip duckdb-shared-libs-windows-arm64.tar.gz duckdb-static-libs-windows-arm64.tar.gz
 
      - uses: actions/upload-artifact@v7
        with:
          path: duckdb-cli-windows-arm64.tar.gz
+         archive: false
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: duckdb-cli-windows-arm64.zip
          archive: false
 
      - uses: actions/upload-artifact@v7
@@ -338,6 +362,7 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
+     if: ${{ inputs.run_all }}
      runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja

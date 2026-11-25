@@ -1,6 +1,7 @@
 #include "duckdb/common/types/type_manager.hpp"
 
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -19,13 +20,16 @@ const CastFunctionSet &TypeManager::GetCastFunctions() const {
 }
 
 static LogicalType TransformStringToUnboundType(const string &str, ClientContext &context) {
-	if (StringUtil::Lower(str) == "null") {
+	if (StringUtil::CIEquals(str, "null")) {
 		return LogicalType::SQLNULL;
 	}
 	ColumnList column_list;
 	try {
 		column_list = Parser(context).ParseColumnList("dummy " + str);
 	} catch (const std::runtime_error &e) {
+		if (ErrorData(e).Type() == ExceptionType::OUT_OF_MEMORY) {
+			throw;
+		}
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",
 		                                      "LONG",
@@ -87,7 +91,8 @@ static LogicalType TransformStringToUnboundType(const string &str, ClientContext
 
 // This has to be called with a level of indirection (through "parse_function") in order to avoid being included in
 // extensions that statically link the core DuckDB library.
-static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
+static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context,
+                                            optional_ptr<const DecimalWidthLimit> decimal_width_limit) {
 	auto type = TransformStringToUnboundType(type_str, context);
 	if (type.IsUnbound()) {
 		if (!context.transaction.HasActiveTransaction()) {
@@ -95,13 +100,15 @@ static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContex
 			    "Context does not have a transaction active, try running ClientContext::BindLogicalType instead");
 		}
 		auto binder = Binder::CreateBinder(context, nullptr);
+		binder->SetDecimalWidthLimit(decimal_width_limit);
 		binder->BindLogicalType(type);
 	}
 	return type;
 }
 
-LogicalType TypeManager::ParseLogicalType(const string &type_str, ClientContext &context) const {
-	return parse_function(type_str, context);
+LogicalType TypeManager::ParseLogicalType(const string &type_str, ClientContext &context,
+                                          optional_ptr<const DecimalWidthLimit> decimal_width_limit) const {
+	return parse_function(type_str, context, decimal_width_limit);
 }
 
 LogicalType TypeManager::ParseLogicalType(const string &type_str) const {
