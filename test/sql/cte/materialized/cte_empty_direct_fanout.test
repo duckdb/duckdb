@@ -3,6 +3,7 @@
 # group: [materialized]
 
 require 64bit
+
 require exact_vector_size 2048
 
 set query_timeout 60
