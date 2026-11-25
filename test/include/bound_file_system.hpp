@@ -19,13 +19,14 @@ public:
 	    : file_system(file_system_p), opener(opener_p) {
 	}
 
+protected:
+	//! Every path goes to the bound file system, so there is no root to register sub-systems on
 	VirtualFileSystem &GetFileSystem() const override {
-		return root;
+		throw InternalException("BoundFileSystem has no virtual file system");
 	}
 	optional_ptr<FileOpener> GetOpener() const override {
 		return opener;
 	}
-	//! Every path goes to the bound file system
 	optional_ptr<BaseFileSystem> GetFixedFileSystem() const override {
 		return file_system;
 	}
@@ -33,7 +34,6 @@ public:
 private:
 	BaseFileSystem &file_system;
 	optional_ptr<FileOpener> opener;
-	mutable VirtualFileSystem root;
 };
 
 } // namespace duckdb

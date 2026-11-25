@@ -21,14 +21,6 @@ class FileSystem {
 public:
 	virtual ~FileSystem() = default;
 
-	//! The root that picks the file system of a path
-	virtual VirtualFileSystem &GetFileSystem() const = 0;
-	virtual optional_ptr<FileOpener> GetOpener() const = 0;
-	//! If set, every path goes to this file system instead of the one the root picks
-	virtual optional_ptr<BaseFileSystem> GetFixedFileSystem() const {
-		return nullptr;
-	}
-
 public:
 	//! The file system of a client, of a database, or the local file system of a database
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
@@ -221,6 +213,15 @@ public:
 	const TARGET &Cast() const {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+protected:
+	//! The root that picks the file system of a path
+	virtual VirtualFileSystem &GetFileSystem() const = 0;
+	virtual optional_ptr<FileOpener> GetOpener() const = 0;
+	//! If set, every path goes to this file system instead of the one the root picks
+	virtual optional_ptr<BaseFileSystem> GetFixedFileSystem() const {
+		return nullptr;
 	}
 
 private:

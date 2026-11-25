@@ -8,20 +8,6 @@
 
 namespace duckdb {
 
-namespace {
-// Get database instance from file opener, throw InvalidInput exception.
-DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
-	if (file_opener == nullptr) {
-		throw InvalidInputException("Cannot get database instance out of file opener, because file opener is nullptr.");
-	}
-	auto database_ptr = file_opener->TryGetDatabase();
-	if (database_ptr == nullptr) {
-		throw InvalidInputException("Cannot extract database instance out of file opener.");
-	}
-	return *database_ptr;
-}
-} // namespace
-
 //===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
@@ -47,10 +33,6 @@ void CachingFileHandleWrapper::Close() {
 //===----------------------------------------------------------------------===//
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db, CachingMode mode)
     : underlying_file_system(file_system), caching_file_system(file_system, db), caching_mode(mode) {
-}
-
-CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, CachingMode mode)
-    : CachingFileSystemWrapper(file_system, GetDatabaseInstance(file_system.GetOpener()), mode) {
 }
 
 bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
@@ -368,7 +350,8 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 //===----------------------------------------------------------------------===//
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
-	return handle->file_system.OpenCompressedFile(context, std::move(handle), write);
+	auto &file_system = handle->file_system;
+	return file_system.OpenCompressedFile(context, std::move(handle), write);
 }
 
 } // namespace duckdb

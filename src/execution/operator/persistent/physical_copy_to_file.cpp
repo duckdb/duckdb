@@ -1,9 +1,9 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/execution/chunk_hasher.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"

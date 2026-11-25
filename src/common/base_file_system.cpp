@@ -732,33 +732,6 @@ bool BaseFileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-unique_ptr<MultiFileList> BaseFileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
-	auto result = GlobFilesExtended(pattern, input, nullptr);
-	if (result->IsEmpty()) {
-		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !FileSystem::HasGlob(pattern)) {
-			// if we have no glob in the pattern and we have an extension, we try to glob
-			if (input.extension.empty()) {
-				throw InternalException("FALLBACK_GLOB requires an extension to be specified");
-			}
-			string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-			result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
-			if (!result->IsEmpty()) {
-				// we found files by globbing the target as if it was a directory - return them
-				return result;
-			}
-		}
-		if (!input.AllowsEmpty()) {
-			throw IOException("No files found that match the pattern \"%s\"", pattern);
-		}
-	}
-	return result;
-}
-
-vector<OpenFileInfo> BaseFileSystem::GlobFiles(const string &pattern, const FileGlobInput &input) {
-	auto file_list = GlobFileList(pattern, input);
-	return file_list->GetAllFiles();
-}
-
 void BaseFileSystem::Seek(FileHandle &handle, idx_t location) {
 	throw NotImplementedException("%s: Seek is not implemented!", GetName());
 }

@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enable_shared_from_this_ipp.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -52,8 +51,6 @@ class CachingFileSystemWrapper : public BaseFileSystem, public enable_shared_fro
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
-	//! The database is taken from the opener of the file system
-	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
 	DUCKDB_API std::string GetName() const override;

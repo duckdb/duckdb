@@ -193,9 +193,8 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 		duckdb::OpenFileInfo info(duckdb::string(Convert(file_path, file_path_length)));
 		info.extended_info = opts.extended_info;
 
-		// No opener is passed: BaseFileSystem::GetFileSystem hands back the context's own FileSystem, which
-		// pushes the opener itself -- which is how a remote file system reaches settings and secrets. Supplying one
-		// here is rejected outright ("the opener is pushed automatically").
+		// FileSystem::GetFileSystem hands back the context's own bound FileSystem, which pushes the opener itself --
+		// which is how a remote file system reaches settings and secrets.
 		auto handle = slot.fs.OpenFile(info, opts.flags);
 		if (!handle) {
 			throw duckdb::IOException("Failed to open file: %s", info.path);
@@ -223,9 +222,8 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_path_is_remote(duckdb_v2_file_system_handl
 	DUCKDB_CHECK_ARG(file_system);
 	DUCKDB_CHECK_STR_ARG(path, path_length);
 	DUCKDB_CHECK_ARG(out_is_remote);
-	return WithErrorHandler(err, [&]() {
-		*out_is_remote = duckdb::FileSystem::IsRemoteFile(duckdb::string(Convert(path, path_length)));
-	});
+	return WithErrorHandler(
+	    err, [&]() { *out_is_remote = duckdb::FileSystem::IsRemoteFile(duckdb::string(Convert(path, path_length))); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_system_path_expand(duckdb_v2_file_system_handle file_system, const char *path,

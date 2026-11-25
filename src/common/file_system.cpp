@@ -39,7 +39,12 @@ unique_ptr<FileHandle> FileSystem::OpenCachedFile(const OpenFileInfo &file, cons
 	raw_flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 	raw_flags.SetCachingMode(CachingMode::NO_CACHING);
 
-	auto caching_file_system = make_shared_ptr<CachingFileSystemWrapper>(*this, flags.GetCachingMode());
+	auto opener = GetOpener();
+	auto db = opener ? opener->TryGetDatabase() : nullptr;
+	if (!db) {
+		throw InvalidInputException("Cannot open \"%s\" through the external file cache without a database", file.path);
+	}
+	auto caching_file_system = make_shared_ptr<CachingFileSystemWrapper>(*this, *db, flags.GetCachingMode());
 	auto handle = caching_file_system->OpenFile(file, raw_flags, GetOpener());
 	if (!handle) {
 		return nullptr;

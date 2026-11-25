@@ -304,10 +304,6 @@ public:
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener);
 	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
 	                                          optional_ptr<FileOpener> opener);
-	DUCKDB_API unique_ptr<MultiFileList> GlobFileList(const string &path,
-	                                                  const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
-	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
