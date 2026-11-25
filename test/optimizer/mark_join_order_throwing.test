@@ -1,0 +1,50 @@
+# name: test/optimizer/mark_join_order_throwing.test
+# description: MARK ordering preserves the evaluation domain of throwing predicates
+# group: [optimizer]
+
+statement ok
+CREATE TABLE probe AS
+SELECT i::INTEGER id, CASE WHEN i%2=0 THEN 'bad' ELSE '1' END s
+FROM range(10) t(i);
+
+statement ok
+CREATE TABLE fact AS SELECT ((i%5)*2+1)::INTEGER id FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE keys AS SELECT * FROM (VALUES (1),(9),(NULL)) t(id);
+
+# The INNER join removes bad strings before the marker-consuming filter.
+query I
+SELECT count(*) FROM probe p JOIN fact f ON p.id=f.id
+WHERE p.id IN (SELECT id FROM keys) OR CAST(p.s AS INTEGER)>0;
+----
+1000
+
+# A throwing MARK operand must also stay above the INNER join.
+query I
+SELECT count(*) FILTER (WHERE CAST(p.s AS INTEGER) IN (SELECT id FROM keys))
+FROM probe p JOIN fact f ON p.id=f.id;
+----
+1000
+
+# Preserve the boundary for a later INNER condition that does not reference the marker.
+statement ok
+CREATE TABLE values_to_match AS SELECT 1 AS v;
+
+query II
+SELECT count(*), count(__mark_join_marker)
+FROM probe p JOIN fact f ON p.id=f.id
+JOIN BY (TYPE MARK) keys k ON p.id=k.id
+JOIN values_to_match v ON CAST(p.s AS INTEGER)=v.v;
+----
+1000	400
+
+# Separate conjuncts remain above the original MARK boundary without filter pushdown.
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query I
+SELECT count(*) FROM probe p JOIN fact f ON p.id=f.id
+WHERE (p.id IN (SELECT id FROM keys)) IS NULL AND CAST(p.s AS INTEGER)>0;
+----
+600

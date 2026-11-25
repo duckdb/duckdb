@@ -1,0 +1,16 @@
+# name: test/sql/json/scalar/json_cast_nested_lifetime.test
+# description: The strings of a JSON cast to a nested type stay valid after the cast's local state is gone
+# group: [scalar]
+
+require json
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/json_cast_nested_lifetime.csv' (HEADER false);
+
+# named parameters are cast to their type once, at bind time
+query II
+SELECT first_column_with_long_name, second_column_with_long_name
+FROM read_csv('{TEST_DIR}/json_cast_nested_lifetime.csv',
+	names := '["first_column_with_long_name", "second_column_with_long_name"]'::JSON);
+----
+1	2
