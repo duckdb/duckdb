@@ -35,6 +35,7 @@ public:
 		client->set_read_timeout(sec, usec);
 		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
+		client->set_payload_max_length(idx_t(2) * 1024 * 1024 * 1024);
 
 		if (!http_params.http_proxy.empty()) {
 			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
@@ -45,7 +46,7 @@ public:
 		}
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
-		auto headers = TransformHeaders(info.headers, info.params);
+		duckdb_httplib::Headers headers(info.headers.begin(), info.headers.end());
 		if (!info.response_handler && !info.content_handler) {
 			return TransformResult(client->Get(info.path, headers));
 		} else {
@@ -83,14 +84,6 @@ public:
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
-	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
-		duckdb_httplib::Headers headers;
-		for (auto &entry : header_map) {
-			headers.insert(entry);
-		}
-		return headers;
-	}
-
 	unique_ptr<HTTPResponse> TransformResponse(const duckdb_httplib::Response &response) {
 		auto status_code = HTTPUtil::ToStatusCode(response.status);
 		auto result = make_uniq<HTTPResponse>(status_code);

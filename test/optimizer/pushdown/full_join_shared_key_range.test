@@ -1,0 +1,107 @@
+# name: test/optimizer/pushdown/full_join_shared_key_range.test
+# description: FULL join pushdown preserves shared-key and one-sided scan pruning
+# group: [pushdown]
+
+require parquet
+
+statement ok
+SET threads = 1;
+
+statement ok
+COPY (SELECT i AS id, (i % 40)::INTEGER AS age FROM range(16384) t(i) ORDER BY i)
+TO '{TEST_DIR}/full_join_shared_key_range.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE VIEW ages AS SELECT * FROM read_parquet('{TEST_DIR}/full_join_shared_key_range.parquet');
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND r.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 AND r.age <= 25 ORDER BY id;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,.*"row_groups_scanned": 1,.*
+
+query I
+SELECT id FROM ages l FULL JOIN ages r USING (id)
+WHERE id BETWEEN 100 AND 106 AND l.age <= 25 AND r.age <= 25 ORDER BY id;
+----
+100
+101
+102
+103
+104
+105
+
+# Cluster age independently of the original fixture's repeating values.
+statement ok
+COPY (SELECT i AS id, i::INTEGER AS age FROM range(16384) t(i) ORDER BY age)
+TO '{TEST_DIR}/full_join_age_range.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+CREATE VIEW sorted_ages AS SELECT * FROM read_parquet('{TEST_DIR}/full_join_age_range.parquet');
+CREATE TABLE other_ids AS SELECT i AS id FROM range(16384) t(i);
+
+# Identify the Parquet input by its eight row groups; age alone must prune it.
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*) FROM sorted_ages l FULL JOIN other_ids r USING (id) WHERE l.age < 2048;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,[^{}]*"total_row_groups_to_scan": 8,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*) FROM other_ids l FULL JOIN sorted_ages r USING (id) WHERE r.age < 2048;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,[^{}]*"total_row_groups_to_scan": 8,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*) FROM sorted_ages l LEFT JOIN other_ids r USING (id) WHERE l.age < 2048;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,[^{}]*"total_row_groups_to_scan": 8,.*
+
+# Keep the FULL join while checking BETWEEN and combined-filter pruning.
+statement ok
+SET disabled_optimizers = 'outer_join_simplification';
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*) FROM sorted_ages l FULL JOIN other_ids r USING (id)
+WHERE l.age >= 2048 AND l.age < 4096;
+----
+analyzed_plan	<REGEX>:.*"row_groups_scanned": 1,[^{}]*"total_row_groups_to_scan": 8,.*
+
+query I
+SELECT count(*) FROM sorted_ages l FULL JOIN other_ids r USING (id)
+WHERE l.age >= 2048 AND l.age < 4096;
+----
+2048
+
+# The shared key admits two groups; age must remove one more on the affected input.
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*) FROM sorted_ages l FULL JOIN sorted_ages r USING (id)
+WHERE id BETWEEN 0 AND 4095 AND l.age < 2048;
+----
+analyzed_plan	<REGEX>:.*("row_groups_scanned": 1,.*"row_groups_scanned": 2,|"row_groups_scanned": 2,.*"row_groups_scanned": 1,).*
+
+query I
+SELECT count(*) FROM sorted_ages l FULL JOIN sorted_ages r USING (id)
+WHERE id BETWEEN 0 AND 4095 AND l.age < 2048;
+----
+2048
+
+statement ok
+RESET disabled_optimizers;

@@ -84,7 +84,8 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 			break;
 		}
 		case PhysicalOperatorType::FILTER:
-			// continue into child operators
+		case PhysicalOperatorType::TOP_KEY_FILTER:
+			// these operators only remove rows and forward every column: continue into child operators
 			child_ref = child_op.children[0];
 			break;
 		default:
@@ -240,8 +241,22 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.Function().HasStateCombineCallback()) {
-			// distinct aggregates are not supported in perfect hash aggregates
+		const auto &function = aggregate.Function();
+		if (aggregate.IsDistinct() || !function.HasStateCombineCallback()) {
+			return false;
+		}
+		if (!function.HasGetStateTypeCallback() || function.HasStateDestructorCallback()) {
+			return false;
+		}
+		const auto layout = function.GetStateType(aggregate.BindInfo().get());
+		// Preserve min/max and fixed-size sketch fast paths, excluding sorted aggregate buffers.
+		const auto &name = function.GetName();
+		if (function.GetArguments().size() == 1 && layout.field.kind != AggregateFieldKind::LIST &&
+		    (name == "min" || name == "max" || name == "approx_count_distinct")) {
+			continue;
+		}
+		if (function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback() ||
+		    !layout.field.IsFixedSize(layout.type)) {
 			return false;
 		}
 	}

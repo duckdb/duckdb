@@ -110,8 +110,9 @@ bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSink
 
 void RadixHTAdaptivity::MaybeSkipLookups(const RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht) {
 	const auto &state = ht.GetAdaptivityState();
+	// Retries run at table boundaries, so keep each append-only fill within the retry window.
 	if (state.LookupsSkipped() || gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD ||
-	    ht.Capacity() != gstate.config.sink_capacity) {
+	    GroupedAggregateHashTable::ResizeThreshold(ht.Capacity()) > MAX_LOOKUP_RETRY_ROWS) {
 		return;
 	}
 
@@ -132,7 +133,7 @@ void RadixHTAdaptivity::MaybeSkipLookups(const RadixHTGlobalSinkState &gstate, G
 	}
 	const auto recent_reduction = static_cast<double>(recent_reduced_rows) / static_cast<double>(recent_input_rows);
 	const auto reduction = static_cast<double>(cycle_input - ht.Count()) / static_cast<double>(cycle_input);
-	if (reduction < MINIMUM_SMALL_TABLE_REDUCTION && recent_reduction < MINIMUM_SMALL_TABLE_REDUCTION) {
+	if (reduction < MINIMUM_LOOKUP_REDUCTION && recent_reduction < MINIMUM_LOOKUP_REDUCTION) {
 		retry_interval_rows = ClampValue(ht.GetMaterializedCount() / LOOKUP_RETRY_MATERIALIZED_ROWS_DIVISOR,
 		                                 MIN_LOOKUP_RETRY_ROWS, MAX_LOOKUP_RETRY_ROWS);
 		ht.SkipLookups();

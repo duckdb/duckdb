@@ -44,8 +44,8 @@ private:
 	static constexpr idx_t LOOKUP_HISTORY_DECAY_THRESHOLD_ROWS = 128 * 1024;
 	static constexpr idx_t MAX_LOOKUP_RETRY_ROWS = 1024 * 1024;
 	static constexpr idx_t LOOKUP_RETRY_MATERIALIZED_ROWS_DIVISOR = 8;
-	static constexpr double GROWTH_DUPLICATE_BYTES_FACTOR = 4.0;
-	static constexpr double MINIMUM_SMALL_TABLE_REDUCTION = 0.05;
+	static constexpr double GROWTH_DUPLICATE_BYTES_FACTOR = 1.0;
+	static constexpr double MINIMUM_LOOKUP_REDUCTION = 0.05;
 
 private:
 	//! Decayed observations from completed lookup-enabled cycles

@@ -10,6 +10,7 @@ set(TEST_API_OBJECTS
     test_json_execute_serialized_sql.cpp
     test_multi_file_column_mapper.cpp
     test_multi_file_lazy_initialization.cpp
+    test_table_function_multi_file_list.cpp
     test_process_util.cpp
     test_random_after_clone.cpp
     test_remove_directory_extended.cpp
@@ -30,6 +31,7 @@ set(TEST_API_OBJECTS
     test_remote_pushdown_merge.cpp
     test_os_util.cpp
     test_compression_select.cpp
+    test_dictionary_filter_cache.cpp
     test_connection_callbacks.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp

@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
@@ -197,9 +198,9 @@ public:
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	ReplacementScanList replacement_scans;
 
-	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
-	//! RamFS or something similar). Never null: defaults to a VirtualFileSystem.
-	unique_ptr<FileSystem> file_system;
+	//! The root of the file systems. Never null. Custom file systems are registered on it as sub-systems, or passed as
+	//! its default file system.
+	unique_ptr<VirtualFileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
@@ -316,9 +317,9 @@ public:
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
-	static idx_t GetSystemMaxThreads(FileSystem &fs);
-	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
-	static idx_t GetSystemAvailableMemory(FileSystem &fs);
+	static idx_t GetSystemMaxThreads();
+	static idx_t GetSystemMaxAsyncThreads();
+	static idx_t GetSystemAvailableMemory();
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	idx_t GetDefaultMaxMemory() const;
 	//! The number of threads used when the threads setting is not set
@@ -386,7 +387,7 @@ private:
 	atomic<bool> has_disabled_optimizers {false};
 	//! Cache of GetDefaultThreads, which reads the cgroup CPU limit
 	mutable atomic<idx_t> default_threads {0};
-	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit through the file system
+	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit
 	mutable atomic<idx_t> default_max_memory {0};
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;

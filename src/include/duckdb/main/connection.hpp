@@ -137,8 +137,6 @@ public:
 	//! works as for ClientContext::IterateStatements.
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query,
 	                                                              bool apply_invalidation_policy = true);
-	//! Extract the logical plan that corresponds to a query
-	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 
 	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);

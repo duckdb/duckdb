@@ -132,6 +132,9 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	}
 
 	micros = 0;
+	if (nanos) {
+		*nanos = 0;
+	}
 	if (pos < len && buf[pos] == '.') {
 		pos++;
 		// we expect some microseconds

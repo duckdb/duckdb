@@ -7,6 +7,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -446,8 +447,84 @@ void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
+static int64_t CalendarMonthNumber(timestamp_t timestamp) {
+	int32_t year, month, day;
+	Date::Convert(Timestamp::GetDate(timestamp), year, month, day);
+	return int64_t(year) * Interval::MONTHS_PER_YEAR + month;
+}
+
+static unique_ptr<BaseStatistics> DateSubMonthStatistics(ClientContext &, FunctionStatisticsInput &input) {
+	const auto &starts = input.child_stats[1];
+	const auto &ends = input.child_stats[2];
+	if (!NumericStats::HasMinMax(starts) || !NumericStats::HasMinMax(ends)) {
+		return nullptr;
+	}
+	const auto start_min = NumericStats::GetMin<timestamp_t>(starts);
+	const auto start_max = NumericStats::GetMax<timestamp_t>(starts);
+	const auto end_min = NumericStats::GetMin<timestamp_t>(ends);
+	const auto end_max = NumericStats::GetMax<timestamp_t>(ends);
+	if (!start_min.IsFinite() || !start_max.IsFinite() || !end_min.IsFinite() || !end_max.IsFinite()) {
+		return nullptr;
+	}
+	const auto first_start_month = CalendarMonthNumber(start_min);
+	const auto first_end_month = CalendarMonthNumber(end_min);
+	// Leave the partial first month, where finite extrema can enclose -infinity, to scalar evaluation.
+	static const auto first_month = CalendarMonthNumber(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	if (first_start_month == first_month || first_end_month == first_month) {
+		return nullptr;
+	}
+	const auto min_months = first_end_month - CalendarMonthNumber(start_max);
+	const auto max_months = CalendarMonthNumber(end_max) - first_start_month;
+	// An incomplete month can move the signed calendar-month difference one step toward zero.
+	auto result = BaseStatistics::CreateUnknown(LogicalType::BIGINT);
+	NumericStats::SetMin(result, min_months > 0 ? min_months - 1 : min_months);
+	NumericStats::SetMax(result, max_months < 0 ? max_months + 1 : max_months);
+	return result.ToUnique();
+}
+
+static unique_ptr<FunctionData> BindDateSub(BindScalarFunctionInput &input) {
+	auto part = input.TryGetConstant(0);
+	DatePartSpecifier unit;
+	if (!part || part->IsNull() || !TryGetDatePartSpecifier(part->ToString(), unit)) {
+		return nullptr;
+	}
+	auto &function = input.GetBoundFunction();
+	switch (unit) {
+	case DatePartSpecifier::MONTH:
+		if (function.GetArguments()[1].id() == LogicalTypeId::TIMESTAMP) {
+			function.SetStatisticsCallback(DateSubMonthStatistics);
+		}
+		return nullptr;
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
+		if (function.GetArguments()[1].id() == LogicalTypeId::TIME) {
+			return nullptr;
+		}
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+	case DatePartSpecifier::MILLISECONDS:
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+	case DatePartSpecifier::MINUTE:
+	case DatePartSpecifier::HOUR:
+		break;
+	default:
+		return nullptr;
+	}
+	function.SetArgProperties(1, ArgProperties().NonIncreasing());
+	function.SetArgProperties(2, ArgProperties().NonDecreasing());
+	function.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
+	return nullptr;
+}
+
 // Names the "part,startdate,enddate" triple shared by date_sub's per-type overloads.
 static ScalarFunction NameDateSubPartStartEndArguments(ScalarFunction fun, const LogicalType &type) {
+	fun.SetBindCallback(BindDateSub);
 	fun.GetSignature()
 	    .AddParameter("part", LogicalType::VARCHAR)
 	    .AddParameter("startdate", type)
@@ -465,9 +542,6 @@ ScalarFunctionSet DateSubFun::GetFunctions() {
 	    ScalarFunction({}, LogicalType::BIGINT, DateSubFunction<dtime_t>), LogicalType::TIME));
 	// throws for unsupported date parts, and when the difference overflows
 	date_sub.SetFallible();
-	date_sub.SetArgProperties(1, ArgProperties().NonIncreasing());
-	date_sub.SetArgProperties(2, ArgProperties().NonDecreasing());
-	date_sub.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 	return date_sub;
 }
 

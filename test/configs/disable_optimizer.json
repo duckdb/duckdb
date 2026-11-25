@@ -8,6 +8,7 @@
       "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
       "paths": [
         "test/optimizer/mark_join_simplifier.test",
+        "test/optimizer/mark_join_order_plan.test",
         "test/optimizer/mark_predicates.test",
         "test/optimizer/mark_join_scalar_subquery.test",
         "test/optimizer/joins/filtering_join_predicate_ownership.test"
@@ -113,6 +114,7 @@
         "test/sql/copy/parquet/page_index/page_index_cache.test",
         "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/page_index/page_index_cache_budget.test",
+        "test/sql/copy/parquet/page_index/page_index_expression_filter.test",
         "test/parquet/utf8_validation_page_index.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
         "test/sql/copy/parquet/parquet_nan_setting.test",
@@ -283,6 +285,15 @@
         "test/sql/sql_export/cte_result_matrices.test",
         "test/sql/sql_export/plan_reconstruction_coverage.test",
         "test/sql/sql_export/recursive_payload_results.test"
+      ]
+    },
+    {
+      "reason": "Checks the plans of the top-key filter, and the groups that a LIMIT without ORDER BY returns through it.",
+      "paths": [
+        "test/optimizer/group_by_top_key.test",
+        "test/optimizer/group_by_top_key_guards.test",
+        "test/optimizer/group_by_top_key_limit.test",
+        "test/optimizer/group_by_top_key_limit_guards.test"
       ]
     },
     {

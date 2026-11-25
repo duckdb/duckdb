@@ -27,3 +27,28 @@ query I
 SELECT COUNT(*) FROM test WHERE a=false
 ----
 2048
+
+# Flush a leading NULL placeholder at the maximum run length.
+statement ok
+CREATE TABLE boundary(b BOOLEAN);
+
+statement ok
+INSERT INTO boundary
+SELECT CASE WHEN i < 65535 THEN NULL ELSE ((i - 65535) // 37) % 2 = 1 END
+FROM range(98835) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('boundary') WHERE compression = 'RLE'
+----
+true
+
+query IIII
+SELECT count(*), count(b), count(*) FILTER (WHERE NOT b), sum(greatest(b, false)::BIGINT)
+FROM boundary;
+----
+98835	33300	16650	16650

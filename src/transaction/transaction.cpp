@@ -6,8 +6,7 @@
 
 namespace duckdb {
 
-Transaction::Transaction(TransactionManager &manager_p, Context &)
-    : manager(manager_p), active_query(MAXIMUM_QUERY_ID), is_read_only(true) {
+Transaction::Transaction(TransactionManager &manager_p, Context &) : manager(manager_p), is_read_only(true) {
 }
 
 Transaction::~Transaction() {

@@ -253,9 +253,6 @@ public:
 	//! parsed to be run; without it the transaction stays usable, as fits statements that are only inspected.
 	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
 
-	//! Extract the logical plan of a query
-	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
 	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun,
