@@ -813,8 +813,8 @@ using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanS
 //! Append generated CTEs in extraction order at each original lowest common ancestor.
 class CommonSubplanCTEPlacement {
 public:
-	LogicalMaterializedCTE &Insert(unique_ptr<LogicalOperator> &ancestor, Identifier name, TableIndex index,
-	                               idx_t column_count, unique_ptr<LogicalOperator> producer) {
+	void Insert(unique_ptr<LogicalOperator> &ancestor, Identifier name, TableIndex index, idx_t column_count,
+	            unique_ptr<LogicalOperator> producer) {
 		auto entry = insertion_points.emplace(ancestor, ancestor).first;
 		auto &consumer = entry->second.get();
 		auto cte = make_uniq<LogicalMaterializedCTE>(std::move(name), index, column_count, std::move(producer),
@@ -822,7 +822,6 @@ public:
 		auto &result = *cte;
 		consumer = std::move(cte);
 		entry->second = result.children[1];
-		return result;
 	}
 
 private:
@@ -830,6 +829,27 @@ private:
 	//! identify insertion sites; their consumer tails move into the newly appended CTEs.
 	//! Subplans are extracted smallest first, so a site's extractions finish before an enclosing subplan can remove it.
 	reference_map_t<unique_ptr<LogicalOperator>, reference<unique_ptr<LogicalOperator>>> insertion_points;
+};
+
+//! Rewrite a consumer scope without revisiting the producers already finalized by this extraction.
+class CommonSubplanBindingRewriter : public ColumnBindingReplacer {
+public:
+	CommonSubplanBindingRewriter(const BindingReplacementGraph &replacements, TableIndex first_cte_index_p)
+	    : ColumnBindingReplacer(replacements), first_cte_index(first_cte_index_p) {
+	}
+
+	void VisitOperator(LogicalOperator &op) override {
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE &&
+		    op.Cast<LogicalMaterializedCTE>().table_index >= first_cte_index) {
+			VisitOperator(*op.children[1]);
+			VisitOperatorBindings(op);
+			return;
+		}
+		ColumnBindingReplacer::VisitOperator(op);
+	}
+
+private:
+	TableIndex first_cte_index;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1081,6 +1101,8 @@ public:
 	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
 		const auto sorted_subplans = GetSortedSubplans();
 		CommonSubplanCTEPlacement placement;
+		BindingReplacementGraph pending_replacements;
+		TableIndex first_cte_index;
 		idx_t index = 1;
 		for (auto &entry : sorted_subplans) {
 			auto &subplan_info = entry.get().second;
@@ -1093,6 +1115,9 @@ public:
 
 			const auto cte_index = optimizer.binder.GenerateTableIndex();
 			const auto cte_name = StringUtil::Format("__common_subplan_%llu", index++);
+			if (!first_cte_index.IsValid()) {
+				first_cte_index = cte_index;
+			}
 			const auto &primary_subplan = subplan_info.subplans[0];
 
 			vector<vector<ColumnBinding>> old_bindings(subplan_info.subplans.size());
@@ -1211,18 +1236,25 @@ public:
 			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
 			                                                            std::move(materialized_select_list));
 			materialized_projection->children.emplace_back(std::move(materialized_subplan));
+			// Finish this producer using only earlier extractions. Its own output replacements apply to
+			// its readers, never to the retained definition. Later extractions cannot occur inside it.
+			if (!pending_replacements.Empty()) {
+				CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+				rewriter.VisitOperator(*materialized_projection);
+			}
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				subplan.op.get() = std::move(cte_refs[subplan_idx]);
 			}
-			auto &cte = placement.Insert(subplan_info.lowest_common_ancestor, Identifier(cte_name), cte_index,
-			                             materialized_column_count, std::move(materialized_projection));
-
-			// Replace bindings of subplans with those of the CTE refs
-			ColumnBindingReplacer replacer(replacements);
-			replacer.stop_operator = cte;
-			replacer.VisitOperator(*op);
-			replacer.VisitOperator(*cte.children[1]);
+			placement.Insert(subplan_info.lowest_common_ancestor, Identifier(cte_name), cte_index,
+			                 materialized_column_count, std::move(materialized_projection));
+			pending_replacements.Merge(replacements);
+		}
+		// Selection reads output bindings and canonical expressions, which do not require rewriting
+		// the remaining consumer expressions after every extraction.
+		if (!pending_replacements.Empty()) {
+			CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+			rewriter.VisitOperator(*op);
 		}
 	}
 
