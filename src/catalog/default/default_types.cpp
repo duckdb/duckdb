@@ -88,8 +88,8 @@ void RegisterNumericConstructors(TypeConstructorSet &set) {
 	set.AddFunction(TypeConstructor(TypeConstructor::Signature(), BindNumericType));
 
 	auto signature = TypeConstructor::Signature();
-	signature.AddParameter("width", LogicalType::UTINYINT);
-	signature.AddParameter("scale", LogicalType::UTINYINT, Value::UTINYINT(0));
+	signature.AddParameter("width", LogicalType::UINTEGER);
+	signature.AddParameter("scale", LogicalType::UINTEGER, Value::UINTEGER(0));
 	set.AddFunction(TypeConstructor(std::move(signature), BindDecimalType));
 }
 

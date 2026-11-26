@@ -216,6 +216,22 @@ SELECT column_type FROM (DESCRIBE d);
 ----
 DECIMAL(10,2)
 
+# the qualified constructor takes the widths DECIMAL takes, the keyword form and the function form agree
+query II
+SELECT typeof(NULL::NUMERIC(256, 0)), typeof(NULL::main."numeric"(256, 0));
+----
+DECIMAL(256,0)	DECIMAL(256,0)
+
+query I
+SELECT typeof(NULL::main."numeric"(10, 2));
+----
+DECIMAL(10,2)
+
+statement error
+SELECT NULL::main."numeric"(0, 0);
+----
+<REGEX>:.*DECIMAL type width must be at least 1.*
+
 # casts to NUMERIC keep the type of exact values
 query I
 SELECT typeof(42::NUMERIC);
