@@ -4,6 +4,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector.hpp"
@@ -367,4 +369,32 @@ TEST_CASE("Test converting long double to HUGEINT and UHUGEINT", "[cast]") {
 	REQUIRE(uhugeint_result == uhugeint_t(0, NumericLimits<uint64_t>::Maximum()));
 	REQUIRE(Uhugeint::TryConvert(above_uint64, uhugeint_result));
 	REQUIRE(uhugeint_result == uhugeint_t(4, 8));
+}
+
+TEST_CASE("Test nanoseconds of strings without fractional seconds", "[cast]") {
+	// the parsers must overwrite the nanoseconds even when there is no fraction
+	const string time_str = "12:34:56";
+	int32_t nanos = 999;
+	auto time = Time::FromCString(time_str.c_str(), time_str.size(), false, &nanos);
+	REQUIRE(time == Time::FromTime(12, 34, 56));
+	REQUIRE(nanos == 0);
+
+	const string ts_str = "2020-01-01 12:34:56";
+	const auto expected = Timestamp::FromDatetime(Date::FromDate(2020, 1, 1), Time::FromTime(12, 34, 56));
+	nanos = 999;
+	auto ts = Timestamp::FromCString(ts_str.c_str(), ts_str.size(), false, &nanos);
+	REQUIRE(ts == expected);
+	REQUIRE(nanos == 0);
+
+	// a fraction still sets them
+	const string frac_str = "2020-01-01 12:34:56.123456789";
+	ts = Timestamp::FromCString(frac_str.c_str(), frac_str.size(), false, &nanos);
+	REQUIRE(ts.value == expected.value + 123456);
+	REQUIRE(nanos == 789);
+
+	// the throwing casts pass uninitialized nanoseconds
+	const auto expected_ns = expected.value * Interval::NANOS_PER_MICRO;
+	REQUIRE(Cast::Operation<string_t, timestamp_ns_t>(string_t(ts_str)).value == expected_ns);
+	REQUIRE(Cast::Operation<string_t, timestamp_tz_ns_t>(string_t(ts_str)).value == expected_ns);
+	REQUIRE(Cast::Operation<string_t, timestamp_ns_t>(string_t(frac_str)).value == expected_ns + 123456789);
 }

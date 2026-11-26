@@ -635,7 +635,7 @@ void DisabledCompressionMethodsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &input) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = VirtualFileSystem::Get(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
 	for (auto &entry : list) {
 		StringUtil::Trim(entry);
@@ -645,13 +645,11 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 
 void DisabledFilesystemsSetting::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
-	auto &fs = FileSystem::GetFileSystem(db);
-	fs.SetDisabledFileSystems(vector<string>());
+	VirtualFileSystem::Get(db).SetDisabledFileSystems(vector<string>());
 }
 
 Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(*context.db);
-	return Value(StringUtil::Join(fs.GetDisabledFileSystems(), ","));
+	return Value(StringUtil::Join(VirtualFileSystem::Get(*context.db).GetDisabledFileSystems(), ","));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1154,17 +1152,9 @@ void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	optional_ptr<FileSystem> fs;
-	if (info.context) {
-		fs = FileSystem::GetFileSystem(*info.context);
-	} else if (info.db) {
-		fs = FileSystem::GetFileSystem(*info.db);
-	} else {
-		fs = info.config.file_system.get();
-	}
-	if (fs && !input.IsNull()) {
+	if (!input.IsNull()) {
 		auto new_home_directory = input.ToString();
-		if (fs->IsRemoteFile(new_home_directory)) {
+		if (FileSystem::IsRemoteFile(new_home_directory)) {
 			throw InvalidInputException("Cannot set the home directory to a remote path");
 		}
 	}

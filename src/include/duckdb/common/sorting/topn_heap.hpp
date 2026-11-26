@@ -77,6 +77,66 @@ struct TopNBoundaryValue {
 	}
 };
 
+//! What the selection does with the rows whose keys are equal to the boundary
+enum class TopNBoundaryTies : uint8_t {
+	//! Only the rows that sort strictly before the boundary are selected. For an operator that already holds the
+	//! boundary row itself, such as the heap of the Top-N: an equal row cannot replace it.
+	EXCLUDE,
+	//! The rows that are equal to the boundary are selected as well. For an operator that has to pass every row of
+	//! the boundary key on, such as the top-key filter below an aggregate.
+	INCLUDE
+};
+
+//! The order of the rows in the selection
+enum class TopNBoundaryRowOrder : uint8_t {
+	//! The rows are selected key by key: the selection is not in the order of the input. For a consumer that does not
+	//! depend on it, such as a heap.
+	ANY,
+	//! The selection is in the order of the input rows. For a streaming operator that forwards the rows.
+	INPUT_ORDER
+};
+
+//! The thread-local side of a boundary: its copy of the shared boundary, and the selection of the rows of a chunk of
+//! keys that sort before a boundary in the lexicographic order of the keys
+class TopNBoundarySelector {
+public:
+	//! not_distinct_from: the NOT DISTINCT FROM comparison of every key with its boundary value (created at plan time),
+	//! over the input [keys..., boundary values...]
+	TopNBoundarySelector(ClientContext &context, Allocator &allocator, const vector<BoundOrderByNode> &orders,
+	                     const vector<unique_ptr<Expression>> &not_distinct_from);
+
+	//! Refreshes the local copy of the shared boundary. Returns whether there is a boundary.
+	bool Refresh(TopNBoundaryValue &global_boundary);
+	//! The local copy of the shared boundary as constant vectors (only valid if there is a boundary)
+	DataChunk &BoundaryValues() {
+		return boundary_values;
+	}
+	//! Decodes a boundary in sort-key format into constant vectors
+	void Decode(const string &sort_key, DataChunk &target) const;
+
+	//! Selects the rows of "keys" (those of sel, or all of them) that sort before "bound" - constant vectors, one per
+	//! key - and writes their indexes to result. Returns their number.
+	idx_t Select(DataChunk &keys, DataChunk &bound, optional_ptr<const SelectionVector> sel, idx_t count,
+	             TopNBoundaryTies ties, TopNBoundaryRowOrder row_order, SelectionVector &result);
+
+private:
+	const vector<BoundOrderByNode> &orders;
+	vector<OrderModifiers> modifiers;
+	//! NOT DISTINCT FROM comparison of every key column with its boundary value
+	vector<unique_ptr<ExpressionExecutor>> not_distinct_from;
+	//! The shared boundary as this thread last saw it: in sort-key format and as constant vectors
+	string boundary_val;
+	DataChunk boundary_values;
+	DataChunk compare_chunk;
+	//! The input of not_distinct_from: [keys..., boundary values...]
+	DataChunk boundary_compare_chunk;
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+	SelectionVector new_remaining_sel;
+	//! Marks the selected rows to restore the order of the input (allocated on first use)
+	unsafe_unique_array<bool> selected_rows;
+};
+
 struct TopOneFunc {
 	typedef idx_t (*topone_size_t)();
 	typedef optional_idx (*topone_update_t)(data_ptr_t state_p, Vector &sort_key, const idx_t count);
@@ -111,8 +171,6 @@ public:
 	idx_t offset;
 	idx_t heap_size;
 	ExpressionExecutor executor;
-	//! NOT DISTINCT FROM comparison of every sort column
-	vector<unique_ptr<ExpressionExecutor>> not_distinct_from;
 	DataChunk sort_chunk;
 	DataChunk heap_data;
 	DataChunk sort_keys;
@@ -121,17 +179,9 @@ public:
 
 	SelectionVector matching_sel;
 
-	DataChunk compare_chunk;
-	//! Cached global boundary value as a set of constant vectors
-	DataChunk boundary_values;
-	//! The input of not_distinct_from: [sort columns..., boundary values...]
-	DataChunk boundary_compare_chunk;
-	//! Cached global boundary value in sort-key format
-	string boundary_val;
+	//! The local copy of the global boundary value and the selection of the rows before it (heap only)
+	unique_ptr<TopNBoundarySelector> boundary_selector;
 	SelectionVector final_sel;
-	SelectionVector true_sel;
-	SelectionVector false_sel;
-	SelectionVector new_remaining_sel;
 
 	unique_ptr<TopOneFunc> topone;
 	vector<data_t> topone_state;

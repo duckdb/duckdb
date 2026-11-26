@@ -3,6 +3,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -12,6 +13,13 @@ void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// encode is essentially a nop cast from varchar to blob
 	// we only need to reinterpret the data using the blob type
 	result.Reinterpret(args.data[0]);
+}
+
+unique_ptr<BaseStatistics> EncodeStats(ClientContext &context, FunctionStatisticsInput &input) {
+	// the bytes are unchanged, so the input stats carry over to the blob
+	auto result = BaseStatistics::CreateEmpty(LogicalType::BLOB);
+	result.Merge(input.child_stats[0]);
+	return result.ToUnique();
 }
 
 enum class DecodeErrorBehavior : uint8_t {
@@ -118,6 +126,7 @@ ScalarFunctionSet EncodeFun::GetFunctions() {
 
 	ScalarFunction unary_function({}, LogicalType::BLOB, EncodeFunction);
 	unary_function.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	unary_function.SetStatisticsCallback(EncodeStats);
 
 	// the encoding is bound to the function of the encoding in system.encodings
 	ScalarFunction binary_function({}, LogicalType::BLOB, nullptr);

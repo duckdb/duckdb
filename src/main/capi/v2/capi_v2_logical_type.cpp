@@ -5,6 +5,8 @@
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/logical_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -140,11 +142,13 @@ LogicalType BindBuiltinTypeV2(const QualifiedName &name, const vector<TypeArgume
 
 // Binds a type by name in the factory's scope: the client's catalog, or the built-in types only.
 LogicalType BindTypeV2(CV2Factory &factory, const QualifiedName &name, const vector<TypeArgument> &args) {
-	if (!factory.TryGetClientContext()) {
-		return BindBuiltinTypeV2(name, args);
-	}
 	LogicalType result;
-	factory.WithTransaction([&](ClientContext &context) { result = BindTypeByNameV2(context, name, args); });
+	if (!factory.TryGetClientContext()) {
+		result = BindBuiltinTypeV2(name, args);
+	} else {
+		factory.WithTransaction([&](ClientContext &context) { result = BindTypeByNameV2(context, name, args); });
+	}
+	CheckDecimalWidthV2(factory, result);
 	return result;
 }
 
@@ -216,6 +220,27 @@ Value TypeParamValue(const LogicalType &type, idx_t index, std::string_view &out
 }
 
 } // anonymous namespace
+
+void CheckDecimalWidthV2(CV2Factory &factory, const LogicalType &type) {
+	auto context = factory.TryGetClientContext();
+	const uint32_t limit = context ? DecimalWidthLimit::FromSetting(context).width : Decimal::DEFAULT_MAX_WIDTH;
+	TypeVisitor::Contains(type, [&](const LogicalType &child) {
+		if (child.id() != LogicalTypeId::DECIMAL || DecimalType::GetWidth(child) <= limit) {
+			return false;
+		}
+		if (context) {
+			throw InvalidInputException(
+			    "DECIMAL width %u exceeds the maximum DECIMAL width of %u (SET max_decimal_width to allow wider "
+			    "decimals)",
+			    DecimalType::GetWidth(child), limit);
+		}
+		throw InvalidInputException(
+		    "DECIMAL width %u exceeds the maximum DECIMAL width of %u: a factory without a connection creates decimals "
+		    "up to the default of max_decimal_width, use the factory of a connection that raised the setting for wider "
+		    "decimals",
+		    DecimalType::GetWidth(child), limit);
+	});
+}
 
 auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType {
 	D_ASSERT(!types.empty());
@@ -309,13 +334,14 @@ static void CreateLogicalTypeFromTextV2(CV2Factory &factory, std::string_view te
 	*out_type = nullptr;
 	// Parse and bind errors propagate.
 	auto string = duckdb::string(text);
-	if (!factory.TryGetClientContext()) {
-		*out_type = Convert(duckdb::TypeManager::Get(factory.GetDatabase()).ParseLogicalType(string));
-		return;
-	}
 	duckdb::LogicalType parsed;
-	factory.WithTransaction(
-	    [&](duckdb::ClientContext &context) { parsed = duckdb::TransformStringToLogicalType(string, context); });
+	if (!factory.TryGetClientContext()) {
+		parsed = duckdb::TypeManager::Get(factory.GetDatabase()).ParseLogicalType(string);
+	} else {
+		factory.WithTransaction(
+		    [&](duckdb::ClientContext &context) { parsed = duckdb::TransformStringToLogicalType(string, context); });
+	}
+	CheckDecimalWidthV2(factory, parsed);
 	*out_type = Convert(std::move(parsed));
 }
 
