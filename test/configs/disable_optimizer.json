@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Relies on the optimizer folding a BETWEEN on a constant NULL input before its bounds overflow.",
+      "paths": [
+        "test/optimizer/between_null_input.test"
+      ]
+    },
+    {
       "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
       "paths": [
         "test/optimizer/mark_join_simplifier.test",

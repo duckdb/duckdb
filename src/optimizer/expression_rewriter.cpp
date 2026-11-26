@@ -34,6 +34,7 @@ vector<unique_ptr<Rule>> ExpressionRewriter::CreateDefaultRules(ExpressionRewrit
 	rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
 	rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<BetweenNullSimplificationRule>(rewriter));
 	rules.push_back(make_uniq<RowComparisonSimplificationRule>(rewriter));
 	rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
 	rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
