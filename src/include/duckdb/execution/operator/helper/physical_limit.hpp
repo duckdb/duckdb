@@ -69,6 +69,9 @@ public:
 public:
 	static void SetInitialLimits(const BoundLimitNode &limit_val, const BoundLimitNode &offset_val, optional_idx &limit,
 	                             optional_idx &offset);
+	//! Evaluates the LIMIT and OFFSET expressions that are not resolved yet
+	static void ResolveLimits(ExecutionContext &context, DataChunk &input, optional_idx &limit, optional_idx &offset,
+	                          const BoundLimitNode &limit_val, const BoundLimitNode &offset_val);
 	static bool ComputeOffset(ExecutionContext &context, DataChunk &input, optional_idx &limit, optional_idx &offset,
 	                          idx_t current_offset, idx_t &max_element, const BoundLimitNode &limit_val,
 	                          const BoundLimitNode &offset_val);

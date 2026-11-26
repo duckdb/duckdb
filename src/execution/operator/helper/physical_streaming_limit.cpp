@@ -30,6 +30,7 @@ public:
 	}
 
 	std::atomic<idx_t> current_offset;
+	//! Expression-valued limit and offset, evaluated once so that every thread uses the same values
 	mutex lock;
 	optional_idx limit;
 	optional_idx offset;
@@ -54,15 +55,14 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	auto &state = state_p.Cast<StreamingLimitOperatorState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
-	idx_t max_element;
 	if (!limit.IsValid() || !offset.IsValid()) {
 		lock_guard<mutex> guard(gstate.lock);
-		PhysicalLimit::ComputeOffset(context, input, gstate.limit, gstate.offset, 0, max_element, limit_val,
-		                             offset_val);
+		PhysicalLimit::ResolveLimits(context, input, gstate.limit, gstate.offset, limit_val, offset_val);
 		limit = gstate.limit;
 		offset = gstate.offset;
 	}
 	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
+	idx_t max_element;
 	if (!PhysicalLimit::ComputeOffset(context, input, limit, offset, current_offset, max_element, limit_val,
 	                                  offset_val)) {
 		return OperatorResultType::FINISHED;

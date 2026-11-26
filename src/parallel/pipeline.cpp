@@ -498,7 +498,6 @@ void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	finished_operator_idx = -1;
 	auto source_state = GetSourceState();
 	if (force || !source_state) {
 		NotifyProgressReset();
