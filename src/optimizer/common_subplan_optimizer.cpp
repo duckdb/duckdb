@@ -632,6 +632,7 @@ public:
 	}
 
 	bool Equals(const PlanSignature &other) const {
+		D_ASSERT(RefersToSameObject(stream, other.stream));
 		if (RefersToSameObject(*this, other)) {
 			return true;
 		}
@@ -757,11 +758,12 @@ public:
 	      table_index_map(allocator) {
 	}
 
-public:
+private:
 	//! For serializing operators to a binary string
 	MemoryStream stream;
 	BinarySerializer serializer;
 
+public:
 	//! For batching allocations together
 	ArenaAllocator allocator;
 
@@ -821,6 +823,7 @@ optional_ptr<const PlanSignature> PlanSignature::Create(PlanSignatureCreateState
 	// Collect some statistics so we can select a good candidate later
 	idx_t operator_count = 1;
 	for (auto &child_signature : child_signatures) {
+		D_ASSERT(RefersToSameObject(state.stream, child_signature.get().stream));
 		operator_count += child_signature.get().OperatorCount();
 	}
 	return state.Intern(PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
