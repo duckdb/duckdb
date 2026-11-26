@@ -166,6 +166,25 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 	written = out;
 }
 
+void DecodeUTF16WithBOMToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+                              idx_t &written) {
+	// A byte order mark picks the byte order and is dropped, without one utf-16 is little-endian
+	const uint16_t mark = input_size >= 2 ? LoadUTF16<true>(input, 0) : 0;
+	if (mark == 0xFEFF) {
+		DecodeUTF16ToUTF8<true>(input + 2, input_size - 2, is_last, output, consumed, written);
+	} else if (mark == 0xFFFE) {
+		DecodeUTF16ToUTF8<false>(input + 2, input_size - 2, is_last, output, consumed, written);
+	} else {
+		DecodeUTF16ToUTF8<false>(input, input_size, is_last, output, consumed, written);
+		return;
+	}
+	consumed += 2;
+}
+
+Value ByteOrderMark(const string &mark, const string &encoding) {
+	return Value::STRUCT({{"mark", Value::BLOB_RAW(mark)}, {"encoding", Value(encoding)}});
+}
+
 } // namespace
 
 void BuiltinFunctions::RegisterEncodingFunctions() {
@@ -185,9 +204,13 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	};
 	decode_t utf16_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
 	                           idx_t &written) {
+		DecodeUTF16WithBOMToUTF8(input, input_size, is_last, output, consumed, written);
+	};
+	decode_t utf16_le_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                              idx_t &written) {
 		DecodeUTF16ToUTF8<false>(input, input_size, is_last, output, consumed, written);
 	};
-	encode_t utf16_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
+	encode_t utf16_le_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
 		EncodeUTF8ToUTF16<false>(input, input_size, output, written);
 	};
 	decode_t utf16_be_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
@@ -197,8 +220,14 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	encode_t utf16_be_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
 		EncodeUTF8ToUTF16<true>(input, input_size, output, written);
 	};
-	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2),
-	                  EncodingFunction::Create("utf-16", utf16_decode, utf16_encode, 4, 2),
+	auto utf16 = EncodingFunction::Create("utf-16", utf16_decode, utf16_le_encode, 4, 2);
+	// A stream is decoded with a fixed byte order, picked by the byte order mark at its start
+	auto byte_order_marks = Value::LIST({ByteOrderMark("\xFE\xFF", "utf-16be"), ByteOrderMark("", "utf-16le")});
+	utf16.ApplyToFunctions([&](ScalarFunction &function) {
+		function.GetProperties().SetProperty(EncodingFunction::BYTE_ORDER_MARKS_PROPERTY, byte_order_marks);
+	});
+	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2), utf16,
+	                  EncodingFunction::Create("utf-16le", utf16_le_decode, utf16_le_encode, 4, 2),
 	                  EncodingFunction::Create("utf-16be", utf16_be_decode, utf16_be_encode, 4, 2)}) {
 		CreateScalarFunctionInfo info(set);
 		EncodingFunction::SetSchema(info);

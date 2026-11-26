@@ -77,6 +77,8 @@ private:
 	DataChunk decode_input;
 	//! The maximum number of input bytes that make up one character
 	idx_t minimum_input_window = 1;
+	//! The (mark, encoding) pairs that pick the decoder from the start of the file
+	vector<pair<string, string>> byte_order_marks;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;
@@ -87,7 +89,7 @@ private:
 	idx_t DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t output_size);
 	//! Binds the streaming overload of the encoding's scalar function as the decoder
 	shared_ptr<const ScalarFunction> BindDecoder(ClientContext &context, ScalarFunctionCatalogEntry &entry);
-	//! Switches a utf-16 decoder to big-endian if the file starts with a big-endian byte order mark
+	//! Binds the decoder of the encoding picked by the byte order mark at the start of the file
 	void DetectByteOrder();
 	//! Runs the encoding's scalar function over the input, returns the number of bytes consumed
 	idx_t Decode(const char *input, idx_t input_size, bool is_last, string &decoded);

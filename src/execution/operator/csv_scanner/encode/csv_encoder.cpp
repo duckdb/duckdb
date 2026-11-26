@@ -72,6 +72,13 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	if (window) {
 		minimum_input_window = MaxValue<idx_t>(window->GetValue<idx_t>(), 1);
 	}
+	auto marks = function->GetProperties().GetProperty(EncodingFunction::BYTE_ORDER_MARKS_PROPERTY);
+	if (marks) {
+		for (auto &mark : ListValue::GetChildren(*marks)) {
+			auto &fields = StructValue::GetChildren(mark);
+			byte_order_marks.emplace_back(StringValue::Get(fields[0]), StringValue::Get(fields[1]));
+		}
+	}
 	// The encoded buffer is even for utf-16, and fits a full input window plus the probe byte
 	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, 2 * minimum_input_window + 2));
 }
@@ -88,14 +95,19 @@ shared_ptr<const ScalarFunction> CSVEncoder::BindDecoder(ClientContext &context_
 }
 
 void CSVEncoder::DetectByteOrder() {
-	// A utf-16 file that starts with a big-endian byte order mark is decoded as utf-16be
-	if (encoding_name != "utf-16" || encoded_buffer.GetSize() < 2 ||
-	    static_cast<unsigned char>(encoded_buffer.Ptr()[0]) != 0xFE ||
-	    static_cast<unsigned char>(encoded_buffer.Ptr()[1]) != 0xFF) {
+	for (auto &mark : byte_order_marks) {
+		if (encoded_buffer.GetSize() < mark.first.size() ||
+		    memcmp(encoded_buffer.Ptr(), mark.first.data(), mark.first.size()) != 0) {
+			continue;
+		}
+		auto &client_context = *context.GetClientContext();
+		auto entry = EncodingFunction::Find(client_context, mark.second);
+		if (!entry) {
+			throw InternalException("Encoding \"%s\" picked by a byte order mark does not exist", mark.second);
+		}
+		BindDecoder(client_context, *entry);
 		return;
 	}
-	auto &client_context = *context.GetClientContext();
-	BindDecoder(client_context, *EncodingFunction::Find(client_context, "utf-16be"));
 }
 
 void CSVEncoder::Reset() {
