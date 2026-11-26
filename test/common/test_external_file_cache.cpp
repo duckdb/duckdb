@@ -434,7 +434,9 @@ TEST_CASE("Large reads of remote files are split into blocks sized from the netw
 	EFCTestFileGuard test_file("test_efc_adaptive_split.bin", content);
 	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
 
-	CachingFileSystem cfs(*remote_fs, db_instance);
+	BoundFileSystem cfs_bound(*remote_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	SECTION("cached reads") {
 		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(remote_path), ReaderSizedFlags());
@@ -551,7 +553,9 @@ TEST_CASE("The lowest latency seen at a host sizes its reads", "[external_file_c
 	EFCTestFileGuard second_file("test_efc_min_latency_second.bin", content);
 	EFCTestFileGuard third_file("test_efc_min_latency_third.bin", content);
 
-	CachingFileSystem cfs(*remote_fs, db_instance);
+	BoundFileSystem cfs_bound(*remote_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto first =
 	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()), ReaderSizedFlags());
 	REQUIRE(ReadFull(*first, FILE_SIZE) == content);
@@ -589,7 +593,9 @@ TEST_CASE("The first reads of a remote file are sized from other files of its ho
 	EFCTestFileGuard first_file("test_efc_adaptive_host_first.bin", content);
 	EFCTestFileGuard second_file("test_efc_adaptive_host_second.bin", content);
 
-	CachingFileSystem cfs(*remote_fs, db_instance);
+	BoundFileSystem cfs_bound(*remote_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto first =
 	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()), ReaderSizedFlags());
 	REQUIRE(ReadFull(*first, FILE_SIZE) == content);
@@ -636,7 +642,9 @@ TEST_CASE("An estimate measured during a file's only read sizes the reads of the
 	EFCTestFileGuard first_file("test_efc_adaptive_publish_first.bin", content);
 	EFCTestFileGuard second_file("test_efc_adaptive_publish_second.bin", content);
 
-	CachingFileSystem cfs(*remote_fs, db_instance);
+	BoundFileSystem cfs_bound(*remote_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	SECTION("a split read") {
 		// There is no estimate yet when the only read of the first file is split
@@ -687,7 +695,9 @@ TEST_CASE("A read split into larger blocks keeps the full blocks cached by earli
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_adaptive_partially_cached.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle =
 	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
 
