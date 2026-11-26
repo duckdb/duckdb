@@ -1,0 +1,244 @@
+# name: test/optimizer/statistics/parquet_filter_conditioned_statistics.test
+# description: A Parquet scan can provide filtered join-key statistics during planning
+# group: [statistics]
+
+require parquet
+
+require json
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+query IIIII
+SELECT current_setting('parquet_enable_filter_conditioned_statistics'),
+       current_setting('parquet_filter_conditioned_statistics_max_files'),
+       current_setting('parquet_filter_conditioned_statistics_max_rows'),
+       current_setting('parquet_filter_conditioned_statistics_max_compressed_bytes'),
+       current_setting('parquet_filter_conditioned_statistics_max_uncompressed_bytes');
+----
+true	16	20000000	134217728	536870912
+
+statement ok
+CREATE TABLE filter_conditioned_stats_fact AS
+SELECT (range % 1000)::INTEGER k FROM range(100000);
+
+statement ok
+ANALYZE filter_conditioned_stats_fact;
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, (range // 1000)::INTEGER g, range::VARCHAR payload
+	FROM range(100000)
+) TO '{TEST_DIR}/filter_conditioned_stats_dimension.parquet' (FORMAT parquet);
+
+# Filtering g to zero leaves 1000 unique k values. The complete k domain remains
+# 100000, while the filtered scan supplies its observed current domain to this join.
+query II
+EXPLAIN SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~(?:9[0-9]|10[0-9]|11[0-9]),[0-9]{3} rows.*
+
+query I
+SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+100000
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, (range // 1000)::INTEGER g, range::VARCHAR payload
+	FROM range(0, 50000)
+) TO '{TEST_DIR}/filter_conditioned_stats_multi_1.parquet' (FORMAT parquet);
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, (range // 1000)::INTEGER g, range::VARCHAR payload
+	FROM range(50000, 100000)
+) TO '{TEST_DIR}/filter_conditioned_stats_multi_2.parquet' (FORMAT parquet);
+
+# All files within the default limit contribute to one merged filtered HLL.
+query II
+EXPLAIN SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_multi_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~[7-9][0-9],[0-9]{3} rows.*
+
+query I
+SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_multi_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+100000
+
+# A file limit below the complete file count declines collection and keeps the existing estimate.
+statement ok
+SET parquet_filter_conditioned_statistics_max_files=1;
+
+query II
+EXPLAIN SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_multi_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,[0-9]{3},[0-9]{3} rows.*
+
+statement ok
+RESET parquet_filter_conditioned_statistics_max_files;
+
+# The feature flag declines collection independently of the file limit.
+statement ok
+SET parquet_enable_filter_conditioned_statistics=false;
+
+query II
+EXPLAIN SELECT count(dimension.payload)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_stats_multi_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,[0-9]{3},[0-9]{3} rows.*
+
+statement ok
+RESET parquet_enable_filter_conditioned_statistics;
+
+statement ok
+CREATE TABLE filter_conditioned_quota_fact AS
+SELECT range::INTEGER k1, range::INTEGER k2 FROM range(100000);
+
+statement ok
+ANALYZE filter_conditioned_quota_fact;
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, (range % 10)::INTEGER g FROM range(100000)
+) TO '{TEST_DIR}/filter_conditioned_quota_a.parquet' (FORMAT parquet);
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, (range % 10)::INTEGER g FROM range(100000)
+) TO '{TEST_DIR}/filter_conditioned_quota_b.parquet' (FORMAT parquet);
+
+# Each group fits 600,000 bytes, but their combined projected cost does not.
+statement ok
+SET parquet_filter_conditioned_statistics_max_compressed_bytes=600000;
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_conditioned_quota_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_a.parquet') a ON fact.k1 = a.k
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_b.parquet') b ON fact.k2 = b.k
+WHERE a.g = 0 AND b.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,0[1-9][0-9] rows.*
+
+# Raising the query quota above the combined cost admits both groups.
+statement ok
+SET parquet_filter_conditioned_statistics_max_compressed_bytes=900000;
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_conditioned_quota_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_a.parquet') a ON fact.k1 = a.k
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_b.parquet') b ON fact.k2 = b.k
+WHERE a.g = 0 AND b.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,000 rows.*
+
+statement ok
+RESET parquet_filter_conditioned_statistics_max_compressed_bytes;
+
+# Each group has 100,000 footer rows, so a 150,000-row query budget admits one.
+statement ok
+SET parquet_filter_conditioned_statistics_max_rows=150000;
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_conditioned_quota_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_a.parquet') a ON fact.k1 = a.k
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_b.parquet') b ON fact.k2 = b.k
+WHERE a.g = 0 AND b.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,0[1-9][0-9] rows.*
+
+# Raising the row budget above the aggregate footer population admits both groups.
+statement ok
+SET parquet_filter_conditioned_statistics_max_rows=250000;
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_conditioned_quota_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_a.parquet') a ON fact.k1 = a.k
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_quota_b.parquet') b ON fact.k2 = b.k
+WHERE a.g = 0 AND b.g = 0;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~1,000 rows.*
+
+statement ok
+RESET parquet_filter_conditioned_statistics_max_rows;
+
+statement ok
+COPY (
+	SELECT range::INTEGER k, CASE WHEN range < 1000 THEN 0 ELSE 1 END::INTEGER g
+	FROM range(0, 50000)
+) TO '{TEST_DIR}/filter_conditioned_reordered_1.parquet' (FORMAT parquet);
+
+statement ok
+COPY (
+	SELECT 1::INTEGER g, range::INTEGER k
+	FROM range(50000, 100000)
+) TO '{TEST_DIR}/filter_conditioned_reordered_2.parquet' (FORMAT parquet);
+
+# The normal scan maps each file by name. Planning statistics decline the whole
+# request rather than interpreting the second file's physical ordinals as the first file's columns.
+statement ok
+CALL enable_profiling(format='json', save_location='{TEST_DIR}/reordered_profile.json',
+                      metrics=['optimizer.filter_conditioned_statistics_requests',
+                               'optimizer.filter_conditioned_statistics_groups']);
+
+query I
+SELECT count(*)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_reordered_*.parquet') dimension USING (k)
+WHERE dimension.g = 0;
+----
+100000
+
+statement ok
+CALL disable_profiling();
+
+query II
+SELECT optimizer.filter_conditioned_statistics_requests,
+       optimizer.filter_conditioned_statistics_groups
+FROM read_json_auto('{TEST_DIR}/reordered_profile.json');
+----
+1	0
+
+statement ok
+CALL enable_profiling(format='json', save_location='{TEST_DIR}/reordered_union_profile.json',
+                      metrics=['optimizer.filter_conditioned_statistics_requests',
+                               'optimizer.filter_conditioned_statistics_groups']);
+
+query I
+SELECT count(*)
+FROM filter_conditioned_stats_fact fact
+JOIN read_parquet('{TEST_DIR}/filter_conditioned_reordered_*.parquet', union_by_name=true) dimension USING (k)
+WHERE dimension.g = 0;
+----
+100000
+
+statement ok
+CALL disable_profiling();
+
+query II
+SELECT optimizer.filter_conditioned_statistics_requests,
+       optimizer.filter_conditioned_statistics_groups
+FROM read_json_auto('{TEST_DIR}/reordered_union_profile.json');
+----
+1	0

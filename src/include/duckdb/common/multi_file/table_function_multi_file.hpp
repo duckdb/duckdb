@@ -233,6 +233,8 @@ public:
 	//! The bind data of the wrapped function for this file. It is used to combine the schemas of several files, and
 	//! kept afterwards so that the bind that reads the file can reuse what this one read from it
 	shared_ptr<FunctionData> bind_data;
+	//! Physical columns reported by this file before mapping them to the scan schema.
+	vector<MultiFileColumnDefinition> physical_columns;
 	//! The statistics callback of the wrapped function, which reads the statistics of this file from its bind data
 	table_statistics_extended_t statistics = nullptr;
 
@@ -391,12 +393,26 @@ public:
 	//! The row groups of a scan that reads a single file, as the wrapped function describes them - the files of a
 	//! scan over several files have not been opened at this point, so their row groups are unknown
 	static vector<PartitionStatistics> GetPartitionStats(ClientContext &context, GetPartitionStatsInput &input);
+	//! Open every file of a bounded scan after the optimizer accepts the request shape. The retained file metadata is
+	//! available to later statistics passes and execution even when the provider subsequently declines on cost.
+	static bool OpenFilesForFilterConditionedStatistics(ClientContext &context, MultiFileBindData &bind_data,
+	                                                    idx_t maximum_files);
+	//! Sum footer-derived projected cost across every completely bound file.
+	static optional<TableFunctionFilterConditionedStatisticsCost>
+	EstimateFilterConditionedStatisticsCost(ClientContext &context,
+	                                        TableFunctionFilterConditionedStatisticsInput &input);
+	//! Forward a single-file filter-conditioned statistics request to the wrapped reader.
+	static unique_ptr<TableFunctionFilterConditionedStatistics>
+	CollectFilterConditionedStatistics(ClientContext &context, TableFunctionFilterConditionedStatisticsInput &input);
 
 	//! Only present to satisfy MultiFileFunction - the wrapper builds its interface from the function info instead
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
 public:
 	void InitializeFileOptions(MultiFileOptions &file_options) override;
+	bool SupportsFilterConditionedStatistics() const override {
+		return true;
+	}
 	bool ReportsBytesScanned() const override {
 		return settings.reports_bytes_scanned;
 	}

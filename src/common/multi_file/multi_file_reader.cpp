@@ -46,6 +46,7 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const BoundTableFunction &ta
 	} else {
 		res = make_uniq<MultiFileReader>();
 		res->function_name = table_function.GetName();
+		res->is_default_reader = true;
 	}
 	return res;
 }
@@ -115,6 +116,7 @@ bool MultiFileBindData::HasIdentityMapping(const vector<MultiFileColumnDefinitio
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
 	res->function_name = Identifier(function_name);
+	res->is_default_reader = true;
 	return res;
 }
 
@@ -1103,7 +1105,12 @@ MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vect
 void MultiFileReader::ReadFilesForStatistics(ClientContext &context, MultiFileList &files, MultiFileBindData &result,
                                              BaseFileReaderOptions &options, MultiFileOptions &file_options) {
 	auto max_files = file_options.maximum_files_for_stats;
-	if (max_files == 0 || !result.union_readers.empty()) {
+	if (max_files == 0) {
+		return;
+	}
+	const bool retained_initial_reader = result.initial_reader && result.union_readers.size() == 1 &&
+	                                     result.union_readers[0]->GetFileName() == result.initial_reader->GetFileName();
+	if (!result.union_readers.empty() && !retained_initial_reader) {
 		return;
 	}
 	// a single file bound on its own already has its statistics from the initial reader
@@ -1127,9 +1134,11 @@ void MultiFileReader::ReadFilesForStatistics(ClientContext &context, MultiFileLi
 		}
 	}
 	if (result.initial_reader) {
-		readers.insert(readers.begin(), result.initial_reader->GetUnionData(0));
+		auto initial = result.initial_reader->GetUnionData(0);
+		initial->reader.reset();
+		readers.insert(readers.begin(), std::move(initial));
 	}
-	std::move(readers.begin(), readers.end(), std::back_inserter(result.union_readers));
+	result.union_readers = std::move(readers);
 }
 
 MultiFileReaderBindData MultiFileReader::BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,

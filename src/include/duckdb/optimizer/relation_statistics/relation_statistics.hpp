@@ -46,7 +46,8 @@ public:
 	RelationColumnStats(ColumnBinding binding, DistinctCount domain, Identifier name);
 	RelationColumnStats(ColumnBinding binding, DistinctCount total_domain, DistinctCount current_domain,
 	                    Identifier name,
-	                    SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence = SemiAntiJoinDomainEvidence());
+	                    SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence = SemiAntiJoinDomainEvidence(),
+	                    optional<DistinctCount> filtered_join_domain = {});
 	optional_idx GetSupportedSemiAntiDomainSize() const;
 
 public:
@@ -55,6 +56,8 @@ public:
 	DistinctCount total_domain;
 	//! The estimated number of values from the total domain that are currently present.
 	DistinctCount current_domain;
+	//! Filter-conditioned evidence supplied explicitly by the scan provider for equality-join costing.
+	optional<DistinctCount> filtered_join_domain;
 	//! Structural evidence that permits using current_domain for SEMI/ANTI joins.
 	SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence;
 	Identifier name;

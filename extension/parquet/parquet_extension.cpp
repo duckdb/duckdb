@@ -1189,6 +1189,25 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("parquet_enable_filter_conditioned_statistics",
+	                          "Collect filtered cardinality and distinct-count statistics for small Parquet scans "
+	                          "during query planning",
+	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption("parquet_filter_conditioned_statistics_max_files",
+	                          "Maximum files in a Parquet scan eligible for planning-time statistics; 0 disables "
+	                          "collection",
+	                          LogicalType::UBIGINT, Value::UBIGINT(16));
+	config.AddExtensionOption("parquet_filter_conditioned_statistics_max_rows",
+	                          "Maximum aggregate input rows in one Parquet filter-conditioned statistics batch",
+	                          LogicalType::UBIGINT, Value::UBIGINT(20000000));
+	config.AddExtensionOption(
+	    "parquet_filter_conditioned_statistics_max_compressed_bytes",
+	    "Maximum aggregate projected compressed bytes in one Parquet filter-conditioned statistics batch",
+	    LogicalType::UBIGINT, Value::UBIGINT(128ULL * 1024ULL * 1024ULL));
+	config.AddExtensionOption(
+	    "parquet_filter_conditioned_statistics_max_uncompressed_bytes",
+	    "Maximum aggregate projected uncompressed bytes in one Parquet filter-conditioned statistics batch",
+	    LogicalType::UBIGINT, Value::UBIGINT(512ULL * 1024ULL * 1024ULL));
 	config.AddExtensionOption("parquet_use_page_index",
 	                          "Use the page index (ColumnIndex and OffsetIndex) of Parquet files to skip the pages "
 	                          "that cannot contain rows matching the filters",

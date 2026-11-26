@@ -181,6 +181,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/join_order/join_order_source_stats.hpp"
 #include "duckdb/optimizer/join_simplification.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -2934,6 +2935,24 @@ const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value) {
 template<>
 FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value) {
 	return static_cast<FileWriteMode>(StringUtil::StringToEnum(GetFileWriteModeValues(), 3, "FileWriteMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFilterConditionedStatisticsModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FilterConditionedStatisticsMode::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(FilterConditionedStatisticsMode::COLLECT), "COLLECT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FilterConditionedStatisticsMode>(FilterConditionedStatisticsMode value) {
+	return StringUtil::EnumToString(GetFilterConditionedStatisticsModeValues(), 2, "FilterConditionedStatisticsMode", static_cast<uint32_t>(value));
+}
+
+template<>
+FilterConditionedStatisticsMode EnumUtil::FromString<FilterConditionedStatisticsMode>(const char *value) {
+	return static_cast<FilterConditionedStatisticsMode>(StringUtil::StringToEnum(GetFilterConditionedStatisticsModeValues(), 2, "FilterConditionedStatisticsMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFilterPropagateResultValues() {

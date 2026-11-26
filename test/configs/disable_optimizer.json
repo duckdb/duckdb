@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks statistics collected by the join-order optimizer and its profiler metrics.",
+      "paths": [
+        "test/optimizer/statistics/parquet_filter_conditioned_statistics.test"
+      ]
+    },
+    {
       "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
       "paths": [
         "test/optimizer/mark_join_simplifier.test",

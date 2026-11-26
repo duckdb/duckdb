@@ -22,7 +22,18 @@ SELECT count(*) FROM unknown_domain a JOIN unknown_domain b USING (k);
 query II
 EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USING (k);
 ----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"100"\s*}\s*}\s*\]\s*$
+
+statement ok
+SET parquet_enable_filter_conditioned_statistics=false;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a JOIN unknown_domain b USING (k);
+----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"500"\s*}\s*}\s*\]\s*$
+
+statement ok
+RESET parquet_enable_filter_conditioned_statistics;
 
 # Two distinct keys replace the discounted domain only once for this relation pair.
 query I
@@ -45,10 +56,22 @@ query II
 EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a, unknown_domain b, unknown_domain c
 WHERE a.k=b.k AND b.k=c.k;
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"2500"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"100"\s*}\s*}\s*\]\s*$
 
 query II
 EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a, unknown_domain b, unknown_domain c
 WHERE a.k=c.k AND b.k=c.k AND a.k=b.k;
 ----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"100"\s*}\s*}\s*\]\s*$
+
+statement ok
+SET parquet_enable_filter_conditioned_statistics=false;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.k FROM unknown_domain a, unknown_domain b, unknown_domain c
+WHERE a.k=b.k AND b.k=c.k;
+----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"2500"\s*}\s*}\s*\]\s*$
+
+statement ok
+RESET parquet_enable_filter_conditioned_statistics;

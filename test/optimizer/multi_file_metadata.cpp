@@ -22,6 +22,22 @@ LogicalGet &MetadataGet(LogicalOperator &op) {
 	return MetadataGet(*op.children[0]);
 }
 
+optional_ptr<LogicalGet> FilterConditionedStatisticsGet(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		if (get.function.prepare_filter_conditioned_statistics) {
+			return get;
+		}
+	}
+	for (auto &child : op.children) {
+		auto result = FilterConditionedStatisticsGet(*child);
+		if (result) {
+			return result;
+		}
+	}
+	return nullptr;
+}
+
 } // namespace
 
 TEST_CASE("Parquet metadata survives consumption of the initial reader", "[optimizer][multi_file_metadata]") {
@@ -71,6 +87,64 @@ TEST_CASE("Parquet metadata survives consumption of the initial reader", "[optim
 			REQUIRE(CHECK_COLUMN(*result, 1, {1, 2, 3}));
 			REQUIRE(CHECK_COLUMN(*result, 2, {0, 1, 2}));
 		}
+	}
+	con.Rollback();
+}
+
+TEST_CASE("Late Parquet footer preparation scopes bind mutation and reader ownership",
+          "[optimizer][multi_file_metadata]") {
+	DuckDB db;
+	if (ExtensionHelper::LoadExtension(db, "parquet") != ExtensionLoadResult::LOADED_EXTENSION) {
+		SKIP_TEST("require parquet");
+	}
+	Connection con(db);
+	auto first_path = "'" + StringUtil::Replace(TestCreatePath("late_footer_first.parquet"), "'", "''") + "'";
+	auto second_path = "'" + StringUtil::Replace(TestCreatePath("late_footer_second.parquet"), "'", "''") + "'";
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY (SELECT range::BIGINT k, (range % 2)::INTEGER g FROM range(0, 10)) TO " + first_path));
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY (SELECT range::BIGINT k, (range % 2)::INTEGER g FROM range(10, 20)) TO " + second_path));
+	con.BeginTransaction();
+
+	struct TestCase {
+		string filter;
+		optional_idx maximum_compressed_bytes;
+		idx_t expected_readers;
+	};
+	vector<TestCase> cases {{"p.g > 0", {}, 1}, {"p.g = 1", {}, 2}, {"p.g = 1", optional_idx(0), 2}};
+	for (auto &test : cases) {
+		CAPTURE(test.filter, test.expected_readers);
+		if (test.maximum_compressed_bytes.IsValid()) {
+			REQUIRE_NO_FAIL(con.Query("SET parquet_filter_conditioned_statistics_max_compressed_bytes=" +
+			                          to_string(test.maximum_compressed_bytes.GetIndex())));
+		} else {
+			REQUIRE_NO_FAIL(con.Query("RESET parquet_filter_conditioned_statistics_max_compressed_bytes"));
+		}
+		Parser parser(*con.context);
+		parser.ParseQuery("SELECT count(*) FROM range(20) fact(k) JOIN read_parquet([" + first_path + "," +
+		                  second_path + "]) p USING(k) WHERE " + test.filter);
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		planner.plan->ResolveOperatorTypes();
+		auto get = FilterConditionedStatisticsGet(*planner.plan);
+		REQUIRE(get);
+		auto &before = get->bind_data->Cast<MultiFileBindData>();
+		REQUIRE(before.initial_reader);
+		REQUIRE(before.union_readers.size() == 1);
+		REQUIRE_FALSE(before.union_readers[0]->reader);
+
+		Optimizer optimizer(*planner.binder, *con.context);
+		planner.plan = optimizer.Optimize(std::move(planner.plan));
+		get = FilterConditionedStatisticsGet(*planner.plan);
+		REQUIRE(get);
+		auto &after = get->bind_data->Cast<MultiFileBindData>();
+		REQUIRE(after.initial_reader);
+		REQUIRE(after.union_readers.size() == test.expected_readers);
+		REQUIRE_FALSE(after.union_readers[0]->reader);
+
+		auto result = con.Query(make_uniq<LogicalPlanStatement>(std::move(planner.plan)));
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(CHECK_COLUMN(*result, 0, {10}));
 	}
 	con.Rollback();
 }

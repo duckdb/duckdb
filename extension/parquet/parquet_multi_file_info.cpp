@@ -8,7 +8,9 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -26,6 +28,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -38,6 +42,43 @@
 namespace duckdb {
 class BaseStatistics;
 class ClientContext;
+
+static constexpr idx_t PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_FILES = 16;
+static constexpr idx_t PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_ROWS = 20000000;
+static constexpr idx_t PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_COMPRESSED_BYTES = 128ULL * 1024ULL * 1024ULL;
+static constexpr idx_t PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_UNCOMPRESSED_BYTES =
+    512ULL * 1024ULL * 1024ULL;
+
+static bool ParquetFilterConditionedStatisticsEnabled(ClientContext &context) {
+	Value setting;
+	return !context.TryGetCurrentSetting("parquet_enable_filter_conditioned_statistics", setting) || setting.IsNull() ||
+	       BooleanValue::Get(setting);
+}
+
+static idx_t ParquetFilterConditionedStatisticsMaxFiles(ClientContext &context) {
+	Value setting;
+	if (!context.TryGetCurrentSetting("parquet_filter_conditioned_statistics_max_files", setting) || setting.IsNull()) {
+		return PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_FILES;
+	}
+	return UBigIntValue::Get(setting);
+}
+
+static idx_t ParquetFilterConditionedStatisticsMaxRows(ClientContext &context) {
+	Value setting;
+	if (!context.TryGetCurrentSetting("parquet_filter_conditioned_statistics_max_rows", setting) || setting.IsNull()) {
+		return PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_ROWS;
+	}
+	return UBigIntValue::Get(setting);
+}
+
+static idx_t ParquetFilterConditionedStatisticsMaxBytes(ClientContext &context, const string &setting_name,
+                                                        idx_t default_value) {
+	Value setting;
+	if (!context.TryGetCurrentSetting(Identifier(setting_name), setting) || setting.IsNull()) {
+		return default_value;
+	}
+	return UBigIntValue::Get(setting);
+}
 class DataChunk;
 class ExecutionContext;
 class Expression;
@@ -273,6 +314,245 @@ void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
 	}
 }
 
+static bool SameParquetFilterConditionedStatisticsSource(const TableFunctionFilterConditionedStatisticsInput &left,
+                                                         const TableFunctionFilterConditionedStatisticsInput &right) {
+	auto &left_bind = left.bind_data->Cast<MultiFileBindData>();
+	auto &right_bind = right.bind_data->Cast<MultiFileBindData>();
+	if (left_bind.names != right_bind.names || left_bind.types != right_bind.types ||
+	    left_bind.union_readers.size() != right_bind.union_readers.size()) {
+		return false;
+	}
+	auto &left_data = left_bind.bind_data->Cast<TableFunctionMultiFileData>();
+	auto &right_data = right_bind.bind_data->Cast<TableFunctionMultiFileData>();
+	if (left_data.options.named_parameters != right_data.options.named_parameters) {
+		return false;
+	}
+	for (idx_t file_index = 0; file_index < left_bind.union_readers.size(); file_index++) {
+		if (left_bind.union_readers[file_index]->file.ToValue() !=
+		    right_bind.union_readers[file_index]->file.ToValue()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static unique_ptr<TableFunctionFilterConditionedStatistics>
+ProjectFilterConditionedStatistics(const TableFunctionFilterConditionedStatistics &source,
+                                   const vector<idx_t> &projection) {
+	vector<unique_ptr<BaseStatistics>> statistics;
+	vector<unique_ptr<DistinctStatistics>> distinct_statistics;
+	statistics.reserve(projection.size());
+	distinct_statistics.reserve(projection.size());
+	for (auto source_index : projection) {
+		if (source_index >= source.filtered_column_statistics.size() ||
+		    source_index >= source.filtered_distinct_statistics.size()) {
+			return nullptr;
+		}
+		auto &source_statistics = source.filtered_column_statistics[source_index];
+		auto &source_distinct = source.filtered_distinct_statistics[source_index];
+		statistics.push_back(source_statistics ? source_statistics->ToUnique() : nullptr);
+		distinct_statistics.push_back(source_distinct ? source_distinct->Copy() : nullptr);
+	}
+	return make_uniq<TableFunctionFilterConditionedStatistics>(source.filtered_cardinality, std::move(statistics),
+	                                                           std::move(distinct_statistics));
+}
+
+static bool
+ParquetFilterConditionedStatisticsRequestSupported(const MultiFileBindData &bind_data,
+                                                   const TableFunctionFilterConditionedStatisticsInput &input) {
+	if (input.filters.HasMultiColumnFilters()) {
+		return false;
+	}
+	auto valid_column = [&](const ColumnIndex &column_index) {
+		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn()) {
+			return false;
+		}
+		auto primary_index = column_index.GetPrimaryIndex();
+		return primary_index < bind_data.types.size() && !bind_data.IsGeneratedColumn(primary_index);
+	};
+	for (auto &column_index : input.scan_column_indexes) {
+		if (!valid_column(column_index)) {
+			return false;
+		}
+	}
+	for (auto &column_index : input.statistics_column_indexes) {
+		if (!valid_column(column_index) || std::find(input.scan_column_indexes.begin(), input.scan_column_indexes.end(),
+		                                             column_index) == input.scan_column_indexes.end()) {
+			return false;
+		}
+	}
+	for (auto &entry : input.filters) {
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			return false;
+		}
+		auto filter_index = entry.GetIndex().GetIndex();
+		if (filter_index >= input.scan_column_indexes.size()) {
+			return false;
+		}
+		auto &column_index = input.scan_column_indexes[filter_index];
+		if (!bind_data.types[column_index.GetPrimaryIndex()].IsIntegral()) {
+			return false;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "Parquet filter-conditioned statistics");
+		if (!BoundComparisonExpression::IsComparison(*filter.expr) ||
+		    (filter.expr->GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+		     filter.expr->GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool ParquetPrepareFilterConditionedStatistics(ClientContext &context, FunctionData &function_data,
+                                                      const TableFunctionFilterConditionedStatisticsInput &input) {
+	auto maximum_files = ParquetFilterConditionedStatisticsMaxFiles(context);
+	if (!ParquetFilterConditionedStatisticsEnabled(context) || maximum_files == 0) {
+		return false;
+	}
+	auto &bind_data = function_data.Cast<MultiFileBindData>();
+	if (!ParquetFilterConditionedStatisticsRequestSupported(bind_data, input)) {
+		return false;
+	}
+	return TableFunctionMultiFileWrapper::OpenFilesForFilterConditionedStatistics(context, bind_data, maximum_files);
+}
+
+static unique_ptr<TableFunctionFilterConditionedStatisticsBatchResult>
+ParquetCollectFilterConditionedStatisticsBatch(ClientContext &context,
+                                               const vector<TableFunctionFilterConditionedStatisticsInput> &inputs) {
+	auto result = make_uniq<TableFunctionFilterConditionedStatisticsBatchResult>();
+	result->statistics.resize(inputs.size());
+	auto maximum_files = ParquetFilterConditionedStatisticsMaxFiles(context);
+	if (!ParquetFilterConditionedStatisticsEnabled(context) || maximum_files == 0) {
+		return result;
+	}
+	struct Group {
+		idx_t representative;
+		vector<idx_t> requests;
+		vector<ColumnIndex> statistics_columns;
+		vector<ColumnIndex> scan_columns;
+		vector<vector<idx_t>> projections;
+		optional<TableFunctionFilterConditionedStatisticsCost> cost;
+	};
+	vector<Group> groups;
+	for (idx_t request_index = 0; request_index < inputs.size(); request_index++) {
+		auto &input = inputs[request_index];
+		if (!input.bind_data) {
+			continue;
+		}
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		if (bind_data.union_readers.size() != bind_data.file_list->GetTotalFileCount()) {
+			continue;
+		}
+		optional_idx group_index;
+		if (!input.filters.HasFilters() && !input.filters.HasMultiColumnFilters()) {
+			for (idx_t candidate = 0; candidate < groups.size(); candidate++) {
+				auto &representative = inputs[groups[candidate].representative];
+				if (!representative.filters.HasFilters() && !representative.filters.HasMultiColumnFilters() &&
+				    SameParquetFilterConditionedStatisticsSource(representative, input)) {
+					group_index = candidate;
+					break;
+				}
+			}
+		}
+		if (!group_index.IsValid()) {
+			group_index = groups.size();
+			groups.push_back({request_index, {}, {}, {}, {}, {}});
+		}
+		auto &group = groups[group_index.GetIndex()];
+		group.requests.push_back(request_index);
+		vector<idx_t> projection;
+		projection.reserve(input.statistics_column_indexes.size());
+		for (auto &column : input.statistics_column_indexes) {
+			auto entry = std::find(group.statistics_columns.begin(), group.statistics_columns.end(), column);
+			if (entry == group.statistics_columns.end()) {
+				projection.push_back(group.statistics_columns.size());
+				group.statistics_columns.push_back(column);
+			} else {
+				projection.push_back(NumericCast<idx_t>(entry - group.statistics_columns.begin()));
+			}
+		}
+		for (auto &column : input.scan_column_indexes) {
+			if (std::find(group.scan_columns.begin(), group.scan_columns.end(), column) == group.scan_columns.end()) {
+				group.scan_columns.push_back(column);
+			}
+		}
+		group.projections.push_back(std::move(projection));
+	}
+
+	auto max_rows = ParquetFilterConditionedStatisticsMaxRows(context);
+	auto max_compressed_bytes = ParquetFilterConditionedStatisticsMaxBytes(
+	    context, "parquet_filter_conditioned_statistics_max_compressed_bytes",
+	    PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_COMPRESSED_BYTES);
+	auto max_uncompressed_bytes = ParquetFilterConditionedStatisticsMaxBytes(
+	    context, "parquet_filter_conditioned_statistics_max_uncompressed_bytes",
+	    PARQUET_FILTER_CONDITIONED_STATISTICS_DEFAULT_MAX_UNCOMPRESSED_BYTES);
+	vector<idx_t> group_order;
+	for (idx_t group_index = 0; group_index < groups.size(); group_index++) {
+		auto &group = groups[group_index];
+		auto &representative = inputs[group.representative];
+		TableFunctionFilterConditionedStatisticsInput group_input(
+		    representative.bind_data.get(), group.statistics_columns, group.scan_columns, representative.filters);
+		group.cost = TableFunctionMultiFileWrapper::EstimateFilterConditionedStatisticsCost(context, group_input);
+		if (!group.cost || group.cost->rows > max_rows || group.cost->compressed_bytes > max_compressed_bytes ||
+		    group.cost->uncompressed_bytes > max_uncompressed_bytes) {
+			group.cost.reset();
+			continue;
+		}
+		group_order.push_back(group_index);
+	}
+	std::sort(group_order.begin(), group_order.end(), [&](idx_t left, idx_t right) {
+		auto &left_group = groups[left];
+		auto &right_group = groups[right];
+		if (left_group.cost->compressed_bytes != right_group.cost->compressed_bytes) {
+			return left_group.cost->compressed_bytes < right_group.cost->compressed_bytes;
+		}
+		if (left_group.cost->uncompressed_bytes != right_group.cost->uncompressed_bytes) {
+			return left_group.cost->uncompressed_bytes < right_group.cost->uncompressed_bytes;
+		}
+		if (left_group.cost->rows != right_group.cost->rows) {
+			return left_group.cost->rows < right_group.cost->rows;
+		}
+		return left_group.representative < right_group.representative;
+	});
+	idx_t batch_rows = 0;
+	idx_t batch_compressed_bytes = 0;
+	idx_t batch_uncompressed_bytes = 0;
+	for (auto group_index : group_order) {
+		auto &group = groups[group_index];
+		if (group.cost->rows > max_rows - batch_rows ||
+		    group.cost->compressed_bytes > max_compressed_bytes - batch_compressed_bytes ||
+		    group.cost->uncompressed_bytes > max_uncompressed_bytes - batch_uncompressed_bytes) {
+			group.cost.reset();
+			continue;
+		}
+		batch_rows += group.cost->rows;
+		batch_compressed_bytes += group.cost->compressed_bytes;
+		batch_uncompressed_bytes += group.cost->uncompressed_bytes;
+	}
+
+	for (auto &group : groups) {
+		if (!group.cost) {
+			continue;
+		}
+		auto &representative = inputs[group.representative];
+		TableFunctionFilterConditionedStatisticsInput group_input(
+		    representative.bind_data.get(), group.statistics_columns, group.scan_columns, representative.filters);
+		auto group_statistics = TableFunctionMultiFileWrapper::CollectFilterConditionedStatistics(context, group_input);
+		if (!group_statistics) {
+			continue;
+		}
+		for (idx_t i = 0; i < group.requests.size(); i++) {
+			result->statistics[group.requests[i]] =
+			    ProjectFilterConditionedStatistics(*group_statistics, group.projections[i]);
+		}
+		result->physical_groups++;
+		result->compressed_bytes += group.cost->compressed_bytes;
+		result->uncompressed_bytes += group.cost->uncompressed_bytes;
+		result->rows_collected += group_statistics->filtered_cardinality;
+	}
+	return result;
+}
+
 //! Bind a parquet scan. The wrapped single-file function is resolved here rather than taken from the function that
 //! is being bound - callers that manage parquet files themselves (e.g. DuckLake) bind this through a TableFunction
 //! they construct, which carries none of our info
@@ -294,6 +574,8 @@ TableFunction ParquetScanFunction::GetMultiFileFunction(Identifier name) {
 	result.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	result.pushdown_expression = ParquetScanPushdownExpression;
 	result.get_partition_stats = ParquetMultiFileGetPartitionStats;
+	result.prepare_filter_conditioned_statistics = ParquetPrepareFilterConditionedStatistics;
+	result.collect_filter_conditioned_statistics_batch = ParquetCollectFilterConditionedStatisticsBatch;
 	result.projection_expression_pushdown = ParquetScanFunction::ProjectionExpressionPushdown;
 	return result;
 }

@@ -37,6 +37,7 @@ enum class TableFunctionParallelism : uint8_t {
 };
 
 class BaseStatistics;
+class DistinctStatistics;
 class LogicalDependencyList;
 class LogicalGet;
 class TableFunction;
@@ -261,6 +262,61 @@ public:
 	ColumnIndex column_index;
 };
 
+//! Filtered statistics that a table function collected for one filter-conditioned statistics request.
+//! The column statistics are positional with TableFunctionFilterConditionedStatisticsInput::statistics_column_indexes.
+struct TableFunctionFilterConditionedStatistics {
+public:
+	DUCKDB_API
+	TableFunctionFilterConditionedStatistics(idx_t filtered_cardinality,
+	                                         vector<unique_ptr<BaseStatistics>> filtered_column_statistics,
+	                                         vector<unique_ptr<DistinctStatistics>> filtered_distinct_statistics = {});
+	DUCKDB_API ~TableFunctionFilterConditionedStatistics();
+
+public:
+	idx_t filtered_cardinality;
+	vector<unique_ptr<BaseStatistics>> filtered_column_statistics;
+	//! Mergeable sketches for wrappers that combine complete per-file results.
+	vector<unique_ptr<DistinctStatistics>> filtered_distinct_statistics;
+};
+
+//! A batch request for statistics after applying the filters pushed into one table-function scan.
+struct TableFunctionFilterConditionedStatisticsInput {
+public:
+	TableFunctionFilterConditionedStatisticsInput(const FunctionData *bind_data,
+	                                              const vector<ColumnIndex> &statistics_column_indexes,
+	                                              const vector<ColumnIndex> &scan_column_indexes,
+	                                              const TableFilterSet &filters)
+	    : bind_data(bind_data), statistics_column_indexes(statistics_column_indexes),
+	      scan_column_indexes(scan_column_indexes), filters(filters) {
+	}
+
+public:
+	optional_ptr<const FunctionData> bind_data;
+	//! Columns for which the provider returns statistics.
+	const vector<ColumnIndex> &statistics_column_indexes;
+	//! Columns physically read to collect statistics, evaluate filters and estimate provider cost.
+	const vector<ColumnIndex> &scan_column_indexes;
+	//! Filter indexes are positional with scan_column_indexes.
+	const TableFilterSet &filters;
+};
+
+//! The statistics and work counters returned by one provider-level filter-conditioned statistics batch.
+struct TableFunctionFilterConditionedStatisticsBatchResult {
+public:
+	vector<unique_ptr<TableFunctionFilterConditionedStatistics>> statistics;
+	idx_t physical_groups = 0;
+	idx_t compressed_bytes = 0;
+	idx_t uncompressed_bytes = 0;
+	idx_t rows_collected = 0;
+};
+
+//! Footer-derived cost of one physical filter-conditioned statistics request.
+struct TableFunctionFilterConditionedStatisticsCost {
+	idx_t rows;
+	idx_t compressed_bytes;
+	idx_t uncompressed_bytes;
+};
+
 struct GetPartitionStatsInput {
 	GetPartitionStatsInput(const BoundTableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
 	    : table_function(table_function_p), bind_data(bind_data_p) {
@@ -364,6 +420,17 @@ typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context,
                                                          column_t column_index);
 typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext &context,
                                                                   TableFunctionGetStatisticsInput &input);
+typedef unique_ptr<TableFunctionFilterConditionedStatistics> (*table_function_collect_filter_conditioned_statistics_t)(
+    ClientContext &context, TableFunctionFilterConditionedStatisticsInput &input);
+typedef bool (*table_function_prepare_filter_conditioned_statistics_t)(
+    ClientContext &context, FunctionData &bind_data, const TableFunctionFilterConditionedStatisticsInput &input);
+typedef unique_ptr<TableFunctionFilterConditionedStatisticsBatchResult> (
+    *table_function_collect_filter_conditioned_statistics_batch_t)(
+    ClientContext &context, const vector<TableFunctionFilterConditionedStatisticsInput> &inputs);
+typedef optional<TableFunctionFilterConditionedStatisticsCost> (
+    *table_function_estimate_filter_conditioned_statistics_cost_t)(ClientContext &context,
+                                                                   const FunctionData &bind_data,
+                                                                   const vector<ColumnIndex> &column_indexes);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
@@ -498,6 +565,14 @@ public:
 	//! (Optional) statistics function fed a ColumnIndex instead of a column_t
 	//! Returns the statistics of a specified column
 	table_statistics_extended_t statistics_extended;
+	//! (Optional) single-scan statistics function used by physical file readers
+	table_function_collect_filter_conditioned_statistics_t collect_filter_conditioned_statistics;
+	//! (Optional) prepares mutable provider state after the optimizer has formed a supported request
+	table_function_prepare_filter_conditioned_statistics_t prepare_filter_conditioned_statistics;
+	//! (Optional) provider-level batch function invoked once with all scans before join ordering
+	table_function_collect_filter_conditioned_statistics_batch_t collect_filter_conditioned_statistics_batch;
+	//! (Optional) footer-only projected cost function used before any filter-conditioned statistics scan
+	table_function_estimate_filter_conditioned_statistics_cost_t estimate_filter_conditioned_statistics_cost;
 	//! (Optional) dependency function
 	//! Sets up which catalog entries this table function depend on
 	table_function_dependency_t dependency;
