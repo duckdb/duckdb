@@ -13,7 +13,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/likely.hpp"
@@ -72,7 +72,7 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::VARCHAR:
-		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
+		StringComparison::Execute<OP>(left, right, result);
 		return true;
 	default:
 		return false;

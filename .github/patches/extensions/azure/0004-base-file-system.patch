@@ -1,0 +1,39 @@
+diff --git a/src/include/azure_blob_filesystem.hpp b/src/include/azure_blob_filesystem.hpp
+index 67bfebd..68c94f8 100644
+--- a/src/include/azure_blob_filesystem.hpp
++++ b/src/include/azure_blob_filesystem.hpp
+@@ -45,7 +45,7 @@ public:
+ 
+ class AzureBlobStorageFileSystem : public AzureStorageFileSystem {
+ public:
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
++	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+ 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+ 	                       optional_ptr<FileOpener> opener) override;
+ 
+diff --git a/src/include/azure_dfs_filesystem.hpp b/src/include/azure_dfs_filesystem.hpp
+index c28417d..67eb8b8 100644
+--- a/src/include/azure_dfs_filesystem.hpp
++++ b/src/include/azure_dfs_filesystem.hpp
+@@ -48,7 +48,7 @@ public:
+ 
+ class AzureDfsStorageFileSystem : public AzureStorageFileSystem {
+ public:
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
++	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+ 	bool ListFilesExtended(const string &path_in, const std::function<void(OpenFileInfo &info)> &callback,
+ 	                       optional_ptr<FileOpener> opener) override;
+ 	bool SupportsListFilesExtended() const override {
+diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
+index 3f9df34..879738f 100644
+--- a/src/include/azure_filesystem.hpp
++++ b/src/include/azure_filesystem.hpp
+@@ -93,7 +93,7 @@ public:
+ 	const AzureOptions options;
+ };
+ 
+-class AzureStorageFileSystem : public FileSystem {
++class AzureStorageFileSystem : public BaseFileSystem {
+ public:
+ 	// FS methods
+ 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,

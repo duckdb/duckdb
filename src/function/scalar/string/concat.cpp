@@ -364,6 +364,19 @@ unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStati
 	return stats;
 }
 
+//! The concat function and operator concatenate lists if their arguments are lists
+unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
+	if (input.expr.GetReturnType().id() != LogicalTypeId::LIST) {
+		return nullptr;
+	}
+	for (auto &child : input.child_stats) {
+		if (child.GetStatsType() != StatisticsType::LIST_STATS) {
+			return nullptr;
+		}
+	}
+	return ListConcatStats(context, input);
+}
+
 } // namespace
 
 ScalarFunction ListConcatFun::GetFunction() {
@@ -392,6 +405,7 @@ ScalarFunction ConcatFun::GetFunction() {
 	concat.SetResolveTypesCallback(ConcatFunctionResolveTypes);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	concat.SetInitStateCallback(InitConcatState);
+	concat.SetStatisticsCallback(ConcatStats);
 	return concat;
 }
 
@@ -399,6 +413,7 @@ ScalarFunction ConcatOperatorFun::GetFunction() {
 	ScalarFunction concat_op = ScalarFunction("||", {}, LogicalType::ANY, ConcatFunction, BindConcatOperator);
 	concat_op.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	concat_op.SetResolveTypesCallback(ConcatOperatorResolveTypes);
+	concat_op.SetStatisticsCallback(ConcatStats);
 	return concat_op;
 }
 

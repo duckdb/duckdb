@@ -6,6 +6,9 @@ statement ok
 SET explain_output = OPTIMIZED_ONLY;
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t AS FROM (VALUES (0.0::DOUBLE, 1, 1), (-0.0::DOUBLE, 2, 1), (1.5::DOUBLE, 3, 2), (-0.0::DOUBLE, 4, 2), (-1.0::DOUBLE, 5, 1), (0.0::DOUBLE, 6, 2)) v(d, x, g);
 
 # the rewrite still applies
@@ -84,3 +87,53 @@ SELECT x, d::VARCHAR FROM (SELECT x, d, row_number() OVER (PARTITION BY d ORDER 
 5	-1.0
 6	0.0
 
+# REAL with a single top row
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x DESC) rn FROM f WHERE x <> 6) WHERE rn = 1 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0
+1.5
+
+# a DOUBLE payload with an ordering key that arg_min/arg_max only support as a sort key
+foreach key_type REAL SMALLINT DECIMAL(4,1) TINYINT
+
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x::{key_type} DESC) rn FROM t WHERE x <> 6) WHERE rn = 1 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0
+1.5
+
+endloop
+
+# the window stays when arg_max stores the payload as a sort key
+query II
+EXPLAIN SELECT d FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x::REAL DESC) rn FROM t) WHERE rn = 1;
+----
+logical_opt	<REGEX>:.*WINDOW.*
+
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY to_seconds(x) DESC) rn FROM t WHERE x <> 6) WHERE rn = 1 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0
+1.5
+
+# only the ordering key selected
+statement ok
+CREATE TABLE k AS FROM (VALUES (1, -0.0::DOUBLE), (1, 2.0::DOUBLE), (1, 3.0::DOUBLE), (2, -1.0::DOUBLE), (2, -0.0::DOUBLE), (2, 5.0::DOUBLE)) v(g, d);
+
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY g ORDER BY d) rn FROM k) WHERE rn <= 2 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0
+-0.0
+2.0
+
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY g ORDER BY d) rn FROM k) WHERE rn = 1 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0

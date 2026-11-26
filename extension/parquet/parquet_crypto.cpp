@@ -514,6 +514,15 @@ int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_ty
 	}
 }
 
+static int16_t CheckedPageOrdinal(uint16_t page_ordinal) {
+	if (page_ordinal > NumericCast<uint16_t>(NumericLimits<int16_t>::Maximum())) {
+		throw InvalidInputException("An encrypted column chunk has more than %d data pages, exceeding the maximum "
+		                            "page ordinal supported by Parquet modular encryption",
+		                            NumericLimits<int16_t>::Maximum() + 1);
+	}
+	return NumericCast<int16_t>(page_ordinal);
+}
+
 int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal) {
 	switch (module) {
 	case DATA_PAGE_HEADER:
@@ -524,9 +533,9 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
 			page_ordinal -= 1;
 		}
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	case DATA_PAGE:
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

@@ -1,0 +1,33 @@
+# name: test/sql/copy/csv/csv_unterminated_quote_mid_file.test
+# description: A quote opened mid-file and never closed must error for both parallel and single-threaded scans
+# group: [csv]
+
+foreach parallel true false
+
+statement error
+SELECT count(*) FROM read_csv('data/csv/unterminated_quote_mid_file.csv', header=false, delim='|', quote='"', parallel={parallel}, auto_detect=false, columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'});
+----
+Value with unterminated quote found.
+
+query III
+SELECT * FROM read_csv('data/csv/unterminated_quote_mid_file.csv', header=false, delim='|', quote='"', parallel={parallel}, auto_detect=false, ignore_errors=true, columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'});
+----
+1	a	x
+
+query III
+SELECT * FROM read_csv('data/csv/unterminated_quote_mid_file.csv', header=false, delim='|', quote='"', parallel={parallel}, auto_detect=false, store_rejects=true, columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'});
+----
+1	a	x
+
+query III
+SELECT line, column_idx, error_type FROM reject_errors;
+----
+2	2	UNQUOTED VALUE
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+endloop

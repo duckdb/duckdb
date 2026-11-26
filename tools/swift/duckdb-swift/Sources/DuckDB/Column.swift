@@ -306,6 +306,11 @@ public extension Column {
   /// the given type and the column's underlying database type, returned
   /// elements will always be equal to `nil`.
   ///
+  /// A decimal column also casts to `String`: its elements are the exact
+  /// digits of the values, for a decimal of up to 255 digits. The width and
+  /// scale of a wider decimal are not available to the client, so its elements
+  /// are `nil`: cast such a column to `VARCHAR` in the query instead.
+  ///
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: String.Type) -> Column<String> {
@@ -446,6 +451,25 @@ extension Column: RandomAccessCollection {
   
   public subscript(position: DBInt) -> DataType? {
     try? unwrap(result.element(forColumn: columnIndex, at: position))
+  }
+
+  /// Returns the element at the given position, or throws the reason why it
+  /// could not be converted
+  ///
+  /// The ``subscript(_:)`` accessor returns `nil` both for a `NULL` value and
+  /// for a value that could not be converted to the type of the column. This
+  /// method returns `nil` for a `NULL` value only, which tells apart, for
+  /// example, a missing value from a decimal with more digits than a
+  /// Foundation `Decimal` holds.
+  ///
+  /// - Parameter position: the row of the element
+  /// - Throws: the ``DatabaseError`` or `DecodingError` of the failed
+  ///   conversion
+  /// - Returns: the element, or `nil` if the value is `NULL`
+  public func element(at position: DBInt) throws -> DataType? {
+    let element = result.element(forColumn: columnIndex, at: position)
+    guard element.unwrapNull() == false else { return nil }
+    return try unwrap(element)
   }
   
   public var startIndex: DBInt { 0 }

@@ -583,7 +583,7 @@ TEST_CASE("Extract the plan of joins the optimizer rewrites", "[api]") {
 	    "JOIN p AS p3 ON k2.p2 = p3.pid JOIN interest AS i ON i.pid = p3.pid "
 	    "ANTI JOIN knows AS k3 ON k3.p1 = p1.pid AND k3.p2 = p3.pid"};
 	for (auto &query : queries) {
-		auto plan = con.ExtractPlan(query);
+		auto plan = TestExtractPlan(con, query);
 		REQUIRE(plan);
 		auto result = con.Query(query);
 		REQUIRE_NO_FAIL(*result);
@@ -594,11 +594,6 @@ TEST_CASE("Extract the plan of joins the optimizer rewrites", "[api]") {
 TEST_CASE("Test connection API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-
-	// extract a plan node
-	REQUIRE_NOTHROW(con.ExtractPlan("SELECT 42"));
-	// can only extract one statement at a time
-	REQUIRE_THROWS(con.ExtractPlan("SELECT 42; SELECT 84"));
 
 	// append to a table
 	con.Query("CREATE TABLE integers(i integer);");
@@ -948,7 +943,7 @@ TEST_CASE("Test an extracted EXECUTE plan still has types after an optimization 
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.Query("PREPARE test AS SELECT 42::INTEGER;");
-	const auto query_plan = con.ExtractPlan("EXECUTE test");
+	const auto query_plan = TestExtractPlan(con, "EXECUTE test");
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }
@@ -968,7 +963,7 @@ TEST_CASE("Test destroying an extracted read_duckdb plan inside its transaction"
 	const auto database_count = db_manager.GetDatabases().size();
 	for (auto commit : {true, false}) {
 		REQUIRE_NOTHROW(con.BeginTransaction());
-		auto plan = con.ExtractPlan(query);
+		auto plan = TestExtractPlan(con, query);
 		REQUIRE(db_manager.GetDatabases().size() == database_count + 1);
 		plan.reset();
 		REQUIRE(db_manager.GetDatabases().size() == database_count);

@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -38,17 +39,29 @@ struct ParallelCollectionScanState;
 struct TableAppendState;
 struct TransactionData;
 
+//! The transaction-local indexes of a table: shared by the storages of the versions of the table (see ALTER)
+struct LocalStorageIndexes {
+	//! The set of unique append indexes.
+	TableIndexList append_indexes;
+	//! The set of delete indexes.
+	TableIndexList delete_indexes;
+};
+
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(Context &context, DataTable &table);
-	//! Create a LocalTableStorage from an ALTER TYPE.
+	//! Create the LocalTableStorage of the new version of a table from an ALTER TYPE: the storage of the old version
+	//! is not modified (it can still be in use), the new one shares what can be shared with it.
 	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
 	                  const idx_t alter_column_index, const LogicalType &target_type,
 	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr, TransactionData transaction);
-	//! Create a LocalTableStorage from a DROP COLUMN.
-	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
-	// Create a LocalTableStorage from an ADD COLUMN
+	//! Create the LocalTableStorage of the new version of a table from a DROP COLUMN.
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+	                  const idx_t drop_column_index);
+	//! Create the LocalTableStorage of the new version of a table from an ADD CONSTRAINT (the row groups are shared)
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent);
+	//! Create the LocalTableStorage of the new version of a table from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
@@ -62,10 +75,6 @@ public:
 	Allocator &allocator;
 	//! The main row group collection.
 	unique_ptr<OptimisticWriteCollection> row_groups;
-	//! The set of unique append indexes.
-	TableIndexList append_indexes;
-	//! The set of delete indexes.
-	TableIndexList delete_indexes;
 	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows (parallel DELETEs update it concurrently)
@@ -77,7 +86,12 @@ public:
 	OptimisticDataWriter optimistic_writer;
 
 	//! Whether or not the storage was dropped
-	bool is_dropped = false;
+	atomic<bool> is_dropped {false};
+
+	//! Serializes the appends and merges into the primary collection
+	StorageLock append_lock;
+	//! Shared by the users of the primary collection, exclusive while its row groups are replaced by a flush
+	StorageLock flush_lock;
 
 public:
 	//! Initialize a scan; the context of the scanning query is used for pushed down casts and zonemap checks
@@ -119,8 +133,16 @@ public:
 
 	RowGroupCollection &GetCollection();
 	OptimisticWriteCollection &GetPrimaryCollection();
+	TableIndexList &GetAppendIndexes() const {
+		return indexes->append_indexes;
+	}
+	TableIndexList &GetDeleteIndexes() const {
+		return indexes->delete_indexes;
+	}
 
 private:
+	//! The transaction-local indexes, shared with the storage of the next version of the table after an ALTER
+	shared_ptr<LocalStorageIndexes> indexes;
 	mutex collections_lock;
 };
 
@@ -129,8 +151,8 @@ public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
-	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;
-	LocalTableStorage &GetOrCreateStorage(Context &context, DataTable &table);
+	shared_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;
+	shared_ptr<LocalTableStorage> GetOrCreateStorage(Context &context, DataTable &table);
 	idx_t EstimatedSize() const;
 	bool IsEmpty() const;
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
@@ -213,17 +235,17 @@ public:
 
 	void AddColumn(ClientContext &context, DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);
-	void DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index);
+	void DropColumn(ClientContext &context, DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index);
 	void ChangeType(ClientContext &context, DataTable &old_dt, DataTable &new_dt, idx_t changed_idx,
 	                const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
-	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
+	void MoveStorage(ClientContext &context, DataTable &old_dt, DataTable &new_dt);
 	void FetchChunk(DataTable &table, const Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);
 	TableIndexList &GetIndexes(Context &context, DataTable &table);
-	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
+	shared_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
 	void VerifyNewConstraint(Context &context, DataTable &parent, const BoundConstraint &constraint);
 

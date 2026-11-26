@@ -276,6 +276,10 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
+	if (base.columns.LogicalColumnCount() == base.columns.PhysicalColumnCount()) {
+		// no generated columns
+		return;
+	}
 
 	vector<Identifier> names;
 	vector<LogicalType> types;
@@ -775,9 +779,25 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	return result;
 }
 
+//! Whether CREATE OR REPLACE drops a table that has indexes, also ones that are not committed yet
+static bool ReplacesTableWithIndexes(ClientContext &context, SchemaCatalogEntry &schema, const CreateTableInfo &info) {
+	auto entry = schema.GetEntry(CatalogTransaction(schema.ParentCatalog(), context), CatalogType::TABLE_ENTRY,
+	                             info.GetQualifiedName().Name());
+	if (!entry || entry->type != CatalogType::TABLE_ENTRY) {
+		return false;
+	}
+	auto &table = entry->Cast<TableCatalogEntry>();
+	return !table.IsDuckTable() || table.GetStorage().HasIndexes();
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto &schema = BindCreateSchema(base);
+	// FIXME: temporary, until the drops that involve indexes run alongside checkpoints as well
+	if (base.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT && ReplacesTableWithIndexes(context, schema, base)) {
+		GetStatementProperties().RegisterDBModify(schema.ParentCatalog(), context,
+		                                          DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	}
 	return BindCreateTableInfo(std::move(info), schema);
 }
 

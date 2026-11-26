@@ -61,10 +61,11 @@ SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k) WHERE a.k IN ('key_3', 
 ----
 4000
 
+# The inferred IN predicates restrict all three inputs to the same two keys.
 query II
 EXPLAIN SELECT count(*) FROM a JOIN b USING (k) JOIN c USING (k) WHERE a.k IN ('key_3', 'key_7');
 ----
-physical_plan	<REGEX>:(?s).*HASH_JOIN.*~100,000 rows.*
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*~4,000 rows.*
 
 # A redundant equality must not apply another selectivity factor.
 query II

@@ -1,6 +1,5 @@
 #include "duckdb/common/process_util.hpp"
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/os_util.hpp"
@@ -120,7 +119,7 @@ string ProcessUtil::GetProcessDescription(int64_t pid) {
 		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
 		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
 		if (readlink_n > 0) {
-			process_name = exe_target;
+			process_name.assign(exe_target, static_cast<size_t>(readlink_n));
 		}
 	}
 

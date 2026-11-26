@@ -1,0 +1,43 @@
+# name: test/sql/pragma/profiling/test_profiling_update_mode.test
+# description: The JSON profile shows the update mode of an UPDATE in the extra_info of the UPDATE operator
+# group: [profiling]
+
+require json
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER, tags INTEGER[]);
+
+statement ok
+INSERT INTO t SELECT i, i, [i] FROM range(10) r(i);
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET profiling_output = '{TEST_DIR}/profiling_update_mode_in_place.json';
+
+statement ok
+UPDATE t SET v = v + 1 WHERE id = 1;
+
+statement ok
+SET profiling_output = '{TEST_DIR}/profiling_update_mode_del_insert.json';
+
+statement ok
+UPDATE t SET tags = [7] WHERE id = 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT value->'extra_info'->>'Table' LIKE '%.t', value->'extra_info'->>'Update Mode'
+FROM read_text('{TEST_DIR}/profiling_update_mode_in_place.json'), json_tree(content)
+WHERE value->>'type' = 'UPDATE';
+----
+true	In Place
+
+query II
+SELECT value->'extra_info'->>'Table' LIKE '%.t', value->'extra_info'->>'Update Mode'
+FROM read_text('{TEST_DIR}/profiling_update_mode_del_insert.json'), json_tree(content)
+WHERE value->>'type' = 'UPDATE';
+----
+true	Delete + Insert

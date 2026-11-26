@@ -33,7 +33,9 @@ public:
 public:
 	//! Compute work for the selected operator and its estimated output.
 	double ComputeCost(const DPJoinNode &left, const DPJoinNode &right, optional_ptr<JoinOrderOperator> join_operator,
-	                   double output_rows);
+	                   JoinRelationSet &output);
+	//! Minimum work for either orientation, excluding nonnegative operator-specific work.
+	double ComputeCostLowerBound(const DPJoinNode &left, const DPJoinNode &right, double output_rows);
 	CardinalityEstimator &GetCardinalityEstimator();
 	void InitializeRecursiveMemory(ClientContext &context, RelationManager &relations);
 	void UpdateBuildMemory(DPJoinNode &result, const DPJoinNode &left, const DPJoinNode &right);

@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "test_helpers.hpp"
@@ -90,7 +90,7 @@ bool SignatureVerifies(DuckDB &db, const vector<char> &buffer) {
 }
 
 //! Serves the signed buffer as the file of an extension, and fails every read of one chunk when one is given
-class SignedFileSystem : public FileSystem {
+class SignedFileSystem : public BaseFileSystem {
 public:
 	SignedFileSystem(const vector<char> &buffer_p, optional_idx unreadable_chunk_p)
 	    : buffer(buffer_p), unreadable_chunk(unreadable_chunk_p) {
@@ -117,7 +117,7 @@ private:
 
 class SignedFileHandle : public FileHandle {
 public:
-	explicit SignedFileHandle(FileSystem &file_system)
+	explicit SignedFileHandle(BaseFileSystem &file_system)
 	    : FileHandle(file_system, "signed.duckdb_extension", FileFlags::FILE_FLAGS_READ) {
 	}
 

@@ -32,7 +32,7 @@ public:
 	//! Equality propagation can return multiple equivalent columns per scan; single-column callers leave it disabled.
 	//! Only the join filter pushdown continues into secure views (cross_secure_views): the other callers act on what
 	//! they find, e.g. a target's estimated cardinality, which must not depend on a view's contents
-	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
+	static void GetPushdownFilterTargets(LogicalOperator &op, const vector<JoinFilterPushdownColumn> &columns,
 	                                     vector<PushdownFilterTarget> &targets,
 	                                     EqualityPropagation equality_propagation = EqualityPropagation::DISABLED,
 	                                     bool cross_secure_views = false);
@@ -44,7 +44,7 @@ private:
 	void GenerateCTEFilters(LogicalMaterializedCTE &cte);
 	void GenerateJoinFilters(LogicalComparisonJoin &join);
 	static bool CanGenerateJoinFilters(const LogicalComparisonJoin &join);
-	static void GetCTEFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
+	static void GetCTEFilterTargets(LogicalOperator &op, const vector<JoinFilterPushdownColumn> &columns,
 	                                reference_map_t<LogicalCTERef, vector<JoinFilterPushdownColumn>> &targets);
 
 private:

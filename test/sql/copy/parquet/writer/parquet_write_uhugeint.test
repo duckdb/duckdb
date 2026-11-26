@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_uhugeint.test
-# description: Parquet uhugeint round trip
+# description: Parquet uhugeint round trip, UHUGEINT is written as an exact DECIMAL(39,0)
 # group: [writer]
 
 require parquet
@@ -8,7 +8,9 @@ statement ok
 CREATE TABLE hugeints(h UHUGEINT)
 
 statement ok
-INSERT INTO hugeints VALUES (0), (1), (NULL), (1180591620717411303424)
+INSERT INTO hugeints VALUES (0), (1), (NULL), (1180591620717411303424),
+	(340282366920938463463374607431768211455), (170141183460469231731687303715884105728),
+	(170141183460469231731687303715884105727), (100000000000000000000000000000000000001)
 
 statement ok
 COPY hugeints TO '{TEST_DIR}/hugeints.parquet' (FORMAT 'parquet');
@@ -20,9 +22,96 @@ SELECT * FROM '{TEST_DIR}/hugeints.parquet'
 1
 NULL
 1180591620717411303424
+340282366920938463463374607431768211455
+170141183460469231731687303715884105728
+170141183460469231731687303715884105727
+100000000000000000000000000000000000001
+
+# the values are exact, nothing is rounded through a DOUBLE
+query I
+SELECT count(*) FROM (SELECT h::UHUGEINT AS h FROM '{TEST_DIR}/hugeints.parquet' EXCEPT ALL SELECT h FROM hugeints)
+----
+0
 
 query I
 SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
-DOUBLE
+DECIMAL(39,0)
 
+# 39 digits hold the full UHUGEINT range. The big-endian two's complement value needs 17 bytes, but is extended to 24.
+# DuckDB 1.x reads such a column as a DOUBLE, and only decodes lengths that are a multiple of 8 bytes correctly
+query IIIIII
+SELECT name, type, type_length, converted_type, precision, scale FROM parquet_schema('{TEST_DIR}/hugeints.parquet') WHERE name = 'h'
+----
+h	FIXED_LEN_BYTE_ARRAY	24	DECIMAL	39	0
+
+# min/max statistics are written, and values of 2^127 and above stay positive
+query III
+SELECT stats_min_value, stats_max_value, stats_null_count FROM parquet_metadata('{TEST_DIR}/hugeints.parquet')
+----
+0	340282366920938463463374607431768211455	1
+
+query I
+SELECT h FROM '{TEST_DIR}/hugeints.parquet' WHERE h > 170141183460469231731687303715884105727 ORDER BY h
+----
+170141183460469231731687303715884105728
+340282366920938463463374607431768211455
+
+# the file can be loaded back into a UHUGEINT column
+statement ok
+CREATE TABLE hugeints_copy(h UHUGEINT)
+
+statement ok
+COPY hugeints_copy FROM '{TEST_DIR}/hugeints.parquet'
+
+query I
+SELECT count(*) FROM (SELECT * FROM hugeints_copy EXCEPT ALL SELECT * FROM hugeints)
+----
+0
+
+# several row groups, with values on both sides of 2^127
+statement ok
+COPY (SELECT i::UHUGEINT * 34028236692093846346337460743176821 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/uhugeints_row_groups.parquet' (ROW_GROUP_SIZE 2000)
+
+query I
+SELECT count(DISTINCT row_group_id) > 1 FROM parquet_metadata('{TEST_DIR}/uhugeints_row_groups.parquet')
+----
+true
+
+query III
+SELECT count(*), min(h), max(h) FROM '{TEST_DIR}/uhugeints_row_groups.parquet' WHERE h > 340000000000000000000000000000000000000
+----
+8	340010141027401712692603907745822795432	340248338684246369617028269971025033179
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/uhugeints_row_groups.parquet' WHERE h < 170141183460469231731687303715884105728
+----
+5001
+
+# few distinct values are dictionary encoded
+statement ok
+COPY (SELECT (i % 4)::UHUGEINT * 100000000000000000000000000000000000000 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/uhugeints_dictionary.parquet'
+
+query I
+SELECT DISTINCT encodings FROM parquet_metadata('{TEST_DIR}/uhugeints_dictionary.parquet')
+----
+PLAIN_DICTIONARY
+
+# no bloom filter is written, a reader that sees the column as a DOUBLE would probe it with the hash of a DOUBLE
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/uhugeints_dictionary.parquet')
+----
+0
+
+query II
+SELECT h, count(*) FROM '{TEST_DIR}/uhugeints_dictionary.parquet' GROUP BY h ORDER BY h
+----
+0	2500
+100000000000000000000000000000000000000	2500
+200000000000000000000000000000000000000	2500
+300000000000000000000000000000000000000	2500
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/uhugeints_dictionary.parquet' WHERE h = 300000000000000000000000000000000000000
+----
+2500

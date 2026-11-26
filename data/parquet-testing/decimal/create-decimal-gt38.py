@@ -1,6 +1,6 @@
 # Generates the decimal fixtures with precision > 38, used by
 # test/sql/copy/parquet/test_parquet_decimal_gt38.test.
-# DuckDB reads these columns as DOUBLE (its DECIMAL type is capped at width 38).
+# DuckDB reads these columns as wide DECIMALs.
 import decimal
 import struct
 
@@ -150,3 +150,29 @@ out += footer + struct.pack("<I", len(footer)) + b"PAR1"
 
 with open("byte_array_decimal_gt38.parquet", "wb") as f:
     f.write(out)
+
+
+# decimal(39,2) / decimal(45,3) declared on INT32 / INT64 columns. The Parquet format allows at most 9 / 18 digits
+# there, so no writer produces such a file. It is a file written by DuckDB with the precision patched in the footer.
+#   COPY (SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE ((i - 1500) / 100)::DECIMAL(9,2) END AS d32,
+#                CASE WHEN i % 11 = 0 THEN NULL ELSE ((i - 1500) * 1000000007 / 1000)::DECIMAL(18,3) END AS d64,
+#                (i % 5 - 2)::DECIMAL(9,2) AS dict32
+#         FROM range(3000) t(i))
+#   TO 'int_decimal_src.parquet' (ROW_GROUP_SIZE 1000, COMPRESSION UNCOMPRESSED);
+# d32 and d64 are PLAIN encoded, dict32 is dictionary encoded; there are two row groups with min/max statistics.
+# The schema element and the DecimalType both hold "scale, precision" as consecutive zigzag varint i32 fields, and
+# all four precisions are single bytes, so the patch does not move any offset.
+def patch_precision(data, scale, old_precision, new_precision, expected_count):
+    old = bytes([0x15]) + zz(scale) + bytes([0x15]) + zz(old_precision)
+    new = bytes([0x15]) + zz(scale) + bytes([0x15]) + zz(new_precision)
+    assert len(old) == len(new)
+    assert data.count(old) == expected_count
+    return data.replace(old, new)
+
+
+with open("int_decimal_src.parquet", "rb") as f:
+    data = f.read()
+data = patch_precision(data, 2, 9, 39, 4)   # d32 and dict32 go from DECIMAL(9,2) to DECIMAL(39,2)
+data = patch_precision(data, 3, 18, 45, 2)  # d64 goes from DECIMAL(18,3) to DECIMAL(45,3)
+with open("int_decimal_gt38.parquet", "wb") as f:
+    f.write(data)

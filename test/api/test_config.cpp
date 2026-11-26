@@ -368,8 +368,8 @@ public:
 	}
 
 	~FileCleaner() {
-		if (fs.FileExists(file)) {
-			fs.RemoveFile(file);
+		if (fs.FileExists(file, nullptr)) {
+			fs.RemoveFile(file, nullptr);
 		}
 	}
 
@@ -502,14 +502,31 @@ TEST_CASE("Test user_agent", "[api]") {
 
 TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
 	HTTPHeaders headers;
-	headers.Insert("Cache-Control", "max-age=600");
+	headers.InsertIfAbsent("Cache-Control", "max-age=600");
 	headers.Append("cache-control", "no-store");
 
 	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
-	const auto values = headers.GetHeaderValues("Cache-Control");
-	REQUIRE(values.size() == 2);
-	REQUIRE(values[0] == "max-age=600");
-	REQUIRE(values[1] == "no-store");
+	headers.InsertIfAbsent("CACHE-CONTROL", "ignored");
+	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"max-age=600", "no-store"});
+
+	headers.Set("CACHE-CONTROL", "private");
+	REQUIRE(headers.GetHeaderValue("cache-control") == "private");
+	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"private"});
+
+	headers.Set("X-Empty", "");
+	headers.Append("Cache-Control", "no-cache");
+	case_insensitive_map_t<vector<string>> fields;
+	for (const auto &field : headers) {
+		fields[field.first].push_back(field.second);
+	}
+	REQUIRE(fields.size() == 2);
+	REQUIRE(fields.at("cache-control") == vector<string> {"private", "no-cache"});
+	REQUIRE(fields.at("x-empty") == vector<string> {""});
+
+	headers.RemoveAll("cAcHe-CoNtRoL");
+	REQUIRE_FALSE(headers.HasHeader("Cache-Control"));
+	headers.RemoveAll("Cache-Control");
+	REQUIRE(headers.GetHeaderValue("X-Empty").empty());
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {
@@ -554,7 +571,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration update", "[api]") {
@@ -588,7 +605,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_other_secret_file));
+	REQUIRE(fs.FileExists(my_other_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret_directory configuration update after secret creation", "[api]") {
@@ -614,7 +631,7 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");

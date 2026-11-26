@@ -11,6 +11,7 @@ SET memory_limit='64MB';
 statement ok
 SET operator_memory_limit='256KB';
 
+# Physical-mode assertions use membership joins to keep the small inputs on the build side.
 statement ok
 SET disabled_optimizers='cte_filter_pusher,build_side_probe_side';
 
@@ -39,8 +40,8 @@ SELECT (SELECT sum(length(payload)) FROM p JOIN b USING(k)),
 query II
 EXPLAIN (ANALYZE, FORMAT JSON)
 WITH p AS MATERIALIZED (SELECT * FROM facts)
-SELECT (SELECT sum(length(payload)) FROM p JOIN b USING(k)),
-       (SELECT count(*) FROM p JOIN c USING(k));
+SELECT (SELECT sum(length(payload)) FROM p SEMI JOIN b USING(k)),
+       (SELECT count(*) FROM p SEMI JOIN c USING(k));
 ----
 analyzed_plan	<REGEX>:(?s).*"Fanout Mode": "DIRECT".*"Table": "[^"]*[.]facts"[^}]*"Dynamic Filters": "[^"]* OR [^"]*"[^}]*},\s*"intermediate_rows": 4,.*
 
@@ -55,8 +56,8 @@ SELECT (SELECT count(*) FROM (SELECT k FROM p JOIN b USING(k) LIMIT 1) t),
 query II
 EXPLAIN (ANALYZE, FORMAT JSON)
 WITH p AS MATERIALIZED (SELECT * FROM facts)
-SELECT (SELECT count(*) FROM (SELECT k FROM p JOIN b USING(k) LIMIT 1) t),
-       (SELECT count(*) FROM (SELECT k FROM p JOIN c USING(k) LIMIT 1) t);
+SELECT (SELECT count(*) FROM (SELECT k FROM p SEMI JOIN b USING(k) LIMIT 1) t),
+       (SELECT count(*) FROM (SELECT k FROM p SEMI JOIN c USING(k) LIMIT 1) t);
 ----
 analyzed_plan	<REGEX>:(?s).*"Fanout Mode": "BUFFERED".*"Table": "[^"]*[.]facts".*
 
@@ -73,8 +74,8 @@ query II
 EXPLAIN (ANALYZE, FORMAT JSON)
 WITH p AS MATERIALIZED (SELECT * FROM facts)
 SELECT count(*),sum(length(x.payload))
-FROM (SELECT p.* FROM p JOIN b USING(k)) x
-JOIN (SELECT p.* FROM p JOIN c USING(k)) y USING(k);
+FROM (SELECT p.* FROM p SEMI JOIN b USING(k)) x
+JOIN (SELECT p.* FROM p SEMI JOIN c USING(k)) y USING(k);
 ----
 analyzed_plan	<REGEX>:(?s).*"Execution Mode": "(?:(?:HYBRID_FANOUT|MATERIALIZED)".*"Table": "[^"]*[.]facts"[^}]*},\s*"intermediate_rows": 50000,|MATERIALIZED".*"Table": "[^"]*[.]facts"[^}]*"Dynamic Filters": "[^"]* OR [^"]*"[^}]*},\s*"intermediate_rows": 4,).*
 

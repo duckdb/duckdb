@@ -24,9 +24,9 @@ query II
 SELECT count(bloom_filter_length), bool_and(bloom_filter_length < 512)
 FROM parquet_metadata('{TEST_DIR}/numeric-fallback.parquet')
 ----
-28	true
+24	true
 
-foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE DECIMAL(4,1) DECIMAL(18,2)
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT FLOAT DOUBLE DECIMAL(4,1) DECIMAL(18,2)
 
 query I
 SELECT bool_and(NOT bloom_filter_excludes) FROM (

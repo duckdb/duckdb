@@ -1,0 +1,16 @@
+diff --git a/src/aws_http_client.cpp b/src/aws_http_client.cpp
+index 61e3af9..dc7d8c5 100644
+--- a/src/aws_http_client.cpp
++++ b/src/aws_http_client.cpp
+@@ -221,9 +221,8 @@ public:
+ 				if (lower == "host" || lower == "content-length") {
+ 					continue;
+ 				}
+-				// Assign rather than Insert(): HTTPHeaders pre-seeds DuckDB's User-Agent and
+-				// Insert() does not overwrite, which would drop the SDK's own user-agent.
+-				headers[header.first.c_str()] = header.second.c_str();
++				// The SDK's User-Agent takes precedence over DuckDB's default.
++				headers.Set(header.first.c_str(), header.second.c_str());
+ 			}
+ 
+ 			unique_ptr<HTTPClient> client;

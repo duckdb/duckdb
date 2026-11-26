@@ -120,7 +120,7 @@ public:
 	void SetShredded(uint32_t row, uint32_t values_index, uint32_t result_idx);
 	//! The field names of the STRUCT type - the keys point into 'type'
 	const string_set_t &ObjectFields() const;
-	virtual const unordered_set<VariantLogicalType> &GetVariantTypes() = 0;
+	virtual const unordered_set<LogicalTypeId> &GetVariantTypes() = 0;
 
 public:
 	//! The type the field is shredded on

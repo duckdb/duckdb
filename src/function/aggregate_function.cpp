@@ -48,6 +48,10 @@ AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocat
                          allocator_p, combine_type_p) {
 }
 
+bool AggregateExecutor::CombineNeverRetainsSource(const AggregateInputData &aggr_input_data) {
+	return aggr_input_data.function.GetCombineSourceRetention() == AggregateCombineSourceRetention::NEVER_RETAINS;
+}
+
 AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
                                                        optional_ptr<const FunctionData> bind_data_p,
                                                        ArenaAllocator &allocator_p,
@@ -84,7 +88,8 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity &&
-	       is_holistic == rhs.is_holistic && combine_source_retention == rhs.combine_source_retention;
+	       is_holistic == rhs.is_holistic && combine_source_retention == rhs.combine_source_retention &&
+	       can_stream == rhs.can_stream;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);
@@ -185,10 +190,11 @@ BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
                                                        BoundAggregateFunction &bound_function_p,
                                                        vector<unique_ptr<Expression>> &arguments_p,
                                                        optional_ptr<Binder> binder_p,
-                                                       optional_ptr<const DecimalWidthLimit> decimal_width_limit_p)
+                                                       optional_ptr<const DecimalWidthLimit> decimal_width_limit_p,
+                                                       bool arguments_collated_p)
     : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p,
                         binder_p, decimal_width_limit_p),
-      bound_function(bound_function_p) {
+      bound_function(bound_function_p), arguments_collated(arguments_collated_p) {
 }
 
 } // namespace duckdb

@@ -60,6 +60,7 @@ public:
 	bool HasValidEqualityBindings() const;
 	bool CanBuildEqualityClosure() const;
 	bool CanBuildSelectivityDomain() const;
+	bool IsResidualFilter() const;
 	bool IsEquivalencePredicate() const;
 	void SetEqualityClassIndex(optional_idx equality_class_index);
 	optional_idx GetEqualityClassIndex() const;

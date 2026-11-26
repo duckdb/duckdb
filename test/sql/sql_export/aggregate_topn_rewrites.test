@@ -11,6 +11,16 @@ CREATE TEMP TABLE reuse_dim AS FROM (VALUES (10,'x'),(20,'b'),(30,'x'),(40,'d'))
 statement ok
 CREATE TEMP TABLE reuse_fact AS FROM (VALUES (1,10),(1,20),(2,5),(3,40),(3,50),(4,NULL)) t(k,v);
 
+# Collect all distinct values so the expected join order is independent of vector-size sampling.
+statement ok
+ANALYZE reuse_owner;
+
+statement ok
+ANALYZE reuse_dim;
+
+statement ok
+ANALYZE reuse_fact;
+
 statement ok
 SET disabled_optimizers='grouping_sets';
 

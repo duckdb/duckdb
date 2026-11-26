@@ -325,6 +325,10 @@ public:
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Keeps the transaction-local storage that is scanned alive (it can be replaced by an ALTER meanwhile)
+	shared_ptr<LocalTableStorage> local_storage;
+	//! Keeps the transaction-local row groups from being replaced while they are scanned
+	unique_ptr<StorageLockKey> local_row_groups_lock;
 
 public:
 	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
