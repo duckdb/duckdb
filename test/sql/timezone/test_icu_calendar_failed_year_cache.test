@@ -1,0 +1,38 @@
+# name: test/sql/timezone/test_icu_calendar_failed_year_cache.test
+# description: Failed lunisolar year calculations must not be cached
+# group: [timezone]
+
+require icu
+
+statement ok
+SET threads=1;
+
+statement ok
+SET TimeZone='UTC';
+
+foreach calendar chinese dangi
+
+statement ok
+SET Calendar='{calendar}';
+
+# Repeated requests must fail even when the calendar instance changes.
+loop iteration 0 2
+
+statement error
+SELECT make_timestamptz(2000, 2147483647, 1, 0, 0, 0);
+----
+<REGEX>:.*(out of range|overflow).*
+
+statement error
+SELECT make_timestamptz(2000, -2147483647, 1, 0, 0, 0);
+----
+<REGEX>:.*(out of range|overflow).*
+
+endloop
+
+query I
+SELECT year(TIMESTAMPTZ '2024-01-10 00:00:00+00') > 0;
+----
+true
+
+endloop
