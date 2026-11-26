@@ -230,8 +230,8 @@ const unsafe_optional_ptr<NodePtr> NodePtr::GetChild(ART &art, const uint8_t byt
 	return GetChildInternal(art, *this, byte, false);
 }
 
-unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutableUnsafe(ART &art, const uint8_t byte, const bool unsafe) const {
-	return GetChildInternal(art, *this, byte, unsafe);
+unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutableUnsafe(ART &art, const uint8_t byte) const {
+	return GetChildInternal(art, *this, byte, false);
 }
 
 OptionalNodePtr NodePtr::GetChildNode(const ART &art, const uint8_t byte) const {
@@ -252,20 +252,20 @@ OptionalNodePtr NodePtr::GetChildNode(const ART &art, const uint8_t byte) const 
 	}
 }
 
-unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutable(NodeHandle &handle, const uint8_t byte) {
+unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutable(NodeHandle &handle, const uint8_t byte, const bool unsafe) {
 	unsafe_optional_ptr<NodePtr> child;
 	switch (handle.GetType()) {
 	case NType::NODE_4:
-		child = Node4::GetChild(handle.Get<Node4>(), byte);
+		child = Node4::GetChild(handle.Get<Node4>(), byte, unsafe);
 		break;
 	case NType::NODE_16:
-		child = Node16::GetChild(handle.Get<Node16>(), byte);
+		child = Node16::GetChild(handle.Get<Node16>(), byte, unsafe);
 		break;
 	case NType::NODE_48:
-		child = Node48::GetChild(handle.Get<Node48>(), byte);
+		child = Node48::GetChild(handle.Get<Node48>(), byte, unsafe);
 		break;
 	case NType::NODE_256:
-		child = Node256::GetChild(handle.Get<Node256>(), byte);
+		child = Node256::GetChild(handle.Get<Node256>(), byte, unsafe);
 		break;
 	default:
 		throw InternalException("Invalid node type for GetChildMutable: %d.", handle.GetType());
