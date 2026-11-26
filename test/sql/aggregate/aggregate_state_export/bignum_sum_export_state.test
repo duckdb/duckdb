@@ -5,7 +5,7 @@
 query I
 SELECT typeof(sum(1::BIGNUM) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('sum', ['BIGNUM'])
 
 # the sum is accumulated in a hugeint_t while it fits
 query III

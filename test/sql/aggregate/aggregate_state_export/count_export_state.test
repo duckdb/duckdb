@@ -40,7 +40,7 @@ WITH nullable_counts AS (
 SELECT finalize(combine_aggr(to_aggregate_state(c::BIGINT, 'count', ['any']))),
        typeof(combine_aggr(c)), typeof(finalize(combine_aggr(c))) FROM nullable_counts;
 ----
-3	AGGREGATE_STATE	BIGINT
+3	AGGREGATE_STATE('count', ['ANY'])	BIGINT
 
 query II
 SELECT finalize(to_aggregate_state(NULL::BIGINT, 'count', ['ANY'])),

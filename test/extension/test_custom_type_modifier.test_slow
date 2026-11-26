@@ -146,7 +146,7 @@ SELECT 10::MINMAX('foob', 10);
 statement error
 SELECT 10::MINMAX(10, (NULL::INTEGER));
 ----
-Parser Error: Expected a constant as type modifier
+Binder Error: Type parameter "max" for type "MINMAX" cannot be NULL
 
 statement error
 SELECT 10::MINMAX(15, 10);

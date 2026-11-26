@@ -553,6 +553,71 @@ static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_li
 	return result;
 }
 
+//! Renders an AGGREGATE_STATE type into its constructor form, e.g. AGGREGATE_STATE('sum', ['BIGINT']) - the
+//! spelling the binder parses back into the same type. Returns false when the extension info does not hold a
+//! valid signature (e.g. a user type that merely shares the alias), falling back to the bare alias.
+static bool TryRenderAggregateStateType(const LogicalType &type, string &result) {
+	auto info = type.GetExtensionInfo();
+	if (!info) {
+		return false;
+	}
+	auto name_entry = info->properties.find("function_name");
+	if (name_entry == info->properties.end() || name_entry->second.IsNull() ||
+	    name_entry->second.type().id() != LogicalTypeId::VARCHAR) {
+		return false;
+	}
+	auto param_entry = info->properties.find("parameters");
+	if (param_entry == info->properties.end() || param_entry->second.IsNull() ||
+	    param_entry->second.type().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	// each parameter is either a plain type, or a (type, value) pair for parameters bound to a constant
+	vector<string> signature;
+	vector<string> constants;
+	bool has_constants = false;
+	for (auto &val : ListValue::GetChildren(param_entry->second)) {
+		if (!val.IsNull() && val.type().id() == LogicalTypeId::TYPE) {
+			signature.push_back(SQLString::ToString(TypeValue::GetType(val).ToString()));
+			constants.emplace_back("NULL");
+			continue;
+		}
+		if (!val.IsNull() && val.type().id() == LogicalTypeId::STRUCT) {
+			auto &children = StructValue::GetChildren(val);
+			if (children.size() != 2 || children[0].IsNull() || children[0].type().id() != LogicalTypeId::TYPE ||
+			    children[1].type().id() != LogicalTypeId::VARIANT) {
+				return false;
+			}
+			signature.push_back(SQLString::ToString(TypeValue::GetType(children[0]).ToString()));
+			if (children[1].IsNull()) {
+				constants.emplace_back("NULL");
+			} else {
+				constants.push_back(children[1].ToSQLString());
+				has_constants = true;
+			}
+			continue;
+		}
+		return false;
+	}
+	auto order_entry = info->properties.find("order_bys");
+	const bool has_orders = order_entry != info->properties.end();
+	if (has_orders && (order_entry->second.IsNull() || order_entry->second.type().id() != LogicalTypeId::LIST ||
+	                   type.id() != LogicalTypeId::LIST)) {
+		return false;
+	}
+	result = "AGGREGATE_STATE(" + SQLString::ToString(StringValue::Get(name_entry->second)) + ", [" +
+	         StringUtil::Join(signature, ", ") + "]";
+	if (has_constants || has_orders) {
+		result += ", [" + StringUtil::Join(constants, ", ") + "]";
+	}
+	if (has_orders) {
+		// an ordered aggregate state carries its ORDER BY spec and buffer layout (the state is a LIST of it)
+		result += ", " + order_entry->second.ToSQLString();
+		result += ", " + SQLString::ToString(ListType::GetChildType(type).ToString());
+	}
+	result += ")";
+	return true;
+}
+
 string LogicalType::ToString() const {
 	// nested types are rendered with an explicit stack to avoid unbounded recursion
 	struct StackEntry {
@@ -580,6 +645,11 @@ string LogicalType::ToString() const {
 		if (type.id() != LogicalTypeId::UNBOUND) {
 			auto alias = type.GetAlias();
 			if (!alias.empty()) {
+				string aggregate_state;
+				if (type.IsAggregateState() && TryRenderAggregateStateType(type, aggregate_state)) {
+					result += aggregate_state;
+					continue;
+				}
 				if (type.HasExtensionInfo()) {
 					auto &ext_info = *type.GetExtensionInfo();
 					alias += TypeModifierListToString(ext_info.modifiers);

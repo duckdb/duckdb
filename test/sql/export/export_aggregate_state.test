@@ -1,0 +1,108 @@
+# name: test/sql/export/export_aggregate_state.test
+# description: Test EXPORT DATABASE/IMPORT DATABASE roundtrip of tables with AGGREGATE_STATE columns
+# group: [export]
+
+# the exported state of an ordered aggregate is its buffer in arrival order, which is only deterministic
+# single-threaded
+statement ok
+SET threads=1;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE sum_state AS SELECT sum(i) EXPORT_STATE AS s FROM range(10) t(i);
+
+# the type renders with the aggregate's signature, in a form the parser can read back
+query I
+SELECT column_type FROM (DESCRIBE sum_state) WHERE column_name = 's';
+----
+AGGREGATE_STATE('sum', ['BIGINT'])
+
+# an aggregate with a constant parameter (the separator) records the constant in the type
+statement ok
+CREATE TABLE agg_state AS SELECT string_agg(i::VARCHAR, '|' ORDER BY i) EXPORT_STATE AS s FROM range(5) t(i);
+
+# an ordered aggregate state buffers its input - the type carries the ORDER BY spec and the buffer layout
+statement ok
+CREATE TABLE list_state AS SELECT list(i ORDER BY 9 - i) EXPORT_STATE AS s FROM range(4) t(i);
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_aggregate_state' (FORMAT CSV)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_aggregate_state'
+
+# the imported states finalize and combine like the originals
+query I
+SELECT finalize(s) FROM sum_state;
+----
+45
+
+query I
+SELECT finalize(combine(s, s)) FROM sum_state;
+----
+90
+
+query I
+SELECT finalize(s) FROM agg_state;
+----
+0|1|2|3|4
+
+query I
+SELECT finalize(s) FROM list_state;
+----
+[3, 2, 1, 0]
+
+# the imported column types match the original rendering
+query I
+SELECT column_type FROM (DESCRIBE sum_state) WHERE column_name = 's';
+----
+AGGREGATE_STATE('sum', ['BIGINT'])
+
+# a bare AGGREGATE_STATE (as written by exports that predate the parameterized rendering) is a clear error
+statement error
+CREATE TABLE broken(s AGGREGATE_STATE);
+----
+The AGGREGATE_STATE type requires the aggregate's name and signature
+
+# the constructor form can also be written by hand
+statement ok
+CREATE TABLE manual(s AGGREGATE_STATE('sum', ['BIGINT']));
+
+statement ok
+INSERT INTO manual SELECT sum(i) EXPORT_STATE FROM range(3) t(i);
+
+query I
+SELECT finalize(s) FROM manual;
+----
+3
+
+require parquet
+
+# IMPORT recreates every exported table, so clear the tables the CSV roundtrip left behind
+statement ok
+DROP TABLE sum_state; DROP TABLE agg_state; DROP TABLE list_state; DROP TABLE manual;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE sum_state_pq AS SELECT sum(i) EXPORT_STATE AS s FROM range(10) t(i);
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_aggregate_state_pq' (FORMAT PARQUET)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_aggregate_state_pq'
+
+query I
+SELECT finalize(s) FROM sum_state_pq;
+----
+45

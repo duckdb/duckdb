@@ -273,7 +273,8 @@ PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer,
 		return vector<unique_ptr<ParsedExpression>> {};
 	}
 	for (auto &expr : *expression) {
-		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		// constant expressions (e.g. the list-typed parameters of AGGREGATE_STATE) are folded by the binder
+		if (!expr->IsScalar()) {
 			throw ParserException("Expected a constant as type modifier");
 		}
 	}

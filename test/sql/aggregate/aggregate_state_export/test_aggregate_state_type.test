@@ -6,9 +6,9 @@ foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback
 query T
-SELECT typeof(avg(1.0::{type}) EXPORT_STATE);
+SELECT typeof(avg(1.0::{type}) EXPORT_STATE) = 'AGGREGATE_STATE(''avg'', [''{type}''])';
 ----
-AGGREGATE_STATE
+true
 
 # Works in a table
 # (Forward compatability tests are covered because of this statement) 
@@ -18,9 +18,9 @@ CREATE TABLE t1_{type} AS SELECT avg(range::{type}) EXPORT_STATE as state FROM r
 # Test reading from the table
 # We cannot run in force storage mode, as this configuration still uses the old serialization version
 query T
-SELECT column_type FROM (DESCRIBE t1_{type}) WHERE column_name = 'state';
+SELECT column_type = 'AGGREGATE_STATE(''avg'', [''{type}''])' FROM (DESCRIBE t1_{type}) WHERE column_name = 'state';
 ----
-AGGREGATE_STATE
+true
 
 # Test combine and finalize
 query R
@@ -51,7 +51,7 @@ endloop
 query T
 SELECT typeof(count(1) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('count', ['ANY'])
 
 # count(INT) (as opted-in) is still serialized correctly
 statement ok
@@ -61,19 +61,19 @@ CREATE TABLE t2_count_int AS SELECT count(range::INT) EXPORT_STATE as state FROM
 query T
 SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('bit_xor', ['BIGINT'])
 
 # skewness is now opted-in to struct-based state
 query T
 SELECT typeof(skewness(1) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('skewness', ['DOUBLE'])
 
 # approx_count_distinct exports its sketch (the precision and the registers)
 query T
 SELECT typeof(approx_count_distinct(1) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('approx_count_distinct', ['ANY'])
 
 # aggregate functions that are not opted-in cannot export their state
 statement error
@@ -85,37 +85,37 @@ does not have a state type callback
 query T
 SELECT typeof(avg(INTERVAL '1 day' ) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['INTERVAL'])
 
 # Test with TIMESTAMP type
 query T
 SELECT typeof(avg(TIMESTAMP '2020-01-01 00:00:00' ) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['TIMESTAMP'])
 
 # Test with TIMESTAMP WITH TIME ZONE type
 query T
 SELECT typeof(avg(TIMESTAMPTZ '2020-01-01 00:00:00+00' ) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['TIMESTAMP WITH TIME ZONE'])
 
 # Test with TIME type
 query T
 SELECT typeof(avg(TIME '12:00:00' ) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['TIME'])
 
 # Test with TIME WITH TIME ZONE type
 query T
 SELECT typeof(avg(TIMETZ '12:00:00+00' ) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['TIME WITH TIME ZONE'])
 
 # Test with DECIMAL type
 query T
 SELECT typeof(avg(1.2) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('avg', ['DECIMAL(2,1)'])
 
 # Casting to struct should work
 query T
@@ -145,19 +145,19 @@ SELECT (count(*) export_state)::bigint;
 query T
 SELECT typeof(first(42) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('first', ['INTEGER'])
 
 # last() now has the new get_state_type callback
 query T
 SELECT typeof(last(42) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('last', ['INTEGER'])
 
 # any_value() now has the new get_state_type callback
 query T
 SELECT typeof(any_value(42) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('any_value', ['INTEGER'])
 
 # Casting first state to struct should work
 query T
@@ -181,7 +181,7 @@ SELECT (any_value(42) export_state)::struct("value" integer);
 query T
 SELECT typeof(product(1.0::DOUBLE) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('product', ['DOUBLE'])
 
 # Works in a table
 statement ok
@@ -191,7 +191,7 @@ CREATE TABLE t3_product AS SELECT product(range::DOUBLE) EXPORT_STATE as state F
 query T
 SELECT column_type FROM (DESCRIBE t3_product) WHERE column_name = 'state';
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('product', ['DOUBLE'])
 
 # Test combine and finalize
 query R
@@ -233,53 +233,53 @@ true
 query T
 SELECT typeof(regr_count(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_count', ['DOUBLE', 'DOUBLE'])
 
 # regr_avgx, regr_avgy
 query T
 SELECT typeof(regr_avgx(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_avgx', ['DOUBLE', 'DOUBLE'])
 
 query T
 SELECT typeof(regr_avgy(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_avgy', ['DOUBLE', 'DOUBLE'])
 
 # regr_slope
 query T
 SELECT typeof(regr_slope(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_slope', ['DOUBLE', 'DOUBLE'])
 
 # regr_intercept
 query T
 SELECT typeof(regr_intercept(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_intercept', ['DOUBLE', 'DOUBLE'])
 
 # regr_r2
 query T
 SELECT typeof(regr_r2(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_r2', ['DOUBLE', 'DOUBLE'])
 
 # regr_sxx, regr_syy
 query T
 SELECT typeof(regr_sxx(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_sxx', ['DOUBLE', 'DOUBLE'])
 
 query T
 SELECT typeof(regr_syy(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_syy', ['DOUBLE', 'DOUBLE'])
 
 # regr_sxy
 query T
 SELECT typeof(regr_sxy(1.0, 2.0) EXPORT_STATE);
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_sxy', ['DOUBLE', 'DOUBLE'])
 
 # regr_count: create table, describe, combine and finalize
 statement ok
@@ -288,7 +288,7 @@ CREATE TABLE t_regr_count AS SELECT regr_count(range::DOUBLE, range::DOUBLE + 1)
 query T
 SELECT column_type FROM (DESCRIBE t_regr_count) WHERE column_name = 'state';
 ----
-AGGREGATE_STATE
+AGGREGATE_STATE('regr_count', ['DOUBLE', 'DOUBLE'])
 
 query R
 SELECT finalize(combine(state, state)) FROM t_regr_count;

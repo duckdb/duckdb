@@ -19,6 +19,7 @@ class BoundAggregateFunction;
 class BoundFunctionExpression;
 struct AggregateStateLayout;
 struct AggregateStateSerializer;
+struct BindLogicalTypeInput;
 struct SortedAggregateStateOrder;
 
 struct ConstantOrNull {
@@ -36,6 +37,9 @@ struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 	static void SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout);
 	static unique_ptr<ParsedExpression> StateToSQL(const LogicalType &type, unique_ptr<ParsedExpression> value);
+	//! Binds the AGGREGATE_STATE(name, signature, ...) type constructor back into an aggregate state type -
+	//! the inverse of the rendering in LogicalType::ToString
+	static LogicalType BindAggregateStateType(BindLogicalTypeInput &input);
 	//! The per-key (column, modifiers) of the AGGREGATE_STATE type of an ordered aggregate
 	static void GetSortedStateOrders(const LogicalType &state_type, vector<SortedAggregateStateOrder> &orders);
 	//! The serializer of the aggregate whose states a bound combine_aggr accumulates. Returns nullptr for any other
