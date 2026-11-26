@@ -925,7 +925,8 @@ TEST_CASE("V2 table: null arguments and destroy null-safety", "[capi_v2][table_f
 	duckdb_v2_table_function_handle function = nullptr;
 	REQUIRE(TestCreateTable(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(TestCreateTable(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(TestRegisterTable(static_cast<duckdb_v2_connection_handle>(nullptr), function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(TestRegisterTable(static_cast<duckdb_v2_connection_handle>(nullptr), function, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	std::string_view str = "x";
 	REQUIRE(duckdb_v2_table_function_set_name(nullptr, str.data(), str.size(), nullptr) ==

@@ -94,7 +94,6 @@ inline DUCKDB_V2_ERROR TestRegisterTable(duckdb_v2_connection_handle conn, duckd
 	return duckdb_v2_connection_register_table_function(conn, function, err);
 }
 
-
 inline DUCKDB_V2_ERROR TestDestroyTable(duckdb_v2_table_function_handle *function) {
 	if (function && *function) {
 		auto &entries = TestTableSources::Entries();
