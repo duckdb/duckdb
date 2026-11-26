@@ -75,6 +75,7 @@ physical_plan	<REGEX>:(?s).*HASH_JOIN.*~2,000 rows.*
 
 # Both finite predicates apply. Their marginal statistics do not record id -> n,
 # so independence estimates 10 joined rows although the hidden dependency yields 100.
+# Floating-point evaluation may truncate the displayed estimate to 9.
 query I
 SELECT count(*) FROM (SELECT n FROM a WHERE id = 3) x JOIN b USING (n) JOIN c USING (n)
 WHERE x.n = 3;
@@ -85,7 +86,7 @@ query II
 EXPLAIN (FORMAT JSON) SELECT count(*) FROM (SELECT n FROM a WHERE id = 3) x JOIN b USING (n) JOIN c USING (n)
 WHERE x.n = 3;
 ----
-physical_plan	<REGEX>:(?s).*"name":\s*"UNGROUPED_AGGREGATE".*"name":\s*"HASH_JOIN".*(?:"Join Type":\s*"INNER"[^}]*"Estimated Cardinality":\s*"10".*"Aggregates":\s*"count_star\(\)(?: EXPORT_STATE)?"[^}]*"Estimated Cardinality":\s*"1"|"Aggregates":\s*"count_star\(\)(?: EXPORT_STATE)?"[^}]*"Estimated Cardinality":\s*"1".*"Join Type":\s*"INNER"[^}]*"Estimated Cardinality":\s*"10").*
+physical_plan	<REGEX>:(?s).*"name":\s*"UNGROUPED_AGGREGATE".*"name":\s*"HASH_JOIN".*(?:"Join Type":\s*"INNER"[^}]*"Estimated Cardinality":\s*"(?:9|10)".*"Aggregates":\s*"count_star\(\)(?: EXPORT_STATE)?"[^}]*"Estimated Cardinality":\s*"1"|"Aggregates":\s*"count_star\(\)(?: EXPORT_STATE)?"[^}]*"Estimated Cardinality":\s*"1".*"Join Type":\s*"INNER"[^}]*"Estimated Cardinality":\s*"(?:9|10)").*
 
 query I
 WITH x AS MATERIALIZED (SELECT n AS key FROM a WHERE n = 3)
