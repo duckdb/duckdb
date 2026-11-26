@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/exception.hpp"
@@ -71,7 +72,7 @@ TEST_CASE("Truncate a failed checkpoint marker before making its WAL writable", 
 
 	auto database_path = TestCreatePath("failed_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -111,7 +112,7 @@ TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[stor
 
 	auto database_path = TestCreatePath("checkpoint_marker_not_at_end");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -149,7 +150,7 @@ TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
 
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	for (idx_t flush_bytes = 0; flush_bytes <= 1; flush_bytes++) {
 		auto database_path = TestCreatePath("torn_checkpoint_flush_" + to_string(flush_bytes));
 		auto wal_path = database_path + ".wal";
@@ -196,7 +197,7 @@ TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage
 
 	auto database_path = TestCreatePath("torn_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -232,7 +233,7 @@ TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint m
 
 	auto database_path = TestCreatePath("mismatched_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -279,7 +280,7 @@ TEST_CASE("Reject multiple checkpoint markers before changing WAL files", "[stor
 	auto wal_path = database_path + ".wal";
 	auto checkpoint_wal_path = database_path + ".wal.checkpoint";
 	auto recovery_wal_path = database_path + ".wal.recovery";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 

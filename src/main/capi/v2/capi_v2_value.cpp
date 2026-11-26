@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <string>
 
@@ -106,15 +107,19 @@ LogicalType RequireValueType(duckdb_v2_logical_type_handle type) {
 // The DECIMAL storage tier follows from the width, and the engine's hugeint
 // constructor covers only the widest one, so the narrower tiers go through the
 // int64 form. Width, scale and the value's digit count are gated here: either
-// would otherwise build a broken value. The uint8_t parameters reach widths
-// up to 255; wider decimals are built through value_cast.
-Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t scale) {
+// would otherwise build a broken value. The width is the uint32_t of the
+// engine, bounded by the factory like the types it creates: a value of a huge
+// width takes time and memory in proportion to the width wherever it is
+// formatted or cast. A wide decimal whose backing integer needs more than
+// 128 bits is built through value_cast.
+Value BuildDecimal(CV2Factory &factory, const duckdb_v2_hugeint_t *in_value, uint32_t width, uint32_t scale) {
 	if (width < 1) {
 		throw InvalidInputException(": DECIMAL width must be at least 1");
 	}
 	if (scale > width) {
 		throw InvalidInputException(": DECIMAL scale cannot exceed the width");
 	}
+	CheckDecimalWidthV2(factory, LogicalType::DECIMAL(width, scale));
 	auto value = Convert(in_value);
 	// a 128-bit value has at most 39 digits, so only narrower widths can be exceeded
 	if (width < Hugeint::CACHED_POWERS_OF_TEN &&
@@ -338,8 +343,8 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_uuid(duckdb_v2_value_handle value, duckdb_v2
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb_v2_hugeint_t *out, uint8_t *out_width,
-                                            uint8_t *out_scale, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb_v2_hugeint_t *out, uint32_t *out_width,
+                                            uint32_t *out_scale, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out);
 	DUCKDB_CHECK_ARG(out_width);
 	DUCKDB_CHECK_ARG(out_scale);
@@ -347,14 +352,8 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb
 		RequireTypedValue(value, duckdb::LogicalTypeId::DECIMAL);
 		auto &v = *Convert(value);
 		auto &type = v.type();
-		if (duckdb::DecimalType::GetWidth(type) > duckdb::NumericLimits<uint8_t>::Maximum()) {
-			throw duckdb::OutOfRangeException(
-			    "duckdb_v2_value_get_decimal: the width of %s does not fit the uint8_t of the API; read its storage "
-			    "with value_get_blob and bignum_decode, or convert it with value_cast",
-			    type.ToString());
-		}
-		*out_width = duckdb::NumericCast<uint8_t>(duckdb::DecimalType::GetWidth(type));
-		*out_scale = duckdb::NumericCast<uint8_t>(duckdb::DecimalType::GetScale(type));
+		*out_width = duckdb::DecimalType::GetWidth(type);
+		*out_scale = duckdb::DecimalType::GetScale(type);
 		// The storage tier follows from the width; widen it to the one form the
 		// caller always gets back.
 		switch (type.InternalType()) {
@@ -373,8 +372,10 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb
 			if (!duckdb::DecimalHelper<duckdb::bignum_t>::TryToHugeint(v.GetValueUnsafe<duckdb::bignum_t>(),
 			                                                           unscaled)) {
 				throw duckdb::OutOfRangeException(
-				    "duckdb_v2_value_get_decimal: the value does not fit in 128 bits; read its storage with "
-				    "value_get_blob and bignum_decode, or convert it with value_cast");
+				    "duckdb_v2_value_get_decimal: the backing integer of this %s value does not fit in 128 bits; "
+				    "read it exactly with duckdb_v2_value_get_blob (the BIGNUM storage bytes of the backing integer) "
+				    "and duckdb_v2_bignum_decode (its sign and big-endian magnitude)",
+				    type.ToString());
 			}
 			*out = Convert(unscaled);
 			break;
@@ -724,12 +725,12 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_handle factory
 // ---------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR duckdb_v2_value_create_decimal(duckdb_v2_factory_handle factory, const duckdb_v2_hugeint_t *in_value,
-                                               uint8_t width, uint8_t scale, duckdb_v2_value_handle *out_value,
+                                               uint32_t width, uint32_t scale, duckdb_v2_value_handle *out_value,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(in_value, width, scale)); });
+	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(*Convert(factory), in_value, width, scale)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_value_create_uuid(duckdb_v2_factory_handle factory, const duckdb_v2_hugeint_t *in_value,
@@ -917,6 +918,29 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_child_count(duckdb_v2_value_handle value, id
 	DUCKDB_CHECK_ARG(value);
 	DUCKDB_CHECK_ARG(out_count);
 	return WithErrorHandler(err, [&]() { *out_count = CompositeChildCount(*Convert(value)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_value_variant_to_value(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(value);
+	DUCKDB_CHECK_ARG(out_value);
+	*out_value = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &v = *Convert(value);
+		if (v.type().id() != duckdb::LogicalTypeId::VARIANT) {
+			throw duckdb::InvalidInputException("duckdb_v2_value_variant_to_value expects a VARIANT value");
+		}
+		if (v.IsNull()) {
+			*out_value = Emit(duckdb::Value());
+			return;
+		}
+		duckdb::Vector vec(v.type());
+		vec.SetValue(0, v);
+		duckdb::RecursiveUnifiedVectorFormat format;
+		duckdb::Vector::RecursiveToUnifiedFormat(vec, format);
+		duckdb::UnifiedVariantVectorData data(format);
+		*out_value = Emit(duckdb::VariantUtils::ConvertVariantToValue(data, 0, 0));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle value, idx_t index, duckdb_v2_value_handle *out_child,

@@ -8,6 +8,7 @@
 
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
+#include "writer/parquet_write_stats.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
@@ -155,7 +156,8 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
-		parquet_type = Type::DOUBLE;
+		// written as DECIMAL(39,0), which holds the full range of both types
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
@@ -360,6 +362,14 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.UUID = true;
 		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		// the full range of HUGEINT / UHUGEINT needs 39 digits, so the column is declared as a DECIMAL(39,0)
+		SetSchemaProperties(LogicalType::DECIMAL(ParquetHugeintDecimalTargetType::DECIMAL_WIDTH, 0), schema_ele,
+		                    allow_geometry, context, write_timestamp_as_int96, timestamp_is_adjusted_to_utc);
+		// with a length that is longer than the width needs, see ParquetHugeintDecimalTargetType
+		schema_ele.type_length = NumericCast<int32_t>(ParquetHugeintDecimalTargetType::PARQUET_SIZE);
+		break;
 	case LogicalTypeId::DECIMAL:
 		if (DecimalType::GetWidth(duckdb_type) > idx_t(NumericLimits<int32_t>::Maximum())) {
 			throw NotImplementedException("Parquet DECIMAL precision is a 32-bit integer, %s cannot be written",
@@ -524,7 +534,6 @@ struct ColumnStatsUnifier {
 	bool max_is_exact = true;
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
-	bool has_nan = false;
 	idx_t nan_count = 0;
 
 	unique_ptr<GeometryStatsData> geo_stats;
@@ -1274,10 +1283,12 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		return make_uniq<NumericStatsUnifier<uint64_t>>();
 	case LogicalTypeId::FLOAT:
 		return make_uniq<NumericStatsUnifier<float>>();
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<NumericStatsUnifier<double>>();
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		// written as DECIMAL(39,0)
+		return make_uniq<WideDecimalStatsUnifier>(ParquetHugeintDecimalTargetType::DECIMAL_WIDTH, 0);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
@@ -1376,22 +1387,12 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 
 	// push the stats of this column into the unifier
 	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
-	bool has_nan = false;
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
-		has_nan = writer_stats->HasNaN();
-		// this is called once per row group: accumulate, so NaNs in earlier row groups are not lost
-		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
 		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
 	if (column.meta_data.__isset.statistics) {
-		if (has_nan && writer_stats->HasStats()) {
-			// if we have NaN values we have not written the min/max to the Parquet file
-			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
-			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
-			stats_unifier->min_is_exact = stats_unifier->min_is_exact && writer_stats->MinIsExact();
-			stats_unifier->max_is_exact = stats_unifier->max_is_exact && writer_stats->MaxIsExact();
-		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+		if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
 			stats_unifier->min_is_exact = stats_unifier->min_is_exact &&
 			                              column.meta_data.statistics.__isset.is_min_value_exact &&
@@ -1455,7 +1456,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
 		}
 		if (stats_unifier->can_have_nan) {
-			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->nan_count != 0);
 			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);
 		}
 		if (stats_unifier->geo_stats) {

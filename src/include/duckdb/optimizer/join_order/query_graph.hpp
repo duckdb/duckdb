@@ -43,6 +43,7 @@ class QueryGraphEdges {
 public:
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct QueryEdge {
+		optional_ptr<JoinRelationSet> relations;
 		vector<unique_ptr<NeighborInfo>> neighbors;
 		unordered_map<RelationIndex, unique_ptr<QueryEdge>> children;
 	};
@@ -59,6 +60,8 @@ public:
 
 	//! Enumerate all neighbors of a given JoinRelationSet node
 	void EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) const;
+	//! Visit active edges with their complete endpoints. Return true from the callback to stop.
+	void EnumerateEdges(const std::function<bool(JoinRelationSet &, NeighborInfo &)> &callback) const;
 	//! Create an edge in the edge_set
 	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate,
 	                optional_ptr<JoinOrderOperator> join_operator = nullptr, bool generated_cross_product = false);

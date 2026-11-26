@@ -112,7 +112,7 @@ JoinOrderCandidateEvaluator::CreateJoinTree(JoinRelationSet &set,
 			return nullptr;
 		}
 	}
-	auto cost = cost_model.ComputeCost(left, right, best_candidate->join_operator, cardinality.GetDouble());
+	auto cost = cost_model.ComputeCost(left, right, best_candidate->join_operator, set);
 	auto result = make_uniq<DPJoinNode>(set, best_candidate->join_operator, std::move(best_candidate->predicates),
 	                                    best_candidate->generated_cross_product, left.set, right.set, cost);
 	result->cardinality = cardinality;
@@ -122,8 +122,14 @@ JoinOrderCandidateEvaluator::CreateJoinTree(JoinRelationSet &set,
 
 optional_ptr<DPJoinNode> JoinOrderCandidateEvaluator::EmitPair(JoinOrderPlanMap &plans, JoinRelationSet &left,
                                                                JoinRelationSet &right,
-                                                               const vector<reference<NeighborInfo>> &info) {
+                                                               const vector<reference<NeighborInfo>> &connections) {
 	auto &set = query_graph_manager.set_manager.Union(left, right);
+	return EmitPair(plans, set, left, right, connections);
+}
+
+optional_ptr<DPJoinNode> JoinOrderCandidateEvaluator::EmitPair(JoinOrderPlanMap &plans, JoinRelationSet &set,
+                                                               JoinRelationSet &left, JoinRelationSet &right,
+                                                               const vector<reference<NeighborInfo>> &connections) {
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
@@ -131,7 +137,7 @@ optional_ptr<DPJoinNode> JoinOrderCandidateEvaluator::EmitPair(JoinOrderPlanMap 
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
 	// create the join tree based on combining the two plans
-	return ConsiderJoinTree(plans, CreateJoinTree(set, info, *left_plan->second, *right_plan->second));
+	return ConsiderJoinTree(plans, CreateJoinTree(set, connections, *left_plan->second, *right_plan->second));
 }
 
 optional_ptr<DPJoinNode> JoinOrderCandidateEvaluator::ConsiderJoinTree(JoinOrderPlanMap &plans,
@@ -142,41 +148,65 @@ optional_ptr<DPJoinNode> JoinOrderCandidateEvaluator::ConsiderJoinTree(JoinOrder
 	auto &new_set = new_plan->set;
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	auto new_cost = GetPlanCost(*new_plan);
-	JoinPlanCost old_cost {NumericLimits<double>::Maximum(), NumericLimits<double>::Maximum()};
-	if (entry != plans.end()) {
-		old_cost = GetPlanCost(*entry->second);
-	}
-	if (entry == plans.end() || new_cost < old_cost) {
-		// the new plan costs less than the old plan. Update our DP table.
+	if (entry == plans.end() || PreferPlan(*new_plan, plans, *entry->second, plans)) {
 		plans[new_set] = std::move(new_plan);
 		return plans[new_set].get();
+	}
+	return entry->second.get();
+}
+
+bool JoinOrderCandidateEvaluator::PreferPlan(const DPJoinNode &candidate, const JoinOrderPlanMap &candidate_plans,
+                                             const DPJoinNode &incumbent,
+                                             const JoinOrderPlanMap &incumbent_plans) const {
+	auto new_cost = cost_model.GetCost(candidate);
+	auto old_cost = cost_model.GetCost(incumbent);
+	if (new_cost < old_cost) {
+		return true;
 	}
 	// Tiebreaker for equal-cost plans: needed for LEFT JOINs,
 	// because all orderings preserve the LHS cardinality and always tie.
 	// This tiebreaker causes less joins to be flipped from LEFT to RIGHT
 	// later by the BuildProbeSideOptimizer, and we strongly prefer LEFT
-	if (new_cost == old_cost) {
-		auto new_right_cardinality = plans.at(new_plan->right_set)->cardinality;
-		auto existing_right = plans.find(entry->second->right_set);
-		if (existing_right != plans.end()) {
+	if (new_cost == old_cost && !candidate.is_leaf) {
+		auto new_right_cardinality = candidate_plans.at(candidate.right_set)->cardinality;
+		auto existing_right = incumbent_plans.find(incumbent.right_set);
+		if (existing_right != incumbent_plans.end()) {
 			auto old_right_cardinality = existing_right->second->cardinality;
 			if (new_right_cardinality > old_right_cardinality) {
-				plans[new_set] = std::move(new_plan);
-				return plans[new_set].get();
+				return true;
 			}
 		}
 	}
-	// Create join node from the plan currently in the DP table.
-	return entry->second.get();
+	return false;
 }
 
-void JoinOrderCandidateEvaluator::InitLeafPlans(JoinOrderPlanMap &plans) {
-	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+bool JoinOrderCandidateEvaluator::CanImprovePair(const JoinOrderPlanMap &plans, const DPJoinNode &left,
+                                                 const DPJoinNode &right, const DPJoinNode &incumbent) const {
+	auto incumbent_cost = cost_model.GetCost(incumbent);
+	if (incumbent_cost.memory_excess > 0) {
+		return true;
+	}
+	auto minimum_work = cost_model.ComputeCostLowerBound(left, right, incumbent.cardinality.GetDouble());
+	if (minimum_work > incumbent_cost.work) {
+		return false;
+	}
+	if (minimum_work != incumbent_cost.work) {
+		return true;
+	}
+	auto incumbent_right = plans.find(incumbent.right_set);
+	if (incumbent_right == plans.end()) {
+		return true;
+	}
+	// Equal work can still win PreferPlan's right-cardinality tiebreaker.
+	return left.cardinality > incumbent_right->second->cardinality ||
+	       right.cardinality > incumbent_right->second->cardinality;
+}
+
+void JoinOrderCandidateEvaluator::InitLeafPlans(JoinOrderPlanMap &plans, vector<RelationStats> relation_stats) {
 	auto &estimator = cost_model.GetCardinalityEstimator();
-	estimator.Initialize(relation_stats, query_graph_manager.GetJoinOperators(),
+	estimator.Initialize(std::move(relation_stats), query_graph_manager.GetJoinOperators(),
 	                     query_graph_manager.relation_manager.GetColumnSources());
-	for (idx_t i = 0; i < relation_stats.size(); i++) {
+	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
 		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));
 		auto join_node = make_uniq<DPJoinNode>(relation_set);
 		join_node->cost = 0;
@@ -220,6 +250,10 @@ const vector<reference<NeighborInfo>> &JoinOrderCandidateEvaluator::CreateCrossP
 	query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 	connection_cache.clear();
 	return GetConnections(left, right);
+}
+
+void JoinOrderCandidateEvaluator::ResetConnectionCache() {
+	connection_cache.clear();
 }
 
 } // namespace duckdb

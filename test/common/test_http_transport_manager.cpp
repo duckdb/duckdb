@@ -30,6 +30,34 @@ TEST_CASE("PUT requests retain their content type", "[http_transport_manager]") 
 	CHECK(request.content_type == "application/json");
 }
 
+TEST_CASE("HTTP logs keep the first field line per header name", "[http_transport_manager]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CALL enable_logging('HTTP', storage = 'memory')"));
+
+	HTTPUtil http;
+	const string url = "http://mock.test/log_headers";
+	auto params = http.InitializeParameters(*connection.context, url);
+	GetRequestInfo request(url, HTTPHeaders(), *params, nullptr, nullptr);
+	request.headers.Append("AcCePt", "text/plain");
+	request.headers.Append("accept", "text/csv");
+	HTTPResponse response(HTTPStatusCode::OK_200);
+	response.headers.Append("Cache-Control", "private");
+	response.headers.Append("Cache-Control", "no-store");
+	response.headers.Append("Set-Cookie", "first");
+	response.headers.Append("set-cookie", "second");
+	http.LogRequest(request, &response);
+
+	auto result = connection.Query("SELECT request.headers = MAP {'AcCePt': 'text/plain'}, "
+	                               "cardinality(response.headers), response.headers['Cache-Control'], "
+	                               "response.headers['Set-Cookie'] FROM duckdb_logs_parsed('HTTP')");
+	REQUIRE_NO_FAIL(*result);
+	CHECK(CHECK_COLUMN(result, 0, {true}));
+	CHECK(CHECK_COLUMN(result, 1, {2}));
+	CHECK(CHECK_COLUMN(result, 2, {"private"}));
+	CHECK(CHECK_COLUMN(result, 3, {"redacted"}));
+}
+
 enum class MockResponseMode : uint8_t {
 	SUCCESS,
 	NULL_RESPONSE,
@@ -225,7 +253,7 @@ public:
 		case MockResponseMode::SUCCESS: {
 			auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
 			response->body = state->response_body;
-			response->headers.Insert("ETag", "mock-etag");
+			response->headers.InsertIfAbsent("ETag", "mock-etag");
 			return response;
 		}
 		case MockResponseMode::REQUEST_ERROR: {
@@ -1081,7 +1109,7 @@ TEST_CASE("HTTP transport manager synchronous session API", "[http_transport_man
 
 static string ReadExtensionBinary(const string &path) {
 	LocalFileSystem fs;
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, nullptr);
 	auto size = NumericCast<idx_t>(handle->GetFileSize());
 	string result(size, '\0');
 	handle->Read(data_ptr_cast(result.data()), size, 0);
@@ -1327,13 +1355,19 @@ TEST_CASE("HTTP retries classify serialized errors without exception RTTI", "[ht
 	}
 	SECTION("retryable HTTP statuses are retried") {
 		HTTPResponse response(HTTPStatusCode::ServiceUnavailable_503);
+		response.headers.Append("Retry-After", "0");
+		response.headers.Append("Retry-After", "1");
+		response.headers.Append("retry-after", "2");
 		message = HTTPException(response, "serialized HTTP failure").what();
+		ErrorData error(message);
+		REQUIRE(error.ExtraInfo().at("header_Retry-After") == "0");
+		REQUIRE(error.ExtraInfo().count("header_retry-after") == 0);
 		retry = true;
 	}
 	SECTION("non-retryable HTTP errors retain their response details") {
 		HTTPResponse response(HTTPStatusCode::NotFound_404);
 		response.body = "missing object";
-		response.headers.Insert("test-header", "test-value");
+		response.headers.InsertIfAbsent("test-header", "test-value");
 		message = HTTPException(response, "serialized HTTP failure").what();
 	}
 	SECTION("permission errors are not retried") {

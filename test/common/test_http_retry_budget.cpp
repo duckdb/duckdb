@@ -838,7 +838,7 @@ TEST_CASE("A returned HTTP error with the quota exhaustion note still parses as 
 	auto quota = http_util.GetRetryQuota("http://throttled.example.com");
 	HTTPResponse throttled(HTTPStatusCode::TooManyRequests_429);
 	throttled.reason = "Too Many Requests";
-	throttled.headers.Insert("ETag", "W/\"bf-0ojpck62M0d8\"");
+	throttled.headers.InsertIfAbsent("ETag", "W/\"bf-0ojpck62M0d8\"");
 	HTTPException error_sent(throttled, "HTTP HEAD error on '%s' (HTTP 429 Too Many Requests)", request.url);
 
 	unique_ptr<HTTPResponse> response;

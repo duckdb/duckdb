@@ -197,7 +197,9 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWi
 	}
 	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		// Aggregates with destructors, and holistic ones (which copy all their input), are too slow to finalize per row
-		if (wexpr.AggregateFunction()->HasStateDestructorCallback() || wexpr.AggregateFunction()->IsHolistic()) {
+		// Some aggregates cannot stream at all (e.g., top-N with a per-row n)
+		if (wexpr.AggregateFunction()->HasStateDestructorCallback() || wexpr.AggregateFunction()->IsHolistic() ||
+		    !wexpr.AggregateFunction()->CanStream()) {
 			return false;
 		}
 		// We can stream aggregates if they are "running totals"

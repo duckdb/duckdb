@@ -85,6 +85,16 @@ struct CurrentQueryId {
 	static ScalarFunction GetFunction();
 };
 
+struct ExtensionRepositoryUrl {
+	static constexpr const char *Name = "extension_repository_url";
+	static constexpr const char *Parameters = "host";
+	static constexpr const char *Description = "Returns the extension repository url that the given host publishes in its well-known metadata file, i.e., where CREATE EXTENSION REPOSITORY <host> would install and load extensions from. Reads the host's metadata file over https and nothing else: no repository is created and no key is trusted";
+	static constexpr const char *Example = "extension_repository_url('duckdb.org')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ParseLogMessage {
 	static constexpr const char *Name = "parse_duckdb_log_message";
 	static constexpr const char *Parameters = "type,message";

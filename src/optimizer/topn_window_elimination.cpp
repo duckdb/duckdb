@@ -309,6 +309,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	if (!AggregateKeepsZeroSign(window, aggregate_payload, params)) {
+		return op;
+	}
 	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
@@ -356,6 +359,33 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 
 	auto fun = GetBuiltinAggregateFunction(context, Identifier(fun_name), ExtractReturnTypes(aggregate_params));
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
+}
+
+//! Whether the aggregate keeps the sign of a zero it returns: a FLOAT or DOUBLE stored as a sort key does not.
+//! Struct-packed payloads are not checked.
+bool TopNWindowElimination::AggregateKeepsZeroSign(const LogicalWindow &window,
+                                                   const vector<unique_ptr<Expression>> &payload,
+                                                   const TopNWindowEliminationParameters &params) const {
+	if (payload.size() > 1) {
+		return true;
+	}
+	auto &order_key = window.expressions[0]->Cast<BoundWindowExpression>().OrderBy()[0].expression;
+	const auto returned_type = payload.empty() ? order_key->GetReturnType() : payload[0]->GetReturnType();
+	if (returned_type.id() != LogicalTypeId::FLOAT && returned_type.id() != LogicalTypeId::DOUBLE) {
+		return true;
+	}
+
+	vector<unique_ptr<Expression>> aggregate_params;
+	if (!payload.empty()) {
+		aggregate_params.push_back(payload[0]->Copy());
+	}
+	aggregate_params.push_back(order_key->Copy());
+	if (params.limit > 1) {
+		aggregate_params.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(params.limit)));
+	}
+	auto aggregate = CreateAggregateExpression(std::move(aggregate_params), !payload.empty(), params);
+	auto &function = aggregate->Cast<BoundAggregateExpression>().Function();
+	return !function.GetProperties().GetBooleanProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY);
 }
 
 unique_ptr<LogicalOperator>

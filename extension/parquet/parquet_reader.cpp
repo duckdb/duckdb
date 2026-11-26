@@ -587,15 +587,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("Invalid DECIMAL precision %d and scale %d", s_ele.precision, s_ele.scale);
 			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
-			if (s_ele.precision > Decimal::MAX_WIDTH_INT128) {
-				// precisions above 38 become wide (BIGNUM-backed) decimals, other physical types fall back to DOUBLE
-				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
-				if (s_ele.type == Type::BYTE_ARRAY || s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
-					return LogicalType::DECIMAL(NumericCast<uint32_t>(s_ele.precision),
-					                            NumericCast<uint32_t>(s_ele.scale));
-				}
-				return LogicalType::DOUBLE;
-			}
+			// precisions above 38 become wide (BIGNUM-backed) decimals, whichever physical type holds the values
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
 			case Type::FIXED_LEN_BYTE_ARRAY:
@@ -1152,9 +1144,28 @@ static optional_ptr<const ParquetColumnSchema> FindNonBinaryShreddedValue(const 
 	return nullptr;
 }
 
-ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                        idx_t &next_schema_idx, idx_t &next_file_idx,
-                                                        ClientContext &context) {
+//! A group being parsed, with the schemas of the children parsed so far. The open groups are kept on an explicit
+//! stack, so that deeply nested schemas cannot overflow the call stack
+struct ParquetReader::ParseSchemaFrame {
+	ParseSchemaFrame(idx_t schema_idx, idx_t depth, idx_t max_define, idx_t max_repeat,
+	                 FieldRepetitionType::type repetition_type, idx_t num_children)
+	    : schema_idx(schema_idx), depth(depth), max_define(max_define), max_repeat(max_repeat),
+	      repetition_type(repetition_type), num_children(num_children) {
+	}
+
+	idx_t schema_idx;
+	idx_t depth;
+	idx_t max_define;
+	idx_t max_repeat;
+	FieldRepetitionType::type repetition_type;
+	idx_t num_children;
+	vector<ParquetColumnSchema> child_schemas;
+};
+
+//! Parses a leaf into 'result', or opens the frame of a group and returns true
+bool ParquetReader::ParseSchemaElement(ClientContext &context, idx_t depth, idx_t max_define, idx_t max_repeat,
+                                       idx_t schema_idx, idx_t &next_file_idx, vector<ParseSchemaFrame> &frames,
+                                       ParquetColumnSchema &result) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	if (depth > MAX_PARQUET_SCHEMA_DEPTH) {
@@ -1163,15 +1174,14 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		    "deep",
 		    file.path, MAX_PARQUET_SCHEMA_DEPTH);
 	}
-	if (next_schema_idx >= file_meta_data->schema.size()) {
+	if (schema_idx >= file_meta_data->schema.size()) {
 		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
-		                            next_schema_idx);
+		                            schema_idx);
 	}
-	auto &s_ele = file_meta_data->schema[next_schema_idx];
-	auto this_idx = next_schema_idx;
+	auto &s_ele = file_meta_data->schema[schema_idx];
 
 	auto repetition_type = FieldRepetitionType::REQUIRED;
-	if (s_ele.__isset.repetition_type && this_idx > 0) {
+	if (s_ele.__isset.repetition_type && schema_idx > 0) {
 		repetition_type = s_ele.repetition_type;
 	}
 	if (repetition_type != FieldRepetitionType::REQUIRED) {
@@ -1205,12 +1215,13 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 		// Inner BLOB schema
 		vector<ParquetColumnSchema> geometry_child;
-		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx));
+		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, schema_idx, next_file_idx));
 
 		// Wrap in geometry schema
-		return ParquetColumnSchema::FromChildSchemas(s_ele.name, target_type, max_define, max_repeat, this_idx,
-		                                             next_file_idx++, std::move(geometry_child),
-		                                             ParquetColumnSchemaType::GEOMETRY);
+		result = ParquetColumnSchema::FromChildSchemas(s_ele.name, target_type, max_define, max_repeat, schema_idx,
+		                                               next_file_idx++, std::move(geometry_child),
+		                                               ParquetColumnSchemaType::GEOMETRY);
+		return false;
 	}
 
 	// Determine if this is an inner node
@@ -1224,142 +1235,169 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		is_inner_node = s_ele.__isset.num_children && s_ele.num_children > 0;
 	}
 
-	if (is_inner_node) { // inner node
-		vector<ParquetColumnSchema> child_schemas;
-
-		idx_t c_idx = 0;
+	if (is_inner_node) {
 		idx_t num_children = 0;
 		if (s_ele.__isset.num_children && !TryCast::Operation(s_ele.num_children, num_children)) {
 			throw InvalidInputException(
 			    "Failed to read Parquet file \"%s\": schema element has negative number of children", file.path);
 		}
-		while (c_idx < num_children) {
-			next_schema_idx++;
+		frames.emplace_back(schema_idx, depth, max_define, max_repeat, repetition_type, num_children);
+		return true;
+	}
+	// leaf node
+	if (!s_ele.__isset.type) {
+		throw InvalidInputException(
+		    "Node '%s' has neither num_children nor type set - this violates the Parquet spec (corrupted file)",
+		    s_ele.name.c_str());
+	}
+	result = ParseColumnSchema(s_ele, max_define, max_repeat, schema_idx, next_file_idx++);
+	if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+		auto list_type = LogicalType::LIST(result.type);
+		vector<ParquetColumnSchema> list_child = {std::move(result)};
+		result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, schema_idx,
+		                                               next_file_idx, std::move(list_child));
+	}
+	return false;
+}
 
-			auto child_schema =
-			    ParseSchemaRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx, context);
-			child_schemas.push_back(std::move(child_schema));
-			c_idx++;
+//! Builds the schema of a group once the schemas of all its children are parsed
+ParquetColumnSchema ParquetReader::FinishSchemaElement(ParseSchemaFrame &frame, idx_t next_file_idx) {
+	auto file_meta_data = GetFileMetadata();
+	const auto this_idx = frame.schema_idx;
+	const auto max_define = frame.max_define;
+	const auto max_repeat = frame.max_repeat;
+	auto &s_ele = file_meta_data->schema[this_idx];
+	auto &child_schemas = frame.child_schemas;
+
+	// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
+	// behavior consistent with CSV reader fwiw
+	case_insensitive_map_t<idx_t> name_collision_count;
+	for (auto &child_schema : child_schemas) {
+		auto &col_name = child_schema.name;
+		// avoid duplicate header names
+		while (name_collision_count.find(col_name) != name_collision_count.end()) {
+			name_collision_count[col_name] += 1;
+			col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 		}
-		// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
-		// behavior consistent with CSV reader fwiw
-		case_insensitive_map_t<idx_t> name_collision_count;
+		child_schema.name = col_name;
+		name_collision_count[col_name] = 0;
+	}
+
+	bool is_repeated = frame.repetition_type == FieldRepetitionType::REPEATED;
+	const bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+	const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+	bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+	bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
+	if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
+		is_variant = true;
+	}
+	if (is_variant) {
+		if (child_schemas.size() < 2) {
+			throw DataCorruptionException("Failed to read Parquet file \"%s\": VARIANT column \"%s\" must have a "
+			                              "'metadata' and a 'value' column",
+			                              file.path, string(s_ele.name));
+		}
 		for (auto &child_schema : child_schemas) {
-			auto &col_name = child_schema.name;
-			// avoid duplicate header names
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
-			}
-			child_schema.name = col_name;
-			name_collision_count[col_name] = 0;
-		}
-
-		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
-		const bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
-		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
-		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
-		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
-		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
-			is_variant = true;
-		}
-		if (is_variant) {
-			if (child_schemas.size() < 2) {
-				throw DataCorruptionException("Failed to read Parquet file \"%s\": VARIANT column \"%s\" must have a "
-				                              "'metadata' and a 'value' column",
-				                              file.path, string(s_ele.name));
-			}
-			for (auto &child_schema : child_schemas) {
-				if (child_schema.name != "metadata" && child_schema.name != "value") {
-					// the 'value' columns of the groups below 'typed_value' are read as binary as well
-					if (FindNonBinaryShreddedValue(child_schema)) {
-						throw DataCorruptionException(
-						    "Failed to read Parquet file \"%s\": the 'value' column of a shredded field of VARIANT "
-						    "column \"%s\" must be a binary BYTE_ARRAY column",
-						    file.path, string(s_ele.name));
-					}
-					continue;
-				}
-				if (!IsVariantBinaryColumn(child_schema)) {
+			if (child_schema.name != "metadata" && child_schema.name != "value") {
+				// the 'value' columns of the groups below 'typed_value' are read as binary as well
+				if (FindNonBinaryShreddedValue(child_schema)) {
 					throw DataCorruptionException(
-					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
-					    "must be a binary BYTE_ARRAY column",
-					    file.path, child_schema.name, string(s_ele.name));
+					    "Failed to read Parquet file \"%s\": the 'value' column of a shredded field of VARIANT "
+					    "column \"%s\" must be a binary BYTE_ARRAY column",
+					    file.path, string(s_ele.name));
 				}
+				continue;
+			}
+			if (!IsVariantBinaryColumn(child_schema)) {
+				throw DataCorruptionException("Failed to read Parquet file \"%s\": the '%s' column of VARIANT column "
+				                              "\"%s\" must be a binary BYTE_ARRAY column",
+				                              file.path, child_schema.name, string(s_ele.name));
 			}
 		}
+	}
 
-		if (!is_map_kv && this_idx > 0) {
-			// check if the parent node of this is a map
-			auto &p_ele = file_meta_data->schema[this_idx - 1];
-			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
-			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
-			is_map_kv = parent_is_map && parent_has_children;
+	if (!is_map_kv && this_idx > 0) {
+		// check if the parent node of this is a map
+		auto &p_ele = file_meta_data->schema[this_idx - 1];
+		bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+		bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+		is_map_kv = parent_is_map && parent_has_children;
+	}
+
+	if (is_map_kv) {
+		if (child_schemas.size() != 2) {
+			throw IOException("MAP_KEY_VALUE requires two children");
+		}
+		if (!is_repeated) {
+			throw IOException("MAP_KEY_VALUE needs to be repeated");
+		}
+		auto result_type = LogicalType::MAP(child_schemas[0].type, child_schemas[1].type);
+		vector<ParquetColumnSchema> map_children;
+		map_children.emplace_back(ParquetColumnSchema::FromChildSchemas(s_ele.name, ListType::GetChildType(result_type),
+		                                                                max_define - 1, max_repeat - 1, this_idx,
+		                                                                next_file_idx, std::move(child_schemas)));
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
+		                                             next_file_idx, std::move(map_children));
+	}
+	ParquetColumnSchema result;
+	if (child_schemas.size() > 1 || (!is_list && !is_map && !is_repeated)) {
+		child_list_t<LogicalType> struct_types;
+		for (auto &child_schema : child_schemas) {
+			struct_types.emplace_back(make_pair(child_schema.name, child_schema.type));
 		}
 
-		if (is_map_kv) {
-			if (child_schemas.size() != 2) {
-				throw IOException("MAP_KEY_VALUE requires two children");
-			}
-			if (!is_repeated) {
-				throw IOException("MAP_KEY_VALUE needs to be repeated");
-			}
-			auto result_type = LogicalType::MAP(child_schemas[0].type, child_schemas[1].type);
-			vector<ParquetColumnSchema> map_children;
-			map_children.emplace_back(ParquetColumnSchema::FromChildSchemas(
-			    s_ele.name, ListType::GetChildType(result_type), max_define - 1, max_repeat - 1, this_idx,
-			    next_file_idx, std::move(child_schemas)));
-			return ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
-			                                             next_file_idx, std::move(map_children));
-		}
-		ParquetColumnSchema result;
-		if (child_schemas.size() > 1 || (!is_list && !is_map && !is_repeated)) {
-			child_list_t<LogicalType> struct_types;
-			for (auto &child_schema : child_schemas) {
-				struct_types.emplace_back(make_pair(child_schema.name, child_schema.type));
-			}
-
-			LogicalType result_type;
-			if (is_variant) {
-				result_type = LogicalType::VARIANT();
-			} else {
-				result_type = LogicalType::STRUCT(std::move(struct_types));
-			}
-			ParquetColumnSchemaType schema_type =
-			    is_variant ? ParquetColumnSchemaType::VARIANT : ParquetColumnSchemaType::COLUMN;
-			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
-			                                               next_file_idx, std::move(child_schemas), schema_type);
-		} else if (child_schemas.empty()) {
-			throw InvalidInputException("Failed to read Parquet file \"%s\": schema element has no children",
-			                            file.path);
+		LogicalType result_type;
+		if (is_variant) {
+			result_type = LogicalType::VARIANT();
 		} else {
-			// if we have a struct with only a single type, pull up
-			result = std::move(child_schemas[0]);
-			result.name = s_ele.name;
+			result_type = LogicalType::STRUCT(std::move(struct_types));
 		}
-		if (is_repeated) {
-			auto list_type = LogicalType::LIST(result.type);
-			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
-			                                               next_file_idx, std::move(list_child));
-		}
-		result.parent_schema_index = this_idx;
-		return result;
-	} else { // leaf node
-		if (!s_ele.__isset.type) {
-			throw InvalidInputException(
-			    "Node '%s' has neither num_children nor type set - this violates the Parquet spec (corrupted file)",
-			    s_ele.name.c_str());
-		}
-		auto result = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			auto list_type = LogicalType::LIST(result.type);
-			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			return ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
-			                                             next_file_idx, std::move(list_child));
-		}
+		ParquetColumnSchemaType schema_type =
+		    is_variant ? ParquetColumnSchemaType::VARIANT : ParquetColumnSchemaType::COLUMN;
+		result = ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
+		                                               next_file_idx, std::move(child_schemas), schema_type);
+	} else if (child_schemas.empty()) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": schema element has no children", file.path);
+	} else {
+		// if we have a struct with only a single type, pull up
+		result = std::move(child_schemas[0]);
+		result.name = s_ele.name;
+	}
+	if (is_repeated) {
+		auto list_type = LogicalType::LIST(result.type);
+		vector<ParquetColumnSchema> list_child = {std::move(result)};
+		result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+		                                               next_file_idx, std::move(list_child));
+	}
+	result.parent_schema_index = this_idx;
+	return result;
+}
 
-		return result;
+ParquetColumnSchema ParquetReader::ParseSchemaTree(ClientContext &context, idx_t &next_schema_idx,
+                                                   idx_t &next_file_idx) {
+	vector<ParseSchemaFrame> frames;
+	ParquetColumnSchema root;
+	if (!ParseSchemaElement(context, 0, 0, 0, next_schema_idx, next_file_idx, frames, root)) {
+		return root;
+	}
+	while (true) {
+		auto &frame = frames.back();
+		if (frame.child_schemas.size() < frame.num_children) {
+			next_schema_idx++;
+			ParquetColumnSchema child;
+			// the frame is not used after the child opened a frame of its own, which may move it
+			if (!ParseSchemaElement(context, frame.depth + 1, frame.max_define, frame.max_repeat, next_schema_idx,
+			                        next_file_idx, frames, child)) {
+				frame.child_schemas.push_back(std::move(child));
+			}
+			continue;
+		}
+		auto schema = FinishSchemaElement(frame, next_file_idx);
+		frames.pop_back();
+		if (frames.empty()) {
+			return schema;
+		}
+		frames.back().child_schemas.push_back(std::move(schema));
 	}
 }
 
@@ -1382,7 +1420,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Failed to read Parquet file \"%s\": root schema element has no children", file.path);
 	}
-	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
+	auto root = ParseSchemaTree(context, next_schema_idx, next_file_idx);
 	if (!StructType::IsStruct(root.type)) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
@@ -1997,7 +2035,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	auto &column_reader = state.GetColumnReader(col_idx);
 
 	// keep track of column and row group ordinal if data is encrypted
-	if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+	if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 		                                       GetGroup(state).ordinal);
 	}
@@ -2021,19 +2059,19 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			auto &filter = *filter_entry;
 
 			auto prune_result = CheckRowGroupFilterStatistics(context, state, column_reader, filter);
-			// check the bloom filter if present
-			auto bloom_source = TryGetBloomFilterSource(column_reader);
+			// check the bloom filter if present and the statistics do not already decide the row group
+			auto bloom_source = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE
+			                        ? TryGetBloomFilterSource(column_reader)
+			                        : nullptr;
 			if (bloom_source) {
 				optional_ptr<ColumnReader> bloom_reader = bloom_source;
 				optional_ptr<const TableFilter> bloom_filter = &filter;
 				unique_ptr<TableFilter> leaf_filter;
-				auto check_bloom_filter = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE;
 				if (bloom_source->Type().IsNested()) {
 					if (!TryGetBloomFilterLeaf(*bloom_source, filter, bloom_reader, leaf_filter)) {
 						bloom_reader = nullptr;
 					} else {
 						bloom_filter = leaf_filter.get();
-						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}
 				if (bloom_reader && parquet_options.RepairsInvalidUTF8() &&
@@ -2045,14 +2083,14 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				auto hash_strategy = bloom_reader ? ParquetStatisticsUtils::GetBloomFilterHashStrategy(
 				                                        bloom_reader->Schema(), interval_bloom_filter_version)
 				                                  : nullopt;
-				if (check_bloom_filter && bloom_reader && bloom_filter &&
+				if (bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
 				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy) {
 					auto &bloom_meta_data = group.columns[bloom_reader->ColumnIndex()].meta_data;
 					if (bloom_meta_data.__isset.bloom_filter_offset && bloom_meta_data.bloom_filter_offset > 0 &&
 					    ParquetStatisticsUtils::HasBloomFilterConstants(*bloom_filter, *hash_strategy)) {
 						TryAttachBloomFilterReadHead(context, state, column_reader, filter,
-						                             bloom_source->Type().IsNested(), bloom_reader->ColumnIndex());
+						                             bloom_reader->ColumnIndex());
 					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
@@ -2130,7 +2168,7 @@ struct ParquetReader::BloomFilterReadPlan {
 
 ParquetReader::BloomFilterReadPlan
 ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport, ColumnReader &column_reader,
-                                    const TableFilter &filter, bool nested_filter, idx_t column_chunk_idx) {
+                                    const TableFilter &filter, idx_t column_chunk_idx) {
 	struct BloomFilterRange {
 		idx_t offset;
 		idx_t length;
@@ -2151,8 +2189,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 			continue;
 		}
 		auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
-		if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
-		                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		if (prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			continue;
 		}
 		const auto offset = NumericCast<idx_t>(meta_data.bloom_filter_offset);
@@ -2224,7 +2261,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 
 bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
                                                  ColumnReader &column_reader, const TableFilter &filter,
-                                                 bool nested_filter, idx_t column_chunk_idx) {
+                                                 idx_t column_chunk_idx) {
 	if (!state.prefetch_mode || parquet_options.encryption_config) {
 		return false;
 	}
@@ -2242,8 +2279,7 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 		lock_guard<mutex> guard(bloom_filter_read_heads_lock);
 		auto entry = bloom_filter_read_heads.find(column_chunk_idx);
 		if (entry == bloom_filter_read_heads.end()) {
-			auto plan =
-			    PlanBloomFilterReads(context, transport, column_reader, filter, nested_filter, column_chunk_idx);
+			auto plan = PlanBloomFilterReads(context, transport, column_reader, filter, column_chunk_idx);
 			fetch_heads = std::move(plan.fetch_heads);
 			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(plan.row_group_heads)).first;
 		}
@@ -2389,7 +2425,7 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics) {
 			can_have_nan = ParquetStatisticsUtils::CanHaveNaN(column_chunk.meta_data.statistics, can_have_nan);
 		}
-		ParquetPageIndexUtils::FilterPages(column_reader.Schema(), column_index, filter_column.filter.get(),
+		ParquetPageIndexUtils::FilterPages(context, column_reader.Schema(), column_index, filter_column.filter.get(),
 		                                   parquet_options, can_have_nan, page_may_match[i]);
 		for (auto may_match : page_may_match[i]) {
 			any_page_pruned = any_page_pruned || !may_match;

@@ -8,6 +8,25 @@
 
 using namespace duckdb;
 
+TEST_CASE("Test GetTableNames does not alter view columns", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(id INTEGER, x VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v AS SELECT * FROM tbl"));
+
+	for (bool qualified : {false, true}) {
+		auto table_names = con.GetTableNames("SELECT * FROM v", qualified);
+		REQUIRE(table_names.size() == 1);
+
+		// extracting table names must not overwrite the view's cached column info
+		auto result = con.Query(
+		    "SELECT column_name, data_type FROM duckdb_columns() WHERE table_name = 'v' ORDER BY column_index");
+		REQUIRE(CHECK_COLUMN(result, 0, {"id", "x"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"INTEGER", "VARCHAR"}));
+	}
+}
+
 TEST_CASE("Test GetTableNames", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

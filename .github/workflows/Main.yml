@@ -60,6 +60,7 @@ jobs:
       runner_linux_slim: ${{ fromJSON(steps.config.outputs.runners).linux_slim }}
       runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
       runner_linux_x64: ${{ fromJSON(steps.config.outputs.runners).linux_x64 }}
+      runner_linux_x64_8xlarge: ${{ fromJSON(steps.config.outputs.runners).linux_x64_8xlarge }}
       runner_linux_22_x64: ${{ fromJSON(steps.config.outputs.runners).linux_22_x64 }}
       runner_linux_arm64: ${{ fromJSON(steps.config.outputs.runners).linux_arm64 }}
       runner_windows_2022_x64: ${{ fromJSON(steps.config.outputs.runners).windows_2022_x64 }}
@@ -277,7 +278,7 @@ jobs:
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64_8xlarge }}
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
@@ -393,7 +394,7 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64_8xlarge }}
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).ubuntu_24_04_amd64_lint }}
     env:
@@ -493,16 +494,14 @@ jobs:
         name: Download all extensions
         with:
           pattern: '*-extensions-*'
-          path: ${{ runner.temp }}/repository_generation
-          # When multiple artifacts are matched:
-          # - if true: the downloaded artifacts will be in the same directory
-          #   specified by path.
-          # - if false: the downloaded artifacts will be extracted into
-          #   individual named directories within the specified path.
-          #
-          # Note: When downloading a single artifact (by name or ID), it will
-          # always be extracted directly to the specified path.
-          merge-multiple: true
+          path: ${{ runner.temp }}/extension_artifacts
+          merge-multiple: false
+
+      - name: Assemble extension repository
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_merge_extension_artifacts.py
+          python3 scripts/ci/merge_extension_artifacts.py \
+            "$RUNNER_TEMP/extension_artifacts" "$RUNNER_TEMP/repository_generation"
 
       - name: Print all extensions
         run: |

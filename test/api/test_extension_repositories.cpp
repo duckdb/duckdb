@@ -205,7 +205,7 @@ TEST_CASE("Test that adding trusted extension repositories must be opted into", 
 static void WriteTextFile(const string &path, const string &contents) {
 	// the database file system refuses to write *.duckdb_extension* files, so write through a raw local file system
 	LocalFileSystem fs;
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, nullptr);
 	handle->Write(QueryContext(), (void *)contents.data(), contents.size(), 0);
 	handle->Sync();
 }
@@ -744,7 +744,7 @@ static void CopyExtensionFile(FileSystem &fs, const string &source, const string
 	WriteExtensionFile(fs, target, buffer.get(), size);
 }
 
-// One "extension|repository|result|previous version|current version" string per row
+// One "extension|repository|result|previous version|current version|error" string per row
 static vector<string> UpdateRows(Connection &con, const string &statement) {
 	auto result = con.Query(statement);
 	REQUIRE_NO_FAIL(*result);
@@ -791,7 +791,7 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 	    "CREATE EXTENSION REPOSITORY my_repo WITH PREFIX '%s' USING PUBLIC KEY '%s'", prefix, TEST_PUBLIC_KEY)));
 	REQUIRE_NO_FAIL(con.Query("INSTALL loadable_extension_demo FROM my_repo"));
 
-	const string repo_row = "loadable_extension_demo|my_repo|NO_UPDATE_AVAILABLE|default-version|default-version";
+	const string repo_row = "loadable_extension_demo|my_repo|NO_UPDATE_AVAILABLE|default-version|default-version|NULL";
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {repo_row});
 
 	// updating a single extension only looks at the flat folder for now
@@ -822,7 +822,7 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 	auto stray = con.Query("UPDATE EXTENSIONS (stray_ext)");
 	REQUIRE(stray->HasError());
 	REQUIRE(StringUtil::Contains(stray->GetError(), "the extension is not installed"));
-	const string stray_row = "stray_ext|not_a_repository|REPOSITORY_NOT_FOUND|default-version|default-version";
+	const string stray_row = "stray_ext|not_a_repository|REPOSITORY_NOT_FOUND|default-version|default-version|NULL";
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {repo_row, stray_row});
 
 	// once repositories are forbidden, their extensions are reported rather than failing the update, also when the
@@ -831,7 +831,7 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 	CopyExtensionFile(fs, repo_path + ".info", flat_path + ".info");
 	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='forbidden'"));
 	const string not_trusted_row =
-	    "loadable_extension_demo|my_repo|REPOSITORY_NOT_TRUSTED|default-version|default-version";
+	    "loadable_extension_demo|my_repo|REPOSITORY_NOT_TRUSTED|default-version|default-version|NULL";
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {not_trusted_row, not_trusted_row, stray_row});
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS (loadable_extension_demo)") == vector<string> {not_trusted_row});
 }
@@ -881,7 +881,7 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 	auto primary_install = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
 	REQUIRE(primary_install != secondary_install);
 
-	const string repo_row = "loadable_extension_demo|my_repo|NO_UPDATE_AVAILABLE|default-version|default-version";
+	const string repo_row = "loadable_extension_demo|my_repo|NO_UPDATE_AVAILABLE|default-version|default-version|NULL";
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {repo_row});
 
 	// the update stays in the secondary directory, nothing is written to the primary one
@@ -894,14 +894,75 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 
 	// a dropped repository can no longer be updated from, which the update reports
 	REQUIRE_NO_FAIL(con.Query("DROP EXTENSION REPOSITORY my_repo"));
-	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") ==
-	        vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_NOT_FOUND|default-version|default-version"});
+	REQUIRE(
+	    UpdateRows(con, "UPDATE EXTENSIONS") ==
+	    vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_NOT_FOUND|default-version|default-version|NULL"});
 
 	// a repository file that cannot be read is reported rather than failing the update
 	auto repository_file = fs.JoinPath(repository_directory, "my_repo.duckdb_extension.repo.json");
 	WriteTextFile(repository_file, "not json");
-	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") ==
-	        vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_UNREADABLE|default-version|default-version"});
+	REQUIRE(
+	    UpdateRows(con, "UPDATE EXTENSIONS") ==
+	    vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_UNREADABLE|default-version|default-version|NULL"});
+}
+
+TEST_CASE("Test UPDATE EXTENSIONS reports failed updates", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto demo_extension = fs.JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
+	if (!fs.FileExists(demo_extension)) {
+		WARN("loadable_extension_demo is not built, skipping");
+		return;
+	}
+	auto extension_directory = TestCreatePath("updf_ext");
+
+	// a local repository serving the demo extension
+	auto prefix = TestCreatePath("updf_prefix");
+	auto served_directory =
+	    fs.JoinPath(fs.JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
+	fs.CreateDirectoriesRecursive(served_directory);
+	CopyExtensionFile(fs, demo_extension, fs.JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
+
+	DBConfig config;
+	config.SetOptionByName("extension_directory", extension_directory);
+	config.SetOptionByName("allow_unsigned_extensions", true);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("INSTALL loadable_extension_demo FROM '%s'", prefix)));
+
+	// a copy of the extension that records a repository that does not exist: its download fails
+	auto missing_prefix = TestCreatePath("updf_missing_prefix");
+	auto flat_directory = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
+	auto broken_path = fs.JoinPath(flat_directory, "broken_ext.duckdb_extension");
+	CopyExtensionFile(fs, demo_extension, broken_path);
+	ExtensionInstallInfo broken_info;
+	broken_info.mode = ExtensionInstallMode::REPOSITORY;
+	broken_info.repository_type = ExtensionRepositoryType::CORE;
+	broken_info.repository_url = missing_prefix;
+	broken_info.version = "default-version";
+	MemoryStream stream;
+	BinarySerializer::Serialize(broken_info, stream);
+	WriteExtensionFile(fs, broken_path + ".info", stream.GetData(), stream.GetPosition());
+
+	// the failure is a row, the other extension is still updated
+	const string demo_row =
+	    "loadable_extension_demo|" + prefix + "|NO_UPDATE_AVAILABLE|default-version|default-version|NULL";
+	const string broken_prefix = "broken_ext|" + missing_prefix + "|UPDATE_FAILED|default-version|default-version|";
+	auto rows = UpdateRows(con, "UPDATE EXTENSIONS");
+	REQUIRE(rows.size() == 2);
+	REQUIRE(StringUtil::StartsWith(rows[0], broken_prefix));
+	REQUIRE(StringUtil::Contains(rows[0], "Failed to install local extension \"broken_ext\""));
+	REQUIRE(rows[1] == demo_row);
+
+	// also when the extension is named: the statement succeeds and reports the failure
+	rows = UpdateRows(con, "UPDATE EXTENSIONS (broken_ext)");
+	REQUIRE(rows.size() == 1);
+	REQUIRE(StringUtil::StartsWith(rows[0], broken_prefix));
+	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS (loadable_extension_demo)") == vector<string> {demo_row});
+
+	// the failed extension is left as it was
+	auto result = con.Query("SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'broken_ext'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default-version"}));
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
@@ -952,9 +1013,10 @@ TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
 
 	// the repository resolved from its host is updated, the one added by prefix is reported rather than failing
 	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='hosts_only'"));
-	const string host_row = "loadable_extension_demo|host.example|NO_UPDATE_AVAILABLE|default-version|default-version";
+	const string host_row =
+	    "loadable_extension_demo|host.example|NO_UPDATE_AVAILABLE|default-version|default-version|NULL";
 	const string prefix_row =
-	    "loadable_extension_demo|prefix_repo|REPOSITORY_NOT_TRUSTED|default-version|default-version";
+	    "loadable_extension_demo|prefix_repo|REPOSITORY_NOT_TRUSTED|default-version|default-version|NULL";
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {host_row, prefix_row});
 
 	// a repository that now points elsewhere is updated from where it points now, which the install info records

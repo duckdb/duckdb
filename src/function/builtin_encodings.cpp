@@ -10,11 +10,37 @@ namespace duckdb {
 
 namespace {
 
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && (defined(__GNUC__) || defined(__clang__))
+#define ENCODING_FAST_PATH 1
+#endif
+
 void DecodeLatin1ToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
                         idx_t &written) {
 	idx_t out = 0;
-	for (idx_t i = 0; i < input_size; i++) {
-		const auto ch = static_cast<unsigned char>(input[i]);
+	idx_t i = 0;
+	while (i < input_size) {
+#ifdef ENCODING_FAST_PATH
+		// Copy 8 ASCII bytes at a time
+		while (i + 8 <= input_size) {
+			uint64_t word;
+			memcpy(&word, input + i, sizeof(word));
+			const uint64_t high_bits = word & 0x8080808080808080ULL;
+			// Copy the whole word, but only advance past the ASCII prefix
+			memcpy(output + out, &word, sizeof(word));
+			if (high_bits) {
+				const idx_t ascii_prefix = static_cast<idx_t>(__builtin_ctzll(high_bits)) / 8;
+				i += ascii_prefix;
+				out += ascii_prefix;
+				break;
+			}
+			i += 8;
+			out += 8;
+		}
+		if (i >= input_size) {
+			break;
+		}
+#endif
+		const auto ch = static_cast<unsigned char>(input[i++]);
 		if (ch > 0x7F && ch <= 0x9F) {
 			throw InvalidInputException("File is not latin-1 encoded");
 		}
@@ -29,9 +55,12 @@ void DecodeLatin1ToUTF8(const char *input, idx_t input_size, bool is_last, char 
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 uint16_t LoadUTF16(const char *input, idx_t pos) {
-	return static_cast<uint16_t>(static_cast<unsigned char>(input[pos]) |
-	                             (static_cast<unsigned char>(input[pos + 1]) << 8));
+	const auto first = static_cast<unsigned char>(input[pos]);
+	const auto second = static_cast<unsigned char>(input[pos + 1]);
+	return BIG_ENDIAN_ORDER ? static_cast<uint16_t>((first << 8) | second)
+	                        : static_cast<uint16_t>(first | (second << 8));
 }
 
 void EncodeUTF8ToLatin1(const char *input, idx_t input_size, char *output, idx_t &written) {
@@ -64,12 +93,13 @@ void EncodeUTF8ToLatin1(const char *input, idx_t input_size, char *output, idx_t
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 void EncodeUTF8ToUTF16(const char *input, idx_t input_size, char *output, idx_t &written) {
 	idx_t out = 0;
 	idx_t pos = 0;
 	auto store = [&](uint16_t unit) {
-		output[out++] = static_cast<char>(unit & 0xFF);
-		output[out++] = static_cast<char>(unit >> 8);
+		output[out++] = static_cast<char>(BIG_ENDIAN_ORDER ? unit >> 8 : unit & 0xFF);
+		output[out++] = static_cast<char>(BIG_ENDIAN_ORDER ? unit & 0xFF : unit >> 8);
 	};
 	while (pos < input_size) {
 		const auto lead = static_cast<unsigned char>(input[pos]);
@@ -109,18 +139,44 @@ void EncodeUTF8ToUTF16(const char *input, idx_t input_size, char *output, idx_t 
 	written = out;
 }
 
+template <bool BIG_ENDIAN_ORDER>
 void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
                        idx_t &written) {
 	idx_t pos = 0;
 	idx_t out = 0;
 	while (pos < input_size) {
+#ifdef ENCODING_FAST_PATH
+		// Narrow 4 little-endian ASCII code units at a time
+		while (!BIG_ENDIAN_ORDER && pos + 8 <= input_size) {
+			uint64_t word;
+			memcpy(&word, input + pos, sizeof(word));
+			const uint64_t high_bits = word & 0xFF80FF80FF80FF80ULL;
+			// Narrow the whole word, but only advance past the ASCII prefix
+			uint64_t narrow = word & 0x00FF00FF00FF00FFULL;
+			narrow = (narrow | (narrow >> 8)) & 0x0000FFFF0000FFFFULL;
+			narrow = (narrow | (narrow >> 16)) & 0x00000000FFFFFFFFULL;
+			const auto narrowed = static_cast<uint32_t>(narrow);
+			memcpy(output + out, &narrowed, sizeof(narrowed));
+			if (high_bits) {
+				const idx_t ascii_units = static_cast<idx_t>(__builtin_ctzll(high_bits)) / 16;
+				pos += ascii_units * 2;
+				out += ascii_units;
+				break;
+			}
+			pos += 8;
+			out += 4;
+		}
+		if (pos >= input_size) {
+			break;
+		}
+#endif
 		if (pos + 1 >= input_size) {
 			if (is_last) {
 				throw InvalidInputException("Input is not valid UTF-16");
 			}
 			break;
 		}
-		const uint16_t ch = LoadUTF16(input, pos);
+		const uint16_t ch = LoadUTF16<BIG_ENDIAN_ORDER>(input, pos);
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
 			if (ch >= 0xDC00) {
 				// low surrogate without a preceding high surrogate
@@ -133,7 +189,7 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 				// the low surrogate follows in the next buffer
 				break;
 			}
-			const uint16_t low = LoadUTF16(input, pos + 2);
+			const uint16_t low = LoadUTF16<BIG_ENDIAN_ORDER>(input, pos + 2);
 			if (low < 0xDC00 || low > 0xDFFF) {
 				throw InvalidInputException("Input is not valid UTF-16");
 			}
@@ -161,6 +217,25 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 	written = out;
 }
 
+void DecodeUTF16WithBOMToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+                              idx_t &written) {
+	// A byte order mark picks the byte order and is dropped, without one utf-16 is little-endian
+	const uint16_t mark = input_size >= 2 ? LoadUTF16<true>(input, 0) : 0;
+	if (mark == 0xFEFF) {
+		DecodeUTF16ToUTF8<true>(input + 2, input_size - 2, is_last, output, consumed, written);
+	} else if (mark == 0xFFFE) {
+		DecodeUTF16ToUTF8<false>(input + 2, input_size - 2, is_last, output, consumed, written);
+	} else {
+		DecodeUTF16ToUTF8<false>(input, input_size, is_last, output, consumed, written);
+		return;
+	}
+	consumed += 2;
+}
+
+Value ByteOrderMark(const string &mark, const string &encoding) {
+	return Value::STRUCT({{"mark", Value::BLOB_RAW(mark)}, {"encoding", Value(encoding)}});
+}
+
 } // namespace
 
 void BuiltinFunctions::RegisterEncodingFunctions() {
@@ -180,13 +255,31 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	};
 	decode_t utf16_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
 	                           idx_t &written) {
-		DecodeUTF16ToUTF8(input, input_size, is_last, output, consumed, written);
+		DecodeUTF16WithBOMToUTF8(input, input_size, is_last, output, consumed, written);
 	};
-	encode_t utf16_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
-		EncodeUTF8ToUTF16(input, input_size, output, written);
+	decode_t utf16_le_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                              idx_t &written) {
+		DecodeUTF16ToUTF8<false>(input, input_size, is_last, output, consumed, written);
 	};
-	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2),
-	                  EncodingFunction::Create("utf-16", utf16_decode, utf16_encode, 4, 2)}) {
+	encode_t utf16_le_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
+		EncodeUTF8ToUTF16<false>(input, input_size, output, written);
+	};
+	decode_t utf16_be_decode = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                              idx_t &written) {
+		DecodeUTF16ToUTF8<true>(input, input_size, is_last, output, consumed, written);
+	};
+	encode_t utf16_be_encode = [](const char *input, idx_t input_size, char *output, idx_t &written) {
+		EncodeUTF8ToUTF16<true>(input, input_size, output, written);
+	};
+	auto utf16 = EncodingFunction::Create("utf-16", utf16_decode, utf16_le_encode, 4, 2);
+	// A stream is decoded with a fixed byte order, picked by the byte order mark at its start
+	auto byte_order_marks = Value::LIST({ByteOrderMark("\xFE\xFF", "utf-16be"), ByteOrderMark("", "utf-16le")});
+	utf16.ApplyToFunctions([&](ScalarFunction &function) {
+		function.GetProperties().SetProperty(EncodingFunction::BYTE_ORDER_MARKS_PROPERTY, byte_order_marks);
+	});
+	for (auto &set : {EncodingFunction::Create("latin-1", latin1_decode, latin1_encode, 1, 2), utf16,
+	                  EncodingFunction::Create("utf-16le", utf16_le_decode, utf16_le_encode, 4, 2),
+	                  EncodingFunction::Create("utf-16be", utf16_be_decode, utf16_be_encode, 4, 2)}) {
 		CreateScalarFunctionInfo info(set);
 		EncodingFunction::SetSchema(info);
 		info.internal = true;
