@@ -29,9 +29,26 @@ void TransactionContext::BeginTransaction() {
 	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
 	current_transaction = make_uniq<MetaTransaction>(*context.db, start_timestamp, global_transaction_id);
 
-	// Notify any registered state of transaction begin
+	// Notify any registered state of transaction begin - all of them, also when one of them fails, so that all see the
+	// transaction end
+	ErrorData begin_error;
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
-		state->TransactionBegin(*current_transaction, context);
+		try {
+			state->TransactionBegin(*current_transaction, context);
+		} catch (std::exception &ex) {
+			if (!begin_error.HasError()) {
+				begin_error = ErrorData(ex);
+			}
+		}
+	}
+	if (begin_error.HasError()) {
+		// a state rejected the transaction: it does not stay open
+		try {
+			Rollback(&begin_error);
+		} catch (...) {
+			// the rejection is the error reported
+		}
+		begin_error.Throw();
 	}
 }
 

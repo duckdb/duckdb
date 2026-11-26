@@ -2068,9 +2068,10 @@ typedef struct _duckdb_v2_context_state_profile {
 /*!
  * Sets up the connection state of a key that has none yet.
  *
- * Runs at most once per key and connection, while the connection's registered states are locked: it must not create,
- * get or remove connection state itself. A failure reported through `err` leaves the key unregistered and fails the
- * call that triggered the init.
+ * Runs outside the lock of the connection's registered states, so it may use the context, state functions included.
+ * When the key gets registered while the init runs, by another thread or by the init itself, the state registered first
+ * is kept, and the one this init set up is released as if the init had failed. A failure reported through `err` leaves
+ * the key unregistered and fails the call that triggered the init.
  */
 typedef void (*duckdb_v2_context_state_init_callback_fn)(duckdb_v2_context_handle context, void *user_data,
                                                          duckdb_v2_context_state_handle state,
@@ -2080,7 +2081,8 @@ typedef void (*duckdb_v2_context_state_init_callback_fn)(duckdb_v2_context_handl
  * Called when a query starts on the connection, before any of it runs. Called at most once per query, also for the
  * queries DuckDB runs on behalf of another. No transaction is guaranteed to be active.
  *
- * An error reported through `err` fails the query.
+ * An error reported through `err` fails the query. The query still ends: the query end callbacks of all states, the
+ * rejecting one included, receive the error, and a transaction the query started is rolled back.
  */
 typedef void (*duckdb_v2_context_state_query_begin_callback_fn)(duckdb_v2_context_handle context, void *user_data,
                                                                 duckdb_v2_error_info_handle *err);
@@ -2097,7 +2099,9 @@ typedef void (*duckdb_v2_context_state_query_end_callback_fn)(duckdb_v2_context_
 /*!
  * Called when a transaction starts on the connection, explicitly or automatically. The transaction is active.
  *
- * An error reported through `err` fails the statement starting the transaction.
+ * An error reported through `err` fails the statement starting the transaction and rolls the transaction back: the
+ * transaction rollback callbacks of all states run. A query whose transaction is rejected this way does not begin, and
+ * its query begin and end callbacks do not run.
  */
 typedef void (*duckdb_v2_context_state_transaction_begin_callback_fn)(duckdb_v2_context_handle context, void *user_data,
                                                                       duckdb_v2_error_info_handle *err);
@@ -2124,10 +2128,10 @@ typedef void (*duckdb_v2_context_state_profiling_callback_fn)(duckdb_v2_context_
 /*!
  * Gets the state registered under a key on the connection of a context, creating it first if there is none.
  *
- * The init callback sets up a new state; it runs at most once per key and connection, also when several threads race to
- * get the same key. The state lives until `duckdb_v2_context_remove_state()` or until the connection is destroyed, and
- * then releases its user data through the destructor bundled with it. The data pointer received is the state's user
- * data, valid for as long as the state is.
+ * The init callback sets up a new state. When several threads race to get the same key, each may run its init, but only
+ * one state is registered, and all of them receive it. The state lives until `duckdb_v2_context_remove_state()` or
+ * until the connection is destroyed, and then releases its user data through the destructor bundled with it. The data
+ * pointer received is the state's user data, valid for as long as the state is.
  *
  * Keys are case-sensitive and shared by everything that registers state on the connection, DuckDB's extensions
  * included: prefix them with the name of the extension. A key held by something that is not state of this API fails the
@@ -2232,8 +2236,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_state(duckdb_v2_connection
  * Removes the state registered under a key on the connection of a context, destroying its user data. Removing a key
  * that has no state is not an error.
  *
- * The callbacks of the state do not run for the query or transaction that is under way, and the data pointer handed out
- * earlier is not valid any longer.
+ * The callbacks of the state do not run for any later step of the query or transaction that is under way, and the data
+ * pointer handed out earlier must not be used any longer. A step already in progress, such as a query begin whose
+ * callback of another state removes this one, may still run the callback of this state; the user data is then released
+ * when that step is over. The destructor of the user data runs outside the lock of the connection's registered states,
+ * so it may use the connection.
  *
  * history:
  * - unstable: v2.0.0
@@ -2274,8 +2281,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_remove_state(duckdb_v2_connect
  * Sets the user data of the state, handed to all of its callbacks.
  *
  * The opaque handle bundles the pointer with an optional destructor, invoked when the state is removed or its
- * connection is destroyed. If the state could not be created after all, because its init callback reported an error,
- * the destructor is invoked right away.
+ * connection is destroyed. If the state could not be created after all, because its init callback reported an error or
+ * the key got registered meanwhile, the destructor is invoked right away.
  *
  * history:
  * - unstable: v2.0.0

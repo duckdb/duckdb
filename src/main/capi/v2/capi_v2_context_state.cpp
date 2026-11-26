@@ -123,24 +123,34 @@ private:
 	CV2ContextStateBuilder callbacks;
 };
 
-//! The C API state under `key`, or null if the key has none. Throws if it is held by state of something else.
-static auto FindState(ClientContext &client, const string &key) -> shared_ptr<CV2ContextState> {
-	auto existing = client.GetContext().GetRegisteredState().Get<ClientContextState>(key);
-	if (!existing) {
-		return nullptr;
-	}
-	if (!dynamic_cast<CV2ContextState *>(existing.get())) {
+//! Throws if `state` is not C API state.
+static void CheckState(const string &key, ClientContextState &state) {
+	if (!dynamic_cast<CV2ContextState *>(&state)) {
 		throw InvalidInputException("The key \"%s\" is in use by state that is not registered through the C API", key);
 	}
-	return shared_ptr_cast<ClientContextState, CV2ContextState>(std::move(existing));
+}
+
+//! `state` as C API state. Throws if it is state of something else.
+static auto CastState(const string &key, shared_ptr<ClientContextState> state) -> shared_ptr<CV2ContextState> {
+	if (!state) {
+		return nullptr;
+	}
+	CheckState(key, *state);
+	return shared_ptr_cast<ClientContextState, CV2ContextState>(std::move(state));
+}
+
+//! The C API state under `key`, or null if the key has none. Throws if it is held by state of something else.
+static auto FindState(ClientContext &client, const string &key) -> shared_ptr<CV2ContextState> {
+	return CastState(key, client.GetContext().GetRegisteredState().Get<ClientContextState>(key));
 }
 
 static void GetOrCreateState(ClientContext &client, CV2Context &context, const string &key,
                              duckdb_v2_context_state_init_callback_fn init, void *init_user_data, void **data) {
 	auto state = FindState(client, key);
 	if (!state) {
-		state =
-		    client.GetContext().GetRegisteredState().GetOrCreate<CV2ContextState>(key, context, init, init_user_data);
+		// the init runs outside the registry lock, and loses to a state another thread registered meanwhile
+		auto created = make_shared_ptr<CV2ContextState>(context, init, init_user_data);
+		state = CastState(key, client.GetContext().GetRegisteredState().GetOrInsert(key, std::move(created)));
 	}
 	if (data) {
 		*data = state->GetUserData();
@@ -157,8 +167,10 @@ static void GetState(ClientContext &client, const string &key, bool *found, void
 
 static void RemoveState(ClientContext &client, const string &key) {
 	// refuse to remove what the C API did not register
-	FindState(client, key);
-	client.GetContext().GetRegisteredState().Remove(key);
+	client.GetContext().GetRegisteredState().RemoveIf(key, [&](ClientContextState &state) {
+		CheckState(key, state);
+		return true;
+	});
 }
 
 } // namespace duckdb::capiv2
