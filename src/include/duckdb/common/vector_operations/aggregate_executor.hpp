@@ -935,6 +935,10 @@ public:
 			return *reinterpret_cast<STATE_TYPE *>(storage);
 		}
 
+		AggregateInputData &GetInput() {
+			return aggr_input_data;
+		}
+
 		void Initialize() {
 			D_ASSERT(!initialized);
 			InitializeState<STATE_TYPE, OP>(Get());
@@ -955,34 +959,56 @@ public:
 		bool initialized = false;
 	};
 
+	//! Whether the aggregate's combine never leaves the target referencing the source's memory
+	DUCKDB_API static bool CombineNeverRetainsSource(const AggregateInputData &aggr_input_data);
+
 	template <class STATE_TYPE, class OP>
 	static void GenericRepeatedCombine(const STATE_TYPE &source, STATE_TYPE &target,
 	                                   AggregateInputData &aggr_input_data, idx_t multiplicity) {
 		AggregateInputData combine_input(aggr_input_data.function, aggr_input_data.bind_data, aggr_input_data.allocator,
 		                                 AggregateCombineType::PRESERVE_INPUT);
+		// if the final combine copies what the target keeps, each intermediate state gets a scratch arena, which is
+		// reset when the state is replaced
+		const bool scratch = CombineNeverRetainsSource(aggr_input_data);
+		auto &underlying_allocator = aggr_input_data.allocator.GetUnderlyingAllocator();
+		ArenaAllocator result_arena(underlying_allocator);
+		ArenaAllocator power_arena_a(underlying_allocator);
+		ArenaAllocator power_arena_b(underlying_allocator);
+		AggregateInputData result_input(aggr_input_data.function, aggr_input_data.bind_data,
+		                                scratch ? result_arena : aggr_input_data.allocator,
+		                                AggregateCombineType::PRESERVE_INPUT);
+		AggregateInputData power_input_a(aggr_input_data.function, aggr_input_data.bind_data,
+		                                 scratch ? power_arena_a : aggr_input_data.allocator,
+		                                 AggregateCombineType::PRESERVE_INPUT);
+		AggregateInputData power_input_b(aggr_input_data.function, aggr_input_data.bind_data,
+		                                 scratch ? power_arena_b : aggr_input_data.allocator,
+		                                 AggregateCombineType::PRESERVE_INPUT);
 
-		AggregateStateGuard<STATE_TYPE, OP> result(combine_input);
-		AggregateStateGuard<STATE_TYPE, OP> power_a(combine_input);
-		AggregateStateGuard<STATE_TYPE, OP> power_b(combine_input);
+		AggregateStateGuard<STATE_TYPE, OP> result(result_input);
+		AggregateStateGuard<STATE_TYPE, OP> power_a(power_input_a);
+		AggregateStateGuard<STATE_TYPE, OP> power_b(power_input_b);
 
 		result.Initialize();
 		power_a.Initialize();
-		OP::template Combine<STATE_TYPE, OP>(source, power_a.Get(), combine_input);
+		OP::template Combine<STATE_TYPE, OP>(source, power_a.Get(), power_input_a);
 
 		auto power = &power_a;
 		auto next_power = &power_b;
 		while (multiplicity > 0) {
 			if (multiplicity & 1) {
-				OP::template Combine<STATE_TYPE, OP>(power->Get(), result.Get(), combine_input);
+				OP::template Combine<STATE_TYPE, OP>(power->Get(), result.Get(), result_input);
 			}
 			multiplicity >>= 1;
 			if (multiplicity == 0) {
 				break;
 			}
 			next_power->Initialize();
-			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
-			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), next_power->GetInput());
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), next_power->GetInput());
 			power->Destroy();
+			if (scratch) {
+				power->GetInput().allocator.Reset();
+			}
 			std::swap(power, next_power);
 		}
 		OP::template Combine<STATE_TYPE, OP>(result.Get(), target, combine_input);

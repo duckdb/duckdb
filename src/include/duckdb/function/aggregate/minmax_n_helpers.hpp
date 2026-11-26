@@ -538,21 +538,6 @@ struct MinMaxNOperation {
 		target.heap.Insert(aggr_input.allocator, source.heap);
 	}
 
-	//! The intermediate heaps of a repeated combine go to a scratch arena: the combine copies the entries it keeps
-	template <class STATE, class OP>
-	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &aggr_input, idx_t count) {
-		if (!source.is_initialized) {
-			return;
-		}
-		// n copies of the source already hold the top n of any larger number of copies
-		count = MinValue(count, source.heap.Capacity());
-		ArenaAllocator scratch(aggr_input.allocator.GetUnderlyingAllocator());
-		AggregateInputData scratch_input(aggr_input.function, aggr_input.bind_data, scratch);
-		STATE result;
-		AggregateExecutor::GenericRepeatedCombine<STATE, OP>(source, result, scratch_input, count);
-		Combine<STATE, OP>(result, target, aggr_input);
-	}
-
 	template <class STATE>
 	static void Finalize(Vector &state_vector, AggregateFinalizeInputData &input_data, Vector &result, idx_t count,
 	                     idx_t offset) {

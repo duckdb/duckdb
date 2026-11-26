@@ -48,6 +48,10 @@ AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocat
                          allocator_p, combine_type_p) {
 }
 
+bool AggregateExecutor::CombineNeverRetainsSource(const AggregateInputData &aggr_input_data) {
+	return aggr_input_data.function.GetCombineSourceRetention() == AggregateCombineSourceRetention::NEVER_RETAINS;
+}
+
 AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
                                                        optional_ptr<const FunctionData> bind_data_p,
                                                        ArenaAllocator &allocator_p,
