@@ -221,7 +221,12 @@ static Value CreateHTTPHeadersValue(const HTTPHeaders &headers, const case_insen
                                     bool redact_http_logs) {
 	vector<Value> keys;
 	vector<Value> values;
+	case_insensitive_set_t seen;
 	for (const auto &header : headers) {
+		const bool first_occurrence = seen.insert(header.first).second;
+		if (!first_occurrence) {
+			continue;
+		}
 		keys.emplace_back(header.first);
 		const bool allow_value = !redact_http_logs || allow_list.find(header.first) != allow_list.end();
 		values.emplace_back(allow_value ? header.second : HTTPLogType::REDACTED_VALUE);

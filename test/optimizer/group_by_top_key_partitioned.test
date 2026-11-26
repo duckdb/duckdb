@@ -1,0 +1,121 @@
+# name: test/optimizer/group_by_top_key_partitioned.test
+# description: The top-key filter keeps the single-value partitions of its input: the partitioned aggregate is still chosen above it
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
+
+require parquet
+
+# 40 partitions of 500 rows each
+statement ok
+COPY (SELECT (i % 40)::INTEGER AS part, i AS v, (i % 7)::INTEGER AS w FROM range(20000) r(i)) TO '{TEST_DIR}/group_by_top_key_partitioned' (FORMAT parquet, PARTITION_BY (part));
+
+statement ok
+CREATE VIEW partitioned AS FROM read_parquet('{TEST_DIR}/group_by_top_key_partitioned/**/*.parquet', hive_types = {'part': 'INTEGER'});
+
+# without the rule: a partitioned aggregate, no filter
+statement ok
+SET disabled_optimizers = 'group_by_top_key';
+
+query II
+EXPLAIN SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part LIMIT 3
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part LIMIT 3
+----
+physical_plan	<!REGEX>:.*TOP_KEY_FILTER.*
+
+statement ok
+SET disabled_optimizers = '';
+
+# with the rule: the filter only removes rows and forwards every column, so the input of the aggregate is still
+# partitioned by the group key and the aggregate is still the partitioned one
+query II
+EXPLAIN SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part LIMIT 3
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*TOP_KEY_FILTER.*
+
+query II
+EXPLAIN SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part DESC LIMIT 3 OFFSET 2
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*TOP_KEY_FILTER.*
+
+# through a WHERE filter and a projection below the top-key filter
+query II
+EXPLAIN SELECT part, count(*), sum(v + 1) FROM partitioned WHERE w <> 3 GROUP BY part ORDER BY part LIMIT 3
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*TOP_KEY_FILTER.*
+
+# the LIMIT without ORDER BY
+query II
+EXPLAIN SELECT part, count(*), sum(v) FROM partitioned GROUP BY part LIMIT 3
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*TOP_KEY_FILTER.*
+
+# a group key that is not the partition column, and a key that is an expression over it: a hash aggregate with and
+# without the rule
+query II
+EXPLAIN SELECT part, w, count(*) FROM partitioned GROUP BY part, w ORDER BY part, w LIMIT 3
+----
+physical_plan	<!REGEX>:.*PARTITIONED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT part + 1 AS p, count(*) FROM partitioned GROUP BY p ORDER BY p LIMIT 3
+----
+physical_plan	<!REGEX>:.*PARTITIONED_AGGREGATE.*
+
+# the results, with the rule disabled and enabled, with one and eight threads
+foreach disabled 'group_by_top_key' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+foreach threads 1 8
+
+statement ok
+SET threads = {threads};
+
+query III
+SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part LIMIT 3
+----
+0	500	4990000
+1	500	4990500
+2	500	4991000
+
+query III
+SELECT part, count(*), sum(v) FROM partitioned GROUP BY part ORDER BY part DESC LIMIT 3 OFFSET 2
+----
+37	500	5008500
+36	500	5008000
+35	500	5007500
+
+query III
+SELECT part, count(*), sum(v + 1) FROM partitioned WHERE w <> 3 GROUP BY part ORDER BY part LIMIT 3
+----
+0	428	4268988
+1	429	4278018
+2	429	4286967
+
+query III nosort part_w
+SELECT part, w, count(*) FROM partitioned GROUP BY part, w ORDER BY part, w LIMIT 3
+----
+
+query II
+SELECT count(*), sum(c) FROM (SELECT part, count(*) c, sum(v) s FROM partitioned GROUP BY part LIMIT 3)
+----
+3	1500
+
+query II
+SELECT part, count(*) FROM partitioned GROUP BY part ORDER BY part LIMIT 100 OFFSET 38
+----
+38	500
+39	500
+
+endloop
+
+endloop

@@ -2098,13 +2098,14 @@ public:
 	struct RuntimeDecimal {
 		/// The unscaled value: the DECIMAL is `value / 10^scale`, e.g. 12345 for 123.45 at scale 2.
 		int128_t value;
-		uint8_t width;
-		uint8_t scale;
+		uint32_t width;
+		uint32_t scale;
 	};
 
 	/// Reads a DECIMAL of any width and scale, for when they are not known at compile time; `Get<WIDTH, SCALE>` is the
 	/// typed alternative.
-	/// @throws Exception When the value is NULL or not a DECIMAL.
+	/// @throws Exception When the value is NULL or not a DECIMAL, or when the backing integer of a DECIMAL wider than
+	/// 38 digits does not fit in 128 bits; `Get<bignum_t>()` reads the backing integer of any wide DECIMAL exactly.
 	auto GetDecimal() const -> RuntimeDecimal;
 
 	/// A NULL of the given type.
@@ -2156,10 +2157,11 @@ public:
 	/// typed alternative.
 	/// @param factory The factory to create the value with.
 	/// @param value The unscaled value, e.g. 12345 for 123.45 at scale 2.
-	/// @param width The number of digits, in [1, 255]; widths above 38 are stored as BIGNUM.
+	/// @param width The number of digits, at least 1 and at most the `max_decimal_width` setting of the factory's
+	/// connection (its default, 1000000, for the factory of an instance); widths above 38 are stored as BIGNUM.
 	/// @param scale The number of digits after the decimal point, at most `width`.
 	/// @throws Exception When the width or scale is out of range, or the value does not fit in `width` digits.
-	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
+	static auto CreateDecimal(Factory &factory, int128_t value, uint32_t width, uint32_t scale) -> Value;
 
 	static auto Create(Factory &factory, bit_t value) -> Value;
 	static auto Create(Factory &factory, bignum_t value) -> Value;
@@ -2242,7 +2244,7 @@ public:
 
 private:
 	/// @internal Reads the backing integer, throwing unless the value's own width and scale are the ones asked for.
-	void GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const;
+	void GetDecimal(int128_t &out, uint32_t width, uint32_t scale) const;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
 	/// every tier.

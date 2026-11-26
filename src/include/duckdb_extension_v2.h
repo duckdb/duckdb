@@ -292,7 +292,7 @@ typedef struct {
 	(duckdb_v2_factory_handle factory, int32_t in_value, duckdb_v2_value_handle *out_value,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_create_decimal)
-	(duckdb_v2_factory_handle factory, const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t scale,
+	(duckdb_v2_factory_handle factory, const duckdb_v2_hugeint_t *in_value, uint32_t width, uint32_t scale,
 	 duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_create_double)
 	(duckdb_v2_factory_handle factory, double in_value, duckdb_v2_value_handle *out_value,
@@ -397,7 +397,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_value_get_date)
 	(duckdb_v2_value_handle value, int32_t *out, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_get_decimal)
-	(duckdb_v2_value_handle value, duckdb_v2_hugeint_t *out, uint8_t *out_width, uint8_t *out_scale,
+	(duckdb_v2_value_handle value, duckdb_v2_hugeint_t *out, uint32_t *out_width, uint32_t *out_scale,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_get_double)
 	(duckdb_v2_value_handle value, double *out, duckdb_v2_error_info_handle *err);

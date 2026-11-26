@@ -11522,6 +11522,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
  * built-in kinds live. A qualified name is resolved exactly as written, with no system-catalog fallback, so it names
  * the type in that catalog or schema or fails.
  *
+ * The width of a DECIMAL, also one nested in another type, is bounded by the max_decimal_width setting of the factory's
+ * connection, and by the default of that setting, 1000000, for an instance's factory, which has no settings: the time
+ * and memory a wide decimal takes grow with its width. A wider type returns ERROR_INPUT_INVALID; create it with the
+ * factory of a connection that raised the setting. factory_create_type_from_id and factory_create_type_from_text apply
+ * the same bound.
+ *
  * Parameters are (name, value) pairs in two parallel arrays. param_names may be NULL to make every parameter
  * positional, and an empty entry makes that one parameter positional. Child types cross as TYPE values, built with
  * value_create_type. The built-in shapes are: decimal(width, scale); list(T); array(T, size); map(K, V); struct(fields,
@@ -18066,8 +18072,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_uuid(duckdb_v2_value_handle val
  * storage tier the width selects. The integer getters convert, so a DECIMAL read through value_get_bigint is its
  * numeric value with the fraction dropped; this one always reports storage instead, together with the scale needed to
  * interpret it. A value of any other type id, and a NULL value, return ERROR_INPUT_INVALID. A DECIMAL wider than 38
- * digits (stored as BIGNUM) is reported the same way as long as its backing integer fits in 128 bits; beyond that the
- * call fails and the exact storage is available through value_get_blob and bignum_decode, or through value_cast.
+ * digits (stored as BIGNUM) is reported the same way, whatever its width, as long as its backing integer fits in 128
+ * bits. Beyond that the call fails, and the exact backing integer is read without a conversion: value_get_blob hands
+ * back the BIGNUM storage bytes, bignum_decode turns them into a sign and a big-endian magnitude, and the width and
+ * scale come from the value's logical type (value_get_logical_type and logical_type_get_param).
  *
  * history:
  * - unstable: v2.0.0
@@ -18080,7 +18088,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_uuid(duckdb_v2_value_handle val
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb_v2_hugeint_t *out,
-                                                         uint8_t *out_width, uint8_t *out_scale,
+                                                         uint32_t *out_width, uint32_t *out_scale,
                                                          duckdb_v2_error_info_handle *err);
 #endif
 
@@ -18691,26 +18699,31 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_h
 /*!
  * Creates a DECIMAL value from its backing integer.
  *
- * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..255, the
- * range of the uint8_t parameter; scale is the number of digits after the point and must not exceed width. Violating
- * either returns ERROR_INPUT_INVALID, as does a value that does not fit in width digits. Widths above 38 build a wide
- * decimal stored as BIGNUM, for which the 128-bit backing integer always fits. value_cast reaches decimals wider than
- * 255 digits.
+ * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be at least 1;
+ * scale is the number of digits after the point and must not exceed width. Violating either returns
+ * ERROR_INPUT_INVALID, as does a value that does not fit in width digits. Widths above 38 build a wide decimal stored
+ * as BIGNUM, for which the 128-bit backing integer always fits; a wide decimal whose backing integer needs more than
+ * 128 bits is built through value_cast.
+ *
+ * The width is bounded like the width of a DECIMAL type the factory creates (see factory_create_type_from_name): by the
+ * max_decimal_width setting of the factory's connection, and by the default of that setting, 1000000, for an instance's
+ * factory. A wider width returns ERROR_INPUT_INVALID; use the factory of a connection that raised the setting.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param factory The factory to create with.
  * @param in_value The backing integer, scaled by 10^scale.
- * @param width Total digit count, 1..255 (the range of the uint8_t).
+ * @param width Total digit count, at least 1 and at most the factory's maximum DECIMAL width; widths above 38 are wide
+ * decimals.
  * @param scale Digits after the decimal point; must not exceed width.
  * @param out_value Receives the new DECIMAL value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal(duckdb_v2_factory_handle factory,
-                                                            const duckdb_v2_hugeint_t *in_value, uint8_t width,
-                                                            uint8_t scale, duckdb_v2_value_handle *out_value,
+                                                            const duckdb_v2_hugeint_t *in_value, uint32_t width,
+                                                            uint32_t scale, duckdb_v2_value_handle *out_value,
                                                             duckdb_v2_error_info_handle *err);
 #endif
 

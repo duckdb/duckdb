@@ -24,6 +24,14 @@ public:
 		return numerator.significand == 0;
 	}
 
+	double GetLog() const {
+		if (IsZero()) {
+			return -std::numeric_limits<double>::infinity();
+		}
+		return std::log(numerator.significand) - std::log(denominator) +
+		       static_cast<double>(numerator.exponent) * std::log(2.0);
+	}
+
 	double GetDouble() const {
 		if (IsZero()) {
 			return 0;
