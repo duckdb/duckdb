@@ -209,13 +209,24 @@ protected:
 	                                              bool extract_filters = true);
 
 private:
+	struct LogicalSubtreeProperties {
+		bool has_side_effects = false;
+		bool has_recursive_cte = false;
+	};
+	class LogicalPlanProperties;
+
 	ClientContext &context;
 	unique_ptr<PhysicalPlan> physical_plan;
 	reference_set_t<const PhysicalOperator> non_repeatable_operators;
+	//! Properties of the logical input before conversion consumes its expressions.
+	optional_ptr<const LogicalPlanProperties> logical_properties;
 
 private:
+	LogicalSubtreeProperties GetLogicalProperties(const LogicalOperator &op) const;
+	//! Reuses properties for existing logical children. Use CreatePlan for new or replaced subtrees.
+	PhysicalOperator &CreatePlanRecursive(LogicalOperator &op);
 	PhysicalOperator &CreatePlanInternal(LogicalOperator &op);
-	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
+	PhysicalOperator &ResolveAndPlan(LogicalOperator &logical);
 	unique_ptr<PhysicalPlan> PlanInternal(LogicalOperator &logical);
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);

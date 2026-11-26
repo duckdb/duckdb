@@ -353,8 +353,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	// Estimate the join cardinality before planning the children - planning consumes the bind data of their scans
 	const idx_t join_cardinality = op.EstimateCardinality(context);
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
+	auto &left = CreatePlanRecursive(*op.children[0]);
+	auto &right = CreatePlanRecursive(*op.children[1]);
 
 	//	Validate
 	vector<idx_t> equi_indexes;

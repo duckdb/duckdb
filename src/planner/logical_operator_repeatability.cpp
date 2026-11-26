@@ -122,10 +122,7 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 	return LogicalOperatorRepeatability::UNKNOWN;
 }
 
-LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperator &op) {
-	if (op.HasSideEffects()) {
-		return LogicalOperatorRepeatability::NON_REPEATABLE;
-	}
+LogicalOperatorRepeatability ClassifyLogicalOperatorLocalRepeatability(LogicalOperator &op) {
 	auto classification = ClassifyOperatorType(op);
 	if (classification != LogicalOperatorRepeatability::REPEATABLE) {
 		return classification;
@@ -136,6 +133,13 @@ LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperato
 	});
 	return expressions_repeatable ? LogicalOperatorRepeatability::REPEATABLE
 	                              : LogicalOperatorRepeatability::NON_REPEATABLE;
+}
+
+LogicalOperatorRepeatability ClassifyLogicalOperatorRepeatability(LogicalOperator &op) {
+	if (op.HasSideEffects()) {
+		return LogicalOperatorRepeatability::NON_REPEATABLE;
+	}
+	return ClassifyLogicalOperatorLocalRepeatability(op);
 }
 
 bool LogicalSubtreeIsRepeatable(LogicalOperator &op) {

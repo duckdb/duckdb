@@ -43,7 +43,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	                                               create_info.GetTableName());
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
-		auto &plan = CreatePlan(*op.children[0]);
+		auto &plan = CreatePlanRecursive(*op.children[0]);
 		return op.schema.catalog.PlanCreateTableAs(context, *this, op, plan);
 	}
 	return Make<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);

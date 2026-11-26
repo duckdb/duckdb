@@ -6,7 +6,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPivot &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 	return Make<PhysicalPivot>(std::move(op.types), plan, std::move(op.bound_pivot));
 }
 

@@ -144,7 +144,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
 	optional_ptr<PhysicalOperator> plan;
 	if (!op.children.empty()) {
 		D_ASSERT(op.children.size() == 1);
-		plan = CreatePlan(*op.children[0]);
+		plan = CreatePlanRecursive(*op.children[0]);
 	}
 	dependencies.AddDependency(op.table);
 	return op.table.catalog.PlanInsert(context, *this, op, plan);
