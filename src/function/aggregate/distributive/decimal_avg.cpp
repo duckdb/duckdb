@@ -140,31 +140,9 @@ struct WideDecimalAvgOperation : BignumAvgOperation {
 		const string count_blob = DecimalHelper<bignum_t>::FromInteger(uhugeint_t(state.count));
 		const bignum_t count_value {string_t(count_blob)};
 		const BignumIntermediate divisor(count_value);
-		string_t quotient;
-		string_t remainder;
-		if (!BignumIntermediate::TryDivMod(heap, arithmetic, state.value, divisor, quotient, remainder)) {
-			throw InternalException("decimal_average: division of the sum by the count failed");
-		}
-		if (!DecimalHelper<bignum_t>::IsZero(bignum_t(remainder))) {
-			// the quotient is truncated towards zero: round half to even, away from zero in the sign of the sum
-			const bignum_t remainder_value(remainder);
-			const BignumIntermediate remainder_intermediate(remainder_value);
-			const bignum_t twice_remainder {
-			    BignumIntermediate::Add(heap, remainder_intermediate, remainder_intermediate)};
-			const BignumIntermediate twice_remainder_intermediate(twice_remainder);
-			const bignum_t quotient_value(quotient);
-			const BignumIntermediate quotient_intermediate(quotient_value);
-			const auto comparison = twice_remainder_intermediate.IsAbsoluteBigger(divisor);
-			const bool quotient_is_odd =
-			    quotient_intermediate.GetAbsoluteByte(NumericCast<int64_t>(quotient_intermediate.size) - 1) & 1;
-			if (comparison == GREATER || (comparison == EQUAL && quotient_is_odd)) {
-				const bool negative = DecimalHelper<bignum_t>::IsNegative(remainder_value);
-				const string step_blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(negative ? -1 : 1));
-				const bignum_t step_value {string_t(step_blob)};
-				const BignumIntermediate step(step_value);
-				quotient = BignumIntermediate::Add(heap, quotient_intermediate, step);
-			}
-		}
+		// the sum is divided once and rounded half to even, like in the fixed-size tiers
+		const auto quotient = DecimalHelper<bignum_t>::DivideAndRound(state.value, divisor,
+		                                                              DecimalRounding::HALF_TO_EVEN, heap, arithmetic);
 		// the average of values of the width fits the width, but an imported state can carry any sum
 		const auto &result_type = finalize_data.result.GetType();
 		if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(quotient), DecimalType::GetWidth(result_type))) {
