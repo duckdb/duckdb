@@ -1,8 +1,10 @@
 #include "duckdb/common/multi_file/table_function_query_filter.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
@@ -50,8 +52,27 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 	}
 	QueryResultStream<> stream(std::move(submitted));
 	auto &types = stream.GetTypes();
+	if (types.size() == 2) {
+		if (types[0].id() != LogicalTypeId::BIGINT || types[1].id() != LogicalTypeId::BIGINT) {
+			throw InvalidInputException("The filter query of file %s must return two BIGINT columns (row_start, "
+			                            "row_end) when it returns ranges",
+			                            path);
+		}
+		has_ranges = true;
+		while (auto chunk = stream.Fetch()) {
+			if (chunk->size() == 0) {
+				break;
+			}
+			AddRanges(*chunk);
+		}
+		if (stream.HasError()) {
+			stream.GetErrorObject().Throw(StringUtil::Format("Failed to read the filter query of file %s: ", path));
+		}
+		FinalizeRanges();
+		return;
+	}
 	if (types.size() != 1) {
-		throw InvalidInputException("The filter query of file %s must return a single column", path);
+		throw InvalidInputException("The filter query of file %s must return a single column, or two for ranges", path);
 	}
 	auto type = types[0].InternalType();
 	bool is_bitmap = types[0].id() == LogicalTypeId::BIT;
@@ -80,28 +101,28 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 		}
 		switch (type) {
 		case PhysicalType::INT8:
-			AddRowIds<int8_t>(column, path);
+			AddRowIds<int8_t>(column);
 			break;
 		case PhysicalType::INT16:
-			AddRowIds<int16_t>(column, path);
+			AddRowIds<int16_t>(column);
 			break;
 		case PhysicalType::INT32:
-			AddRowIds<int32_t>(column, path);
+			AddRowIds<int32_t>(column);
 			break;
 		case PhysicalType::INT64:
-			AddRowIds<int64_t>(column, path);
+			AddRowIds<int64_t>(column);
 			break;
 		case PhysicalType::UINT8:
-			AddRowIds<uint8_t>(column, path);
+			AddRowIds<uint8_t>(column);
 			break;
 		case PhysicalType::UINT16:
-			AddRowIds<uint16_t>(column, path);
+			AddRowIds<uint16_t>(column);
 			break;
 		case PhysicalType::UINT32:
-			AddRowIds<uint32_t>(column, path);
+			AddRowIds<uint32_t>(column);
 			break;
 		case PhysicalType::UINT64:
-			AddRowIds<uint64_t>(column, path);
+			AddRowIds<uint64_t>(column);
 			break;
 		default:
 			throw InvalidInputException("The filter query of file %s must return integers or a BIT, not %s", path,
@@ -114,7 +135,7 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 }
 
 template <class T>
-void TableFunctionQueryFilter::AddRowIds(Vector &row_ids, const string &path) {
+void TableFunctionQueryFilter::AddRowIds(Vector &row_ids) {
 	auto data = reinterpret_cast<uint8_t *>(&scan_bits[0]);
 	auto padding = idx_t(data[0]);
 	for (auto entry : row_ids.ValidValues<T>()) {
@@ -141,14 +162,103 @@ void TableFunctionQueryFilter::AddBitmap(const char *data, idx_t size, const str
 	}
 }
 
+void TableFunctionQueryFilter::AddRanges(DataChunk &chunk) {
+	auto starts = chunk.data[0].Values<int64_t>();
+	auto ends = chunk.data[1].Values<int64_t>();
+	for (idx_t i = 0; i < chunk.size(); i++) {
+		auto row_start = starts[i];
+		auto row_end = ends[i];
+		idx_t range_start = 0;
+		idx_t range_end = NumericLimits<idx_t>::Maximum();
+		if (row_start.IsValid() && row_start.GetValue() > 0) {
+			range_start = NumericCast<idx_t>(row_start.GetValue());
+		}
+		if (row_end.IsValid()) {
+			if (row_end.GetValue() <= 0) {
+				continue;
+			}
+			range_end = NumericCast<idx_t>(row_end.GetValue());
+		}
+		if (range_start < range_end) {
+			scan_ranges.emplace_back(range_start, range_end);
+		}
+	}
+}
+
+void TableFunctionQueryFilter::FinalizeRanges() {
+	sort(scan_ranges.begin(), scan_ranges.end());
+	vector<pair<idx_t, idx_t>> merged;
+	for (auto &range : scan_ranges) {
+		if (!merged.empty() && range.first <= merged.back().second) {
+			merged.back().second = MaxValue<idx_t>(merged.back().second, range.second);
+			continue;
+		}
+		merged.push_back(range);
+	}
+	scan_ranges = std::move(merged);
+}
+
 bool TableFunctionQueryFilter::RowIsScanned(idx_t row_idx) const {
 	auto data = reinterpret_cast<const uint8_t *>(scan_bits.data());
 	auto pos = row_idx + data[0];
 	return (data[1 + pos / 8] >> (7 - pos % 8)) & 1;
 }
 
+bool TableFunctionQueryFilter::RowsAreScanned(idx_t row_start, idx_t count) const {
+	if (row_start + count > bit_count) {
+		return false;
+	}
+	auto data = reinterpret_cast<const uint8_t *>(scan_bits.data());
+	auto pos = row_start + data[0];
+	auto end = pos + count;
+	auto bit_is_set = [&](idx_t bit_pos) {
+		return (data[1 + bit_pos / 8] >> (7 - bit_pos % 8)) & 1;
+	};
+	for (; pos < end && pos % 8 != 0; pos++) {
+		if (!bit_is_set(pos)) {
+			return false;
+		}
+	}
+	for (; pos + 8 <= end; pos += 8) {
+		if (data[1 + pos / 8] != 0xFF) {
+			return false;
+		}
+	}
+	for (; pos < end; pos++) {
+		if (!bit_is_set(pos)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 idx_t TableFunctionQueryFilter::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 	auto start = NumericCast<idx_t>(start_row_index);
+	auto end = start + count;
+	if (has_ranges) {
+		// the first range that ends after the start of these rows
+		auto range = std::upper_bound(scan_ranges.begin(), scan_ranges.end(), start,
+		                              [](idx_t row, const pair<idx_t, idx_t> &r) { return row < r.second; });
+		if (range == scan_ranges.end() || range->first >= end) {
+			return 0;
+		}
+		if (range->first <= start && range->second >= end) {
+			return count;
+		}
+		result_sel.Initialize(STANDARD_VECTOR_SIZE);
+		idx_t result_count = 0;
+		for (; range != scan_ranges.end() && range->first < end; ++range) {
+			auto range_start = MaxValue<idx_t>(range->first, start);
+			auto range_end = MinValue<idx_t>(range->second, end);
+			for (idx_t row = range_start; row < range_end; row++) {
+				result_sel.set_index(result_count++, row - start);
+			}
+		}
+		return result_count;
+	}
+	if (RowsAreScanned(start, count)) {
+		return count;
+	}
 	result_sel.Initialize(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < count && start + i < bit_count; i++) {

@@ -199,7 +199,7 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.p
 bitmaps of different sizes
 
 statement error
-SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1, 2'}])
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1, 2, 3'}])
 ----
 must return a single column
 
@@ -207,3 +207,100 @@ statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''x'''}])
 ----
 must return integers or a BIT
+
+# two BIGINT columns are the ranges of rows to scan
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 2::BIGINT AS row_start, 5::BIGINT AS row_end'}])
+----
+2
+3
+4
+
+# ranges can be in any order, overlap and touch
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (6::BIGINT, 8::BIGINT), (0::BIGINT, 2::BIGINT), (1::BIGINT, 3::BIGINT), (3::BIGINT, 4::BIGINT))'}])
+----
+0
+1
+2
+3
+6
+7
+
+# a NULL start is the start of the file and a NULL end the end of the file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (NULL::BIGINT, 2::BIGINT), (7::BIGINT, NULL::BIGINT))'}])
+----
+0
+1
+7
+8
+9
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT NULL::BIGINT, NULL::BIGINT'}])
+----
+10
+
+# empty ranges, reversed ranges and ranges past the end of the file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (3::BIGINT, 3::BIGINT), (6::BIGINT, 4::BIGINT), (-5::BIGINT, 1::BIGINT), (8::BIGINT, 100::BIGINT), (200::BIGINT, 300::BIGINT))'}])
+----
+0
+8
+9
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, 2::BIGINT WHERE false'}])
+----
+0
+
+# the ranges between deleted positions
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'WITH deleted AS (SELECT DISTINCT unnest([5, 2, 9, 2])::BIGINT AS pos) SELECT coalesce(lag(pos) OVER (ORDER BY pos) + 1, 0) AS row_start, pos AS row_end FROM deleted UNION ALL SELECT coalesce(max(pos) + 1, 0), NULL::BIGINT FROM deleted'}])
+----
+0
+1
+3
+4
+6
+7
+8
+
+# no deleted positions: all of the file
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'WITH deleted AS (SELECT 1::BIGINT AS pos WHERE false) SELECT coalesce(lag(pos) OVER (ORDER BY pos) + 1, 0) AS row_start, pos AS row_end FROM deleted UNION ALL SELECT coalesce(max(pos) + 1, 0), NULL::BIGINT FROM deleted'}])
+----
+10
+
+# ranges do not need the number of rows of the file, and span several vectors
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_large.parquet', 'filter_query': 'SELECT * FROM (VALUES (0::BIGINT, 5000::BIGINT), (7000::BIGINT, NULL::BIGINT))'}])
+----
+8000	37996000
+
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_large.parquet', 'filter_query': 'SELECT 1000::BIGINT, 1010::BIGINT'}])
+----
+10	10045
+
+# a bitmap that scans all rows of a vector, or all but a few
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_large.parquet', 'filter_query': 'SELECT ~bitstring(''0'', 10000)'}])
+----
+10000	49995000
+
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_large.parquet', 'filter_query': 'SELECT ~set_bit(bitstring(''0'', 10000), 5000, 1)'}])
+----
+9999	49990000
+
+query II
+SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_large.parquet', 'filter_query': 'SELECT ~set_bit(bitstring(''0'', 9999), 3, 1)'}])
+----
+9998	49984998
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::INTEGER, 2::INTEGER'}])
+----
+two BIGINT columns
