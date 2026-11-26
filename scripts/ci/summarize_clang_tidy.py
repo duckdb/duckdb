@@ -14,7 +14,7 @@ CLANG_TIDY_STATUS_PATTERNS = (
     re.compile(r"^Found compiler error\(s\)\.$"),
 )
 BUILD_STATUS_PATTERN = re.compile(r"^(?:make(?:\[\d+\])?:|ninja:)")
-WORKER_STATUS_PATTERN = re.compile(r"^(?:Running clang-tidy shard |Peak concurrent clang-tidy workers: )")
+WORKER_STATUS_PATTERN = re.compile(r"^Running clang-tidy shard ")
 FAILURE_TAIL_LINES = 100
 
 

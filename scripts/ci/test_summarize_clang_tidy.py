@@ -75,7 +75,6 @@ class SummarizeClangTidyTest(unittest.TestCase):
     def test_preserves_worker_counts_for_success_and_failure(self):
         worker_status = [
             "Running clang-tidy shard 1/1 on 1000 of 1000 files with 32 parallel workers",
-            "Peak concurrent clang-tidy workers: 32/32",
         ]
         error_block = [
             "/work/a.cpp:3:4: error: first error [check-a,-warnings-as-errors]",
@@ -88,10 +87,10 @@ class SummarizeClangTidyTest(unittest.TestCase):
             [*worker_status, "No clang-tidy errors found."],
         )
         self.assertEqual(
-            SUMMARIZE_CLANG_TIDY.summarize([worker_status[0], *error_block, worker_status[1]], 1),
+            SUMMARIZE_CLANG_TIDY.summarize([*error_block, worker_status[0]], 1),
             [*worker_status, "Found 1 unique clang-tidy error:", "", *error_block],
         )
-        self.assertEqual(SUMMARIZE_CLANG_TIDY.summarize(worker_status, 2)[:2], worker_status)
+        self.assertEqual(SUMMARIZE_CLANG_TIDY.summarize(worker_status, 2)[:1], worker_status)
 
 
 if __name__ == "__main__":

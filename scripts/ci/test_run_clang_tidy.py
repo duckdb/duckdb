@@ -132,7 +132,6 @@ sys.exit({exit_code} if source.stem == 'file_63' else 0)
 
                 self.assertEqual(result.returncode, exit_code, result.stdout + result.stderr)
                 self.assertIn("on 64 of 64 files with 32 parallel workers", result.stdout)
-                self.assertIn("Peak concurrent clang-tidy workers: 32/32", result.stdout)
                 self.assertEqual(len(list(build_path.glob("*.started"))), len(files))
 
 

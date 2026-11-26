@@ -184,7 +184,7 @@ def apply_fixes(args, tmpdir):
     subprocess.call(invocation)
 
 
-def run_tidy(args, tmpdir, build_path, queue, lock, failed_files, worker_stats):
+def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
     """Takes filenames out of queue and runs clang-tidy on them."""
     while True:
         name = queue.get()
@@ -202,14 +202,7 @@ def run_tidy(args, tmpdir, build_path, queue, lock, failed_files, worker_stats):
         )
 
         proc = subprocess.Popen(invocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        with lock:
-            worker_stats['active'] += 1
-            worker_stats['peak'] = max(worker_stats['peak'], worker_stats['active'])
-        try:
-            output, err = proc.communicate()
-        finally:
-            with lock:
-                worker_stats['active'] -= 1
+        output, err = proc.communicate()
         if proc.returncode != 0:
             failed_files.append(name)
             with lock:
@@ -349,11 +342,8 @@ def main():
         # List of files with a non-zero return code.
         failed_files = []
         lock = threading.Lock()
-        worker_stats = {'active': 0, 'peak': 0}
         for _ in range(max_task):
-            t = threading.Thread(
-                target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files, worker_stats)
-            )
+            t = threading.Thread(target=run_tidy, args=(args, tmpdir, build_path, task_queue, lock, failed_files))
             t.daemon = True
             t.start()
 
@@ -363,7 +353,6 @@ def main():
 
         # Wait for all threads to be done.
         task_queue.join()
-        print('Peak concurrent clang-tidy workers: {}/{}'.format(worker_stats['peak'], max_task))
         if len(failed_files):
             return_code = 1
 
