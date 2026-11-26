@@ -73,10 +73,10 @@ NULL	NULL	NULL	NULL
 
 # it round-trips through CSV
 statement ok
-COPY (SELECT make_date(-2147483648) AS d) TO '__TEST_DIR__/date_int32_min.csv';
+COPY (SELECT make_date(-2147483648) AS d) TO '{TEST_DIR}/date_int32_min.csv';
 
 query I
-SELECT d FROM read_csv('__TEST_DIR__/date_int32_min.csv', columns={'d': 'DATE'});
+SELECT d FROM read_csv('{TEST_DIR}/date_int32_min.csv', columns={'d': 'DATE'});
 ----
 5877642-06-23 (BC)
 
