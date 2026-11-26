@@ -109,7 +109,8 @@ TEST_CASE("A failed close of a temporary directory marker is reported", "[api]")
 
 	// the marker whose close failed is removed
 	vector<string> files;
-	marker_fs.ListFiles(temp_directory, [&](const string &name, bool) { files.push_back(name); });
+	marker_fs.ListFiles(
+	    temp_directory, [&](const string &name, bool) { files.push_back(name); }, nullptr);
 	REQUIRE(files.empty());
 }
 #endif

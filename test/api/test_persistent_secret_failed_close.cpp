@@ -71,11 +71,12 @@ TEST_CASE("A failed close of a persistent secret file is reported", "[api]") {
 	result = con.Query("SELECT count(*) FROM duckdb_secrets() WHERE name = 's'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	vector<string> files;
-	secret_fs.ListFiles(secret_directory, [&](const string &name, bool) { files.push_back(name); });
+	secret_fs.ListFiles(
+	    secret_directory, [&](const string &name, bool) { files.push_back(name); }, nullptr);
 	REQUIRE(files.empty());
 
 	secret_fs.fail_close = false;
 	REQUIRE_NO_FAIL(con.Query("CREATE PERSISTENT SECRET s (TYPE http, BEARER_TOKEN 'abc')"));
-	REQUIRE(secret_fs.FileExists(secret_fs.JoinPath(secret_directory, "s.duckdb_secret")));
+	REQUIRE(secret_fs.FileExists(secret_fs.JoinPath(secret_directory, "s.duckdb_secret"), nullptr));
 }
 #endif
