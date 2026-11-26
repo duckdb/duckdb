@@ -138,6 +138,9 @@ void WindowRangeBoundary::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(106, "result_casts", result_casts);
 	serializer.WriteProperty(107, "boundary", boundary);
 	serializer.WriteProperty(108, "direction", direction);
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<Value>(109, "offset", offset, Value());
+	}
 }
 
 unique_ptr<WindowRangeBoundary> WindowRangeBoundary::Deserialize(Deserializer &deserializer) {
@@ -151,6 +154,7 @@ unique_ptr<WindowRangeBoundary> WindowRangeBoundary::Deserialize(Deserializer &d
 	deserializer.ReadProperty(106, "result_casts", result->result_casts);
 	deserializer.ReadProperty(107, "boundary", result->boundary);
 	deserializer.ReadProperty(108, "direction", result->direction);
+	result->offset = deserializer.ReadPropertyWithExplicitDefault<Value>(109, "offset", Value());
 	return result;
 }
 } // namespace duckdb

@@ -1,8 +1,6 @@
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -15,35 +13,21 @@ struct WindowSQLFrame {
 	optional_ptr<const Expression> order;
 	optional_ptr<const Expression> start;
 	optional_ptr<const Expression> end;
-	unique_ptr<Expression> start_literal;
-	unique_ptr<Expression> end_literal;
+	unique_ptr<Expression> start_constant;
+	unique_ptr<Expression> end_constant;
 };
 
-static optional<Value> NumericRangeLiteral(const ParsedExpression &literal) {
-	if (literal.GetExpressionClass() == ExpressionClass::CONSTANT) {
-		auto value = literal.Cast<ConstantExpression>().GetLiteral().ToValue();
-		return value.type().IsNumeric() && !value.IsNull() ? optional<Value>(value) : optional<Value>();
-	}
-	if (literal.GetExpressionClass() == ExpressionClass::CAST) {
-		auto &cast = literal.Cast<CastExpression>();
-		auto type = UnboundType::TryDefaultBind(cast.TargetType());
-		auto child = NumericRangeLiteral(cast.Child());
-		if (child && type.IsNumeric() && !cast.IsTryCast()) {
-			return child->DefaultTryCastAs(type);
-		}
-	}
-	return {};
+static bool IsRangeOffset(WindowBoundary boundary) {
+	return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
 }
 
-//! The SQL offset of a RANGE frame endpoint: the retained literal when it still describes the endpoint,
-//! otherwise the live input the binder's endpoint arithmetic was derived from
+//! The SQL offset of a RANGE frame endpoint: the live input the binder's endpoint arithmetic was derived from, or the
+//! recorded zero offset when the optimizer removed that arithmetic
 static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &expression, const WindowSQLFrame &frame,
                                                   const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
-                                                  const unique_ptr<Expression> &literal,
-                                                  const unique_ptr<WindowRangeBoundary> &origin) {
-	const bool is_range_offset =
-	    boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
-	if (!is_range_offset) {
+                                                  const unique_ptr<WindowRangeBoundary> &origin,
+                                                  unique_ptr<Expression> &constant) {
+	if (!IsRangeOffset(boundary)) {
 		return endpoint.get();
 	}
 	if (!origin || !endpoint || !frame.order) {
@@ -54,13 +38,13 @@ static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &e
 	if (!origin_matches_endpoint) {
 		return nullptr;
 	}
-	const bool has_literal_offset = literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
-	const bool endpoint_is_order = has_literal_offset && Expression::Equals(*endpoint, *order.expression);
-	if (endpoint_is_order) {
-		auto &value = literal->Cast<BoundConstantExpression>().GetValue();
-		if (!value.IsNull() && value.type().IsNumeric() && value == Value::Numeric(value.type(), 0)) {
-			return literal.get();
-		}
+	auto &recorded = origin->offset;
+	const bool is_zero_offset =
+	    !recorded.IsNull() && recorded.type().IsNumeric() && recorded == Value::Numeric(recorded.type(), 0);
+	if (is_zero_offset && Expression::Equals(*endpoint, *order.expression)) {
+		// the recorded constant has the type the arithmetic took it in, so that the exported frame binds the same call
+		constant = make_uniq<BoundConstantExpression>(recorded);
+		return constant.get();
 	}
 	auto input = origin->Match(*endpoint, *frame.order);
 	if (!input) {
@@ -70,14 +54,6 @@ static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &e
 	const bool offset_is_constant = offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
 	if (offset_is_constant && offset.Cast<BoundConstantExpression>().GetValue().IsNull()) {
 		return nullptr;
-	}
-	if (has_literal_offset && offset_is_constant) {
-		auto &original = literal->Cast<BoundConstantExpression>().GetValue();
-		auto &current = offset.Cast<BoundConstantExpression>().GetValue();
-		const bool has_numeric_offsets = original.type().IsNumeric() && current.type().IsNumeric();
-		if (!original.IsNull() && has_numeric_offsets && original == current) {
-			return literal.get();
-		}
 	}
 	return &offset;
 }
@@ -104,16 +80,10 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 			frame.order = nullptr;
 		}
 	}
-	auto retained_offset = [&](const unique_ptr<ParsedExpression> &literal) -> unique_ptr<Expression> {
-		auto value = literal ? NumericRangeLiteral(*literal) : optional<Value>();
-		return value ? make_uniq<BoundConstantExpression>(*value) : nullptr;
-	};
-	frame.start_literal = retained_offset(expression.SQLRangeStart());
-	frame.end_literal = retained_offset(expression.SQLRangeEnd());
-	frame.start = RangeOffset(expression, frame, expression.StartExpr(), expression.WindowStart(), frame.start_literal,
-	                          expression.SQLRangeStartBoundary());
-	frame.end = RangeOffset(expression, frame, expression.EndExpr(), expression.WindowEnd(), frame.end_literal,
-	                        expression.SQLRangeEndBoundary());
+	frame.start = RangeOffset(expression, frame, expression.StartExpr(), expression.WindowStart(),
+	                          expression.SQLRangeStartBoundary(), frame.start_constant);
+	frame.end = RangeOffset(expression, frame, expression.EndExpr(), expression.WindowEnd(),
+	                        expression.SQLRangeEndBoundary(), frame.end_constant);
 	return frame;
 }
 

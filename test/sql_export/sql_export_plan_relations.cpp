@@ -252,7 +252,7 @@ TEST_CASE("Window SQL range origins survive copies and optional serialization fi
 			REQUIRE(window.SQLRangeOrderType() == order_types[i]);
 			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 			REQUIRE(exported.IsSuccess());
-			window.RetainSQLRange(nullptr, nullptr, LogicalType::INVALID);
+			window.RetainSQLRange(LogicalType::INVALID);
 			window.SQLRangeStartBoundaryMutable().reset();
 			window.SQLRangeEndBoundaryMutable().reset();
 			window.SQLRangeOrderCastsMutable().clear();

@@ -82,6 +82,16 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	if (origin) {
 		*origin = WindowRangeBoundary::Capture(*function, *bound_order, *offset);
 	}
+	if (origin && *origin) {
+		// a constant offset is recorded in the type the call takes it in, which is the type its SQL has to be
+		// exported in for the frame to bind this call again
+		auto &fitted_offset = *function->Cast<BoundFunctionExpression>().GetChildren()[1];
+		Value fitted_value;
+		if (fitted_offset.IsFoldable() && ExpressionExecutor::TryEvaluateScalar(context, fitted_offset, fitted_value) &&
+		    !fitted_value.IsNull()) {
+			(*origin)->offset = std::move(fitted_value);
+		}
+	}
 	bound = std::move(function);
 	return bound->GetReturnType();
 }
@@ -346,8 +356,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	const bool range_end = window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE ||
 	                       window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE;
 	if ((range_start || range_end) && bound_orders.size() == 1) {
-		result->RetainSQLRange(range_start ? bound_start.get() : nullptr, range_end ? bound_end.get() : nullptr,
-		                       bound_orders[0]->GetReturnType());
+		result->RetainSQLRange(bound_orders[0]->GetReturnType());
 	}
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.

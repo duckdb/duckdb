@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -41,6 +42,8 @@ struct WindowRangeBoundary {
 	LogicalType return_type;
 	LogicalType order_type;
 	LogicalType offset_type;
+	//! The value of a constant offset in offset_type, NULL for any other offset
+	Value offset;
 	vector<WindowRangeCast> order_casts;
 	vector<WindowRangeCast> result_casts;
 
