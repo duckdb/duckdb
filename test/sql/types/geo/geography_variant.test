@@ -36,25 +36,14 @@ true
 statement ok
 SET variant_minimum_shredding_size = 0;
 
-# Storage versions that predate GEOGRAPHY keep the values unshredded
+# Storage versions that predate GEOGRAPHY refuse the values, their engines cannot read them back
 statement ok
 ATTACH '{TEST_DIR}/geography_variant_v2_0_0.db' AS v20 (STORAGE_VERSION 'v2.0.0');
 
-statement ok
+statement error
 CREATE TABLE v20.t AS SELECT ('POINT(' || (i % 180) || ' 1)')::GEOGRAPHY::VARIANT v FROM range(3000) r(i);
-
-statement ok
-CHECKPOINT v20;
-
-query I
-SELECT count(*) FROM pragma_storage_info('v20.t') WHERE segment_type = 'GEOGRAPHY';
 ----
-0
-
-query III
-SELECT count(*), count(DISTINCT v::GEOGRAPHY), any_value(variant_type(v)) FROM v20.t;
-----
-3000	180	GEOGRAPHY
+GEOGRAPHY values cannot be stored in a VARIANT column in storage versions prior to v2.1.0
 
 # Newer storage versions shred the values into a GEOGRAPHY column
 statement ok

@@ -12,8 +12,9 @@ create table tbl (
 	col VARIANT
 )
 
+# GEOGRAPHY values cannot be stored in a VARIANT column at this storage version
 statement ok
-insert into tbl select t::VARIANT var from test_all_types() t
+insert into tbl select t::VARIANT var from (select * EXCLUDE (geography) from test_all_types()) t
 
 statement ok
 checkpoint
