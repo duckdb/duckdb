@@ -177,6 +177,16 @@ EXPLAIN SELECT (SELECT sum(paid) FROM read_parquet('{TEST_DIR}/sam_a.parquet') s
 ----
 physical_plan	<!REGEX>:[\s\S]*(Function: READ_PARQUET|Table: (\S*\.)?dim1)\b[\s\S]*(Function: READ_PARQUET|Table: (\S*\.)?dim1)\b[\s\S]*(Function: READ_PARQUET|Table: (\S*\.)?dim1)\b[\s\S]*
 
+# scan order and named-argument order/case do not separate otherwise compatible branches
+query II
+EXPLAIN SELECT
+    (SELECT sum(s.paid) FROM read_csv('{TEST_DIR}/sam_sales.csv', header = true, auto_detect = true) s, dim1
+     WHERE s.k = dim1.dk AND dim1.dname = 'a') AS a,
+    (SELECT avg(s.disc) FROM dim1, read_csv('{TEST_DIR}/sam_sales.csv', AUTO_DETECT = true, HEADER = true) s
+     WHERE dim1.dk = s.k AND dim1.dname = 'b') AS b
+----
+physical_plan	<!REGEX>:([\s\S]*(Function: READ_CSV|Table: (\S*\.)?dim1)\b){3}[\s\S]*
+
 # ---- different scans stay apart ----------------------------------------------------------------------------------
 
 # different files

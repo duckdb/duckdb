@@ -31,6 +31,10 @@ public:
 	idx_t count;
 	//! Bitmask over the relation indexes for fast subset/intersection checks
 	vector<idx_t> bitmask;
+
+private:
+	//! First word containing a relation (zero for empty sets)
+	idx_t first_word = 0;
 };
 
 //! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to

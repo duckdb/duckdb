@@ -49,3 +49,26 @@ JOIN (VALUES (1, 0), (2, 1)) c(k, x) USING (k)
 WHERE v // x > 0;
 ----
 4
+
+statement ok
+CREATE TABLE binding_strings(s VARCHAR);
+
+statement ok
+INSERT INTO binding_strings VALUES ('bad'), ('1'), ('2');
+
+statement ok
+CREATE TABLE binding_valid(s VARCHAR);
+
+statement ok
+INSERT INTO binding_valid VALUES ('1'), ('2');
+
+# A throwing filter must stay above the join that removes the invalid input.
+query I
+SELECT count(*)
+FROM (
+	SELECT p.x FROM (
+		SELECT a.s AS x FROM binding_strings a JOIN binding_valid b ON a.s = b.s
+	) p JOIN binding_valid c ON p.x = c.s
+) q WHERE q.x::INTEGER > 0;
+----
+2

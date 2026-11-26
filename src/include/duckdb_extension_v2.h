@@ -1747,6 +1747,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_data_source)
 	(duckdb_v2_table_function_handle function, duckdb_v2_data_source_handle data_source,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_value_variant_to_value)
+	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_set_data_source)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_data_source_handle data_source,
 	 duckdb_v2_error_info_handle *err);
@@ -3966,6 +3968,9 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_table_function_set_data_source duckdb_ext_api.duckdb_v2_table_function_set_data_source
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_value_variant_to_value duckdb_ext_api.duckdb_v2_value_variant_to_value
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_copy_from_set_data_source duckdb_ext_api.duckdb_v2_copy_from_set_data_source

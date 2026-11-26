@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <string>
 
@@ -917,6 +918,29 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_child_count(duckdb_v2_value_handle value, id
 	DUCKDB_CHECK_ARG(value);
 	DUCKDB_CHECK_ARG(out_count);
 	return WithErrorHandler(err, [&]() { *out_count = CompositeChildCount(*Convert(value)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_value_variant_to_value(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(value);
+	DUCKDB_CHECK_ARG(out_value);
+	*out_value = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &v = *Convert(value);
+		if (v.type().id() != duckdb::LogicalTypeId::VARIANT) {
+			throw duckdb::InvalidInputException("duckdb_v2_value_variant_to_value expects a VARIANT value");
+		}
+		if (v.IsNull()) {
+			*out_value = Emit(duckdb::Value());
+			return;
+		}
+		duckdb::Vector vec(v.type());
+		vec.SetValue(0, v);
+		duckdb::RecursiveUnifiedVectorFormat format;
+		duckdb::Vector::RecursiveToUnifiedFormat(vec, format);
+		duckdb::UnifiedVariantVectorData data(format);
+		*out_value = Emit(duckdb::VariantUtils::ConvertVariantToValue(data, 0, 0));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle value, idx_t index, duckdb_v2_value_handle *out_child,

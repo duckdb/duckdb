@@ -14,6 +14,7 @@ static constexpr idx_t BITMASK_WORD_SIZE = sizeof(idx_t) * 8;
 JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
     : relations(std::move(relations)), count(count) {
 	if (count != 0) {
+		first_word = this->relations[0].index / BITMASK_WORD_SIZE;
 		// the relations are sorted, so the last one determines the number of words
 		bitmask.resize(this->relations[count - 1].index / BITMASK_WORD_SIZE + 1, 0);
 		for (idx_t i = 0; i < count; i++) {
@@ -43,7 +44,7 @@ bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationS
 	if (sub.count > super.count || sub.bitmask.size() > super.bitmask.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < sub.bitmask.size(); i++) {
+	for (idx_t i = sub.first_word; i < sub.bitmask.size(); i++) {
 		if (sub.bitmask[i] & ~super.bitmask[i]) {
 			return false;
 		}

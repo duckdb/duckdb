@@ -1,0 +1,356 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_filter_mixed_types.test
+# description: Filters over read_duckdb when the files store a column with different types or shapes
+# group: [read_duckdb]
+
+# two files that store the same columns differently: integer widths, the order of struct fields, list child types
+statement ok
+ATTACH '{TEST_DIR}/rd_mixed_narrow.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS
+SELECT i::INTEGER x, {'a': i::BIGINT, 'b': (i * 10)::BIGINT} s, [i]::INTEGER[] l, i::BIGINT k, 1 only_narrow
+FROM range(10) r(i)
+
+statement ok
+INSERT INTO rd.t VALUES (NULL, NULL, NULL, 10, NULL)
+
+statement ok
+DETACH rd
+
+statement ok
+ATTACH '{TEST_DIR}/rd_mixed_wide.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS
+SELECT (i + 100)::BIGINT x, {'b': (i * 10)::BIGINT, 'a': (i + 100)::BIGINT} s, [i + 100]::BIGINT[] l, (i + 100)::BIGINT k
+FROM range(10) r(i)
+
+statement ok
+INSERT INTO rd.t VALUES (NULL, NULL, NULL, 110)
+
+statement ok
+DETACH rd
+
+# the first file decides the types: wide_first reads the INTEGER column of the second file as BIGINT, narrow_first reads
+# the BIGINT column of the second file as INTEGER
+statement ok
+CREATE VIEW wide_first AS
+SELECT x, s, l, k FROM read_duckdb(['{TEST_DIR}/rd_mixed_wide.db', '{TEST_DIR}/rd_mixed_narrow.db'])
+
+statement ok
+CREATE VIEW narrow_first AS
+SELECT x, s, l, k FROM read_duckdb(['{TEST_DIR}/rd_mixed_narrow.db', '{TEST_DIR}/rd_mixed_wide.db'])
+
+statement ok
+CREATE VIEW by_name AS
+FROM read_duckdb(['{TEST_DIR}/rd_mixed_narrow.db', '{TEST_DIR}/rd_mixed_wide.db'], union_by_name = true)
+
+query IIII
+SELECT typeof(x), typeof(s), typeof(l), count(*) FROM wide_first GROUP BY ALL
+----
+BIGINT	STRUCT(b BIGINT, a BIGINT)	BIGINT[]	22
+
+query IIII
+SELECT typeof(x), typeof(s), typeof(l), count(*) FROM narrow_first GROUP BY ALL
+----
+INTEGER	STRUCT(a BIGINT, b BIGINT)	INTEGER[]	22
+
+query IIII
+SELECT typeof(x), typeof(s), typeof(l), count(*) FROM by_name GROUP BY ALL
+----
+BIGINT	STRUCT(a BIGINT, b BIGINT)	BIGINT[]	22
+
+foreach view wide_first narrow_first by_name
+
+query II
+SELECT x, k FROM {view} WHERE x = 5
+----
+5	5
+
+query II
+SELECT x, k FROM {view} WHERE x = 105
+----
+105	105
+
+query I
+SELECT x FROM {view} WHERE x > 7 AND x < 103 ORDER BY x
+----
+8
+9
+100
+101
+102
+
+query I
+SELECT x FROM {view} WHERE x IN (5, 105, 1000) ORDER BY x
+----
+5
+105
+
+query I
+SELECT k FROM {view} WHERE x IS NULL ORDER BY k
+----
+10
+110
+
+query I
+SELECT count(*) FROM {view} WHERE x IS NOT NULL
+----
+20
+
+query I
+SELECT count(*) FROM {view} WHERE x <> 5
+----
+19
+
+# a filter on the converted column beside a filter on a column both files store alike
+query II
+SELECT x, k FROM {view} WHERE x >= 5 AND k < 102 AND k <> 7 ORDER BY k
+----
+5	5
+6	6
+8	8
+9	9
+100	100
+101	101
+
+query I
+SELECT x FROM {view} WHERE k = 103
+----
+103
+
+# struct fields are matched by name
+query I
+SELECT s.a FROM {view} WHERE s.a = 105
+----
+105
+
+query I
+SELECT s.a FROM {view} WHERE s.a = 5
+----
+5
+
+query II
+SELECT s.a, s.b FROM {view} WHERE s = {'a': 105, 'b': 50}
+----
+105	50
+
+query II
+SELECT s.a, s.b FROM {view} WHERE s = {'a': 5, 'b': 50}
+----
+5	50
+
+query I
+SELECT k FROM {view} WHERE s IS NULL ORDER BY k
+----
+10
+110
+
+query I
+SELECT k FROM {view} WHERE s.b = 30 AND x > 0 ORDER BY k
+----
+3
+103
+
+# lists
+query I
+SELECT l FROM {view} WHERE l = [105]
+----
+[105]
+
+query I
+SELECT l FROM {view} WHERE l = [5]
+----
+[5]
+
+query I
+SELECT k FROM {view} WHERE l[1] > 107 OR l[1] < 1 ORDER BY k
+----
+0
+108
+109
+
+# top-N pushes a dynamic filter into the scan
+query I
+SELECT x FROM {view} ORDER BY x LIMIT 3
+----
+0
+1
+2
+
+query I
+SELECT x FROM {view} ORDER BY x DESC NULLS LAST LIMIT 3
+----
+109
+108
+107
+
+# a join pushes a filter on the join key into the scan
+query I
+SELECT x FROM {view} JOIN (VALUES (5), (105), (1000)) v(key) ON x = key ORDER BY x
+----
+5
+105
+
+endloop
+
+foreach view wide_first narrow_first
+
+# late materialization: the top-N runs over the converted column, the other columns are fetched by row id
+query III
+SELECT x, k, s.a FROM {view} ORDER BY x LIMIT 2
+----
+0	0	0
+1	1	1
+
+query III
+SELECT x, k, s.b FROM {view} WHERE k <> 109 ORDER BY x DESC NULLS LAST LIMIT 2
+----
+108	108	80
+107	107	70
+
+endloop
+
+# the row id is read beside a converted column
+query II
+SELECT x, rowid FROM read_duckdb(['{TEST_DIR}/rd_mixed_wide.db', '{TEST_DIR}/rd_mixed_narrow.db']) WHERE x IN (5, 105) ORDER BY x
+----
+5	5
+105	5
+
+query II
+SELECT x, rowid FROM read_duckdb(['{TEST_DIR}/rd_mixed_narrow.db', '{TEST_DIR}/rd_mixed_wide.db']) WHERE x > 107 ORDER BY x
+----
+108	8
+109	9
+
+# a column only one of the files stores
+statement ok
+CREATE VIEW by_name_wide_first AS
+FROM read_duckdb(['{TEST_DIR}/rd_mixed_wide.db', '{TEST_DIR}/rd_mixed_narrow.db'], union_by_name = true)
+
+query II
+SELECT x, only_narrow FROM by_name_wide_first WHERE only_narrow = 1 AND x > 7 ORDER BY x
+----
+8	1
+9	1
+
+query I
+SELECT count(*) FROM by_name_wide_first WHERE only_narrow IS NULL AND x >= 0
+----
+10
+
+# an explicit schema over both files: x is converted in one file, missing is in neither
+statement ok
+CREATE VIEW with_schema AS
+FROM read_duckdb(['{TEST_DIR}/rd_mixed_narrow.db', '{TEST_DIR}/rd_mixed_wide.db'], schema = MAP {
+	'x': {name: 'x', type: 'BIGINT', default_value: NULL},
+	'k': {name: 'k', type: 'BIGINT', default_value: NULL},
+	'missing': {name: 'missing', type: 'BIGINT', default_value: 42}
+})
+
+query III
+SELECT * FROM with_schema WHERE x IN (5, 105) AND missing = 42 ORDER BY x
+----
+5	5	42
+105	105	42
+
+query I
+SELECT count(*) FROM with_schema WHERE x > 5 AND missing <> 42
+----
+0
+
+query II
+SELECT x, k FROM with_schema WHERE x < 3 AND k > 0 ORDER BY x
+----
+1	1
+2	2
+
+# several row groups and vectors: the INTEGER column of the second file is read as BIGINT
+statement ok
+ATTACH '{TEST_DIR}/rd_mixed_big_wide.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT (i + 300000)::BIGINT x, i % 7 g FROM range(300000) r(i)
+
+statement ok
+DETACH rd
+
+statement ok
+ATTACH '{TEST_DIR}/rd_mixed_big_narrow.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT i::INTEGER x, i % 7 g FROM range(300000) r(i)
+
+statement ok
+DETACH rd
+
+statement ok
+CREATE VIEW big AS FROM read_duckdb(['{TEST_DIR}/rd_mixed_big_wide.db', '{TEST_DIR}/rd_mixed_big_narrow.db'])
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads}
+
+query III
+SELECT count(*), sum(x), typeof(any_value(x)) FROM big
+----
+600000	179999700000	BIGINT
+
+# only the last vector of the converted file has rows that pass
+query III
+SELECT count(*), min(x), max(x) FROM big WHERE x >= 299990 AND x < 300010
+----
+20	299990	300009
+
+query I
+SELECT x FROM big WHERE x = 299999
+----
+299999
+
+# a few rows of every vector pass
+query II
+SELECT count(*), sum(x) FROM big WHERE x % 1000 = 0
+----
+600	179700000
+
+# no row of the converted file passes
+query II
+SELECT count(*), min(x) FROM big WHERE x > 599990
+----
+9	599991
+
+query II
+SELECT count(*), sum(x) FROM big WHERE x < 250000 AND g = 3
+----
+35714	4464196429
+
+query I
+SELECT x FROM big WHERE x IN (1, 150000, 299999, 300000, 599999) ORDER BY x
+----
+1
+150000
+299999
+300000
+599999
+
+query I
+SELECT x FROM big ORDER BY x LIMIT 3
+----
+0
+1
+2
+
+query I
+SELECT x FROM big WHERE g = 6 ORDER BY x DESC LIMIT 2
+----
+599998
+599991
+
+query I
+SELECT count(*) FROM big JOIN (SELECT i * 60000 key FROM range(10) r(i)) v ON x = key
+----
+10
+
+endloop

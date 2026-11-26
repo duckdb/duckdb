@@ -1,0 +1,87 @@
+# name: test/sql/optimizer/joins/linearized_non_inner.test
+# description: Approximate enumeration preserves non-inner multiplicity and NULL semantics
+# group: [joins]
+
+statement ok
+CREATE TABLE a(k INTEGER, v INTEGER)
+
+statement ok
+INSERT INTO a VALUES (1,10),(1,11),(2,20),(NULL,30)
+
+statement ok
+CREATE TABLE b(k INTEGER, v INTEGER)
+
+statement ok
+INSERT INTO b VALUES (1,100),(1,101),(3,300),(NULL,400)
+
+statement ok
+CREATE TABLE c(k INTEGER)
+
+statement ok
+INSERT INTO c VALUES (2),(NULL)
+
+query II rowsort
+SELECT a.v, b.v FROM a LEFT JOIN b ON a.k=b.k ANTI JOIN c ON a.k=c.k
+----
+10	100
+10	101
+11	100
+11	101
+30	NULL
+
+query I rowsort
+SELECT a.v FROM a SEMI JOIN b ON a.k IS NOT DISTINCT FROM b.k ANTI JOIN c ON a.k=c.k
+----
+10
+11
+30
+
+query I rowsort
+SELECT a.v FROM a SEMI JOIN b ON a.k IS NOT DISTINCT FROM b.k ANTI JOIN c ON a.k IS NOT DISTINCT FROM c.k
+----
+10
+11
+
+statement ok
+CREATE TABLE empty_input(k INTEGER)
+
+query I rowsort
+SELECT a.v FROM a LEFT JOIN b ON a.k=b.k SEMI JOIN empty_input e ON a.k=e.k
+----
+
+query II rowsort
+SELECT a.v, e.k FROM a LEFT JOIN empty_input e ON a.k=e.k ANTI JOIN c ON a.k=c.k
+----
+10	NULL
+11	NULL
+30	NULL
+
+query II rowsort
+SELECT a.v, b.v FROM a LEFT JOIN (b ANTI JOIN c ON b.k IS NOT DISTINCT FROM c.k) ON a.k=b.k
+----
+10	100
+10	101
+11	100
+11	101
+20	NULL
+30	NULL
+
+statement ok
+CREATE TABLE d(k INTEGER)
+
+statement ok
+INSERT INTO d VALUES (1),(NULL)
+
+statement ok
+CREATE TABLE e AS SELECT * FROM d
+
+query I
+SELECT count(*) FROM (a JOIN b ON a.k=b.k) JOIN (d JOIN e ON d.k=e.k) ON a.k+b.k=d.k+e.k
+----
+4
+
+# The isolated relation requires a cross product before the expression can be evaluated.
+query I
+SELECT count(*) FROM a, b, d WHERE a.k+b.k=d.k+1
+----
+4

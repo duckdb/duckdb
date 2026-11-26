@@ -1,0 +1,83 @@
+# name: test/optimizer/group_by_top_key_throwing_histogram.test
+# description: GROUP BY k ORDER BY k LIMIT n: a binned histogram whose update or finalize can throw does not see the groups after the bound
+# group: [optimizer]
+
+require exact_vector_size 2048
+
+statement ok
+SET threads = 1;
+
+# the bins of a group come from its first row, the row with the largest i under the aggregate ORDER BY. In one thread
+# the rows of k = 2 with i < 2048 arrive first, then the rows of k = 1, then the rows of k = 2 with i >= 4096 and
+# k = 0 last. A filter below the aggregate with the bound k = 1 drops the rows of k = 2 that arrive after it, so the
+# group takes its bins from a row with i < 2048 instead:
+# - hin: the bin 2147483647 is the key of the "other values" bucket that the value 1 falls into (finalize)
+# - boolean_bins: a NULL bin entry, BOOLEAN bins have no "other values" bucket (update)
+# - null_bins: a NULL bin list (update)
+statement ok
+CREATE TABLE hin AS
+SELECT i, CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k,
+       CASE WHEN i < 2048 THEN [2147483647] ELSE [1] END AS bins
+FROM range(6145) AS source(i);
+
+statement ok
+CREATE TABLE boolean_bins AS
+SELECT i, CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k,
+       CASE WHEN i < 2048 THEN [NULL::BOOLEAN] ELSE [true] END AS bins
+FROM range(6145) AS source(i);
+
+statement ok
+CREATE TABLE null_bins AS
+SELECT i, CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k,
+       CASE WHEN i < 2048 THEN NULL ELSE [1] END AS bins
+FROM range(6145) AS source(i);
+
+foreach disabled 'group_by_top_key' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+query II
+SELECT k, histogram_exact(1::INTEGER, bins ORDER BY i DESC) FROM hin GROUP BY k ORDER BY k LIMIT 1
+----
+0	{1=1}
+
+query II
+SELECT k, histogram_exact(1::INTEGER, bins ORDER BY i DESC) FROM hin GROUP BY k ORDER BY k DESC LIMIT 2
+----
+2	{1=4096}
+1	{1=2048}
+
+query II
+SELECT k, histogram_exact(true, bins ORDER BY i DESC) FROM boolean_bins GROUP BY k ORDER BY k LIMIT 1
+----
+0	{true=1}
+
+query II
+SELECT k, histogram(true, bins ORDER BY i DESC) FROM boolean_bins GROUP BY k ORDER BY k LIMIT 1
+----
+0	{true=1}
+
+query II
+SELECT k, histogram_exact(true, bins ORDER BY i DESC) FROM boolean_bins GROUP BY k ORDER BY k DESC LIMIT 2
+----
+2	{true=4096}
+1	{true=2048}
+
+query II
+SELECT k, histogram_exact(1::INTEGER, bins ORDER BY i DESC) FROM null_bins GROUP BY k ORDER BY k LIMIT 1
+----
+0	{1=1}
+
+query II
+SELECT k, histogram(1::INTEGER, bins ORDER BY i DESC) FROM null_bins GROUP BY k ORDER BY k LIMIT 1
+----
+0	{1=1}
+
+query II
+SELECT k, histogram(1::INTEGER, bins ORDER BY i DESC) FROM null_bins GROUP BY k ORDER BY k DESC LIMIT 2
+----
+2	{1=4096}
+1	{1=2048}
+
+endloop

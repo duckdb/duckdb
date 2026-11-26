@@ -39,11 +39,15 @@ public:
 	struct MergeTarget;
 
 private:
+	class ConjunctIndex;
+	class ScanCollection;
+
 	void VisitOperator(unique_ptr<LogicalOperator> &op);
 	//! Merges the eligible leaves of the cross-product tree rooted at `op`
 	void MergeCrossProduct(unique_ptr<LogicalOperator> &op);
-	//! Appends `leaf` to `branches` when it has the shape of a branch
-	static void TryMatchBranch(unique_ptr<LogicalOperator> &leaf, vector<Branch> &branches);
+	//! Appends leaves[leaf_index] to branches when it has the shape of a branch
+	static void TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves, idx_t leaf_index,
+	                           vector<Branch> &branches);
 	//! Whether the scans of `branch` cost enough for the merge to pay off: a table function (files, remote sources)
 	//! or a table of at least scalar_aggregate_merge_threshold rows
 	bool IsWorthMerging(const Branch &branch);
@@ -53,7 +57,7 @@ private:
 private:
 	Optimizer &optimizer;
 	//! The bindings of the branches that were merged away, pointed at the merged projection's columns
-	vector<ReplacementBinding> replacements;
+	BindingReplacementGraph replacements;
 };
 
 } // namespace duckdb

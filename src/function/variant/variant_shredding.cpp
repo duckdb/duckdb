@@ -366,7 +366,7 @@ VariantShreddingState::VariantShreddingState(const LogicalType &type, idx_t tota
 
 bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index) {
 	auto type_id = variant.GetTypeId(row, values_index);
-	if (!GetVariantTypes().count(type_id)) {
+	if (!GetVariantTypes().count(VariantTypeToLogicalTypeId(type_id))) {
 		return false;
 	}
 	if (type_id == VariantLogicalType::DECIMAL) {

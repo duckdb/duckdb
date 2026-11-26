@@ -106,6 +106,8 @@ private:
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
+	//! Only these operator occurrences can restrict a candidate join.
+	vector<reference<const JoinOrderOperator>> candidate_constraints;
 	unordered_set<idx_t> operator_costing_predicates;
 	unordered_set<idx_t> reconstructed_operators;
 	vector<idx_t> inner_companion_roots;

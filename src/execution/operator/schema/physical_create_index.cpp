@@ -134,8 +134,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	bound_index->Verify();
 
-	D_ASSERT(!bound_index->ToString(true).empty());
-
 	bound_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
@@ -191,7 +189,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), index_oid, check_mode);
 	if (local_table_storage) {
 		// Existing transaction-local rows are verified when committing, so we only add a delete index.
-		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);
+		index_entry->InitializeLocalDeleteIndex(local_table_storage->GetDeleteIndexes());
 	}
 
 	return SinkFinalizeType::READY;

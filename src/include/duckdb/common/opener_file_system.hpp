@@ -241,7 +241,10 @@ protected:
 		if (fixed_fs) {
 			return fixed_fs->OpenFile(file, flags, GetOpener());
 		}
-		return GetFileSystem().OpenFile(file, flags, GetOpener());
+		if (flags.GetCachingMode() == CachingMode::NO_CACHING) {
+			return GetFileSystem().OpenFile(file, flags, GetOpener());
+		}
+		return OpenCachedFile(file, flags);
 	}
 
 	bool SupportsOpenFileExtended() const override {
@@ -294,6 +297,7 @@ private:
 		}
 		return GetFileSystem().FindFileSystem(path, GetOpener());
 	}
+	unique_ptr<FileHandle> OpenCachedFile(const OpenFileInfo &file, const FileOpenFlags &flags);
 	void VerifyCanAccessFileInternal(const string &path, FileType type);
 };
 
