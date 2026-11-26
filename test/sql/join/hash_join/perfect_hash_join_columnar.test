@@ -10,7 +10,7 @@ SET VARIABLE check_perfect_activation =
     NOT current_setting('debug_force_external') AND NOT current_setting('debug_disable_optimizer');
 
 statement ok
-SET disabled_optimizers='join_order,build_side_probe_side,join_filter_pushdown,statistics_propagation';
+SET disabled_optimizers='join_order,build_side_probe_side,join_filter_pushdown,statistics_propagation,constant_propagation';
 
 statement ok
 CREATE TABLE b(k BIGINT, v VARCHAR, n BIGINT);
