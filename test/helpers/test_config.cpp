@@ -28,6 +28,7 @@ static const TestConfigOption test_config_options[] = {
     {"description", "Config description", LogicalType::VARCHAR, nullptr},
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"emit_test_events", "Emit JSON test lifecycle events", LogicalType::BOOLEAN, SetEmitTestEventsOption},
+    {"keep_home", "Preserve the caller home directory", LogicalType::BOOLEAN, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"data_dir",
      "Root dir for test data (DATA_DIR / {DATA_DIR}); default {WORKING_DIR}/data. Relative values "
@@ -238,11 +239,26 @@ bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
 
 bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i) {
 	if (arg == "--test-config") {
-		if (i >= argc) {
+		if (i + 1 >= argc) {
 			throw std::runtime_error("--test-config expected a path to a configuration file");
 		}
 		auto config_path = string(argv[++i]);
 		LoadConfig(config_path);
+		return true;
+	}
+	if (arg == "--keep-home") {
+		ParseOption("keep_home", Value(true));
+		return true;
+	}
+	if (arg == "--emit-on-skip") {
+		SetEmitOnSkip(true);
+		return true;
+	}
+	if (arg == "--require") {
+		if (i + 1 >= argc) {
+			throw std::runtime_error("--require expected an extension name");
+		}
+		AddRequire(argv[++i]);
 		return true;
 	}
 	if (arg == "--force-storage") {
@@ -284,7 +300,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 				return true;
 			}
 		} else if (arg == option_name) {
-			if (i >= argc) {
+			if (i + 1 >= argc) {
 				throw std::runtime_error(option_name + " expected an argument");
 			}
 			auto option_value = string(argv[++i]);
@@ -740,6 +756,10 @@ optional_idx TestConfiguration::GetBlockAllocSize() {
 
 idx_t TestConfiguration::GetCheckpointWALSize() {
 	return GetOptionOrDefault<idx_t>("checkpoint_wal_size", 0);
+}
+
+bool TestConfiguration::GetKeepHome() {
+	return GetOptionOrDefault("keep_home", false);
 }
 
 bool TestConfiguration::GetForceRestart() {

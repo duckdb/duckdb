@@ -5,6 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -108,4 +109,23 @@ TEST_CASE("Runner regression nested invocation", "[test_runner]") {
 	auto result = connection.Query("SELECT * FROM run_tests([])");
 	REQUIRE_FAIL(result);
 	REQUIRE_THAT(result->GetError(), Catch::Contains("A test run is already active in this process"));
+}
+
+TEST_CASE("Runner regression registry survives cache eviction", "[test_runner]") {
+	if (!RunnerRegressionEnabled()) {
+		return;
+	}
+	auto extension = std::getenv("DUCKDB_TEST_RUNNER_EXTENSION");
+	REQUIRE(extension);
+	DBConfig config;
+	config.SetOptionByName("allow_unsigned_extensions", Value(true));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("LOAD '" + StringUtil::Replace(extension, "'", "''") + "'"));
+	auto &cache = db.instance->GetObjectCache();
+	auto registry = cache.GetObject("duckdb.test.registry");
+	REQUIRE(registry);
+	REQUIRE_FALSE(registry->GetEstimatedCacheMemory().IsValid());
+	cache.EvictToReduceMemory(NumericLimits<idx_t>::Maximum());
+	REQUIRE(cache.GetObject("duckdb.test.registry") == registry);
 }

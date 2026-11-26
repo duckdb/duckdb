@@ -16,9 +16,13 @@ import threading
 import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from io import StringIO
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if os.fspath(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, os.fspath(REPO_ROOT))
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
@@ -40,9 +44,6 @@ ANSI_TEAL = "\033[36m"
 ANSI_DARK_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 FAILURE_MARKER = "================================================================"
-TEST_EXTENSION_OVERRIDE: Path | None = None
-TEST_ROOT_OVERRIDES: list[Path] = []
-TEST_BUNDLE_ROOT_OVERRIDES: list[Path] = []
 
 
 class TestRunnerError(RuntimeError):
@@ -65,6 +66,59 @@ def stop_requested():
 
 
 @dataclass(frozen=True)
+class TestInvocation:
+    runner: Path
+    cli: str
+    extension: Path
+    test_roots: tuple[Path, ...]
+    bundle_roots: tuple[Path, ...]
+    working_directory: Path
+    flags: str = ""
+    config_files: tuple[str, ...] = ()
+    test_command: str | None = None
+    options: tuple[str, ...] = ()
+
+    def command(self, names, flags=None, configs=None):
+        command = [
+            sys.executable,
+            os.fspath(self.runner),
+            self.cli,
+            "--test-extension",
+            os.fspath(self.extension),
+            "--working-directory",
+            os.fspath(self.working_directory),
+        ]
+        for option, paths in (("--test-root", self.test_roots), ("--test-bundle-root", self.bundle_roots)):
+            for path in paths:
+                command.extend([option, os.fspath(path)])
+        if self.test_command is not None:
+            command.extend(["--test-command", self.test_command])
+        command.extend(self.options)
+        flags = self.flags if flags is None else flags
+        if flags:
+            command.append("--test-flags=" + flags)
+        for config in self.config_files if configs is None else configs:
+            command.extend(["--test-config", config])
+        command.append(",".join(quote_catch_test_name(name) for name in names))
+        return command
+
+
+def resolve_invocation(cli, *, extension=None, test_roots=(), bundle_roots=(), **kwargs):
+    cli = os.fspath(Path(cli).resolve())
+    build_dir = Path(cli).parent
+    return TestInvocation(
+        runner=Path(__file__).resolve(),
+        cli=cli,
+        extension=(extension or resolve_test_extension_path(build_dir)).resolve(),
+        test_roots=tuple(Path(root).resolve() for root in test_roots)
+        or (Path.cwd() / "test", Path.cwd() / "third_party/sqllogictest/test"),
+        bundle_roots=tuple(Path(root).resolve() for root in bundle_roots) or (build_dir / "test/extension",),
+        working_directory=Path.cwd(),
+        **kwargs,
+    )
+
+
+@dataclass(frozen=True)
 class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
@@ -83,6 +137,7 @@ class TestRunnerConfig:
     fail_require_skip: bool
     coverage_profile_dir: Path | None
     timeout_policy: str = "fail"
+    invocation: TestInvocation | None = None
 
 
 @dataclass(frozen=True)
@@ -159,8 +214,8 @@ class BatchRunState:
     def record_retry(self):
         self.retry_count += 1
 
-    def record_failure(self):
-        self.failed_count += 1
+    def record_failure(self, count=1):
+        self.failed_count += count
 
     def add_failed_attempt(
         self, batch_idx: int, lines: list[str], reproduce_batch: list[str], failed_test_names: list[str]
@@ -315,23 +370,13 @@ def resolve_test_extension_path(build_dir: Path):
     return candidates[0] if len(candidates) == 1 else path
 
 
-def resolve_test_protocol_paths(duckdb_bin: str):
-    build_dir = Path(duckdb_bin).resolve().parent
-    test_extension = TEST_EXTENSION_OVERRIDE or resolve_test_extension_path(build_dir)
-    test_roots = TEST_ROOT_OVERRIDES or [
-        Path.cwd() / "test",
-        Path.cwd() / "third_party" / "sqllogictest" / "test",
-    ]
-    bundle_roots = TEST_BUNDLE_ROOT_OVERRIDES or [build_dir / "test" / "extension"]
-    return (
-        test_extension.resolve(),
-        [path.resolve() for path in test_roots],
-        [path.resolve() for path in bundle_roots],
-    )
+def resolve_test_protocol_paths(duckdb_bin: str, invocation: TestInvocation | None = None):
+    invocation = invocation or resolve_invocation(duckdb_bin)
+    return invocation.extension, list(invocation.test_roots), list(invocation.bundle_roots)
 
 
-def test_protocol_available(duckdb_bin: str):
-    test_extension, _, _ = resolve_test_protocol_paths(duckdb_bin)
+def test_protocol_available(duckdb_bin: str, invocation: TestInvocation | None = None):
+    test_extension, _, _ = resolve_test_protocol_paths(duckdb_bin, invocation)
     return test_extension.is_file()
 
 
@@ -344,8 +389,8 @@ def core_functions_load_statement(duckdb_bin: str):
     return f"LOAD {sql_string(core_functions)};\n"
 
 
-def build_test_protocol_sql(duckdb_bin: str, query: str):
-    test_extension, _, _ = resolve_test_protocol_paths(duckdb_bin)
+def build_test_protocol_sql(duckdb_bin: str, query: str, invocation: TestInvocation | None = None):
+    test_extension, _, _ = resolve_test_protocol_paths(duckdb_bin, invocation)
     return core_functions_load_statement(duckdb_bin) + f"LOAD {sql_string(test_extension)};\n" + query + "\n"
 
 
@@ -391,6 +436,7 @@ def run_test_protocol_query(
     coverage_profile_dir: Path | None = None,
     test_config: str | None = None,
     thread_stack_size: str | None = None,
+    invocation: TestInvocation | None = None,
 ):
     child_env = os.environ.copy()
     child_env["DUCKDB_TEST_BUILD_DIRECTORY"] = os.fspath(Path(duckdb_bin).resolve().parent)
@@ -401,13 +447,14 @@ def run_test_protocol_query(
         child_env["LLVM_PROFILE_FILE"] = coverage_profile_file_pattern(coverage_profile_dir)
     return subprocess.run(
         test_protocol_command(duckdb_bin, thread_stack_size),
-        input=build_test_protocol_sql(duckdb_bin, query),
+        input=build_test_protocol_sql(duckdb_bin, query, invocation),
         text=True,
         encoding="utf8",
         errors="backslashreplace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=child_env,
+        cwd=invocation.working_directory if invocation else None,
     )
 
 
@@ -531,8 +578,9 @@ def generate_test_list(
     error_output=None,
     test_config: str | None = None,
     test_command: str | None = None,
+    invocation: TestInvocation | None = None,
 ):
-    if test_command is not None and not test_protocol_available(unittest_bin):
+    if test_command is not None and not test_protocol_available(unittest_bin, invocation):
         list_file_args = []
         if test_list_files:
             list_file_args = [arg for test_list_file in test_list_files for arg in ("-f", str(test_list_file))]
@@ -550,6 +598,7 @@ def generate_test_list(
             errors="backslashreplace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            cwd=invocation.working_directory if invocation else None,
         )
         if proc.returncode != 0 and not proc.stdout:
             print(
@@ -563,7 +612,7 @@ def generate_test_list(
         test_file.flush()
         return
 
-    _, test_roots, bundle_roots = resolve_test_protocol_paths(unittest_bin)
+    _, test_roots, bundle_roots = resolve_test_protocol_paths(unittest_bin, invocation)
     test_list_selectors = read_test_selectors(test_list_files)
     selectors = [
         *(test_list_selector_expression(selector) for selector in test_list_selectors),
@@ -587,6 +636,7 @@ def generate_test_list(
         coverage_profile_dir,
         test_config,
         thread_stack_size,
+        invocation,
     )
     if proc.returncode != 0:
         error_stream = error_output if error_output is not None else sys.stderr
@@ -1509,21 +1559,6 @@ def format_batch_failure(
     return "\n".join(parts)
 
 
-def format_unittest_bin_for_display(unittest_bin: str):
-    try:
-        if os.path.isabs(unittest_bin):
-            return os.path.relpath(unittest_bin, os.getcwd())
-    except ValueError:
-        # On Windows, relpath can fail across drives. Fall back to the original path.
-        return unittest_bin
-    return unittest_bin
-
-
-def format_test_runner_for_display(unittest_bin: str):
-    runner_name = "run.py" if os.name == "nt" else "run"
-    return format_unittest_bin_for_display(os.fspath(Path(unittest_bin).resolve().parent / "test" / runner_name))
-
-
 def escape_catch_test_name(test_name: str):
     # Catch treats commas as separators even inside quoted names.
     return test_name.replace("\\", "\\\\").replace('"', '\\"').replace(",", "\\,")
@@ -1538,35 +1573,20 @@ def format_failed_tests_reproducer(
     test_flags: str,
     failed_test_configs: list[str],
     failed_test_names: list[str],
+    invocation: TestInvocation | None = None,
 ):
-    runner = format_test_runner_for_display(unittest_bin)
-    command = [runner]
-    if os.name == "nt":
-        command.insert(0, sys.executable)
-    if test_flags:
-        command.append("--test-flags=" + test_flags)
-    for test_config in failed_test_configs:
-        command.extend(["--test-config", test_config])
-    command.append(",".join(quote_catch_test_name(test_name) for test_name in failed_test_names))
-    if os.name == "nt":
-        return subprocess.list2cmdline(command)
-    return shlex.join(command)
+    invocation = invocation or resolve_invocation(unittest_bin)
+    command = invocation.command(failed_test_names, test_flags, failed_test_configs)
+    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
 
 
 def format_batch_reproducer(config: TestRunnerConfig, batch):
-    if config.test_command is not None and not test_protocol_available(config.unittest_bin):
-        return shlex.join(
-            [
-                format_unittest_bin_for_display(config.unittest_bin),
-                *shlex.split(config.test_flags),
-                ",".join(batch),
-            ]
-        )
     return format_failed_tests_reproducer(
         config.unittest_bin,
         config.test_flags,
         [config.test_config] if config.test_config is not None else [],
         batch,
+        config.invocation or resolve_invocation(config.unittest_bin, test_command=config.test_command),
     )
 
 
@@ -1757,6 +1777,23 @@ def extract_skipped_test_output(stdout: str, stderr: str):
 
     # Custom test commands and older event fixtures might not emit whole-test terminal events.
     return aggregate_count, full_skip_reasons, partial_names, partial_reason_names
+
+
+def extract_result_skips(result):
+    if "results" not in result:
+        return extract_skipped_test_output(result["stdout"], result["stderr"])
+    skipped, reasons, partial, partial_reasons = set(), {}, set(), {}
+    for row in result["results"]:
+        name = row["test_id"]
+        if row["status"] == "skipped":
+            skipped.add(name)
+            reason = row.get("message") or "unspecified"
+            reasons[reason] = reasons.get(reason, 0) + 1
+        elif row["status"] == "passed" and int(row.get("skip_mode") or 0) > 0 and row.get("partial_skip_reasons"):
+            partial.add(name)
+            for reason in row.get("partial_skip_reasons") or ["mode skip unspecified"]:
+                partial_reasons.setdefault(reason, set()).add(name)
+    return len(skipped), reasons, partial, partial_reasons
 
 
 def coverage_profile_file_pattern(profile_dir: Path):
@@ -1953,6 +1990,7 @@ def run_custom_batch(config: TestRunnerConfig, batch):
             stdout=stdout_capture,
             stderr=stderr_capture,
             env=child_env,
+            cwd=config.invocation.working_directory if config.invocation else None,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
         while proc.poll() is None:
@@ -2026,7 +2064,7 @@ def read_test_state(config: TestRunnerConfig, state_database: Path, child_env):
             f"SET extension_directories = {sql_string_list([repository])};\n"
             "LOAD json;\n"
             "SELECT test_id, attempt, status, duration_ms, assertion_count, failures, message, "
-            "skip_mode, partial_skip_reasons FROM test_results;\n"
+            "skip_mode, partial_skip_reasons, diagnostics FROM test_results;\n"
         ),
         text=True,
         encoding="utf8",
@@ -2034,6 +2072,7 @@ def read_test_state(config: TestRunnerConfig, state_database: Path, child_env):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=child_env,
+        cwd=config.invocation.working_directory if config.invocation else None,
     )
     if proc.returncode != 0:
         detail = proc.stderr.strip()
@@ -2066,7 +2105,7 @@ def read_test_state(config: TestRunnerConfig, state_database: Path, child_env):
 
 
 def run_batch(config: TestRunnerConfig, batch):
-    if config.test_command is not None and not test_protocol_available(config.unittest_bin):
+    if config.test_command is not None and not test_protocol_available(config.unittest_bin, config.invocation):
         return run_custom_batch(config, batch)
 
     failed = False
@@ -2084,7 +2123,7 @@ def run_batch(config: TestRunnerConfig, batch):
         config.coverage_profile_dir.mkdir(parents=True, exist_ok=True)
         child_env["LLVM_PROFILE_FILE"] = coverage_profile_file_pattern(config.coverage_profile_dir)
 
-    _, test_roots, bundle_roots = resolve_test_protocol_paths(config.unittest_bin)
+    _, test_roots, bundle_roots = resolve_test_protocol_paths(config.unittest_bin, config.invocation)
     configuration_flags, thread_stack_size = split_process_test_flags(config.test_flags)
     if "--emit-test-events" not in configuration_flags:
         configuration_flags.append("--emit-test-events")
@@ -2097,7 +2136,8 @@ def run_batch(config: TestRunnerConfig, batch):
         f"test_flags = {sql_string_list(configuration_flags)}, "
         f"state_database = {sql_string(state_database)});"
     )
-    sql = build_test_protocol_sql(config.unittest_bin, query)
+    sql = build_test_protocol_sql(config.unittest_bin, query, config.invocation)
+    durable_results = []
     protocol_file_path = None
     if config.test_command is not None:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as protocol_file:
@@ -2124,6 +2164,7 @@ def run_batch(config: TestRunnerConfig, batch):
             stdout=subprocess.DEVNULL,
             stderr=stderr_capture,
             env=child_env,
+            cwd=config.invocation.working_directory if config.invocation else None,
             text=True,
             encoding="utf8",
             errors="backslashreplace",
@@ -2166,7 +2207,6 @@ def run_batch(config: TestRunnerConfig, batch):
                 message = f"run_tests process exited with return code {proc.returncode}"
 
         state_rows, recovery_error = read_test_state(config, state_database, child_env)
-        event_lines = []
         failure_lines = []
         skipped_rows = []
         rows_by_test = {}
@@ -2191,35 +2231,18 @@ def run_batch(config: TestRunnerConfig, batch):
                 incomplete_tests.append(test_id)
                 continue
 
-            duration_ms = row.get("duration_ms")
-            if isinstance(duration_ms, (int, float)):
-                event_lines.append(f"{test_id} took {duration_ms / 1000.0:.3f}s")
-            event_status = "ok"
+            durable_results.append(row)
             if status == "failed":
                 failed = True
-                event_status = "error"
-                failure_lines.append(f"1. {test_id}:1")
-                for failure in row.get("failures") or []:
-                    failure_lines.append(str(failure))
-                if row.get("message"):
-                    failure_lines.append(str(row["message"]))
                 if message is None:
                     message = f"test failed: {test_id}"
             elif status == "skipped":
-                event_status = "skip-requirement"
                 skipped_rows.append(row)
             elif status != "passed":
                 failed = True
                 allow_retry = False
-                event_status = "error"
                 message = f"run_tests stored invalid status {status!r} for {test_id}"
-                failure_lines.extend([f"1. {test_id}:1", message])
-            event = {"version": 2, "event": "end", "name": test_id, "status": event_status}
-            event["skip-mode"] = int(row.get("skip_mode") or 0)
-            event["partial-skip-reasons"] = row.get("partial_skip_reasons") or []
-            if row.get("message"):
-                event["data"] = row["message"]
-            event_lines.append(TEST_EVENT_MARKER + json.dumps(event, separators=(",", ":")))
+                failure_lines.append(message)
 
         if rows_by_test:
             recovery_error = f"test state contains an unexpected test: {next(iter(rows_by_test))}"
@@ -2252,7 +2275,6 @@ def run_batch(config: TestRunnerConfig, batch):
             failed = True
             allow_retry = False
             message = f"error: detected require-based skipped test: {skipped_rows[0]['test_id']}"
-        stdout = normalize_output("\n".join(event_lines) + ("\n" if event_lines else ""))
         if failure_lines:
             stderr = normalize_output(
                 stderr + ("\n" if stderr and not stderr.endswith("\n") else "") + "\n".join(failure_lines) + "\n"
@@ -2269,6 +2291,7 @@ def run_batch(config: TestRunnerConfig, batch):
         shutil.rmtree(state_directory, ignore_errors=True)
 
     return {
+        "results": durable_results,
         "failed": failed,
         "stdout": stdout,
         "stderr": stderr,
@@ -2336,17 +2359,65 @@ def can_warn_timeout(config: TestRunnerConfig, batch, result):
     )
 
 
-def handle_failed_batch(ctx: RunContext, batch_info, result):
-    failure = parse_failure_info(
-        result["message"],
-        result["stdout"],
-        result["stderr"],
-        batch_info["batch"],
-        result.get("returncode"),
+def render_durable_failure(result, batch):
+    rows = [row for row in result["results"] if row.get("status") == "failed"]
+    names, lines = [], []
+    for row in rows:
+        names.append(row["test_id"])
+        lines.extend(format_fail_header(row["test_id"]))
+        for failure in row.get("failures") or []:
+            if not isinstance(failure, dict):
+                lines.append(str(failure))
+                continue
+            file, line = failure.get("file"), int(failure.get("line") or 0)
+            if file:
+                lines.append(f"{file}:{line or 0}")
+                if line:
+                    lines.extend(render_context_snippet(file, line))
+            for field in ("expression", "message"):
+                if failure.get(field):
+                    lines.extend(str(failure[field]).splitlines())
+        for field in ("message", "diagnostics"):
+            if row.get(field):
+                lines.extend(str(row[field]).splitlines())
+    if result.get("returncode") or not rows or result.get("timed_out"):
+        lines.extend(
+            [result.get("message") or "test batch failed", *render_raw_output_tail(result["stdout"], result["stderr"])]
+        )
+    test_name = names[0] if names else None
+    if not test_name:
+        for event in reversed(parse_test_events(result["stderr"])):
+            if event.get("name") in batch:
+                test_name = event["name"]
+                break
+    match = re.search(r"after ([0-9.]+) seconds", result.get("message") or "")
+    failure = FailureInfo(
+        kind="timeout" if result.get("timed_out") else "generic",
+        test_name=test_name,
+        line_number=None,
+        mismatch_context=None,
+        expected=None,
+        actual=None,
+        snippet_lines=[],
+        expected_result_lines=[],
+        actual_result_lines=[],
+        detail_lines=[],
+        reproduce_batch=[test_name] if test_name and not names else batch,
+        timeout_seconds=float(match.group(1)) if match else None,
     )
-    lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
+    return failure, lines, names or list(batch)
+
+
+def handle_failed_batch(ctx: RunContext, batch_info, result):
+    if "results" in result:
+        failure, lines, failed_test_names = render_durable_failure(result, batch_info["batch"])
+    else:
+        failure = parse_failure_info(
+            result["message"], result["stdout"], result["stderr"], batch_info["batch"], result.get("returncode")
+        )
+        lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
+        failed_test_names = extract_failed_test_names(failure, result["stdout"], result["stderr"], batch_info["batch"])
     reproduce_batch = failure.reproduce_batch
-    failed_test_names = extract_failed_test_names(failure, result["stdout"], result["stderr"], batch_info["batch"])
     if batch_info["batch_idx"] not in ctx.state.failed_attempts and can_warn_timeout(
         ctx.config, batch_info["batch"], result
     ):
@@ -2392,7 +2463,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
             retry_count=batch_info["attempt"],
         )
     )
-    ctx.state.record_failure()
+    failure_count = sum(row.get("status") == "failed" for row in result.get("results", []))
+    ctx.state.record_failure(max(1, failure_count))
     if ctx.state.should_stop(ctx.config):
         ctx.state.stop_launching = True
     return False
@@ -2400,7 +2472,15 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
     if ctx.config.runtime_threshold_seconds is not None:
-        test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
+        test_runtimes = (
+            [
+                (row["test_id"], row["duration_ms"] / 1000.0)
+                for row in result["results"]
+                if isinstance(row.get("duration_ms"), (int, float))
+            ]
+            if "results" in result
+            else extract_test_runtimes(result["stdout"], result["stderr"])
+        )
         if test_runtimes:
             for test_name, test_elapsed in test_runtimes:
                 if test_elapsed >= ctx.config.runtime_threshold_seconds:
@@ -2416,6 +2496,137 @@ def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
         )
 
 
+LEGACY_NEGATABLE_FLAGS = frozenset(
+    (
+        'emit-test-events',
+        'keep-home',
+        'checkpoint-on-shutdown',
+        'force-restart',
+        'summarize-failures',
+        'test-memory-leaks',
+        'storage-fuzzer',
+        'skip-compiled',
+        'warnings-as-errors',
+    )
+)
+LEGACY_BOOLEAN_FLAGS = LEGACY_NEGATABLE_FLAGS | frozenset(
+    (
+        'force-storage',
+        'force-reload',
+        'single-threaded',
+        'zero-initialize',
+        'one-initialize',
+        'memory-leaks',
+        'emit-on-skip',
+    )
+)
+LEGACY_VALUE_FLAGS = frozenset(
+    (
+        'description',
+        'comment',
+        'initial-db',
+        'data-dir',
+        'local-data-dir',
+        'temp-dir-root',
+        'local-temp-dir-root',
+        'run-id',
+        'temp-dir-run-id',
+        'temp-dir-test-id',
+        'temp-dir-destroy',
+        'database-destroy',
+        'env-passthrough',
+        'max-threads',
+        'max-test-threads',
+        'base-config',
+        'block-size',
+        'checkpoint-wal-size',
+        'verify-vector',
+        'debug-initialize',
+        'autoloading',
+        'init-script',
+        'init-sqllogic',
+        'cleanup-sqllogic',
+        'on-cleanup',
+        'on-init',
+        'on-load',
+        'on-new-connection',
+        'test-env',
+        'inherit-skip-tests',
+        'skip-tests',
+        'skip-error-messages',
+        'sort-style',
+        'statically-loaded-extensions',
+        'storage-version',
+        'select-tag',
+        'select-tag-set',
+        'skip-tag',
+        'skip-tag-set',
+        'settings',
+        'attach-options',
+        'extends',
+        'require',
+        'thread-stack-size',
+    )
+)
+
+
+def legacy_boolean_flag(name):
+    return (
+        name in LEGACY_BOOLEAN_FLAGS
+        or name.startswith(("memory-leak", "test-memory-leak"))
+        or (name.startswith("no-") and name[3:] in LEGACY_NEGATABLE_FLAGS)
+    )
+
+
+def adapt_legacy_arguments(argv, parser):
+    forwarded, flags = [], []
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        option, separator, value = arg.partition("=")
+        name = option.removeprefix("--")
+        if option == "--test-flags":
+            if not separator:
+                index += 1
+                if index >= len(argv):
+                    parser.error("--test-flags expected an argument")
+                value = argv[index]
+            try:
+                flags.extend(shlex.split(value))
+            except ValueError as error:
+                parser.error(f"invalid --test-flags: {error}")
+        elif option.startswith("--") and legacy_boolean_flag(name):
+            if separator:
+                parser.error(f"{option} does not take a value")
+            flags.append(option)
+        elif option.startswith("--") and name in LEGACY_VALUE_FLAGS:
+            if not separator:
+                index += 1
+                if index >= len(argv) or argv[index].startswith("--"):
+                    parser.error(f"{option} expected an argument")
+                value = argv[index]
+            flags.extend([option, value])
+        elif option in {"--stdin", "--lldb", "--reporter", "-r", "--out", "-o", "--break", "--success"}:
+            parser.error(f"{option} is not supported by the CLI test runner; see test/README.md for alternatives")
+        else:
+            forwarded.append(arg)
+        index += 1
+    if "--test-command" in argv or any(arg.startswith("--test-command=") for arg in argv):
+        return forwarded, shlex.join(flags)
+    # Validate the explicit --test-flags string before discovery starts a shell.
+    index = 0
+    while index < len(flags):
+        name = flags[index].removeprefix("--")
+        if name in LEGACY_VALUE_FLAGS or name == "test-config":
+            if index + 1 >= len(flags) or flags[index + 1].startswith("--"):
+                parser.error(f"{flags[index]} expected an argument")
+            index += 1
+        elif not legacy_boolean_flag(name):
+            parser.error(f"unsupported test flag: {flags[index]}")
+        index += 1
+    return forwarded, shlex.join(flags)
+
+
 def parse_args(argv: list[str] | None = None):
     if argv is None:
         argv = sys.argv[1:]
@@ -2429,7 +2640,8 @@ def parse_args(argv: list[str] | None = None):
         default=[],
         help=argparse.SUPPRESS,
     )
-    parser.add_argument("--test-list", type=Path)
+    parser.add_argument("--test-list", "-f", "--input-file", action="append", type=Path)
+    parser.add_argument("--working-directory", "--test-dir", type=Path)
     parser.add_argument("--list-tests", action="store_true", help="list matching tests without running them")
     parser.add_argument("--changed-tests", type=Path, help="extra test list file; requires --test-list")
     parser.add_argument(
@@ -2490,7 +2702,12 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--coverage-report", type=Path, help="write an LCOV HTML coverage report to this directory")
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
-    return parser.parse_intermixed_args(argv)
+    argv, flags = adapt_legacy_arguments(argv, parser)
+    args = parser.parse_intermixed_args(argv)
+    args.test_flags = flags
+    args.test_lists = args.test_list or []
+    args.test_list = args.test_lists[0] if args.test_lists else None
+    return args
 
 
 def resolve_test_runner_args(args):
@@ -2580,6 +2797,7 @@ def create_temp_test_list(
     error_output=None,
     test_config: str | None = None,
     test_command: str | None = None,
+    invocation: TestInvocation | None = None,
 ):
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
         generate_test_list(
@@ -2592,6 +2810,7 @@ def create_temp_test_list(
             error_output,
             test_config,
             test_command,
+            invocation,
         )
         return Path(test_file.name)
 
@@ -2636,6 +2855,7 @@ def run_single_config(
                 output,
                 invocation.test_config,
                 args.test_command,
+                args.invocation,
             )
             if executor is None:
                 generated_test_list = create_temp_test_list(*create_args)
@@ -2660,6 +2880,11 @@ def run_single_config(
             fail_require_skip=args.fail_require_skip,
             coverage_profile_dir=args.coverage_profile_dir,
             timeout_policy=args.timeout_policy,
+            invocation=replace(
+                args.invocation,
+                flags=invocation.test_flags,
+                config_files=(invocation.test_config,) if invocation.test_config else (),
+            ),
         )
 
         tests = load_tests(config.test_list)
@@ -2677,7 +2902,7 @@ def run_single_config(
         stabilization_tests = []
         if args.changed_tests is not None:
             merged_names = {test.name for test in tests}
-            base_list_names = {test.name for test in load_tests(args.test_list)}
+            base_list_names = {test.name for path in args.test_lists for test in load_tests(path)}
             base_names = {
                 test.name
                 for test in tests
@@ -2698,6 +2923,7 @@ def run_single_config(
         config_values.pop("unittest_bin", None)
         config_values.pop("test_command", None)
         config_values.pop("coverage_profile_dir", None)
+        config_values.pop("invocation", None)
         config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
         config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
         print(f"config: {config_output}", file=output)
@@ -2825,19 +3051,53 @@ def main(argv: list[str] | None = None):
 def main_impl(argv: list[str] | None = None):
     args = parse_args(argv)
     test_root_directory = resolve_test_runner_args(args)
-    if test_root_directory is None:
-        return run_tests_from_args(args)
+    if args.unittest_bin:
+        args.unittest_bin = os.fspath(Path(args.unittest_bin).resolve())
+    if args.test_extension is not None:
+        args.test_extension = args.test_extension.resolve()
     from scripts.ci.test_runner_wrapper import pushd
 
-    with pushd(test_root_directory):
+    with pushd(args.working_directory or test_root_directory or Path.cwd()):
+        if not args.unittest_bin:
+            print("error: missing DuckDB shell", file=sys.stderr)
+            return 1
+        options = [
+            "--workers",
+            str(args.workers),
+            "--batch-size",
+            str(args.batch_size),
+            "--retry",
+            str(args.retry),
+            "--max-retries",
+            str(args.max_retries),
+            "--timeout-policy",
+            args.timeout_policy,
+        ]
+        if args.batch_timeout is not None:
+            options.extend(["--batch-timeout", str(args.batch_timeout)])
+        for name in ("max_failures", "track_runtime", "track_rss_memory"):
+            value = getattr(args, name)
+            if value is not None:
+                options.extend(["--" + name.replace("_", "-"), str(value)])
+        for name in ("fail_require_skip", "fail_fast"):
+            if getattr(args, name):
+                options.append("--" + name.replace("_", "-"))
+        args.invocation = resolve_invocation(
+            args.unittest_bin,
+            extension=args.test_extension,
+            test_roots=args.test_root,
+            bundle_roots=args.test_bundle_root,
+            flags=args.test_flags,
+            config_files=tuple(os.fspath(Path(path).resolve()) for path in args.test_config),
+            test_command=args.test_command,
+            options=tuple(options),
+        )
+        args.unittest_bin = args.invocation.cli
+        args.test_list = args.test_lists[0] if args.test_lists else None
         return run_tests_from_args(args)
 
 
 def run_tests_from_args(args):
-    global TEST_EXTENSION_OVERRIDE, TEST_ROOT_OVERRIDES, TEST_BUNDLE_ROOT_OVERRIDES
-    TEST_EXTENSION_OVERRIDE = args.test_extension
-    TEST_ROOT_OVERRIDES = args.test_root
-    TEST_BUNDLE_ROOT_OVERRIDES = args.test_bundle_root
     args.coverage_profile_dir = None
     if args.timeout_policy == "warn" and args.batch_size != 1:
         print("error: --timeout-policy warn requires --batch-size 1")
@@ -2852,7 +3112,7 @@ def run_tests_from_args(args):
         print("error: missing DuckDB shell", file=sys.stderr)
         return 1
 
-    test_list_files = [path for path in [args.test_list, args.changed_tests] if path is not None]
+    test_list_files = [*args.test_lists, *([args.changed_tests] if args.changed_tests is not None else [])]
     config_invocations = build_config_invocations(args.test_config, args.test_flags)
     if args.list_tests:
         if len(config_invocations) != 1:
@@ -2869,6 +3129,7 @@ def run_tests_from_args(args):
                 test_list_files,
                 test_config=invocation.test_config,
                 test_command=args.test_command,
+                invocation=args.invocation,
             )
         except TestRunnerError as exc:
             print(f"error: {exc}", file=sys.stderr)
@@ -3023,7 +3284,11 @@ def run_tests_from_args(args):
         if failed_test_names:
             print()
             print("reproduce all failed tests:")
-            print(format_failed_tests_reproducer(unittest_bin, args.test_flags, failed_test_configs, failed_test_names))
+            print(
+                format_failed_tests_reproducer(
+                    unittest_bin, args.test_flags, failed_test_configs, failed_test_names, args.invocation
+                )
+            )
         return 1
     if args.coverage_report is not None and report_returncode != 0:
         return report_returncode
@@ -3141,9 +3406,7 @@ def run_tests(
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
-                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_skipped_test_output(
-                        result["stdout"], result["stderr"]
-                    )
+                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_result_skips(result)
                     total_skipped_tests += skipped_count
                     partially_skipped_test_names.update(partial_names)
                     for reason, count in skipped_reasons.items():
@@ -3162,9 +3425,7 @@ def run_tests(
                                 retry_count=batch_info["attempt"],
                             )
                         )
-                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_skipped_test_output(
-                        result["stdout"], result["stderr"]
-                    )
+                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_result_skips(result)
                     total_skipped_tests += skipped_count
                     partially_skipped_test_names.update(partial_names)
                     for reason, count in skipped_reasons.items():

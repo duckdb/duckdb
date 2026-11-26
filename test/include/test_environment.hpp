@@ -2,6 +2,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "test_config.hpp"
+#include "test_helpers.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -11,12 +12,15 @@ namespace duckdb {
 class TestEnvironmentScope {
 public:
 	TestEnvironmentScope()
-	    : working_directory(FileSystem::GetWorkingDirectory()), configuration(TestConfiguration::Get()) {
+	    : working_directory(FileSystem::GetWorkingDirectory()), configuration(TestConfiguration::Get()),
+	      helper_state(CaptureTestHelperState()) {
 		auto value = std::getenv(HomeVariable());
 		has_home = value != nullptr;
 		if (value) {
 			home = value;
 		}
+		ResetTestHelperState();
+		TestConfiguration::Get() = TestConfiguration();
 	}
 
 	~TestEnvironmentScope() {
@@ -34,6 +38,7 @@ public:
 			std::fprintf(stderr, "Failed to restore working directory after running tests: %s\n", ex.what());
 		}
 		TestConfiguration::Get() = std::move(configuration);
+		RestoreTestHelperState(*helper_state);
 	}
 
 	TestEnvironmentScope(const TestEnvironmentScope &) = delete;
@@ -50,6 +55,7 @@ private:
 
 	string working_directory;
 	TestConfiguration configuration;
+	shared_ptr<TestHelperState> helper_state;
 	bool has_home;
 	string home;
 };

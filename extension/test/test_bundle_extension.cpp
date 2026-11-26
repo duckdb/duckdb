@@ -2,7 +2,7 @@
 #include "catch.hpp"
 
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb_test/test_bundle.hpp"
+#include "duckdb_test/test_registry.hpp"
 #include "test_config.hpp"
 #include "test_environment.hpp"
 #include "test_helpers.hpp"
@@ -89,7 +89,8 @@ struct CatchTestReporter : public TestReporter {
 };
 
 static void ReportResult(RunContext &run_context, const string &test_name, TestStatus status, double duration_ms,
-                         idx_t assertion_count, vector<CapturedFailure> failures, const string &message) {
+                         idx_t assertion_count, vector<CapturedFailure> failures, const string &message,
+                         const string &diagnostics = "") {
 	vector<TestFailure> reported_failures;
 	reported_failures.reserve(failures.size());
 	for (auto &failure : failures) {
@@ -105,7 +106,8 @@ static void ReportResult(RunContext &run_context, const string &test_name, TestS
 	                   NumericCast<uint64_t>(assertion_count),
 	                   reported_failures.data(),
 	                   NumericCast<uint64_t>(reported_failures.size()),
-	                   message.c_str()};
+	                   message.c_str(),
+	                   diagnostics.c_str()};
 	run_context.callback(run_context.callback_data, &result);
 }
 
@@ -176,18 +178,19 @@ public:
 				status = TestStatus::SKIPPED;
 			}
 			string message = stats.skipReason;
+			string diagnostics;
 			if (status == TestStatus::FAILED) {
 				if (!stats.stdOut.empty()) {
-					message += "\n--- test stdout ---\n" + stats.stdOut;
+					diagnostics += "\n--- test stdout ---\n" + stats.stdOut;
 				}
 				if (!stats.stdErr.empty()) {
-					message += "\n--- test stderr ---\n" + stats.stdErr;
+					diagnostics += "\n--- test stderr ---\n" + stats.stdErr;
 				}
 			}
 			auto end = std::chrono::steady_clock::now();
 			auto duration = std::chrono::duration<double, std::milli>(end - capture.start).count();
 			ReportResult(*current_run, capture.test_name, status, duration, stats.totals.assertions.total(),
-			             std::move(capture.failures), message);
+			             std::move(capture.failures), message, diagnostics);
 			current_run->test_active = false;
 		}
 		StreamingReporterBase::testCaseEnded(stats);
@@ -217,7 +220,6 @@ static string QuoteCatchTest(const string &name) {
 
 static void InitializeTestEnvironment() {
 	auto &config = TestConfiguration::Get();
-	config.ChangeWorkingDirectory(TestRootDirectory());
 	string error;
 	if (!PrepareTempDir(error)) {
 		throw InvalidInputException("Failed to prepare test directory: %s", error);
@@ -226,16 +228,18 @@ static void InitializeTestEnvironment() {
 	if (!config.ValidateDataDirs(error)) {
 		throw InvalidInputException("%s", error);
 	}
-	auto home_dir = TestMakeAbsolute(GetTempDirHome(), TestGetCurrentDirectory());
+	if (!config.GetKeepHome()) {
+		auto home_dir = TestMakeAbsolute(GetTempDirHome(), TestGetCurrentDirectory());
 #ifdef DUCKDB_WINDOWS
-	if (_putenv_s("USERPROFILE", home_dir.c_str()) != 0) {
-		throw IOException("Failed to set USERPROFILE environment variable");
-	}
+		if (_putenv_s("USERPROFILE", home_dir.c_str()) != 0) {
+			throw IOException("Failed to set USERPROFILE environment variable");
+		}
 #else
-	if (setenv("HOME", home_dir.c_str(), 1) != 0) {
-		throw IOException("Failed to set HOME environment variable");
-	}
+		if (setenv("HOME", home_dir.c_str(), 1) != 0) {
+			throw IOException("Failed to set HOME environment variable");
+		}
 #endif
+	}
 #ifdef DUCKDB_TEST_BUNDLE_DEBUG_FS
 	static bool loader_initialized = false;
 	if (!loader_initialized) {
@@ -256,17 +260,9 @@ static void EnumerateTests(void *, test_case_callback_t callback, void *callback
 }
 
 static void ConfigureTestFlags(const char *const *test_flags, uint64_t test_flag_count) {
-	static bool initialized = false;
-	static vector<string> configured_flags;
 	vector<string> flags;
 	for (uint64_t index = 0; index < test_flag_count; index++) {
 		flags.emplace_back(test_flags[index]);
-	}
-	if (initialized) {
-		if (flags != configured_flags) {
-			throw InvalidInputException("A C++ test bundle cannot be reconfigured with different test flags");
-		}
-		return;
 	}
 
 	auto &config = TestConfiguration::Get();
@@ -287,16 +283,14 @@ static void ConfigureTestFlags(const char *const *test_flags, uint64_t test_flag
 			throw InvalidInputException("Invalid C++ test flag '%s': %s", argument, ex.what());
 		}
 	}
-	configured_flags = std::move(flags);
-	initialized = true;
 }
 
 static void RunTests(void *, const char *const *test_names, uint64_t test_count, const char *const *test_flags,
                      uint64_t test_flag_count, test_result_callback_t callback, void *callback_data) {
 	static mutex run_lock;
 	lock_guard<mutex> guard(run_lock);
-	ConfigureTestFlags(test_flags, test_flag_count);
 	TestEnvironmentScope environment_scope;
+	ConfigureTestFlags(test_flags, test_flag_count);
 	TempDirReclaimer temp_dir_reclaimer;
 	InitializeTestEnvironment();
 	temp_dir_reclaimer.success = true;
@@ -341,10 +335,11 @@ static TestBundle bundle {DUCKDB_TEST_BUNDLE_NAME, nullptr, EnumerateTests, RunT
 extern "C" {
 
 DUCKDB_TEST_BUNDLE_ENTRY(DUCKDB_TEST_BUNDLE_IDENTIFIER) {
-	auto service = static_cast<duckdb_test::TestRegistry *>(loader.GetService(duckdb_test::SERVICE_NAME));
-	if (!service) {
+	auto registry = loader.GetDatabaseInstance().GetObjectCache().Get<duckdb_test::TestRegistryEntry>(
+	    duckdb_test::TestRegistryEntry::ObjectType());
+	if (!registry) {
 		throw duckdb::InvalidInputException("The test extension must be loaded before '%s'", DUCKDB_TEST_BUNDLE_NAME);
 	}
-	service->register_bundle(service->data, &bundle);
+	registry->registry.register_bundle(registry->registry.data, &bundle);
 }
 }

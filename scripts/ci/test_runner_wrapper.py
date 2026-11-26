@@ -70,5 +70,14 @@ def main(
 
     from scripts.ci import run_tests
 
-    with pushd(test_root_directory or source_root_path):
-        return int(run_tests.main(build_run_tests_argv(forwarded_args, wrapper_path, duckdb_name, test_roots)) or 0)
+    return int(
+        run_tests.main(
+            [
+                *build_run_tests_argv([], wrapper_path, duckdb_name, test_roots),
+                "--working-directory",
+                os.fspath(test_root_directory or source_root_path),
+                *forwarded_args,
+            ]
+        )
+        or 0
+    )

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import os
+import contextlib
+import io
+import re
 import json
 import runpy
 import signal
@@ -89,6 +92,120 @@ def protocol_config(**overrides):
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def assertReproducer(self, command, legacy_expected):
+        arguments = shlex.split(command)
+        self.assertEqual(arguments[:2], [sys.executable, str(REPO_ROOT / "scripts/ci/run_tests.py")])
+        self.assertEqual(arguments[-(len(legacy_expected) - 1) :], legacy_expected[1:])
+        parsed = run_tests.parse_args(arguments[2:])
+        self.assertTrue(Path(parsed.unittest_bin).is_absolute())
+        self.assertTrue(parsed.working_directory.is_absolute())
+
+    def test_legacy_configuration_arguments_preserve_order_and_repeat_files(self):
+        args = run_tests.parse_args(
+            [
+                "duckdb",
+                "--force-storage",
+                "--test-flags=--autoloading none",
+                "--autoloading",
+                "available",
+                "--temp-dir-root",
+                "directory with spaces",
+                "--require",
+                "parquet",
+                "--keep-home",
+                "--emit-on-skip",
+                "--test-dir",
+                "suite",
+                "-f",
+                "one",
+                "--input-file",
+                "two",
+            ]
+        )
+        self.assertEqual(
+            shlex.split(args.test_flags),
+            [
+                "--force-storage",
+                "--autoloading",
+                "none",
+                "--autoloading",
+                "available",
+                "--temp-dir-root",
+                "directory with spaces",
+                "--require",
+                "parquet",
+                "--keep-home",
+                "--emit-on-skip",
+            ],
+        )
+        self.assertEqual(args.test_lists, [Path("one"), Path("two")])
+        self.assertEqual(args.working_directory, Path("suite"))
+
+    def test_test_names_are_not_translated_as_legacy_flags(self):
+        names = ["force-storage", "description", "memory-leak-suite"]
+        args = run_tests.parse_args(["duckdb", *names])
+        self.assertEqual(args.patterns, names)
+        self.assertEqual(args.test_flags, "")
+
+    def test_legacy_options_cover_the_cpp_configuration_table(self):
+        source = (REPO_ROOT / "test/helpers/test_config.cpp").read_text()
+        table = source.split("static const TestConfigOption test_config_options[] =", 1)[1].split(
+            "TestConfiguration &TestConfiguration::Get", 1
+        )[0]
+        for name, kind in re.findall(r'^    \{"(\w+)"\s*,.*?LogicalType::(\w+)', table, re.S | re.M):
+            flag = name.replace("_", "-")
+            self.assertIn(flag, run_tests.LEGACY_BOOLEAN_FLAGS if kind == "BOOLEAN" else run_tests.LEGACY_VALUE_FLAGS)
+
+    def test_legacy_missing_values_fail_before_starting_a_shell(self):
+        for flags in (["--temp-dir-root"], ["--require"], ["--test-flags=--temp-dir-root"], ["-f"]):
+            with self.subTest(flags=flags), contextlib.redirect_stderr(io.StringIO()):
+                with mock.patch.object(run_tests.subprocess, "run") as child:
+                    with self.assertRaises(SystemExit):
+                        run_tests.parse_args(["duckdb", *flags])
+                    child.assert_not_called()
+
+    def test_structured_results_count_failures_individually_in_a_batch(self):
+        ids = ["sql:test/sql/" + name + ".test" for name in ("pass", "fail_one", "fail_two", "skip")]
+        rows = [
+            {"test_id": name, "status": status, "message": "require parquet" if status == "skipped" else ""}
+            for name, status in zip(ids, ("passed", "failed", "failed", "skipped"))
+        ]
+        result = {
+            "results": rows,
+            "failed": True,
+            "stdout": "",
+            "stderr": "",
+            "returncode": 1,
+            "message": "test failed",
+            "peak_rss_bytes": 0,
+            "allow_retry": False,
+        }
+        with mock.patch.object(run_tests, "run_batch", return_value=result):
+            summary = run_tests.run_tests(protocol_config(batch_size=4), [ids], len(ids), output=StringIO())
+        self.assertEqual(summary.returncode, 1)
+        self.assertEqual((summary.passed_tests, summary.failed_tests, summary.skipped_tests), (1, 2, 1))
+        self.assertEqual(summary.failed_test_names, tuple(ids[1:3]))
+
+    def test_structured_failure_uses_the_real_source_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source.cpp"
+            path.write_text("first line\nCHECK(1 == 2);\nlast line\n")
+            row = {
+                "test_id": "cpp:duckdb_tests:fixture",
+                "status": "failed",
+                "duration_ms": 3,
+                "assertion_count": 2,
+                "failures": [{"file": str(path), "line": "2", "expression": "1 == 2", "message": "input=314159"}],
+                "diagnostics": "captured output",
+            }
+            result = {"results": [row], "stdout": "", "stderr": "", "returncode": 0}
+            failure, lines, names = run_tests.render_durable_failure(result, [row["test_id"]])
+            output = run_tests.strip_ansi("\n".join(lines))
+            for value in (str(path) + ":2", "CHECK(1 == 2);", "input=314159", "captured output"):
+                self.assertIn(value, output)
+            self.assertNotIn(row["test_id"] + ":1", output)
+            self.assertEqual(names, [row["test_id"]])
+
     def test_protocol_timeout_warning_requires_an_active_body(self):
         test_id = "sql:test/sql/slow.test"
         begin = {"version": 2, "event": "begin", "name": "test/sql/slow.test"}
@@ -137,6 +254,7 @@ class RunTestsScriptTest(unittest.TestCase):
                 "attempt": 0,
                 "status": "passed",
                 "duration_ms": 3500,
+                "skip_mode": "0",
             },
         ]
         terminal = run_tests.TEST_EVENT_MARKER + json.dumps(
@@ -155,17 +273,13 @@ class RunTestsScriptTest(unittest.TestCase):
 
         self.assertFalse(result["failed"], result)
         self.assertEqual(popen.call_args_list[0].kwargs["stdout"], run_tests.subprocess.DEVNULL)
-        self.assertEqual(
-            run_tests.extract_test_runtimes(result["stdout"], result["stderr"]),
-            [
-                (test_ids[0], 0.012),
-                (test_ids[1], 3.5),
-            ],
-        )
-        skip_events = run_tests.extract_skip_events(result["stdout"], result["stderr"])
-        self.assertEqual(skip_events[3], {test_ids[0]})
-        self.assertEqual(skip_events[4], {"mode skip unsupported": {test_ids[0]}})
-        self.assertEqual(len(run_tests.parse_test_events(result["stdout"] + result["stderr"])), 2)
+        self.assertEqual(result["results"], rows)
+        skipped, reasons, partial, partial_reasons = run_tests.extract_result_skips(result)
+        self.assertEqual(skipped, 0)
+        self.assertEqual(partial, {test_ids[0]})
+        self.assertEqual(partial_reasons, {"mode skip unsupported": {test_ids[0]}})
+        self.assertEqual(result["stdout"], "")
+        self.assertEqual(len(run_tests.parse_test_events(result["stderr"])), 0)
 
     def test_missing_state_reports_test_ids_and_recovery_cause(self):
         passed_id = "sql:test/sql/passed.test"
@@ -243,8 +357,8 @@ class RunTestsScriptTest(unittest.TestCase):
         attempt = run_tests.FailedAttempt(["failed"], batch, batch)
         output = run_tests.strip_ansi(run_tests.format_batch_failure(batch, config, [attempt], False, 0))
         command = output.splitlines()[-1]
-        self.assertEqual(
-            shlex.split(command),
+        self.assertReproducer(
+            command,
             [
                 os.path.relpath("/repo/build/reldebug/test/run", REPO_ROOT),
                 "--test-flags=--force-storage",
@@ -253,7 +367,7 @@ class RunTestsScriptTest(unittest.TestCase):
                 '"sql:test/sql/a.test","cpp:duckdb_tests:Compiled\\, test"',
             ],
         )
-        parsed = run_tests.parse_args(["duckdb", *shlex.split(command)[1:]])
+        parsed = run_tests.parse_args(shlex.split(command)[2:])
         self.assertEqual(parsed.test_flags, config.test_flags)
         self.assertEqual(parsed.test_config, [config.test_config])
 
@@ -360,7 +474,9 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual(attempts, {"slow": 1, "pass": 1, "skip": 1})
         self.assertIn("1 passed, 1 skipped, 1 timed out", proc.stdout)
         self.assertNotIn("all tests passed", proc.stdout)
-        self.assertIn("reproduce: unused-binary test/sql/slow.test", proc.stdout)
+        self.assertIn("reproduce: " + shlex.quote(sys.executable), proc.stdout)
+        self.assertIn("--test-command", proc.stdout)
+        self.assertIn('"test/sql/slow.test"', proc.stdout)
         self.assertIn("test-revision", summary)
         self.assertIn("`test/sql/slow.test`", summary)
 
@@ -1010,16 +1126,16 @@ class RunTestsScriptTest(unittest.TestCase):
     def test_failed_tests_reproducer_uses_runner_and_preserves_context(self):
         command = run_tests.format_failed_tests_reproducer(
             "/repo/build/reldebug/duckdb",
-            "--force-storage --label 'two words'",
+            "--force-storage --description 'two words'",
             ["test/configs/a config.json"],
             ["test/sql/a.test", "Compiled, test's name"],
         )
 
-        self.assertEqual(
-            shlex.split(command),
+        self.assertReproducer(
+            command,
             [
                 os.path.relpath("/repo/build/reldebug/test/run", REPO_ROOT),
-                "--test-flags=--force-storage --label 'two words'",
+                "--test-flags=--force-storage --description 'two words'",
                 "--test-config",
                 "test/configs/a config.json",
                 '"test/sql/a.test","Compiled\\, test\'s name"',
@@ -2010,7 +2126,7 @@ require windows: 2
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("error: stabilization rerun failure detected", proc.stdout)
         self.assertIn("reproduce all failed tests:", proc.stdout)
-        self.assertIn("run '\"test/sql/fast.test\"'", proc.stdout)
+        self.assertIn('"test/sql/fast.test"', proc.stdout)
 
     def test_retries_failed_fake_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -2225,10 +2341,7 @@ Error: Catalog Error: a failed
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("reproduce all failed tests:", proc.stdout)
         command = proc.stdout.rstrip().splitlines()[-1]
-        self.assertEqual(
-            shlex.split(command),
-            ["test/run", '"test/sql/a.test","Compiled test name","test/sql/b.test"'],
-        )
+        self.assertReproducer(command, ["test/run", '"test/sql/a.test","Compiled test name","test/sql/b.test"'])
 
     def test_final_reproducer_unions_failures_across_exhausted_retries(self):
         test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
@@ -2267,7 +2380,7 @@ Error: Catalog Error: a failed
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         command = proc.stdout.rstrip().splitlines()[-1]
-        self.assertEqual(shlex.split(command), ["test/run", '"test/sql/a.test","test/sql/b.test"'])
+        self.assertReproducer(command, ["test/run", '"test/sql/a.test","test/sql/b.test"'])
 
     def test_failed_batch_includes_mismatch_context(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -3602,8 +3715,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         command = proc.stdout.rstrip().splitlines()[-1]
-        self.assertEqual(
-            shlex.split(command),
+        self.assertReproducer(
+            command,
             [
                 "build/reldebug/test/run",
                 "--test-flags=--force-storage --force-reload",

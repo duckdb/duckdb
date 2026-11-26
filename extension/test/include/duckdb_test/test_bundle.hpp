@@ -11,8 +11,6 @@
 
 namespace duckdb_test {
 
-static constexpr const char *SERVICE_NAME = "duckdb_test_registry";
-
 struct TestCase {
 	const char *name;
 	const char *tags;
@@ -37,6 +35,7 @@ struct TestResult {
 	const TestFailure *failures;
 	uint64_t failure_count;
 	const char *message;
+	const char *diagnostics;
 };
 
 using test_case_callback_t = void (*)(void *data, const TestCase *test_case);

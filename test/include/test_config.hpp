@@ -65,6 +65,7 @@ public:
 	optional_idx GetMaxTestThreads();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
+	bool GetKeepHome();
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
 	bool RunStorageFuzzer();

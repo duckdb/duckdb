@@ -131,8 +131,33 @@ def verify_process_lifecycle(binary, directory):
             connection = NativeTestConnection(library)
             connections.append(connection)
             load = run_tests.build_test_protocol_sql(binary, "SELECT 42;")
-            assert connection.query(load) is None
+            load_error = connection.query(load)
+            assert load_error is None, load_error
         first, second = connections
+        # Discovery must leave each database free to choose flags for later calls.
+        assert first.query("SELECT count(*) FROM scan_tests([], test_roots=[]);") is None
+        invalid = second.query("SELECT * FROM run_tests([], test_flags=['--temp-dir-root']);")
+        assert invalid and "expected an argument" in invalid, invalid
+        assert_restored()
+        for index, flags in enumerate(("--force-reload", "--single-threaded")):
+            query = run_sql("passing", f"flags_{index}")
+            query = query.replace("'--temp-dir-root'", f"'{flags}', '--temp-dir-root'")
+            assert second.query(query) is None
+            assert_restored()
+        # Binding two statements must not make one statement inherit the other's flags.
+        assert (
+            first.query(
+                "PREPARE runner_one AS "
+                + run_sql("passing", "prepared_one").replace(
+                    "'--temp-dir-root'", "'--force-storage', '--temp-dir-root'"
+                )
+            )
+            is None
+        )
+        assert first.query("PREPARE runner_two AS " + run_sql("passing", "prepared_two")) is None
+        assert first.query("EXECUTE runner_two") is None
+        assert first.query("EXECUTE runner_one") is None
+        assert_restored()
         results = []
         worker = threading.Thread(target=lambda: results.append(first.query(run_sql("blocking", "blocking"))))
         worker.start()
@@ -150,7 +175,7 @@ def verify_process_lifecycle(binary, directory):
         assert not worker.is_alive(), "blocking fixture did not finish"
         assert results == [None], results
         assert_restored()
-        for index, name in enumerate(["passing", "passing", "nested invocation"]):
+        for index, name in enumerate(["passing", "passing", "nested invocation", "registry survives cache eviction"]):
             error = second.query(run_sql(name, f"sequential_{index}"))
             assert error is None, error
             assert_restored()
@@ -375,6 +400,63 @@ class TestExtensionIntegrationTest(unittest.TestCase):
             ],
         )
 
+    def test_reproducer_runs_with_an_installed_cli_from_another_directory(self):
+        installed = self.root / "installed cli"
+        installed.mkdir()
+        cli = installed / ("duckdb.exe" if os.name == "nt" else "duckdb")
+        shutil.copy2(self.binary, cli)
+        work = self.root / "working directory"
+        work.mkdir()
+        bundle_root = self.root / "bundle roots"
+        bundle_root.mkdir()
+        test_id = self.create_test("reproduce.test", "query I\nSELECT 42\n----\n43\n")
+        test_id = "sql:" + Path(test_id.removeprefix("sql:")).resolve().as_posix()
+        command = [
+            sys.executable,
+            str(REPO_ROOT / "scripts/ci/run_tests.py"),
+            str(cli),
+            "--test-extension",
+            str(self.test_extension),
+            "--test-root",
+            str(self.test_root),
+            "--test-bundle-root",
+            str(bundle_root),
+            "--working-directory",
+            str(work),
+            "--workers",
+            "1",
+            "--retry",
+            "0",
+            "--max-retries",
+            "0",
+            test_id,
+        ]
+        environment = {**os.environ, "CI": ""}
+        failed = subprocess.run(command, cwd=self.root, env=environment, capture_output=True, text=True, timeout=60)
+        self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+        self.assertIn("reproduce all failed tests:\n", failed.stdout, failed.stdout + failed.stderr)
+        reproduce = failed.stdout.split("reproduce all failed tests:\n", 1)[1].splitlines()[0]
+        if os.name == "nt":
+            arguments = reproduce
+            for value in (str(cli), str(self.test_extension), str(self.test_root), str(bundle_root), str(work)):
+                self.assertIn(value, reproduce)
+        else:
+            import shlex
+
+            arguments = shlex.split(reproduce)
+            parsed = run_tests.parse_args(arguments[2:])
+            self.assertEqual(Path(parsed.unittest_bin), cli.resolve())
+            self.assertEqual(parsed.test_extension, self.test_extension)
+            self.assertEqual(parsed.test_root, [self.test_root.resolve()])
+            self.assertEqual(parsed.test_bundle_root, [bundle_root.resolve()])
+            self.assertEqual(parsed.working_directory, work.resolve())
+        path = Path(test_id.removeprefix("sql:"))
+        path.write_text("query I\nSELECT 42\n----\n42\n")
+        other = self.root / "another directory"
+        other.mkdir()
+        passed = subprocess.run(arguments, cwd=other, env=environment, capture_output=True, text=True, timeout=60)
+        self.assertEqual(passed.returncode, 0, passed.stdout + passed.stderr)
+
     def test_result_recovery_preserves_failure_messages_and_empty_lists(self):
         passed_id = self.create_test("passed.test", "query I\nSELECT 42\n----\n42\n")
         failed_id = self.create_test("failed.test", "query I\nSELECT 42\n----\n43\n")
@@ -475,7 +557,9 @@ class TestExtensionIntegrationTest(unittest.TestCase):
                 if status == "skipped":
                     self.assertEqual(rows[0]["message"], "require parquet")
                 if name == "failure context":
-                    diagnostic = "\n".join(rows[0]["failures"]) + rows[0]["message"]
+                    diagnostic = (
+                        "\n".join(failure["message"] for failure in rows[0]["failures"]) + rows[0]["diagnostics"]
+                    )
                     for context in ("input=314159", "captured := 271828", "stdout fixture", "stderr fixture"):
                         self.assertIn(context, diagnostic)
                 runner = subprocess.run(
@@ -627,8 +711,10 @@ class TestExtensionIntegrationTest(unittest.TestCase):
             batch_timeout_seconds=3,
             timeout_policy="warn",
         )
-        with mock.patch("scripts.ci.run_tests.TEST_ROOT_OVERRIDES", [self.test_root]):
-            result = run_tests.run_batch(config, [test_id])
+        config = run_tests.replace(
+            config, invocation=run_tests.resolve_invocation(self.binary, test_roots=[self.test_root])
+        )
+        result = run_tests.run_batch(config, [test_id])
         self.assertTrue(result["timed_out"], result)
         self.assertTrue(run_tests.can_warn_timeout(config, [test_id], result), result)
 
@@ -645,13 +731,15 @@ class TestExtensionIntegrationTest(unittest.TestCase):
             test_flags=f"--temp-dir-root {self.temp_root}",
             batch_timeout_seconds=3,
         )
-        with mock.patch("scripts.ci.run_tests.TEST_ROOT_OVERRIDES", [self.test_root]):
-            result = run_tests.run_batch(config, batch)
+        config = run_tests.replace(
+            config, invocation=run_tests.resolve_invocation(self.binary, test_roots=[self.test_root])
+        )
+        result = run_tests.run_batch(config, batch)
         self.assertTrue(result["timed_out"], result)
-        failure = run_tests.parse_failure_info(result["message"], result["stdout"], result["stderr"], batch)
+        failure, lines, _ = run_tests.render_durable_failure(result, batch)
         self.assertEqual(failure.test_name, hanging)
         self.assertEqual(failure.reproduce_batch, [hanging])
-        self.assertIn("incomplete tests:", failure.detail_lines)
+        self.assertIn("incomplete tests:", "\n".join(lines))
 
 
 if __name__ == "__main__":
