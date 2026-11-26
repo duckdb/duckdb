@@ -512,8 +512,7 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
-	auto &vfs = opener_filesystem.GetFileSystem();
-	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
 	// Shared variable both all caching modes.
 	string buffer(TEST_BUFFER_SIZE, '\0');
@@ -545,6 +544,39 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	}
 }
 
+// Testing scenario: a compressed file is cached as stored, and the decompression is applied on top of the cache.
+TEST_CASE("Open compressed file with caching", "[file_system][caching]") {
+	const string test_content = "File used for compressed caching testing";
+	TestFileGuard test_file("test_caching_compressed.txt.gz", "");
+
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
+
+	{
+		FileOpenFlags write_flags {FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE};
+		write_flags.SetCompression(FileCompressionType::GZIP);
+		auto handle = opener_filesystem.OpenFile(test_file.GetPath(), write_flags);
+		handle->Write(QueryContext(), const_cast<char *>(test_content.data()), test_content.size());
+		handle->Close();
+	}
+
+	for (auto compression : {FileCompressionType::GZIP, FileCompressionType::AUTO_DETECT}) {
+		FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
+		flags.SetCompression(compression);
+		flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
+
+		auto handle = opener_filesystem.OpenFile(test_file.GetPath(), flags);
+		string buffer(test_content.size(), '\0');
+		REQUIRE(handle->Read(QueryContext(), &buffer[0], buffer.size()) == static_cast<int64_t>(buffer.size()));
+		REQUIRE(buffer == test_content);
+	}
+	// the cache holds the compressed file
+	const auto cached = db_instance.GetExternalFileCache().GetCachedFileInformation();
+	REQUIRE(cached.size() == 1);
+	REQUIRE(cached[0].nr_bytes != test_content.size());
+}
+
 // Testing scenario: read end offset exceeds file size, caching filesystem is expected to truncate.
 TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	const string test_content = "File used for over-sized read testing";
@@ -553,8 +585,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
-	auto &vfs = opener_filesystem.GetFileSystem();
-	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
 	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
 	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);

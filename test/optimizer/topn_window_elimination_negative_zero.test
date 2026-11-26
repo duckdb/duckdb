@@ -84,3 +84,10 @@ SELECT x, d::VARCHAR FROM (SELECT x, d, row_number() OVER (PARTITION BY d ORDER 
 5	-1.0
 6	0.0
 
+# REAL with a single top row
+query I
+SELECT d::VARCHAR FROM (SELECT d, row_number() OVER (PARTITION BY d ORDER BY x DESC) rn FROM f WHERE x <> 6) WHERE rn = 1 ORDER BY d, d::VARCHAR;
+----
+-1.0
+-0.0
+1.5

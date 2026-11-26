@@ -94,6 +94,7 @@ private:
 		LogicalOperator &op;
 		optional_ptr<LogicalOperator> parent;
 		bool optimize_as_leaf;
+		bool has_throwing_predicate;
 	};
 
 	bool ExtractJoinRelation(JoinOrderOptimizer &optimizer, PendingRelation relation,
@@ -113,6 +114,7 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 	column_binding_map_t<ColumnBinding> normalized_bindings;
+	unordered_map<TableIndex, unordered_set<RelationIndex>> marker_dependencies;
 	unordered_set<TableIndex> active_recursive_ctes;
 	bool has_recursive_relations = false;
 	bool stats_complete = true;

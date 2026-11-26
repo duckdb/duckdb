@@ -13,9 +13,9 @@ bool IsScalarValue(const VariantNode &node) {
 		return false;
 	}
 	switch (node.GetTypeId()) {
-	case VariantLogicalType::VARIANT_NULL:
-	case VariantLogicalType::OBJECT:
-	case VariantLogicalType::ARRAY:
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
 		return false;
 	default:
 		return true;

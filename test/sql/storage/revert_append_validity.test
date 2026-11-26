@@ -1,0 +1,69 @@
+# name: test/sql/storage/revert_append_validity.test
+# description: Appends after a failed commit reverted rows with NULL values in partially and completely filled validity segments
+# group: [storage]
+
+require skip_reload
+
+statement ok
+SET wal_autocheckpoint = '1TB'
+
+statement ok
+ATTACH '{TEST_DIR}/revert_append_validity.db' AS db
+
+# the index makes the failing commits append their rows before they are reverted
+statement ok con1
+CREATE TABLE db.t (id INTEGER PRIMARY KEY, i INTEGER, s VARCHAR)
+
+statement ok con1
+INSERT INTO db.t SELECT r, CASE WHEN r % 3 = 0 THEN NULL ELSE r END, CASE WHEN r % 5 = 0 THEN NULL ELSE r::VARCHAR END FROM range(100) t(r)
+
+# the reverted rows stay in the last validity segment
+statement ok con1
+BEGIN
+
+statement ok con1
+INSERT INTO db.t SELECT r, NULL, NULL FROM range(100, 150) t(r)
+
+statement ok con2
+COMMENT ON TABLE db.t IS 'x'
+
+statement error con1
+COMMIT
+----
+another transaction has
+
+statement ok con1
+INSERT INTO db.t SELECT r, r, r::VARCHAR FROM range(100, 150) t(r)
+
+query IIII
+SELECT count(*), count(i), count(s), sum(i) FROM db.t
+----
+150	116	130	9492
+
+# the reverted rows fill validity segments
+statement ok con1
+BEGIN
+
+statement ok con1
+INSERT INTO db.t SELECT r, CASE WHEN r % 2 = 0 THEN NULL ELSE r END, NULL FROM range(150, 100000) t(r)
+
+statement ok con2
+COMMENT ON TABLE db.t IS 'y'
+
+statement error con1
+COMMIT
+----
+another transaction has
+
+statement ok con1
+INSERT INTO db.t SELECT r, CASE WHEN r % 7 = 0 THEN NULL ELSE r END, r::VARCHAR FROM range(150, 50000) t(r)
+
+query IIII
+SELECT count(*), count(i), count(s), sum(i) FROM db.t
+----
+50000	42845	49980	1071421363
+
+query II
+SELECT count(*), count(i) FROM db.t WHERE s IS NULL
+----
+20	13

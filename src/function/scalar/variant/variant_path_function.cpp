@@ -10,8 +10,8 @@ namespace {
 void EmitSelectedNode(const VariantNode &node, VariantBuilder &builder) {
 	if (!node.IsNull() && !node.IsMissing()) {
 		const auto type = node.GetTypeId();
-		if (type != VariantLogicalType::OBJECT && type != VariantLogicalType::ARRAY) {
-			builder.EmitPrimitiveNode(node, type);
+		if (type != LogicalTypeId::STRUCT && type != LogicalTypeId::LIST) {
+			builder.EmitPrimitiveNode(node);
 			return;
 		}
 	}
@@ -67,7 +67,7 @@ void VariantPathFunction::ExecuteVariant(DataChunk &input, const ExpressionState
 }
 
 optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node, int64_t index) {
-	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != VariantLogicalType::ARRAY) {
+	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != LogicalTypeId::LIST) {
 		return {};
 	}
 	const auto elements = node.GetArrayChildren();
@@ -133,14 +133,15 @@ void VariantPathFunction::ExecuteVariantMany(const Vector &input, const vector<v
 					selected[offset + path_idx] = ResolvePath(root, paths[path_idx]);
 				}
 			}
-			if (key_count == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
+			if (key_count == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != LogicalTypeId::STRUCT) {
 				continue;
 			}
 			auto pending = key_count;
 			for (const auto &entry : root.GetObjectChildren()) {
 				for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
 					auto &value = selected[offset + path_idx];
-					if (keys[path_idx] && !value && *keys[path_idx] == entry.key) {
+					const auto &key = keys[path_idx];
+					if (key && !value && *key == entry.key) {
 						value = entry.value;
 						pending--;
 					}

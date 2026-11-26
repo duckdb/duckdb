@@ -871,6 +871,8 @@ CardinalityValue CardinalityEstimator::EstimateCardinality(JoinRelationSet &set)
 		auto right_rows = EstimateCardinality(right);
 		if (op.type == JoinOrderOperatorType::LEFT) {
 			result = MaxValue(left_rows, left_rows * right_rows * boundary->selectivity);
+		} else if (op.type == JoinOrderOperatorType::MARK) {
+			result = left_rows;
 		} else {
 			auto type = op.type == JoinOrderOperatorType::SEMI ? JoinType::SEMI : JoinType::ANTI;
 			result = RelationStatisticsHelper::EstimateSemiAntiJoinFallbackCardinality(
@@ -974,6 +976,20 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		state->unique_keys.push_back(stats.unique_key);
 		state->cardinalities.emplace(set_manager.GetJoinRelation(RelationIndex(i)), cardinality);
 		UpdateTotalDomains(RelationIndex(i), stats, sources);
+	}
+	for (auto &op : operators) {
+		if (op->type != JoinOrderOperatorType::MARK) {
+			continue;
+		}
+		D_ASSERT(op->right_relations.get().count == 1);
+		auto rhs = op->right_relations.get().relations[0];
+		// The marker's synthetic slot follows the RHS columns but is produced by the join.
+		auto key = ColumnBinding(TableIndex(rhs.index), ProjectionIndex(relations[rhs.index].columns.size()));
+		for (auto &domain : state->relation_set_stats) {
+			if (domain.equivalent_relations.count(key)) {
+				domain.domain_estimate.Update(key, DistinctCount(3, DistinctCountSource::CARDINALITY), nullptr);
+			}
+		}
 	}
 	RestrictFilterDomains(relations);
 	for (auto &domain : state->relation_set_stats) {

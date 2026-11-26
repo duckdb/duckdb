@@ -1,0 +1,13 @@
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index bded7f4..f348825 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -17,7 +17,7 @@ namespace duckdb {
+ 
+ struct HTTPFSExtensionLoader {
+ 	static void RegisterFileSystems(DatabaseInstance &instance) {
+-		auto &fs = instance.GetFileSystem();
++		auto &fs = VirtualFileSystem::Get(instance);
+ 		fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
+ 		fs.RegisterSubSystem(make_uniq<HuggingFaceFileSystem>());
+ 		fs.RegisterSubSystem(make_uniq<S3FileSystem>(BufferManager::GetBufferManager(instance)));
