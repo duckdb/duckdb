@@ -737,7 +737,7 @@ struct MedianFunction {
 		auto fun = can_interpolate ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
 		fun.SetName("median");
 		fun.SetIsHolistic(true);
-		fun.SetHolisticWindowTrees(!can_interpolate);
+		fun.SetAllowsWindowTrees(!can_interpolate);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		return fun;

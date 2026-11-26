@@ -511,7 +511,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	}
 	// a holistic state stays holistic, but combine_aggr has no custom window and keeps the window trees
 	function.SetIsHolistic(bind_data->aggr.IsHolistic());
-	function.SetHolisticWindowTrees(true);
+	function.SetAllowsWindowTrees(true);
 
 	function.SetReturnType(arguments[0]->GetReturnType());
 
