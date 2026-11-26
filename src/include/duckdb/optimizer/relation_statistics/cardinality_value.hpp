@@ -121,7 +121,7 @@ public:
 
 private:
 	struct Product {
-		enum class Operation : uint8_t { ADD, SUBTRACT };
+		enum class Operation { ADD, SUBTRACT };
 
 		explicit Product(double value) {
 			D_ASSERT(std::isfinite(value) && value >= 0);
