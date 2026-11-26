@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/table/table_scan.hpp"
@@ -638,7 +639,7 @@ RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &de
 	result.stats_initialized = true;
 	for (auto &binding : delim_get.GetColumnBindings()) {
 		result.columns.emplace_back(binding, DistinctCount(1, DistinctCountSource::CARDINALITY),
-		                            Identifier("column" + to_string(binding.column_index)));
+		                            Identifier(StringUtil::Format("column%llu", binding.column_index.GetIndex())));
 	}
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(delim_get.GetColumnBindings());

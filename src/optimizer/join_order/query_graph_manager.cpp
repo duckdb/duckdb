@@ -566,12 +566,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRela
 	throw InternalException("Could not find relation in parent node (?)");
 }
 
-expression_set_t QueryGraphManager::GetExtractedFilterExpressions() const {
-	return extracted_filter_expressions;
-}
-
 void QueryGraphManager::ClearExtractedExpressions() {
-	auto extracted = GetExtractedFilterExpressions();
 	vector<unique_ptr<Expression>> retired_expressions;
 	for (auto &operator_ref : filter_operators) {
 		auto &op = operator_ref.get();
@@ -582,7 +577,7 @@ void QueryGraphManager::ClearExtractedExpressions() {
 		}
 		vector<unique_ptr<Expression>> remaining_expressions;
 		for (auto &expression : op.expressions) {
-			if (!extracted.count(*expression)) {
+			if (!extracted_filter_expressions.count(*expression)) {
 				remaining_expressions.push_back(std::move(expression));
 			} else {
 				// Set entries borrow the originals until every operator has been inspected.
@@ -591,9 +586,8 @@ void QueryGraphManager::ClearExtractedExpressions() {
 		}
 		op.expressions = std::move(remaining_expressions);
 	}
-	// The original expressions have now been released; reconstruction owns their normalized copies.
+	// Clear borrowed references before destroying the retired originals. Reconstruction owns their normalized copies.
 	extracted_filter_expressions.clear();
-	extracted.clear();
 }
 
 vector<reference<FilterInfo>> QueryGraphManager::GetPendingFilters(JoinRelationSet &root) const {
@@ -636,17 +630,15 @@ static LogicalOperator &FindJoinRoot(LogicalOperator &plan, vector<reference<Log
 }
 
 RelationStats QueryGraphManager::ApplyAncestorStats(const vector<reference<LogicalOperator>> &ancestors,
-                                                    RelationStats stats, bool retain_expressions,
-                                                    bool update_estimates) {
-	auto extracted = retain_expressions ? GetExtractedFilterExpressions() : expression_set_t();
+                                                    RelationStats stats, PlanEstimateUpdate update_estimates) {
 	for (auto ancestor = ancestors.rbegin(); ancestor != ancestors.rend(); ++ancestor) {
 		auto &op = ancestor->get();
 		optional<RelationStats> output_stats;
-		if (retain_expressions && op.type == LogicalOperatorType::LOGICAL_FILTER) {
+		if (!extracted_filter_expressions.empty() && op.type == LogicalOperatorType::LOGICAL_FILTER) {
 			// Only expressions outside this extracted region remain owned by the ancestor FILTER.
 			vector<unique_ptr<Expression>> remaining;
 			for (auto &expression : op.expressions) {
-				if (!extracted.count(*expression)) {
+				if (!extracted_filter_expressions.count(*expression)) {
 					remaining.push_back(expression->Copy());
 				}
 			}
@@ -659,7 +651,7 @@ RelationStats QueryGraphManager::ApplyAncestorStats(const vector<reference<Logic
 			return RelationStats();
 		}
 		stats = std::move(*output_stats);
-		if (update_estimates) {
+		if (update_estimates == PlanEstimateUpdate::UPDATE) {
 			op.SetEstimatedCardinality(stats.GetCardinalityForPlan());
 		}
 	}
@@ -667,14 +659,15 @@ RelationStats QueryGraphManager::ApplyAncestorStats(const vector<reference<Logic
 }
 
 optional<RelationStats> QueryGraphManager::ProjectRetainedStats(CardinalityEstimator &estimator, JoinRelationSet &set,
-                                                                LogicalOperator &plan, bool update_estimates) {
+                                                                LogicalOperator &plan,
+                                                                PlanEstimateUpdate update_estimates) {
 	vector<reference<LogicalOperator>> ancestors;
 	auto &join = FindJoinRoot(plan, ancestors);
 	auto stats = ProjectStats(estimator, set, join.GetColumnBindings());
 	if (!stats) {
 		return {};
 	}
-	auto result = ApplyAncestorStats(ancestors, std::move(*stats), true, update_estimates);
+	auto result = ApplyAncestorStats(ancestors, std::move(*stats), update_estimates);
 	return result.stats_initialized ? optional<RelationStats>(std::move(result)) : optional<RelationStats>();
 }
 
@@ -743,7 +736,7 @@ GenerateJoinRelation QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> 
 	(*parent)->children[0] = std::move(join_tree.op);
 	// the new join tree can emit its columns in a different order: preserve the parent's output layout
 	ColumnBindingRewrite::ApplyToChild(*parent, 0, std::move(old_child_bindings), BindingReplacementGraph());
-	join_tree.stats = ApplyAncestorStats(ancestors, std::move(join_tree.stats), false, true);
+	join_tree.stats = ApplyAncestorStats(ancestors, std::move(join_tree.stats), PlanEstimateUpdate::UPDATE);
 	join_tree.op = std::move(plan);
 	return join_tree;
 }

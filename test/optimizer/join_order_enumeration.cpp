@@ -55,7 +55,7 @@ TEST_CASE("Connected hypergraphs can require original cross products", "[optimiz
 		REQUIRE(enumerator.SolveJoinOrder());
 		auto result = connection.Query(query);
 		REQUIRE_NO_FAIL(*result);
-		CHECK_COLUMN(result, 0, {10});
+		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 	connection.Rollback();
 }

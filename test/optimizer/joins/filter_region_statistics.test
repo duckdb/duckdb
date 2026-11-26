@@ -22,18 +22,18 @@ ANALYZE
 query I
 SELECT count(*) FROM
   (SELECT a.i AS x, b.i AS y FROM filter_region_a a, filter_region_b b
-   WHERE a.i > b.i AND a.i > 0) ab,
+   WHERE a.i > b.i AND a.i < 4) ab,
   filter_region_c c
 ----
-90
+12
 
 # The same region can occur on the right, with repeated projected bindings.
 query III
 SELECT count(*), sum(ab.x), sum(ab.copy_x) FROM filter_region_c c,
   (SELECT a.i AS x, a.i AS copy_x, b.i AS y FROM filter_region_a a, filter_region_b b
-   WHERE a.i > b.i AND a.i > 0) ab
+   WHERE a.i > b.i AND a.i < 4) ab
 ----
-90	570	570
+12	28	28
 
 # ON and WHERE retain their different treatment of NULL-extended rows.
 query I

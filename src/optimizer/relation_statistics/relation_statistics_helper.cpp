@@ -297,7 +297,6 @@ void RelationStatisticsHelper::ApplyCardinality(RelationStats &stats, Cardinalit
 		stats.row_retention *= output_cardinality / input_cardinality;
 	}
 	stats.cardinality = output_cardinality;
-	stats.cardinality = stats.GetCardinality();
 }
 
 optional_idx RelationStatisticsHelper::AddCardinalityBounds(optional_idx left, optional_idx right) {

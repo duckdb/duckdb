@@ -202,9 +202,9 @@ bool JoinOrderCandidateEvaluator::CanImprovePair(const JoinOrderPlanMap &plans, 
 	       right.cardinality > incumbent_right->second->cardinality;
 }
 
-void JoinOrderCandidateEvaluator::InitLeafPlans(JoinOrderPlanMap &plans, const vector<RelationStats> &relation_stats) {
+void JoinOrderCandidateEvaluator::InitLeafPlans(JoinOrderPlanMap &plans, vector<RelationStats> relation_stats) {
 	auto &estimator = cost_model.GetCardinalityEstimator();
-	estimator.Initialize(relation_stats, query_graph_manager.GetJoinOperators(),
+	estimator.Initialize(std::move(relation_stats), query_graph_manager.GetJoinOperators(),
 	                     query_graph_manager.relation_manager.GetColumnSources());
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
 		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));

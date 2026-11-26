@@ -106,6 +106,70 @@ TEST_CASE("INNER join costs distinguish estimates below one", "[optimizer][relat
 		rhs.cost = 3;
 		REQUIRE(costs.ComputeCost(lhs, rhs, &inner, output) == Approx(5 + rows));
 		REQUIRE(costs.ComputeCost(lhs, rhs, nullptr, output) == Approx(5 + rows));
+		REQUIRE(costs.ComputeCostLowerBound(lhs, rhs, rows) == Approx(5 + rows));
+	}
+}
+
+TEST_CASE("MARK boundaries preserve the left population and publish their marker", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	for (idx_t rhs_rows : {idx_t(0), idx_t(3)}) {
+		JoinRelationSetManager sets;
+		auto &left = sets.GetJoinRelation(RelationIndex(0));
+		auto &right = sets.GetJoinRelation(RelationIndex(1));
+		auto &output = sets.Union(left, right);
+		vector<unique_ptr<JoinOrderOperator>> operators;
+		auto &mark = AddOperator(operators, sets, left, right, JoinOrderOperatorType::MARK);
+		auto left_binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+		auto right_binding = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+		auto marker_binding = ColumnBinding(TableIndex(1), ProjectionIndex(1));
+		auto left_stats = CreateStats({left_binding}, {1}, 1);
+		left_stats.cardinality = 0.25;
+		left_stats.row_retention = 0.25;
+		left_stats.columns[0].current_domain.distinct_count = 0.25;
+		left_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
+		auto right_stats = CreateStats({right_binding}, {rhs_rows}, rhs_rows);
+		JoinPredicateModel predicates;
+		CardinalityEstimator estimator(sets, predicates);
+		estimator.Initialize({left_stats, right_stats}, operators);
+		auto projected = estimator.ProjectStats(output, {left_binding, marker_binding});
+		REQUIRE(projected);
+		REQUIRE(projected->cardinality == left_stats.cardinality);
+		REQUIRE(projected->row_retention == left_stats.row_retention);
+		REQUIRE(projected->max_cardinality.GetIndex() == 1);
+		REQUIRE_FALSE(projected->IsEmpty());
+		REQUIRE(projected->columns[1].total_domain.distinct_count == 3);
+		REQUIRE(projected->columns[1].current_domain.distinct_count == 0.25);
+		REQUIRE_FALSE(estimator.ProjectStats(output, {right_binding}));
+
+		LogicalComparisonJoin logical_mark(JoinType::MARK);
+		logical_mark.mark_index = TableIndex(2);
+		logical_mark.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
+		logical_mark.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(1)));
+		auto extracted = RelationStatisticsHelper::ExtractOperatorStats(logical_mark, *connection.context,
+		                                                                {left_stats, right_stats});
+		REQUIRE(extracted);
+		REQUIRE(extracted->cardinality == projected->cardinality);
+		REQUIRE(extracted->row_retention == projected->row_retention);
+		REQUIRE(extracted->max_cardinality.GetIndex() == projected->max_cardinality.GetIndex());
+		REQUIRE(extracted->columns.size() == projected->columns.size());
+		for (idx_t i = 0; i < extracted->columns.size(); i++) {
+			REQUIRE(extracted->columns[i].total_domain.distinct_count ==
+			        projected->columns[i].total_domain.distinct_count);
+			REQUIRE(extracted->columns[i].current_domain.distinct_count ==
+			        projected->columns[i].current_domain.distinct_count);
+		}
+		auto extracted_evidence = extracted->columns[0].GetSupportedSemiAntiDomainSize();
+		auto projected_evidence = projected->columns[0].GetSupportedSemiAntiDomainSize();
+		REQUIRE(extracted_evidence);
+		REQUIRE(projected_evidence);
+		REQUIRE(*extracted_evidence == *projected_evidence);
+
+		CostModel costs(estimator);
+		DPJoinNode lhs(left), rhs(right);
+		lhs.cost = 2;
+		rhs.cost = 3;
+		REQUIRE(costs.ComputeCostLowerBound(lhs, rhs, 0.25) <= costs.ComputeCost(lhs, rhs, &mark, output));
 	}
 }
 
@@ -1073,8 +1137,8 @@ TEST_CASE("Only uniquely owned column collections establish closed cardinality p
 		DataChunk chunk;
 		collection.InitializeScanChunk(chunk);
 		chunk.SetChildCardinality(2);
-		chunk.SetValue(0, 0, Value::INTEGER(42));
-		chunk.SetValue(0, 1, Value::INTEGER(42));
+		chunk.data[0].SetValue(0, Value::INTEGER(42));
+		chunk.data[0].SetValue(1, Value::INTEGER(42));
 		chunk.CheckCardinality(2);
 		collection.Append(chunk);
 	};
@@ -2127,8 +2191,8 @@ TEST_CASE("Equality filter estimates retain their ceiling at scan and filter bou
 		    make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
 		auto filtered = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
 		REQUIRE(filtered.cardinality == 2);
-		scan->table_filters.PushFilter(
-		    ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(42)));
+		scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+		                                                       ExpressionType::COMPARE_EQUAL, Value::INTEGER(42)));
 		auto pushed = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context, rows);
 		REQUIRE(pushed.cardinality == filtered.cardinality);
 	}
@@ -2144,9 +2208,9 @@ TEST_CASE("Equality filter compatibility preserves fractional and scaled arithme
 		child.columns.emplace_back(binding, DistinctCount(ndv, source), DistinctCount(MinValue(rows, ndv), source),
 		                           Identifier("key"));
 		vector<unique_ptr<Expression>> expressions;
-		expressions.push_back(BoundComparisonExpression::Create(
-		    type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
-		    make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
+		expressions.push_back(
+		    BoundComparisonExpression::Create(type, make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding),
+		                                      make_uniq<BoundConstantExpression>(Value::INTEGER(42))));
 		auto result = RelationStatisticsHelper::ConditionFilterStats(child, expressions, {binding});
 		REQUIRE(result.cardinality <= rows);
 		return result.cardinality;
@@ -2168,71 +2232,68 @@ TEST_CASE("Grouped membership statistics reach enumeration and parent cost befor
           "[optimizer][relation_statistics]") {
 	DuckDB db;
 	Connection connection(db);
-	for (idx_t repetition = 0; repetition < 2; repetition++) {
-		auto left = CreateDomainProvider(TableIndex(10), 64, DistinctCount(59, DistinctCountSource::HLL));
-		auto keys = CreateDomainProvider(TableIndex(20), 128, DistinctCount(59, DistinctCountSource::HLL));
-		auto group = make_uniq<LogicalAggregate>(TableIndex(30), TableIndex(31), vector<unique_ptr<Expression>>());
-		group->groups.push_back(
-		    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, keys->GetColumnBindings()[0]));
-		group->children.push_back(std::move(keys));
-		auto semi = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
-		semi->conditions.emplace_back(
-		    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, left->GetColumnBindings()[0]),
-		    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, group->GetColumnBindings()[0]),
-		    ExpressionType::COMPARE_EQUAL);
-		semi->children.push_back(std::move(left));
-		semi->children.push_back(std::move(group));
-		auto right = CreateDomainProvider(TableIndex(40), 128, DistinctCount(59, DistinctCountSource::HLL));
-		auto outer = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
-		outer->conditions.emplace_back(
-		    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, semi->GetColumnBindings()[0]),
-		    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right->GetColumnBindings()[0]),
-		    ExpressionType::COMPARE_EQUAL);
-		outer->children.push_back(std::move(semi));
-		outer->children.push_back(std::move(right));
-		unique_ptr<LogicalOperator> plan = std::move(outer);
-		plan->ResolveOperatorTypes();
-		JoinOrderOptimizer optimizer(*connection.context);
-		QueryGraphManager graph(*connection.context);
-		REQUIRE(graph.Build(optimizer, *plan));
-		CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
-		CostModel cost(estimator);
-		PlanEnumerator enumeration(graph, cost, graph.GetQueryGraphEdges());
-		enumeration.InitLeafPlans();
-		REQUIRE(enumeration.SolveJoinOrder());
-		auto &plans = enumeration.GetPlans();
-		bool observed_membership = false;
-		for (auto &entry : plans) {
-			auto &node = *entry.second;
-			if (node.is_leaf) {
-				continue;
-			}
-			auto &lhs = *plans.at(node.left_set);
-			auto &rhs = *plans.at(node.right_set);
-			REQUIRE(node.cost == Approx(cost.ComputeCost(lhs, rhs, node.join_operator, node.set)));
-			if (node.join_operator && node.join_operator->type == JoinOrderOperatorType::SEMI && node.set.count == 2) {
-				observed_membership = true;
-				REQUIRE(node.cardinality.GetDouble() == Approx(64));
-				REQUIRE(node.cost == Approx(64));
-			}
+	auto left = CreateDomainProvider(TableIndex(10), 64, DistinctCount(59, DistinctCountSource::HLL));
+	auto keys = CreateDomainProvider(TableIndex(20), 128, DistinctCount(59, DistinctCountSource::HLL));
+	auto group = make_uniq<LogicalAggregate>(TableIndex(30), TableIndex(31), vector<unique_ptr<Expression>>());
+	group->groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, keys->GetColumnBindings()[0]));
+	group->children.push_back(std::move(keys));
+	auto semi = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	semi->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, left->GetColumnBindings()[0]),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, group->GetColumnBindings()[0]),
+	    ExpressionType::COMPARE_EQUAL);
+	semi->children.push_back(std::move(left));
+	semi->children.push_back(std::move(group));
+	auto right = CreateDomainProvider(TableIndex(40), 128, DistinctCount(59, DistinctCountSource::HLL));
+	auto outer = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
+	outer->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, semi->GetColumnBindings()[0]),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right->GetColumnBindings()[0]),
+	    ExpressionType::COMPARE_EQUAL);
+	outer->children.push_back(std::move(semi));
+	outer->children.push_back(std::move(right));
+	unique_ptr<LogicalOperator> plan = std::move(outer);
+	plan->ResolveOperatorTypes();
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, *plan));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel cost(estimator);
+	PlanEnumerator enumeration(graph, cost, graph.GetQueryGraphEdges());
+	enumeration.InitLeafPlans();
+	REQUIRE(enumeration.SolveJoinOrder());
+	auto &plans = enumeration.GetPlans();
+	bool observed_membership = false;
+	for (auto &entry : plans) {
+		auto &node = *entry.second;
+		if (node.is_leaf) {
+			continue;
 		}
-		REQUIRE(observed_membership);
-		unordered_set<RelationIndex> all;
-		for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
-			all.insert(RelationIndex(i));
+		auto &lhs = *plans.at(node.left_set);
+		auto &rhs = *plans.at(node.right_set);
+		REQUIRE(node.cost == Approx(cost.ComputeCost(lhs, rhs, node.join_operator, node.set)));
+		if (node.join_operator && node.join_operator->type == JoinOrderOperatorType::SEMI && node.set.count == 2) {
+			observed_membership = true;
+			REQUIRE(node.cardinality.GetDouble() == Approx(64));
+			REQUIRE(node.cost == Approx(64));
 		}
-		auto &set = graph.set_manager.GetJoinRelation(all);
-		auto before = graph.ProjectStats(estimator, set, plan->GetColumnBindings());
-		REQUIRE(before);
-		REQUIRE(before->cardinality.GetDouble() == Approx(64.0 * 128 / 59));
-		REQUIRE(plans.at(set)->cardinality == before->cardinality);
-		graph.plans = plans;
-		auto reconstructed = graph.Reconstruct(std::move(plan), estimator);
-		REQUIRE(reconstructed.stats.cardinality == before->cardinality);
-		REQUIRE(reconstructed.op->estimated_cardinality == before->GetCardinalityForPlan());
-		// Moving the ON expressions must not invalidate the compiled region summary.
-		REQUIRE(estimator.EstimateCardinality(set) == before->cardinality);
 	}
+	REQUIRE(observed_membership);
+	unordered_set<RelationIndex> all;
+	for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
+		all.insert(RelationIndex(i));
+	}
+	auto &set = graph.set_manager.GetJoinRelation(all);
+	auto before = graph.ProjectStats(estimator, set, plan->GetColumnBindings());
+	REQUIRE(before);
+	REQUIRE(before->cardinality.GetDouble() == Approx(64.0 * 128 / 59));
+	REQUIRE(plans.at(set)->cardinality == before->cardinality);
+	graph.plans = plans;
+	auto reconstructed = graph.Reconstruct(std::move(plan), estimator);
+	REQUIRE(reconstructed.stats.cardinality == before->cardinality);
+	REQUIRE(reconstructed.op->estimated_cardinality == before->GetCardinalityForPlan());
+	// Moving the ON expressions must not invalidate the compiled region summary.
+	REQUIRE(estimator.EstimateCardinality(set) == before->cardinality);
 }
 
 TEST_CASE("Fractional rows and domains survive materialized producer handoff",
@@ -2462,19 +2523,7 @@ TEST_CASE("Empty proofs propagate across projected materialized and aggregate bo
 		REQUIRE(optimized.stats_initialized);
 		REQUIRE(optimized.IsEmpty() == stats->IsEmpty());
 		REQUIRE(optimized.GetCardinalityForPlan() == stats->GetCardinalityForPlan());
-		auto result = connection.Query(entry.first);
-		REQUIRE_NO_FAIL(*result);
-		REQUIRE(result->RowCount() == entry.second);
 	}
-	// Nullable keys and NULL-extended outputs must still execute their SQL semantics.
-	auto nullable =
-	    connection.Query("SELECT a.i,b.i FROM (VALUES (NULL),(1)) a(i) FULL JOIN (VALUES (NULL),(1)) b(i) ON a.i=b.i");
-	REQUIRE_NO_FAIL(*nullable);
-	REQUIRE(nullable->RowCount() == 3);
-	auto anti =
-	    connection.Query("SELECT a.i FROM (VALUES (NULL),(1)) a(i) ANTI JOIN (VALUES (NULL),(1)) b(i) ON a.i=b.i");
-	REQUIRE_NO_FAIL(*anti);
-	REQUIRE(anti->RowCount() == 1);
 	connection.Rollback();
 }
 

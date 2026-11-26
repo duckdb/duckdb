@@ -109,8 +109,7 @@ static SemiAntiJoinCardinalityEstimate EstimateSemiAntiJoin(LogicalComparisonJoi
                                                             const vector<SemiAntiJoinDomain> &domains,
                                                             bool has_residual) {
 	auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(
-	    preserved.GetCardinality(), rhs.GetCardinality(), rhs.row_retention, join.join_type, domains,
-	    has_residual);
+	    preserved.GetCardinality(), rhs.GetCardinality(), rhs.row_retention, join.join_type, domains, has_residual);
 	auto is_semi = join.join_type == JoinType::SEMI || join.join_type == JoinType::RIGHT_SEMI;
 	if (!is_semi || join.children.size() != 2) {
 		return estimate;
@@ -122,8 +121,8 @@ static SemiAntiJoinCardinalityEstimate EstimateSemiAntiJoin(LogicalComparisonJoi
 	}
 	if (rhs_op->type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
 		// Constant-list domains do not describe the frequency of matching values.
-		auto fallback = RelationStatisticsHelper::EstimateSemiAntiJoinFallback(
-		    preserved.GetCardinality(), rhs.GetCardinality(), join.join_type);
+		auto fallback = RelationStatisticsHelper::EstimateSemiAntiJoinFallback(preserved.GetCardinality(),
+		                                                                       rhs.GetCardinality(), join.join_type);
 		if (estimate.cardinality < fallback.cardinality) {
 			return fallback;
 		}
@@ -242,29 +241,29 @@ static optional<RelationStats> ExtractComparisonJoinStats(LogicalComparisonJoin 
 	auto cardinality = JoinCardinality(join, child_stats[0], child_stats[1]);
 	auto maximum = RelationStatisticsHelper::JoinCardinalityBound(join.join_type, child_stats[0].get().max_cardinality,
 	                                                              child_stats[1].get().max_cardinality);
-	auto result = ProjectChildStats(join, child_stats, cardinality, maximum);
-	if (result || join.join_type != JoinType::MARK) {
-		return result;
+	if (join.join_type != JoinType::MARK) {
+		return ProjectChildStats(join, child_stats, cardinality, maximum);
 	}
 
 	RelationStats mark_result;
 	mark_result.cardinality = cardinality;
 	mark_result.max_cardinality = maximum;
+	mark_result.row_retention = child_stats[0].get().row_retention;
 	mark_result.stats_initialized = true;
 	mark_result.table_name = Identifier(join.GetName());
 	RelationColumnStatsLookup left_columns(child_stats[0].get());
 	for (auto &binding : join.GetColumnBindings()) {
 		auto column = left_columns.Find(binding);
 		if (column) {
-			mark_result.columns.emplace_back(binding, column->total_domain, column->current_domain, column->name);
+			mark_result.columns.push_back(*column);
 		} else if (binding.table_index == join.mark_index) {
-			mark_result.columns.emplace_back(
-			    binding, DistinctCount(MinValue(cardinality, CardinalityValue(3)), DistinctCountSource::CARDINALITY),
-			    Identifier("mark"));
+			mark_result.columns.emplace_back(binding, DistinctCount(3, DistinctCountSource::CARDINALITY),
+			                                 Identifier("mark"));
 		} else {
 			return {};
 		}
 	}
+	mark_result.CapCurrentDomainsToCardinality();
 	mark_result.Verify(join.GetColumnBindings());
 	return mark_result;
 }

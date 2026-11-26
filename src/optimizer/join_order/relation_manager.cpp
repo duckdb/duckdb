@@ -457,8 +457,7 @@ static bool HasStableJoinInputs(LogicalComparisonJoin &join) {
 			return false;
 		}
 	}
-	return (join.join_type != JoinType::LEFT && join.join_type != JoinType::SEMI && join.join_type != JoinType::ANTI &&
-	        join.join_type != JoinType::MARK) ||
+	return (join.join_type != JoinType::LEFT && join.join_type != JoinType::SEMI && join.join_type != JoinType::ANTI) ||
 	       !ContainsRecurringCTERef(*join.children[1]);
 }
 
@@ -1493,13 +1492,13 @@ void RelationManager::PrintRelationStats() {
 		auto &relation = relations.at(i);
 		auto &stats = relation->stats;
 		for (auto &column : stats.columns) {
-			to_print = column.name + " has estimated current/total domains " +
-			           to_string(column.current_domain.distinct_count.GetDouble()) + "/" +
-			           to_string(column.total_domain.distinct_count.GetDouble());
+			to_print = StringUtil::Format("%s has estimated current/total domains %g/%g", column.name,
+			                              column.current_domain.distinct_count.GetDouble(),
+			                              column.total_domain.distinct_count.GetDouble());
 			Printer::Print(to_print);
 		}
-		to_print = stats.table_name + " has estimated cardinality " + to_string(stats.cardinality.GetDouble());
-		to_print += " and relation id " + to_string(i) + "\n";
+		to_print = StringUtil::Format("%s has estimated cardinality %g and relation id %llu\n", stats.table_name,
+		                              stats.cardinality.GetDouble(), i);
 		Printer::Print(to_print);
 	}
 #endif

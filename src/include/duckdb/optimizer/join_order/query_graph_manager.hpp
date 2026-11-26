@@ -34,6 +34,8 @@ public:
 	RelationStats stats;
 };
 
+enum class PlanEstimateUpdate { KEEP, UPDATE };
+
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
 //! from the logical plan and creating the intermediate structures needed by the plan enumerator.
 //! When the plan enumerator finishes, the Query Graph Manger can then recreate the logical plan.
@@ -50,7 +52,8 @@ public:
 	                                     const vector<ColumnBinding> &bindings) const;
 	//! Project a complete region through its original unary ancestors without reconstructing the join order.
 	optional<RelationStats> ProjectRetainedStats(CardinalityEstimator &estimator, JoinRelationSet &set,
-	                                             LogicalOperator &plan, bool update_estimates = false);
+	                                             LogicalOperator &plan,
+	                                             PlanEstimateUpdate update_estimates = PlanEstimateUpdate::KEEP);
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	GenerateJoinRelation Reconstruct(unique_ptr<LogicalOperator> plan, CardinalityEstimator &estimator);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
@@ -82,11 +85,10 @@ private:
 	void BuildPredicateModel();
 	void BuildLeftJoinPredicates();
 	void BuildInnerCompanionSets();
-	expression_set_t GetExtractedFilterExpressions() const;
 	void ClearExtractedExpressions();
 	vector<reference<FilterInfo>> GetPendingFilters(JoinRelationSet &root) const;
 	RelationStats ApplyAncestorStats(const vector<reference<LogicalOperator>> &ancestors, RelationStats stats,
-	                                 bool retain_expressions, bool update_estimates);
+	                                 PlanEstimateUpdate update_estimates);
 	idx_t FindGraphComponent(RelationIndex relation);
 	idx_t GetGraphComponent(RelationIndex relation) const;
 	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);

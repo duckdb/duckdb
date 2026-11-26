@@ -197,10 +197,6 @@ bool JoinPredicate::IsResidualFilter() const {
 	       (info.filter && info.filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR);
 }
 
-bool JoinPredicate::HasSelectivityEstimate() const {
-	return IsResidualFilter() || CanBuildEqualityClosure() || CanBuildSelectivityDomain();
-}
-
 void JoinPredicate::SetEqualityClassIndex(optional_idx equality_class_index) {
 	this->equality_class_index = equality_class_index;
 	filter.get().edge_equivalence_index = equality_class_index;

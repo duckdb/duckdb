@@ -132,6 +132,7 @@ void RelationStats::Verify(const vector<ColumnBinding> &bindings) const {
 	if (!stats_initialized) {
 		return;
 	}
+	D_ASSERT(cardinality == GetCardinality());
 	D_ASSERT(row_retention >= 0 && row_retention <= 1);
 	for (auto &column : columns) {
 		(void)column;

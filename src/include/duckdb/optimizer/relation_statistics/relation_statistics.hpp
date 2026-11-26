@@ -14,7 +14,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/optimizer/join_order/cardinality_value.hpp"
+#include "duckdb/optimizer/relation_statistics/cardinality_value.hpp"
 
 namespace duckdb {
 
@@ -70,6 +70,7 @@ public:
 	optional_idx FindColumn(ColumnBinding binding) const;
 	optional_ptr<const RelationColumnStats> GetColumnStats(ColumnBinding binding) const;
 	bool MatchesBindings(const vector<ColumnBinding> &bindings) const;
+	//! Reconcile the point with its structural upper bound, then cap current column domains.
 	void CapCurrentDomainsToCardinality();
 	void Verify(const vector<ColumnBinding> &bindings) const;
 	bool IsEmpty() const;

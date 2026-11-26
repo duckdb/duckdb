@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_order/cardinality_value.hpp
+// duckdb/optimizer/relation_statistics/cardinality_value.hpp
 //
 //===----------------------------------------------------------------------===//
 #pragma once
@@ -70,8 +70,9 @@ public:
 	}
 
 	friend CardinalityValue operator+(const CardinalityValue &left, const CardinalityValue &right) {
-		return CardinalityValue((left.numerator * right.denominator).Add(right.numerator * left.denominator, false),
-		                        Product(left.denominator * right.denominator));
+		return CardinalityValue(
+		    (left.numerator * right.denominator).Add(right.numerator * left.denominator, Product::Operation::ADD),
+		    Product(left.denominator * right.denominator));
 	}
 
 	//! Subtraction of nonnegative estimates, clamped at zero.
@@ -79,8 +80,9 @@ public:
 		if (!(left > right)) {
 			return CardinalityValue(0);
 		}
-		return CardinalityValue((left.numerator * right.denominator).Add(right.numerator * left.denominator, true),
-		                        Product(left.denominator * right.denominator));
+		return CardinalityValue(
+		    (left.numerator * right.denominator).Add(right.numerator * left.denominator, Product::Operation::SUBTRACT),
+		    Product(left.denominator * right.denominator));
 	}
 
 	CardinalityValue &operator*=(const CardinalityValue &other) {
@@ -119,6 +121,8 @@ public:
 
 private:
 	struct Product {
+		enum class Operation : uint8_t { ADD, SUBTRACT };
+
 		explicit Product(double value) {
 			D_ASSERT(std::isfinite(value) && value >= 0);
 			int value_exponent;
@@ -142,12 +146,12 @@ private:
 			return result;
 		}
 
-		Product Add(const Product &other, bool subtract) const {
+		Product Add(const Product &other, Operation operation) const {
 			if (other.significand == 0) {
 				return *this;
 			}
 			if (significand == 0) {
-				D_ASSERT(!subtract);
+				D_ASSERT(operation == Operation::ADD);
 				return other;
 			}
 			auto common_exponent = MaxValue(exponent, other.exponent);
@@ -157,7 +161,7 @@ private:
 				           ? 0.0
 				           : std::ldexp(value.significand, -static_cast<int>(distance));
 			};
-			Product result(scale(*this) + (subtract ? -scale(other) : scale(other)));
+			Product result(scale(*this) + (operation == Operation::SUBTRACT ? -scale(other) : scale(other)));
 			if (result.significand != 0) {
 				result.exponent += common_exponent;
 			}

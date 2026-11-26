@@ -115,7 +115,7 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 			continue;
 		}
 		optional_ptr<CTEJoinFilter> best;
-		double best_fraction = 1;
+		CardinalityValue best_fraction(1);
 		CardinalityValue best_source_count(0);
 		for (auto &filter : join_filters) {
 			if (filter.target != target || filter.target_scan != cte.filter_dependency->row_scan) {
@@ -146,7 +146,7 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 			if (!source_stats || source_stats->cardinality > target_stats->cardinality * MAX_SOURCE_RATIO) {
 				continue;
 			}
-			double fraction = 1;
+			CardinalityValue fraction(1);
 			bool valid_columns = true;
 			for (idx_t i = 0; i < filter.comparisons.size(); i++) {
 				auto source_col = filter.source_keys[i].column.GetIndex();
@@ -166,7 +166,7 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 					valid_columns = false;
 					break;
 				}
-				fraction = MinValue(fraction, (source_count / target_count).GetDouble());
+				fraction = MinValue(fraction, source_count / target_count);
 			}
 			if (valid_columns && fraction <= MAX_KEY_RATIO &&
 			    (!best || fraction < best_fraction ||

@@ -91,7 +91,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 				relations.insert(RelationIndex(i));
 			}
 			auto &set = query_graph_manager.set_manager.GetJoinRelation(relations);
-			auto projected = query_graph_manager.ProjectRetainedStats(cardinality_estimator, set, *plan, true);
+			auto projected =
+			    query_graph_manager.ProjectRetainedStats(cardinality_estimator, set, *plan, PlanEstimateUpdate::UPDATE);
 			if (projected) {
 				output_stats = std::move(*projected);
 			}

@@ -47,7 +47,7 @@ CardinalityValue DomainEstimate::GetDistinctCount(const JoinPredicate &predicate
 		}
 	}
 	if (!domain) {
-		return static_cast<double>(NumericLimits<idx_t>::Maximum());
+		return CardinalityValue(static_cast<double>(NumericLimits<idx_t>::Maximum()));
 	}
 	auto result = domain->distinct_count;
 	auto comparison = predicate.GetComparisonType();
@@ -61,13 +61,13 @@ CardinalityValue DomainEstimate::GetDistinctCount(const JoinPredicate &predicate
 	if (!HasReliableDistinctCount() || reliable_source_count != 1) {
 		return result;
 	}
-	CardinalityValue key_domain(NumericLimits<idx_t>::Maximum());
+	optional<CardinalityValue> key_domain;
 	for (auto candidate : min_max_candidates) {
 		if (candidate > result && candidate <= reliable_source_cardinality) {
-			key_domain = MinValue(key_domain, candidate);
+			key_domain = key_domain ? MinValue(*key_domain, candidate) : candidate;
 		}
 	}
-	return key_domain == NumericLimits<idx_t>::Maximum() ? result : key_domain;
+	return key_domain ? *key_domain : result;
 }
 
 bool DomainEstimate::HasReliableDistinctCount() const {
@@ -75,7 +75,7 @@ bool DomainEstimate::HasReliableDistinctCount() const {
 }
 
 CardinalityValue DomainEstimate::GetReliableDistinctCount() const {
-	if (!estimate || (estimate->source != DistinctCountSource::HLL && estimate->source != DistinctCountSource::EXACT)) {
+	if (!HasReliableDistinctCount()) {
 		throw InternalException("Attempted to access an unreliable distinct count");
 	}
 	return estimate->distinct_count;
@@ -117,8 +117,7 @@ void DomainEstimate::Update(ColumnBinding binding, const DistinctCount &distinct
 		reliable_source_cardinality = 0;
 	}
 	if (column_sources && distinct_count.source == DistinctCountSource::MIN_MAX) {
-		min_max_candidates.push_back(
-		    MinValue(distinct_count.distinct_count, CardinalityValue(column_sources->direct.scan_cardinality)));
+		min_max_candidates.push_back(MinValue(distinct_count.distinct_count, column_sources->direct.scan_cardinality));
 	}
 	estimate = estimate ? RelationStatisticsHelper::SelectTotalDomain({*estimate, distinct_count}) : distinct_count;
 }
@@ -731,7 +730,7 @@ struct SelectivityState {
 	unordered_set<idx_t> applied_equivalence_groups;
 	reference_map_t<JoinRelationSet, CompositeJoinPairStats> join_pair_stats;
 	reference_set_t<JoinRelationSet> capped_join_pairs;
-	duckdb::set<CardinalityValue> unused_edge_tdoms;
+	set<CardinalityValue> unused_edge_tdoms;
 };
 
 static bool SelectivitySubgraphComplete(SelectivityState &state, JoinRelationSet &set) {
