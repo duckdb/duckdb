@@ -1787,6 +1787,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
 	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
 	 void *user_data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_value_variant_to_value)
+	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -4065,6 +4067,9 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_get_profiling_information duckdb_ext_api.duckdb_v2_connection_get_profiling_information
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_value_variant_to_value duckdb_ext_api.duckdb_v2_value_variant_to_value
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

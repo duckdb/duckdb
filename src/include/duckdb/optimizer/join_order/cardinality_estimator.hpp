@@ -8,7 +8,7 @@
 #pragma once
 
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/optimizer/join_order/cardinality_value.hpp"
+#include "duckdb/optimizer/relation_statistics/cardinality_value.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/join_order_source_stats.hpp"
@@ -23,6 +23,7 @@ struct CompositeJoinPairStats;
 struct SelectivityState;
 struct FilterInfoWithTotalDomains;
 struct SelectivitySubgraph;
+struct LogicalJoinStats;
 
 class CardinalityEstimator {
 public:
@@ -31,12 +32,23 @@ public:
 
 public:
 	//! Initialize immutable logical statistics before estimating any relation set.
-	void Initialize(const vector<RelationStats> &relations, const vector<unique_ptr<JoinOrderOperator>> &operators = {},
+	void Initialize(vector<RelationStats> relations, const vector<unique_ptr<JoinOrderOperator>> &operators = {},
 	                const join_column_sources_t &sources = {});
 	//! All equivalent plans in a memo group share this estimate.
 	CardinalityValue EstimateCardinality(JoinRelationSet &set);
+	//! Cost adaptation never changes the memoized raw point.
+	CardinalityValue EstimateCardinalityForCost(JoinRelationSet &set);
+	//! Project immutable region statistics, independently of the selected physical split.
+	optional<RelationStats> ProjectStats(JoinRelationSet &set, const vector<ColumnBinding> &bindings);
 
 private:
+	optional_ptr<const LogicalJoinStats> FindBoundary(JoinRelationSet &set, optional_ptr<JoinRelationSet> &region);
+	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding);
+	optional<RelationColumnStats> ProjectInputColumn(JoinRelationSet &set, ColumnBinding binding,
+	                                                 optional_ptr<const LogicalJoinStats> boundary,
+	                                                 optional_ptr<JoinRelationSet> region);
+	SemiAntiJoinCardinalityEstimate EstimateMembership(const LogicalJoinStats &boundary, JoinRelationSet &left,
+	                                                   JoinRelationSet &right, vector<SemiAntiJoinDomain> &domains);
 	void InitEquivalentRelations();
 	void UpdateTotalDomains(RelationIndex relation, const RelationStats &stats, const join_column_sources_t &sources);
 	void RestrictFilterDomains(const vector<RelationStats> &relation_stats);
@@ -71,10 +83,10 @@ private:
 	bool ApplyCompositeJoinPairCaps(CardinalityValue &target_selectivity, JoinRelationSet &scope,
 	                                reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
 	                                reference_set_t<JoinRelationSet> &capped_join_pairs);
-	double GetJoinPairCap(JoinRelationSet &join_pair);
+	CardinalityValue GetJoinPairCap(JoinRelationSet &join_pair);
 	//! The number of key combinations of a join pair whose equalities cover a unique key of one of its relations,
 	//! or 0 if they cover neither relation's key.
-	double GetUniqueJoinPairDomain(JoinRelationSet &join_pair);
+	CardinalityValue GetUniqueJoinPairDomain(JoinRelationSet &join_pair);
 
 	void AddRelationStats(const FilterInfo &filter_info);
 	bool EmptyFilter(const FilterInfo &filter_info);

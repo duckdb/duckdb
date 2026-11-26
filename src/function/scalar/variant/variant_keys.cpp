@@ -11,7 +11,7 @@ static void WriteKeysResult(const optional<VariantNode> &node, VectorWriter<Vect
 		list_writer.WriteNull();
 		return;
 	}
-	if (node->GetTypeId() != VariantLogicalType::OBJECT) {
+	if (node->GetTypeId() != LogicalTypeId::STRUCT) {
 		list_writer.WriteList(0);
 		return;
 	}

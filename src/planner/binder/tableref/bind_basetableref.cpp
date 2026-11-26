@@ -358,8 +358,12 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
-		// update the view binding with the bound view information
-		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		if (GetBindingMode() == BindingMode::STANDARD_BINDING) {
+			// update the view binding with the bound view information
+			// skipped in other binding modes - e.g. in EXTRACT_NAMES mode tables bind as dummy columns,
+			// and storing those would corrupt the view's cached column information
+			view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		}
 		auto root_index = bound_child.plan->GetRootIndex();
 		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
 			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view

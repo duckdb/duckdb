@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -201,6 +202,31 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
+}
+
+BetweenNullSimplificationRule::BetweenNullSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto between = make_uniq<FunctionExpressionMatcher>();
+	between->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_BETWEEN);
+	between->matchers.push_back(make_uniq<FoldableConstantMatcher>());
+	between->matchers.push_back(make_uniq<ExpressionMatcher>());
+	between->matchers.push_back(make_uniq<ExpressionMatcher>());
+	between->policy = SetMatcher::Policy::ORDERED;
+	root = std::move(between);
+}
+
+unique_ptr<Expression> BetweenNullSimplificationRule::Apply(LogicalOperator &op,
+                                                            vector<reference<Expression>> &bindings, bool &changes_made,
+                                                            bool is_root) {
+	auto &between = bindings[0].get().Cast<BoundFunctionExpression>();
+	if (!BoundBetweenExpression::HasValidBindData(between)) {
+		return nullptr;
+	}
+	Value input_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), bindings[1].get(), input_value) || !input_value.IsNull()) {
+		return nullptr;
+	}
+	// both bound comparisons are NULL whatever the bounds are, so they need not be evaluated
+	return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 }
 
 RowComparisonSimplificationRule::RowComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {

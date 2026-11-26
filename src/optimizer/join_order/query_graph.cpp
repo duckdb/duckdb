@@ -18,7 +18,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<RelationIndex> pre
 	string result = "";
 	string source = "[";
 	for (idx_t i = 0; i < prefix.size(); i++) {
-		source += to_string(prefix[i].index) + (i < prefix.size() - 1 ? ", " : "");
+		source += StringUtil::Format("%llu%s", prefix[i].index, i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
 	for (auto &entry : info->neighbors) {

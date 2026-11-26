@@ -29,7 +29,7 @@ public:
 	bool CanImprovePair(const JoinOrderPlanMap &plans, const DPJoinNode &left, const DPJoinNode &right,
 	                    const DPJoinNode &incumbent) const;
 
-	void InitLeafPlans(JoinOrderPlanMap &plans, const vector<RelationStats> &relation_stats);
+	void InitLeafPlans(JoinOrderPlanMap &plans, vector<RelationStats> relation_stats);
 	void InitInputPlan(JoinOrderPlanMap &plans);
 	JoinPlanCost GetPlanCost(const DPJoinNode &node) const;
 	//! Borrowed vectors are invalidated by graph changes or ResetConnectionCache.

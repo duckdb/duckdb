@@ -13,7 +13,8 @@
     {
       "reason": "The generated SQL is planned differently, which changes how often the volatile expressions the fixture counts are evaluated",
       "paths": [
-        "test/optimizer/join_to_semi_join_volatile.test"
+        "test/optimizer/join_to_semi_join_volatile.test",
+        "test/optimizer/pushdown/filter_projection_map.test"
       ]
     },
     {

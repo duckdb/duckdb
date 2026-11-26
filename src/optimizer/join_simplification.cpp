@@ -380,14 +380,15 @@ void JoinSimplification::VisitJoinChildren(LogicalOperator &op, bool left_ignore
 		return;
 	}
 	// the column sets do not pass through this join: each child starts with all of its columns required
-	for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
+	auto visit_child = [&](idx_t child_idx, ParentInfo info) {
 		column_binding_set_t child_required_columns;
 		for (const auto &binding : op.children[child_idx]->GetColumnBindings()) {
 			child_required_columns.insert(binding);
 		}
-		VisitChildInNewContext(op, child_idx, std::move(child_required_columns),
-		                       child_idx == 0 ? std::move(left_info) : std::move(right_info));
-	}
+		VisitChildInNewContext(op, child_idx, std::move(child_required_columns), std::move(info));
+	};
+	visit_child(0, std::move(left_info));
+	visit_child(1, std::move(right_info));
 }
 
 void JoinSimplification::VisitComparisonJoin(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &op_ptr) {

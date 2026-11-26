@@ -182,7 +182,7 @@ static unique_ptr<ParsedExpression> GeometryExpression(const Value &value) {
 
 static bool HasUnsupportedVariantKeys(const VariantNode &node) {
 	// Struct literals require nonempty, case-insensitively unique keys; inspect before the lossy STRUCT conversion.
-	if (node.GetTypeId() == VariantLogicalType::OBJECT) {
+	if (node.GetTypeId() == LogicalTypeId::STRUCT) {
 		identifier_set_t names;
 		for (auto &child : node.GetObjectChildren()) {
 			if (child.key.GetSize() == 0 || !names.insert(Identifier(child.key.GetString())).second ||
@@ -190,7 +190,7 @@ static bool HasUnsupportedVariantKeys(const VariantNode &node) {
 				return true;
 			}
 		}
-	} else if (node.GetTypeId() == VariantLogicalType::ARRAY) {
+	} else if (node.GetTypeId() == LogicalTypeId::LIST) {
 		for (auto child : node.GetArrayChildren()) {
 			if (HasUnsupportedVariantKeys(child)) {
 				return true;

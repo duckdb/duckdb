@@ -10,12 +10,30 @@ COPY (SELECT range::BIGINT AS i FROM range(1000)) TO '{TEST_DIR}/given_schema.pa
 statement ok
 CREATE MACRO given_schema() AS MAP {'i': {name: 'i', type: 'BIGINT', default_value: NULL::VARCHAR}};
 
-# explicit_cardinality is the estimate, whether a file is opened at bind or not
+# An opened file's proven maximum caps the supplied estimate.
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/given_schema.parquet', explicit_cardinality = 123456)
 ----
-physical_plan	<REGEX>:.*~123,456 rows.*
+physical_plan	<REGEX>:.*~1,000 rows.*
 
+# A smaller override is also retained; zero means no override.
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/given_schema.parquet', explicit_cardinality = 100)
+----
+physical_plan	<REGEX>:.*~100 rows.*
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/given_schema.parquet', explicit_cardinality = 0)
+----
+physical_plan	<REGEX>:.*~1,000 rows.*
+
+# Projecting the file row number preserves the same source-bound reconciliation.
+query II
+EXPLAIN SELECT file_row_number FROM read_parquet('{TEST_DIR}/given_schema.parquet', file_row_number = true, explicit_cardinality = 123456)
+----
+physical_plan	<REGEX>:.*~1,000 rows.*
+
+# Without opened-file bounds, the supplied estimate remains available.
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/given_schema.parquet', explicit_cardinality = 123456, schema = given_schema())
 ----
@@ -63,3 +81,17 @@ query I
 SELECT count(*) FROM read_parquet([{filename: '{TEST_DIR}/given_schema.parquet', file_size: 100000}], schema = given_schema())
 ----
 1000
+
+# A positive estimate does not override an opened file's emptiness proof.
+statement ok
+COPY (SELECT range::BIGINT AS i FROM range(0)) TO '{TEST_DIR}/empty_cardinality.parquet';
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/empty_cardinality.parquet', explicit_cardinality = 100)
+----
+physical_plan	<!REGEX>:.*~100 rows.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/empty_cardinality.parquet', explicit_cardinality = 100)
+----
+0

@@ -13,10 +13,11 @@
 namespace duckdb {
 
 //! Rewrites `f(col) OP const` into a direct range predicate on `col` when `f` is a monotone
-//! (ArgProperties) unary function over an exact integer/date column. The preimage boundary is
+//! (ArgProperties) unary function over an exact integer/decimal/date column. The preimage boundary is
 //! found by bisecting the column's value domain, generalizing the hand-written inverses in
-//! move_constants / date_trunc_simplification / timestamp_comparison. Exact-or-bail: if an exact
-//! boundary cannot be established the rule leaves the expression untouched.
+//! move_constants / date_trunc_simplification / timestamp_comparison. floor/ceil/trunc over FLOAT and
+//! DOUBLE are inverted in closed form. Exact-or-bail: if an exact boundary cannot be established the
+//! rule leaves the expression untouched.
 class MonotonePreimageRule : public Rule {
 public:
 	explicit MonotonePreimageRule(ExpressionRewriter &rewriter);

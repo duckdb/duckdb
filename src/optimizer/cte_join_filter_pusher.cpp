@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-static bool CanAffordCTEJoinSource(ClientContext &context, LogicalOperator &op, idx_t target_cardinality) {
+static bool CanAffordCTEJoinSource(ClientContext &context, LogicalOperator &op, CardinalityValue target_cardinality) {
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER || op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		return op.children.size() == 1 && CanAffordCTEJoinSource(context, *op.children[0], target_cardinality);
 	}
@@ -115,8 +115,8 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 			continue;
 		}
 		optional_ptr<CTEJoinFilter> best;
-		double best_fraction = 1;
-		idx_t best_source_count = 0;
+		CardinalityValue best_fraction(1);
+		CardinalityValue best_source_count(0);
 		for (auto &filter : join_filters) {
 			if (filter.target != target || filter.target_scan != cte.filter_dependency->row_scan) {
 				continue;
@@ -143,11 +143,10 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 				    cached == restricted_stats.end() ? extractor.Extract(*source_cte.children[0]) : &cached->second;
 			}
 			// The hash build should be small relative to the input being restricted.
-			if (!source_stats || static_cast<double>(source_stats->cardinality) >
-			                         static_cast<double>(target_stats->cardinality) * MAX_SOURCE_RATIO) {
+			if (!source_stats || source_stats->cardinality > target_stats->cardinality * MAX_SOURCE_RATIO) {
 				continue;
 			}
-			double fraction = 1;
+			CardinalityValue fraction(1);
 			bool valid_columns = true;
 			for (idx_t i = 0; i < filter.comparisons.size(); i++) {
 				auto source_col = filter.source_keys[i].column.GetIndex();
@@ -163,7 +162,11 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 				}
 				auto source_count = MinValue(source_distinct.distinct_count, source_stats->cardinality);
 				auto target_count = MinValue(target_distinct.distinct_count, target_stats->cardinality);
-				fraction = MinValue(fraction, static_cast<double>(source_count) / static_cast<double>(target_count));
+				if (target_count.IsZero()) {
+					valid_columns = false;
+					break;
+				}
+				fraction = MinValue(fraction, source_count / target_count);
 			}
 			if (valid_columns && fraction <= MAX_KEY_RATIO &&
 			    (!best || fraction < best_fraction ||
@@ -210,8 +213,7 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 			    best->comparisons[i]);
 		}
 		auto stats = *target_stats;
-		auto cardinality = LossyNumericCast<idx_t>(std::ceil(static_cast<double>(stats.cardinality) * best_fraction));
-		RelationStatisticsHelper::ApplyCardinality(stats, cardinality);
+		RelationStatisticsHelper::ApplyCardinality(stats, stats.cardinality * best_fraction);
 		for (auto &column : stats.columns) {
 			column.semi_anti_join_domain_evidence.Invalidate();
 		}

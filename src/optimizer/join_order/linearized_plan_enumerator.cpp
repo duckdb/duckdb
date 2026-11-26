@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/join_order/greedy_join_enumerator.hpp"
 #include "duckdb/optimizer/join_order/join_order_linearizer.hpp"
+#include "duckdb/optimizer/join_order/join_order_precedence.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 namespace duckdb {
@@ -25,6 +26,24 @@ bool LinearizedPlanEnumerator::SolveGreedy(JoinOrderPlanMap &plans) {
 	evaluator.InitInputPlan(plans);
 	GreedyJoinEnumerator greedy(query_graph_manager, evaluator);
 	return greedy.Solve(plans);
+}
+
+unique_ptr<CapturedJoinOrderPlan> LinearizedPlanEnumerator::CaptureInputPlan(JoinOrderPlanMap &plans,
+                                                                             JoinRelationSet &root) {
+	evaluator.InitInputPlan(plans);
+	if (plans.find(root) == plans.end()) {
+		return nullptr;
+	}
+	return CapturedJoinOrderPlan::Capture(plans, root, cost_model);
+}
+
+unique_ptr<CapturedJoinOrderPlan> LinearizedPlanEnumerator::CaptureGreedyPlan(JoinOrderPlanMap &plans,
+                                                                              JoinRelationSet &root) {
+	GreedyJoinEnumerator greedy(query_graph_manager, evaluator);
+	if (!greedy.Solve(plans)) {
+		return nullptr;
+	}
+	return CapturedJoinOrderPlan::Capture(plans, root, cost_model);
 }
 
 void LinearizedPlanEnumerator::OfferPlan(JoinRelationSet &root, unique_ptr<CapturedJoinOrderPlan> candidate,
@@ -89,9 +108,7 @@ bool LinearizedPlanEnumerator::SolveApproximately(JoinOrderPlanMap &plans) {
 		return SolveGreedy(plans);
 	}
 	JoinOrderLinearizer linearizer(query_graph_manager, cost_model.GetCardinalityEstimator());
-	if (!linearizer.BuildTree()) {
-		return SolveGreedy(plans);
-	}
+	auto ordinary = linearizer.BuildTree();
 	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
 		bindings.emplace(i);
@@ -104,21 +121,49 @@ bool LinearizedPlanEnumerator::SolveApproximately(JoinOrderPlanMap &plans) {
 	// Partial exact nodes may have stale ancestor costs. Each new search starts from immutable leaves.
 	plans = CopyJoinOrderLeafPlans(plans);
 	evaluator.ResetConnectionCache();
+	unique_ptr<CapturedJoinOrderPlan> input_plan, greedy_plan;
+	bool greedy_ran = false;
+	vector<RelationIndex> order;
+	if (ordinary) {
+		order = linearizer.GetBestOrder();
+	} else {
+		input_plan = CaptureInputPlan(plans, root);
+		optional_ptr<CapturedJoinOrderPlan> witness = input_plan ? input_plan.get() : incumbent.get();
+		if (!witness) {
+			// Some input trees need cross-product activation before a complete witness is available.
+			greedy_ran = true;
+			greedy_plan = CaptureGreedyPlan(plans, root);
+			plans = CopyJoinOrderLeafPlans(plans);
+			input_plan = CaptureInputPlan(plans, root);
+			witness = input_plan ? input_plan.get() : greedy_plan.get();
+		}
+		if (!witness) {
+			return false;
+		}
+		JoinOrderPrecedence precedence(query_graph_manager, cost_model.GetCardinalityEstimator(), evaluator, *witness);
+		order = precedence.GetBestOrder();
+		if (order.empty()) {
+			order = witness->GetLeafOrder();
+		}
+	}
 	{
 		IntervalJoinEnumerator trial(query_graph_manager, evaluator, plans);
-		if (trial.Solve(linearizer.GetBestOrder())) {
+		if (trial.Solve(order)) {
 			OfferPlan(root, CapturedJoinOrderPlan::Capture(trial.GetPlans(), root, cost_model), incumbent);
 		}
 	}
-	// Greedy explores different bushy plans. Compare complete candidates without mixing their memos.
-	evaluator.InitInputPlan(plans);
-	if (plans.find(root) != plans.end()) {
-		// Capture before greedy can replace a child: recursive memory preferences may invert in its parent.
-		OfferPlan(root, CapturedJoinOrderPlan::Capture(plans, root, cost_model), incumbent);
+	if (ordinary) {
+		input_plan = CaptureInputPlan(plans, root);
 	}
-	GreedyJoinEnumerator greedy(query_graph_manager, evaluator);
-	if (greedy.Solve(plans)) {
-		OfferPlan(root, CapturedJoinOrderPlan::Capture(plans, root, cost_model), incumbent);
+	if (input_plan) {
+		OfferPlan(root, std::move(input_plan), incumbent);
+	}
+	// Greedy explores different bushy plans. Compare complete candidates without mixing their memos.
+	if (!greedy_ran) {
+		greedy_plan = CaptureGreedyPlan(plans, root);
+	}
+	if (greedy_plan) {
+		OfferPlan(root, std::move(greedy_plan), incumbent);
 	}
 	if (!incumbent) {
 		return false;

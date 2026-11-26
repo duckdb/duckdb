@@ -10,11 +10,37 @@ namespace duckdb {
 
 namespace {
 
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && (defined(__GNUC__) || defined(__clang__))
+#define ENCODING_FAST_PATH 1
+#endif
+
 void DecodeLatin1ToUTF8(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
                         idx_t &written) {
 	idx_t out = 0;
-	for (idx_t i = 0; i < input_size; i++) {
-		const auto ch = static_cast<unsigned char>(input[i]);
+	idx_t i = 0;
+	while (i < input_size) {
+#ifdef ENCODING_FAST_PATH
+		// Copy 8 ASCII bytes at a time
+		while (i + 8 <= input_size) {
+			uint64_t word;
+			memcpy(&word, input + i, sizeof(word));
+			const uint64_t high_bits = word & 0x8080808080808080ULL;
+			// Copy the whole word, but only advance past the ASCII prefix
+			memcpy(output + out, &word, sizeof(word));
+			if (high_bits) {
+				const idx_t ascii_prefix = static_cast<idx_t>(__builtin_ctzll(high_bits)) / 8;
+				i += ascii_prefix;
+				out += ascii_prefix;
+				break;
+			}
+			i += 8;
+			out += 8;
+		}
+		if (i >= input_size) {
+			break;
+		}
+#endif
+		const auto ch = static_cast<unsigned char>(input[i++]);
 		if (ch > 0x7F && ch <= 0x9F) {
 			throw InvalidInputException("File is not latin-1 encoded");
 		}
@@ -114,6 +140,31 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 	idx_t pos = 0;
 	idx_t out = 0;
 	while (pos < input_size) {
+#ifdef ENCODING_FAST_PATH
+		// Narrow 4 ASCII code units at a time
+		while (pos + 8 <= input_size) {
+			uint64_t word;
+			memcpy(&word, input + pos, sizeof(word));
+			const uint64_t high_bits = word & 0xFF80FF80FF80FF80ULL;
+			// Narrow the whole word, but only advance past the ASCII prefix
+			uint64_t narrow = word & 0x00FF00FF00FF00FFULL;
+			narrow = (narrow | (narrow >> 8)) & 0x0000FFFF0000FFFFULL;
+			narrow = (narrow | (narrow >> 16)) & 0x00000000FFFFFFFFULL;
+			const auto narrowed = static_cast<uint32_t>(narrow);
+			memcpy(output + out, &narrowed, sizeof(narrowed));
+			if (high_bits) {
+				const idx_t ascii_units = static_cast<idx_t>(__builtin_ctzll(high_bits)) / 16;
+				pos += ascii_units * 2;
+				out += ascii_units;
+				break;
+			}
+			pos += 8;
+			out += 4;
+		}
+		if (pos >= input_size) {
+			break;
+		}
+#endif
 		if (pos + 1 >= input_size) {
 			if (is_last) {
 				throw InvalidInputException("Input is not valid UTF-16");

@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -1165,6 +1166,17 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
 		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
+	}
+	// From the storage version of wide decimals on, the types of the keys are recorded: the stored keys are encoded
+	// from them, so an index whose expressions bind to other types when it is loaded (the result type of a key
+	// expression is decided by the engine that binds it) is not used with keys it cannot match
+	if (storage_version != StorageVersion::INVALID &&
+	    !StorageManager::IsPriorToVersion(Decimal::WIDE_VERSION_ADDED, storage_version)) {
+		vector<Value> key_types;
+		for (auto &type : logical_types) {
+			key_types.push_back(Value::TYPE(type));
+		}
+		info.options["key_types"] = Value::LIST(LogicalType::TYPE(), std::move(key_types));
 	}
 
 #ifdef DEBUG

@@ -1,0 +1,48 @@
+# name: test/optimizer/group_by_top_key_throwing_aggregate.test
+# description: GROUP BY k ORDER BY k LIMIT n: an aggregate function that can throw does not see the groups after the bound
+# group: [optimizer]
+
+statement ok
+SET threads = 1;
+
+# every complete group sums to 0. In one thread the 2,048 rows of +5e34 of k = 2 arrive first, then the rows of k = 1,
+# then the rows of -5e34 of k = 2 that cancel them, and k = 0 last. A filter below the aggregate with the bound k = 1
+# would drop the cancelling rows, and the sum of 1.024e38 fits the HUGEINT accumulator but not the DECIMAL(38) result
+statement ok
+CREATE TABLE decimal_cancellation AS
+SELECT CASE WHEN i = 6144 THEN 0 WHEN i < 2048 THEN 2 WHEN i < 4096 THEN 1 ELSE 2 END AS k,
+       CASE WHEN i = 6144 THEN 0::DECIMAL(38,0)
+            WHEN i < 2048 THEN '50000000000000000000000000000000000'::DECIMAL(38,0)
+            WHEN i < 4096 THEN 0::DECIMAL(38,0)
+            ELSE '-50000000000000000000000000000000000'::DECIMAL(38,0) END AS v
+FROM range(6145) r(i);
+
+foreach disabled 'group_by_top_key' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+query II
+SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+0	0
+
+query II
+SELECT k, sum(v) FROM decimal_cancellation GROUP BY k ORDER BY k DESC LIMIT 2
+----
+2	0
+1	0
+
+# a LIMIT without ORDER BY, whichever group is returned sums to 0
+query I
+SELECT s FROM (SELECT k, sum(v) s FROM decimal_cancellation GROUP BY k LIMIT 1)
+----
+0
+
+# the same aggregate as an argument of a cast that is evaluated above the Top-N
+query II
+SELECT k, sum(v)::VARCHAR FROM decimal_cancellation GROUP BY k ORDER BY k LIMIT 1
+----
+0	0
+
+endloop
