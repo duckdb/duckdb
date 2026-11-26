@@ -1,0 +1,1390 @@
+module: data_source
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  data_source:
+    description: |
+      An owned opaque handle to a data source being built. A data source is what scans a source of rows: like a
+      physical operator source it sets up the state of the scan, hands out the work to the scanning threads, and
+      produces the batches of rows, without knowing how the call that scans it was bound. It is configured with the
+      setter functions (e.g. `[[data_source_set_exec_callback]]`), and made the scan of a table function with
+      `[[table_function_set_data_source]]`, which any number of table functions can do. The COPY FROM side of a copy
+      function scans with a data source in the same way (`copy_from_set_data_source`).
+
+      The callbacks of a data source run when a scan executes, and receive the handles of the scan
+      (e.g. `[[data_source_exec_info]]`). The "bind data" they can read is the bind data of the call or statement
+      that scans the data source (the table function call, or the `COPY ... FROM` statement), and the user data they can read is the one set with `[[data_source_set_user_data]]`.
+      Created with `[[data_source_create]]`, destroyed with `[[data_source_destroy]]`.
+
+  data_source_init_global_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source during the global state
+      initialization "init global" phase. The "init global" callback receives this handle and can use it to e.g.
+      set up the state shared by every thread scanning the data source, and to declare how many threads may scan it.
+
+  data_source_init_local_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source during the local state
+      initialization "init local" phase. The "init local" callback receives this handle and can use it to e.g.
+      set up worker-local state, typically by claiming work from the shared global state.
+
+  data_source_exec_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source during the execution "exec" phase.
+      The "exec" callback receives this handle and can use it to e.g. access the global and local state and write
+      the next batch of rows to the output chunk.
+
+  data_source_progress_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source during the "progress" phase. The
+      "progress" callback receives this handle and can use it to report how far the scan has advanced.
+
+  data_source_partition_data_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source during the "partition data" phase.
+      The engine invokes the callback on the worker thread that just produced a batch of rows, once per batch, only
+      when a downstream operator needs to know the batch's ordering position, the values of a set of partitioning
+      columns, or both; the handle reports which of those were actually requested and receives the answer.
+
+  data_source_claim_batch_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source when a scanning thread claims its
+      next batch of work. The "claim batch" callback receives this handle and can use it to claim the next part of
+      the scan from the shared global state for the thread's local state, and to report whether it claimed one.
+
+  data_source_metrics_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a data source when the engine collects the metrics
+      of a scan. The "metrics" callback receives this handle and can use it to report the operator metrics of the scan,
+      e.g. how many row groups it read.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  data_source_init_global_callback:
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_init_local_callback:
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_exec_callback:
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_progress_callback:
+    parameters:
+      info:
+        type: data_source_progress_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_metrics_callback:
+    parameters:
+      info:
+        type: data_source_metrics_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_partition_data_callback:
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  data_source_claim_batch_callback:
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  data_source_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Creates a new data source through a factory.
+
+      The data source starts out empty: configure it with the setter functions (e.g.
+      `[[data_source_set_exec_callback]]`), then make it the scan of a table function with
+      `[[table_function_set_data_source]]`. The caller owns the returned handle and must destroy it with
+      `[[data_source_destroy]]`, also after it has been handed to a table function.
+
+      The data source can only be used for table functions and copy functions of the database the factory belongs to.
+    role: constructor
+    belongs_to: data_source
+    parameters:
+      factory:
+        type: factory
+        description: The factory to create the data source through.
+      source:
+        type: data_source
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created data source. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets arbitrary user data on the data source.
+
+      Associates an opaque pointer with the data source, retrievable from its callbacks via
+      `[[data_source_init_global_get_user_data]]`, `[[data_source_exec_get_user_data]]` and their counterparts on
+      the other phases. The opaque handle bundles the pointer with an optional destructor, invoked when the data is no
+      longer needed. A data source without user data, or whose user data pointer is null, hands its callbacks the user
+      data of the table function or copy function that scans it, if that has any.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_init_global_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional global init callback of the data source.
+
+      The global init callback is invoked once per scan, at the start of execution. It can set "global state"
+      shared by every thread scanning the data source, and declare how many threads may scan it in parallel via
+      `[[data_source_init_global_set_max_threads]]`.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the global init callback of.
+      callback:
+        type: data_source_init_global_callback
+        description: The global init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_init_local_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional local init callback of the data source.
+
+      The local init callback is invoked once per thread that will scan the data source. It can set worker-local
+      "local state", retrievable from the exec callback, typically derived from the shared global state.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the local init callback of.
+      callback:
+        type: data_source_init_local_callback
+        description: The local init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_exec_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the exec callback of the data source.
+
+      The exec callback implements the scan: it is invoked repeatedly during query execution and writes the next
+      batch of rows to the output chunk, until it produces an empty batch to signal the end of the scan. An exec
+      callback must be set before the data source is given to a table function.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the exec callback of.
+      callback:
+        type: data_source_exec_callback
+        description: The exec callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_progress_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional progress callback of the data source.
+
+      The progress callback is invoked on demand during execution to report how far the scan has advanced, which
+      the engine surfaces as the query's progress. It is invoked concurrently with the exec callback, so it must
+      read the global state in a thread-safe way.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the progress callback of.
+      callback:
+        type: data_source_progress_callback
+        description: The progress callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_metrics_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional metrics callback of the data source.
+
+      The metrics callback is invoked when the engine collects the metrics of the scan, e.g. when profiling is
+      enabled, and reports them via `[[data_source_metrics_set]]`.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the metrics callback of.
+      callback:
+        type: data_source_metrics_callback
+        description: The metrics callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_partition_data_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional partition data callback of the data source.
+
+      The partition data callback is invoked on the worker thread that just produced a batch of rows, once per batch,
+      when a downstream operator needs to know the ordering position of the batch or the values of a set of
+      partitioning columns. A table function with a partitioning callback (see
+      `[[table_function_set_partitioning_callback]]`) requires its data source to have one.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the partition data callback of.
+      callback:
+        type: data_source_partition_data_callback
+        description: The partition data callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_set_claim_batch_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Sets the optional claim batch callback of the data source.
+
+      With a claim batch callback, a scanning thread works through the scan one batch at a time: the callback
+      claims the next batch of work (e.g. the next block of a file) for the thread's local state, typically from the
+      shared global state, and the exec callback then produces the rows of that batch only, leaving the output chunk
+      empty once the batch is exhausted. A batch is claimed before the exec callback first runs on a thread, and
+      again whenever the exec callback leaves the output chunk empty; the scan ends for a thread once the claim batch
+      callback does not claim a batch.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to set the claim batch callback of.
+      callback:
+        type: data_source_claim_batch_callback
+        description: The claim batch callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_data_source:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Makes the scan of the table function the given data source.
+
+      A table function takes care of everything that is decided when a call is planned - it binds the call and
+      declares the columns it returns, and pushes projections and filters down - and scans with a data source: the
+      callbacks that set up the scan at execution time and produce its rows. A table function has no scan callbacks of
+      its own, so a data source must be set before the function is registered. The function keeps a copy of the data
+      source as it is when this is called, so the same data source can be given to any number of functions, and
+      changing it afterwards does not change them.
+
+      The callbacks of the data source read the bind data the bind callback of the function sets, and the user data of
+      the data source or, if it has none or its pointer is null, the user data of the function.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the data source of.
+      data_source:
+        type: data_source
+        description: The data source to scan with. Borrowed; it can be destroyed after this call.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Destroys the data source, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
+      prevent double-destruction. Destroying the handle after it was given to a table function does not affect that
+      table function, which keeps a copy of the data source as it was.
+    parameters:
+      source:
+        type: data_source
+        description: The data source to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Global Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_init_global_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_global_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_global_set_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the function's "global state" from the global init callback.
+
+      The global state lives for the duration of the scan and is retrievable from the local init, exec and
+      progress callbacks. Every thread scanning the function shares it, so the function must synchronize its own
+      access to it. The opaque handle bundles the pointer with an optional destructor, invoked when the scan is
+      done with the state.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the global state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_global_set_max_threads:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets how many threads may scan the function in parallel.
+
+      Defaults to 1, a single-threaded scan. The engine creates at most this many local states, and therefore
+      runs at most this many exec callbacks concurrently. It is an upper bound, not a request: the engine may
+      use fewer threads.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      max_threads:
+        type: idx
+        description: The maximum number of threads. Must be at least 1.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  data_source_init_global_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[data_source_init_global_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_global_get_column_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: data_source_init_global_info
+        description: The global init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_local_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_local_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_local_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_local_set_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Sets the function's worker-local "local state" from the local init callback.
+
+      The local state is associated with the executing thread for the duration of the scan and retrievable from
+      the exec callback via `[[data_source_exec_get_local_state]]`. No other thread observes it, so it needs
+      no synchronization. The opaque handle bundles the pointer with an optional destructor, invoked when the
+      local state is no longer needed.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the local state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  data_source_init_local_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[data_source_init_local_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_init_local_get_column_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: data_source_init_local_info
+        description: The local init info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Exec Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_exec_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_get_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the worker-local local state set by the function's local init callback.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer for the executing thread, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_get_output_chunk:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the output chunk the exec callback must write the next batch of rows into.
+
+      The chunk holds one vector per column declared with `[[table_function_bind_add_result_column]]`, in the
+      same order; reach them with `[[data_chunk_get_vector]]`. The chunk starts out empty on every invocation:
+      write the rows, then declare how many there are with `[[vector_set_size]]` on the first vector, which the
+      engine takes as the batch's row count and propagates to the other vectors. Producing an empty batch signals
+      the end of the scan, after which the callback is not invoked again on that thread. Borrowed; valid only for
+      the duration of the callback.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed output chunk to write into.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  data_source_exec_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of columns the scan produces.
+
+      With projection pushdown (see `[[table_function_set_projection_pushdown]]`) this is the number of columns the
+      query uses, which is the number of vectors in the exec callback's output chunk; without it, it is the number
+      of columns declared in bind. Valid indices for `[[data_source_exec_get_column_index]]` are `0` up to
+      (but excluding) this count.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns the scan produces.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_exec_get_column_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns which declared column the scan's column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order: the exec callback fills the output chunk's vector at `index` with that column's data. Without
+      projection pushdown the mapping is the identity. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: data_source_exec_info
+        description: The exec info handle.
+      index:
+        type: idx
+        description: The index of the column in the scan's output.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Progress Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_progress_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_progress_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_progress_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      The progress callback runs concurrently with the exec callbacks scanning the function, so it must read the
+      global state in a thread-safe way.
+    parameters:
+      info:
+        type: data_source_progress_info
+        description: The progress info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_progress_set_progress:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Reports how far the scan has advanced.
+
+      A fraction between 0.0 (nothing scanned yet) and 1.0 (done); values outside that range are clamped. A
+      progress callback that returns without calling this reports no progress.
+    parameters:
+      info:
+        type: data_source_progress_info
+        description: The progress info handle.
+      progress:
+        type: f64
+        description: The fraction of the scan that is complete, in [0.0, 1.0].
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Partition Data Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_partition_data_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_get_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Retrieves the worker-local local state set by the function's local init callback, for the thread that
+      produced the batch this call reports on. No other thread observes it, so it needs no synchronization.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_requires_batch_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns whether a downstream operator needs this batch's ordering position.
+
+      `[[data_source_partition_data_set_batch_index]]` must still be called even when this is false: the
+      engine validates the reported value regardless of whether it is actually used for ordering, so `0` is
+      always a safe answer when this reports false.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      required:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether a batch index is required.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_requires_partition_columns:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns whether a downstream operator needs this batch's values for a set of partitioning columns.
+
+      When true, call `[[data_source_partition_data_set_partition_value]]` once for every index in
+      `[0, count)`, where `count` comes from `[[data_source_partition_data_get_partition_column_count]]`.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      required:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether partitioning column values are required.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_get_partition_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns the number of partitioning columns a downstream operator is requesting values for.
+
+      `0` when `[[data_source_partition_data_requires_partition_columns]]` is false. Valid indices for
+      `[[data_source_partition_data_get_partition_column_index]]` and
+      `[[data_source_partition_data_set_partition_value]]` are `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of requested partitioning columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_get_partition_column_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns which declared column the requested partitioning column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      index:
+        type: idx
+        description: The index of the requested partitioning column.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_set_batch_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Reports the ordering position of the batch the exec callback just produced.
+
+      Required on every call, whether or not `[[data_source_partition_data_requires_batch_index]]` is
+      true: the engine validates the reported value regardless. Not calling this before the callback returns
+      fails the query; `0` is always a safe answer when the batch index is not actually required. Must not
+      decrease across successive calls on the same thread, must be unique across threads for the ordering to be
+      meaningful, must be less than roughly `10^13`, and, when
+      partitioning column values are also being reported, must change whenever those values change: the engine
+      only re-reads them when the batch index changes, so reporting a new value under an unchanged batch index
+      is treated as a caller error rather than applied. Fails with `ERROR_INPUT_INVALID` for an out-of-range
+      value; a decreasing value or an unchanged value paired with changed partitioning columns fails the query
+      once the callback returns.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      batch_index:
+        type: idx
+        description: The batch's ordering position.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_partition_data_set_partition_value:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Reports the single value of the partitioning column at the given index, for the batch the exec callback
+      just produced.
+
+      Every partition reported this way carries exactly one distinct value for the column, so the value serves
+      as both the minimum and maximum of the partition's range. The value is borrowed and copied, and must be
+      of the declared type of the corresponding result column. Required once for every index in `[0,
+      `[[data_source_partition_data_get_partition_column_count]]`)` before the callback returns; calling
+      it again for the same index overwrites the previous value. The reported value only takes effect
+      together with a changed `[[data_source_partition_data_set_batch_index]]`: reporting a different
+      value under an unchanged batch index fails the query once the callback returns. Fails with
+      `ERROR_INPUT_INVALID` when the index is out of bounds or the value's type does not match.
+    parameters:
+      info:
+        type: data_source_partition_data_info
+        description: The partition data info handle.
+      index:
+        type: idx
+        description: The index of the partitioning column being reported.
+      value:
+        type: value
+        description: The single value of the partitioning column. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Metrics Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_metrics_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-27" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_metrics_info
+        description: The metrics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_metrics_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-27" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_metrics_info
+        description: The metrics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_metrics_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-27" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      The metrics callback can run while the scan is still running, so it must read the global state in a
+      thread-safe way. The global state is null if the scan has not been initialized.
+    parameters:
+      info:
+        type: data_source_metrics_info
+        description: The metrics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_metrics_set:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-27" ]
+    description: |
+      Reports an operator metric of the scan, by the name DuckDB's profiler uses for it (the names `tracked_metrics`
+      accepts).
+
+      The metrics a scan can report are counters:
+      - `operator.rows_scanned`: the rows the scan read.
+      - `operator.row_groups_scanned`: the row groups the scan read. A row group is the unit a format lets the scan
+        skip, e.g. a Parquet row group or an ORC stripe.
+      - `operator.total_row_groups_to_scan`: the row groups the scan read or skipped.
+      - `operator.bytes_scanned`: the bytes the scan read.
+
+      The engine may collect the metrics of a scan more than once, and adds up what it is told: each value is the
+      amount since the metrics were last collected, except `operator.total_row_groups_to_scan`, which is the number
+      found so far in all. Fails for a name that is not one of the above.
+    parameters:
+      info:
+        type: data_source_metrics_info
+        description: The metrics info handle.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name of the metric. Borrowed.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` must be valid UTF-8 and need not be null-terminated.
+      value:
+        type: u64
+        description: The value of the metric.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Batch claiming
+  #---------------------------------------------------------------------------------------------------------------------
+  data_source_claim_batch_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: The claim batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_claim_batch_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: The claim batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_claim_batch_get_global_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: The claim batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_claim_batch_get_local_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the local state set by the function's local init callback, for the thread claiming a batch.
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: The claim batch info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer for the claiming thread, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  data_source_claim_batch_set_claimed:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Reports whether the callback claimed a batch for the thread.
+
+      A callback that returns without calling this claimed nothing, which ends the scan for the thread.
+    parameters:
+      info:
+        type: data_source_claim_batch_info
+        description: The claim batch info handle.
+      claimed:
+        type: bool
+        description: Whether a batch was claimed.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
