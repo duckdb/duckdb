@@ -277,7 +277,7 @@ jobs:
     name: Diagnose autocomplete
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 29391 }}
     needs: prepare
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64_8xlarge }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -319,7 +319,7 @@ jobs:
             -DSTATICALLY_LINK_EXTENSIONS=core_functions \
             -DDUCKDB_EXTENSION_CORE_FUNCTIONS_PREBUILT_PATH="$PWD/repro/libs/libcore_functions_extension.a" \
             '-DSKIP_EXTENSIONS=icu;json;parquet'
-          python3 scripts/ci/filter_ninja_output.py -- cmake --build build/diagnose --target unittest -j24
+          python3 scripts/ci/filter_ninja_output.py -- cmake --build build/diagnose --target unittest -j "$(( $(nproc) * 3 / 4 ))"
       - name: Capture the failing test's backtrace
         shell: bash
         run: |
