@@ -199,6 +199,16 @@ void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (type.id() == LogicalTypeId::VARIANT && !val.IsNull()) {
+		validity.Set(index, true);
+		auto encoded =
+		    VariantValue::GetEncodedChildren(val.type().id() == LogicalTypeId::VARIANT ? val : Value::VARIANT(val));
+		D_ASSERT(children.size() == encoded.size());
+		for (idx_t i = 0; i < children.size(); i++) {
+			children[i].SetValue(index, encoded[i]);
+		}
+		return;
+	}
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -244,11 +254,10 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 	case LogicalTypeId::VARIANT: {
 		duckdb::vector<Value> child_values;
-		child_values.emplace_back(children[0].GetValue(index));
-		child_values.emplace_back(children[1].GetValue(index));
-		child_values.emplace_back(children[2].GetValue(index));
-		child_values.emplace_back(children[3].GetValue(index));
-		return Value::VARIANT(child_values);
+		for (auto &child : children) {
+			child_values.emplace_back(child.GetValue(index));
+		}
+		return VariantValue::FromEncodedChildren(child_values);
 	}
 	default: {
 		duckdb::vector<Value> child_values;

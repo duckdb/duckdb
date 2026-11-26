@@ -2,6 +2,7 @@
 #include "duckdb/optimizer/rule/constant_folding.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -31,6 +32,10 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<re
 	// the root is a scalar expression that we have to fold
 	D_ASSERT(root.IsFoldable() && root.GetExpressionType() != ExpressionType::VALUE_CONSTANT);
 
+	if (TypeVisitor::Contains(root.GetReturnType(), LogicalTypeId::VARIANT)) {
+		// a VARIANT constant holds the decoded value, which cannot always be re-encoded to the same variant
+		return nullptr;
+	}
 	// use an ExpressionExecutor to execute the expression
 	Value result_value;
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), root, result_value)) {

@@ -1126,6 +1126,10 @@ static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> 
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
 		return false;
 	}
+	// a VARIANT constant holds the decoded value, which cannot always be re-encoded to the same variant
+	if (TypeVisitor::Contains(child->GetReturnType(), LogicalTypeId::VARIANT)) {
+		return false;
+	}
 	if (binder && child->RequiresRebind()) {
 		// the constant no longer shows that its value can change across queries
 		binder->SetAlwaysRequireRebind();

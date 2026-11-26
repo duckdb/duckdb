@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -809,13 +810,13 @@ Value Value::TUPLE(vector<Value> values) {
 	return Value::STRUCT(LogicalType::TUPLE(std::move(child_types)), std::move(values));
 }
 
-Value Value::VARIANT(vector<Value> val) {
-	D_ASSERT(val.size() == 4);
-	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[1].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[2].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[3].type().id() == LogicalTypeId::BLOB);
-	return Value::STRUCT(LogicalType::VARIANT(), std::move(val));
+Value Value::VARIANT(Value payload) {
+	Value result(LogicalType::VARIANT());
+	result.is_null = false;
+	vector<Value> values;
+	values.push_back(std::move(payload));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
+	return result;
 }
 
 void MapKeyCheck(value_set_t &unique_keys, const Value &key) {
@@ -1778,11 +1779,7 @@ string Value::ToSQLString() const {
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
 	case LogicalTypeId::VARIANT: {
-		Vector tmp(*this, count_t(1));
-		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, format);
-		UnifiedVariantVectorData vector_data(format);
-		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		auto val = VariantValue::GetValue(*this);
 		if (val.type().id() == LogicalTypeId::STRUCT) {
 			child_list_t<Value> children;
 			auto &values = StructValue::GetChildren(val);
@@ -2075,13 +2072,34 @@ const LogicalType &UnionValue::GetType(const Value &value) {
 	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
 }
 
-Value VariantValue::GetValue(const Value &variant_val) {
+const Value &VariantValue::GetValue(const Value &variant_val) {
 	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
-	Vector tmp(variant_val, count_t(1));
+	return StructValue::GetChildren(variant_val)[0];
+}
+
+vector<Value> VariantValue::GetEncodedChildren(const Value &variant_val) {
+	// encode the held value as a variant, then read the encoded children back
+	Vector source(GetValue(variant_val), count_t(1));
+	Vector encoded(LogicalType::VARIANT(), 1);
+	VectorOperations::DefaultCast(source, encoded, 1);
+	vector<Value> result;
+	for (auto &child : StructVector::GetEntries(encoded)) {
+		result.push_back(child.GetValue(0));
+	}
+	return result;
+}
+
+Value VariantValue::FromEncodedChildren(const vector<Value> &children) {
+	Vector encoded(LogicalType::VARIANT(), 1);
+	auto &entries = StructVector::GetEntries(encoded);
+	D_ASSERT(entries.size() == children.size());
+	for (idx_t i = 0; i < entries.size(); i++) {
+		entries[i].SetValue(0, children[i]);
+	}
 	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(tmp, format);
+	Vector::RecursiveToUnifiedFormat(encoded, format);
 	UnifiedVariantVectorData vector_data(format);
-	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+	return Value::VARIANT(VariantUtils::ConvertVariantToValue(vector_data, 0, 0));
 }
 
 hugeint_t IntegralValue::Get(const Value &value) {
@@ -2362,6 +2380,11 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		SerializeChildren(serializer, ListValue::GetChildren(*this), type_);
 		break;
 	case PhysicalType::STRUCT:
+		if (type_.id() == LogicalTypeId::VARIANT) {
+			// the encoded form keeps the serialized format of a VARIANT unchanged
+			SerializeChildren(serializer, VariantValue::GetEncodedChildren(*this), type_);
+			break;
+		}
 		SerializeChildren(serializer, StructValue::GetChildren(*this), type_);
 		break;
 	case PhysicalType::ARRAY:
@@ -2650,6 +2673,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 			});
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
+		if (type.id() == LogicalTypeId::VARIANT) {
+			return VariantValue::FromEncodedChildren(StructValue::GetChildren(new_value));
+		}
 	} break;
 	case PhysicalType::ARRAY: {
 		deserializer.Set<const LogicalType &>(ArrayType::GetChildType(type));

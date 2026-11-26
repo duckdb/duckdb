@@ -119,22 +119,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {
 		if (left_type.id() == LogicalTypeId::VARIANT) {
-			Vector left_vec(left.type());
-			Vector right_vec(right.type());
-			left_vec.Reference(left, count_t(1));
-			right_vec.Reference(right, count_t(1));
-
-			RecursiveUnifiedVectorFormat left_format;
-			RecursiveUnifiedVectorFormat right_format;
-			Vector::RecursiveToUnifiedFormat(left_vec, left_format);
-			Vector::RecursiveToUnifiedFormat(right_vec, right_format);
-
-			UnifiedVariantVectorData left_variant_data(left_format);
-			UnifiedVariantVectorData right_variant_data(right_format);
-
-			auto left_value = VariantUtils::ConvertVariantToValue(left_variant_data, 0, 0);
-			auto right_value = VariantUtils::ConvertVariantToValue(right_variant_data, 0, 0);
-			return TemplatedBooleanOperation<OP>(left_value, right_value);
+			return TemplatedBooleanOperation<OP>(VariantValue::GetValue(left), VariantValue::GetValue(right));
 		}
 		auto &left_children = StructValue::GetChildren(left);
 		auto &right_children = StructValue::GetChildren(right);

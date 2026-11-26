@@ -709,7 +709,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 			VariantStats::SetUnshreddedStats(result, FromConstant(Value(unshredded_type)));
 		} else {
 			VariantStats::SetUnshreddedStats(
-			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
+			    result, FromConstant(Value::STRUCT(unshredded_type, VariantValue::GetEncodedChildren(input))));
 			VariantStats::MarkAsNotShredded(result);
 		}
 		return result;

@@ -200,6 +200,34 @@ static bool HasUnsupportedVariantKeys(const VariantNode &node) {
 	return false;
 }
 
+static bool HoldsMap(const Value &value) {
+	if (value.IsNull()) {
+		return false;
+	}
+	switch (value.type().id()) {
+	case LogicalTypeId::MAP:
+		return true;
+	case LogicalTypeId::VARIANT:
+		return HoldsMap(VariantValue::GetValue(value));
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructValue::GetChildren(value)) {
+			if (HoldsMap(child)) {
+				return true;
+			}
+		}
+		return false;
+	case LogicalTypeId::LIST:
+		for (auto &child : ListValue::GetChildren(value)) {
+			if (HoldsMap(child)) {
+				return true;
+			}
+		}
+		return false;
+	default:
+		return false;
+	}
+}
+
 bool ConstantExpression::RequiresTypeWitness(const LogicalType &type) {
 	return TypeVisitor::Contains(type, [&](const LogicalType &child) {
 		return child.IsAggregateState() || child.id() == LogicalTypeId::TYPE ||
@@ -393,12 +421,16 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	case LogicalTypeId::STRUCT:
 		return StructExpression(value);
 	case LogicalTypeId::VARIANT: {
+		auto payload = VariantValue::GetValue(value);
+		// an object with keys that cannot name a struct field is held as a MAP
+		if (HoldsMap(payload)) {
+			throw NotImplementedException("VARIANT object keys cannot be represented by a struct literal");
+		}
 		Vector vector(value, count_t(1));
 		VariantIterator iterator(vector);
 		if (HasUnsupportedVariantKeys(iterator.Root(0))) {
 			throw NotImplementedException("VARIANT object keys cannot be represented by a struct literal");
 		}
-		auto payload = VariantValue::GetValue(value);
 		return CastTo(type, CastTo(payload.type(), FromValue(payload)));
 	}
 	case LogicalTypeId::LIST: {

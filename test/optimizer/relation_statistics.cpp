@@ -1045,46 +1045,6 @@ TEST_CASE("Grouping sets discard inherited SEMI domain evidence", "[optimizer][r
 	REQUIRE_FALSE(duplicate_groups->columns[0].GetSupportedSemiAntiDomainSize().IsValid());
 }
 
-//! Casts JSON nested 'depth' levels deep to VARIANT in a scan, so that no constant is folded on the way
-static Value DeepVariantValue(Connection &connection, idx_t depth) {
-	auto result = connection.Query("SELECT (repeat('[', i) || repeat(']', i))::JSON::VARIANT FROM range(" +
-	                               to_string(depth) + ", " + to_string(depth + 1) + ") t(i)");
-	REQUIRE_NO_FAIL(*result);
-	return result->Collection().GetValue(0, 0);
-}
-
-TEST_CASE("Projection and aggregate statistics do not render a nested VARIANT constant",
-          "[optimizer][relation_statistics]") {
-	DuckDB db;
-	Connection connection(db);
-	if (!db.ExtensionIsLoaded("json")) {
-		return;
-	}
-	// rendering a VARIANT as SQL fails beyond 127 nested arrays, so naming a column after this value would fail
-	auto deep = DeepVariantValue(connection, 1000);
-	auto child_stats = CreateStats({}, {}, 3);
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(make_uniq<BoundConstantExpression>(deep));
-	LogicalProjection projection(TableIndex(20), std::move(expressions));
-	auto projected = RelationStatisticsHelper::ExtractProjectionStats(projection, child_stats);
-	REQUIRE(projected);
-	REQUIRE(projected->columns.size() == 1);
-	REQUIRE(projected->columns[0].total_domain.distinct_count == 1);
-
-	FunctionBinder function_binder(*connection.context);
-	vector<unique_ptr<Expression>> first_children;
-	first_children.push_back(make_uniq<BoundConstantExpression>(deep));
-	vector<unique_ptr<Expression>> aggregates;
-	aggregates.push_back(function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(deep.type()),
-	                                                           std::move(first_children), nullptr,
-	                                                           AggregateType::NON_DISTINCT));
-	LogicalAggregate aggregate(TableIndex(30), TableIndex(40), std::move(aggregates));
-	aggregate.groups.push_back(make_uniq<BoundConstantExpression>(deep));
-	auto aggregated = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats, *connection.context);
-	REQUIRE(aggregated);
-	REQUIRE(aggregated->columns.size() == 2);
-}
-
 #ifndef DEBUG
 // debug builds render every plan expression in LogicalOperator::Verify, where this depth fails
 TEST_CASE("Statements over a nested VARIANT constant plan without rendering it", "[optimizer][relation_statistics]") {

@@ -185,7 +185,8 @@ public:
 	DUCKDB_API static Value TUPLE(vector<Value> values);
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values);
 	//! Create a variant value with given list of internal variant data (keys/children/values/data)
-	DUCKDB_API static Value VARIANT(vector<Value> children);
+	//! Create a VARIANT value that holds the given (any-typed) payload
+	DUCKDB_API static Value VARIANT(Value payload);
 	//! Create a list value with the given entries
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
 	//! Create a list value with the given entries
@@ -512,8 +513,12 @@ struct TypeValue {
 };
 
 struct VariantValue {
-	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
-	DUCKDB_API static Value GetValue(const Value &variant_val);
+	//! The value held by a (non-null) VARIANT-typed Value
+	DUCKDB_API static const Value &GetValue(const Value &variant_val);
+	//! The four children of the encoded (vector) form of a (non-null) VARIANT-typed Value
+	DUCKDB_API static vector<Value> GetEncodedChildren(const Value &variant_val);
+	//! Create a VARIANT value from the four children of its encoded (vector) form
+	DUCKDB_API static Value FromEncodedChildren(const vector<Value> &children);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally
