@@ -82,32 +82,21 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 
 //! The functions rounding a FLOAT or DOUBLE to an integer. They are exact, unlike the libm functions that are
 //! declared monotone, so their preimage is computed in closed form instead of by bisection.
-enum class FloatRounding : uint8_t { FLOOR, CEIL, TRUNC };
-
 static bool GetFloatRounding(const BoundFunctionExpression &func, const LogicalType &col_type,
-                             FloatRounding &rounding) {
+                             IntegerRounding &rounding) {
 	if (col_type.id() != LogicalTypeId::FLOAT && col_type.id() != LogicalTypeId::DOUBLE) {
 		return false;
 	}
-	auto &name = func.Function().GetName();
-	if (name == "floor") {
-		rounding = FloatRounding::FLOOR;
-	} else if (name == "ceil" || name == "ceiling") {
-		rounding = FloatRounding::CEIL;
-	} else if (name == "trunc") {
-		rounding = FloatRounding::TRUNC;
-	} else {
-		return false;
-	}
-	return true;
+	rounding = func.Function().GetArgProperties(0).integer_rounding;
+	return rounding != IntegerRounding::UNKNOWN;
 }
 
 //! `rounding(col) >= k`, or its complement `rounding(col) < k`, as a comparison on col. NaN sorts above every number
 //! and the infinities and NaN round to themselves, so this agrees with comparing the rounding for every value.
-static unique_ptr<Expression> RoundingAtLeast(FloatRounding rounding, double k, bool complement,
+static unique_ptr<Expression> RoundingAtLeast(IntegerRounding rounding, double k, bool complement,
                                               const BoundColumnRefExpression &col, const LogicalType &col_type) {
 	// floor and positive trunc reach k at k, ceil and non-positive trunc right above k - 1
-	const bool from_k = rounding == FloatRounding::FLOOR || (rounding == FloatRounding::TRUNC && k > 0);
+	const bool from_k = rounding == IntegerRounding::FLOOR || (rounding == IntegerRounding::TRUNCATE && k > 0);
 	auto type = from_k ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
 	const double bound = from_k ? k : k - 1;
 	if (complement) {
@@ -118,9 +107,9 @@ static unique_ptr<Expression> RoundingAtLeast(FloatRounding rounding, double k, 
 }
 
 //! Preimage of `rounding(col) cmp c` on a FLOAT or DOUBLE column
-static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, FloatRounding rounding, ExpressionType cmp,
-                                                    const Value &c, const BoundColumnRefExpression &col,
-                                                    const LogicalType &col_type) {
+static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, IntegerRounding rounding,
+                                                    ExpressionType cmp, const Value &c,
+                                                    const BoundColumnRefExpression &col, const LogicalType &col_type) {
 	const auto value = c.GetValue<double>();
 	// the integers next to the constant must be exact, which they are not beyond 2^24 (FLOAT) or 2^53 (DOUBLE)
 	const double exact_limit = col_type.id() == LogicalTypeId::FLOAT ? 16777216.0 : 9007199254740992.0;
@@ -264,7 +253,7 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 
 	int64_t dom_lo = 0, dom_hi = 0;
 	bool has_infinity = false;
-	FloatRounding rounding = FloatRounding::FLOOR;
+	IntegerRounding rounding = IntegerRounding::FLOOR;
 	const bool is_float_rounding = GetFloatRounding(func, col_type, rounding);
 	if (!is_float_rounding && !GetFiniteDomain(col_type, dom_lo, dom_hi, has_infinity)) {
 		return nullptr;

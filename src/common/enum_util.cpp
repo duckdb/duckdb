@@ -3506,6 +3506,26 @@ InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value) {
 	return static_cast<InsertColumnOrder>(StringUtil::StringToEnum(GetInsertColumnOrderValues(), 2, "InsertColumnOrder", value));
 }
 
+const StringUtil::EnumStringLiteral *GetIntegerRoundingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IntegerRounding::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(IntegerRounding::FLOOR), "FLOOR" },
+		{ static_cast<uint32_t>(IntegerRounding::CEIL), "CEIL" },
+		{ static_cast<uint32_t>(IntegerRounding::TRUNCATE), "TRUNCATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<IntegerRounding>(IntegerRounding value) {
+	return StringUtil::EnumToString(GetIntegerRoundingValues(), 4, "IntegerRounding", static_cast<uint32_t>(value));
+}
+
+template<>
+IntegerRounding EnumUtil::FromString<IntegerRounding>(const char *value) {
+	return static_cast<IntegerRounding>(StringUtil::StringToEnum(GetIntegerRoundingValues(), 4, "IntegerRounding", value));
+}
+
 const StringUtil::EnumStringLiteral *GetInterruptModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(InterruptMode::NO_INTERRUPTS), "NO_INTERRUPTS" },
