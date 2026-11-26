@@ -102,8 +102,6 @@
         "test/issues/general/test_5072.test",
         "test/sql/aggregate/aggregates/arg_min_max_n_tpch.test",
         "test/sql/aggregate/aggregates/minmax_n_fallible.test",
-        "test/sql/aggregate/aggregates/minmax_n_int128.test",
-        "test/sql/aggregate/aggregates/minmax_n_interval.test",
         "test/sql/aggregate/aggregates/bitstring_agg_empty.test",
         "test/sql/aggregate/aggregates/bitstring_agg_memory_limit.test",
         "test/sql/aggregate/aggregates/first_last_alloc_reuse.test",

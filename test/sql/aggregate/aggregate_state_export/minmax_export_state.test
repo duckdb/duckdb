@@ -172,6 +172,20 @@ SELECT finalize(combine(to_aggregate_state({'n': 1, 'entries': []}, 'max', ['BIG
 ----
 [7]
 
+statement error
+SELECT finalize(combine(to_aggregate_state({'n': 1, 'entries': [1]}, 'max', ['BIGINT', 'BIGINT']), to_aggregate_state({'n': 2, 'entries': [7]}, 'max', ['BIGINT', 'BIGINT'])));
+----
+Mismatched n values
+
+# importing a sparse state allocates its entries, not n slots
+statement ok
+SET memory_limit='1GB';
+
+query II
+SELECT count(*), sum(finalize(m)[1]) FROM (SELECT i, combine_aggr(s) m FROM (SELECT i, max(i, 100000) EXPORT_STATE s FROM range(20000) r(i) GROUP BY i) GROUP BY i);
+----
+20000	199990000
+
 # a repeated combine_aggr frees the imported entries of each input row
 statement ok
 SET memory_limit='64MB';
