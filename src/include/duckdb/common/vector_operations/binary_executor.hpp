@@ -37,15 +37,6 @@ struct ComparisonSelectComplement<GreaterThanEquals> {
 	static constexpr bool SWAP_OPERANDS = true;
 };
 
-//! Whether either side of a string comparison is a non-NULL constant that is inlined
-inline bool HasInlinedStringConstant(const Vector &left, const Vector &right) {
-	auto &constant = left.GetVectorType() == VectorType::CONSTANT_VECTOR ? left : right;
-	if (constant.GetVectorType() != VectorType::CONSTANT_VECTOR || ConstantVector::IsNull(constant)) {
-		return false;
-	}
-	return ConstantVector::GetData<string_t>(constant)->IsInlined();
-}
-
 struct DefaultNullCheckOperator {
 	template <class LEFT_TYPE, class RIGHT_TYPE>
 	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {

@@ -48,6 +48,7 @@ add_library_unity(
   test_scalar_executor.cpp
   test_shared_ptr.cpp
   test_string_stats.cpp
+  test_string_comparison.cpp
   test_logical_type_is_complete.cpp
   test_logical_type_immutable.cpp
   test_type_visitor.cpp

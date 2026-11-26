@@ -13,7 +13,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/likely.hpp"
@@ -24,18 +24,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Fast path: direct BinaryExecutor for primitive types (single pass, no intermediate vector)
 //===--------------------------------------------------------------------===//
-template <class OP>
-static void StringComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
-	if constexpr (InlinedStringEqualityOperator<OP>::ENABLED) {
-		if (HasInlinedStringConstant(left, right)) {
-			using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
-			BinaryExecutor::Execute<string_t, string_t, bool, INLINED_OP>(left, right, result);
-			return;
-		}
-	}
-	BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
-}
-
 template <class OP>
 static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
 #if DUCKDB_SMALLER_BINARY(primitive_comparison_execute)
@@ -84,7 +72,7 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::VARCHAR:
-		StringComparisonExecute<OP>(left, right, result);
+		StringComparison::Execute<OP>(left, right, result);
 		return true;
 	default:
 		return false;

@@ -91,6 +91,38 @@ SELECT count(*) FROM blobs a, blobs b WHERE (a.b = b.b) <> (a.id = b.id) OR (a.b
 ----
 0
 
+# Exercise batch dispatch with mixed lengths, NULLs and column-to-column comparisons.
+statement ok
+CREATE TABLE ordering_pairs AS
+SELECT a.id AS ai, b.id AS bi, a.s AS a, b.s AS b
+FROM strings a, strings b, range(17) r(i)
+ORDER BY hash(a.id, b.id, i)
+
+query I
+SELECT count(*) FROM ordering_pairs
+WHERE (a > b) IS DISTINCT FROM (ai > bi)
+   OR (a >= b) IS DISTINCT FROM (ai >= bi)
+   OR (a < b) IS DISTINCT FROM (ai < bi)
+   OR (a <= b) IS DISTINCT FROM (ai <= bi)
+----
+0
+
+foreach op > >= < <=
+
+query I
+SELECT (SELECT count(*) FROM ordering_pairs WHERE a {op} b)
+     - (SELECT count(*) FROM ordering_pairs WHERE ai {op} bi)
+----
+0
+
+query I
+SELECT (SELECT count(*) FROM ordering_pairs WHERE a {op} 'abcdefghijkl' AND bi % 2 = 0)
+     - (SELECT count(*) FROM ordering_pairs WHERE ai {op} 11 AND bi % 2 = 0)
+----
+0
+
+endloop
+
 query III
 SELECT (SELECT count(*) FROM blobs WHERE b = '\x00'::BLOB), (SELECT count(*) FROM blobs WHERE b > '\xFF'::BLOB),
 	count(*) FILTER (b <> 'a\x00'::BLOB)
