@@ -18938,7 +18938,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_destroy(duckdb_v2_data_source
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19058,7 +19059,8 @@ duckdb_v2_data_source_init_global_get_column_index(duckdb_v2_data_source_init_gl
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19178,7 +19180,8 @@ duckdb_v2_data_source_init_local_get_column_index(duckdb_v2_data_source_init_loc
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19318,7 +19321,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_index(duckdb_
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19392,7 +19396,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_progress_set_progress(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19602,7 +19607,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_partition_data_set_partition_
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0
@@ -19688,7 +19694,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_set(duckdb_v2_data_so
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Retrieves the user data set on the table function via `duckdb_v2_table_function_set_user_data()`.
+ * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function when
+ * the data source has none.
  *
  * history:
  * - unstable: v2.0.0

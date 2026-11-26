@@ -424,7 +424,7 @@ functions:
   data_source_init_global_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_init_global_info
@@ -561,7 +561,7 @@ functions:
   data_source_init_local_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_init_local_info
@@ -701,7 +701,7 @@ functions:
   data_source_exec_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_exec_info
@@ -863,7 +863,7 @@ functions:
   data_source_progress_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_progress_info
@@ -948,7 +948,7 @@ functions:
   data_source_partition_data_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-15" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_partition_data_info
@@ -1189,7 +1189,7 @@ functions:
   data_source_metrics_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-10-27" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_metrics_info
@@ -1292,7 +1292,7 @@ functions:
   data_source_claim_batch_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-18" ]
-    description: Retrieves the user data set on the table function via `[[table_function_set_user_data]]`.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function when the data source has none.
     parameters:
       info:
         type: data_source_claim_batch_info
