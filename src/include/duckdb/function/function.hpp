@@ -82,6 +82,9 @@ public:
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
 	DUCKDB_API virtual bool SupportStatementCache() const;
+	//! Whether the call that bound this data, the function and its arguments, identifies what its scan reads, i.e.
+	//! the bind data adds no identity of its own
+	DUCKDB_API virtual bool IsIdentifiedByCall() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
