@@ -349,6 +349,9 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	                           AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>,
 	                           HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr, nullptr);
 	function.GetSignature().AddParameter("arg", type).AddParameter("bins", LogicalType::LIST(type));
+	// a NULL bin list or bin entry throws in the update, different bin boundaries of one group in the combine, and a
+	// bin that is the key of the "other values" bucket while that bucket has entries in the finalize
+	function.SetFallible();
 	return function;
 }
 

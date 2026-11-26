@@ -100,6 +100,10 @@ extension Vector {
   }
   
   func unwrap(_ type: String.Type, at index: Int) throws -> String {
+    if logicalType.dataType == .decimal {
+      // the exact digits of a decimal of up to 255 digits; a wider one throws
+      return try unwrapDecimalString(at: index)
+    }
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .varchar)
     return unsafelyUnwrapElement(as: duckdb_string.self, at: index) { $0.asString }
   }
@@ -167,7 +171,7 @@ extension Vector {
   func unwrap(_ type: Decimal.Type, at index: Int) throws -> Decimal {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .decimal)
     guard let props = logicalType.decimalProperties else {
-      fatalError("expected decimal logical type")
+      throw DatabaseError.typeMismatch(type)
     }
     switch props.storageType {
     case .tinyint:
@@ -180,9 +184,67 @@ extension Vector {
       return unwrapDecimal(withUnderlyingType: Int64.self, scale: props.scale, at: index)
     case .hugeint:
       return unwrapDecimal(withUnderlyingType: IntHuge.self, scale: props.scale, at: index)
-    case let unexpectedInternalType:
-      fatalError("unexpected internal decimal type: \(unexpectedInternalType)")
+    case .bignum:
+      let (value, scale) = try unwrapWideDecimal(properties: props, at: index)
+      guard let decimal = value.decimal(scale: scale) else {
+        let digits = value.string(width: Int(props.width), scale: scale)
+        throw DatabaseError.decimalNotConvertible(
+          reason: "DECIMAL(\(props.width),\(props.scale)) value \(digits) does not fit "
+            + "a Foundation Decimal exactly; cast the column to String for its digits")
+      }
+      return decimal
+    default:
+      throw DatabaseError.typeMismatch(type)
     }
+  }
+
+  /// The exact digits of a decimal, in the format of DuckDB's `VARCHAR` cast
+  func unwrapDecimalString(at index: Int) throws -> String {
+    try assertNonNullTypeMatch(of: String.self, at: index, withColumnType: .decimal)
+    guard let props = logicalType.decimalProperties else {
+      throw DatabaseError.typeMismatch(String.self)
+    }
+    switch props.storageType {
+    case .tinyint:
+      return unwrapDecimalString(withUnderlyingType: Int8.self, width: props.width, scale: props.scale, at: index)
+    case .smallint:
+      return unwrapDecimalString(withUnderlyingType: Int16.self, width: props.width, scale: props.scale, at: index)
+    case .integer:
+      return unwrapDecimalString(withUnderlyingType: Int32.self, width: props.width, scale: props.scale, at: index)
+    case .bigint:
+      return unwrapDecimalString(withUnderlyingType: Int64.self, width: props.width, scale: props.scale, at: index)
+    case .hugeint:
+      return unwrapDecimalString(withUnderlyingType: IntHuge.self, width: props.width, scale: props.scale, at: index)
+    case .bignum:
+      let (value, scale) = try unwrapWideDecimal(properties: props, at: index)
+      return value.string(width: Int(props.width), scale: scale)
+    default:
+      throw DatabaseError.typeMismatch(String.self)
+    }
+  }
+
+  func unwrapDecimalString<T: FixedWidthInteger>(
+    withUnderlyingType storageType: T.Type, width: UInt8, scale: UInt8, at index: Int
+  ) -> String {
+    unsafelyUnwrapElement(as: T.self, at: index) { unscaled in
+      WideDecimal.string(
+        digits: String(unscaled.magnitude).utf8, isNegative: unscaled < 0, width: Int(width), scale: Int(scale))
+    }
+  }
+
+  /// Decodes the unscaled value of a decimal of more than 38 digits, which
+  /// DuckDB stores as a `BIGNUM`
+  func unwrapWideDecimal(
+    properties: LogicalType.DecimalProperties, at index: Int
+  ) throws -> (value: WideDecimal, scale: Int) {
+    guard properties.width > 0 else {
+      // DuckDB's C API reports width and scale as UInt8, and both as zero for
+      // a type that does not fit: the position of the decimal point is unknown
+      throw DatabaseError.decimalNotConvertible(
+        reason: "the scale of a DECIMAL of more than 255 digits is not available; cast it to VARCHAR in the query")
+    }
+    let storage = unsafelyUnwrapElement(as: duckdb_blob.self, at: index) { $0.asData }
+    return (try WideDecimal(bignumStorage: storage), Int(properties.scale))
   }
   
   func unwrapDecimal<T: DecimalStorageType>(

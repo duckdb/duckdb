@@ -65,12 +65,19 @@ void FilterPullup::ProjectSetOperation(LogicalProjection &proj) {
 
 unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
+	auto &proj = op->Cast<LogicalProjection>();
+	// Pulling filters above a projection can evaluate its expressions on additional rows.
+	for (auto &expr : proj.expressions) {
+		if (expr->CanThrow() || expr->IsVolatile()) {
+			return FinishPullup(std::move(op));
+		}
+	}
+
 	op->children[0] = Rewrite(std::move(op->children[0]));
 	if (!filters_expr_pullup.empty()) {
-		auto &proj = op->Cast<LogicalProjection>();
 		for (auto &expr : filters_expr_pullup) {
-			if (expr->CanThrow()) {
-				// Keep fallible predicates and their guards below the projection.
+			if (expr->CanThrow() || expr->IsVolatile()) {
+				// Keep fallible or volatile predicates and their guards below the projection.
 				RevertFilterPullup(proj, filters_expr_pullup);
 				return op;
 			}

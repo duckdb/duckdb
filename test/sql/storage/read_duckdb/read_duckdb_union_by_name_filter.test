@@ -1,0 +1,170 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_union_by_name_filter.test
+# description: A filter that skips a later file of a union_by_name read_duckdb scan keeps the rows of the files before it
+# group: [read_duckdb]
+
+statement ok
+ATTACH '{TEST_DIR}/rd_ubn_filter_both.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT i x, 1 only_both FROM range(10) r(i)
+
+statement ok
+DETACH rd
+
+statement ok
+ATTACH '{TEST_DIR}/rd_ubn_filter_x.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT i + 100 x FROM range(10) r(i)
+
+statement ok
+DETACH rd
+
+loop i 0 3
+
+statement ok
+ATTACH '{TEST_DIR}/rd_ubn_filter_glob_{i}.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT r + {i} * 10 x FROM range(10) t(r)
+
+statement ok
+DETACH rd
+
+endloop
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads}
+
+# the file without only_both is skipped for a filter that rejects NULL - the file before it is not
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both = 1
+----
+10	45
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_both.db'], union_by_name = true)
+WHERE only_both = 1
+----
+10	45
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both IS NOT NULL AND x > 4
+----
+5	35
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both IS NULL
+----
+10	1045
+
+# several files before and after the skipped ones
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both = 1
+----
+20	90
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_both.db'], union_by_name = true)
+WHERE only_both = 1
+----
+20	90
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_both.db'], union_by_name = true)
+WHERE only_both = 1
+----
+20	90
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both = 1
+----
+10	45
+
+# every reader is skipped
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE file_index >= 2
+----
+0	NULL
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE filename = 'nope'
+----
+0	NULL
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_x.db', '{TEST_DIR}/rd_ubn_filter_both.db'], union_by_name = true)
+WHERE only_both = 1 AND filename = '{TEST_DIR}/rd_ubn_filter_x.db'
+----
+0	NULL
+
+# one reader is skipped by the file name, the other by the column it lacks
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both IS NULL AND filename = '{TEST_DIR}/rd_ubn_filter_both.db'
+----
+0	NULL
+
+# no reader is skipped, the filter rejects every row
+query I
+SELECT count(*)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE x < 0
+----
+0
+
+# without union_by_name only the first file is open: it is skipped, the files after it are opened by the scan
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb('{TEST_DIR}/rd_ubn_filter_glob_*.db')
+WHERE filename <> '{TEST_DIR}/rd_ubn_filter_glob_0.db'
+----
+20	390
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb('{TEST_DIR}/rd_ubn_filter_glob_*.db', union_by_name = true)
+WHERE filename <> '{TEST_DIR}/rd_ubn_filter_glob_1.db'
+----
+20	290
+
+# no filter
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+----
+20	1090
+
+endloop
+
+# the optimizer-disabled result
+statement ok
+PRAGMA disable_optimizer
+
+query II
+SELECT count(*), sum(x)
+FROM read_duckdb(['{TEST_DIR}/rd_ubn_filter_both.db', '{TEST_DIR}/rd_ubn_filter_x.db'], union_by_name = true)
+WHERE only_both = 1
+----
+10	45

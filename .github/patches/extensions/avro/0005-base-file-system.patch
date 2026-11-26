@@ -1,0 +1,17 @@
+diff --git a/test/cpp/test_writer_cleanup.cpp b/test/cpp/test_writer_cleanup.cpp
+index 3448e15..c7f5fc3 100644
+--- a/test/cpp/test_writer_cleanup.cpp
++++ b/test/cpp/test_writer_cleanup.cpp
+@@ -53,10 +53,10 @@ struct Faults {
+ 	int writes = 0;
+ };
+ 
+-class FaultFileSystem : public FileSystem {
++class FaultFileSystem : public BaseFileSystem {
+ public:
+ 	struct Handle : FileHandle {
+-		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
++		Handle(BaseFileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+ 		}
+ 		void Close() override {
+ 		}

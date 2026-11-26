@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -38,7 +39,7 @@ class ExtensionRepositoryManager {
 public:
 	//! The file extension used for the stored repository definitions
 	//! Repository files carry a ".duckdb_extension." segment so that they are covered by the write protection in
-	//! OpenerFileSystem::IsDuckDBExtensionName: they hold the pinned keys that decide which extensions may be loaded,
+	//! FileSystem::IsDuckDBExtensionName: they hold the pinned keys that decide which extensions may be loaded,
 	//! so they must not be writable through anything but CREATE EXTENSION REPOSITORY
 	static constexpr const char *FILE_EXTENSION = ".duckdb_extension.repo.json";
 	//! The version of the repository file format

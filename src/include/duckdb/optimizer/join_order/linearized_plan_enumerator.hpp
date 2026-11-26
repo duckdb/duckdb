@@ -33,6 +33,8 @@ public:
 
 private:
 	bool SolveGreedy(JoinOrderPlanMap &plans);
+	unique_ptr<CapturedJoinOrderPlan> CaptureInputPlan(JoinOrderPlanMap &plans, JoinRelationSet &root);
+	unique_ptr<CapturedJoinOrderPlan> CaptureGreedyPlan(JoinOrderPlanMap &plans, JoinRelationSet &root);
 	void OfferPlan(JoinRelationSet &root, unique_ptr<CapturedJoinOrderPlan> candidate,
 	               unique_ptr<CapturedJoinOrderPlan> &incumbent);
 

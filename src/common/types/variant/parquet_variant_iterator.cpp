@@ -475,7 +475,24 @@ ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
 //===--------------------------------------------------------------------===//
 // ParquetVariantNode
 //===--------------------------------------------------------------------===//
-VariantLogicalType ParquetVariantNode::GetTypeId() const {
+LogicalTypeId ParquetVariantNode::GetTypeId() const {
+	return VariantTypeToLogicalTypeId(GetVariantType());
+}
+
+LogicalType ParquetVariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
+bool ParquetVariantNode::GetBool() const {
+	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
+}
+
+VariantLogicalType ParquetVariantNode::GetVariantType() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
@@ -633,8 +650,13 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 // ParquetObjectIterator
 //===--------------------------------------------------------------------===//
 void ParquetObjectIterator::Finalize() {
-	std::sort(ordered_entries.begin(), ordered_entries.end(),
-	          [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) { return a.key < b.key; });
+	// the fields of a Parquet variant object are stored sorted by key, so this is usually a no-op
+	auto key_less = [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) {
+		return a.key < b.key;
+	};
+	if (!std::is_sorted(ordered_entries.begin(), ordered_entries.end(), key_less)) {
+		std::sort(ordered_entries.begin(), ordered_entries.end(), key_less);
+	}
 	// the keys of a Variant object have to be unique
 	for (idx_t i = 1; i < ordered_entries.size(); i++) {
 		if (ordered_entries[i].key == ordered_entries[i - 1].key) {

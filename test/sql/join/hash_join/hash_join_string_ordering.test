@@ -1,0 +1,76 @@
+# name: test/sql/join/hash_join/hash_join_string_ordering.test
+# description: Test string ordering predicates in hash joins against numeric ordering
+# group: [hash_join]
+
+# ord follows byte order, including zero bytes and the inline boundary.
+statement ok
+CREATE TABLE strings AS
+SELECT row_number() OVER () AS id, k, ord, s
+FROM (VALUES
+	(1, ''), (2, chr(0)), (3, 'a'), (4, 'a' || chr(0)), (5, 'abc'), (6, 'abcd'),
+	(7, 'abcd' || chr(0)), (8, 'abcde'), (9, 'abcdefgh'), (10, 'abcdefghijk'),
+	(11, 'abcdefghijkl'), (12, 'abcdefghijkl' || chr(0)), (13, 'abcdefghijklm'),
+	(14, 'abcdefghijklm' || chr(0)), (15, 'abcdefghijkln'), (16, 'abcdefghijkm'),
+	(17, 'abcdefgi'), (18, 'abce'), (19, 'b'), (20, 'é'), (21, NULL)
+) t(ord, s), range(129) r(k)
+
+statement ok
+UPDATE strings SET ord = NULL WHERE s IS NULL
+
+statement ok
+CREATE TABLE blobs AS
+SELECT id, k, ord, encode(s) AS s FROM strings
+UNION ALL
+SELECT 3000 + k, k, 22, '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'::BLOB FROM range(129) r(k)
+UNION ALL
+SELECT 4000 + k, k, 23, '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00'::BLOB FROM range(129) r(k)
+
+foreach tbl strings blobs
+
+foreach op > >= < <=
+
+foreach join INNER LEFT RIGHT FULL
+
+query I
+WITH actual AS (
+	SELECT a.id AS ai, b.id AS bi
+	FROM {tbl} a {join} JOIN {tbl} b ON a.k = b.k AND a.s {op} b.s
+	WHERE a.id % 3 <> 0 OR a.id IS NULL
+), expected AS (
+	SELECT a.id AS ai, b.id AS bi
+	FROM {tbl} a {join} JOIN {tbl} b ON a.k = b.k AND a.ord {op} b.ord
+	WHERE a.id % 3 <> 0 OR a.id IS NULL
+)
+SELECT count(*) FROM (
+	(SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+	UNION ALL
+	(SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+endloop
+
+foreach join SEMI ANTI
+
+query I
+WITH actual AS (
+	SELECT a.id FROM {tbl} a {join} JOIN {tbl} b ON a.k = b.k AND a.s {op} b.s
+	WHERE a.id % 3 <> 0
+), expected AS (
+	SELECT a.id FROM {tbl} a {join} JOIN {tbl} b ON a.k = b.k AND a.ord {op} b.ord
+	WHERE a.id % 3 <> 0
+)
+SELECT count(*) FROM (
+	(SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+	UNION ALL
+	(SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+)
+----
+0
+
+endloop
+
+endloop
+
+endloop

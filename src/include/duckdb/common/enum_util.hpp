@@ -334,6 +334,8 @@ enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
+enum class IntegerRounding : uint8_t;
+
 enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
@@ -665,6 +667,10 @@ enum class TemporaryCompressionLevel : int;
 enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TopNBoundaryRowOrder : uint8_t;
+
+enum class TopNBoundaryTies : uint8_t;
 
 enum class TransactionInvalidationPolicy : uint8_t;
 
@@ -1179,6 +1185,9 @@ template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
 
 template<>
+const char* EnumUtil::ToChars<IntegerRounding>(IntegerRounding value);
+
+template<>
 const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
@@ -1675,6 +1684,12 @@ const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryRowOrder>(TopNBoundaryRowOrder value);
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryTies>(TopNBoundaryTies value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
@@ -2218,6 +2233,9 @@ template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);
 
 template<>
+IntegerRounding EnumUtil::FromString<IntegerRounding>(const char *value);
+
+template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
@@ -2714,6 +2732,12 @@ ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TopNBoundaryRowOrder EnumUtil::FromString<TopNBoundaryRowOrder>(const char *value);
+
+template<>
+TopNBoundaryTies EnumUtil::FromString<TopNBoundaryTies>(const char *value);
 
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);

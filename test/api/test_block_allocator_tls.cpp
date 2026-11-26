@@ -829,7 +829,13 @@ TEST_CASE("Allocation cache pressure accounts for fixed backing and preserves li
 	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
 
 	CHECK_FALSE(allocator.TryFlushDeallocated(1, BLOCK_SIZE + 3 * SIZE));
-	CHECK(allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE + SIZE));
+	// Trimmed allocations wait for the purge threshold like the other fallback frees.
+	CHECK_FALSE(allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE + SIZE));
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + SIZE);
+	CHECK(live_bytes.load() == 5 * SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * SIZE);
+	CHECK(allocator.TryFlushDeallocated(2 * SIZE, BLOCK_SIZE + SIZE) == Allocator::SupportsFlush());
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : 2 * SIZE));
 	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + SIZE);
 	CHECK(live_bytes.load() == 5 * SIZE);
 	CHECK(live[0] == 42);
@@ -866,8 +872,20 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
 		CHECK(result.success);
 		CHECK(allocator.GetCachedMemory() == 0);
+		// A trimmed allocation of less than a sixteenth of the limit is not purged yet, the larger uncached free is.
 		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==
-		      (cached || Allocator::SupportsFlush() ? 0 : freed_size));
+		      (cached || !Allocator::SupportsFlush() ? freed_size : 0));
+		if (cached) {
+			pointer = allocator.AllocateData(freed_size);
+			allocator.FreeData(pointer, freed_size);
+			CHECK(allocator.GetCachedMemory() == freed_size);
+			// With the second one the trimmed allocations reach the threshold.
+			auto second_result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
+			CHECK(second_result.success);
+			CHECK(allocator.GetCachedMemory() == 0);
+			CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==
+			      (Allocator::SupportsFlush() ? 0 : 2 * freed_size));
+		}
 	}
 	SECTION("Lowering the limit releases retained backing") {
 		pool.SetLimit(MEMORY_LIMIT - freed_size, "");
@@ -877,6 +895,56 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -static_cast<int64_t>(MEMORY_LIMIT - freed_size));
 	CHECK(pool.GetUsedMemory() == 0);
 }
+
+TEST_CASE("BlockAllocator purges trimmed allocations below the threshold when idle", "[api][block_allocator]") {
+	constexpr idx_t SIZE = 1024 * 1024;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, 65536, 0);
+	auto pointer = allocator.AllocateData(SIZE);
+	allocator.FreeData(pointer, SIZE);
+	REQUIRE(allocator.GetCachedMemory() == SIZE);
+	// No headroom trims the cache, and the trimmed allocation is far below the threshold.
+	CHECK_FALSE(allocator.TryFlushDeallocated(64 * SIZE, 0));
+	REQUIRE(allocator.GetCachedMemory() == 0);
+	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == SIZE);
+	// The cache is empty, so only the estimate tells an idle thread that there is something to purge.
+	allocator.ThreadIdle();
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+}
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("BlockAllocator purges trimmed allocations while other threads free", "[api][block_allocator]") {
+	constexpr idx_t SIZE = 2 * 1024 * 1024;
+	// Neither cached nor pooled, so every free adds to the estimate of unflushed memory.
+	constexpr idx_t UNCACHED_SIZE = 4097;
+	atomic<idx_t> live_bytes {0};
+	// Without mapped statistics nothing but the threshold and the headroom decides.
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	BlockAllocator allocator(fallback, 65536, 0);
+	atomic<bool> stop {false};
+	std::thread freeing([&] {
+		while (!stop.load()) {
+			auto pointer = allocator.AllocateData(UNCACHED_SIZE);
+			allocator.FreeData(pointer, UNCACHED_SIZE);
+		}
+	});
+	idx_t purges = 0;
+	constexpr idx_t ROUNDS = 20000;
+	for (idx_t i = 0; i < ROUNDS; i++) {
+		auto first = allocator.AllocateData(SIZE);
+		auto second = allocator.AllocateData(SIZE);
+		allocator.FreeData(first, SIZE);
+		allocator.FreeData(second, SIZE);
+		// One cached allocation has to go: it exceeds the threshold, and does not fit next to the other one.
+		purges += allocator.TryFlushDeallocated(SIZE / 4, SIZE + SIZE / 2);
+		allocator.FlushAll();
+	}
+	stop = true;
+	freeing.join();
+	CHECK(purges == (Allocator::SupportsFlush() ? ROUNDS : 0));
+}
+#endif
 
 TEST_CASE("BlockAllocator fallback pressure shares headroom with cached blocks", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
