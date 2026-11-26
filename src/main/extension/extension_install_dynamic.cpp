@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
@@ -400,10 +401,15 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 		}
 		// a custom path install keeps the origin its FROM named, which a NOP install must not appear to replace
 		auto requested_type = repository ? repository->type : ExtensionRepositoryType::CORE;
-		if (install_info->mode == ExtensionInstallMode::CUSTOM_PATH &&
+		if (install_info->mode == ExtensionInstallMode::CUSTOM_PATH && ExtensionHelper::IsFullPath(extension) &&
 		    install_info->repository_type != requested_type) {
-			throw InvalidInputException(format_string, extension_name, custom_path, install_info->full_path,
-			                            repository ? repo : custom_path, repository ? repository->path : extension);
+			throw InvalidInputException(
+			    "Installing extension '%s' failed. The extension is already installed but the origin is different.\n"
+			    "Currently installed extension is from %s '%s' with %s signing keys, while the extension to be "
+			    "installed uses %s signing keys.\n"
+			    "To solve this rerun this command with `FORCE INSTALL`",
+			    extension_name, custom_path, install_info->full_path, EnumUtil::ToString(install_info->repository_type),
+			    EnumUtil::ToString(requested_type));
 		}
 	}
 }

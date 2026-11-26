@@ -45,15 +45,19 @@ IO Error: Extension 'loadable_extension_demo' was not installed from repository 
 statement error
 INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM core
 ----
-<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*with COMMUNITY signing keys.*uses CORE signing keys.*
 
 statement error
 INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
 ----
-<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*with COMMUNITY signing keys.*uses CORE signing keys.*
 
 statement ok
 INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM community
+
+# an install by name over the path install stays the no-op it always was
+statement ok
+INSTALL loadable_extension_demo FROM core
 
 statement ok
 LOAD loadable_extension_demo FROM community
