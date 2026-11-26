@@ -128,7 +128,21 @@ void TableFunctionQueryFilter::AddWindow(idx_t window_start, const char *data, i
 	auto bytes = reinterpret_cast<const uint8_t *>(data);
 	// the first byte is the number of padding bits - the most significant bits of the first byte that follows
 	auto padding = idx_t(bytes[0]);
-	for (idx_t byte_idx = 0; byte_idx + 1 < size; byte_idx++) {
+	idx_t byte_idx = 0;
+	if (padding == 0 && window_start % 64 == 0) {
+		// the bytes are 8 words of rows when they start at a word: reverse the bits of every byte
+		for (; byte_idx + 8 < size; byte_idx += 8) {
+			uint64_t word;
+			memcpy(&word, bytes + 1 + byte_idx, sizeof(word));
+			word = ((word & 0xF0F0F0F0F0F0F0F0ULL) >> 4) | ((word & 0x0F0F0F0F0F0F0F0FULL) << 4);
+			word = ((word & 0xCCCCCCCCCCCCCCCCULL) >> 2) | ((word & 0x3333333333333333ULL) << 2);
+			word = ((word & 0xAAAAAAAAAAAAAAAAULL) >> 1) | ((word & 0x5555555555555555ULL) << 1);
+			if (word != 0) {
+				scan_words.push_back(ScanWord {window_start / 64 + byte_idx / 8, word});
+			}
+		}
+	}
+	for (; byte_idx + 1 < size; byte_idx++) {
 		auto value = bytes[1 + byte_idx];
 		if (byte_idx == 0) {
 			value = static_cast<uint8_t>(value & (0xFF >> padding));
