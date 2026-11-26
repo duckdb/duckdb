@@ -2,7 +2,7 @@
 # description: A checkpoint writes the updates of vectors whose rows lie in two segments
 # group: [checkpoint]
 
-load __TEST_DIR__/checkpoint_updates_across_segment_boundaries.db
+load {TEST_DIR}/checkpoint_updates_across_segment_boundaries.db
 
 statement ok
 SET force_compression='uncompressed'
