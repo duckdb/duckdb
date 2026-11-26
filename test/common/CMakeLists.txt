@@ -74,6 +74,7 @@ add_library_unity(
   test_value_to_expression.cpp
   test_variant_cast.cpp
   test_variant_size.cpp
+  test_variant_writer.cpp
   test_vector_buffer_validity.cpp
   test_wide_decimal_cast.cpp
   test_lazy_vector.cpp
