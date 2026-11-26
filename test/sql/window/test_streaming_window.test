@@ -1024,3 +1024,17 @@ statement error
 SELECT arg_max(i, i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
 ----
 n value must be > 0
+
+statement error
+SELECT min(i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+----
+n value must be > 0
+
+#also when a collation rebinds min/max to arg_min/arg_max, and when a view binds it again
+statement ok
+CREATE VIEW per_row_n AS SELECT max(i::VARCHAR COLLATE nocase, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+
+statement error
+SELECT * FROM per_row_n;
+----
+n value must be > 0

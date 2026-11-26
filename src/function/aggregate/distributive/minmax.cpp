@@ -625,7 +625,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
 	function.GetArguments()[0] = arguments[0]->GetReturnType();
 	if (!arguments[1]->IsFoldable()) {
-		MinMaxNOperation::DisableStateExport(function);
+		MinMaxNOperation::BindPerRowN(function);
 	}
 
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));

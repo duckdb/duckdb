@@ -627,14 +627,11 @@ struct MinMaxNOperation {
 		return layout;
 	}
 
-	static void PerRowNDestroy(Vector &, AggregateInputData &, idx_t) {
-	}
-
-	//! States with different n values cannot be combined, so a per-row n cannot export its states. The destructor
-	//! keeps it off the streaming window, which (unlike WINDOW) would never check the n of later rows.
-	static void DisableStateExport(BoundAggregateFunction &function) {
+	//! States with different n values cannot be combined, so a per-row n cannot export its states. It also cannot
+	//! stream: the streaming window (unlike WINDOW) would never check the n of later rows.
+	static void BindPerRowN(BoundAggregateFunction &function) {
 		function.GetCallbacks().get_state_type = nullptr;
-		function.GetCallbacks().SetStateDestructorCallback(PerRowNDestroy);
+		function.SetCanStream(false);
 	}
 
 	template <class STATE>

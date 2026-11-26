@@ -366,6 +366,9 @@ public:
 	//! Whether combining can leave the target referencing the source's memory
 	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
 
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	bool can_stream = true;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -419,6 +422,10 @@ public: // Properties
 	//! Whether combining can leave the target referencing the source's memory
 	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
 	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
+
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	auto CanStream() const -> bool { return properties.can_stream; }
+	auto SetCanStream(bool value) -> void { properties.can_stream = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }

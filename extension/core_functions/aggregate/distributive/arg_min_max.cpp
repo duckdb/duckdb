@@ -952,7 +952,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
 	}
 	if (!arguments[2]->IsFoldable()) {
-		MinMaxNOperation::DisableStateExport(function);
+		MinMaxNOperation::BindPerRowN(function);
 	}
 
 	return unique_ptr<FunctionData>(std::move(function_data));
