@@ -1871,8 +1871,8 @@ TEST_CASE("Large LEFT and composite joins retain their cardinality bounds",
 		for (idx_t key = 1; key <= (join_type == JoinType::LEFT ? 1 : 2); key++) {
 			auto a = ColumnBinding(TableIndex(count - 2), ProjectionIndex(key));
 			auto b = ColumnBinding(TableIndex(count - 1), ProjectionIndex(key));
-			auto filter = make_uniq<FilterInfo>(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL),
-			                                    sets.Union(left, right), filters.size(), join_type);
+			auto filter = make_uniq<FilterInfo>(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), pair,
+			                                    filters.size(), join_type);
 			filter->SetLeftSet(left);
 			filter->SetRightSet(right);
 			filter->left_binding = a;
