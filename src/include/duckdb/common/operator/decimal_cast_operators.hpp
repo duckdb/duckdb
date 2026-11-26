@@ -640,7 +640,6 @@ struct DecimalCastData {
 	uint32_t scale;
 	uint32_t digit_count;
 	uint32_t decimal_count;
-	uint32_t leading_decimal_zeros;
 	//! Whether we have determined if the result should be rounded
 	bool round_set;
 	//! If the result should be rounded
@@ -777,15 +776,14 @@ struct DecimalCastOperation {
 			return true;
 		}
 		if (state.result == 0 && digit == 0) {
-			// leading zeros after the decimal point do not consume significant digits of StoreType
-			state.leading_decimal_zeros++;
+			// leading zeros after the decimal point still advance decimal_count
 			state.decimal_count++;
 			return true;
 		}
 		//! If we expect an exponent, we need to preserve the decimals
 		//! But we don't want to overflow, so we prevent overflowing the result with this check
-		if (state.digit_count + state.decimal_count - state.leading_decimal_zeros >=
-		    DecimalWidth<decltype(state.result)>::max) {
+		if (NEGATIVE ? state.result <= DecimalCastLimits<typename T::StoreType>::MinimumDiv10
+		             : state.result >= DecimalCastLimits<typename T::StoreType>::MaximumDiv10) {
 			return true;
 		}
 		state.decimal_count++;
@@ -805,9 +803,6 @@ struct DecimalCastOperation {
 			auto mod = state.result % 10;
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 			state.result /= static_cast<typename T::StoreType>(10.0);
-			if (state.result == 0 && !round_up) {
-				break;
-			}
 		}
 		//! Only round up when exponents are involved
 		if (state.exponent_type == ExponentType::POSITIVE && round_up) {
@@ -864,7 +859,6 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	state.leading_decimal_zeros = 0;
 	state.excessive_decimals = 0;
 	state.exponent_type = ExponentType::NONE;
 	state.round_set = false;
@@ -890,7 +884,6 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	state.leading_decimal_zeros = 0;
 	state.excessive_decimals = 0;
 	state.exponent_type = ExponentType::NONE;
 	state.round_set = false;

@@ -291,6 +291,21 @@ SELECT '0.000000000000000000123e5'::DECIMAL(5,2), '0.000000000000000000123e-5'::
 ----
 0.00	0.00	0.00
 
+query II
+SELECT '0.001'::DECIMAL(5,3), '-0.001'::DECIMAL(5,3)
+----
+0.001	-0.001
+
+statement error
+SELECT '0.32769e3'::DECIMAL(4,2)
+----
+Conversion Error
+
+statement error
+SELECT '-0.32769e3'::DECIMAL(4,2)
+----
+Conversion Error
+
 statement error
 SELECT '0.000000000123e13'::DECIMAL(4,2)
 ----
