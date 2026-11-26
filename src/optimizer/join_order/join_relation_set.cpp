@@ -2,12 +2,11 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
-
-using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
 static constexpr idx_t BITMASK_WORD_SIZE = sizeof(idx_t) * 8;
 
@@ -63,24 +62,22 @@ bool JoinRelationSet::Intersects(const JoinRelationSet &left, const JoinRelation
 }
 
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<RelationIndex> relations, idx_t count) {
-	// now look it up in the tree
-	reference<JoinRelationTreeNode> info(root);
+	hash_t hash = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto entry = info.get().children.find(relations[i]);
-		if (entry == info.get().children.end()) {
-			// node not found, create it
-			auto insert_it = info.get().children.insert(make_pair(relations[i], make_uniq<JoinRelationTreeNode>()));
-			entry = insert_it.first;
+		hash = CombineHash(hash, Hash(relations[i].index));
+	}
+	auto entries = relation_sets.equal_range(hash);
+	for (auto entry = entries.first; entry != entries.second; ++entry) {
+		auto &set = *entry->second;
+		if (set.count != count) {
+			continue;
 		}
-		// move to the next node
-		info = *entry->second;
+		if (count == 0 || std::equal(relations.get(), relations.get() + count, set.relations.get())) {
+			return set;
+		}
 	}
-	// now check if the JoinRelationSet has already been created
-	if (!info.get().relation) {
-		// if it hasn't we need to create it
-		info.get().relation = make_uniq<JoinRelationSet>(std::move(relations), count);
-	}
-	return *info.get().relation;
+	auto entry = relation_sets.emplace(hash, make_uniq<JoinRelationSet>(std::move(relations), count));
+	return *entry->second;
 }
 
 //! Create or get a JoinRelationSet from a single node with the given index
@@ -180,19 +177,12 @@ JoinRelationSet &JoinRelationSetManager::Difference(const JoinRelationSet &left,
 	return GetJoinRelation(std::move(relations), count);
 }
 
-static string JoinRelationTreeNodeToString(const JoinRelationTreeNode *node) {
-	string result = "";
-	if (node->relation) {
-		result += node->relation.get()->ToString() + "\n";
-	}
-	for (auto &child : node->children) {
-		result += JoinRelationTreeNodeToString(child.second.get());
+string JoinRelationSetManager::ToString() const {
+	string result;
+	for (auto &entry : relation_sets) {
+		result += entry.second->ToString() + "\n";
 	}
 	return result;
-}
-
-string JoinRelationSetManager::ToString() const {
-	return JoinRelationTreeNodeToString(&root);
 }
 
 void JoinRelationSetManager::Print() {
