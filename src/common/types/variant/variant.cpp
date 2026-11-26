@@ -2,6 +2,8 @@
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -16,6 +18,219 @@ VariantVectorData::VariantVectorData(Vector &variant)
 	values_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetValues(variant));
 	children_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetChildren(variant));
 	keys_data = FlatVector::GetDataMutable<list_entry_t>(keys);
+}
+
+LogicalTypeId VariantTypeToLogicalTypeId(VariantLogicalType type) {
+	switch (type) {
+	case VariantLogicalType::BOOL_TRUE:
+	case VariantLogicalType::BOOL_FALSE:
+		return LogicalTypeId::BOOLEAN;
+	case VariantLogicalType::VARIANT_NULL:
+		return LogicalTypeId::SQLNULL;
+	case VariantLogicalType::INT8:
+		return LogicalTypeId::TINYINT;
+	case VariantLogicalType::INT16:
+		return LogicalTypeId::SMALLINT;
+	case VariantLogicalType::INT32:
+		return LogicalTypeId::INTEGER;
+	case VariantLogicalType::INT64:
+		return LogicalTypeId::BIGINT;
+	case VariantLogicalType::INT128:
+		return LogicalTypeId::HUGEINT;
+	case VariantLogicalType::UINT8:
+		return LogicalTypeId::UTINYINT;
+	case VariantLogicalType::UINT16:
+		return LogicalTypeId::USMALLINT;
+	case VariantLogicalType::UINT32:
+		return LogicalTypeId::UINTEGER;
+	case VariantLogicalType::UINT64:
+		return LogicalTypeId::UBIGINT;
+	case VariantLogicalType::UINT128:
+		return LogicalTypeId::UHUGEINT;
+	case VariantLogicalType::FLOAT:
+		return LogicalTypeId::FLOAT;
+	case VariantLogicalType::DOUBLE:
+		return LogicalTypeId::DOUBLE;
+	case VariantLogicalType::DECIMAL:
+		return LogicalTypeId::DECIMAL;
+	case VariantLogicalType::VARCHAR:
+		return LogicalTypeId::VARCHAR;
+	case VariantLogicalType::BLOB:
+		return LogicalTypeId::BLOB;
+	case VariantLogicalType::UUID:
+		return LogicalTypeId::UUID;
+	case VariantLogicalType::DATE:
+		return LogicalTypeId::DATE;
+	case VariantLogicalType::TIME_MICROS:
+		return LogicalTypeId::TIME;
+	case VariantLogicalType::TIME_NANOS:
+		return LogicalTypeId::TIME_NS;
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return LogicalTypeId::TIMESTAMP_SEC;
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return LogicalTypeId::TIMESTAMP_MS;
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return LogicalTypeId::TIMESTAMP;
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return LogicalTypeId::TIMESTAMP_NS;
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return LogicalTypeId::TIME_TZ;
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ_NS;
+	case VariantLogicalType::INTERVAL:
+		return LogicalTypeId::INTERVAL;
+	case VariantLogicalType::OBJECT:
+		return LogicalTypeId::STRUCT;
+	case VariantLogicalType::ARRAY:
+		return LogicalTypeId::LIST;
+	case VariantLogicalType::BIGNUM:
+		return LogicalTypeId::BIGNUM;
+	case VariantLogicalType::BITSTRING:
+		return LogicalTypeId::BIT;
+	case VariantLogicalType::GEOMETRY:
+		return LogicalTypeId::GEOMETRY;
+	case VariantLogicalType::GEOGRAPHY:
+		return LogicalTypeId::GEOGRAPHY;
+	default:
+		throw InternalException("Unrecognized VariantLogicalType %d", static_cast<int>(type));
+	}
+}
+
+bool TryVariantTypeFromLogicalTypeId(LogicalTypeId id, VariantLogicalType &result, bool bool_value) {
+	switch (id) {
+	case LogicalTypeId::BOOLEAN:
+		result = bool_value ? VariantLogicalType::BOOL_TRUE : VariantLogicalType::BOOL_FALSE;
+		return true;
+	case LogicalTypeId::SQLNULL:
+		result = VariantLogicalType::VARIANT_NULL;
+		return true;
+	case LogicalTypeId::TINYINT:
+		result = VariantLogicalType::INT8;
+		return true;
+	case LogicalTypeId::SMALLINT:
+		result = VariantLogicalType::INT16;
+		return true;
+	case LogicalTypeId::INTEGER:
+		result = VariantLogicalType::INT32;
+		return true;
+	case LogicalTypeId::BIGINT:
+		result = VariantLogicalType::INT64;
+		return true;
+	case LogicalTypeId::HUGEINT:
+		result = VariantLogicalType::INT128;
+		return true;
+	case LogicalTypeId::UTINYINT:
+		result = VariantLogicalType::UINT8;
+		return true;
+	case LogicalTypeId::USMALLINT:
+		result = VariantLogicalType::UINT16;
+		return true;
+	case LogicalTypeId::UINTEGER:
+		result = VariantLogicalType::UINT32;
+		return true;
+	case LogicalTypeId::UBIGINT:
+		result = VariantLogicalType::UINT64;
+		return true;
+	case LogicalTypeId::UHUGEINT:
+		result = VariantLogicalType::UINT128;
+		return true;
+	case LogicalTypeId::FLOAT:
+		result = VariantLogicalType::FLOAT;
+		return true;
+	case LogicalTypeId::DOUBLE:
+		result = VariantLogicalType::DOUBLE;
+		return true;
+	case LogicalTypeId::DECIMAL:
+		result = VariantLogicalType::DECIMAL;
+		return true;
+	case LogicalTypeId::VARCHAR:
+		result = VariantLogicalType::VARCHAR;
+		return true;
+	case LogicalTypeId::BLOB:
+		result = VariantLogicalType::BLOB;
+		return true;
+	case LogicalTypeId::UUID:
+		result = VariantLogicalType::UUID;
+		return true;
+	case LogicalTypeId::DATE:
+		result = VariantLogicalType::DATE;
+		return true;
+	case LogicalTypeId::TIME:
+		result = VariantLogicalType::TIME_MICROS;
+		return true;
+	case LogicalTypeId::TIME_NS:
+		result = VariantLogicalType::TIME_NANOS;
+		return true;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		result = VariantLogicalType::TIMESTAMP_SEC;
+		return true;
+	case LogicalTypeId::TIMESTAMP_MS:
+		result = VariantLogicalType::TIMESTAMP_MILIS;
+		return true;
+	case LogicalTypeId::TIMESTAMP:
+		result = VariantLogicalType::TIMESTAMP_MICROS;
+		return true;
+	case LogicalTypeId::TIMESTAMP_NS:
+		result = VariantLogicalType::TIMESTAMP_NANOS;
+		return true;
+	case LogicalTypeId::TIME_TZ:
+		result = VariantLogicalType::TIME_MICROS_TZ;
+		return true;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		result = VariantLogicalType::TIMESTAMP_MICROS_TZ;
+		return true;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		result = VariantLogicalType::TIMESTAMP_NANOS_TZ;
+		return true;
+	case LogicalTypeId::INTERVAL:
+		result = VariantLogicalType::INTERVAL;
+		return true;
+	case LogicalTypeId::STRUCT:
+		result = VariantLogicalType::OBJECT;
+		return true;
+	case LogicalTypeId::LIST:
+		result = VariantLogicalType::ARRAY;
+		return true;
+	case LogicalTypeId::BIGNUM:
+		result = VariantLogicalType::BIGNUM;
+		return true;
+	case LogicalTypeId::BIT:
+		result = VariantLogicalType::BITSTRING;
+		return true;
+	case LogicalTypeId::GEOMETRY:
+		result = VariantLogicalType::GEOMETRY;
+		return true;
+	case LogicalTypeId::GEOGRAPHY:
+		result = VariantLogicalType::GEOGRAPHY;
+		return true;
+	default:
+		return false;
+	}
+}
+
+LogicalType VariantDefaultType(LogicalTypeId id) {
+	switch (id) {
+	case LogicalTypeId::STRUCT:
+		return LogicalType::STRUCT(child_list_t<LogicalType>());
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(LogicalType::VARIANT());
+	case LogicalTypeId::GEOMETRY:
+		return LogicalType::GEOMETRY();
+	case LogicalTypeId::GEOGRAPHY:
+		return LogicalType::GEOGRAPHY();
+	default:
+		return LogicalType(id);
+	}
+}
+
+VariantLogicalType VariantTypeFromLogicalTypeId(LogicalTypeId id, bool bool_value) {
+	VariantLogicalType result;
+	if (!TryVariantTypeFromLogicalTypeId(id, result, bool_value)) {
+		throw InternalException("LogicalTypeId %s cannot be stored in a VARIANT", EnumUtil::ToString(id));
+	}
+	return result;
 }
 
 UnifiedVariantVectorData::UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant)

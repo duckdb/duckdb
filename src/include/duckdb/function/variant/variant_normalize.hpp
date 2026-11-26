@@ -90,7 +90,7 @@ struct VariantNormalizer {
 	                       idx_t depth, VariantNormalizerState &state);
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                        idx_t depth, VariantNormalizerState &state);
-	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state);
+	static void VisitDefault(const LogicalType &type, const_data_ptr_t, VariantNormalizerState &state);
 
 public:
 	static void Normalize(const Vector &input, Vector &output);
