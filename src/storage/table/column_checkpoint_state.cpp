@@ -4,6 +4,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,15 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 
 shared_ptr<ColumnData> ColumnCheckpointState::CreateEmptyColumnData() {
 	throw InternalException("CreateEmptyColumnData not implemented for this column checkpoint state");
+}
+
+void ColumnCheckpointState::InitializeSegmentScan(ColumnScanState &state) {
+	original_column_mutable.InitializeSegmentScan(state);
+}
+
+idx_t ColumnCheckpointState::ScanSegmentVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                                               Vector &result, idx_t scan_count) {
+	return original_column_mutable.ScanSegmentVector(transaction, vector_index, state, result, scan_count);
 }
 
 ColumnData &ColumnCheckpointState::GetResultColumn() {
