@@ -62,6 +62,25 @@ EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
 ----
 physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
 
+# Group predicates above the joins must pass through the restored output projection.
+statement ok
+CREATE OR REPLACE VIEW ranked_neighbors AS
+SELECT count(*), sum(cur.grp::BIGINT * 100 + cur.rn), sum(lag.year * 100 + lag.moy)
+FROM ranked cur
+JOIN ranked lag ON cur.rn = lag.rn + 1
+JOIN ranked lead ON cur.rn = lead.rn - 1
+WHERE cur.grp = lag.grp AND cur.grp = lead.grp;
+
+query III
+FROM ranked_neighbors;
+----
+24576	3870720	135168
+
+query II
+EXPLAIN (FORMAT JSON) FROM ranked_neighbors;
+----
+physical_plan	<REGEX>:(.*"Conditions":\s*\[[^\]]*(\brn\b[^\]]*grp = grp|grp = grp[^\]]*\brn\b)[^\]]*\]){2}.*
+
 endloop
 
 statement ok
