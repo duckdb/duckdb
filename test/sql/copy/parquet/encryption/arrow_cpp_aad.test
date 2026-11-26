@@ -1,0 +1,77 @@
+# name: test/sql/copy/parquet/encryption/arrow_cpp_aad.test
+# description: Read PyArrow files with stored and external binary AAD prefixes
+# group: [encryption]
+
+require parquet
+
+require noforcestorage
+
+# PyArrow 22.0.0 with Arrow C++ encryption properties: AES_GCM_V1, Snappy,
+# DataPageV1, two row groups of 512 rows, and multiple pages per column chunk.
+# id = 0..1023, label = 'group-' || (id % 8), value = id * 10 (NULL when id % 5 = 0).
+# Only label is dictionary-encoded. The binary AAD prefix ends in bytes 0x00, 0xFF.
+statement ok
+PRAGMA add_parquet_key('arrow_cpp_aad_key', '0123456789abcdef')
+
+statement ok
+SET debug_verify_serializer=true
+
+statement ok
+SET threads=1
+
+foreach cache false true
+
+statement ok
+SET parquet_metadata_cache={cache}
+
+foreach mode stored external
+
+query IIII
+SELECT file_row_number // 512 AS row_group, sum(id), count(value), sum(value)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_{mode}.parquet',
+    encryption_config={footer_key: 'arrow_cpp_aad_key', aad_prefix: 'duckdb-pyarrow-aad\x00\xFF'::BLOB},
+    file_row_number=true)
+GROUP BY row_group ORDER BY row_group;
+----
+0	130816	409	1045510
+1	392960	410	3146750
+
+query ITI
+SELECT id, label, value
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_{mode}.parquet',
+    encryption_config={footer_key: 'arrow_cpp_aad_key', aad_prefix: 'duckdb-pyarrow-aad\x00\xFF'::BLOB})
+WHERE id IN (0, 31, 32, 511, 512, 1023) ORDER BY id;
+----
+0	group-0	NULL
+31	group-7	310
+32	group-0	320
+511	group-7	5110
+512	group-0	5120
+1023	group-7	10230
+
+endloop
+
+# A stored prefix is also resolved automatically, including on a warm cache.
+query I
+SELECT sum(id) FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_stored.parquet',
+    encryption_config={footer_key: 'arrow_cpp_aad_key'});
+----
+523776
+
+# Each file's cached metadata must be checked using its own file AAD.
+query III
+SELECT count(*), sum(id), sum(value)
+FROM read_parquet(['{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_stored.parquet',
+                  '{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_external.parquet'],
+    encryption_config={footer_key: 'arrow_cpp_aad_key', aad_prefix: 'duckdb-pyarrow-aad\x00\xFF'::BLOB});
+----
+2048	1047552	8384520
+
+# The bytes after the embedded NUL are part of the authenticated prefix.
+statement error
+SELECT sum(id) FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_cpp_aad_external.parquet',
+    encryption_config={footer_key: 'arrow_cpp_aad_key', aad_prefix: 'duckdb-pyarrow-aad\x00'::BLOB});
+----
+Computed AES tag differs from read AES tag
+
+endloop
