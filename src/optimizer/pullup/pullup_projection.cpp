@@ -2,25 +2,10 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-
-static bool CanMatchExpression(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		// Expression equality must not conflate constants a function can distinguish, such as signed zeros.
-		return expr.GetReturnType().EqualValuesAreIdentical();
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
-		return false;
-	}
-	bool can_match = true;
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](const Expression &child) { can_match &= CanMatchExpression(child); });
-	return can_match;
-}
 
 static bool CanRewrite(const Expression &expr, const expression_map_t<ProjectionIndex> &projections,
                        bool match_computed) {
@@ -87,7 +72,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	expression_map_t<ProjectionIndex> projections;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		// Keep constants in predicates available for constant-filter inference.
-		if (!proj.expressions[i]->IsFoldable() && CanMatchExpression(*proj.expressions[i])) {
+		if (!proj.expressions[i]->IsFoldable() && FilterCombiner::CanMatchExpression(*proj.expressions[i])) {
 			projections.emplace(*proj.expressions[i], ProjectionIndex(i));
 		}
 	}
@@ -108,21 +93,22 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 
 	vector<unique_ptr<Expression>> exported;
 	for (auto &expr : filters_expr_pullup) {
-		// Only duplicate comparisons the combiner can merge back with their originals.
-		auto compared = FilterCombiner::GetComparedExpression(*expr);
-		if (expr->HasParameter() ||
-		    (!BoundComparisonExpression::IsComparison(*expr) &&
-		     expr->GetExpressionType() != ExpressionType::COMPARE_BETWEEN) ||
-		    !compared || !CanMatchExpression(*compared)) {
+		if (!FilterCombiner::CanCopyFilter(*expr)) {
 			continue;
 		}
-		const bool match_computed = !CanRewrite(*compared, projections, false);
-		if (!match_computed || CanRewrite(*compared, projections, true)) {
+		auto compared = FilterCombiner::GetComparedExpression(*expr);
+		auto &operand = compared ? *compared : *expr;
+		const bool match_computed = !CanRewrite(operand, projections, false);
+		if (!match_computed || CanRewrite(operand, projections, true)) {
 			auto copy = expr->Copy();
 			// Keep the comparison available for inference, even when it is also a Boolean output.
-			ExpressionIterator::EnumerateChildren(*copy, [&](unique_ptr<Expression> &child) {
-				child = RewritePredicate(std::move(child), proj, projections, match_computed);
-			});
+			if (compared) {
+				ExpressionIterator::EnumerateChildren(*copy, [&](unique_ptr<Expression> &child) {
+					child = RewritePredicate(std::move(child), proj, projections, match_computed);
+				});
+			} else {
+				copy = RewritePredicate(std::move(copy), proj, projections, match_computed);
+			}
 			exported.push_back(std::move(copy));
 		}
 	}
