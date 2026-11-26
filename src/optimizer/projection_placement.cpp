@@ -929,7 +929,7 @@ void LiftTraversal::Apply(LiftPlacementGroup &group) {
 	}
 	// The rewrite supplies the complete replacement path. Traversal does not depend on the shape or
 	// number of inserted operators, and child indexes preserve progress through unaffected siblings.
-	ancestors.erase(ancestors.begin() + target_depth, ancestors.end());
+	ancestors.erase(ancestors.begin() + NumericCast<vector<PathStep>::difference_type>(target_depth), ancestors.end());
 	ancestors.insert(ancestors.end(), result.path_to_source.begin(), result.path_to_source.end());
 	column_binding_set_t inputs;
 	for (auto &dependency : group.dependencies) {
