@@ -529,10 +529,6 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	bool expect_user_repo = false;
 	ExtensionRepositoryType expected_repository_type = ExtensionRepositoryType::CORE;
 	if (!repository_name.empty()) {
-		if (ExtensionHelper::IsFullPath(extension)) {
-			error = "Cannot combine a FROM repository with a file path";
-			return false;
-		}
 		ExtensionRepository repository;
 		if (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository)) {
 			expected_repository_type = repository.type;
@@ -676,8 +672,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	auto filebase = fs.ExtractBaseName(filename);
 	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
-	// The install info tells us where the extension came from, which determines the keys that are trusted to sign it.
-	// Extensions that are loaded directly have no install info: those are verified against the core keys
+	// The origin selects the trusted keys: the install info records it, a direct load takes it from FROM (default core)
 	unique_ptr<ExtensionInstallInfo> install_info;
 	if (!direct_load) {
 		install_info = ExtensionInstallInfo::TryReadInfoFile(fs, filename + ".info", lowercase_extension_name);
@@ -707,9 +702,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		// extension_directory (a repository's served layout matches an extension directory's) from loading native code
 		// under a user-provided key.
 		bool bare_load = repository_name.empty();
-		auto recorded_origin = install_info ? install_info->repository_type : ExtensionRepositoryType::CORE;
+		auto recorded_origin = install_info ? install_info->repository_type : expected_repository_type;
 		auto trusted_origin = ExtensionHelper::ResolveTrustedSignatureOrigin(!bare_load, core_only, recorded_origin);
-		auto signing_repository_name = install_info ? install_info->repository_name : string();
+		auto signing_repository_name = install_info ? install_info->repository_name : repository_name;
 		if (trusted_origin != recorded_origin) {
 			// forced onto the core keys - the repository's own name is no longer the trust anchor
 			signing_repository_name = string();

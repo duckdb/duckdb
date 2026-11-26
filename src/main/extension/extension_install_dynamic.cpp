@@ -121,12 +121,25 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	fs.MoveFile(temp_path, local_extension_path);
 }
 
+// INSTALL '<path>' FROM <repo> is a custom path install that still records the repository, as its keys verify the file
+static void SetInstallOrigin(ExtensionInstallInfo &info, ExtensionInstallMode mode, const string &full_path,
+                             const ExtensionInstallOptions &options) {
+	info.mode = mode;
+	info.full_path = full_path;
+	if (options.repository) {
+		info.repository_url = options.repository->path;
+		info.repository_type = options.repository->type;
+		info.repository_name = options.repository->name;
+	}
+}
+
 // Install an extension using a filesystem
 static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path,
                                                                const string &temp_path, const string &extension_name,
                                                                const string &local_extension_path,
                                                                ExtensionInstallOptions &options,
-                                                               optional_ptr<ClientContext> context) {
+                                                               optional_ptr<ClientContext> context,
+                                                               ExtensionInstallMode mode) {
 	string extension;
 	string file;
 	if (fs.IsRemoteFile(path, extension)) {
@@ -183,16 +196,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 
 	CheckExtensionMetadataOnInstall(db, extension_decompressed, extension_decompressed_size, info, extension_name);
 
-	if (!options.repository) {
-		info.mode = ExtensionInstallMode::CUSTOM_PATH;
-		info.full_path = file;
-	} else {
-		info.mode = ExtensionInstallMode::REPOSITORY;
-		info.full_path = file;
-		info.repository_url = options.repository->path;
-		info.repository_type = options.repository->type;
-		info.repository_name = options.repository->name;
-	}
+	SetInstallOrigin(info, mode, file, options);
 
 	QueryContext query_context(context);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
@@ -255,7 +259,8 @@ static bool ServerUnavailable(const HTTPResponse &response) {
 static unique_ptr<ExtensionInstallInfo>
 InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extension_name, const string &temp_path,
                    const string &local_extension_path, ExtensionInstallOptions &options,
-                   optional_ptr<ClientContext> context, const string &backup_url = string()) {
+                   optional_ptr<ClientContext> context, ExtensionInstallMode mode,
+                   const string &backup_url = string()) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
 		auto &fs = FileSystem::GetLocal(db);
@@ -329,16 +334,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 		info.etag = response->GetHeaderValue("ETag");
 	}
 
-	if (options.repository) {
-		info.mode = ExtensionInstallMode::REPOSITORY;
-		info.full_path = download_url;
-		info.repository_url = options.repository->path;
-		info.repository_type = options.repository->type;
-		info.repository_name = options.repository->name;
-	} else {
-		info.mode = ExtensionInstallMode::CUSTOM_PATH;
-		info.full_path = download_url;
-	}
+	SetInstallOrigin(info, mode, download_url, options);
 
 	QueryContext query_context(context);
 	auto &fs = FileSystem::GetLocal(db);
@@ -371,12 +367,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 			HTTPUtil::BumpToSecureProtocol(backup_url);
 		}
 		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context,
-		                          backup_url);
+		                          ExtensionInstallMode::REPOSITORY, backup_url);
 	}
 
 	// Default case, let the FileSystem figure it out
 	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, options,
-	                              context);
+	                              context, ExtensionInstallMode::REPOSITORY);
 }
 
 static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
@@ -410,10 +406,6 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
                                                           ExtensionInstallOptions &options,
                                                           optional_ptr<ClientContext> context) {
 	auto extension_name = ExtensionHelper::ApplyExtensionAlias(fs.ExtractBaseName(extension));
-
-	if (ExtensionHelper::IsFullPath(extension) && options.repository) {
-		throw InvalidInputException("Cannot pass both a repository and a full path url");
-	}
 
 	// Resolve default repository if there is none set
 	ExtensionRepository resolved_repository;
@@ -461,11 +453,12 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
 	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
 		auto &local_fs = FileSystem::GetLocal(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
-		                              context);
+		                              context, ExtensionInstallMode::CUSTOM_PATH);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
-	if (options.repository && !FileSystem::IsRemoteFile(options.repository->path)) {
+	if (!ExtensionHelper::IsFullPath(extension) && options.repository &&
+	    !FileSystem::IsRemoteFile(options.repository->path)) {
 		auto &local_fs = FileSystem::GetLocal(db);
 		return InstallFromRepository(db, local_fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);
@@ -479,11 +472,13 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
 	if (ExtensionHelper::IsFullPath(extension)) {
 		if (StringUtil::StartsWith(extension, "http://")) {
 			// HTTP takes separate path to avoid dependency on httpfs extension
-			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options, context);
+			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options, context,
+			                          ExtensionInstallMode::CUSTOM_PATH);
 		}
 
 		// Direct installation from local or remote path
-		return DirectInstallExtension(db, fs, extension, temp_path, extension, local_extension_path, options, context);
+		return DirectInstallExtension(db, fs, extension, temp_path, extension, local_extension_path, options, context,
+		                              ExtensionInstallMode::CUSTOM_PATH);
 	}
 
 	// Repository installation
