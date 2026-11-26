@@ -272,6 +272,8 @@ static const vector<string> &SQLiteLogicTestExcludes() {
 	    "test/random/expr/slt_good_80.test", "test/random/expr/slt_good_75.test", "test/random/expr/slt_good_42.test",
 	    "test/random/expr/slt_good_49.test", "test/random/expr/slt_good_24.test", "test/random/expr/slt_good_30.test",
 	    "test/random/expr/slt_good_8.test", "test/random/expr/slt_good_61.test",
+	    // comparing a BLOB with an INTEGER requires an explicit cast
+	    "evidence/in1.test",
 	    // dependencies between tables/views prevent dropping in DuckDB without CASCADE
 	    "test/index/view/1000/slt_good_0.test", "test/index/view/100/slt_good_0.test",
 	    "test/index/view/100/slt_good_5.test", "test/index/view/100/slt_good_1.test",
