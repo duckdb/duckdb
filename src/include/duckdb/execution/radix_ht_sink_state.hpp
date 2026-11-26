@@ -109,9 +109,6 @@ public:
 	idx_t GetThreadLimit() const {
 		return temporary_memory_state->GetReservation() / number_of_threads / 10 * 8;
 	}
-	//! Reservation share for the arena's export decision: with a spill plan and memory to spare, only the threads
-	//! that sink share the reservation
-	idx_t ThreadReservation() const;
 	//! Whether the aggregate arena alone approaches the thread memory limit
 	bool StatePressureExceeded(GroupedAggregateHashTable &ht) const;
 	//! HT size without the arena when there is no spill plan: the arena then stays in memory whatever the sink does

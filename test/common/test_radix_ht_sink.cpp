@@ -194,14 +194,14 @@ TEST_CASE("Increasing the reservation preserves an underfull aggregate table", "
 }
 
 TEST_CASE("Arena pressure requests enough reservation to keep aggregate states resident", "[radix_ht_sink]") {
-	for (const idx_t other_workers : {0, 1, 3}) {
-		CAPTURE(other_workers);
+	for (const bool combine_other_worker : {false, true}) {
+		CAPTURE(combine_other_worker);
 		RadixSinkFixture fixture("1GB", true);
 		fixture.Keys(0, STANDARD_VECTOR_SIZE);
 		fixture.Sink();
-		for (idx_t i = 1; i <= other_workers; i++) {
-			fixture.Sink(i);
-			fixture.Combine(i);
+		if (combine_other_worker) {
+			fixture.Sink(1);
+			fixture.Combine(1);
 		}
 		auto &local = fixture.Local();
 		auto &global = fixture.Global();
@@ -214,15 +214,10 @@ TEST_CASE("Arena pressure requests enough reservation to keep aggregate states r
 		const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
 		REQUIRE(arena_size * 5 > total_size * 4);
 		REQUIRE(ht.Count() + STANDARD_VECTOR_SIZE < ht.ResizeThreshold());
-		const idx_t sinking_threads = 1 + other_workers;
-		global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(fixture.con.context->GetContext(),
-		                                                                    3 * sinking_threads * total_size / 2);
-		// only the threads that sink share the reservation
-		REQUIRE(global.ThreadReservation() == global.temporary_memory_state->GetReservation() / sinking_threads);
+		global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(
+		    fixture.con.context->GetContext(), 3 * global.number_of_threads * total_size / 2);
 		const auto old_limit = global.GetThreadLimit();
-		if (sinking_threads == global.number_of_threads) {
-			REQUIRE(total_size <= old_limit);
-		}
+		REQUIRE(total_size <= old_limit);
 		REQUIRE(global.StatePressureExceeded(ht));
 
 		fixture.SetPayload(Value(LogicalType::VARCHAR));
@@ -239,22 +234,6 @@ TEST_CASE("Arena pressure requests enough reservation to keep aggregate states r
 	}
 }
 
-TEST_CASE("The arena export decision shares the reservation among the sinking threads only", "[radix_ht_sink]") {
-	RadixSinkFixture fixture("1GB", true);
-	fixture.Keys(0, STANDARD_VECTOR_SIZE);
-	fixture.Sink();
-	auto &global = fixture.Global();
-	auto &ht = *fixture.Local().ht;
-	fixture.SetPayload(Value(string(8 * 1024 * 1024 / STANDARD_VECTOR_SIZE, 'p')));
-	ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
-	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
-	global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(fixture.con.context->GetContext(),
-	                                                                    5 * arena_size);
-	// the arena exceeds an even split over all threads, but not the share of the single sinking thread
-	REQUIRE(arena_size > global.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR);
-	REQUIRE_FALSE(global.StatePressureExceeded(ht));
-}
-
 TEST_CASE("Arena pressure still exports when the reservation cannot grow enough", "[radix_ht_sink]") {
 	for (const bool force_external : {false, true}) {
 		CAPTURE(force_external);
@@ -264,10 +243,6 @@ TEST_CASE("Arena pressure still exports when the reservation cannot grow enough"
 		}
 		fixture.Keys(0, STANDARD_VECTOR_SIZE);
 		fixture.Sink();
-		// every thread sinks, so the reservation is split evenly
-		for (idx_t i = 1; i < 4; i++) {
-			fixture.Sink(i);
-		}
 		auto &local = fixture.Local();
 		auto &global = fixture.Global();
 		auto &ht = *local.ht;
@@ -284,9 +259,7 @@ TEST_CASE("Arena pressure still exports when the reservation cannot grow enough"
 		REQUIRE(local.spilling);
 		REQUIRE_FALSE(local.abandoned_exported_data.empty());
 		REQUIRE(ht.GetAggregateAllocator()->AllocationSize() == 0);
-		for (idx_t i = 0; i < 4; i++) {
-			fixture.Combine(i);
-		}
+		fixture.Combine(0);
 		REQUIRE(fixture.ScanGroupCount(payload) == STANDARD_VECTOR_SIZE);
 	}
 }

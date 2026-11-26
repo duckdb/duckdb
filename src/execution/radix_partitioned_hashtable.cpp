@@ -15,7 +15,6 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
@@ -606,23 +605,9 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 	                                         MemoryTag::HASH_TABLE, radix_bits, hash_col_idx, context);
 }
 
-idx_t RadixHTGlobalSinkState::ThreadReservation() const {
-	const auto reservation = temporary_memory_state->GetReservation();
-	const auto share = reservation / number_of_threads;
-	const auto sinking_threads = MaxValue<idx_t>(MinValue<idx_t>(number_of_threads, active_threads.load()), 1);
-	if (!spill_plan || external || sinking_threads == number_of_threads) {
-		return share;
-	}
-	// The sinking threads take a larger share, as far as it fits in half the memory limit
-	const auto used = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-	const auto budget = memory_limit / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
-	const auto extra = reservation / sinking_threads - share;
-	return share + (used < budget ? MinValue(extra, budget - used) : 0);
-}
-
 bool RadixHTGlobalSinkState::StatePressureExceeded(GroupedAggregateHashTable &ht) const {
 	return ht.GetAggregateAllocator()->AllocationSize() >
-	       ThreadReservation() / 10 * 8 / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
+	       GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
 }
 
 idx_t RadixHTGlobalSinkState::SpillableSize(GroupedAggregateHashTable &ht) const {
