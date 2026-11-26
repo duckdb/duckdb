@@ -284,3 +284,60 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 6);
 	}
 }
+
+TEST_CASE("Queries planned before another connection of a shared transaction writes read its rows consistently",
+          "[api][transaction]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	Connection filtered(db);
+	Connection ordered(db);
+	Connection nulls(db);
+	// no background threads: the submitted queries only run when they are completed
+	REQUIRE_NO_FAIL(con1.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT, b VARCHAR)"));
+	REQUIRE_NO_FAIL(con1.Query("INSERT INTO s SELECT i, 'v' || i FROM range(5) t(i)"));
+	REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con1.Query("INSERT INTO s SELECT i, 'v' || i FROM range(5, 10) t(i)"));
+	auto share_id = ShareTransaction(con1);
+	for (auto con : {&filtered, &ordered, &nulls}) {
+		REQUIRE_NO_FAIL(con->Query("JOIN TRANSACTION '" + share_id + "'"));
+	}
+
+	auto filtered_result = filtered.Submit("SELECT count(*) FROM s WHERE a < 100");
+	auto ordered_result = ordered.Submit("SELECT a, b FROM s ORDER BY a DESC LIMIT 1");
+	auto nulls_result = nulls.Submit("SELECT count(*) FROM s WHERE a IS NULL");
+	REQUIRE_NO_FAIL(con1.Query("INSERT INTO s SELECT i, 'v' || i FROM range(1000, 4000) t(i)"));
+	REQUIRE_NO_FAIL(con1.Query("INSERT INTO s VALUES (NULL, NULL)"));
+	REQUIRE_NO_FAIL(con1.Query("UPDATE s SET a = a + 10000 WHERE a = 3"));
+
+	filtered_result->Complete();
+	REQUIRE(CHECK_COLUMN(filtered_result, 0, {Value::BIGINT(9)}));
+	ordered_result->Complete();
+	REQUIRE(CHECK_COLUMN(ordered_result, 0, {Value::BIGINT(10003)}));
+	REQUIRE(CHECK_COLUMN(ordered_result, 1, {"v3"}));
+	nulls_result->Complete();
+	REQUIRE(CHECK_COLUMN(nulls_result, 0, {Value::BIGINT(1)}));
+	for (auto con : {&nulls, &ordered, &filtered, &con1}) {
+		REQUIRE_NO_FAIL(con->Query("COMMIT"));
+	}
+}
+
+TEST_CASE("Closing a connection leaves the shared transaction while its results are outstanding",
+          "[api][transaction]") {
+	DuckDB db(nullptr);
+	Connection joined(db);
+	auto owner = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(owner->Query("CREATE TABLE t(i INTEGER)"));
+	REQUIRE_NO_FAIL(owner->Query("BEGIN"));
+	REQUIRE_NO_FAIL(owner->Query("INSERT INTO t VALUES (1)"));
+	auto share_id = ShareTransaction(*owner);
+	REQUIRE_NO_FAIL(joined.Query("JOIN TRANSACTION '" + share_id + "'"));
+	auto pending = owner->Submit("SELECT * FROM range(1000000)");
+	owner.reset();
+	// the closed connection voted to roll back and the joined connection is the last participant
+	REQUIRE_FAIL(joined.Query("COMMIT"));
+	pending.reset();
+	RequireValue(joined, "SELECT count(*) FROM t", 0);
+	// the transaction ended: the identifier can no longer be joined
+	REQUIRE_FAIL(joined.Query("JOIN TRANSACTION '" + share_id + "'"));
+}

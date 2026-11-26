@@ -39,6 +39,11 @@ shared_ptr<MetaTransaction> TransactionContext::GetSharedTransaction(const strin
 	return nullptr;
 }
 
+bool TransactionContext::IsInSharedTransaction() {
+	lock_guard<mutex> guard(current_transaction_lock);
+	return current_transaction && current_transaction->IsShared();
+}
+
 TransactionContext::~TransactionContext() {
 }
 

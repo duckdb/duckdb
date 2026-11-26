@@ -62,6 +62,8 @@ public:
 	//! The current transaction if it was shared under the given identifier, otherwise null.
 	//! Safe to call from other connections.
 	shared_ptr<MetaTransaction> GetSharedTransaction(const string &share_id);
+	//! Whether the current transaction is shared with other connections. Safe to call from other threads.
+	bool IsInSharedTransaction();
 
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();

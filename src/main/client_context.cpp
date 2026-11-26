@@ -237,6 +237,19 @@ void ClientContext::Destroy() {
 	CleanupInternal(lock);
 }
 
+void ClientContext::LeaveSharedTransaction() {
+	if (Exception::UncaughtException() || !transaction.IsInSharedTransaction()) {
+		return;
+	}
+	try {
+		Destroy();
+	} catch (...) {
+		// the transaction cannot be left while the active query may still be running
+		return;
+	}
+	RollbackActiveTransaction();
+}
+
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
 	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
