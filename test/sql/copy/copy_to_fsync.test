@@ -83,7 +83,8 @@ statement ok
 COPY (SELECT 43 AS i) TO '{TEST_DIR}/fsync_single.parquet' (FSYNC)
 
 query I
-SELECT list(replace(path, '{TEST_DIR}', 'TEST_DIR') ORDER BY timestamp) FROM duckdb_logs_parsed('FileSystem') WHERE op = 'SYNC'
+SELECT list(replace(path, '{TEST_DIR}', 'TEST_DIR') ORDER BY timestamp)
+FROM duckdb_logs_parsed('FileSystem') WHERE op = 'SYNC'
 ----
 [TEST_DIR/tmp_fsync_single.parquet, TEST_DIR]
 
