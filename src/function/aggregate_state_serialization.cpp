@@ -236,7 +236,7 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 	case AggregateFieldKind::SORT_KEY: {
 		Vector sort_keys(LogicalType::BLOB);
 		CreateSortKeyHelpers::CreateSortKey(
-		    input_vec, count, OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST), sort_keys);
+		    input_vec, count, OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST), sort_keys, false);
 		auto *key_data = FlatVector::GetData<string_t>(sort_keys);
 		const auto validity = input_vec.Validity();
 		for (idx_t i = 0; i < count; i++) {
@@ -303,7 +303,7 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 			const OrderModifiers modifiers(element.sort_key_order, OrderByNullType::NULLS_LAST);
 			// the result must be sized for the full (possibly larger than standard) child up front
 			encoded_child = make_uniq<Vector>(LogicalType::BLOB, MaxValue<idx_t>(child_count, 1));
-			CreateSortKeyHelpers::CreateSortKey(logical_child, child_count, modifiers, *encoded_child);
+			CreateSortKeyHelpers::CreateSortKey(logical_child, child_count, modifiers, *encoded_child, false);
 			physical_child = *encoded_child;
 		}
 

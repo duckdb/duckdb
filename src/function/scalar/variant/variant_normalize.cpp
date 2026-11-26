@@ -188,8 +188,11 @@ void VariantNormalizer::VisitDefault(const LogicalType &type, const_data_ptr_t, 
 }
 
 void VariantNormalizer::Normalize(const Vector &variant_vec, Vector &result) {
+	Normalize(variant_vec, result, variant_vec.size());
+}
+
+void VariantNormalizer::Normalize(const Vector &variant_vec, Vector &result, idx_t count) {
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
-	const idx_t count = variant_vec.size();
 
 	//! Set up the access helper for the source VARIANT
 	RecursiveUnifiedVectorFormat source_format;
