@@ -53,23 +53,29 @@ CREATE TABLE rn_bind_a AS SELECT * FROM (VALUES (10, 'a'), (20, NULL), (30, 'c')
 statement ok
 CREATE TABLE rn_bind_b AS SELECT * FROM (VALUES (40, 'd'), (50, 'e')) t(k, label);
 
-query III
-SELECT sum(n), sum(n * 10 + k), count(label)
+query IIT
+SELECT n, k, label
 FROM (
     SELECT rn AS n, k, label FROM (SELECT label, row_number() OVER () AS rn, k FROM rn_bind_a)
     UNION ALL
     SELECT rn AS n, k, label FROM (SELECT k, row_number() OVER () AS rn, label FROM rn_bind_b)
-) u;
+) u
+ORDER BY k;
 ----
-9	240	4
+1	10	a
+2	20	NULL
+3	30	c
+1	40	d
+2	50	e
 
 query II
-EXPLAIN SELECT sum(n), sum(n * 10 + k), count(label)
+EXPLAIN SELECT n, k, label
 FROM (
     SELECT rn AS n, k, label FROM (SELECT label, row_number() OVER () AS rn, k FROM rn_bind_a)
     UNION ALL
     SELECT rn AS n, k, label FROM (SELECT k, row_number() OVER () AS rn, label FROM rn_bind_b)
-) u;
+) u
+ORDER BY k;
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
