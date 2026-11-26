@@ -45,11 +45,10 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 	}
 	QueryResultStream<> stream(std::move(submitted));
 	auto &types = stream.GetTypes();
-	if ((types.size() != 3 && types.size() != 4) || types[0].id() != LogicalTypeId::BIGINT ||
-	    types[1].id() != LogicalTypeId::BIGINT || types[2].id() != LogicalTypeId::BIT ||
-	    (types.size() == 4 && types[3].id() != LogicalTypeId::BIGINT)) {
+	if (types.size() != 3 || types[0].id() != LogicalTypeId::BIGINT || types[1].id() != LogicalTypeId::BIGINT ||
+	    types[2].id() != LogicalTypeId::BIT) {
 		throw InvalidInputException("The filter query of file %s must return (row_start BIGINT, row_end BIGINT, bits "
-		                            "BIT[, row_value BIGINT])",
+		                            "BIT)",
 		                            path);
 	}
 	while (auto chunk = stream.Fetch()) {
@@ -71,25 +70,14 @@ static uint8_t ReverseBits(uint8_t value) {
 	return value;
 }
 
-void TableFunctionQueryFilter::AddValue(idx_t row_start, idx_t row_end, int64_t value) {
-	scan_values.push_back(ScanValue {row_start, row_end, value});
-}
-
 void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
 	auto starts = chunk.data[0].Values<int64_t>();
 	auto ends = chunk.data[1].Values<int64_t>();
 	auto bitmaps = chunk.data[2].Values<string_t>();
-	optional_ptr<VectorIterator<int64_t>> row_values;
-	unique_ptr<VectorIterator<int64_t>> values_holder;
-	if (chunk.ColumnCount() == 4) {
-		values_holder = make_uniq<VectorIterator<int64_t>>(chunk.data[3]);
-		row_values = values_holder.get();
-	}
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto row_start = starts[i];
 		auto row_end = ends[i];
 		auto bitmap = bitmaps[i];
-		bool has_value = row_values && (*row_values)[i].IsValid();
 		if (bitmap.IsValid()) {
 			if (row_start.IsValid() && row_start.GetValue() < 0) {
 				throw InvalidInputException("The filter query of file %s returns a bitmap that starts before the file",
@@ -98,10 +86,6 @@ void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
 			auto bits = bitmap.GetValue();
 			auto window_start = row_start.IsValid() ? NumericCast<idx_t>(row_start.GetValue()) : 0;
 			AddWindow(window_start, bits.GetData(), bits.GetSize());
-			if (has_value && bits.GetSize() > 1) {
-				auto bit_count = (bits.GetSize() - 1) * 8 - static_cast<uint8_t>(bits.GetData()[0]);
-				AddValue(window_start, window_start + bit_count, (*row_values)[i].GetValue());
-			}
 			continue;
 		}
 		idx_t range_start = 0;
@@ -117,9 +101,6 @@ void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
 		}
 		if (range_start < range_end) {
 			scan_ranges.emplace_back(range_start, range_end);
-			if (has_value) {
-				AddValue(range_start, range_end, (*row_values)[i].GetValue());
-			}
 		}
 	}
 }
@@ -202,41 +183,6 @@ void TableFunctionQueryFilter::Finalize() {
 		}
 	}
 	scan_words = std::move(merged_words);
-
-	stable_sort(scan_values.begin(), scan_values.end(),
-	            [](const ScanValue &lhs, const ScanValue &rhs) { return lhs.start < rhs.start; });
-}
-
-bool TableFunctionQueryFilter::HasRowValues() const {
-	return !scan_values.empty();
-}
-
-void TableFunctionQueryFilter::GatherRowValues(const Vector &file_row_numbers, Vector &result, idx_t count) {
-	if (scan_values.empty()) {
-		return;
-	}
-	result.Flatten();
-	auto result_data = FlatVector::GetDataMutable<int64_t>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
-	auto row_numbers = file_row_numbers.Values<int64_t>();
-	for (idx_t i = 0; i < count; i++) {
-		auto row_number = row_numbers[i];
-		if (!row_number.IsValid() || row_number.GetValue() < 0) {
-			continue;
-		}
-		auto row = NumericCast<idx_t>(row_number.GetValue());
-		// the last value that starts at or before the row
-		auto entry = std::upper_bound(scan_values.begin(), scan_values.end(), row,
-		                              [](idx_t row_idx, const ScanValue &value) { return row_idx < value.start; });
-		if (entry == scan_values.begin()) {
-			continue;
-		}
-		--entry;
-		if (row < entry->end) {
-			result_data[i] = entry->value;
-			result_validity.SetValid(i);
-		}
-	}
 }
 
 //! The bits [begin, end) of a word, where begin < end <= 64
