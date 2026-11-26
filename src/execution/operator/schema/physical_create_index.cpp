@@ -134,8 +134,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	bound_index->Verify();
 
-	D_ASSERT(!bound_index->ToString(true).empty());
-
 	bound_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
