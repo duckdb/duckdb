@@ -212,6 +212,14 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
 	return AttachedDatabase::TryGetReference(connected_to_database);
 }
 
+ConnectedInputLanguage ClientContext::GetConnectedInputLanguage() const {
+	auto target = TryGetConnectedCatalog();
+	if (!target) {
+		return ConnectedInputLanguage::DEFAULT;
+	}
+	return target->GetCatalog().GetConnectedInputLanguage();
+}
+
 //! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
 //! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
 static bool IsConnectControlStatement(StatementType type) {

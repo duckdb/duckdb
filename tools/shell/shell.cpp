@@ -59,6 +59,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -2910,7 +2911,19 @@ static bool line_contains_semicolon(const char *z, idx_t N) {
 }
 
 /*
-** Test to see if a line consists entirely of whitespace.
+** Test to see if a line consists entirely of whitespace characters.
+*/
+static bool only_whitespace(const char *z) {
+	for (; *z; z++) {
+		if (!ShellState::IsSpace(*z)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/*
+** Test to see if a line consists entirely of whitespace and SQL comments.
 */
 static bool _all_whitespace(const char *z) {
 	for (; *z; z++) {
@@ -2952,6 +2965,33 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	}
 	auto parser = duckdb::Parser::GetBuiltinParser();
 	return parser.IsQueryComplete(zSql);
+}
+
+const ShellLineRules &ShellState::GetLineRules() {
+	// The line-rules table: how the shell handles typed input, per input language of the CONNECT-ed
+	// catalog (ClientContext::GetConnectedInputLanguage).
+	//
+	// DEFAULT keeps today's behaviour in full. Under NATURAL_TEXT what is typed is not SQL, so each
+	// line is one message: Enter submits it whole (no ';' needed, no completeness check), '#...' is
+	// text rather than a comment, and SQL highlighting, tab completion and auto-formatting are off.
+	// '.command' still runs a shell meta-command - the escape hatch that keeps .exit and friends
+	// reachable - and '..text' sends a literal '.text'. A blank line is not sent in any language,
+	// and Ctrl-D still disconnects.
+	//
+	//                                                enter   hash is  sql cmts  dot-dot  sql        sql       sql
+	//                                                submits comment  blank     escapes  highlight  complete  format
+	static constexpr ShellLineRules default_rules = {false, true, true, false, true, true, true};
+	static constexpr ShellLineRules natural_text_rules = {true, false, false, true, false, false, false};
+	auto &state = ShellState::Get();
+	if (!state.conn || !state.conn->context) {
+		return default_rules;
+	}
+	switch (state.conn->context->GetConnectedInputLanguage()) {
+	case duckdb::ConnectedInputLanguage::NATURAL_TEXT:
+		return natural_text_rules;
+	default:
+		return default_rules;
+	}
 }
 
 void ShellState::ShellAddHistory(const char *history) {
@@ -3101,13 +3141,18 @@ int ShellState::ProcessInput(InputMode mode) {
 			mode = InputMode::FILE;
 		}
 		lineno++;
-		if (nSql == 0 && _all_whitespace(zLine)) {
+		auto &rules = GetLineRules();
+		if (nSql == 0 && (rules.sql_comments_are_blank ? _all_whitespace(zLine) : only_whitespace(zLine))) {
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zLine);
 			}
 			continue;
 		}
-		if ((zLine[0] == '.' || zLine[0] == '#') && nSql == 0) {
+		const char *zInput = zLine;
+		if (nSql == 0 && zInput[0] == '.' && zInput[1] == '.' && rules.dot_dot_escapes) {
+			// '..text' submits a literal '.text'
+			zInput++;
+		} else if ((zLine[0] == '.' || (zLine[0] == '#' && rules.hash_is_comment)) && nSql == 0) {
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zLine);
 			}
@@ -3124,7 +3169,7 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			continue;
 		}
-		nLine = StringLength(zLine);
+		nLine = StringLength(zInput);
 		if (nSql + nLine + 2 >= nAlloc) {
 			nAlloc = nSql + nLine + 100;
 			auto new_sql = (char *)realloc(zSql, nAlloc);
@@ -3136,17 +3181,18 @@ int ShellState::ProcessInput(InputMode mode) {
 		nSqlPrior = nSql;
 		if (nSql == 0) {
 			int i;
-			for (i = 0; zLine[i] && IsSpace(zLine[i]); i++) {
+			for (i = 0; zInput[i] && IsSpace(zInput[i]); i++) {
 			}
 			assert(nAlloc > 0 && zSql);
-			memcpy(zSql, zLine + i, nLine + 1 - i);
+			memcpy(zSql, zInput + i, nLine + 1 - i);
 			nSql = nLine - i;
 		} else {
 			zSql[nSql++] = '\n';
-			memcpy(zSql + nSql, zLine, nLine + 1);
+			memcpy(zSql + nSql, zInput, nLine + 1);
 			nSql += nLine;
 		}
-		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql)) {
+		if (nSql && (rules.enter_submits ||
+		             (line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql)))) {
 			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {
@@ -3280,6 +3326,10 @@ static char *linenoise_format(const char *zLine) {
 	if (zLine[0] == '.' || zLine[0] == '#' || zLine[0] == '\3') {
 		return nullptr;
 	}
+	if (!ShellState::GetLineRules().sql_formatting) {
+		// what is typed for the connected catalog is not SQL: no SQL auto-formatting
+		return nullptr;
+	}
 	try {
 		auto prepared = state.conn->Prepare("SELECT duckdb_format_sql($1)");
 		if (prepared->HasError()) {
@@ -3313,6 +3363,10 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			return;
 		}
 		if (zLine[0] == '#') {
+			return;
+		}
+		if (!ShellState::GetLineRules().sql_completion) {
+			// what is typed for the connected catalog is not SQL: no SQL completion
 			return;
 		}
 		auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));

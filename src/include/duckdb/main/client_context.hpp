@@ -40,6 +40,7 @@ class Logger;
 class Appender;
 class AttachedDatabase;
 class Catalog;
+enum class ConnectedInputLanguage : uint8_t;
 class CatalogSearchPath;
 class ColumnDataCollection;
 class DatabaseInstance;
@@ -150,6 +151,9 @@ public:
 	//! target has been detached out from under us (in that case IsConnected() is still true — call it
 	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
 	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
+	//! The input language declared by the CONNECT-ed catalog; see ConnectedInputLanguage. DEFAULT
+	//! when not connected (or when the target has been detached out from under us).
+	DUCKDB_API ConnectedInputLanguage GetConnectedInputLanguage() const;
 
 	bool HasActiveTransaction() const {
 		return transaction.HasActiveTransaction();

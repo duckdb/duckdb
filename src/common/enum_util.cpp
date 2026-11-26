@@ -1597,6 +1597,24 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConnectedInputLanguageValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectedInputLanguage::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ConnectedInputLanguage::NATURAL_TEXT), "NATURAL_TEXT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectedInputLanguage>(ConnectedInputLanguage value) {
+	return StringUtil::EnumToString(GetConnectedInputLanguageValues(), 2, "ConnectedInputLanguage", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectedInputLanguage EnumUtil::FromString<ConnectedInputLanguage>(const char *value) {
+	return static_cast<ConnectedInputLanguage>(StringUtil::StringToEnum(GetConnectedInputLanguageValues(), 2, "ConnectedInputLanguage", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConnectionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConnectionType::USER), "USER" },

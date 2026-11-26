@@ -80,6 +80,27 @@ enum class PrintOutput { STDOUT, STDERR };
 
 enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
+//! How the shell handles input lines, one row per input language of the CONNECT-ed catalog
+//! (duckdb::ConnectedInputLanguage). The active row comes from ShellState::GetLineRules().
+struct ShellLineRules {
+	//! Enter submits the input whole: no ';' required and no statement-completeness check
+	bool enter_submits;
+	//! a line whose first character is '#' is a comment (dropped) instead of input
+	bool hash_is_comment;
+	//! a line that holds only SQL comments ('-- ...', '/* ... */') counts as blank; blank lines are
+	//! never submitted in any language
+	bool sql_comments_are_blank;
+	//! a line starting with '..' submits the text with one leading '.' stripped, so text that starts
+	//! with a '.' can be sent (a line with a single leading '.' always runs a shell meta-command)
+	bool dot_dot_escapes;
+	//! SQL syntax highlighting of the prompt input
+	bool sql_highlighting;
+	//! SQL tab completion of the prompt input
+	bool sql_completion;
+	//! SQL auto-formatting of the prompt input on submission
+	bool sql_formatting;
+};
+
 enum class OutputCommand { OUTPUT, ONCE, EXCEL };
 
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
@@ -451,6 +472,8 @@ public:
 	int ProcessInput(InputMode mode);
 	bool GetBailOnError(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
+	//! The line rules for the input language of the CONNECT-ed catalog; see the table in GetLineRules
+	static const ShellLineRules &GetLineRules();
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
 	static int64_t StringToInt(const string &arg);
