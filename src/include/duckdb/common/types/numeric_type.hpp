@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 class Value;
@@ -20,6 +21,8 @@ class Value;
 struct NumericType {
 	//! The widest value a NUMERIC holds, in decimal digits
 	static constexpr uint32_t MAX_WIDTH = 255;
+	//! The storage version that stores NUMERIC: the engines before it bind the type name as DECIMAL(18,3)
+	static constexpr StorageVersion VERSION_ADDED = StorageVersion::V2_1_0;
 
 	//! Whether values of this type can be stored in a NUMERIC column without loss (integers and decimals)
 	DUCKDB_API static bool IsExact(const LogicalType &type);

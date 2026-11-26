@@ -4,7 +4,7 @@
 
 # range, whole numbers round to themselves, wide decimals round exactly
 
-load {TEST_DIR}/numeric_kernel_contract.db
+load {TEST_DIR}/numeric_kernel_contract.db readwrite latest
 
 # the alternative verification delivers scanned NUMERIC values as canonical blobs: the representations asserted here
 # are those of the regular scan

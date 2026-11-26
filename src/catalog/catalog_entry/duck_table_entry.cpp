@@ -106,16 +106,16 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	auto &storage_manager = catalog.GetAttached().GetStorageManager();
 	for (auto &col_def : columns.Logical()) {
 		if (col_def.Generated()) {
-			storage_manager.CheckDecimalWidthIsSupported(col_def.Type());
-			storage_manager.CheckExpressionDecimalsAreSupported(col_def.GeneratedExpression());
+			storage_manager.CheckCatalogTypeIsSupported(col_def.Type());
+			storage_manager.CheckExpressionTypesAreSupported(col_def.GeneratedExpression());
 		}
 		if (col_def.HasDefaultValue()) {
-			storage_manager.CheckExpressionDecimalsAreSupported(col_def.DefaultValue());
+			storage_manager.CheckExpressionTypesAreSupported(col_def.DefaultValue());
 		}
 	}
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
-			storage_manager.CheckExpressionDecimalsAreSupported(*constraint->Cast<CheckConstraint>().expression);
+			storage_manager.CheckExpressionTypesAreSupported(*constraint->Cast<CheckConstraint>().expression);
 		}
 	}
 

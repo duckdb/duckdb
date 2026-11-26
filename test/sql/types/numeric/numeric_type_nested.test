@@ -2,7 +2,7 @@
 # description: NUMERIC nested in LIST, STRUCT, MAP and ARRAY columns
 # group: [numeric]
 
-load {TEST_DIR}/numeric_type_nested.db
+load {TEST_DIR}/numeric_type_nested.db readwrite latest
 
 #----------------------------------------------------------------------------------------------------------------------
 # lists

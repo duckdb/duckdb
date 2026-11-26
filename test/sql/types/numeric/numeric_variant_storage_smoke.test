@@ -2,7 +2,7 @@
 # description: NUMERIC columns: the row group representation follows the values, scans deliver it
 # group: [numeric]
 
-load {TEST_DIR}/numeric_variant_storage_smoke.db
+load {TEST_DIR}/numeric_variant_storage_smoke.db readwrite latest
 
 # the storage layout the test asserts (one row group holding every row) depends on the vector size: with tiny vectors the
 # re-inserted row of the update is moved into its own row group instead of being copied into the last one

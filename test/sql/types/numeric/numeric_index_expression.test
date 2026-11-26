@@ -2,7 +2,7 @@
 # description: NUMERIC arithmetic in index expressions, which run without a client context
 # group: [numeric]
 
-load {TEST_DIR}/numeric_index_expression.db
+load {TEST_DIR}/numeric_index_expression.db readwrite latest
 
 statement ok
 CREATE TABLE prod(a NUMERIC, b NUMERIC);

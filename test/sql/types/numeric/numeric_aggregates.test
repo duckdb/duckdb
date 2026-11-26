@@ -2,7 +2,7 @@
 # description: min/max/first/last/any_value over NUMERIC work on the run-time representation of their input
 # group: [numeric]
 
-load {TEST_DIR}/numeric_aggregates.db
+load {TEST_DIR}/numeric_aggregates.db readwrite latest
 
 # the typed reference: the same values in the representation they get stored in
 statement ok

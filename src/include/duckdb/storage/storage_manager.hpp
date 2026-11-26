@@ -150,16 +150,19 @@ public:
 	void CheckTypeIsSupported(const LogicalType &type) const;
 	//! Whether a type holds a DECIMAL stored as a BIGNUM blob, the argument types of aggregate states included
 	static bool ContainsWideDecimal(const LogicalType &type);
-	//! Why a type written to the catalog holds a DECIMAL wider than this storage version stores, empty when it does
-	//! not; the subject names what is stored (columns, index keys)
-	string GetUnsupportedDecimalWidthReason(const LogicalType &type, const string &subject = "columns") const;
-	//! Throws when a type written to the catalog holds a DECIMAL wider than this storage version stores
-	void CheckDecimalWidthIsSupported(const LogicalType &type) const;
-	//! Throws when a stored expression casts to a DECIMAL wider than this storage version stores: below v2.0.0 a CAST
-	//! serializes its target as a LogicalType, which the engines of that version read as a fixed-size decimal
-	void CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const;
+	//! Whether a type holds a NUMERIC, the argument types of aggregate states included
+	static bool ContainsNumeric(const LogicalType &type);
+	//! Why a type written to the catalog holds a type this storage version does not store (a DECIMAL wider than 38
+	//! digits, a NUMERIC), empty when it does not; the subject names what is stored (columns, index keys)
+	string GetUnsupportedCatalogTypeReason(const LogicalType &type, const string &subject = "columns") const;
+	//! Throws when a type written to the catalog holds a type this storage version does not store
+	void CheckCatalogTypeIsSupported(const LogicalType &type) const;
+	//! Throws when a stored expression casts to a type the engines of this storage version read otherwise: below
+	//! v2.0.0 a CAST serializes its target as a LogicalType, which those engines cannot read when it is a wide DECIMAL;
+	//! from v2.0.0 on it serializes the type name, which the engines before NUMERIC bind as DECIMAL(18,3)
+	void CheckExpressionTypesAreSupported(const ParsedExpression &expression) const;
 	//! The same check over every expression of a stored query (a view or a table macro)
-	void CheckQueryDecimalsAreSupported(QueryNode &node) const;
+	void CheckQueryTypesAreSupported(QueryNode &node) const;
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}

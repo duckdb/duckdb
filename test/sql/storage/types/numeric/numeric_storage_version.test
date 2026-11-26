@@ -1,49 +1,68 @@
 # name: test/sql/storage/types/numeric/numeric_storage_version.test
-# description: NUMERIC columns require storage version v2.0.0
+# description: NUMERIC columns require storage version v2.1.0, the engines before it bind the type name as DECIMAL(18,3)
 # group: [numeric]
 
-statement ok
-attach '{TEST_DIR}/numeric_old.db' (STORAGE_VERSION 'v1.4.4');
+foreach version v1.4.4 v2.0.0
 
 statement ok
-use numeric_old;
+attach '{TEST_DIR}/numeric_old_{version}.db' AS numeric_old (STORAGE_VERSION '{version}');
 
 statement error
-create table t1 (n NUMERIC);
+create table numeric_old.t1 (n NUMERIC);
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
 statement error
-create table t2 as select '1'::NUMERIC n;
+create table numeric_old.t2 as select '1'::NUMERIC n;
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
 statement ok
-create table t3 (i INT);
+create table numeric_old.t3 (i INT);
 
 statement error
-alter table t3 add column n NUMERIC;
+alter table numeric_old.t3 add column n NUMERIC;
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
 statement error
-alter table t3 alter column i set type NUMERIC;
+alter table numeric_old.t3 alter column i set type NUMERIC;
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
 statement error
-create table t4 (s STRUCT(n NUMERIC));
+create table numeric_old.t4 (s STRUCT(n NUMERIC));
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
 statement error
-create table t5 (l NUMERIC[]);
+create table numeric_old.t5 (l NUMERIC[]);
 ----
-Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.0.0
+Invalid Input Error: NUMERIC columns are not supported in storage versions prior to v2.1.0
 
-# the same database with the current storage version accepts NUMERIC
+# a NUMERIC(width, scale) is a DECIMAL as before, which this storage version stores
 statement ok
-attach '{TEST_DIR}/numeric_new.db' (STORAGE_VERSION 'v2.0.0');
+create table numeric_old.t6 (d NUMERIC(10, 2));
+
+statement ok
+insert into numeric_old.t6 values (1.5);
+
+# the error names the database and its storage version
+statement error
+create table numeric_old.t7 (n NUMERIC);
+----
+<REGEX>:.*database "numeric_old" is using storage version v.*
+
+statement ok
+detach numeric_old;
+
+endloop
+
+# the database with the storage version that stores NUMERIC accepts it
+foreach version v2.1.0 latest
+
+statement ok
+attach '{TEST_DIR}/numeric_new_{version}.db' AS numeric_new (STORAGE_VERSION '{version}');
 
 statement ok
 create table numeric_new.t1 (n NUMERIC);
@@ -55,3 +74,40 @@ query I
 select count(*) from numeric_new.t1;
 ----
 3
+
+statement ok
+create table numeric_new.t2 as select '1'::NUMERIC n;
+
+statement ok
+create table numeric_new.t3 (i INT);
+
+statement ok
+alter table numeric_new.t3 add column n NUMERIC;
+
+statement ok
+create table numeric_new.t4 (s STRUCT(n NUMERIC), l NUMERIC[]);
+
+statement ok
+checkpoint numeric_new;
+
+statement ok
+detach numeric_new;
+
+statement ok
+attach '{TEST_DIR}/numeric_new_{version}.db' AS numeric_new;
+
+query II
+select count(*), max(n) = '1e254'::NUMERIC from numeric_new.t1;
+----
+3	true
+
+query I
+select data_type from duckdb_columns() where database_name = 'numeric_new' and table_name = 't4' order by column_index;
+----
+STRUCT(n NUMERIC)
+NUMERIC[]
+
+statement ok
+detach numeric_new;
+
+endloop

@@ -2,7 +2,7 @@
 # description: Compressed materialization works on NUMERIC values in the representation that holds them
 # group: [optimizer]
 
-load {TEST_DIR}/compressed_materialization_numeric.db
+load {TEST_DIR}/compressed_materialization_numeric.db readwrite latest
 
 statement ok
 SET explain_output = 'OPTIMIZED_ONLY';

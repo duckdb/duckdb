@@ -2,7 +2,7 @@
 # description: Table filters on NUMERIC columns compare on the stored representation of every row group
 # group: [numeric]
 
-load {TEST_DIR}/numeric_filter_pushdown.db
+load {TEST_DIR}/numeric_filter_pushdown.db readwrite latest
 
 # three row groups of integers, a batch of decimals and two wide values
 statement ok

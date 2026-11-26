@@ -7,6 +7,9 @@
     }
   ],
   "skip_compiled": "true",
+  "skip_error_messages": [
+    "NUMERIC columns are not supported in storage versions prior to v2.1.0"
+  ],
   "skip_tests": [
     {
       "reason": "Asserts DECIMAL column semantics (declared type, scale, 38-digit width, statistics) that this configuration replaces with NUMERIC.",

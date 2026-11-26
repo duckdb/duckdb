@@ -7,6 +7,7 @@
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -302,18 +303,54 @@ static string WideDecimalUnsupportedReason(AttachedDatabase &db, StorageVersion 
 	return UnsupportedAtStorageVersion(db, storage_version, what, Decimal::WIDE_VERSION_ADDED);
 }
 
-bool StorageManager::ContainsWideDecimal(const LogicalType &logical_type) {
+static string NumericUnsupportedReason(AttachedDatabase &db, StorageVersion storage_version, const string &subject) {
+	return UnsupportedAtStorageVersion(db, storage_version, "NUMERIC " + subject, NumericType::VERSION_ADDED);
+}
+
+//! Whether a type, or an argument type of an aggregate state within it, satisfies the predicate
+template <class PREDICATE>
+static bool ContainsType(const LogicalType &logical_type, PREDICATE &predicate) {
 	return TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
 		if (type.IsAggregateState()) {
 			for (auto &argument_type : AggregateStateArgumentTypes(type)) {
-				if (ContainsWideDecimal(argument_type)) {
+				if (ContainsType(argument_type, predicate)) {
 					return true;
 				}
 			}
 			return false;
 		}
-		return type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type));
+		return predicate(type);
 	});
+}
+
+bool StorageManager::ContainsWideDecimal(const LogicalType &logical_type) {
+	auto is_wide = [](const LogicalType &type) {
+		return type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type));
+	};
+	return ContainsType(logical_type, is_wide);
+}
+
+bool StorageManager::ContainsNumeric(const LogicalType &logical_type) {
+	auto is_numeric = [](const LogicalType &type) {
+		return type.id() == LogicalTypeId::NUMERIC;
+	};
+	return ContainsType(logical_type, is_numeric);
+}
+
+//! Why the engines of the storage version read a stored CAST to the type otherwise than this engine, empty when they
+//! read it alike
+static string UnsupportedCastTargetReason(AttachedDatabase &db, StorageVersion storage_version,
+                                          const LogicalType &type) {
+	// below v2.0.0 a CAST stores its target as a LogicalType, which those engines read as a fixed-size decimal; from
+	// v2.0.0 on it stores a type expression, which the reading engine binds itself
+	if (storage_version < StorageVersion::V2_0_0 && StorageManager::ContainsWideDecimal(type)) {
+		return WideDecimalUnsupportedReason(db, storage_version, "columns");
+	}
+	// the engines before NUMERIC bind the type name as DECIMAL(18,3), so the stored expression computes other values
+	if (storage_version < NumericType::VERSION_ADDED && StorageManager::ContainsNumeric(type)) {
+		return NumericUnsupportedReason(db, storage_version, "columns");
+	}
+	return string();
 }
 
 string StorageManager::GetUnsupportedPriorToVersionReason(const string &what, StorageVersion required) const {
@@ -362,9 +399,9 @@ string StorageManager::GetUnsupportedTypeReason(const LogicalType &logical_type)
 			}
 			break;
 		case LogicalTypeId::NUMERIC:
-			// NUMERIC is a new type id with its own column format, which older engines cannot read
-			if (storage_version < StorageVersion::V2_0_0) {
-				reason = unsupported("NUMERIC columns", StorageVersion::V2_0_0);
+			// the engines before NUMERIC bind the type name as DECIMAL(18,3) and cannot read its column format
+			if (storage_version < NumericType::VERSION_ADDED) {
+				reason = NumericUnsupportedReason(db, storage_version, "columns");
 			}
 			break;
 		case LogicalTypeId::VARIANT:
@@ -406,24 +443,32 @@ void StorageManager::CheckTypeIsSupported(const LogicalType &type) const {
 	}
 }
 
-string StorageManager::GetUnsupportedDecimalWidthReason(const LogicalType &type, const string &subject) const {
+string StorageManager::GetUnsupportedCatalogTypeReason(const LogicalType &type, const string &subject) const {
 	const auto storage_version = GetStorageVersion();
-	if (storage_version >= Decimal::WIDE_VERSION_ADDED || !ContainsWideDecimal(type)) {
-		return string();
+	if (storage_version < Decimal::WIDE_VERSION_ADDED && ContainsWideDecimal(type)) {
+		return WideDecimalUnsupportedReason(db, storage_version, subject);
 	}
-	return WideDecimalUnsupportedReason(db, storage_version, subject);
+	if (storage_version < NumericType::VERSION_ADDED && ContainsNumeric(type)) {
+		return NumericUnsupportedReason(db, storage_version, subject);
+	}
+	return string();
 }
 
-void StorageManager::CheckDecimalWidthIsSupported(const LogicalType &type) const {
-	auto reason = GetUnsupportedDecimalWidthReason(type);
+void StorageManager::CheckCatalogTypeIsSupported(const LogicalType &type) const {
+	auto reason = GetUnsupportedCatalogTypeReason(type);
 	if (!reason.empty()) {
 		throw InvalidInputException(reason);
 	}
 }
 
-void StorageManager::CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const {
-	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
-		// from v2.0.0 on a CAST stores its target as a type expression, which the reading engine binds itself
+//! Whether the engines of the storage version read some stored CAST otherwise than this engine
+static bool StoredCastsNeedChecking(StorageVersion storage_version) {
+	return storage_version < NumericType::VERSION_ADDED;
+}
+
+void StorageManager::CheckExpressionTypesAreSupported(const ParsedExpression &expression) const {
+	const auto storage_version = GetStorageVersion();
+	if (!StoredCastsNeedChecking(storage_version)) {
 		return;
 	}
 	// a work list instead of recursion, the expression tree is user data
@@ -433,11 +478,16 @@ void StorageManager::CheckExpressionDecimalsAreSupported(const ParsedExpression 
 		auto &expr = work.back().get();
 		work.pop_back();
 		switch (expr.GetExpressionClass()) {
-		case ExpressionClass::CAST:
-			CheckDecimalWidthIsSupported(UnboundType::TryDefaultBind(expr.Cast<CastExpression>().TargetType()));
+		case ExpressionClass::CAST: {
+			auto target = UnboundType::TryDefaultBind(expr.Cast<CastExpression>().TargetType());
+			auto reason = UnsupportedCastTargetReason(db, storage_version, target);
+			if (!reason.empty()) {
+				throw InvalidInputException(reason);
+			}
 			break;
+		}
 		case ExpressionClass::SUBQUERY:
-			CheckQueryDecimalsAreSupported(*expr.Cast<SubqueryExpression>().Subquery()->node);
+			CheckQueryTypesAreSupported(*expr.Cast<SubqueryExpression>().Subquery()->node);
 			break;
 		default:
 			break;
@@ -447,12 +497,12 @@ void StorageManager::CheckExpressionDecimalsAreSupported(const ParsedExpression 
 	}
 }
 
-void StorageManager::CheckQueryDecimalsAreSupported(QueryNode &node) const {
-	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
+void StorageManager::CheckQueryTypesAreSupported(QueryNode &node) const {
+	if (!StoredCastsNeedChecking(GetStorageVersion())) {
 		return;
 	}
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    node, [&](unique_ptr<ParsedExpression> &child) { CheckExpressionDecimalsAreSupported(*child); });
+	    node, [&](unique_ptr<ParsedExpression> &child) { CheckExpressionTypesAreSupported(*child); });
 }
 
 bool StorageManager::HasWAL() const {

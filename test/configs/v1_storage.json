@@ -13,11 +13,11 @@
   "skip_error_messages": [
     "HTTP",
     "Unable to connect",
-    "NUMERIC columns are not supported in storage versions prior to v2.0.0"
+    "NUMERIC columns are not supported in storage versions prior to v2.1.0"
   ],
   "skip_tests": [
     {
-      "reason": "NUMERIC columns require storage version v2.0.0 or higher.",
+      "reason": "NUMERIC columns require storage version v2.1.0 or higher.",
       "paths": [
         "test/sql/types/numeric/numeric_type.test",
         "test/sql/types/numeric/numeric_type_storage.test",
