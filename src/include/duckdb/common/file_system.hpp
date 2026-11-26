@@ -153,12 +153,11 @@ public:
 	bool IsPathAbsolute(const string &path) {
 		return PathFileSystem(path).IsPathAbsolute(path);
 	}
-	string JoinPath(const string &a, const string &path) {
-		return PathFileSystem(a).JoinPath(a, path);
-	}
+	//! Joining is plain string work, so it does not look up the file system of the path
+	DUCKDB_API string JoinPath(const string &a, const string &path);
 	template <typename... ARGS>
 	string JoinPath(const string &a, const string &b, ARGS... args) {
-		return PathFileSystem(a).JoinPath(a, b, args...);
+		return JoinPath(JoinPath(a, b), args...);
 	}
 	string ConvertSeparators(const string &path) {
 		return PathFileSystem(path).ConvertSeparators(path);

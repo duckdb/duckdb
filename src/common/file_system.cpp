@@ -222,6 +222,13 @@ BaseFileSystem &FileSystem::FindFileSystem(const string &path) {
 	return GetFileSystem().FindFileSystem(path, GetOpener());
 }
 
+string FileSystem::JoinPath(const string &a, const string &path) {
+	// BaseFileSystem::JoinPath is not virtual, so any file system joins the same way
+	auto fixed_fs = GetFixedFileSystem();
+	auto &fs = fixed_fs ? *fixed_fs : GetFileSystem().GetDefaultFileSystem();
+	return fs.JoinPath(a, path);
+}
+
 BaseFileSystem &FileSystem::PathFileSystem(const string &path) const {
 	auto fixed_fs = GetFixedFileSystem();
 	if (fixed_fs) {
