@@ -235,6 +235,10 @@ template <>
 struct HandleTraits<Stats> {
 	using handle = duckdb_v2_stats_handle;
 };
+template <>
+struct HandleTraits<VirtualCatalog> {
+	using handle = duckdb_v2_vcatalog_handle;
+};
 
 } // namespace detail
 
@@ -7529,6 +7533,786 @@ auto ReplacementScan::Input::SetAlias(std::string_view alias) -> void {
 
 auto ReplacementScan::Input::GetContext() -> Context & {
 	return context;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual Catalog
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// A string the C API lends out as a pointer and a length.
+template <class GETTER, class... ARGS>
+auto BorrowString(GETTER getter, ARGS... args) -> std::string_view {
+	const char *data = nullptr;
+	idx_t length = 0;
+	CheckedAPICall(getter, args..., &data, &length);
+	return data ? std::string_view(data, length) : std::string_view();
+}
+
+// The transaction state of the transaction a callback runs in, through the getter of its info handle.
+template <class INFO, class GETTER>
+auto GetTransactionState(GETTER getter, void *info) -> void * {
+	void *state = nullptr;
+	CheckedAPICall(getter, static_cast<INFO>(info), &state);
+	return state;
+}
+
+// The builders are only needed until the entry is built: these destroy them also when building fails.
+struct SchemaBuilderGuard {
+	duckdb_v2_vcatalog_schema_builder_handle handle = nullptr;
+	~SchemaBuilderGuard() {
+		duckdb_v2_vcatalog_schema_builder_destroy(&handle);
+	}
+};
+struct TableBuilderGuard {
+	duckdb_v2_vcatalog_table_builder_handle handle = nullptr;
+	~TableBuilderGuard() {
+		duckdb_v2_vcatalog_table_builder_destroy(&handle);
+	}
+};
+struct ViewBuilderGuard {
+	duckdb_v2_vcatalog_view_builder_handle handle = nullptr;
+	~ViewBuilderGuard() {
+		duckdb_v2_vcatalog_view_builder_destroy(&handle);
+	}
+};
+
+[[noreturn]] void ThrowNotSupported(const char *what) {
+	throw Exception(DUCKDB_V2_ERROR_QUERY_NOT_IMPLEMENTED, std::string(what) + " is not supported in this database");
+}
+
+} // namespace
+
+namespace detail {
+
+// Reaches into the classes of the virtual catalog on behalf of the C callbacks. The object of the implementation
+// rides the state slot of what it stands for: the database in the catalog state, the transaction in the transaction
+// state, and an entry in the state of its C entry.
+struct VirtualCatalogAccess {
+	// What a registered virtual catalog carries in the C user_data slot: how to construct its databases, and the
+	// user's own slot (SetUserData).
+	struct Info {
+		Info(VirtualCatalog::AttachFunction attach, UserData user_data)
+		    : attach(attach), user_data(std::move(user_data)) {
+		}
+
+		VirtualCatalog::AttachFunction attach;
+		UserData user_data;
+	};
+
+	static auto GetDatabase(duckdb_v2_vcatalog_database_handle database) -> VirtualDatabase & {
+		void *state = nullptr;
+		CheckedAPICall(duckdb_v2_vcatalog_database_get_catalog_state, database, &state);
+		return *static_cast<VirtualDatabase *>(state);
+	}
+	static auto GetSchema(duckdb_v2_vcatalog_schema_handle schema) -> VirtualSchemaEntry & {
+		void *state = nullptr;
+		CheckedAPICall(duckdb_v2_vcatalog_schema_get_state, schema, &state);
+		return *static_cast<VirtualSchemaEntry *>(state);
+	}
+	static auto GetTable(duckdb_v2_vcatalog_table_handle table) -> VirtualTableEntry & {
+		void *state = nullptr;
+		CheckedAPICall(duckdb_v2_vcatalog_table_get_state, table, &state);
+		return *static_cast<VirtualTableEntry *>(state);
+	}
+	static auto GetView(duckdb_v2_vcatalog_view_handle view) -> VirtualViewEntry & {
+		void *state = nullptr;
+		CheckedAPICall(duckdb_v2_vcatalog_view_get_state, view, &state);
+		return *static_cast<VirtualViewEntry *>(state);
+	}
+
+	static auto SchemaHandle(const VirtualSchemaEntry &schema) -> duckdb_v2_vcatalog_schema_handle {
+		return static_cast<duckdb_v2_vcatalog_schema_handle>(schema.entry);
+	}
+	static auto TableHandle(const VirtualTableEntry &table) -> duckdb_v2_vcatalog_table_handle {
+		return static_cast<duckdb_v2_vcatalog_table_handle>(table.entry);
+	}
+	static auto ViewHandle(const VirtualViewEntry &view) -> duckdb_v2_vcatalog_view_handle {
+		return static_cast<duckdb_v2_vcatalog_view_handle>(view.entry);
+	}
+
+	// Reports the table or view a schema found.
+	static void SetFound(duckdb_v2_vcatalog_table_find_info_handle info, VirtualCatalogEntry &entry) {
+		switch (entry.kind) {
+		case VirtualCatalogEntry::Kind::TABLE:
+			CheckedAPICall(duckdb_v2_vcatalog_table_find_set_table, info,
+			               static_cast<duckdb_v2_vcatalog_table_handle>(entry.entry));
+			break;
+		case VirtualCatalogEntry::Kind::VIEW:
+			CheckedAPICall(duckdb_v2_vcatalog_table_find_set_view, info,
+			               static_cast<duckdb_v2_vcatalog_view_handle>(entry.entry));
+			break;
+		default:
+			throw InvalidInputException("FindTable must return a table or a view");
+		}
+	}
+
+	// Adds a table or view to the listing of a schema.
+	static void AddToList(duckdb_v2_vcatalog_table_list_info_handle info, VirtualCatalogEntry &entry) {
+		switch (entry.kind) {
+		case VirtualCatalogEntry::Kind::TABLE:
+			CheckedAPICall(duckdb_v2_vcatalog_table_list_add_table, info,
+			               static_cast<duckdb_v2_vcatalog_table_handle>(entry.entry));
+			break;
+		case VirtualCatalogEntry::Kind::VIEW:
+			CheckedAPICall(duckdb_v2_vcatalog_table_list_add_view, info,
+			               static_cast<duckdb_v2_vcatalog_view_handle>(entry.entry));
+			break;
+		default:
+			throw InvalidInputException("TableListInput::Add takes a table or a view");
+		}
+	}
+
+	static void Attach(duckdb_v2_vcatalog_attach_info_handle info, duckdb_v2_vcatalog_database_handle database,
+	                   duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_database_get_user_data, database, &user_data);
+			const auto &catalog = *static_cast<Info *>(user_data);
+
+			VirtualCatalog::AttachInput input(info, database, context, catalog.user_data.get());
+			auto attached = catalog.attach(input);
+			duckdb_v2_opaque state {attached.get(), TypedDelete<VirtualDatabase>, nullptr};
+			CheckedAPICall(duckdb_v2_vcatalog_attach_set_catalog_state, info, &state);
+			// The database owns the object now.
+			attached.release(); // NOLINT(bugprone-unused-return-value)
+		});
+	}
+
+	static void Begin(duckdb_v2_vcatalog_transaction_begin_info_handle info,
+	                  duckdb_v2_vcatalog_database_handle database, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			VirtualDatabase::BeginTransactionInput input(info);
+			auto transaction = GetDatabase(database).BeginTransaction(input);
+			if (!transaction) {
+				throw InvalidInputException("BeginTransaction returned no transaction");
+			}
+			duckdb_v2_opaque state {transaction.get(), TypedDelete<VirtualCatalogTransaction>, nullptr};
+			CheckedAPICall(duckdb_v2_vcatalog_transaction_begin_set_transaction_state, info, &state);
+			// DuckDB owns the transaction now.
+			transaction.release(); // NOLINT(bugprone-unused-return-value)
+		});
+	}
+
+	static void Commit(duckdb_v2_vcatalog_transaction_commit_info_handle info, duckdb_v2_vcatalog_database_handle,
+	                   duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *state = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_transaction_commit_get_transaction_state, info, &state);
+			if (state) {
+				static_cast<VirtualCatalogTransaction *>(state)->Commit();
+			}
+		});
+	}
+
+	static void Rollback(duckdb_v2_vcatalog_transaction_rollback_info_handle info, duckdb_v2_vcatalog_database_handle,
+	                     duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *state = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_transaction_rollback_get_transaction_state, info, &state);
+			if (state) {
+				static_cast<VirtualCatalogTransaction *>(state)->Rollback();
+			}
+		});
+	}
+
+	static void SchemaFind(duckdb_v2_vcatalog_schema_find_info_handle info, duckdb_v2_vcatalog_database_handle database,
+	                       duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			VirtualDatabase::SchemaFindInput input(info, context);
+			auto schema = GetDatabase(database).FindSchema(input);
+			if (schema) {
+				CheckedAPICall(duckdb_v2_vcatalog_schema_find_set_schema, info, SchemaHandle(*schema));
+			}
+		});
+	}
+
+	static void SchemaList(duckdb_v2_vcatalog_schema_list_info_handle info, duckdb_v2_vcatalog_database_handle database,
+	                       duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			VirtualDatabase::SchemaListInput input(info, context);
+			GetDatabase(database).ListSchemas(input);
+		});
+	}
+
+	static void TableFind(duckdb_v2_vcatalog_table_find_info_handle info, duckdb_v2_vcatalog_database_handle,
+	                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_schema_handle schema = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_table_find_get_schema, info, &schema);
+
+			VirtualSchemaEntry::TableFindInput input(info, context);
+			auto entry = GetSchema(schema).FindTable(input);
+			if (entry) {
+				SetFound(info, *entry);
+			}
+		});
+	}
+
+	static void TableList(duckdb_v2_vcatalog_table_list_info_handle info, duckdb_v2_vcatalog_database_handle,
+	                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_schema_handle schema = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_table_list_get_schema, info, &schema);
+
+			VirtualSchemaEntry::TableListInput input(info, context);
+			GetSchema(schema).ListTables(input);
+		});
+	}
+
+	static void SchemaCreate(duckdb_v2_vcatalog_entry_create_info_handle info,
+	                         duckdb_v2_vcatalog_schema_create_info_handle schema_info,
+	                         duckdb_v2_vcatalog_database_handle database, duckdb_v2_context_handle context,
+	                         duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			VirtualDatabase::SchemaCreateInput input(info, context);
+			auto &schema = GetDatabase(database).CreateSchema(input);
+			CheckedAPICall(duckdb_v2_vcatalog_schema_create_set_schema, schema_info, SchemaHandle(schema));
+		});
+	}
+
+	static void SchemaDrop(duckdb_v2_vcatalog_entry_drop_info_handle info,
+	                       duckdb_v2_vcatalog_schema_drop_info_handle schema_info,
+	                       duckdb_v2_vcatalog_database_handle database, duckdb_v2_context_handle context,
+	                       duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_schema_handle schema = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_schema_drop_get_schema, schema_info, &schema);
+
+			VirtualDatabase::SchemaDropInput input(info, context);
+			GetDatabase(database).DropSchema(GetSchema(schema), input);
+		});
+	}
+
+	static void TableCreate(duckdb_v2_vcatalog_entry_create_info_handle info,
+	                        duckdb_v2_vcatalog_table_create_info_handle table_info, duckdb_v2_vcatalog_database_handle,
+	                        duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_schema_handle schema = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_table_create_get_schema, table_info, &schema);
+
+			VirtualSchemaEntry::TableCreateInput input(info, table_info, context);
+			auto &table = GetSchema(schema).CreateTable(input);
+			CheckedAPICall(duckdb_v2_vcatalog_table_create_set_table, table_info, TableHandle(table));
+		});
+	}
+
+	static void TableDrop(duckdb_v2_vcatalog_entry_drop_info_handle info,
+	                      duckdb_v2_vcatalog_table_drop_info_handle table_info, duckdb_v2_vcatalog_database_handle,
+	                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_table_handle table = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_table_drop_get_table, table_info, &table);
+
+			VirtualSchemaEntry::TableDropInput input(info, context);
+			auto &entry = GetTable(table);
+			entry.GetSchema().DropTable(entry, input);
+		});
+	}
+
+	static void ViewCreate(duckdb_v2_vcatalog_entry_create_info_handle info,
+	                       duckdb_v2_vcatalog_view_create_info_handle view_info, duckdb_v2_vcatalog_database_handle,
+	                       duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_schema_handle schema = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_view_create_get_schema, view_info, &schema);
+
+			VirtualSchemaEntry::ViewCreateInput input(info, view_info, context);
+			auto &view = GetSchema(schema).CreateView(input);
+			CheckedAPICall(duckdb_v2_vcatalog_view_create_set_view, view_info, ViewHandle(view));
+		});
+	}
+
+	static void ViewDrop(duckdb_v2_vcatalog_entry_drop_info_handle info,
+	                     duckdb_v2_vcatalog_view_drop_info_handle view_info, duckdb_v2_vcatalog_database_handle,
+	                     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_view_handle view = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_view_drop_get_view, view_info, &view);
+
+			VirtualSchemaEntry::ViewDropInput input(info, context);
+			auto &entry = GetView(view);
+			entry.GetSchema().DropView(entry, input);
+		});
+	}
+
+	static void ScanBind(duckdb_v2_vcatalog_table_scan_bind_info_handle info, duckdb_v2_vcatalog_database_handle,
+	                     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			duckdb_v2_vcatalog_table_handle table = nullptr;
+			CheckedAPICall(duckdb_v2_vcatalog_table_scan_bind_get_table, info, &table);
+
+			VirtualTableEntry::ScanBindInput input(info, context);
+			GetTable(table).BindScan(input);
+		});
+	}
+};
+
+} // namespace detail
+
+// --- The definition ---
+
+VirtualCatalog::VirtualCatalog(void *impl) : detail::Handle<VirtualCatalog>(impl) {
+}
+
+VirtualCatalog::~VirtualCatalog() {
+	auto _h = handle();
+	duckdb_v2_vcatalog_destroy(&_h);
+}
+
+auto VirtualCatalog::CreateInternal(Factory &factory, const std::string &name, AttachFunction attach)
+    -> VirtualCatalog {
+	using detail::VirtualCatalogAccess;
+
+	duckdb_v2_vcatalog_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_create, factory.handle(), &_h);
+	auto result = detail::HandleFactory::Make<VirtualCatalog>(_h);
+	result.attach_function = attach;
+
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_vcatalog_set_name, _h, name_str.data(), name_str.size());
+	CheckedAPICall(duckdb_v2_vcatalog_set_attach_callback, _h, VirtualCatalogAccess::Attach);
+	CheckedAPICall(duckdb_v2_vcatalog_set_transaction_begin_callback, _h, VirtualCatalogAccess::Begin);
+	CheckedAPICall(duckdb_v2_vcatalog_set_transaction_commit_callback, _h, VirtualCatalogAccess::Commit);
+	CheckedAPICall(duckdb_v2_vcatalog_set_transaction_rollback_callback, _h, VirtualCatalogAccess::Rollback);
+	CheckedAPICall(duckdb_v2_vcatalog_set_schema_find_callback, _h, VirtualCatalogAccess::SchemaFind);
+	CheckedAPICall(duckdb_v2_vcatalog_set_schema_list_callback, _h, VirtualCatalogAccess::SchemaList);
+	CheckedAPICall(duckdb_v2_vcatalog_set_table_find_callback, _h, VirtualCatalogAccess::TableFind);
+	CheckedAPICall(duckdb_v2_vcatalog_set_table_list_callback, _h, VirtualCatalogAccess::TableList);
+	CheckedAPICall(duckdb_v2_vcatalog_set_schema_create_callback, _h, VirtualCatalogAccess::SchemaCreate);
+	CheckedAPICall(duckdb_v2_vcatalog_set_schema_drop_callback, _h, VirtualCatalogAccess::SchemaDrop);
+	CheckedAPICall(duckdb_v2_vcatalog_set_table_create_callback, _h, VirtualCatalogAccess::TableCreate);
+	CheckedAPICall(duckdb_v2_vcatalog_set_table_drop_callback, _h, VirtualCatalogAccess::TableDrop);
+	CheckedAPICall(duckdb_v2_vcatalog_set_view_create_callback, _h, VirtualCatalogAccess::ViewCreate);
+	CheckedAPICall(duckdb_v2_vcatalog_set_view_drop_callback, _h, VirtualCatalogAccess::ViewDrop);
+	return result;
+}
+
+auto VirtualCatalog::PrepareRegistration() -> void {
+	// The attach function rides the C user_data slot so the attach callback can find it; the user's own data
+	// (SetUserData, moved out here) rides inside it.
+	auto info = std::make_unique<detail::VirtualCatalogAccess::Info>(attach_function, std::move(user_data));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<detail::VirtualCatalogAccess::Info>, nullptr};
+	CheckedAPICall(duckdb_v2_vcatalog_set_user_data, handle(), &opaque);
+	// The virtual catalog owns it now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+auto Connection::Register(VirtualCatalog &virtual_catalog) -> void {
+	virtual_catalog.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_vcatalog, handle(), virtual_catalog.handle());
+}
+
+auto Extension::Register(VirtualCatalog &virtual_catalog) -> void {
+	virtual_catalog.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_vcatalog, handle(), virtual_catalog.handle());
+}
+
+// --- Attach ---
+
+VirtualCatalog::AttachInput::AttachInput(void *info, void *database, void *context, void *user_data)
+    : info(info), database(database), user_data(user_data), context(detail::HandleFactory::Make<Context>(context)) {
+}
+
+auto VirtualCatalog::AttachInput::GetName() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_attach_get_name, static_cast<duckdb_v2_vcatalog_attach_info_handle>(info));
+}
+
+auto VirtualCatalog::AttachInput::GetPath() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_attach_get_path, static_cast<duckdb_v2_vcatalog_attach_info_handle>(info));
+}
+
+auto VirtualCatalog::AttachInput::IsReadOnly() const -> bool {
+	bool read_only = false;
+	CheckedAPICall(duckdb_v2_vcatalog_attach_is_read_only, static_cast<duckdb_v2_vcatalog_attach_info_handle>(info),
+	               &read_only);
+	return read_only;
+}
+
+auto VirtualCatalog::AttachInput::GetOption(std::string_view name) -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	bool present = false;
+	CheckedAPICall(duckdb_v2_vcatalog_attach_get_option, static_cast<duckdb_v2_vcatalog_attach_info_handle>(info),
+	               name.data(), name.size(), &value, &present);
+	if (!present) {
+		return std::nullopt;
+	}
+	return detail::HandleFactory::Make<Value>(value);
+}
+
+auto VirtualCatalog::AttachInput::SetDefaultSchema(std::string_view name) -> void {
+	CheckedAPICall(duckdb_v2_vcatalog_attach_set_default_schema,
+	               static_cast<duckdb_v2_vcatalog_attach_info_handle>(info), name.data(), name.size());
+}
+
+void *VirtualCatalog::AttachInput::GetUserDataInternal() const {
+	if (!user_data) {
+		throw InvalidInputException("no user data was set; call VirtualCatalog::SetUserData before Register");
+	}
+	return user_data;
+}
+
+auto VirtualCatalog::AttachInput::GetContext() -> Context & {
+	return context;
+}
+
+// --- Inputs ---
+
+detail::VirtualCatalogInput::VirtualCatalogInput(void *transaction, void *context)
+    : transaction(transaction), context(detail::HandleFactory::Make<Context>(context)) {
+}
+
+auto detail::VirtualCatalogInput::GetTransaction() const -> VirtualCatalogTransaction & {
+	return *static_cast<VirtualCatalogTransaction *>(transaction);
+}
+
+auto detail::VirtualCatalogInput::GetContext() -> Context & {
+	return context;
+}
+
+VirtualCatalogCreateInput::VirtualCatalogCreateInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_entry_create_info_handle>(
+                              duckdb_v2_vcatalog_entry_create_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualCatalogCreateInput::GetName() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_entry_create_get_name,
+	                    static_cast<duckdb_v2_vcatalog_entry_create_info_handle>(info));
+}
+
+VirtualCatalogDropInput::VirtualCatalogDropInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_entry_drop_info_handle>(
+                              duckdb_v2_vcatalog_entry_drop_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualCatalogDropInput::IsCascade() const -> bool {
+	bool cascade = false;
+	CheckedAPICall(duckdb_v2_vcatalog_entry_drop_is_cascade,
+	               static_cast<duckdb_v2_vcatalog_entry_drop_info_handle>(info), &cascade);
+	return cascade;
+}
+
+// --- Database ---
+
+VirtualDatabase::VirtualDatabase(VirtualCatalog::AttachInput &input) : database(input.database) {
+}
+
+auto VirtualDatabase::CreateSchema(SchemaCreateInput &) -> VirtualSchemaEntry & {
+	ThrowNotSupported("Creating schemas");
+}
+
+auto VirtualDatabase::DropSchema(VirtualSchemaEntry &, SchemaDropInput &) -> void {
+	ThrowNotSupported("Dropping schemas");
+}
+
+auto VirtualDatabase::BeginTransactionInput::IsReadOnly() const -> bool {
+	bool read_only = false;
+	CheckedAPICall(duckdb_v2_vcatalog_transaction_begin_is_read_only,
+	               static_cast<duckdb_v2_vcatalog_transaction_begin_info_handle>(info), &read_only);
+	return read_only;
+}
+
+VirtualDatabase::SchemaFindInput::SchemaFindInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_schema_find_info_handle>(
+                              duckdb_v2_vcatalog_schema_find_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualDatabase::SchemaFindInput::GetName() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_schema_find_get_name,
+	                    static_cast<duckdb_v2_vcatalog_schema_find_info_handle>(info));
+}
+
+VirtualDatabase::SchemaListInput::SchemaListInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_schema_list_info_handle>(
+                              duckdb_v2_vcatalog_schema_list_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualDatabase::SchemaListInput::Add(VirtualSchemaEntry &schema) -> void {
+	CheckedAPICall(duckdb_v2_vcatalog_schema_list_add_schema,
+	               static_cast<duckdb_v2_vcatalog_schema_list_info_handle>(info),
+	               detail::VirtualCatalogAccess::SchemaHandle(schema));
+}
+
+// --- Entries ---
+
+VirtualCatalogEntry::~VirtualCatalogEntry() {
+	switch (kind) {
+	case Kind::SCHEMA: {
+		auto _h = static_cast<duckdb_v2_vcatalog_schema_handle>(entry);
+		duckdb_v2_vcatalog_schema_destroy(&_h);
+		break;
+	}
+	case Kind::TABLE: {
+		auto _h = static_cast<duckdb_v2_vcatalog_table_handle>(entry);
+		duckdb_v2_vcatalog_table_destroy(&_h);
+		break;
+	}
+	case Kind::VIEW: {
+		auto _h = static_cast<duckdb_v2_vcatalog_view_handle>(entry);
+		duckdb_v2_vcatalog_view_destroy(&_h);
+		break;
+	}
+	}
+}
+
+auto VirtualCatalogEntry::GetName() const -> std::string_view {
+	switch (kind) {
+	case Kind::SCHEMA:
+		return BorrowString(duckdb_v2_vcatalog_schema_get_name, static_cast<duckdb_v2_vcatalog_schema_handle>(entry));
+	case Kind::TABLE:
+		return BorrowString(duckdb_v2_vcatalog_table_get_name, static_cast<duckdb_v2_vcatalog_table_handle>(entry));
+	default:
+		return BorrowString(duckdb_v2_vcatalog_view_get_name, static_cast<duckdb_v2_vcatalog_view_handle>(entry));
+	}
+}
+
+VirtualSchemaEntry::VirtualSchemaEntry(VirtualDatabase &database_p, std::string_view name)
+    : VirtualCatalogEntry(Kind::SCHEMA), database(database_p) {
+	SchemaBuilderGuard builder;
+	CheckedAPICall(duckdb_v2_vcatalog_schema_builder_create,
+	               static_cast<duckdb_v2_vcatalog_database_handle>(database.database), name.data(), name.size(),
+	               &builder.handle);
+	// The entry refers back to this object, which outlives it: no destructor.
+	duckdb_v2_opaque state {this, nullptr, nullptr};
+	CheckedAPICall(duckdb_v2_vcatalog_schema_builder_set_state, builder.handle, &state);
+
+	duckdb_v2_vcatalog_schema_handle schema = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_schema_builder_build, builder.handle, &schema);
+	entry = schema;
+}
+
+auto VirtualSchemaEntry::CreateTable(TableCreateInput &) -> VirtualTableEntry & {
+	ThrowNotSupported("Creating tables");
+}
+
+auto VirtualSchemaEntry::CreateView(ViewCreateInput &) -> VirtualViewEntry & {
+	ThrowNotSupported("Creating views");
+}
+
+auto VirtualSchemaEntry::DropTable(VirtualTableEntry &, TableDropInput &) -> void {
+	ThrowNotSupported("Dropping tables");
+}
+
+auto VirtualSchemaEntry::DropView(VirtualViewEntry &, ViewDropInput &) -> void {
+	ThrowNotSupported("Dropping views");
+}
+
+VirtualSchemaEntry::TableFindInput::TableFindInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_table_find_info_handle>(
+                              duckdb_v2_vcatalog_table_find_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualSchemaEntry::TableFindInput::GetName() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_table_find_get_name,
+	                    static_cast<duckdb_v2_vcatalog_table_find_info_handle>(info));
+}
+
+VirtualSchemaEntry::TableListInput::TableListInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_table_list_info_handle>(
+                              duckdb_v2_vcatalog_table_list_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+auto VirtualSchemaEntry::TableListInput::Add(VirtualCatalogEntry &entry) -> void {
+	detail::VirtualCatalogAccess::AddToList(static_cast<duckdb_v2_vcatalog_table_list_info_handle>(info), entry);
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_vcatalog_table_create_get_column_count,
+	               static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), &count);
+	return count;
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetColumnName(idx_t index) const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_table_create_get_column_name,
+	                    static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), index);
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetColumnType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_table_create_get_column_type,
+	               static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), index, &type);
+	return detail::HandleFactory::Make<LogicalType>(type);
+}
+
+auto VirtualSchemaEntry::TableCreateInput::IsColumnNotNull(idx_t index) const -> bool {
+	bool not_null = false;
+	CheckedAPICall(duckdb_v2_vcatalog_table_create_is_column_not_null,
+	               static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), index, &not_null);
+	return not_null;
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetColumnDefault(idx_t index) const -> std::optional<std::string_view> {
+	const char *sql = nullptr;
+	idx_t sql_length = 0;
+	bool present = false;
+	CheckedAPICall(duckdb_v2_vcatalog_table_create_get_column_default,
+	               static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), index, &sql, &sql_length,
+	               &present);
+	if (!present) {
+		return std::nullopt;
+	}
+	return std::string_view(sql, sql_length);
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetConstraintCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_vcatalog_table_create_get_constraint_count,
+	               static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), &count);
+	return count;
+}
+
+auto VirtualSchemaEntry::TableCreateInput::GetConstraint(idx_t index) const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_table_create_get_constraint,
+	                    static_cast<duckdb_v2_vcatalog_table_create_info_handle>(table_info), index);
+}
+
+auto VirtualSchemaEntry::ViewCreateInput::GetQuery() const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_view_create_get_query,
+	                    static_cast<duckdb_v2_vcatalog_view_create_info_handle>(view_info));
+}
+
+auto VirtualSchemaEntry::ViewCreateInput::GetColumnAliasCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_vcatalog_view_create_get_column_alias_count,
+	               static_cast<duckdb_v2_vcatalog_view_create_info_handle>(view_info), &count);
+	return count;
+}
+
+auto VirtualSchemaEntry::ViewCreateInput::GetColumnAlias(idx_t index) const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_view_create_get_column_alias,
+	                    static_cast<duckdb_v2_vcatalog_view_create_info_handle>(view_info), index);
+}
+
+// --- Tables ---
+
+VirtualScanFunction::VirtualScanFunction(TableFunction function_p) : function(std::move(function_p)) {
+	// Moves the callbacks of the function into its C handle, which every table copies from.
+	function.PrepareRegistration();
+}
+
+VirtualTableEntry::VirtualTableEntry(VirtualSchemaEntry &schema_p, const VirtualTableInfo &info)
+    : VirtualCatalogEntry(Kind::TABLE), schema(schema_p) {
+	TableBuilderGuard builder;
+	auto name = ToStr(info.name);
+	CheckedAPICall(duckdb_v2_vcatalog_table_builder_create, detail::VirtualCatalogAccess::SchemaHandle(schema),
+	               name.data(), name.size(), &builder.handle);
+	for (size_t i = 0; i < info.column_names.size(); i++) {
+		auto column_name = ToStr(info.column_names[i]);
+		CheckedAPICall(duckdb_v2_vcatalog_table_builder_add_column, builder.handle, column_name.data(),
+		               column_name.size(), info.column_types[i].handle());
+	}
+	for (auto index : info.not_null_columns) {
+		CheckedAPICall(duckdb_v2_vcatalog_table_builder_set_column_not_null, builder.handle, index);
+	}
+	// The entry refers back to this object, which outlives it: no destructor.
+	duckdb_v2_opaque state {this, nullptr, nullptr};
+	CheckedAPICall(duckdb_v2_vcatalog_table_builder_set_state, builder.handle, &state);
+	if (info.scan_function) {
+		CheckedAPICall(duckdb_v2_vcatalog_table_builder_set_scan_function, builder.handle,
+		               info.scan_function->function.handle());
+		CheckedAPICall(duckdb_v2_vcatalog_table_builder_set_scan_bind_callback, builder.handle,
+		               detail::VirtualCatalogAccess::ScanBind);
+	}
+
+	duckdb_v2_vcatalog_table_handle table = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_table_builder_build, builder.handle, &table);
+	entry = table;
+}
+
+auto VirtualTableEntry::GetColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_vcatalog_table_get_column_count, detail::VirtualCatalogAccess::TableHandle(*this), &count);
+	return count;
+}
+
+auto VirtualTableEntry::GetColumnName(idx_t index) const -> std::string_view {
+	return BorrowString(duckdb_v2_vcatalog_table_get_column_name, detail::VirtualCatalogAccess::TableHandle(*this),
+	                    index);
+}
+
+auto VirtualTableEntry::GetColumnType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_table_get_column_type, detail::VirtualCatalogAccess::TableHandle(*this), index,
+	               &type);
+	return detail::HandleFactory::Make<LogicalType>(type);
+}
+
+auto VirtualTableEntry::IsColumnNotNull(idx_t index) const -> bool {
+	bool not_null = false;
+	CheckedAPICall(duckdb_v2_vcatalog_table_is_column_not_null, detail::VirtualCatalogAccess::TableHandle(*this), index,
+	               &not_null);
+	return not_null;
+}
+
+auto VirtualTableEntry::BindScan(ScanBindInput &) -> void {
+}
+
+VirtualTableEntry::ScanBindInput::ScanBindInput(void *info, void *context)
+    : VirtualCatalogInput(GetTransactionState<duckdb_v2_vcatalog_table_scan_bind_info_handle>(
+                              duckdb_v2_vcatalog_table_scan_bind_get_transaction_state, info),
+                          context),
+      info(info) {
+}
+
+void VirtualTableEntry::ScanBindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                           void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_vcatalog_table_scan_bind_set_bind_data,
+	               static_cast<duckdb_v2_vcatalog_table_scan_bind_info_handle>(info), &opaque);
+}
+
+auto VirtualTableEntry::ScanBindInput::SetCardinality(idx_t cardinality, bool is_exact) -> void {
+	CheckedAPICall(duckdb_v2_vcatalog_table_scan_bind_set_cardinality,
+	               static_cast<duckdb_v2_vcatalog_table_scan_bind_info_handle>(info), cardinality, is_exact);
+}
+
+auto VirtualTableEntry::ScanBindInput::SetOrderPreservation(OrderPreservation order) -> void {
+	CheckedAPICall(duckdb_v2_vcatalog_table_scan_bind_set_order_preservation,
+	               static_cast<duckdb_v2_vcatalog_table_scan_bind_info_handle>(info),
+	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
+}
+
+// --- Views ---
+
+VirtualViewEntry::VirtualViewEntry(VirtualSchemaEntry &schema_p, const VirtualViewInfo &info)
+    : VirtualCatalogEntry(Kind::VIEW), schema(schema_p) {
+	ViewBuilderGuard builder;
+	auto sql = ToStr(info.sql);
+	if (info.is_create_statement) {
+		CheckedAPICall(duckdb_v2_vcatalog_view_builder_create_from_sql,
+		               detail::VirtualCatalogAccess::SchemaHandle(schema), sql.data(), sql.size(), &builder.handle);
+	} else {
+		auto name = ToStr(info.name);
+		CheckedAPICall(duckdb_v2_vcatalog_view_builder_create, detail::VirtualCatalogAccess::SchemaHandle(schema),
+		               name.data(), name.size(), &builder.handle);
+		CheckedAPICall(duckdb_v2_vcatalog_view_builder_set_query, builder.handle, sql.data(), sql.size());
+	}
+	for (auto &alias : info.column_aliases) {
+		auto alias_str = ToStr(alias);
+		CheckedAPICall(duckdb_v2_vcatalog_view_builder_add_column_alias, builder.handle, alias_str.data(),
+		               alias_str.size());
+	}
+	// The entry refers back to this object, which outlives it: no destructor.
+	duckdb_v2_opaque state {this, nullptr, nullptr};
+	CheckedAPICall(duckdb_v2_vcatalog_view_builder_set_state, builder.handle, &state);
+
+	duckdb_v2_vcatalog_view_handle view = nullptr;
+	CheckedAPICall(duckdb_v2_vcatalog_view_builder_build, builder.handle, &view);
+	entry = view;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

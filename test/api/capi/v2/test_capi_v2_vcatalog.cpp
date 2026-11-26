@@ -61,6 +61,12 @@ struct Recorder {
 	bool duplicate_column_rejected = false;
 	//! Whether building a table without columns failed
 	bool empty_table_rejected = false;
+	//! Whether a column was declared NOT NULL, twice, and a column that does not exist was not
+	bool not_null_setter_checked = false;
+	//! The default schema the ATTACH asked for with the `default_schema` option
+	std::string default_schema;
+	//! Whether an empty name was refused as the default schema
+	bool empty_default_schema_rejected = false;
 	//! Whether every builder built a second entry of its own, sharing its state
 	bool builders_reusable = true;
 	//! States of schemas and tables destroyed with the last entry sharing them
@@ -89,6 +95,10 @@ struct Recorder {
 	std::string last_create;
 	//! The columns and constraints the last table create callback was given
 	std::string last_table_create;
+	//! The columns the table built by the last table create reports about itself
+	std::string last_table_columns;
+	//! Whether that table refused to report a column it does not have
+	bool table_column_bounds_checked = false;
 	//! The column aliases and query the last view create callback was given
 	std::string last_view_create;
 	bool last_drop_cascade = false;
@@ -223,6 +233,26 @@ void Attach(duckdb_v2_vcatalog_attach_info_handle info, duckdb_v2_vcatalog_datab
 			recorder.secret.assign(text, text_length);
 		}
 		duckdb_v2_value_destroy(&secret);
+		if (rc != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+	}
+	option_name = "DEFAULT_SCHEMA";
+	duckdb_v2_value_handle default_schema = nullptr;
+	if (duckdb_v2_vcatalog_attach_get_option(info, option_name.data(), option_name.size(), &default_schema, &present,
+	                                         err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	recorder.default_schema.clear();
+	recorder.empty_default_schema_rejected =
+	    duckdb_v2_vcatalog_attach_set_default_schema(info, nullptr, 0, nullptr) != DUCKDB_V2_ERROR_NONE;
+	if (present) {
+		auto rc = duckdb_v2_value_get_varchar(default_schema, &text, &text_length, err);
+		if (rc == DUCKDB_V2_ERROR_NONE) {
+			recorder.default_schema.assign(text, text_length);
+			rc = duckdb_v2_vcatalog_attach_set_default_schema(info, text, text_length, err);
+		}
+		duckdb_v2_value_destroy(&default_schema);
 		if (rc != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
@@ -874,6 +904,11 @@ bool BuildTables(duckdb_v2_factory_handle factory, duckdb_v2_table_function_hand
 	    duckdb_v2_vcatalog_table_builder_build(builder, &empty_table, nullptr) != DUCKDB_V2_ERROR_NONE && !empty_table;
 	auto rc = AddColumn(builder, factory, column, err);
 	state.recorder->duplicate_column_rejected = AddColumn(builder, factory, column, nullptr) != DUCKDB_V2_ERROR_NONE;
+	// A column is declared NOT NULL by its index: once is enough, and only a column the builder has
+	state.recorder->not_null_setter_checked =
+	    duckdb_v2_vcatalog_table_builder_set_column_not_null(builder, 1, nullptr) != DUCKDB_V2_ERROR_NONE &&
+	    duckdb_v2_vcatalog_table_builder_set_column_not_null(builder, 0, nullptr) == DUCKDB_V2_ERROR_NONE &&
+	    duckdb_v2_vcatalog_table_builder_set_column_not_null(builder, 0, nullptr) == DUCKDB_V2_ERROR_NONE;
 	state.recorder->invalid_scan_functions_rejected = RejectsInvalidScanFunctions(builder, factory);
 	duckdb_v2_vcatalog_table_builder_destroy(&builder);
 	duckdb_v2_vcatalog_table_destroy(&empty_table);
@@ -1179,6 +1214,9 @@ DUCKDB_V2_ERROR AddCreatedColumn(duckdb_v2_vcatalog_table_create_info_handle tab
 	if (rc == DUCKDB_V2_ERROR_NONE) {
 		rc = duckdb_v2_vcatalog_table_builder_add_column(builder, name, name_length, type, err);
 	}
+	if (rc == DUCKDB_V2_ERROR_NONE && not_null) {
+		rc = duckdb_v2_vcatalog_table_builder_set_column_not_null(builder, index, err);
+	}
 	if (rc == DUCKDB_V2_ERROR_NONE) {
 		description += (index > 0 ? ", " : "") + std::string(name, name_length) + " " + TypeText(type);
 		if (not_null) {
@@ -1190,6 +1228,46 @@ DUCKDB_V2_ERROR AddCreatedColumn(duckdb_v2_vcatalog_table_create_info_handle tab
 	}
 	duckdb_v2_logical_type_destroy(&type);
 	return rc;
+}
+
+// The columns a table reports about itself, in the form AddCreatedColumn describes them, without the defaults.
+std::string DescribeColumns(duckdb_v2_vcatalog_table_handle table) {
+	idx_t count = 0;
+	if (duckdb_v2_vcatalog_table_get_column_count(table, &count, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return std::string();
+	}
+	std::string description;
+	for (idx_t i = 0; i < count; i++) {
+		const char *name = nullptr;
+		idx_t name_length = 0;
+		duckdb_v2_logical_type_handle type = nullptr;
+		bool not_null = false;
+		if (duckdb_v2_vcatalog_table_get_column_name(table, i, &name, &name_length, nullptr) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_vcatalog_table_get_column_type(table, i, &type, nullptr) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_vcatalog_table_is_column_not_null(table, i, &not_null, nullptr) != DUCKDB_V2_ERROR_NONE) {
+			return std::string();
+		}
+		description += (i > 0 ? ", " : "") + std::string(name, name_length) + " " + TypeText(type);
+		if (not_null) {
+			description += " NOT NULL";
+		}
+		duckdb_v2_logical_type_destroy(&type);
+	}
+	return description;
+}
+
+// Whether a table refuses to report a column past its last.
+bool ChecksColumnBounds(duckdb_v2_vcatalog_table_handle table) {
+	idx_t count = 0;
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	duckdb_v2_logical_type_handle type = nullptr;
+	bool not_null = false;
+	return duckdb_v2_vcatalog_table_get_column_count(table, &count, nullptr) == DUCKDB_V2_ERROR_NONE &&
+	       duckdb_v2_vcatalog_table_get_column_name(table, count, &name, &name_length, nullptr) !=
+	           DUCKDB_V2_ERROR_NONE &&
+	       duckdb_v2_vcatalog_table_get_column_type(table, count, &type, nullptr) != DUCKDB_V2_ERROR_NONE && !type &&
+	       duckdb_v2_vcatalog_table_is_column_not_null(table, count, &not_null, nullptr) != DUCKDB_V2_ERROR_NONE;
 }
 
 void TableCreate(duckdb_v2_vcatalog_entry_create_info_handle info,
@@ -1234,6 +1312,8 @@ void TableCreate(duckdb_v2_vcatalog_entry_create_info_handle info,
 	}
 	recorder->table_creates++;
 	recorder->last_table_create = description;
+	recorder->last_table_columns = DescribeColumns(table);
+	recorder->table_column_bounds_checked = ChecksColumnBounds(table);
 	state->created_tables.push_back({name, schema, table});
 	duckdb_v2_vcatalog_table_create_set_table(table_info, table, err);
 }
@@ -1785,6 +1865,7 @@ TEST_CASE("V2 vcatalog: a table builder builds tables with columns", "[capi_v2][
 	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.main.t1')") == 2);
 	REQUIRE(recorder.empty_table_rejected);
 	REQUIRE(recorder.duplicate_column_rejected);
+	REQUIRE(recorder.not_null_setter_checked);
 	REQUIRE(recorder.builders_reusable);
 	// A column added to the builder after a table was built is not added to that table
 	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.main.t2')") == 1);
@@ -1963,6 +2044,7 @@ TEST_CASE("V2 vcatalog: table arguments are checked", "[capi_v2][vcatalog]") {
 	duckdb_v2_vcatalog_table_builder_handle builder = nullptr;
 	REQUIRE(duckdb_v2_vcatalog_table_builder_destroy(&builder) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vcatalog_table_builder_add_column(nullptr, "c", 1, nullptr, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vcatalog_table_builder_set_column_not_null(nullptr, 0, nullptr) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vcatalog_table_builder_set_state(nullptr, nullptr, nullptr) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vcatalog_table_builder_set_scan_function(nullptr, nullptr, nullptr) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vcatalog_table_builder_set_scan_bind_callback(nullptr, nullptr, nullptr) != DUCKDB_V2_ERROR_NONE);
@@ -1970,6 +2052,15 @@ TEST_CASE("V2 vcatalog: table arguments are checked", "[capi_v2][vcatalog]") {
 	REQUIRE(duckdb_v2_vcatalog_table_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_vcatalog_table_handle table = nullptr;
 	REQUIRE(duckdb_v2_vcatalog_table_destroy(&table) == DUCKDB_V2_ERROR_NONE);
+	idx_t count = 0;
+	const char *name = nullptr;
+	idx_t name_length = 0;
+	duckdb_v2_logical_type_handle type = nullptr;
+	bool not_null = false;
+	REQUIRE(duckdb_v2_vcatalog_table_get_column_count(nullptr, &count, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vcatalog_table_get_column_name(nullptr, 0, &name, &name_length, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vcatalog_table_get_column_type(nullptr, 0, &type, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vcatalog_table_is_column_not_null(nullptr, 0, &not_null, nullptr) != DUCKDB_V2_ERROR_NONE);
 	void *state = nullptr;
 	REQUIRE(duckdb_v2_vcatalog_table_scan_bind_get_transaction_state(nullptr, &state, nullptr) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vcatalog_table_scan_bind_get_table(nullptr, &table, nullptr) != DUCKDB_V2_ERROR_NONE);
@@ -2047,6 +2138,13 @@ TEST_CASE("V2 vcatalog: tables are created and dropped through their callbacks",
 	REQUIRE(Contains(recorder.last_table_create, "| CHECK("));
 	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.main.c1')") == 3);
 	REQUIRE(CountRows(conn, "SELECT table_name FROM duckdb_tables() WHERE database_name = 'v'") == 3);
+	// The table the callback built reports its columns, and the ones it declared NOT NULL are not nullable: the
+	// column DuckDB was told is NOT NULL, and the one of the primary key
+	REQUIRE(recorder.last_table_columns == "id INTEGER NOT NULL, name VARCHAR NOT NULL, score DOUBLE");
+	REQUIRE(recorder.table_column_bounds_checked);
+	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.main.c1') WHERE \"notnull\"") == 2);
+	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.main.c1') WHERE NOT \"notnull\" AND name = 'score'") ==
+	        1);
 
 	SECTION("a table that exists is not created again") {
 		REQUIRE(Contains(ErrorText(conn, "CREATE TABLE v.main.c1 (i INTEGER)"), "already exists"));
@@ -2130,6 +2228,30 @@ TEST_CASE("V2 vcatalog: views are created and dropped through their callbacks", 
 	}
 	REQUIRE(recorder.states_seen);
 	REQUIRE(recorder.contexts_seen);
+}
+
+TEST_CASE("V2 vcatalog: the attach callback sets the default schema", "[capi_v2][vcatalog]") {
+	VCatalogFixture vfx;
+	auto &recorder = vfx.recorder;
+	auto conn = vfx.fx.conn;
+	REQUIRE(duckdb_v2_vcatalog_attach_set_default_schema(nullptr, "s", 1, nullptr) != DUCKDB_V2_ERROR_NONE);
+
+	// Without one, a name without a schema refers to "main"
+	REQUIRE(RunSql(conn, "ATTACH 'p' AS v (TYPE vtest)") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(recorder.empty_default_schema_rejected);
+	REQUIRE(RunSql(conn, "CREATE SCHEMA v.extra") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(conn, "CREATE TABLE v.extra.only_here (i INTEGER)") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('v.t1')") == 2);
+	REQUIRE(Contains(ErrorText(conn, "SELECT * FROM pragma_table_info('v.only_here')"), "does not exist"));
+
+	// With one, it refers to that schema, which need not exist yet when the database is attached
+	REQUIRE(RunSql(conn, "ATTACH 'p' AS d (TYPE vtest, default_schema 'extra')") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(recorder.default_schema == "extra");
+	REQUIRE(RunSql(conn, "CREATE SCHEMA d.extra") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(conn, "CREATE TABLE d.extra.only_here (i INTEGER)") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('d.only_here')") == 1);
+	REQUIRE(CountRows(conn, "SELECT * FROM pragma_table_info('d.main.t1')") == 2);
+	REQUIRE(Contains(ErrorText(conn, "SELECT * FROM pragma_table_info('d.t1')"), "does not exist"));
 }
 
 TEST_CASE("V2 vcatalog: a create callback reports what it created, or an error", "[capi_v2][vcatalog]") {

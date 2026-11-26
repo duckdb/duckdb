@@ -1276,7 +1276,7 @@ public:
 		scan_info->name = name.empty() ? default_name : name;
 		auto function = CreateFunction(std::move(scan_info));
 		function.get_table_entry = CV2TableScanGetTableEntry;
-		function.stability = stability;
+		// Keeps the stability of a table scan: unlike a call of the function, a table reads the same within a query
 		return function;
 	}
 

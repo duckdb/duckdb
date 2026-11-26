@@ -2044,6 +2044,20 @@ typedef struct {
 	 void *user_data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_value_variant_to_value)
 	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_attach_set_default_schema)
+	(duckdb_v2_vcatalog_attach_info_handle info, const char *name, idx_t name_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_set_column_not_null)
+	(duckdb_v2_vcatalog_table_builder_handle builder, idx_t index, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_get_column_count)
+	(duckdb_v2_vcatalog_table_handle table, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_get_column_name)
+	(duckdb_v2_vcatalog_table_handle table, idx_t index, const char **name, idx_t *name_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_get_column_type)
+	(duckdb_v2_vcatalog_table_handle table, idx_t index, duckdb_v2_logical_type_handle *type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_is_column_not_null)
+	(duckdb_v2_vcatalog_table_handle table, idx_t index, bool *not_null, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -4653,6 +4667,25 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_value_variant_to_value duckdb_ext_api.duckdb_v2_value_variant_to_value
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_attach_set_default_schema duckdb_ext_api.duckdb_v2_vcatalog_attach_set_default_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_set_column_not_null                                                           \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_builder_set_column_not_null
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_get_column_count duckdb_ext_api.duckdb_v2_vcatalog_table_get_column_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_get_column_name duckdb_ext_api.duckdb_v2_vcatalog_table_get_column_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_get_column_type duckdb_ext_api.duckdb_v2_vcatalog_table_get_column_type
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_is_column_not_null duckdb_ext_api.duckdb_v2_vcatalog_table_is_column_not_null
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

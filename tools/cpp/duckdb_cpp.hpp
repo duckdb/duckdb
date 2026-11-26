@@ -110,6 +110,8 @@ class PragmaFunction;
 class LogSink;
 class MacroFunction;
 class ReplacementScan;
+class VirtualCatalog;
+class VirtualScanFunction;
 class QualifiedName;
 class TableDescription;
 class ColumnDescription;
@@ -983,6 +985,11 @@ public:
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the virtual catalog, making `ATTACH ... (TYPE <name>)` create its databases. Not transactional; the
+	/// virtual catalog lives as long as the database instance. User data set via `SetUserData` is consumed by
+	/// registration. Unstable API.
+	/// @throws InvalidInputException When the name is missing or taken.
+	auto Register(VirtualCatalog &virtual_catalog) -> void;
 
 	/// The config of this connection: its own cascade.
 	auto GetConfig() -> Config & {
@@ -1454,6 +1461,11 @@ public:
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the virtual catalog, making `ATTACH ... (TYPE <name>)` create its databases. Not transactional; the
+	/// virtual catalog lives as long as the database instance. User data set via `SetUserData` is consumed by
+	/// registration. Unstable API.
+	/// @throws InvalidInputException When the name is missing or taken.
+	auto Register(VirtualCatalog &virtual_catalog) -> void;
 	/// Registers the log sink, making it available to the logging configuration under its name. Not transactional;
 	/// the sink lives as long as the database. User data set via `SetUserData` is consumed by registration.
 	/// @throws InvalidInputException When the name or write callback is missing, or the name is taken, by a sink
@@ -4640,6 +4652,7 @@ class TableFunction final : public detail::Handle<TableFunction> {
 	friend detail::HandleFactory;
 	friend class Connection;
 	friend class Extension;
+	friend class VirtualScanFunction;
 
 public:
 	class BindInput;
@@ -7367,6 +7380,667 @@ public:
 
 		void *GetUserDataInternal() const;
 	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual Catalog
+//----------------------------------------------------------------------------------------------------------------------
+// A virtual catalog is a kind of database of your own, attached with `ATTACH '<path>' AS <name> (TYPE <type>)`: DuckDB
+// asks it for its schemas, tables and views, and reads the tables through a table function. Unstable API.
+//
+// Unlike the rest of this API, a virtual catalog is implemented by deriving from classes: `VirtualDatabase` for an
+// attached database, `VirtualCatalogTransaction` for a transaction on it, and `VirtualSchemaEntry`,
+// `VirtualTableEntry` and `VirtualViewEntry` for what it contains. DuckDB calls their virtual functions; a function
+// reports failure by throwing, and the exception surfaces as the error of the statement. The objects are owned by
+// the implementation, never copied and never moved: DuckDB refers to them by address.
+//
+// Each of those objects has `Cast<T>()`, which gives the object as the class of the implementation without checking
+// that it is one, e.g. `input.GetTransaction().Cast<MyTransaction>()`. Each input of a function that runs in a
+// transaction has `GetTransaction()` and `GetContext()`.
+//
+// An entry handed to DuckDB must stay alive until every transaction it was handed out in has ended, also when it
+// was dropped in the meantime. DuckDB recognizes an entry by its address, so hand out the same object for the same
+// table for as long as it is the same table.
+
+class VirtualCatalogTransaction;
+class VirtualDatabase;
+class VirtualCatalogEntry;
+class VirtualSchemaEntry;
+class VirtualTableEntry;
+class VirtualViewEntry;
+class VirtualScanFunction;
+class VirtualCatalog;
+
+namespace detail {
+struct VirtualCatalogAccess;
+
+/// @internal
+/// Base of every class a virtual catalog implementation derives from. Never copied and never moved, so the address
+/// of an object stays the same for as long as it lives.
+class VirtualCatalogObject {
+public:
+	VirtualCatalogObject(const VirtualCatalogObject &) = delete;
+	VirtualCatalogObject &operator=(const VirtualCatalogObject &) = delete;
+	VirtualCatalogObject(VirtualCatalogObject &&) = delete;
+	VirtualCatalogObject &operator=(VirtualCatalogObject &&) = delete;
+
+	virtual ~VirtualCatalogObject() = default;
+
+	/// This object as the class of the implementation, e.g. `input.GetTransaction().Cast<MyTransaction>()`. Not
+	/// checked: the object must be a `T`.
+	template <class T>
+	auto Cast() -> T & {
+		static_assert(std::is_base_of<VirtualCatalogObject, T>::value, "T must be a class of a virtual catalog");
+		return static_cast<T &>(*this);
+	}
+
+	/// Const overload of the above.
+	template <class T>
+	auto Cast() const -> const T & {
+		static_assert(std::is_base_of<VirtualCatalogObject, T>::value, "T must be a class of a virtual catalog");
+		return static_cast<const T &>(*this);
+	}
+
+protected:
+	VirtualCatalogObject() = default;
+};
+
+/// @internal
+/// What the functions of a virtual catalog that run in a transaction work with. Borrowed, valid only for the call.
+class VirtualCatalogInput {
+public:
+	/// The transaction the call runs in.
+	auto GetTransaction() const -> VirtualCatalogTransaction &;
+
+	/// The context of the connection the call runs for. Borrowed, valid only for the call.
+	auto GetContext() -> Context &;
+
+protected:
+	VirtualCatalogInput(void *transaction, void *context);
+
+private:
+	void *transaction;
+	Context context;
+};
+
+} // namespace detail
+
+/// What the functions that create a schema, a table or a view work with: see the input of each kind.
+class VirtualCatalogCreateInput : public detail::VirtualCatalogInput {
+public:
+	/// The name of the entry to create. Borrowed, valid only for the call.
+	auto GetName() const -> std::string_view;
+
+protected:
+	VirtualCatalogCreateInput(void *info, void *context);
+
+private:
+	void *info;
+};
+
+/// What the functions that drop a schema, a table or a view work with: see the input of each kind.
+class VirtualCatalogDropInput : public detail::VirtualCatalogInput {
+public:
+	/// Whether the statement asks to drop what depends on the entry too (`DROP ... CASCADE`).
+	auto IsCascade() const -> bool;
+
+protected:
+	VirtualCatalogDropInput(void *info, void *context);
+
+private:
+	void *info;
+};
+
+/// A transaction on a database of a virtual catalog. Created by `VirtualDatabase::BeginTransaction`, owned by
+/// DuckDB from then on, and destroyed once it has committed or rolled back. Every other function of the virtual
+/// catalog receives the transaction it runs in.
+class VirtualCatalogTransaction : public detail::VirtualCatalogObject {
+public:
+	/// Commits the transaction. When it throws, DuckDB calls `Rollback` and reports the error of the commit.
+	virtual auto Commit() -> void = 0;
+	/// Rolls the transaction back. The transaction ends also when this throws.
+	virtual auto Rollback() -> void = 0;
+};
+
+/// A kind of database, attached with `ATTACH ... (TYPE <name>)`. Create one for the class that implements its
+/// databases, then register it with `Connection::Register` or `Extension::Register`. The object may be destroyed
+/// after registration; the registered virtual catalog lives as long as the database instance. Unstable API.
+class VirtualCatalog final : public detail::Handle<VirtualCatalog> {
+	friend detail::HandleFactory;
+	friend struct detail::VirtualCatalogAccess;
+	friend class Connection;
+	friend class Extension;
+
+public:
+	class AttachInput;
+
+	VirtualCatalog(VirtualCatalog &&) noexcept = default;
+	VirtualCatalog &operator=(VirtualCatalog &&) noexcept = default;
+
+	~VirtualCatalog() override;
+
+	/// Creates a virtual catalog through `factory`, whose attached databases are objects of `DATABASE`: every
+	/// `ATTACH` constructs one from an `AttachInput &`, and the detach destroys it. An `ATTACH` fails when the
+	/// constructor throws.
+	/// @param name The name of the database type, as `ATTACH ... (TYPE <name>)` refers to it.
+	template <class DATABASE>
+	static auto Create(Factory &factory, const std::string &name) -> VirtualCatalog {
+		static_assert(std::is_base_of<VirtualDatabase, DATABASE>::value, "DATABASE must derive from VirtualDatabase");
+		return CreateInternal(factory, name, AttachDatabase<DATABASE>);
+	}
+
+	/// Constructs user data of type `T`, shared by every database attached with the virtual catalog and freed at
+	/// database instance teardown; read it via `AttachInput::GetUserData<T>`. Consumed by registration.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&...args) & -> VirtualCatalog & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		user_data = detail::UserData(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+private:
+	using AttachFunction = std::unique_ptr<VirtualDatabase> (*)(AttachInput &input);
+
+	template <class DATABASE>
+	static auto AttachDatabase(AttachInput &input) -> std::unique_ptr<VirtualDatabase> {
+		return std::make_unique<DATABASE>(input);
+	}
+
+	explicit VirtualCatalog(void *impl);
+	static auto CreateInternal(Factory &factory, const std::string &name, AttachFunction attach) -> VirtualCatalog;
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	AttachFunction attach_function = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the constructor of a database works with: the `ATTACH` it is constructed for. Borrowed, valid only for
+	/// the duration of the constructor.
+	class AttachInput {
+		friend struct detail::VirtualCatalogAccess;
+		friend class duckdb::cxx::VirtualDatabase;
+
+	public:
+		/// The name the database is attached under. Borrowed, valid only for the call.
+		auto GetName() const -> std::string_view;
+		/// The path given to `ATTACH`. Borrowed, valid only for the call.
+		auto GetPath() const -> std::string_view;
+		/// Whether the database is attached read-only.
+		auto IsReadOnly() const -> bool;
+		/// The value of an option given to `ATTACH`, matched case-insensitively; nothing when it was not given. An
+		/// option the constructor never asks for fails the `ATTACH`. The options DuckDB interprets itself, such as
+		/// `TYPE` and `READ_ONLY`, are not visible here.
+		auto GetOption(std::string_view name) -> std::optional<Value>;
+
+		/// Sets the default schema of the database: the one a statement refers to when it names the database but no
+		/// schema, as in `<database>.<table>`. Defaults to `main`. The schema need not exist yet.
+		/// @throws InvalidInputException When the name is empty.
+		auto SetDefaultSchema(std::string_view name) -> void;
+
+		/// The user data set via `VirtualCatalog::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The context of the connection that attaches the database. Borrowed, valid only for the call.
+		auto GetContext() -> Context &;
+
+	private:
+		AttachInput(void *info, void *database, void *context, void *user_data);
+
+		void *GetUserDataInternal() const;
+
+		void *info;
+		void *database;
+		void *user_data;
+		Context context;
+	};
+};
+
+/// A database attached with a virtual catalog: derive from it, and name the class in `VirtualCatalog::Create`.
+/// DuckDB constructs one per `ATTACH` and destroys it when the database is detached or the instance closes. Its
+/// functions may be called from several threads at once.
+class VirtualDatabase : public detail::VirtualCatalogObject {
+	friend struct detail::VirtualCatalogAccess;
+	friend class VirtualSchemaEntry;
+
+public:
+	class BeginTransactionInput;
+	class SchemaFindInput;
+	class SchemaListInput;
+	class SchemaCreateInput;
+	class SchemaDropInput;
+
+	/// Begins a transaction on the database. Called under a lock of the connection, before the transaction is
+	/// first used: keep it cheap, and defer the work of beginning to the first use where possible.
+	virtual auto BeginTransaction(BeginTransactionInput &input) -> std::unique_ptr<VirtualCatalogTransaction> = 0;
+
+	/// The schema of the given name, or null when the database has none. How the name is matched is up to the
+	/// database. DuckDB caches nothing: it asks again for every lookup.
+	virtual auto FindSchema(SchemaFindInput &input) -> VirtualSchemaEntry * = 0;
+	/// Adds every schema of the database to the input.
+	virtual auto ListSchemas(SchemaListInput &input) -> void = 0;
+
+	/// Creates the schema `CREATE SCHEMA` asks for and returns it. Only called for a name `FindSchema` does not
+	/// find: DuckDB handles `IF NOT EXISTS` itself. Fails as not supported unless overridden.
+	virtual auto CreateSchema(SchemaCreateInput &input) -> VirtualSchemaEntry &;
+	/// Drops a schema `FindSchema` found: DuckDB handles `IF EXISTS` itself. The object has to outlive the
+	/// transactions that still use it. Fails as not supported unless overridden.
+	virtual auto DropSchema(VirtualSchemaEntry &schema, SchemaDropInput &input) -> void;
+
+protected:
+	explicit VirtualDatabase(VirtualCatalog::AttachInput &input);
+
+private:
+	void *database;
+
+public:
+	/// What `BeginTransaction` works with. Borrowed, valid only for the call.
+	class BeginTransactionInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// Whether the transaction is read-only: the database is, or the transaction was started that way.
+		auto IsReadOnly() const -> bool;
+
+	private:
+		explicit BeginTransactionInput(void *info) : info(info) {
+		}
+
+		void *info;
+	};
+
+	/// What `FindSchema` works with. Borrowed, valid only for the call.
+	class SchemaFindInput final : public detail::VirtualCatalogInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// The name to resolve, as written in the statement. Borrowed, valid only for the call.
+		auto GetName() const -> std::string_view;
+
+	private:
+		SchemaFindInput(void *info, void *context);
+
+		void *info;
+	};
+
+	/// What `ListSchemas` works with. Borrowed, valid only for the call.
+	class SchemaListInput final : public detail::VirtualCatalogInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// Adds a schema of this database to the listing. A schema added twice is listed once.
+		auto Add(VirtualSchemaEntry &schema) -> void;
+
+	private:
+		SchemaListInput(void *info, void *context);
+
+		void *info;
+	};
+
+	/// What `CreateSchema` works with. Borrowed, valid only for the call.
+	class SchemaCreateInput final : public VirtualCatalogCreateInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	private:
+		SchemaCreateInput(void *info, void *context) : VirtualCatalogCreateInput(info, context) {
+		}
+	};
+
+	/// What `DropSchema` works with. Borrowed, valid only for the call.
+	class SchemaDropInput final : public VirtualCatalogDropInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	private:
+		SchemaDropInput(void *info, void *context) : VirtualCatalogDropInput(info, context) {
+		}
+	};
+};
+
+/// Base of the schemas, tables and views of a virtual catalog. An entry is built when it is constructed and
+/// immutable from then on. Destroying it is up to the implementation, within the rule that an entry handed to
+/// DuckDB stays alive until every transaction it was handed out in has ended.
+class VirtualCatalogEntry : public detail::VirtualCatalogObject {
+	friend struct detail::VirtualCatalogAccess;
+	friend class VirtualSchemaEntry;
+	friend class VirtualTableEntry;
+	friend class VirtualViewEntry;
+
+public:
+	~VirtualCatalogEntry() override;
+
+	/// The name of the entry. Borrowed, valid while the entry is.
+	auto GetName() const -> std::string_view;
+
+private:
+	enum class Kind : uint8_t { SCHEMA, TABLE, VIEW };
+
+	explicit VirtualCatalogEntry(Kind kind) : kind(kind), entry(nullptr) {
+	}
+
+	Kind kind;
+	void *entry;
+};
+
+/// A schema of a database attached with a virtual catalog: derive from it. Tables and views share a namespace, so
+/// one pair of functions finds and lists both.
+class VirtualSchemaEntry : public VirtualCatalogEntry {
+	friend struct detail::VirtualCatalogAccess;
+
+public:
+	class TableFindInput;
+	class TableListInput;
+	class TableCreateInput;
+	class ViewCreateInput;
+	class TableDropInput;
+	class ViewDropInput;
+
+	/// The database the schema belongs to.
+	auto GetDatabase() const -> VirtualDatabase & {
+		return database;
+	}
+
+	/// The table or view of the given name, or null when the schema has none. How the name is matched is up to the
+	/// schema. DuckDB caches nothing: it asks again for every lookup.
+	/// @return A `VirtualTableEntry` or a `VirtualViewEntry` of this schema.
+	virtual auto FindTable(TableFindInput &input) -> VirtualCatalogEntry * = 0;
+	/// Adds every table and view of the schema to the input.
+	virtual auto ListTables(TableListInput &input) -> void = 0;
+
+	/// Creates the table `CREATE TABLE` asks for and returns it. Only called for a name `FindTable` does not
+	/// find: DuckDB handles `IF NOT EXISTS` and `OR REPLACE` itself, the latter by dropping first. Fails as not
+	/// supported unless overridden.
+	virtual auto CreateTable(TableCreateInput &input) -> VirtualTableEntry &;
+	/// Creates the view `CREATE VIEW` asks for and returns it: see `CreateTable`.
+	virtual auto CreateView(ViewCreateInput &input) -> VirtualViewEntry &;
+	/// Drops a table `FindTable` found: DuckDB handles `IF EXISTS` itself. The object has to outlive the
+	/// transactions that still use it. Fails as not supported unless overridden.
+	virtual auto DropTable(VirtualTableEntry &table, TableDropInput &input) -> void;
+	/// Drops a view `FindTable` found: see `DropTable`.
+	virtual auto DropView(VirtualViewEntry &view, ViewDropInput &input) -> void;
+
+protected:
+	/// Builds a schema of `database` named `name`.
+	VirtualSchemaEntry(VirtualDatabase &database, std::string_view name);
+
+private:
+	VirtualDatabase &database;
+
+public:
+	/// What `FindTable` works with. Borrowed, valid only for the call.
+	class TableFindInput final : public detail::VirtualCatalogInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// The name to resolve, as written in the statement. Borrowed, valid only for the call.
+		auto GetName() const -> std::string_view;
+
+	private:
+		TableFindInput(void *info, void *context);
+
+		void *info;
+	};
+
+	/// What `ListTables` works with. Borrowed, valid only for the call.
+	class TableListInput final : public detail::VirtualCatalogInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// Adds a table or a view of this schema to the listing. An entry added twice is listed once.
+		/// @throws InvalidInputException When the entry is neither a table nor a view.
+		auto Add(VirtualCatalogEntry &entry) -> void;
+
+	private:
+		TableListInput(void *info, void *context);
+
+		void *info;
+	};
+
+	/// What `CreateTable` works with: the table `CREATE TABLE` describes. Borrowed, valid only for the call.
+	class TableCreateInput final : public VirtualCatalogCreateInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// How many columns the table has.
+		auto GetColumnCount() const -> idx_t;
+		/// The name of a column. Borrowed, valid only for the call.
+		/// @param index Column index in [0, GetColumnCount()).
+		auto GetColumnName(idx_t index) const -> std::string_view;
+		/// An owned copy of the type of a column.
+		auto GetColumnType(idx_t index) const -> LogicalType;
+		/// Whether a column is declared `NOT NULL`.
+		auto IsColumnNotNull(idx_t index) const -> bool;
+		/// The default of a column as SQL text, in DuckDB's dialect; nothing when the column has none.
+		auto GetColumnDefault(idx_t index) const -> std::optional<std::string_view>;
+		/// How many constraints the table has besides `NOT NULL`.
+		auto GetConstraintCount() const -> idx_t;
+		/// A constraint as SQL text, in DuckDB's dialect, e.g. `PRIMARY KEY(id)`. Borrowed, valid only for the call.
+		/// @param index Constraint index in [0, GetConstraintCount()).
+		auto GetConstraint(idx_t index) const -> std::string_view;
+
+	private:
+		TableCreateInput(void *info, void *table_info, void *context)
+		    : VirtualCatalogCreateInput(info, context), table_info(table_info) {
+		}
+
+		void *table_info;
+	};
+
+	/// What `CreateView` works with: the view `CREATE VIEW` describes. Borrowed, valid only for the call.
+	class ViewCreateInput final : public VirtualCatalogCreateInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// The query of the view as SQL text, in DuckDB's dialect. Borrowed, valid only for the call.
+		auto GetQuery() const -> std::string_view;
+		/// How many column aliases the view declares.
+		auto GetColumnAliasCount() const -> idx_t;
+		/// A column alias. Borrowed, valid only for the call.
+		/// @param index Alias index in [0, GetColumnAliasCount()).
+		auto GetColumnAlias(idx_t index) const -> std::string_view;
+
+	private:
+		ViewCreateInput(void *info, void *view_info, void *context)
+		    : VirtualCatalogCreateInput(info, context), view_info(view_info) {
+		}
+
+		void *view_info;
+	};
+
+	/// What `DropTable` works with. Borrowed, valid only for the call.
+	class TableDropInput final : public VirtualCatalogDropInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	private:
+		TableDropInput(void *info, void *context) : VirtualCatalogDropInput(info, context) {
+		}
+	};
+
+	/// What `DropView` works with. Borrowed, valid only for the call.
+	class ViewDropInput final : public VirtualCatalogDropInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	private:
+		ViewDropInput(void *info, void *context) : VirtualCatalogDropInput(info, context) {
+		}
+	};
+};
+
+/// The table function the tables of a virtual catalog are read with. Build it once from a `TableFunction` with an
+/// exec callback and no parameters, and use it for any number of tables. Its init, exec and other callbacks run as
+/// for any table function; its bind callback is never called: `VirtualTableEntry::BindScan` binds the scan instead,
+/// and the bind data set there is what the callbacks read with `GetBindData<T>`. User data set on the function is
+/// consumed here.
+class VirtualScanFunction {
+	friend class VirtualTableEntry;
+
+public:
+	explicit VirtualScanFunction(TableFunction function);
+
+private:
+	TableFunction function;
+};
+
+/// What a table is built from: its name, its columns, and the function it is read with.
+class VirtualTableInfo {
+	friend class VirtualTableEntry;
+
+public:
+	explicit VirtualTableInfo(std::string name_p) : name(std::move(name_p)) {
+	}
+
+	/// Adds a column. A table needs at least one, and the names must differ.
+	auto AddColumn(std::string column_name, LogicalType type) & -> VirtualTableInfo & {
+		column_names.push_back(std::move(column_name));
+		column_types.push_back(std::move(type));
+		return *this;
+	}
+
+	/// Declares the column at `index`, in the order the columns were added, `NOT NULL`. DuckDB reports the column
+	/// as not nullable; it does not check the rows the scan function produces against it.
+	auto SetColumnNotNull(idx_t index) & -> VirtualTableInfo & {
+		not_null_columns.push_back(index);
+		return *this;
+	}
+
+	/// Sets the function the table is read with. Borrowed until the table is built. A table without one cannot be
+	/// read.
+	auto SetScanFunction(const VirtualScanFunction &function) & -> VirtualTableInfo & {
+		scan_function = &function;
+		return *this;
+	}
+
+private:
+	std::string name;
+	std::vector<std::string> column_names;
+	std::vector<LogicalType> column_types;
+	std::vector<idx_t> not_null_columns;
+	const VirtualScanFunction *scan_function = nullptr;
+};
+
+/// A table of a schema of a virtual catalog. Derive from it to carry the state of the table and to bind its scans.
+class VirtualTableEntry : public VirtualCatalogEntry {
+	friend struct detail::VirtualCatalogAccess;
+
+public:
+	class ScanBindInput;
+
+	/// Builds a table of `schema` from `info`.
+	/// @throws InvalidInputException When the table has no columns or two columns of the same name, a column
+	/// declared `NOT NULL` does not exist, or the scan function has no exec callback or has parameters.
+	VirtualTableEntry(VirtualSchemaEntry &schema, const VirtualTableInfo &info);
+
+	/// The schema the table belongs to.
+	auto GetSchema() const -> VirtualSchemaEntry & {
+		return schema;
+	}
+
+	/// How many columns the table has.
+	auto GetColumnCount() const -> idx_t;
+	/// The name of a column. Borrowed, valid while the table is.
+	/// @param index Column index in [0, GetColumnCount()).
+	auto GetColumnName(idx_t index) const -> std::string_view;
+	/// An owned copy of the type of a column.
+	auto GetColumnType(idx_t index) const -> LogicalType;
+	/// Whether a column was declared `NOT NULL`.
+	auto IsColumnNotNull(idx_t index) const -> bool;
+
+	/// Binds a scan of the table: called once per reference to the table in a query, in place of the bind callback
+	/// of the scan function. Sets what the scan needs as bind data. Does nothing unless overridden.
+	virtual auto BindScan(ScanBindInput &input) -> void;
+
+private:
+	VirtualSchemaEntry &schema;
+
+public:
+	/// What `BindScan` works with. Borrowed, valid only for the call.
+	class ScanBindInput final : public detail::VirtualCatalogInput {
+		friend struct detail::VirtualCatalogAccess;
+
+	public:
+		/// Constructs bind data of type `T` for the scan, readable from the callbacks of the scan function via
+		/// their inputs' `GetBindData<T>`. When `T` is equality-comparable, scans with equal bind data count as
+		/// the same scan.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&...args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// Hints how many rows the scan will produce, for the optimizer.
+		/// @param cardinality The estimated row count.
+		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
+		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
+
+		/// Sets the order guarantee of the rows the scan produces. Defaults to
+		/// `OrderPreservation::INSERTION_ORDER`.
+		/// @throws InvalidInputException When order is not a declared enum value.
+		auto SetOrderPreservation(OrderPreservation order) -> void;
+
+	private:
+		ScanBindInput(void *info, void *context);
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
+
+		void *info;
+	};
+};
+
+/// What a view is built from: its name, its query, and optionally the names of its columns.
+class VirtualViewInfo {
+	friend class VirtualViewEntry;
+
+public:
+	/// A view named `name` over `query`, a `SELECT` in DuckDB's dialect.
+	VirtualViewInfo(std::string name_p, std::string query_p)
+	    : name(std::move(name_p)), sql(std::move(query_p)), is_create_statement(false) {
+	}
+
+	/// The view a `CREATE VIEW` statement in DuckDB's dialect describes: its name, column aliases and query. The
+	/// catalog and schema the statement names are ignored.
+	static auto FromSQL(std::string create_view_sql) -> VirtualViewInfo {
+		VirtualViewInfo result;
+		result.sql = std::move(create_view_sql);
+		result.is_create_statement = true;
+		return result;
+	}
+
+	/// Names the next column of the view, in place of the name the query gives it.
+	auto AddColumnAlias(std::string alias) & -> VirtualViewInfo & {
+		column_aliases.push_back(std::move(alias));
+		return *this;
+	}
+
+private:
+	VirtualViewInfo() : is_create_statement(false) {
+	}
+
+	std::string name;
+	std::string sql;
+	bool is_create_statement;
+	std::vector<std::string> column_aliases;
+};
+
+/// A view of a schema of a virtual catalog. DuckDB binds its query when the view is used, resolving unqualified
+/// names in the database and schema of the view first. Usable as it is, or derive from it to carry state.
+class VirtualViewEntry : public VirtualCatalogEntry {
+	friend struct detail::VirtualCatalogAccess;
+
+public:
+	/// Builds a view of `schema` from `info`.
+	/// @throws InvalidInputException When the query is not a single `SELECT`, or the statement not a `CREATE VIEW`.
+	VirtualViewEntry(VirtualSchemaEntry &schema, const VirtualViewInfo &info);
+
+	/// The schema the view belongs to.
+	auto GetSchema() const -> VirtualSchemaEntry & {
+		return schema;
+	}
+
+private:
+	VirtualSchemaEntry &schema;
 };
 
 //----------------------------------------------------------------------------------------------------------------------

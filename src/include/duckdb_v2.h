@@ -20551,6 +20551,30 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_attach_set_catalog_state(duckdb_
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Sets the name of the default schema of the database being attached: the schema a statement refers to when it names
+ * the database but no schema, as in `<database>.<table>`, and the one `USE <database>` selects.
+ *
+ * Defaults to `main`. The name is not checked against the schemas of the database: a default schema the schema find
+ * callback does not find behaves as a schema that does not exist. Calling this again replaces the name.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The attach info handle.
+ * @param name The name of the default schema. Borrowed and copied.
+ * @param name_length The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and must
+ * not be 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_attach_set_default_schema(duckdb_v2_vcatalog_attach_info_handle info,
+                                                                          const char *name, idx_t name_length,
+                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Retrieves whether the transaction cannot write to the database: because the database is attached read-only, or
  * because the transaction was started with `BEGIN TRANSACTION READ ONLY`. A transaction that can write need not.
  *
@@ -20990,6 +21014,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_builder_add_column(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Declares a column of the table being built `NOT NULL`.
+ *
+ * DuckDB reports the column as not nullable, e.g. in `DESCRIBE`. It does not check the rows the scan function produces
+ * against it. Fails if the index is out of bounds. Declaring a column twice has no further effect.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param builder The builder of the table.
+ * @param index The index of the column, in the order the columns were added.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_builder_set_column_not_null(
+    duckdb_v2_vcatalog_table_builder_handle builder, idx_t index, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Sets the implementation's own state of the table being built, retrievable from the table via
  * `duckdb_v2_vcatalog_table_get_state()`.
  *
@@ -21021,6 +21065,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_builder_set_state(duckdb_v
  * callback set via `duckdb_v2_vcatalog_table_builder_set_scan_bind_callback()` instead, whose bind data the callbacks
  * of the function receive. Its "get bind info" callback is not invoked either. A scan produces the columns of the table
  * only: the table has no `rowid`.
+ *
+ * DuckDB assumes that scanning the table again within one query produces the same rows, as it does for its own tables,
+ * and may then scan it once where a query refers to it twice, or not at all where its rows are not needed.
  *
  * The function needs an exec callback and a signature without parameters, and must have been created through a factory
  * of the instance the database is attached to. Its name is optional, and shown by `EXPLAIN`. The builder copies the
@@ -21157,6 +21204,85 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_get_schema(duckdb_v2_vcata
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_get_state(duckdb_v2_vcatalog_table_handle table, void **data,
                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the number of columns of the table.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param table The table.
+ * @param count Receives the number of columns.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_get_column_count(duckdb_v2_vcatalog_table_handle table,
+                                                                       idx_t *count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the name of the column at the given index. Fails if the index is out of bounds. The name is borrowed and
+ * valid for as long as the table is.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param table The table.
+ * @param index The index of the column.
+ * @param name Receives a borrowed pointer to the name. Valid for as long as the table is.
+ * @param name_length Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_get_column_name(duckdb_v2_vcatalog_table_handle table,
+                                                                      idx_t index, const char **name,
+                                                                      idx_t *name_length,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the type of the column at the given index. Fails if the index is out of bounds. The returned type is owned
+ * by the caller and must be destroyed via `duckdb_v2_logical_type_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param table The table.
+ * @param index The index of the column.
+ * @param type Receives the column type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_get_column_type(duckdb_v2_vcatalog_table_handle table,
+                                                                      idx_t index, duckdb_v2_logical_type_handle *type,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves whether the column at the given index was declared `NOT NULL`, via
+ * `duckdb_v2_vcatalog_table_builder_set_column_not_null()`. Fails if the index is out of bounds.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param table The table.
+ * @param index The index of the column.
+ * @param not_null Receives whether the column is declared `NOT NULL`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vcatalog_table_is_column_not_null(duckdb_v2_vcatalog_table_handle table,
+                                                                         idx_t index, bool *not_null,
+                                                                         duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

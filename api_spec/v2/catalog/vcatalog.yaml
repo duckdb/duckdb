@@ -20,6 +20,10 @@ module: vcatalog
 # The transaction state may be used by several threads of one query at once, e.g. by a parallel scan, so the
 # implementation must synchronize its own access to it.
 #
+# The find, list, create, drop and scan bind callbacks always run for a connection, in the transaction of that
+# connection on the database: their context is never null, and the transaction has begun before they are invoked.
+# DuckDB makes no lookup in an attached database on its own behalf.
+#
 # The catalog of an attached database is resolved through find and list callbacks, which hand DuckDB entries the
 # implementation builds and owns, such as `[[vcatalog_schema]]`. An entry is put together in a builder, such as
 # `[[vcatalog_schema_builder]]`, and no longer changes once it is built. The implementation decides how long it keeps
@@ -291,7 +295,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection the schema is found for.
+        description: Borrowed handle to the context of the connection the schema is found for. Never null.
       err:
         type: error_info
         indirection: 1
@@ -310,7 +314,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection listing the schemas.
+        description: Borrowed handle to the context of the connection listing the schemas. Never null.
       err:
         type: error_info
         indirection: 1
@@ -329,7 +333,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection the table is found for.
+        description: Borrowed handle to the context of the connection the table is found for. Never null.
       err:
         type: error_info
         indirection: 1
@@ -348,7 +352,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection listing the tables.
+        description: Borrowed handle to the context of the connection listing the tables. Never null.
       err:
         type: error_info
         indirection: 1
@@ -370,7 +374,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection creating the schema.
+        description: Borrowed handle to the context of the connection creating the schema. Never null.
       err:
         type: error_info
         indirection: 1
@@ -392,7 +396,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection dropping the schema.
+        description: Borrowed handle to the context of the connection dropping the schema. Never null.
       err:
         type: error_info
         indirection: 1
@@ -414,7 +418,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection creating the table.
+        description: Borrowed handle to the context of the connection creating the table. Never null.
       err:
         type: error_info
         indirection: 1
@@ -436,7 +440,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection dropping the table.
+        description: Borrowed handle to the context of the connection dropping the table. Never null.
       err:
         type: error_info
         indirection: 1
@@ -458,7 +462,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection creating the view.
+        description: Borrowed handle to the context of the connection creating the view. Never null.
       err:
         type: error_info
         indirection: 1
@@ -480,7 +484,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection dropping the view.
+        description: Borrowed handle to the context of the connection dropping the view. Never null.
       err:
         type: error_info
         indirection: 1
@@ -499,7 +503,7 @@ callbacks:
         description: Borrowed handle to the database the callback runs on.
       context:
         type: context
-        description: Borrowed handle to the context of the connection scanning the table.
+        description: Borrowed handle to the context of the connection scanning the table. Never null.
       err:
         type: error_info
         indirection: 1
@@ -1102,6 +1106,34 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  vcatalog_attach_set_default_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Sets the name of the default schema of the database being attached: the schema a statement refers to when it
+      names the database but no schema, as in `<database>.<table>`, and the one `USE <database>` selects.
+
+      Defaults to `main`. The name is not checked against the schemas of the database: a default schema the schema
+      find callback does not find behaves as a schema that does not exist. Calling this again replaces the name.
+    parameters:
+      info:
+        type: vcatalog_attach_info
+        description: The attach info handle.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name of the default schema. Borrowed and copied.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and must not be 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Transaction Begin Info
   #---------------------------------------------------------------------------------------------------------------------
@@ -1630,6 +1662,27 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  vcatalog_table_builder_set_column_not_null:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Declares a column of the table being built `NOT NULL`.
+
+      DuckDB reports the column as not nullable, e.g. in `DESCRIBE`. It does not check the rows the scan function
+      produces against it. Fails if the index is out of bounds. Declaring a column twice has no further effect.
+    parameters:
+      builder:
+        type: vcatalog_table_builder
+        description: The builder of the table.
+      index:
+        type: idx
+        description: The index of the column, in the order the columns were added.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   vcatalog_table_builder_set_state:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
@@ -1666,6 +1719,10 @@ functions:
       callback set via `[[vcatalog_table_builder_set_scan_bind_callback]]` instead, whose bind data the callbacks of
       the function receive. Its "get bind info" callback is not invoked either. A scan produces the columns of the
       table only: the table has no `rowid`.
+
+      DuckDB assumes that scanning the table again within one query produces the same rows, as it does for its own
+      tables, and may then scan it once where a query refers to it twice, or not at all where its rows are not
+      needed.
 
       The function needs an exec callback and a signature without parameters, and must have been created through a
       factory of the instance the database is attached to. Its name is optional, and shown by `EXPLAIN`. The builder
@@ -1812,6 +1869,103 @@ functions:
         indirection: 2
         kind: OUT
         description: Receives the state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: Retrieves the number of columns of the table.
+    parameters:
+      table:
+        type: vcatalog_table
+        description: The table.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_get_column_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Retrieves the name of the column at the given index. Fails if the index is out of bounds. The name is borrowed
+      and valid for as long as the table is.
+    parameters:
+      table:
+        type: vcatalog_table
+        description: The table.
+      index:
+        type: idx
+        description: The index of the column.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the name. Valid for as long as the table is.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_get_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Retrieves the type of the column at the given index. Fails if the index is out of bounds. The returned type is
+      owned by the caller and must be destroyed via `[[logical_type_destroy]]`.
+    parameters:
+      table:
+        type: vcatalog_table
+        description: The table.
+      index:
+        type: idx
+        description: The index of the column.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_is_column_not_null:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-26" ]
+    description: |
+      Retrieves whether the column at the given index was declared `NOT NULL`, via
+      `[[vcatalog_table_builder_set_column_not_null]]`. Fails if the index is out of bounds.
+    parameters:
+      table:
+        type: vcatalog_table
+        description: The table.
+      index:
+        type: idx
+        description: The index of the column.
+      not_null:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the column is declared `NOT NULL`.
       err:
         type: error_info
         indirection: 1
