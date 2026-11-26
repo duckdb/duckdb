@@ -345,6 +345,12 @@ public:
 	}
 	//! Reads the field a record end inside an open quote left in progress as NULL
 	void AddUnterminatedQuoteNull();
+	//! Whether the file ended inside a quoted value that reads as a value, the embedded quote toggle has its own pass
+	inline bool FileEndsInOpenValue() const {
+		return allow_unterminated_quotes && quoted && !embedded_quote_fields && FileEndsInsideQuotes();
+	}
+	//! Adds the quoted value the end of the file left open, which has no closing quote to remove
+	void AddOpenQuotedValue(idx_t buffer_pos);
 	//! Whether a plain field is the escape and a character that spell a NULL string, which reads as NULL in any type
 	bool IsEscapedNullString(const char *value_ptr, idx_t size) const;
 	//! Routes a quoted field through the embedded quote text pass when that pass could change it

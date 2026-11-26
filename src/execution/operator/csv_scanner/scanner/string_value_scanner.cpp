@@ -30,6 +30,12 @@ static bool LoneCarriageReturn(const char *buffer, const idx_t buffer_size, cons
 	return buffer_pos + 1 < buffer_size && buffer[buffer_pos] == '\r' && buffer[buffer_pos + 1] != '\n';
 }
 
+//! The size of a quoted value the end of the file left open, a line break as its last byte is not part of it
+static idx_t OpenQuotedValueSize(const char *value_ptr, const idx_t size) {
+	const bool ends_in_line_break = size > 0 && (value_ptr[size - 1] == '\n' || value_ptr[size - 1] == '\r');
+	return ends_in_line_break ? size - 1 : size;
+}
+
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
@@ -651,6 +657,14 @@ void StringValueResult::AddUnterminatedQuoteNull() {
 	}
 	cur_col_id++;
 	chunk_col_id++;
+}
+
+void StringValueResult::AddOpenQuotedValue(const idx_t buffer_pos) {
+	const char *value_ptr = buffer_ptr + quoted_position + 1;
+	const idx_t length = OpenQuotedValueSize(value_ptr, buffer_pos - quoted_position - 1);
+	AddPossiblyEscapedValue(*this, buffer_pos, value_ptr, length, length == 0);
+	quoted = false;
+	last_position.buffer_pos = buffer_pos + 1;
 }
 
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
@@ -1843,8 +1857,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		j++;
 	}
-	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-	    result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes && !result.RecordEndsInsideQuotes()) {
+	const bool file_ended =
+	    cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size;
+	if (file_ended && result.FileEndsInsideQuotes() && !result.allow_unterminated_quotes &&
+	    !result.RecordEndsInsideQuotes()) {
 		// the file ended inside a quoted value, recorded before the value itself is added, while line records
 		// read the field left open as NULL instead
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
@@ -1874,10 +1890,17 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		bool cast_errored = false;
 		if (result.quoted && !result.comment) {
-			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
-			while (length > 0 && result.ignore_empty_values &&
-			       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
-				length--;
+			idx_t length;
+			if (file_ended && result.FileEndsInOpenValue()) {
+				// the value left open has no closing quote to remove
+				length = OpenQuotedValueSize(over_buffer_string.c_str() + result.quoted_position,
+				                             over_buffer_string.size() - result.quoted_position);
+			} else {
+				length = over_buffer_string.size() - 1 - result.quoted_position;
+				while (length > 0 && result.ignore_empty_values &&
+				       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
+					length--;
+				}
 			}
 			// remove the extra delimiter bytes before removing escapes, which can change the length of the value
 			if (extra_delimiter_bytes > length) {
@@ -2097,6 +2120,10 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 			if (result.quoted && states.IsDelimiterBytes() && !result.allow_unterminated_quotes) {
 				result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 				                             result.last_position);
+			}
+			if (result.FileEndsInOpenValue()) {
+				// AddRow then only ends the row
+				result.AddOpenQuotedValue(previous_buffer_handle->actual_size);
 			}
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
