@@ -133,7 +133,7 @@ private:
 				continue;
 			}
 
-			if (node.GetTypeId() != VariantLogicalType::OBJECT) {
+			if (node.GetTypeId() != LogicalTypeId::STRUCT) {
 				return {};
 			}
 

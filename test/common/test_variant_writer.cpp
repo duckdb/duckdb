@@ -158,7 +158,7 @@ TEST_CASE("VectorWriter<VectorVariantType> copies nested VARIANT values", "[vari
 	}
 	const VectorIterator<VectorVariantType> written(result);
 	REQUIRE(written.RowIsValid(nodes.size()));
-	REQUIRE(written[nodes.size()].GetTypeId() == VariantLogicalType::VARIANT_NULL);
+	REQUIRE(written[nodes.size()].GetTypeId() == LogicalTypeId::SQLNULL);
 }
 
 TEST_CASE("VectorWriter<VectorVariantType> appends at an offset", "[variant][variant_writer]") {

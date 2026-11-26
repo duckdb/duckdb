@@ -4,7 +4,7 @@
 namespace duckdb {
 
 optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node, int64_t index) {
-	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != VariantLogicalType::ARRAY) {
+	if (node.IsNull() || node.IsMissing() || node.GetTypeId() != LogicalTypeId::LIST) {
 		return {};
 	}
 	const auto elements = node.GetArrayChildren();
@@ -51,7 +51,7 @@ void VariantPathFunction::ResolvePaths(const VariantNode &root, const vector<vec
 			selected_data[path_idx] = ResolvePath(root, paths[path_idx]);
 		}
 	}
-	if (pending == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
+	if (pending == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != LogicalTypeId::STRUCT) {
 		return;
 	}
 	for (const auto &entry : root.GetObjectChildren()) {

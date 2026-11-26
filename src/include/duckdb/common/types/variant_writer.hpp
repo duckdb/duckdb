@@ -66,22 +66,14 @@ struct VectorWriter<VectorVariantType> {
 			FinishRow();
 			return;
 		}
-		WriteValue(node, node.GetTypeId());
+		WriteNode(node, VariantNodeStorageAccess::GetStorageType(node));
 	}
 
-	//! Write a copy of the value 'node' points at, for a node that is not NULL or missing and whose type is 'type_id'.
+	//! Write a copy of the value 'node' points at, for a node that is not NULL or missing and whose type is 'type'.
 	//! Saves looking up the type again when the caller already has it.
-	void WriteValue(const VariantNode &node, VariantLogicalType type_id) {
-		D_ASSERT(current_idx < count);
-		D_ASSERT(!node.IsNull() && !node.IsMissing() && node.GetTypeId() == type_id);
-		auto &builder = GetState().builder;
-		builder.BeginRow();
-		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
-			EmitContainer(node, builder);
-		} else {
-			builder.EmitPrimitiveNode(node, type_id);
-		}
-		FinishRow();
+	void WriteValue(const VariantNode &node, LogicalTypeId type) {
+		D_ASSERT(!node.IsNull() && !node.IsMissing() && node.GetTypeId() == type);
+		WriteNode(node, VariantTypeFromLogicalTypeId(type, type == LogicalTypeId::BOOLEAN && node.GetBool()));
 	}
 
 	void Truncate() noexcept {
@@ -102,6 +94,18 @@ private:
 			InitializeState();
 		}
 		return *state;
+	}
+
+	void WriteNode(const VariantNode &node, VariantLogicalType type_id) {
+		D_ASSERT(current_idx < count);
+		auto &builder = GetState().builder;
+		builder.BeginRow();
+		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
+			EmitContainer(node, builder);
+		} else {
+			builder.EmitPrimitiveNode(node, type_id);
+		}
+		FinishRow();
 	}
 
 	//! Records the row the builder just emitted

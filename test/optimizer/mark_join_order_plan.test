@@ -1,0 +1,53 @@
+# name: test/optimizer/mark_join_order_plan.test
+# description: MARK joins enter join ordering and respect its optimizer gate
+# group: [optimizer]
+
+statement ok
+CREATE TABLE probe AS SELECT i::INTEGER id FROM range(10) t(i);
+
+statement ok
+CREATE TABLE fact AS SELECT (i%10)::INTEGER id FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE keys AS SELECT 1::INTEGER id;
+
+# Compute the marker on the small probe input before the expanding INNER join.
+query II
+EXPLAIN SELECT p.id, p.id IN (SELECT id FROM keys)
+FROM probe p JOIN fact f ON p.id=f.id;
+----
+physical_plan	<REGEX>:[\s\S]*Join Type: INNER[\s\S]*Join Type: MARK[\s\S]*
+
+# Independent markers remain available to a filter with different probe keys.
+statement ok
+CREATE TABLE other_keys AS SELECT 3::INTEGER id;
+
+query II
+EXPLAIN SELECT p.id FROM probe p JOIN fact f ON p.id=f.id
+WHERE p.id IN (SELECT id FROM keys) OR (p.id+1) IN (SELECT id FROM other_keys);
+----
+physical_plan	<REGEX>:[\s\S]*Join Type: INNER[\s\S]*Join Type: MARK[\s\S]*Join Type: MARK[\s\S]*
+
+# A volatile probe must still run once per original join output row.
+statement ok
+CREATE SEQUENCE marker_calls;
+
+query I
+SELECT count(*) FILTER (WHERE (p.id+nextval('marker_calls')) IN (SELECT -id FROM keys))
+FROM probe p JOIN fact f ON p.id=f.id;
+----
+0
+
+query I
+SELECT currval('marker_calls');
+----
+10000
+
+statement ok
+SET disabled_optimizers='join_order';
+
+query II
+EXPLAIN SELECT p.id, p.id IN (SELECT id FROM keys)
+FROM probe p JOIN fact f ON p.id=f.id;
+----
+physical_plan	<REGEX>:[\s\S]*Join Type: MARK[\s\S]*Join Type: INNER[\s\S]*

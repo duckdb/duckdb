@@ -8,11 +8,11 @@ namespace duckdb {
 namespace {
 
 //! Whether a value of this type is returned, OBJECT, ARRAY and VARIANT_NULL values are not
-bool IsScalarType(VariantLogicalType type) {
+bool IsScalarType(LogicalTypeId type) {
 	switch (type) {
-	case VariantLogicalType::VARIANT_NULL:
-	case VariantLogicalType::OBJECT:
-	case VariantLogicalType::ARRAY:
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
 		return false;
 	default:
 		return true;

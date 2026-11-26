@@ -1,0 +1,74 @@
+# name: test/sql/table_function/glob_full_file_info.test
+# description: glob(full_file_info := true) returns the options to open every file with
+# group: [table_function]
+
+statement ok
+COPY (SELECT i FROM range(3) t(i)) TO '{TEST_DIR}/glob_extended_a.csv';
+
+statement ok
+COPY (SELECT i FROM range(3) t(i)) TO '{TEST_DIR}/glob_extended_b.csv';
+
+query IIII
+SELECT parse_filename(file), options['type']::VARCHAR, options['file_size']::BIGINT > 0, options['last_modified'] IS NOT NULL
+FROM glob('{TEST_DIR}/glob_extended_*.csv', full_file_info := true)
+----
+glob_extended_a.csv	file	true	true
+glob_extended_b.csv	file	true	true
+
+# the files are the same as those glob returns
+query I
+SELECT count(*) FROM (SELECT file FROM glob('{TEST_DIR}/glob_extended_*.csv') EXCEPT SELECT file FROM glob('{TEST_DIR}/glob_extended_*.csv', full_file_info := true))
+----
+0
+
+query I
+SELECT count(*) FROM glob(['{TEST_DIR}/glob_extended_a.csv', '{TEST_DIR}/nothing_*.csv'], full_file_info := true)
+----
+1
+
+statement error
+SELECT count(*) FROM glob('{TEST_DIR}/nothing_*.csv', allow_empty := false)
+----
+No files found that match the pattern
+
+# a path that matches nothing is globbed as a directory of files with the fallback extension
+statement ok
+COPY (SELECT i, i AS j FROM range(1) t(i)) TO '{TEST_DIR}/glob_extended_dir' (FORMAT csv, PARTITION_BY i);
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/glob_extended_dir', fallback_extension := 'csv')
+----
+1
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/glob_extended_dir')
+----
+0
+
+# files given with options to open them with are returned as-is, together with those options
+query II
+SELECT file, options FROM glob([{'filename': 'not_a_file_*.csv', 'file_size': 10}], full_file_info := true)
+----
+not_a_file_*.csv	{file_size=10}
+
+query II
+SELECT file, options FROM glob([{'filename': 'not_a_file_*.csv'}::VARIANT, '{TEST_DIR}/nothing_*.csv'::VARIANT], full_file_info := true)
+----
+not_a_file_*.csv	{}
+
+# without full_file_info glob only returns the files
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM glob('{TEST_DIR}/glob_extended_*.csv'))
+----
+file
+
+# the readers list their files through glob
+query II
+SELECT count(*), sum(i) FROM read_csv('{TEST_DIR}/glob_extended_*.csv')
+----
+6	6
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/nothing_*.csv')
+----
+No files found that match the pattern

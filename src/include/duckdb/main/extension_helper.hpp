@@ -69,6 +69,8 @@ enum class ExtensionUpdateResultTag : uint8_t {
 	REPOSITORY_NOT_TRUSTED = 7,
 	// The file of the user-provided repository the extension was installed from could not be read
 	REPOSITORY_UNREADABLE = 8,
+	// Downloading or installing the extension from its repository failed, see the error
+	UPDATE_FAILED = 9,
 
 	// The extension was re-downloaded from the repository, but due to a lack of version information
 	// its impossible to tell if the extension is actually updated
@@ -86,6 +88,8 @@ struct ExtensionUpdateResult {
 	string extension_version;
 	string prev_version;
 	string installed_version;
+	//! The error message when the tag is UPDATE_FAILED
+	string error;
 };
 
 struct ExtensionInstallOptions {
@@ -101,6 +105,19 @@ struct ExtensionInstallOptions {
 	//! Throw an error when installing an extension with a different origin than the one that is installed
 	bool throw_on_origin_mismatch = false;
 	//! Install into this extension directory instead of the primary one
+	string extension_directory;
+};
+
+//! An installed extension that needs a download to be updated, prepared by PrepareExtensionUpdates
+struct PendingExtensionUpdate {
+	//! Index of the entry in the results that this update fills in
+	idx_t result_index;
+	string extension_name;
+	//! The repository the extension is updated from
+	ExtensionRepository repository;
+	//! Whether the repository is the one the extension was installed from, so its ETag can be reused
+	bool use_etags;
+	//! The extension directory the extension is installed in
 	string extension_directory;
 };
 
@@ -152,6 +169,15 @@ public:
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	//! Update a specific extension
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
+	//! Check all installed extensions: extensions that cannot be updated get a result, the others a pending update
+	static void PrepareExtensionUpdates(ClientContext &context, vector<ExtensionUpdateResult> &results,
+	                                    vector<PendingExtensionUpdate> &pending);
+	//! Check a specific extension, as PrepareExtensionUpdates does; throws when it is not installed
+	static void PrepareExtensionUpdate(ClientContext &context, const string &extension_name,
+	                                   vector<ExtensionUpdateResult> &results, vector<PendingExtensionUpdate> &pending);
+	//! Download and install a pending update, filling in its result; failures are reported as UPDATE_FAILED
+	static void ExecuteExtensionUpdate(ClientContext &context, const PendingExtensionUpdate &pending,
+	                                   ExtensionUpdateResult &result);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);

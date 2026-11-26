@@ -792,6 +792,8 @@ static JoinType GetJoinType(JoinOrderOperatorType type) {
 		return JoinType::SEMI;
 	case JoinOrderOperatorType::ANTI:
 		return JoinType::ANTI;
+	case JoinOrderOperatorType::MARK:
+		return JoinType::MARK;
 	default:
 		throw InternalException("Operator occurrence type %d has no comparison join type", static_cast<int>(type));
 	}
@@ -876,6 +878,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 			} else {
 				auto join = make_uniq<LogicalComparisonJoin>(GetJoinType(descriptor->type));
+				join->mark_index = descriptor->mark_index;
+				join->mark_types = std::move(descriptor->mark_types);
 				join->children.push_back(std::move(left.op));
 				join->children.push_back(std::move(right.op));
 				join->conditions = std::move(descriptor->conditions);
@@ -943,10 +947,16 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		vector<reference<const RelationStats>> child_stats {left.stats, right.stats};
 		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 		    (result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::SEMI ||
+		     result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::MARK ||
 		     result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::ANTI)) {
 			result_stats = RelationStatisticsHelper::ExtractOperatorStats(*result_operator, context, child_stats);
 			if (result_stats) {
-				result_cardinality = result_stats->cardinality;
+				if (result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::MARK) {
+					result_stats->cardinality = result_cardinality;
+					result_stats->CapCurrentDomainsToCardinality();
+				} else {
+					result_cardinality = result_stats->cardinality;
+				}
 			}
 		} else {
 			result_stats = CombineRelationStats(result_operator->GetColumnBindings(), child_stats, result_cardinality);
@@ -1220,6 +1230,9 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	}
 	for (auto &operator_ptr : join_operators) {
 		auto &op = *operator_ptr;
+		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT && !JoinOrderConflictDetector::MustApplyAsOperator(op)) {
+			continue;
+		}
 		if (JoinOrderConflictDetector::IsCompletedBy(op, left) || JoinOrderConflictDetector::IsCompletedBy(op, right) ||
 		    !JoinOrderConflictDetector::IsCompletedBy(op, combined)) {
 			continue;
@@ -1228,7 +1241,7 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 				return false;
 			}
-		} else if (JoinOrderConflictDetector::MustApplyAsOperator(op) && selected_operator != &op) {
+		} else if (selected_operator != &op) {
 			return false;
 		}
 	}
