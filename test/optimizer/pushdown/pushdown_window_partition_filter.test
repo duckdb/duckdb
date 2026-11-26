@@ -19,7 +19,7 @@ create table t1 as from VALUES
 	t(a, b);
 
 statement ok
-pragma explain_output=OPTIMIZED_ONLY
+SET explain_output='OPTIMIZED_ONLY'
 
 statement ok
 create view window_with_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1 where a != 'C';
@@ -228,14 +228,14 @@ explain
 FROM avg_price
 WHERE l_linenumber IS NOT DISTINCT FROM 20;
 ----
-logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* IS NOT DISTINCT FROM make_date.20.*
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* IS NOT DISTINCT FROM '1970-01-21'::DATE.*
 
 query II
 explain
 FROM avg_price
 WHERE l_linenumber IS DISTINCT FROM 20;
 ----
-logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* IS DISTINCT FROM make_date.20.*
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* IS DISTINCT FROM '1970-01-21'::DATE.*
 
 query II
 explain
@@ -290,3 +290,52 @@ explain
 from avg_id where var like '%hel%';
 ----
 logical_opt	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+
+# A partition function can be NULL for a non-NULL argument, like year(infinity): those rows have to survive
+statement ok
+create or replace table inf_dates(d DATE);
+
+statement ok
+insert into inf_dates values ('2019-01-01'), ('2020-01-01'), ('infinity');
+
+foreach part_expr year(d) date_part('year',d)
+
+query II
+select d, n from (select d, count(*) over (partition by {part_expr}) as n from inf_dates)
+where d >= DATE '2020-01-01' order by d;
+----
+2020-01-01	1
+infinity	1
+
+# nothing can be derived from a constant the function is NULL for
+query II
+select d, n from (select d, count(*) over (partition by {part_expr}) as n from inf_dates)
+where d <= DATE 'infinity' order by d;
+----
+2019-01-01	1
+2020-01-01	1
+infinity	1
+
+query II
+select d, n from (select d, count(*) over (partition by {part_expr}) as n from inf_dates)
+where d <> DATE '2020-01-01' order by d;
+----
+2019-01-01	1
+infinity	1
+
+endloop
+
+query II
+select d, n from (select d, count(*) over (partition by extract(year from d)) as n from inf_dates)
+where d >= DATE '2020-01-01' order by d;
+----
+2020-01-01	1
+infinity	1
+
+# the weaker filter is still pushed down
+query II
+explain
+select d, n from (select d, count(*) over (partition by date_part('year', d)) as n from inf_dates)
+where d >= DATE '2020-01-01';
+----
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.*year.*IS NULL.*

@@ -370,21 +370,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 		    path, "cast_type", "The cast type has no SQL type representation")});
 	}
 	if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
-		if (!BoundCastExpression::IsDefaultCast(expression)) {
-			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "compressed_materialization_cast",
-			    "The compressed materialization projection contains a non-default cast")});
-		}
 		return ExportChild(*expression.GetChildren()[0], path, 0);
-	}
-	if (BoundCastExpression::IsDefaultCast(expression)) {
-		if (!context.client_context ||
-		    CastFunctionSet::Get(*context.client_context)
-		        .CanOverrideDefaultCast(expression.GetChildren()[0]->GetReturnType(), expression.GetReturnType())) {
-			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "default_cast_binding",
-			    "A default-only bound cast cannot be reconstructed through this SQL binding")});
-		}
 	}
 	auto child = ExportChild(*expression.GetChildren()[0], path, 0);
 	if (child.HasError()) {
@@ -393,6 +379,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	if (expression.GetReturnType().IsAggregateState()) {
 		auto storage_type = expression.GetReturnType().WithAlias("").WithExtensionInfo(nullptr);
 		auto &source_type = expression.GetChildren()[0]->GetReturnType();
+		// the export reinterprets the storage value, which bypasses a registered cast to the aggregate state
 		if (BoundCastExpression::IsTryCast(expression) || !context.client_context ||
 		    CastFunctionSet::Get(*context.client_context)
 		        .CanOverrideDefaultCast(source_type, expression.GetReturnType()) ||

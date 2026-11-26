@@ -5,7 +5,7 @@
 load {TEST_DIR}/transaction_local_parallelism.db
 
 statement ok
-PRAGMA threads=8
+SET threads=8
 
 foreach parallelism_pragma disable_verify_parallelism verify_parallelism
 
@@ -104,6 +104,10 @@ PRAGMA disable_verify_parallelism
 
 statement ok
 SET storage_block_prefetch='always_prefetch'
+
+# progress of the ORDER_BY pipeline can stall while the insert reads and writes the same table
+statement ok
+SET debug_verify_progress_ignore='STALLED:ORDER_BY'
 
 statement ok
 BEGIN

@@ -75,6 +75,8 @@ struct VariantStatsVisitor {
 	}
 	static void VisitGeometry(const string_t &geom, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
+	static void VisitGeography(const string_t &geog, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
 	static void VisitBitstring(const string_t &bits, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
 
@@ -144,86 +146,21 @@ struct VariantStatsVisitor {
 		}
 	}
 
-	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantShreddingStats &stats,
+	static void VisitDefault(const LogicalType &type, const_data_ptr_t, VariantShreddingStats &stats,
 	                         idx_t stats_column_index) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 
-static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
+static unordered_set<LogicalTypeId> GetVariantType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::ANY) {
 		return {};
 	}
-	switch (type.id()) {
-	case LogicalTypeId::STRUCT:
-		return {VariantLogicalType::OBJECT};
-	case LogicalTypeId::LIST:
-		return {VariantLogicalType::ARRAY};
-	case LogicalTypeId::BOOLEAN:
-		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
-	case LogicalTypeId::TINYINT:
-		return {VariantLogicalType::INT8};
-	case LogicalTypeId::SMALLINT:
-		return {VariantLogicalType::INT16};
-	case LogicalTypeId::INTEGER:
-		return {VariantLogicalType::INT32};
-	case LogicalTypeId::BIGINT:
-		return {VariantLogicalType::INT64};
-	case LogicalTypeId::HUGEINT:
-		return {VariantLogicalType::INT128};
-	case LogicalTypeId::UTINYINT:
-		return {VariantLogicalType::UINT8};
-	case LogicalTypeId::USMALLINT:
-		return {VariantLogicalType::UINT16};
-	case LogicalTypeId::UINTEGER:
-		return {VariantLogicalType::UINT32};
-	case LogicalTypeId::UBIGINT:
-		return {VariantLogicalType::UINT64};
-	case LogicalTypeId::UHUGEINT:
-		return {VariantLogicalType::UINT128};
-	case LogicalTypeId::FLOAT:
-		return {VariantLogicalType::FLOAT};
-	case LogicalTypeId::DOUBLE:
-		return {VariantLogicalType::DOUBLE};
-	case LogicalTypeId::DECIMAL:
-		return {VariantLogicalType::DECIMAL};
-	case LogicalTypeId::DATE:
-		return {VariantLogicalType::DATE};
-	case LogicalTypeId::TIME:
-		return {VariantLogicalType::TIME_MICROS};
-	case LogicalTypeId::TIME_TZ:
-		return {VariantLogicalType::TIME_MICROS_TZ};
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
-	case LogicalTypeId::TIMESTAMP:
-		return {VariantLogicalType::TIMESTAMP_MICROS};
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return {VariantLogicalType::TIMESTAMP_SEC};
-	case LogicalTypeId::TIMESTAMP_MS:
-		return {VariantLogicalType::TIMESTAMP_MILIS};
-	case LogicalTypeId::TIMESTAMP_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS};
-	case LogicalTypeId::BLOB:
-		return {VariantLogicalType::BLOB};
-	case LogicalTypeId::VARCHAR:
-		return {VariantLogicalType::VARCHAR};
-	case LogicalTypeId::UUID:
-		return {VariantLogicalType::UUID};
-	case LogicalTypeId::BIGNUM:
-		return {VariantLogicalType::BIGNUM};
-	case LogicalTypeId::TIME_NS:
-		return {VariantLogicalType::TIME_NANOS};
-	case LogicalTypeId::INTERVAL:
-		return {VariantLogicalType::INTERVAL};
-	case LogicalTypeId::BIT:
-		return {VariantLogicalType::BITSTRING};
-	case LogicalTypeId::GEOMETRY:
-		return {VariantLogicalType::GEOMETRY};
-	default:
+	VariantLogicalType variant_type;
+	if (type.id() == LogicalTypeId::SQLNULL || !TryVariantTypeFromLogicalTypeId(type.id(), variant_type)) {
 		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
 	}
+	return {type.id()};
 }
 
 struct DuckDBVariantShreddingState : public VariantShreddingState {
@@ -235,12 +172,12 @@ public:
 	}
 
 public:
-	const unordered_set<VariantLogicalType> &GetVariantTypes() override {
+	const unordered_set<LogicalTypeId> &GetVariantTypes() override {
 		return variant_types;
 	}
 
 private:
-	unordered_set<VariantLogicalType> variant_types;
+	unordered_set<LogicalTypeId> variant_types;
 };
 
 struct UnshreddedValue {
@@ -387,6 +324,8 @@ static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
 		return LogicalTypeId::BIT;
 	case VariantLogicalType::GEOMETRY:
 		return LogicalTypeId::GEOMETRY;
+	case VariantLogicalType::GEOGRAPHY:
+		return LogicalTypeId::GEOGRAPHY;
 	case VariantLogicalType::OBJECT:
 	case VariantLogicalType::ARRAY:
 		throw InternalException("Already handled above");
@@ -748,7 +687,8 @@ void VariantColumnData::ShredVariantData(const Vector &input, Vector &output, id
 	ListVector::SetListSize(values, 0);
 
 	auto &keys_entry = ListVector::GetChildMutable(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
+	OrderedOwningStringMap<uint32_t> dictionary;
+	auto &keys_arena = StringVector::GetStringAllocator(keys_entry);
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
 
@@ -775,7 +715,7 @@ void VariantColumnData::ShredVariantData(const Vector &input, Vector &output, id
 		auto &values_list_entry = variant_data.values_data[row];
 		values_list_entry.offset = ListVector::GetListSize(values);
 
-		VariantNormalizerState normalizer_state(row, variant_data, dictionary, keys_selvec);
+		VariantNormalizerState normalizer_state(row, variant_data, dictionary, keys_arena, keys_selvec);
 		for (idx_t i = 0; i < unshredded_values.size(); i++) {
 			auto &unshredded_value = unshredded_values[i];
 			auto value_index = unshredded_value.source_value_index;

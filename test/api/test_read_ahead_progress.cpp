@@ -2,6 +2,7 @@
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -24,7 +25,7 @@ TEST_CASE("Parquet read-ahead supports a schema supplied without binding a file"
 		query = "SELECT i FROM read_parquet('" + path +
 		        "', schema=map{'i': {'name': 'i', 'type': 'BIGINT', 'default_value': NULL}})";
 	}
-	auto plan = con.ExtractPlan(query);
+	auto plan = TestExtractPlan(con, query);
 	auto op = plan.get();
 	while (op->type != LogicalOperatorType::LOGICAL_GET) {
 		REQUIRE(op->children.size() == 1);
@@ -90,7 +91,7 @@ TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
 	std::atomic<bool> opened {false};
 	std::atomic<bool> settled {false};
 	{
-		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		ScanReadAhead read_ahead(*con.context, ScanReadAheadPolicy::ORDERED, 1, nullptr);
 		read_ahead.PushError(ErrorData("injected read-ahead error"));
 		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
 		// leaving the scope cancels and drains, retiring the open without running it
@@ -119,7 +120,7 @@ TEST_CASE("Automatic read-ahead grows its backlog within the memory budget", "[a
 		expect_overlap = false;
 	}
 
-	auto read_ahead = ScanReadAhead::Create(*con.context);
+	auto read_ahead = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::ORDERED);
 	REQUIRE(read_ahead);
 	struct JobState {};
 	const idx_t job_count = 32;
@@ -151,5 +152,58 @@ TEST_CASE("Automatic read-ahead grows its backlog within the memory budget", "[a
 	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::EXHAUSTED);
 	REQUIRE_FALSE(job);
 	REQUIRE(produced == job_count);
+}
+
+TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const auto use_affinity = GENERATE(false, true);
+	REQUIRE_NO_FAIL(con.Query("SET threads=8"));
+	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=-1"));
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit='1GB'"));
+	// without a temporary directory every reservation is granted in full
+	REQUIRE_NO_FAIL(con.Query("SET temp_directory='" + TestCreatePath("read_ahead_release_tmp") + "'"));
+
+	// another operator's reservation: it fits beside the scan's request, but not beside what the scan holds
+	auto &context = con.context->GetContext();
+	auto observer = TemporaryMemoryManager::Get(context).Register(context);
+	observer->SetRemainingSizeAndUpdateReservation(context, 770ULL * 1000 * 1000);
+	const auto full_reservation = observer->GetReservation();
+
+	auto policy = use_affinity ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
+	auto read_ahead = ScanReadAhead::Create(*con.context, policy, true, 2, 8);
+	REQUIRE(read_ahead);
+	struct JobState {};
+	const idx_t job_count = 8;
+	idx_t produced = 0;
+	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
+		if (produced == job_count) {
+			return nullptr;
+		}
+		auto job = make_uniq<ScanReadAheadJobWrapper<JobState>>();
+		job->batch_index = produced++;
+		return std::move(job);
+	};
+	TableFunctionInput input(nullptr, nullptr, nullptr);
+	duckdb::unique_ptr<ScanReadAheadJob> job;
+	auto acquire = [&]() {
+		return use_affinity ? read_ahead->AcquireReadyJob(*con.context, input, produce, job, 0)
+		                    : read_ahead->AcquireJob(*con.context, input, produce, job);
+	};
+	for (idx_t consumed = 0; consumed < job_count; consumed++) {
+		REQUIRE(acquire() == ScanReadAheadAcquire::ACQUIRED);
+		job.reset();
+		if (consumed == 0) {
+			// the scan reserved memory for its backlog
+			observer->UpdateReservation(context);
+			REQUIRE(observer->GetReservation() < full_reservation);
+		}
+	}
+	REQUIRE(acquire() == ScanReadAheadAcquire::EXHAUSTED);
+
+	// the scan still exists but no longer holds memory
+	observer->UpdateReservation(context);
+	REQUIRE(observer->GetReservation() == full_reservation);
 }
 #endif

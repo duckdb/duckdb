@@ -5,6 +5,28 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Relies on the optimizer folding a BETWEEN on a constant NULL input before its bounds overflow.",
+      "paths": [
+        "test/optimizer/between_null_input.test"
+      ]
+    },
+    {
+      "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
+      "paths": [
+        "test/optimizer/mark_join_simplifier.test",
+        "test/optimizer/mark_join_order_plan.test",
+        "test/optimizer/mark_predicates.test",
+        "test/optimizer/mark_join_scalar_subquery.test",
+        "test/optimizer/joins/filtering_join_predicate_ownership.test"
+      ]
+    },
+    {
+      "reason": "Checks the plan of an executed query through the profiler output.",
+      "paths": [
+        "test/optimizer/partial_aggregate_pushdown_serialized_plan.test"
+      ]
+    },
+    {
       "reason": "Checks the plans the scalar aggregate merge produces.",
       "paths": [
         "test/sql/optimizer/scalar_aggregate_merge_files_plan.test",
@@ -21,6 +43,7 @@
     {
       "reason": "Counts the evaluations of volatile filters that only the optimizer pushes down or keeps above.",
       "paths": [
+        "test/optimizer/join_to_semi_join_volatile.test",
         "test/optimizer/pushdown/volatile_filter_aggregate_distinct.test"
       ]
     },
@@ -53,7 +76,8 @@
       "paths": [
         "test/sql/table_function/external_resources_where_pruning.test",
         "test/optimizer/pushdown/lateral_projection_evaluation.test",
-        "test/optimizer/pushdown/cte_domain_join_filter.test"
+        "test/optimizer/pushdown/cte_domain_join_filter.test",
+        "test/sql/subquery/lateral/lateral_filter_into_delim_cte.test"
       ]
     },
     {
@@ -90,12 +114,14 @@
         "test/sql/copy/parquet/page_index/page_index_cache.test",
         "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/page_index/page_index_cache_budget.test",
+        "test/sql/copy/parquet/page_index/page_index_expression_filter.test",
         "test/parquet/utf8_validation_page_index.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
         "test/sql/copy/parquet/parquet_nan_setting.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test",
         "test/sql/optimizer/test_rowid_vector_pruning.test",
-        "test/sql/optimizer/test_rowid_vector_pruning_prefetch.test"
+        "test/sql/optimizer/test_rowid_vector_pruning_prefetch.test",
+        "test/sql/storage/read_duckdb/read_duckdb_schema_filter_pushdown.test"
       ]
     },
     {
@@ -158,7 +184,8 @@
         "test/sql/optimizer/scalar_aggregate_merge_tpcds.test",
         "test/sql/limit/test_limit0.test",
         "test/sql/optimizer/plan/test_filter_pushdown_large.test",
-        "test/optimizer/joins/denominator_cardinality_estimation.test"
+        "test/optimizer/joins/denominator_cardinality_estimation.test",
+        "test/sql/update/update_unordered_row_ids.test"
       ]
     },
     {
@@ -172,7 +199,13 @@
     {
       "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
       "paths": [
-        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test_slow"
+      ]
+    },
+    {
+      "reason": "Without the window self-join the window operator evaluates the aggregates, which fit in the memory limit.",
+      "paths": [
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
       ]
     },
     {
@@ -253,6 +286,15 @@
         "test/sql/sql_export/cte_result_matrices.test",
         "test/sql/sql_export/plan_reconstruction_coverage.test",
         "test/sql/sql_export/recursive_payload_results.test"
+      ]
+    },
+    {
+      "reason": "Checks the plans of the top-key filter, and the groups that a LIMIT without ORDER BY returns through it.",
+      "paths": [
+        "test/optimizer/group_by_top_key.test",
+        "test/optimizer/group_by_top_key_guards.test",
+        "test/optimizer/group_by_top_key_limit.test",
+        "test/optimizer/group_by_top_key_limit_guards.test"
       ]
     },
     {

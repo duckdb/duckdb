@@ -55,6 +55,7 @@ struct ColumnCheckpointInfo {
 	idx_t column_idx;
 
 public:
+	Context &GetContext();
 	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
 
@@ -208,7 +209,7 @@ public:
 
 	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group, Context &context,
 	                                                                PartialBlockManager &partial_block_manager);
 	//! If this is a nested column, "stats" are the corresponding statistics from the parent column
 	//! Otherwise, "stats" == this->statistics->stats
@@ -322,6 +323,7 @@ enum class ExtraPersistentColumnDataType : uint8_t {
 	INVALID = 0,
 	VARIANT = 1,
 	GEOMETRY = 2,
+	LIST = 3,
 };
 
 class ExtraPersistentColumnData {
@@ -347,6 +349,10 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ExtraPersistentColumnData> Deserialize(Deserializer &deserializer);
+	//! Whether the extra data can be written for the storage version of the serializer
+	virtual bool IsSupported(const Serializer &serializer) const {
+		return true;
+	}
 
 protected:
 	explicit ExtraPersistentColumnData(ExtraPersistentColumnDataType type_p) : type(type_p) {

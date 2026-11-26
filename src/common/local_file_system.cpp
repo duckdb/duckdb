@@ -1,3 +1,4 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
@@ -336,7 +337,7 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
 			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fl.l_pid);
 			if (!process.empty()) {
 				extended_error = "Conflicting lock is held in " + process;
 			}
@@ -2288,7 +2289,7 @@ private:
 
 LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), fs(fs), path(fs.ExpandPath(path_p, opener)),
+    : LazyMultiFileList(FileOpener::TryGetContext(opener)), fs(fs), path(fs.ExpandPath(path_p, opener)),
       opener(opener) {
 	if (path.empty()) {
 		finished = true;
@@ -2438,10 +2439,6 @@ bool LocalGlobResult::ExpandNextPath() const {
 unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
                                                              optional_ptr<FileOpener> opener) {
 	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
-}
-
-unique_ptr<FileSystem> FileSystem::CreateLocal() {
-	return make_uniq<LocalFileSystem>();
 }
 
 } // namespace duckdb

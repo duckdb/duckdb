@@ -258,7 +258,7 @@ struct CredentialsFixture {
 		RegisterTestSecretTypes(*db.instance);
 		auto fs_p = make_uniq<MemoryFileSystem>();
 		fs = fs_p.get();
-		db.instance->GetFileSystem().RegisterSubSystem(std::move(fs_p));
+		VirtualFileSystem::Get(*db.instance).RegisterSubSystem(std::move(fs_p));
 		fs->files["mem://bucket/table/a.bin"] = "abc";
 		fs->files["mem://bucket/table/b.bin"] = "def";
 		REQUIRE_NO_FAIL(con.Query("CREATE SECRET by_path (TYPE file_credentials_test, SCOPE 'mem://bucket/table/', "
@@ -406,7 +406,7 @@ TEST_CASE("A named secret of another type fails the read, and a reader of severa
 	f.con.BeginTransaction();
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", other)); },
 	                  "is of type \"file_credentials_test_other\", which this read does not take");
-	ClientContextFileOpener opener(f.Context());
+	ClientContextFileOpener opener(f.Context().GetContext());
 	FileOpenerInfo info(CredentialsFixture::File("mem://bucket/table/a.bin", other));
 	const char *with_other[] = {TEST_TYPE, "FILE_CREDENTIALS_TEST_OTHER"};
 	KeyValueSecretReader reader(opener, &info, with_other, 2);

@@ -335,21 +335,21 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 	}
 
 	SECTION("Unclosed quote") {
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\""), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x"), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x "), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\","), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x,"), ParserException);
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\""), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\"x"), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\"x "), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\","), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\"x,"), Catch::Contains("Invalid quoted list"));
 	}
 
 	SECTION("Unexpected quote") {
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("abc\"def"), ParserException);
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("abc\"def"), Catch::Contains("Invalid quoted list"));
 	}
 
 	SECTION("Missing delimiter") {
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\"\"y\""), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\" \"y\""), ParserException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("x y"), ParserException);
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\"x\"\"y\""), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("\"x\" \"y\""), Catch::Contains("Invalid quoted list"));
+		REQUIRE_THROWS_WITH(StringUtil::SplitWithQuote("x y"), Catch::Contains("Invalid quoted list"));
 	}
 }
 

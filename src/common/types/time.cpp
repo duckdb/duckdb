@@ -16,6 +16,33 @@
 namespace duckdb {
 static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 
+static bool OnlySpaceRemains(const char *buf, idx_t len, idx_t &pos) {
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+		pos++;
+	}
+	return pos == len;
+}
+
+//	The offset is Z or ±HH[:MM[:SS]] (PG claims they don't support :SS but they do...)
+static bool TryParseOffsetSuffix(const char *buf, idx_t len, idx_t &pos, int32_t &offset, bool &has_offset) {
+	has_offset = !OnlySpaceRemains(buf, len, pos);
+	int hh = 0;
+	int mm = 0;
+	int ss = 0;
+	if (has_offset && buf[pos] == 'Z') {
+		pos++;
+	} else if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm, ss)) {
+		return false;
+	}
+
+	//	Offsets are in seconds in the open interval (-16:00:00, +16:00:00)
+	offset = ((hh * Interval::MINS_PER_HOUR) + mm) * Interval::SECS_PER_MINUTE + ss;
+	if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
+		return false;
+	}
+	return OnlySpaceRemains(buf, len, pos);
+}
+
 // string format is hh:mm:ss.microsecondsZ
 // microseconds and Z are optional
 // ISO 8601
@@ -105,6 +132,9 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	}
 
 	micros = 0;
+	if (nanos) {
+		*nanos = 0;
+	}
 	if (pos < len && buf[pos] == '.') {
 		pos++;
 		// we expect some microseconds
@@ -113,10 +143,20 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			// do we expect nanoseconds?
 			mult *= Interval::NANOS_PER_MICRO;
 		}
+		int32_t round_digit = -1;
+		bool round_nonzero = false;
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				micros += (buf[pos] - '0') * mult;
+			} else if (round_digit < 0) {
+				round_digit = buf[pos] - '0';
+			} else if (buf[pos] != '0') {
+				round_nonzero = true;
 			}
+		}
+		// round half to even, so that a tie does not always round up
+		if (round_digit >= 5 && (round_digit > 5 || round_nonzero || micros % 2 != 0)) {
+			micros++;
 		}
 		if (nanos) {
 			*nanos = UnsafeNumericCast<int32_t>(micros % Interval::NANOS_PER_MICRO);
@@ -124,16 +164,8 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		}
 	}
 
-	// in strict mode, check remaining string for non-space characters
-	if (strict) {
-		// skip trailing spaces
-		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
-			pos++;
-		}
-		// check position. if end was not reached, non-space chars remaining
-		if (pos < len) {
-			return false;
-		}
+	if (strict && !OnlySpaceRemains(buf, len, pos)) {
+		return false;
 	}
 
 	// a negative interval accumulates below zero, so its minimum fits
@@ -173,6 +205,12 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		}
 		return false;
 	}
+	// a TIME drops a UTC offset, as the TIMESTAMP cast does; a strict parse has already rejected one
+	int32_t offset;
+	bool has_offset;
+	if (!TryParseOffsetSuffix(buf, len, pos, offset, has_offset)) {
+		return false;
+	}
 	return result.value <= Interval::MICROS_PER_DAY;
 }
 
@@ -200,38 +238,9 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		return false;
 	}
 
-	// skip optional whitespace before offset
-	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
-		pos++;
-	}
-
-	//	Get the ±HH[:MM[:SS]] part
-	//	(PG claims they don't support :SS but they do...)
-	int hh = 0;
-	int mm = 0;
-	int ss = 0;
-	has_offset = (pos < len);
-	if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm, ss)) {
+	int32_t offset;
+	if (!TryParseOffsetSuffix(buf, len, pos, offset, has_offset)) {
 		return false;
-	}
-
-	//	Offsets are in seconds in the open interval (-16:00:00, +16:00:00)
-	int32_t offset = ((hh * Interval::MINS_PER_HOUR) + mm) * Interval::SECS_PER_MINUTE + ss;
-
-	if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
-		return false;
-	}
-
-	// in strict mode, check remaining string for non-space characters
-	if (strict) {
-		// skip trailing spaces
-		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
-			pos++;
-		}
-		// check position. if end was not reached, non-space chars remaining
-		if (pos < len) {
-			return false;
-		}
 	}
 
 	result = dtime_tz_t(time_part, offset);

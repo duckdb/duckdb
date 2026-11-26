@@ -16,6 +16,7 @@
 #include <condition_variable>
 
 namespace duckdb {
+class DataTable;
 class DuckTransactionManager;
 class DuckTransaction;
 struct UndoBufferProperties;
@@ -42,11 +43,11 @@ public:
 	static DuckTransactionManager &Get(AttachedDatabase &db);
 
 	//! Start a new transaction
-	Transaction &StartTransaction(ClientContext &context) override;
+	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
 	//! Commit the given transaction
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
-	void RollbackTransaction(Transaction &transaction) override;
+	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
@@ -67,7 +68,12 @@ public:
 		return ++next_checkpoint_id;
 	}
 	void SetActiveCheckpoint(idx_t checkpoint_id);
-	void ResetActiveCheckpoint();
+	//! Ends the checkpoint. If it succeeded, frees the tables that drops handed over to it
+	void ResetActiveCheckpoint(bool checkpoint_succeeded);
+	//! Hands dropped tables over to the running checkpoint, which frees them. False if none runs: the commit does
+	bool DeferDroppedTables(const vector<shared_ptr<DataTable>> &tables);
+	//! The next start time, and the earliest of the active transactions: the same if none, 0 if a cleanup waits
+	void GetStartTimes(transaction_t &next_start, transaction_t &lowest_active_start);
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -130,6 +136,10 @@ private:
 
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
+	//! Lets the block manager reuse the blocks that checkpoints freed before every active transaction started
+	void ReuseFreedBlocks(transaction_t lowest_start) noexcept;
+	//! The earliest start time of the active transactions, checkpoints aside. Caller holds the transaction lock
+	transaction_t LowestActiveStart();
 
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	bool HasUnsyncedCommits();
@@ -150,6 +160,12 @@ private:
 	//! The lowest bound any active transaction reads at. A version preceding it is visible to
 	//! every active transaction, so whatever it supersedes can be cleaned up or compacted
 	atomic<VisibilityBound> lowest_visibility_bound;
+	//! Guards the dropped tables that are handed over to a checkpoint
+	mutex deferred_tables_lock;
+	//! The dropped tables that the running checkpoint frees once it has written its header
+	vector<shared_ptr<DataTable>> deferred_tables;
+	//! The lowest start time of the transactions that stayed active when the last one ended, checkpoints aside
+	atomic<transaction_t> lowest_remaining_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
 	//! The currently active checkpoint, zero when none is running

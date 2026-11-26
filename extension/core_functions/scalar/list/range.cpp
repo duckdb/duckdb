@@ -2,6 +2,8 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
@@ -18,7 +20,8 @@ struct NumericRangeInfo {
 		return 1;
 	}
 
-	static uint64_t ListLength(int64_t start_value, int64_t end_value, int64_t increment_value, bool inclusive_bound) {
+	static uint64_t ListLength(Context &, int64_t start_value, int64_t end_value, int64_t increment_value,
+	                           bool inclusive_bound) {
 		if (increment_value == 0) {
 			return 0;
 		}
@@ -58,8 +61,8 @@ struct TimestampRangeInfo {
 	static interval_t DefaultIncrement() {
 		throw InternalException("Default increment not implemented for timestamp range");
 	}
-	static uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value,
-	                           bool inclusive_bound) {
+	static uint64_t ListLength(Context &context, timestamp_t start_value, timestamp_t end_value,
+	                           interval_t increment_value, bool inclusive_bound) {
 		bool is_positive = increment_value.months > 0 || increment_value.days > 0 || increment_value.micros > 0;
 		bool is_negative = increment_value.months < 0 || increment_value.days < 0 || increment_value.micros < 0;
 		if (!is_negative && !is_positive) {
@@ -90,6 +93,10 @@ struct TimestampRangeInfo {
 				if (total_values > NumericLimits<uint32_t>::Maximum()) {
 					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
 				}
+				// counting the elements can take billions of steps
+				if (total_values % STANDARD_VECTOR_SIZE == 0) {
+					context.FastInterruptCheck();
+				}
 			}
 		} else {
 			// positive interval, start_value is going up
@@ -98,6 +105,10 @@ struct TimestampRangeInfo {
 				total_values++;
 				if (total_values > NumericLimits<uint32_t>::Maximum()) {
 					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+				}
+				// counting the elements can take billions of steps
+				if (total_values % STANDARD_VECTOR_SIZE == 0) {
+					context.FastInterruptCheck();
 				}
 			}
 		}
@@ -175,12 +186,12 @@ public:
 		increment_value = ListIncrementValue(row_idx);
 	}
 
-	uint64_t ListLength(idx_t row_idx) {
+	uint64_t ListLength(Context &context, idx_t row_idx) {
 		typename OP::TYPE start_value;
 		typename OP::TYPE end_value;
 		typename OP::INCREMENT_TYPE increment_value;
 		GetListValues(row_idx, start_value, end_value, increment_value);
-		return OP::ListLength(start_value, end_value, increment_value, INCLUSIVE_BOUND);
+		return OP::ListLength(context, start_value, end_value, increment_value, INCLUSIVE_BOUND);
 	}
 
 private:
@@ -192,9 +203,11 @@ template <class OP, bool INCLUSIVE_BOUND>
 void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
+	auto &context = state.GetContext();
 	RangeInfoStruct<OP, INCLUSIVE_BOUND> info(args);
 	auto args_size = args.size();
 	auto list_writer = FlatVector::Writer<VectorListType<typename OP::TYPE>>(result, args_size);
+	idx_t written_since_check = 0;
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
 			list_writer.WriteNull();
@@ -202,7 +215,7 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		}
 		typename OP::TYPE start_value = info.StartListValue(i);
 		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);
-		const auto length = info.ListLength(i);
+		const auto length = info.ListLength(context, i);
 
 		typename OP::TYPE range_value = start_value;
 		bool seen_value = false;
@@ -212,6 +225,12 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 			child_writer.WriteValue(range_value);
 			seen_value = true;
+		}
+		// writing long lists can take billions of steps
+		written_since_check += length;
+		if (written_since_check >= STANDARD_VECTOR_SIZE) {
+			context.FastInterruptCheck();
+			written_since_check = 0;
 		}
 	}
 }

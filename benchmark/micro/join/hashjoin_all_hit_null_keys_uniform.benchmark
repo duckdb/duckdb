@@ -1,0 +1,16 @@
+# name: benchmark/micro/join/hashjoin_all_hit_null_keys_uniform.benchmark
+# description: Hash join probe where every non-NULL key hits a 2M-row build, 4.5% NULL keys, keys in random order
+# group: [join]
+
+name Hash Join All Hit NULL Keys Uniform
+group join
+
+load
+CREATE TABLE build AS SELECT hash(range) AS k FROM range(2000000);
+CREATE TABLE probe AS SELECT CASE WHEN hash(i * 7 + 1) % 1000 < 45 THEN NULL ELSE hash(hash(i) % 2000000) END AS k FROM range(50000000) t(i);
+
+run
+SELECT count(*) FROM probe JOIN build ON probe.k = build.k;
+
+result I
+47749721

@@ -151,15 +151,29 @@ void DictFSSTCompressionStorage::StringScan(ColumnSegment &segment, ColumnScanSt
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
+static bool PreferSparseDictionary(const ColumnSegment &segment, const CompressedStringScanState &scan_state,
+                                   idx_t vector_count, idx_t sel_count) {
+	return scan_state.layout.mode == DictFSSTMode::DICT_FSST && scan_state.layout.dict_count >= 512 &&
+	       idx_t(scan_state.layout.dict_count) * 8 >= segment.count.load() && sel_count <= vector_count / 64;
+}
+
 void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                     const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	D_ASSERT(sel_count <= vector_count);
 	D_ASSERT(sel_count == 0 || sel.get_index(sel_count - 1) < vector_count);
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
+	if (!scan_state.dictionary && PreferSparseDictionary(segment, scan_state, vector_count, sel_count)) {
+		scan_state.Select(result, result_offset, state.GetPositionInSegment(), sel, sel_count,
+		                  StringScanType::COPY_STRINGS);
+		return;
+	}
 	if (scan_state.layout.mode != DictFSSTMode::FSST_ONLY && scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
-		// scan + slice, so that we can emit a dictionary vector
-		DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
-		result.Slice(sel, sel_count);
+		if (sel_count <= vector_count / 64) {
+			scan_state.SelectToDictionaryVector(result, state.GetPositionInSegment(), vector_count, sel, sel_count);
+		} else {
+			DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
+			result.Slice(sel, sel_count);
+		}
 		return;
 	}
 	scan_state.Select(result, result_offset, state.GetPositionInSegment(), sel, sel_count, state.string_scan_type);
@@ -174,63 +188,56 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 	D_ASSERT(sel_count <= vector_count);
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 	auto start = state.GetPositionInSegment();
+	const bool sparse_dictionary = PreferSparseDictionary(segment, scan_state, vector_count, sel_count) &&
+	                               (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state));
+	if (sparse_dictionary || (scan_state.layout.mode == DictFSSTMode::FSST_ONLY && sel_count <= vector_count / 2)) {
+		SelectionVector input_rows(sel_count);
+		SelectionVector compact_sel(sel_count);
+		for (idx_t i = 0; i < sel_count; i++) {
+			input_rows.set_index(i, sel.get_index(i));
+			compact_sel.set_index(i, i);
+		}
+		Vector decoded(result.GetType());
+		scan_state.Select(decoded, 0, start, input_rows, sel_count,
+		                  sparse_dictionary && !scan_state.dictionary ? StringScanType::COPY_STRINGS
+		                                                              : state.string_scan_type);
+		const auto decoded_count = sel_count;
+		ColumnSegment::FilterSelection(compact_sel, decoded, filter_state, decoded_count, sel_count);
+		if (sel_count == 0) {
+			return;
+		}
+
+		// Restore the original row positions expected by the scan.
+		StringVector::AddHeapReference(result, decoded);
+		if (scan_state.dictionary) {
+			StringVector::AddHeapReference(result, scan_state.dictionary->data);
+		}
+		auto values = decoded.Values<string_t>();
+		auto writer = FlatVector::Writer<string_t>(result, vector_count);
+		idx_t survivor = 0;
+		for (idx_t row = 0; row < vector_count; row++) {
+			if (survivor == sel_count || input_rows.get_index(compact_sel.get_index(survivor)) != row) {
+				writer.WriteNull();
+				continue;
+			}
+			auto value = values[compact_sel.get_index(survivor)];
+			if (value.IsValid()) {
+				writer.WriteStringRef(value.GetValue());
+			} else {
+				writer.WriteNull();
+			}
+			sel.set_index(survivor++, row);
+		}
+		D_ASSERT(survivor == sel_count);
+		return;
+	}
 	if (scan_state.AllowDictionaryScan(vector_count)) {
-		// only pushdown filters on dictionaries
-		if (!scan_state.filter_result) {
-			// no filter result yet - apply filter to the dictionary
-			// initialize the filter result - setting everything to false
-			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.layout.dict_count);
-
-			// Slot zero represents NULL and is not necessarily referenced by any row.
-			idx_t non_null_count = scan_state.layout.dict_count - 1;
-			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.layout.dict_count);
-			SelectionVector dict_sel;
-			idx_t filter_count = non_null_count;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, filter_state, non_null_count, filter_count);
-			D_ASSERT(filter_count <= non_null_count);
-
-			// now set all matching tuples to true
-			for (idx_t i = 0; i < filter_count; i++) {
-				auto idx = dict_sel.get_index(i) + 1;
-				D_ASSERT(idx < scan_state.layout.dict_count);
-				scan_state.filter_result[idx] = true;
-			}
+		if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
+			scan_state.filter_cache =
+			    filter_state.CreateCache(scan_state.dictionary->data, scan_state.layout.dict_count);
 		}
-		// Till now, we have a filter result for all non-NULL values.
-		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
-		SelectionVector new_sel(sel_count);
-		idx_t approved_tuple_count = 0;
-		if (!sel.IsSet() && (scan_state.null_filter_result_initialized || !segment.GetStats().CanHaveNull())) {
-			approved_tuple_count =
-			    SelectionVector::SelectFromBoolean(scan_state.filter_result.get(), &dict_sel, sel_count,
-			                                       array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
-		} else {
-			for (idx_t idx = 0; idx < sel_count; idx++) {
-				auto row_idx = sel.get_index(idx);
-				D_ASSERT(row_idx < vector_count);
-				auto dict_offset = dict_sel.get_index(row_idx);
-				// Evaluate NULL only when slot zero is referenced by an actual row.
-				if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
-					Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
-					SelectionVector null_sel;
-					idx_t null_filter_count = 1;
-					ColumnSegment::FilterSelection(null_sel, null_data, filter_state, 1, null_filter_count);
-					scan_state.filter_result[0] = null_filter_count == 1;
-					scan_state.null_filter_result_initialized = true;
-				}
-				// Check filter result for the value at the offset and assign selection vector.
-				if (!scan_state.filter_result[dict_offset]) {
-					// does not pass the filter
-					continue;
-				}
-				new_sel.set_index(approved_tuple_count++, row_idx);
-			}
-		}
-		if (approved_tuple_count < vector_count) {
-			sel.Initialize(new_sel);
-		}
-		sel_count = approved_tuple_count;
-
+		const auto &dict_sel = scan_state.GetSelVec(start, vector_count);
+		scan_state.filter_cache->Filter(dict_sel, sel, sel_count);
 		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
 		return;
 	}
@@ -285,6 +292,7 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	res.select = dict_fsst::DictFSSTSelect;
 	res.filter = dict_fsst::DictFSSTFilter;
 	res.get_segment_info = dict_fsst::DictFSSTGetSegmentInfo;
+	res.zero_initialize_segments = false;
 	return res;
 }
 

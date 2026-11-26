@@ -83,12 +83,14 @@ private:
 	void BuildLeftJoinPredicates();
 	void BuildInnerCompanionSets();
 	void ClearExtractedExpressions();
+	vector<reference<FilterInfo>> GetPendingFilters(JoinRelationSet &root) const;
 	idx_t FindGraphComponent(RelationIndex relation);
 	idx_t GetGraphComponent(RelationIndex relation) const;
 	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
-	                                   const vector<RelationStats> &relation_stats);
+	                                   const vector<RelationStats> &relation_stats,
+	                                   const vector<reference<FilterInfo>> &pending_filters);
 
 public:
 	ClientContext &context;
@@ -106,6 +108,8 @@ private:
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
+	//! Only these operator occurrences can restrict a candidate join.
+	vector<reference<const JoinOrderOperator>> candidate_constraints;
 	unordered_set<idx_t> operator_costing_predicates;
 	unordered_set<idx_t> reconstructed_operators;
 	vector<idx_t> inner_companion_roots;

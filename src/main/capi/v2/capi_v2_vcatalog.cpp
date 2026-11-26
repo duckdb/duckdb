@@ -55,7 +55,7 @@ struct CV2VCatalogDefinition {
 
 //! Invokes a callback with a live error slot, rethrowing the error it reports.
 template <class FN>
-static void InvokeCallback(FN &&callback) {
+static void InvokeCatalogCallback(FN &&callback) {
 	CV2ErrorInfo err;
 	auto err_ptr = Convert(&err);
 	callback(&err_ptr);
@@ -66,13 +66,13 @@ static void InvokeCallback(FN &&callback) {
 
 //! Invokes a catalog callback with the context it runs for, if there is one.
 template <class FN>
-static void InvokeCallback(optional_ptr<ClientContext> context, FN &&callback) {
+static void InvokeCatalogCallback(optional_ptr<ClientContext> context, FN &&callback) {
 	if (!context) {
-		InvokeCallback([&](duckdb_v2_error_info_handle *err) { callback(nullptr, err); });
+		InvokeCatalogCallback([&](duckdb_v2_error_info_handle *err) { callback(nullptr, err); });
 		return;
 	}
 	CV2CallbackContext callback_context(*context);
-	InvokeCallback([&](duckdb_v2_error_info_handle *err) { callback(Convert(&callback_context), err); });
+	InvokeCatalogCallback([&](duckdb_v2_error_info_handle *err) { callback(Convert(&callback_context), err); });
 }
 
 static void *GetState(const unique_ptr<CV2UserData> &state) {
@@ -533,7 +533,7 @@ static auto Convert(CV2VCatalogAttachInfo *info) -> duckdb_v2_vcatalog_attach_in
 //----------------------------------------------------------------------------------------------------------------------
 class CV2VCatalogTransaction final : public Transaction {
 public:
-	CV2VCatalogTransaction(TransactionManager &manager, ClientContext &context) : Transaction(manager, context) {
+	CV2VCatalogTransaction(TransactionManager &manager, Context &context) : Transaction(manager, context) {
 	}
 
 	unique_ptr<CV2UserData> transaction_state;
@@ -652,7 +652,7 @@ optional_ptr<CatalogEntry> CV2VirtualCatalog::ResolveSchema(CatalogTransaction t
 		return nullptr;
 	}
 	CV2VCatalogSchemaFindInfo info(*this, GetTransaction(transaction), name);
-	InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 		find_cb(Convert(&info), Convert(this), context, err);
 	});
 	return info.result.get();
@@ -664,7 +664,7 @@ void CV2VirtualCatalog::ScanSchemas(ClientContext &context, std::function<void(S
 		return;
 	}
 	CV2VCatalogSchemaListInfo info(*this, Transaction::Get(context, *this).Cast<CV2VCatalogTransaction>());
-	InvokeCallback(&context, [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(&context, [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
 		list_cb(Convert(&info), Convert(this), callback_context, err);
 	});
 	// Visited once the callback returned, so the engine's callback cannot run inside the implementation's
@@ -734,7 +734,7 @@ optional_ptr<CatalogEntry> CV2VirtualCatalog::ResolveTable(CatalogTransaction tr
 		return nullptr;
 	}
 	CV2VCatalogTableFindInfo info(GetTransaction(transaction), schema, name);
-	InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 		find_cb(Convert(&info), Convert(this), context, err);
 	});
 	return info.result.get();
@@ -747,7 +747,7 @@ void CV2VirtualCatalog::ListTables(ClientContext &context, CV2VCatalogSchema &sc
 		return;
 	}
 	CV2VCatalogTableListInfo info(Transaction::Get(context, *this).Cast<CV2VCatalogTransaction>(), schema);
-	InvokeCallback(&context, [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(&context, [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
 		list_cb(Convert(&info), Convert(this), callback_context, err);
 	});
 	for (auto &entry : info.entries) {
@@ -945,9 +945,10 @@ void CV2VirtualCatalog::DropEntry(CatalogTransaction transaction, CatalogEntry &
 			throw NotImplementedException("Dropping %s is not supported in %s databases", what, definition.name);
 		}
 		CV2VCatalogDropInfo<std::remove_reference_t<decltype(kind_entry)>> kind_info(kind_entry);
-		InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
-			drop_cb(Convert(&info), Convert(&kind_info), Convert(this), context, err);
-		});
+		InvokeCatalogCallback(transaction.context,
+		                      [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+			                      drop_cb(Convert(&info), Convert(&kind_info), Convert(this), context, err);
+		                      });
 	};
 	switch (entry.type) {
 	case CatalogType::SCHEMA_ENTRY:
@@ -996,7 +997,7 @@ optional_ptr<CatalogEntry> CV2VirtualCatalog::CreateSchema(CatalogTransaction tr
 	}
 	CV2VCatalogEntryCreateInfo create_info(GetTransaction(transaction), name);
 	CV2VCatalogSchemaCreateInfo schema_info(*this);
-	InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 		create_cb(Convert(&create_info), Convert(&schema_info), Convert(this), context, err);
 	});
 	if (!schema_info.result) {
@@ -1033,7 +1034,7 @@ optional_ptr<CatalogEntry> CV2VirtualCatalog::CreateTable(CatalogTransaction tra
 	}
 	CV2VCatalogEntryCreateInfo create_info(GetTransaction(transaction), name);
 	CV2VCatalogTableCreateInfo table_info(schema, info);
-	InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 		create_cb(Convert(&create_info), Convert(&table_info), Convert(this), context, err);
 	});
 	if (!table_info.result) {
@@ -1055,7 +1056,7 @@ optional_ptr<CatalogEntry> CV2VirtualCatalog::CreateView(CatalogTransaction tran
 	}
 	CV2VCatalogEntryCreateInfo create_info(GetTransaction(transaction), name);
 	CV2VCatalogViewCreateInfo view_info(schema, info);
-	InvokeCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback(transaction.context, [&](duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 		create_cb(Convert(&create_info), Convert(&view_info), Convert(this), context, err);
 	});
 	if (!view_info.result) {
@@ -1125,9 +1126,10 @@ TableFunction CV2VCatalogTable::GetScanFunction(ClientContext &context, unique_p
 	auto &database = ParentCatalog().Cast<CV2VirtualCatalog>();
 	CV2VCatalogTableScanBindInfo info(Transaction::Get(context, database).Cast<CV2VCatalogTransaction>(), *this);
 	if (scan.bind_cb) {
-		InvokeCallback(&context, [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
-			scan.bind_cb(Convert(&info), Convert(&database), callback_context, err);
-		});
+		InvokeCatalogCallback(&context,
+		                      [&](duckdb_v2_context_handle callback_context, duckdb_v2_error_info_handle *err) {
+			                      scan.bind_cb(Convert(&info), Convert(&database), callback_context, err);
+		                      });
 	}
 	auto function = *scan.function;
 	bind_data = CV2BindTableScan(function, *this, std::move(info.result));
@@ -1141,14 +1143,14 @@ public:
 	}
 
 	//! Runs under the lock of the client's MetaTransaction.
-	Transaction &StartTransaction(ClientContext &context) override {
+	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override {
 		auto transaction = make_uniq<CV2VCatalogTransaction>(*this, context);
 		auto begin_cb = catalog.definition.begin_cb;
 		if (begin_cb) {
-			auto read_only = db.IsReadOnly() ||
-			                 (context.transaction.HasActiveTransaction() && MetaTransaction::Get(context).IsReadOnly());
+			auto read_only = db.IsReadOnly() || meta_transaction.IsReadOnly();
 			CV2VCatalogBeginInfo info(*transaction, read_only);
-			InvokeCallback([&](duckdb_v2_error_info_handle *err) { begin_cb(Convert(&info), Convert(&catalog), err); });
+			InvokeCatalogCallback(
+			    [&](duckdb_v2_error_info_handle *err) { begin_cb(Convert(&info), Convert(&catalog), err); });
 		}
 		auto &result = *transaction;
 		lock_guard<mutex> guard(transaction_lock);
@@ -1163,7 +1165,7 @@ public:
 		if (commit_cb) {
 			try {
 				CV2VCatalogEndInfo info(vcatalog_transaction);
-				InvokeCallback([&](duckdb_v2_error_info_handle *err) {
+				InvokeCatalogCallback([&](duckdb_v2_error_info_handle *err) {
 					commit_cb(reinterpret_cast<duckdb_v2_vcatalog_transaction_commit_info_handle>(&info),
 					          Convert(&catalog), err);
 				});
@@ -1179,7 +1181,7 @@ public:
 		return error;
 	}
 
-	void RollbackTransaction(Transaction &transaction) override {
+	void RollbackTransaction(ClientContext &context, Transaction &transaction) override {
 		auto error = TryRollback(transaction.Cast<CV2VCatalogTransaction>());
 		RemoveTransaction(transaction);
 		if (error.HasError()) {
@@ -1198,7 +1200,7 @@ private:
 		}
 		try {
 			CV2VCatalogEndInfo info(transaction);
-			InvokeCallback([&](duckdb_v2_error_info_handle *err) {
+			InvokeCatalogCallback([&](duckdb_v2_error_info_handle *err) {
 				rollback_cb(reinterpret_cast<duckdb_v2_vcatalog_transaction_rollback_info_handle>(&info),
 				            Convert(&catalog), err);
 			});
@@ -1246,7 +1248,7 @@ static unique_ptr<Catalog> AttachVCatalog(optional_ptr<StorageExtensionInfo> sto
 	CV2VCatalogAttachInfo attach_info(*catalog, name, info.path, options.access_mode == AccessMode::READ_ONLY,
 	                                  options.options);
 	CV2CallbackContext callback_context(context);
-	InvokeCallback([&](duckdb_v2_error_info_handle *err) {
+	InvokeCatalogCallback([&](duckdb_v2_error_info_handle *err) {
 		definition.attach_cb(Convert(&attach_info), Convert(catalog.get()), Convert(&callback_context), err);
 	});
 	attach_info.CheckOptionsRecognized();

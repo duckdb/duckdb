@@ -203,7 +203,8 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang" AND NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
 elseif(WIN32 AND MSVC)
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
+  # clang-cl sets MSVC=TRUE and takes this branch, so /Gw is needed here too
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy /Gw")
 endif()
 
 option(SHADOW_FORBIDDEN_FUNCTIONS
@@ -1322,17 +1323,28 @@ if(PREBUILT_BINARY)
     )
   endif()
 
-  # capabilities shipped next to the prebuilt library become their archive
-  # targets
+  # capabilities shipped next to the prebuilt library, or at their place in the
+  # build tree that made it, become their archive targets
   get_filename_component(_DUCKDB_PREBUILT_DIRECTORY "${PREBUILT_BINARY_PATH}"
                          DIRECTORY)
-  foreach(DUCKDB_PREBUILT_CAPABILITY duckdb_httplib duckdb_loadable_extensions)
+  foreach(DUCKDB_PREBUILT_CAPABILITY_ENTRY
+          duckdb_httplib:main/http duckdb_loadable_extensions:main/extension)
+    string(REPLACE ":" ";" DUCKDB_PREBUILT_CAPABILITY_ENTRY
+                   "${DUCKDB_PREBUILT_CAPABILITY_ENTRY}")
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 0 DUCKDB_PREBUILT_CAPABILITY)
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 1
+         _DUCKDB_PREBUILT_CAPABILITY_SUBDIR)
     if(MSVC)
-      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/${DUCKDB_PREBUILT_CAPABILITY}.lib")
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "${DUCKDB_PREBUILT_CAPABILITY}.lib")
     else()
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+    endif()
+    set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+        "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}")
+    if(NOT EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}")
       set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+          "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_SUBDIR}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}"
+      )
     endif()
     if(EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
        AND NOT TARGET ${DUCKDB_PREBUILT_CAPABILITY})

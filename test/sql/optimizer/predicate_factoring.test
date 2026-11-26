@@ -131,3 +131,106 @@ query II
 EXPLAIN SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
 ----
 physical_plan	<REGEX>:.*Filters:.*a = 1.*Filters:.*x = 1.*
+
+# The predicates a disjunct has on one column hold together: a range is factored out per disjunct
+statement ok
+CREATE TABLE r AS SELECT i AS a, i % 7 AS b, i % 11 AS c FROM range(100) t(i);
+
+statement ok
+INSERT INTO r VALUES (NULL, 1, 2), (15, NULL, NULL), (55, NULL, 2);
+
+# Adjacent ranges: the factored ranges merge into one range on the scan
+query II
+SELECT count(*), sum(a) FROM r WHERE (a BETWEEN 10 AND 19 AND b = 1) OR (a BETWEEN 20 AND 29 AND c = 2)
+----
+2	39
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a BETWEEN 10 AND 19 AND b = 1) OR (a BETWEEN 20 AND 29 AND c = 2)
+----
+physical_plan	<REGEX>:.*Filters: \(a >= 10\) AND \(a <= 29\).*
+
+# Disjoint ranges
+query II
+SELECT count(*), sum(a) FROM r WHERE (a BETWEEN 10 AND 19 AND b = 1) OR (a BETWEEN 50 AND 59 AND c = 2)
+----
+3	127
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a BETWEEN 10 AND 19 AND b = 1) OR (a BETWEEN 50 AND 59 AND c = 2)
+----
+physical_plan	<REGEX>:.*\(\(a >= 10\) AND \(a <= 19\)\) OR \(\(a >= 50\) AND \(a <= 59\)\).*
+
+# One disjunct with two predicates on the column, the other with one
+query II
+SELECT count(*), sum(a) FROM r WHERE (a >= 10 AND a < 20 AND b = 1) OR (a = 50 AND c = 2)
+----
+1	15
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a >= 10 AND a < 20 AND b = 1) OR (a = 50 AND c = 2)
+----
+physical_plan	<REGEX>:.*\(\(a >= 10\) AND \(a < 20\)\) OR \(a = 50\).*
+
+# Each disjunct also has an OR over other columns (TPC-DS q28)
+query II
+SELECT count(*), sum(a) FROM r WHERE (a BETWEEN 0 AND 9 AND (b = 1 OR c = 1)) OR (a BETWEEN 10 AND 19 AND (b = 2 OR c = 2))
+----
+4	38
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a BETWEEN 0 AND 9 AND (b = 1 OR c = 1)) OR (a BETWEEN 10 AND 19 AND (b = 2 OR c = 2))
+----
+physical_plan	<REGEX>:.*Filters: a <= 19.*
+
+# A disjunct without a predicate on the column: nothing is factored out for it
+query II
+SELECT count(*), sum(a) FROM r WHERE (a BETWEEN 10 AND 19 AND b = 1) OR c = 2
+----
+12	484
+
+# Three ranges written out of order: a flat OR lets range merging see every alternative
+query II
+SELECT count(*), sum(a) FROM r WHERE (a BETWEEN 0 AND 9 AND b = 1) OR (a BETWEEN 20 AND 29 AND b = 2) OR (a BETWEEN 10 AND 19 AND b = 3)
+----
+5	59
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a BETWEEN 0 AND 9 AND b = 1) OR (a BETWEEN 20 AND 29 AND b = 2) OR (a BETWEEN 10 AND 19 AND b = 3)
+----
+physical_plan	<REGEX>:.*Filters: a <= 29.*
+
+# Three equality disjuncts can be pushed down as a dense range instead of remaining a nested OR
+query II
+SELECT count(*), sum(a) FROM r WHERE (a = 1 AND b = 1) OR (a = 2 AND b = 2) OR (a = 3 AND b = 3)
+----
+3	6
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a = 1 AND b = 1) OR (a = 2 AND b = 2) OR (a = 3 AND b = 3)
+----
+physical_plan	<REGEX>:.*Filters: \(a >= 1\) AND \(a <= 3\).*
+
+# Duplicate predicates within one disjunct do not prevent range merging
+query II
+SELECT count(*), sum(a) FROM r WHERE (a >= 10 AND a <= 19 AND a >= 10 AND b = 1) OR (a BETWEEN 20 AND 29 AND c = 2)
+----
+2	39
+
+query II
+EXPLAIN SELECT * FROM r WHERE (a >= 10 AND a <= 19 AND a >= 10 AND b = 1) OR (a BETWEEN 20 AND 29 AND c = 2)
+----
+physical_plan	<REGEX>:.*Filters: \(a >= 10\) AND \(a <= 29\).*
+
+# Do not evaluate a predicate that can throw on rows belonging to another disjunct
+statement ok
+CREATE TABLE t_str(a VARCHAR, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_str VALUES ('abc', 0, 1), ('15', 1, 0);
+
+query III rowsort
+SELECT * FROM t_str WHERE (b = 1 AND a::INT BETWEEN 10 AND 20) OR (c = 1 AND a = 'abc')
+----
+15	1	0
+abc	0	1

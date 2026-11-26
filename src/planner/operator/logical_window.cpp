@@ -24,12 +24,23 @@ vector<TableIndex> LogicalWindow::GetTableIndex() const {
 }
 
 string LogicalWindow::GetName() const {
+	(void)DBConfigOptions::debug_print_bindings;
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
 		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", window_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();
+}
+
+InsertionOrderPreservingMap<string> LogicalWindow::ParamsToString() const {
+	auto result = LogicalOperator::ParamsToString();
+
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
+	return result;
 }
 
 } // namespace duckdb

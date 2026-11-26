@@ -4,6 +4,7 @@ add_library(
   scalar_executor.cpp
   vector_cast.cpp
   comparison_operators.cpp
+  string_comparison.cpp
   vector_copy.cpp
   generators.cpp
   vector_hash.cpp

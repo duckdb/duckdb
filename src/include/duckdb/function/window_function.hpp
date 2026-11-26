@@ -70,7 +70,7 @@ public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
-	                        OptionalOrderTypes arg_order_types_p = nullptr);
+	                        OptionalOrderTypes arg_order_types_p = nullptr, optional_ptr<Binder> binder_p = nullptr);
 
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
@@ -140,7 +140,7 @@ typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &i
                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
-typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                    const BoundWindowFunction &function);
 typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, BoundWindowFunction &function);
 
@@ -190,6 +190,8 @@ public:
 	bool can_ignore_nulls = true;
 	//! Does the function rank rows within the partition?
 	bool is_ranking = false;
+	//! Does the function read the ORDER BY values, so that a redundant key must be kept?
+	bool requires_ordering = false;
 };
 
 class BaseWindowFunction {
@@ -228,6 +230,7 @@ public: // Properties
 	bool CanExclude() const { return properties.can_exclude; }
 	bool CanIgnoreNulls() const { return properties.can_ignore_nulls; }
 	bool IsRanking() const { return properties.is_ranking; }
+	bool RequiresOrdering() const { return properties.requires_ordering; }
 
 	void SetCanDistinct(bool value) { properties.can_distinct = value; }
 	void SetCanFilter(bool value) { properties.can_filter = value; }
@@ -235,6 +238,7 @@ public: // Properties
 	void SetCanExclude(bool value) { properties.can_exclude = value; }
 	void SetCanIgnoreNulls(bool value) { properties.can_ignore_nulls = value; }
 	void SetIsRanking(bool value) { properties.is_ranking = value; }
+	void SetRequiresOrdering(bool value) { properties.requires_ordering = value; }
 
 public: // Callbacks
 
@@ -301,7 +305,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	auto SetExtraFunctionInfo(ARGS &&... args) -> void {
+	auto SetExtraFunctionInfo(ARGS &&...args) -> void {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	auto GetFunctionInfo() const -> shared_ptr<WindowFunctionInfo> {

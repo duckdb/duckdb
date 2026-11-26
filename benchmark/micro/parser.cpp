@@ -22,7 +22,9 @@ enum class ParserWorkload : uint8_t {
 	FLUMMI,
 	AOC,
 	STRESS,
-	VALUES_LIST
+	VALUES_LIST,
+	SET_OPERATION_CHAIN,
+	CTE_CHAIN
 };
 
 struct ParserBenchmarkState : public BenchmarkState {
@@ -157,6 +159,30 @@ public:
 			}
 			return query;
 		}
+		case ParserWorkload::SET_OPERATION_CHAIN: {
+			// one generated statement of about 100 KB: a UNION ALL of 2000 small selects
+			string query = "SELECT * FROM (";
+			for (idx_t i = 0; i < 2000; i++) {
+				if (i > 0) {
+					query += " UNION ALL ";
+				}
+				auto number = to_string(i);
+				query += "SELECT " + number + " AS a, 's" + number + "' AS b, " + number + ".5 AS c";
+			}
+			return query + ")";
+		}
+		case ParserWorkload::CTE_CHAIN: {
+			// one generated statement of about 30 KB: 300 CTEs, each with a list literal and a lambda
+			string query = "WITH ";
+			for (idx_t i = 0; i < 300; i++) {
+				if (i > 0) {
+					query += ", ";
+				}
+				query += "c" + to_string(i) + " AS (SELECT i AS k, i*" + to_string(i + 1) +
+				         " AS v, list_transform([1,2,3], lambda x: x+" + to_string(i) + ") AS l FROM range(10) t(i))";
+			}
+			return query + " SELECT count(*) FROM c299";
+		}
 		case ParserWorkload::TPCH:
 		case ParserWorkload::TPCDS:
 		case ParserWorkload::FLUMMI:
@@ -256,6 +282,8 @@ ParserMicroBenchmark parser_flummi("ParserFlummi", ParserWorkload::FLUMMI, 1);
 ParserMicroBenchmark parser_aoc("ParserAoC", ParserWorkload::AOC, 2);
 ParserMicroBenchmark parser_stress("ParserStress", ParserWorkload::STRESS, 7);
 ParserMicroBenchmark parser_values_list("ParserValuesList", ParserWorkload::VALUES_LIST, 8);
+ParserMicroBenchmark parser_set_operation_chain("ParserSetOperationChain", ParserWorkload::SET_OPERATION_CHAIN, 13);
+ParserMicroBenchmark parser_cte_chain("ParserCTEChain", ParserWorkload::CTE_CHAIN, 24);
 
 struct ParserGrammarConstructionState : public BenchmarkState {
 	idx_t grammars_constructed = 0;

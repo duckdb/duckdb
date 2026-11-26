@@ -842,7 +842,8 @@ TEST_CASE("Logical plan verification preserves setting and legacy extension beha
 
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_column_bindings=true"));
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(LogicalPlanVerifier::Verify(*connection.context, *invalid_plan), InternalException);
+	REQUIRE_THROWS_WITH(LogicalPlanVerifier::Verify(*connection.context, *invalid_plan),
+	                    Catch::Contains("Failed to bind column reference"));
 #endif
 
 	auto valid_plan = ReferenceProjection(TableIndex(82), ColumnBinding(child_index, ProjectionIndex(0)),
@@ -857,7 +858,8 @@ TEST_CASE("Logical plan verification preserves setting and legacy extension beha
 	REQUIRE_NOTHROW(LogicalPlanVerifier::Verify(*connection.context, *malformed_plan));
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_column_bindings=true"));
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(LogicalPlanVerifier::Verify(*connection.context, *malformed_plan), InternalException);
+	REQUIRE_THROWS_WITH(LogicalPlanVerifier::Verify(*connection.context, *malformed_plan),
+	                    Catch::Contains("Logical operator child 0 is null"));
 #endif
 
 	auto legacy_index = TableIndex(90);

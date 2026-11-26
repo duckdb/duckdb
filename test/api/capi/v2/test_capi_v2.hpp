@@ -125,7 +125,7 @@ public:
 		ptr_storage[i] = view.data();
 		length_storage[i] = view.size();
 	}
-	auto ptrs() -> const char ** {
+	auto ptrs() const -> const char *const * {
 		return ptr_storage.empty() ? nullptr : ptr_storage.data();
 	}
 	auto lengths() -> const idx_t * {
@@ -569,8 +569,8 @@ inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_factory_handle factory,
 }
 inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_factory_handle factory, const void *data, idx_t len) {
 	duckdb_v2_value_handle value = nullptr;
-	std::string_view bytes = {static_cast<const char *>(data), len};
-	REQUIRE(duckdb_v2_value_create_blob(factory, bytes.data(), bytes.size(), &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto bytes = static_cast<const char *>(data);
+	REQUIRE(duckdb_v2_value_create_blob(factory, bytes, len, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 

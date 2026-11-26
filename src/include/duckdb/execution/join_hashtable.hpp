@@ -19,8 +19,12 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/perfect_hash_join_table.hpp"
+#include "duckdb/parallel/sharded_counter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/joinside.hpp"
 
@@ -34,14 +38,47 @@ struct ClientConfig;
 struct ResidualPredicateInfo;
 class PhysicalHashJoin;
 
+//! Each producer has its own refcounts; emitted vectors retain the original dictionaries through these owners.
+class DictionaryOwnershipCache {
+public:
+	explicit DictionaryOwnershipCache(idx_t column_count) : column_count(column_count) {
+	}
+
+	const buffer_ptr<DictionaryEntry> &GetEntry(idx_t column, const buffer_ptr<DictionaryEntry> &entry);
+	void Reset();
+
+	SelectionVector &GetNullSelection(idx_t count) {
+		if (null_selection.Capacity() < count) {
+			null_selection.Initialize(count);
+		}
+		return null_selection;
+	}
+
+private:
+	struct DictionaryOwner {
+		explicit DictionaryOwner(const buffer_ptr<DictionaryEntry> &entry) : entry(entry) {
+		}
+
+		buffer_ptr<DictionaryEntry> entry;
+	};
+
+	const idx_t column_count;
+	//! Allocated once on first use; resetting owners does not invalidate references to these slots.
+	unique_array<buffer_ptr<DictionaryEntry>> entries;
+	SelectionVector null_selection;
+};
+
 struct JoinHTScanState {
 public:
 	JoinHTScanState(TupleDataCollection &collection, idx_t chunk_idx_from, idx_t chunk_idx_to,
+	                idx_t output_column_count,
 	                TupleDataPinProperties properties = TupleDataPinProperties::ALREADY_PINNED)
-	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0), chunks_done(0) {
+	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false),
+	      dictionary_gather_state(output_column_count), offset_in_chunk(0), chunks_done(0) {
 	}
 
 	TupleDataChunkIterator iterator;
+	DictionaryOwnershipCache dictionary_gather_state;
 	idx_t offset_in_chunk;
 	//! The number of chunks that have been scanned entirely
 	idx_t chunks_done;
@@ -65,7 +102,7 @@ private:
    The pointers are either NULL
 
    Two-phase lifecycle: the constructor populates only layout-INDEPENDENT state; all layout-DEPENDENT state
-   (layout_ptr, row matchers, tuple_size/pointer_offset/entry_size, data_collection, sink_collection, dead_end,
+   (layout_ptr, row matchers, tuple_size/pointer_offset, data_collection, sink_collection,
    dict_info) is published by FinishInitWithLayout on the first build chunk, so slot widths (and the dictionary
    a narrowed slot indexes into) can be chosen from the data's actual runtime encoding. Until then the JHT is
    unusable except for the null-safe Count() / SizeInBytes() accessors; the layout-dependent accessors assert
@@ -115,9 +152,13 @@ struct DictSurvivingInfo {
 	static LogicalType IndexType(uint8_t index_width);
 };
 
+struct JoinBuildSelection;
+
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+	//! Prefix-range filter build states, indexed by key column
+	using PrefixRangeBuildStates = vector<unique_ptr<PrefixRangeFilter::BuildState>>;
 
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
@@ -155,6 +196,8 @@ public:
 		SelectionVector sel_vector;
 		SelectionVector chain_match_sel_vector;
 		SelectionVector chain_no_match_sel_vector;
+		//! Direct columnar lookup produces dictionary positions instead of row pointers.
+		unique_ptr<SelectionVector> dictionary_selection;
 
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
@@ -173,6 +216,7 @@ public:
 
 		// Thread-local probe match count, flushed when the current chunk's pointer scan is exhausted.
 		idx_t local_probe_matches = 0;
+		DictionaryOwnershipCache dictionary_gather_state;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		void Reset();
@@ -184,8 +228,11 @@ public:
 		void FlushProbeMatches();
 
 	private:
+		void ProjectProbeColumns(DataChunk &probe_data, const SelectionVector &sel, idx_t count, DataChunk &result,
+		                         bool full_identity);
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextDictionaryJoin(DataChunk &probe_data, DataChunk &result);
 		void NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data);
@@ -218,10 +265,7 @@ public:
 	public:
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
-		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
-		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
-		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        optional_ptr<SelectionVector> no_match_sel);
 	};
@@ -229,8 +273,6 @@ public:
 public:
 	struct SharedState {
 		SharedState();
-
-		Vector salt_v;
 
 		SelectionVector keys_to_compare_sel;
 		SelectionVector keys_no_match_sel;
@@ -242,32 +284,40 @@ public:
 
 		//! The current dictionary vector id (if any)
 		string dictionary_id;
-		DataChunk unique_values;
-		TupleDataChunkState unique_key_state;
-		Vector hashes;
-		Vector new_dictionary_pointers;
-		SelectionVector unique_entries;
-		//! Per-slot head-of-chain pointer cache; nullptr marks a miss
-		unique_ptr<Vector> dictionary_pointers;
+		//! Row pointers, membership bits or one-based dictionary positions; zero marks a miss.
+		unsafe_unique_array<uint64_t> dictionary_results;
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
-		SelectionVector match_sel;
 		//! Number of dict slots already resolved; the unique-entries walk is skipped once it reaches dict_size
 		idx_t resolved_count = 0;
+		DataChunk unique_values;
+		SelectionVector unique_entries;
 	};
 
 	struct ProbeState : SharedState {
 		ProbeState();
 
+		Vector hashes;
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
-		SelectionVector non_empty_sel;
+		//! Rows that probe another entry, and rows that found their entry in the current round
+		SelectionVector rows_to_probe_sel;
+		SelectionVector rows_found_sel;
+		//! Loaded ht entry and probe flags per dense row
+		unsafe_unique_array<ht_entry_t> dense_entries;
+		Vector is_match_v;
+		Vector needs_next_v;
+		//! Executes the hash table's hash expression over the probe keys
+		unique_ptr<ExpressionExecutor> hash_executor;
+		unique_ptr<DataChunk> spill_hashes;
+		SelectionVector spill_false_sel;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
 
 	struct InsertState : SharedState {
 		explicit InsertState(const JoinHashTable &ht);
+		Vector salt_v;
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
@@ -329,7 +379,7 @@ public:
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
-	              optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state = nullptr,
+	              optional_ptr<PrefixRangeBuildStates> prefix_range_states = nullptr,
 	              bool prefix_range_parallel = false);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
@@ -346,29 +396,8 @@ public:
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	static idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
 
-	//! Pre-materialize RHS output columns into dict_arrays and embed the dict index into NEXT_PTR;
-	//! called once from HashJoinFinalizeEvent::FinishEvent, after all finalize tasks have completed.
-	void BuildDictionaryArrays(const PhysicalHashJoin &op);
-	//! Emit dictionary vectors for row_ptrs[ptr_sel[0..count)]; pass
-	//! *FlatVector::IncrementalSelectionVector() when row_ptrs is already compacted
-	void EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count, DataChunk &result,
-	                     idx_t rhs_col_offset) const;
-	//! Emit RHS output columns for matched rows row_ptrs[ptr_sel[0..count)] into result starting at
-	//! result column rhs_col_offset; routes through EmitDictVectors when use_dict_emission is active.
-	void GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
-	               idx_t rhs_col_offset) const;
-	//! Follow the chain pointer; when USE_DICT_EMISSION, resolves via aux_next_ptrs
-	template <bool USE_DICT_EMISSION>
-	inline data_ptr_t GetNextPointer(data_ptr_t row_ptr) const {
-		if (USE_DICT_EMISSION) {
-			if (!chains_longer_than_one.load(std::memory_order_relaxed)) {
-				// aux_next_ptrs is unallocated in this case
-				return nullptr;
-			}
-			return aux_next_ptrs_data[Load<uint32_t>(row_ptr + pointer_offset)];
-		}
-		return cast_uint64_to_pointer(Load<uint64_t>(row_ptr + pointer_offset));
-	}
+	//! Materialize RHS dictionaries after all finalize tasks complete.
+	void BuildDictionaryArrays(const PhysicalHashJoin &op, idx_t reservation_size);
 
 	idx_t Count() const {
 		return data_collection ? data_collection->Count() : 0;
@@ -392,13 +421,14 @@ public:
 		D_ASSERT(IsLayoutFinalized());
 		return *data_collection;
 	}
-	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
-	//! Returns the number of tuples found (can be smaller than the vector capacity).
-	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
-
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
+
+	//! Choose direct lookup from the completed in-memory build.
+	bool TryInitializePerfectHashTable();
+
+	idx_t GetTotalProbeMatches() const;
 
 	ClientContext &context;
 	const PhysicalOperator &op;
@@ -408,6 +438,13 @@ public:
 	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
+	//! "hash(#0, #1, ...)" over the equality keys
+	unique_ptr<Expression> hash_expression;
+	//! "hash(#i)" for every equality key i, for the per-key-column filters
+	vector<unique_ptr<Expression>> key_hash_expressions;
+	//! Executors of the build side, which is thread-local
+	unique_ptr<ExpressionExecutor> build_hash_executor;
+	unique_ptr<ExpressionExecutor> build_key_hash_executor;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
@@ -439,10 +476,8 @@ public:
 	//! If there is more than one element in the chain, we need to scan the next elements of the chain
 	atomic<bool> chains_longer_than_one {false};
 
-	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(ht_entry_t)
+	//! Number of hash entries, direct-directory slots or bitmap words to initialize.
 	idx_t capacity = DConstants::INVALID_INDEX;
-	//! The size of an entry as stored in the HashTable
-	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
 	//! Next pointer offset in tuple, also used for the position of the hash, which then gets overwritten by the pointer
@@ -461,8 +496,6 @@ public:
 	bool single_join_error_on_multiple_rows = true;
 	//! Whether or not to perform deduplication based on join_keys when building ht
 	bool insert_duplicate_keys = true;
-	//! Number of probe matches, isolated from immutable probe metadata.
-	PaddedAtomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
 	optional_ptr<Expression> residual_predicate;
 	//! Residual predicate mapping info
@@ -470,22 +503,12 @@ public:
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
 	vector<idx_t> lhs_output_in_probe;
 
-	//! True once BuildDictionaryArrays has embedded dictionary indices into NEXT_PTR
-	bool use_dict_emission = false;
-	//! Pre-materialized columnar data, one entry per RHS output column
-	vector<buffer_ptr<DictionaryEntry>> dict_arrays;
-	//! Dict-surviving descriptor shared with every other per-thread JHT of the same join; set by
-	//! FinishInitWithLayout, nullptr when no build payload column is narrowed
+	//! Dict-surviving descriptor shared with every per-thread table of the same join.
 	shared_ptr<const DictSurvivingInfo> dict_info;
-	//! Saved NEXT_PTR values, indexed by dict index; only allocated when chains_longer_than_one
-	AllocatedData aux_next_ptrs;
-	//! Typed pointer into aux_next_ptrs; set by BuildDictionaryArrays alongside the allocation
-	data_ptr_t *aux_next_ptrs_data = nullptr;
 
-	//! Total bytes the dict_arrays allocation would cost for the given RHS output types
-	idx_t ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const;
-	//! Returns true iff small-build-side dictionary emission should activate
-	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
+	//! Peak allocation estimate, or zero when materialized dictionary emission is unsuitable.
+	idx_t GetDictionaryReservationSize(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
+	idx_t GetMaterializedDictionarySize() const;
 
 	struct {
 		mutex mj_lock;
@@ -509,9 +532,34 @@ public:
 	} mark_join_info;
 
 private:
+	//! Emit RHS dictionaries using build-row positions.
+	void EmitDictVectors(const SelectionVector &build_sel, idx_t count, DataChunk &result, idx_t rhs_col_offset,
+	                     DictionaryOwnershipCache &dictionary_state) const;
+	//! Emit RHS dictionaries using selected row pointers.
+	void EmitDictVectors(const data_ptr_t *row_ptrs, const JoinBuildSelection &selection, DataChunk &result,
+	                     idx_t rhs_col_offset, DictionaryOwnershipCache &dictionary_state) const;
+	//! Emit RHS output columns for matched rows row_ptrs[ptr_sel[0..count)] into result starting at
+	//! result column rhs_col_offset, preserving prepared or surviving dictionaries where possible.
+	void GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
+	               idx_t rhs_col_offset, DictionaryOwnershipCache &dictionary_state) const;
+	void GatherRHS(Vector &row_ptrs, const JoinBuildSelection &selection, DataChunk &result, idx_t rhs_col_offset,
+	               DictionaryOwnershipCache &dictionary_state) const;
+	//! Advance selected equality chains, compacting the surviving probe positions.
+	idx_t AdvancePointers(Vector &pointers, SelectionVector &out_sel, const SelectionVector &sel, idx_t count) const;
+	//! Mark selected build rows after all join predicates have matched.
+	void MarkMatchedRows(Vector &pointers, const SelectionVector &sel, idx_t count) const;
+	//! Mark every build row in the selected equality groups.
+	void MarkMatchedChains(Vector &pointers, const SelectionVector &sel, idx_t count) const;
+
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	//! Hash all rows of the equality keys, creating the executor if it does not exist yet
+	void Hash(DataChunk &keys, unique_ptr<ExpressionExecutor> &executor, Vector &hashes) const;
+
+	bool TryProbePerfectHashTable(ScanStructure &scan_structure, DataChunk &keys);
+	bool CanUsePerfectDictionaryLookup() const;
+	bool UsesDictionaryLookup() const;
+	void AllocateHashMap(bool use_radix_layout);
 
 	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
 	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -519,14 +567,19 @@ private:
 	//! Constant-vector variant of Probe. Returns false if the LHS keys are not a constant vector.
 	bool TryProbeConstant(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                      ProbeState &probe_state);
+	PerfectHashJoinTable::Type GetProbeResultType() const;
+	void ResolveProbeKeys(ScanStructure &scan, DataChunk &keys, ProbeState &state, array_ptr<uint64_t> results,
+	                      const SelectionVector &result_sel);
+	template <bool CONSTANT>
+	void ExpandProbeResults(ScanStructure &scan, DataChunk &keys, TupleDataChunkState &key_state,
+	                        array_ptr<const uint64_t> results, const SelectionVector &result_sel);
 
 	bool UseSalt() const;
 
-	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
-	//! key_match_sel vector and the count argument to the number and position of the matches
-	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    optional_ptr<const SelectionVector> sel, idx_t &count, Vector &pointers_result_v,
-	                    SelectionVector &match_sel, bool has_sel);
+	//! Resolve keys to equality-group heads and return their probe positions in match_sel.
+	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state,
+	                    optional_ptr<Vector> precomputed_hashes, optional_ptr<const SelectionVector> sel, idx_t &count,
+	                    Vector &pointers_result_v, SelectionVector &match_sel, bool has_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
@@ -544,6 +597,28 @@ private:
 		return reinterpret_cast<atomic<ht_entry_t> *>(hash_map.get());
 	}
 
+	void InitializeMatchFlags(const Vector &rows) const;
+	atomic<bool> &GetMatchFlag(data_ptr_t row) const;
+	idx_t SelectBuildMatches(array_ptr<const data_ptr_t> rows, idx_t &offset, array_ptr<data_ptr_t> result,
+	                         bool matched) const;
+
+	template <bool DICTIONARY>
+	data_ptr_t GetNextPointer(data_ptr_t row) const;
+	template <bool DICTIONARY>
+	idx_t AdvancePointers(Vector &pointers, SelectionVector &out_sel, const SelectionVector &sel, idx_t count) const;
+	template <bool DICTIONARY>
+	void MarkMatchedChains(Vector &pointers, const SelectionVector &sel, idx_t count) const;
+
+	struct MaterializedDictionary {
+		vector<buffer_ptr<DictionaryEntry>> columns;
+		//! Original chain links, indexed by the dictionary position embedded in each row.
+		AllocatedData next_pointers;
+	};
+	unique_ptr<MaterializedDictionary> materialized_dictionary;
+
+	//! Number of matches from completed probe chunks.
+	ShardedCounter probe_matches;
+
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
 	//! Partitioned data collection that the data is sunk into when building
@@ -551,26 +626,31 @@ private:
 	//! The DataCollection holding the main data of the hash table
 	unique_ptr<TupleDataCollection> data_collection;
 
+	//! Bounds collected during sink, before choosing the lookup representation.
+	unique_ptr<PerfectHashJoinTable> perfect_hash_candidate;
+	//! An allocated direct lookup, published only after in-memory finalize chooses it.
+	unique_ptr<PerfectHashJoinTable> perfect_hash_table;
+
 	//! The hash map of the HT, created after finalization
 	HugeAllocation hash_map;
 	//! Shift to align fully resident buckets with radix partitions; zero selects the external/low-bit layout.
 	idx_t bucket_shift = 0;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
-	//! An empty tuple that's a "dead end", can be used to stop chains early
-	unsafe_unique_array<data_t> dead_end;
 
-	//! Bloom filter over the join keys. An external join fills it during Sink, an in-memory join during
-	//! finalize. Shared by every thread-local hash table of this operator, and shared again with any scan it
-	//! gets published to, so it outlives a reset of this table
-	shared_ptr<BloomFilter> bloom_filter;
+	//! Bloom filters indexed by equality key. External joins fill them during Sink, in-memory joins during
+	//! finalize. Shared with thread-local hash tables and published scans, so they can outlive a table reset.
+	vector<shared_ptr<BloomFilter>> bloom_filters;
+	//! Which key filters finalize should build from the materialized build side.
+	vector<bool> should_build_bloom_filters;
 	//! Unpublished filter kept from a previous recursive iteration so finalize can reuse its allocation.
-	//! Only ever set on the global hash table, never on the thread-local ones that share bloom_filter
+	//! Used only by the global hash table of a single-key join.
 	shared_ptr<BloomFilter> recycled_bloom_filter;
-	//! Whether finalize should build the bloom filter from the materialized build side
-	bool should_build_bloom_filter = false;
+	//! Per-column bitmap budget for multi-key joins, shared with the other runtime filters.
+	idx_t bloom_filter_budget = NumericLimits<idx_t>::Maximum();
 
-	unique_ptr<PrefixRangeFilter> prefix_range_filter;
+	//! Prefix-range filters, indexed by key column
+	vector<unique_ptr<PrefixRangeFilter>> prefix_range_filters;
 	bool should_build_prefix_range_filter = false;
 
 	//! Copying not allowed
@@ -637,6 +717,10 @@ public:
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
 	//! Minimum capacity of the pointer table
 	static constexpr idx_t MINIMUM_CAPACITY = 16384;
+	//! Pointer tables above this capacity prefetch the entries the probe reads
+	static constexpr idx_t PREFETCH_MIN_CAPACITY = idx_t(1) << 20;
+	//! Vectors of at most this many rows probe row by row with branches; longer vectors probe branch-free
+	static constexpr idx_t BRANCHING_PROBE_MAX_COUNT = 32;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
@@ -650,62 +734,81 @@ public:
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
-	void SetBloomFilter(shared_ptr<BloomFilter> filter) {
-		bloom_filter = std::move(filter);
+	void SetBloomFilter(idx_t key_idx, shared_ptr<BloomFilter> filter) {
+		D_ASSERT(key_idx < equality_predicate_columns.size());
+		bloom_filters.resize(equality_predicate_columns.size());
+		bloom_filters[key_idx] = std::move(filter);
 	}
-	//! Requests a filter built during finalize, from the materialized build side (in-memory joins only)
-	void SetBuildBloomFilter(const bool should_build) {
-		this->should_build_bloom_filter = should_build;
+	//! Whether the join has one equality key, so the hash table hashes are that key's hashes
+	bool HasSingleEqualityKey() const {
+		return equality_predicate_columns.size() == 1;
+	}
+	//! Creates the per-key-column bloom filters that an external join with several equality keys fills during
+	//! Sink. They split the memory budget between them
+	void InitializeBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget);
+	void SetBloomFilters(vector<shared_ptr<BloomFilter>> filters) {
+#ifdef DEBUG
+		for (auto &filter : filters) {
+			D_ASSERT(!filter || !filter->IsSealed());
+		}
+#endif
+		bloom_filters = std::move(filters);
+	}
+	const vector<shared_ptr<BloomFilter>> &GetBloomFilters() const {
+		return bloom_filters;
+	}
+	//! Requests a finalize-built bloom filter for a key column (in-memory joins only)
+	void SetBuildBloomFilter(idx_t key_idx);
+	void SetBloomFilterBudget(idx_t bytes) {
+		bloom_filter_budget = bytes;
 	}
 
-	shared_ptr<BloomFilter> GetBloomFilter() {
-		return bloom_filter;
-	}
+	shared_ptr<BloomFilter> GetBloomFilter(idx_t key_idx) const;
 	//! Hands an unpublished filter from a previous recursive iteration to the finalize-built filter path
 	void SetRecycledBloomFilter(shared_ptr<BloomFilter> filter) {
 		// a null argument would drop a parked filter; callers must only hand over live, unpublished filters
 		D_ASSERT(filter && !filter->IsPublished());
 		recycled_bloom_filter = std::move(filter);
 	}
-	//! Marks the bloom filter complete. The reference stays, because the thread-local tables hold it too
-	void SealBloomFilter() {
-		if (bloom_filter) {
-			bloom_filter->Seal(context);
-		}
-	}
+	//! Marks all bloom filters complete, retaining references shared with thread-local tables.
+	void SealBloomFilters();
 	//! Whether the filter is complete and rejects enough for pushing it into a scan to pay off
-	bool HasPublishableBloomFilter() const {
-		return bloom_filter && bloom_filter->IsSealed() && bloom_filter->IsUseful();
-	}
+	bool HasPublishableBloomFilter(idx_t key_idx) const;
 
-	void SetPrefixRangeFilter(unique_ptr<PrefixRangeFilter> filter) {
-		prefix_range_filter = std::move(filter);
+	void SetPrefixRangeFilter(idx_t key_idx, unique_ptr<PrefixRangeFilter> filter) {
+		D_ASSERT(key_idx < equality_predicate_columns.size());
+		prefix_range_filters.resize(equality_predicate_columns.size());
+		prefix_range_filters[key_idx] = std::move(filter);
 	}
 
 	void SetBuildPrefixRangeFilter() {
 		should_build_prefix_range_filter = true;
 	}
 
-	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter() {
-		return prefix_range_filter;
+	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter(idx_t key_idx) {
+		if (key_idx >= prefix_range_filters.size()) {
+			return nullptr;
+		}
+		return prefix_range_filters[key_idx].get();
 	}
 
-	bool ShouldBuildPrefixRangeFilter() const {
-		return should_build_prefix_range_filter && prefix_range_filter;
-	}
+	bool ShouldBuildPrefixRangeFilter() const;
 
-	void BuildPrefixRangeFilter();
-	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
+	//! One build state per key column with a prefix-range filter, null for the other key columns
+	PrefixRangeBuildStates InitializePrefixRangeBuildState();
 	idx_t GetPrefixRangeBuildStateSize() const;
-	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state,
-	                            bool parallel = false);
-	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
+	void MergePrefixRangeBuildState(PrefixRangeBuildStates &states);
 
-	//! Get total size of HT if all partitions would be built
+	void MergePerfectHashBounds(const vector<reference<JoinHashTable>> &local_hts);
+	enum class LookupSizing { SELECTED, HASH_ONLY };
+	//! Cost the whole build using the selected lookup representation.
 	idx_t GetTotalSize(const vector<reference<JoinHashTable>> &local_hts, idx_t &max_partition_size,
-	                   idx_t &max_partition_count) const;
+	                   idx_t &max_partition_count, LookupSizing lookup_sizing = LookupSizing::SELECTED) const;
+	//! External partitions always use ordinary hashing.
 	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
 	                   idx_t &max_partition_size, idx_t &max_partition_count) const;
+	//! Dictionaries retained outside spillable tuple storage.
+	idx_t GetRetainedDictionarySize() const;
 	//! Get the remaining size of the unbuilt partitions
 	idx_t GetRemainingSize() const;
 	//! Sets number of radix bits according to the max ht size
@@ -736,15 +839,34 @@ public:
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
+	//! Buffers reused across chunks to fill the per-key-column filters
+	struct KeyFilterBuildScratch {
+		explicit KeyFilterBuildScratch(JoinHashTable &ht);
+		DataChunk keys;
+		Vector hashes;
+		ExpressionExecutor key_hash_executor;
+	};
+	//! Gathers one key column of a chunk of materialized rows
+	void GatherKeyColumn(TupleDataChunkState &chunk_state, idx_t count, idx_t key_idx, Vector &result);
+	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeBuildStates &states,
+	                            KeyFilterBuildScratch &scratch, bool parallel);
+	//! Inserts a chunk into the per-key-column bloom filters
+	void InsertKeyBloomFilterChunk(TupleDataChunkState &chunk_state, idx_t count, KeyFilterBuildScratch &scratch);
+
 	//! True iff the residual predicate (if any) reads build payload column build_col_idx from its row slot
 	bool ColumnReferencedByResidual(idx_t build_col_idx) const;
 	//! Materialise the narrow index vector for a narrowed column: the dictionary indices of a chunk that wraps the
 	//! pinned upstream dictionary, or the reserved NULL index for a NULL-only chunk (e.g. the unmatched-build scan of
 	//! a FULL/RIGHT join upstream). Any other shape means the build pipeline is not single-source and throws.
 	void EncodeDictSurvivingColumn(const DictSurvivingColumn &column, idx_t build_col_idx, const Vector &incoming,
-	                               idx_t count, vector<AllocatedData> &buffers, vector<Vector> &vectors);
+	                               idx_t count, Vector &result);
 
 private:
+	//! Build is local to this table; its buffers are initialized on the first nonempty chunk.
+	struct BuildState;
+	BuildState &GetBuildState();
+	unique_ptr<BuildState> build_state;
+
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 

@@ -1,0 +1,36 @@
+# name: test/sql/storage/corrupt/list_type_without_type_info.test
+# description: Reject a nested type that is stored without its type info
+# group: [corrupt]
+
+require vector_size 2048
+
+# the type of a table column is a LIST without a child type
+unzip data/storage/corrupt/list_type_without_type_info.db.gz {TEST_DIR}/list_type_without_type_info.db
+
+statement error
+ATTACH '{TEST_DIR}/list_type_without_type_info.db' AS corrupt_db (READ_ONLY)
+----
+Serialization Error: Failed to deserialize type LIST: missing type info
+
+query I
+SELECT 42
+----
+42
+
+# a row group written to the WAL lists a LIST without a child type as the type of its column
+statement ok
+SET debug_abort_on_wal_failure=true
+
+unzip data/storage/corrupt/wal_list_type_without_type_info.db.gz {TEST_DIR}/wal_list_type_without_type_info.db
+
+unzip data/storage/corrupt/wal_list_type_without_type_info.db.wal.gz {TEST_DIR}/wal_list_type_without_type_info.db.wal
+
+statement error
+ATTACH '{TEST_DIR}/wal_list_type_without_type_info.db' AS corrupt_wal_db
+----
+Failed to deserialize type LIST: missing type info
+
+query I
+SELECT 42
+----
+42

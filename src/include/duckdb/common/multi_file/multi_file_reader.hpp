@@ -111,9 +111,6 @@ public:
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
-	//! Create a LIST Value from a vector of strings (list of file paths)
-	static Value CreateValueFromFileList(const vector<string> &files);
-
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	//! Which of the multi-file options to declare on a function. A function that reads exactly one file per call
 	//! takes only "allow_empty"; the others describe how several files are combined
@@ -148,7 +145,7 @@ public:
 
 	//! Parse the named parameters of a multi-file reader
 	//! Parse an option of a COPY ... FROM that the multi-file reader handles itself
-	DUCKDB_API virtual bool ParseCopyOption(const Identifier &key, const vector<Value> &values,
+	DUCKDB_API virtual bool ParseCopyOption(Context &context, const Identifier &key, const vector<Value> &values,
 	                                        MultiFileOptions &options);
 	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
@@ -222,7 +219,8 @@ public:
 	MultiFileReaderBindData BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
-	//! With "maximum_files_for_stats", open every file of a small scan for its row count and column statistics
+	//! With "maximum_files_for_stats", open every file of a small scan for its row count and column statistics. After
+	//! a custom Bind no file has been opened yet, and all of them are read
 	void ReadFilesForStatistics(ClientContext &context, MultiFileList &files, MultiFileBindData &result,
 	                            BaseFileReaderOptions &options, MultiFileOptions &file_options);
 	//! Bind the schema on the first "maximum_sample_files" files, combining the schemas of the sampled files

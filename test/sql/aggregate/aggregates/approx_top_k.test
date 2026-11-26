@@ -118,3 +118,70 @@ SELECT count(*) FROM (
 ) WHERE a != [0];
 ----
 0
+
+# the state lives in the aggregate's arena: strings are copied into it, and an evicted value leaves the fixed
+# lookup table without growing it
+statement ok
+SET threads=1;
+
+# per group, value v occurs v + 1 times: at most 3 * k distinct values, so the result is exact
+statement ok
+CREATE TABLE exact AS
+SELECT g, (g * 1000 + v)::VARCHAR || '_a_long_string_suffix' AS s
+FROM range(10) t1(g), range(20) t2(v), LATERAL range(v + 1) t3(r);
+
+query I
+SELECT count(*) FROM (
+	SELECT g, approx_top_k(s, 10) AS approx FROM exact GROUP BY g
+) a JOIN (
+	SELECT g, list(s ORDER BY c DESC)[1:10] AS expected FROM (SELECT g, s, count(*) c FROM exact GROUP BY g, s) GROUP BY g
+) e USING (g)
+WHERE approx = expected;
+----
+10
+
+# many distinct values per group: values are evicted and re-inserted, the heavy hitters are found
+query II
+SELECT g, list_sort(list_filter(approx_top_k(v, 3), lambda e: e >= 1000000)) FROM (
+	SELECT i % 4 AS g, CASE WHEN i % 10 < 3 THEN i % 10 + 1000000 ELSE i END AS v FROM range(200000) r(i)
+) GROUP BY g ORDER BY g;
+----
+0	[1000000, 1000002]
+1	[1000001]
+2	[1000000, 1000002]
+3	[1000001]
+
+query I
+SELECT approx_top_k(s, 2) FROM (
+	SELECT CASE WHEN i % 3 = 0 THEN 'heavy hitter number one!' WHEN i % 5 = 0 THEN 'the second heavy hitter' ELSE md5(i::VARCHAR) END AS s
+	FROM range(100000) r(i)
+);
+----
+[heavy hitter number one!, the second heavy hitter]
+
+# groups without values give NULL
+query II
+SELECT g, approx_top_k(v, 2) FILTER (WHERE v <> 5) FROM (VALUES (1, 5), (1, 5), (1, 6), (2, 5), (3, NULL)) t(g, v) GROUP BY g ORDER BY g;
+----
+1	[6]
+2	NULL
+3	NULL
+
+# more groups than the perfect hash table handles, combined across two threads
+statement ok
+SET threads=2;
+
+query I
+SELECT count(*) FROM (
+	SELECT i % 10000 AS g, approx_top_k(i % 10000 % 3, 3) AS x FROM range(100000) r(i) GROUP BY g
+) WHERE x != [g % 3];
+----
+0
+
+# the window segment tree combines two full 16-row sketches, then updates with raw rows that the merged filter must not admit early
+query I
+SELECT approx_top_k(v, 1) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM (
+	SELECT i, substr('aaaaaabbbbbcccccxxxxxxyyyyzzzzcaaabbcc', i, 1) AS v FROM range(1, 39) r(i)
+) QUALIFY i = 38;
+----
+[a]

@@ -1,0 +1,149 @@
+# name: test/sql/join/inner/runtime_in_filter_key_types.test
+# description: Distinct runtime IN keys preserve scalar equality and logical types
+# group: [inner]
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,compressed_materialization,partial_aggregate_pushdown';
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE DECIMAL(4,1) DECIMAL(18,2) DECIMAL(38,2)
+
+statement ok
+CREATE TABLE probe(k {type});
+
+statement ok
+INSERT INTO probe VALUES (0), (50), (99), (25), (NULL);
+
+statement ok
+CREATE TABLE build AS
+SELECT CASE WHEN i%4=3 THEN NULL ELSE [0,50,99][i%4+1] END::{type} k FROM range(4097) t(i);
+
+query I
+SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+3073
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters": ".*k IN \(.*
+
+query I
+SELECT count(*) FROM probe p JOIN build b ON p.k IS NOT DISTINCT FROM b.k;
+----
+4097
+
+statement ok
+DROP TABLE build;
+
+statement ok
+DROP TABLE probe;
+
+endloop
+
+# Collect in the probe's type when a lossless join cast widened its key.
+statement ok
+CREATE TABLE cast_probe AS SELECT i::INTEGER k FROM range(100) t(i);
+
+statement ok
+CREATE TABLE cast_build AS SELECT [0,50,99][i%3+1]::BIGINT k FROM range(4097) t(i);
+
+query I
+SELECT count(*) FROM cast_probe p JOIN cast_build b ON p.k=b.k;
+----
+4097
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM cast_probe p JOIN cast_build b ON p.k=b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters": ".*k IN \(.*
+
+# NaNs compare equal and signed zero contributes only one distinct key.
+statement ok
+SET dynamic_or_filter_threshold=2;
+
+foreach type FLOAT DOUBLE
+
+statement ok
+CREATE TABLE probe(k {type});
+
+statement ok
+INSERT INTO probe VALUES (0), (0), ('-0'), ('NaN'), (50), (99), (NULL);
+
+statement ok
+CREATE TABLE build AS
+SELECT CASE i%4 WHEN 0 THEN '-0' WHEN 1 THEN '0' WHEN 2 THEN 'NaN' ELSE NULL END::{type} k
+FROM range(4097) t(i);
+
+query I
+SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+7171
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters": ".*k IN \(.*
+
+query I
+SELECT count(*) FROM probe p JOIN build b ON p.k IS NOT DISTINCT FROM b.k;
+----
+8195
+
+statement ok
+DROP TABLE build;
+
+statement ok
+DROP TABLE probe;
+
+endloop
+
+statement ok
+RESET dynamic_or_filter_threshold;
+
+statement ok
+CREATE TYPE text_alias AS VARCHAR;
+
+# Long shared prefixes and embedded NUL bytes must not collapse distinct strings.
+foreach type VARCHAR BLOB text_alias
+
+statement ok
+CREATE TABLE probe AS SELECT (repeat('x',128)||chr(0)||i::VARCHAR)::{type} k FROM range(10) t(i);
+
+statement ok
+CREATE TABLE build AS
+SELECT (repeat('x',128)||chr(0)||[0,5,9][i%3+1]::VARCHAR)::{type} k FROM range(4097) t(i);
+
+statement ok
+PREPARE runtime_in_typed AS SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+
+query I
+EXECUTE runtime_in_typed;
+----
+4097
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters": ".*k IN \(.*
+
+statement ok
+DELETE FROM build;
+
+statement ok
+INSERT INTO build SELECT (repeat('x',128)||chr(0)||[2,4,8][i%3+1]::VARCHAR)::{type} FROM range(4097) t(i);
+
+query I
+EXECUTE runtime_in_typed;
+----
+4097
+
+statement ok
+DEALLOCATE runtime_in_typed;
+
+statement ok
+DROP TABLE build;
+
+statement ok
+DROP TABLE probe;
+
+endloop

@@ -272,6 +272,8 @@ static const vector<string> &SQLiteLogicTestExcludes() {
 	    "test/random/expr/slt_good_80.test", "test/random/expr/slt_good_75.test", "test/random/expr/slt_good_42.test",
 	    "test/random/expr/slt_good_49.test", "test/random/expr/slt_good_24.test", "test/random/expr/slt_good_30.test",
 	    "test/random/expr/slt_good_8.test", "test/random/expr/slt_good_61.test",
+	    // comparing a BLOB with an INTEGER requires an explicit cast
+	    "evidence/in1.test",
 	    // dependencies between tables/views prevent dropping in DuckDB without CASCADE
 	    "test/index/view/1000/slt_good_0.test", "test/index/view/100/slt_good_0.test",
 	    "test/index/view/100/slt_good_5.test", "test/index/view/100/slt_good_1.test",
@@ -321,9 +323,9 @@ static bool IsExtensionTestPath(const string &path) {
 }
 
 void RegisterSqllogictests(const vector<string> &test_paths) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	for (const auto &path : test_paths) {
-		if (IsSQLiteLogicTestPath(*fs, path)) {
+		if (IsSQLiteLogicTestPath(fs, path)) {
 			if (!IsExcludedSQLiteLogicTest(path)) {
 				register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
 			}
@@ -336,8 +338,8 @@ void RegisterSqllogictests(const vector<string> &test_paths) {
 }
 
 void RegisterSqllogictests() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
+	auto &fs = TestLocalFileSystem();
+	listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			if (IsExcludedSQLiteLogicTest(path)) {
 				return;
@@ -345,7 +347,7 @@ void RegisterSqllogictests() {
 			register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
 		}
 	});
-	listFiles(*fs, "test", [&](const string &path) {
+	listFiles(fs, "test", [&](const string &path) {
 		if (IsSQLLogicTestFile(path)) {
 			// parse the name / group from the test
 			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
@@ -353,7 +355,7 @@ void RegisterSqllogictests() {
 	});
 
 	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
-		listFiles(*fs, extension_test_path, [&](const string &path) {
+		listFiles(fs, extension_test_path, [&](const string &path) {
 			if (IsSQLLogicTestFile(path)) {
 				auto fun = testRunner<true>;
 				register_sqllogic_test_case(fun, path, ParseGroupFromPath(path));

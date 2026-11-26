@@ -300,7 +300,9 @@
       {
         "id": 104,
         "name": "repeatable",
-        "type": "bool"
+        "type": "bool",
+        "version": "v2.0.0",
+        "deserialize_default": "result->seed.IsValid()"
       },
       {
         "id": 105,
@@ -1344,6 +1346,9 @@
     "methods": {
       "Verify": []
     },
+    "finalize_deserialization": [
+      "deserializer.CheckAllowed(result.kind);"
+    ],
     "pointer_type": "none"
   },
   {

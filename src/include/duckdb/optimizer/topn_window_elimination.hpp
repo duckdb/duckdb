@@ -41,8 +41,14 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
+	//! Whether a rewrite used late materialization, which leaves the input of its aggregate to be pruned afterwards
+	bool UsedLateMaterialization() const {
+		return any_late_materialization;
+	}
+
 	//	Returns the <= index for TopN, if any
-	static optional_idx CanOptimize(LogicalOperator &op);
+	//	Note that it can return 0 if the filter removes all rows!
+	static optional_idx CanOptimize(LogicalOperator &op, ClientContext &client);
 
 private:
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
@@ -61,6 +67,8 @@ private:
 	                                vector<ColumnBinding> &new_bindings);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,
 	                                                 const TopNWindowEliminationParameters &params) const;
+	bool AggregateKeepsZeroSign(const LogicalWindow &window, const vector<unique_ptr<Expression>> &payload,
+	                            const TopNWindowEliminationParameters &params) const;
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
@@ -90,5 +98,6 @@ private:
 	ClientContext &context;
 	Optimizer &optimizer;
 	optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats;
+	bool any_late_materialization = false;
 };
 } // namespace duckdb

@@ -1,5 +1,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -12,20 +13,8 @@ constexpr int64_t NANOS_PER_MILLI = 1000000;
 constexpr int64_t NANOS_PER_SEC = 1000000000;
 constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
 
-//! Writes the decimal digits of value into the back of buffer (which must hold 20 characters) and
-//! returns the offset of the first digit - so no length has to be computed up front.
-idx_t UInt64Digits(uint64_t value, char *buffer) {
-	idx_t pos = 20;
-	while (value >= 10) {
-		buffer[--pos] = static_cast<char>('0' + value % 10);
-		value /= 10;
-	}
-	buffer[--pos] = static_cast<char>('0' + value);
-	return pos;
-}
-
 //! Build a number key from a sign, the decimal digits of the magnitude (no leading zeros, as e.g.
-//! produced by UInt64Digits) and a base-10 scale (value = magnitude / 10^scale)
+//! produced by NumericHelper::FormatUnsigned) and a base-10 scale (value = magnitude / 10^scale)
 VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, int64_t scale) {
 	VariantNumberKey key;
 	// find the first non-zero digit (magnitude digits have no leading zeros, but be defensive)
@@ -52,32 +41,19 @@ VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, 
 	return key;
 }
 
-//! Build a number key from a 128-bit magnitude, using 64-bit arithmetic whenever the value fits
+//! Build a number key from a 128-bit magnitude
 VariantNumberKey BuildNumberKey(bool negative, uhugeint_t magnitude, int64_t scale) {
-	if (magnitude.upper == 0) {
-		char buffer[20];
-		auto offset = UInt64Digits(magnitude.lower, buffer);
-		return BuildNumberKey(negative, buffer + offset, 20 - offset, scale);
-	}
-	// magnitudes above 64 bits are rare, and are guaranteed to fit inline (39 digits)
-	auto magnitude_digits = Uhugeint::ToString(magnitude);
-	return BuildNumberKey(negative, magnitude_digits.data(), magnitude_digits.size(), scale);
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), scale);
 }
 
 //! Decompose a 128-bit signed value (hugeint) into (sign, magnitude)
 uhugeint_t HugeintMagnitude(const hugeint_t value, bool &negative) {
 	negative = value.upper < 0;
-	uint64_t hi = static_cast<uint64_t>(value.upper);
-	uint64_t lo = value.lower;
-	if (negative) {
-		// two's complement negate to get the magnitude
-		hi = ~hi;
-		lo = ~lo;
-		if (++lo == 0) {
-			++hi;
-		}
-	}
-	return uhugeint_t(hi, lo);
+	const uhugeint_t magnitude(static_cast<uint64_t>(value.upper), value.lower);
+	return negative ? -magnitude : magnitude;
 }
 
 //! Build a number key from a native (<= 64-bit) integer value, computing the magnitude and its
@@ -92,93 +68,103 @@ VariantNumberKey IntegerNumberKey(T value) {
 			magnitude = static_cast<uint64_t>(0) - magnitude; // unsigned negate -> |value| (also handles the minimum)
 		}
 	}
-	char buffer[20];
-	auto offset = UInt64Digits(magnitude, buffer);
-	return BuildNumberKey(negative, buffer + offset, 20 - offset, 0);
+	char buffer[NumericLimits<uint64_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), 0);
 }
 } // namespace
 
-VariantComparisonType GetVariantComparisonType(VariantLogicalType type) {
+VariantComparisonType GetVariantComparisonType(LogicalTypeId type) {
 	switch (type) {
-	case VariantLogicalType::VARIANT_NULL:
+	case LogicalTypeId::SQLNULL:
 		return VariantComparisonType::NULL_VALUE;
-	case VariantLogicalType::BOOL_TRUE:
-	case VariantLogicalType::BOOL_FALSE:
+	case LogicalTypeId::BOOLEAN:
 		return VariantComparisonType::BOOLEAN;
 		// all integers, decimals and bignums fold into a single NUMBER rank (compared by numeric value)
-	case VariantLogicalType::INT8:
-	case VariantLogicalType::INT16:
-	case VariantLogicalType::INT32:
-	case VariantLogicalType::INT64:
-	case VariantLogicalType::INT128:
-	case VariantLogicalType::UINT8:
-	case VariantLogicalType::UINT16:
-	case VariantLogicalType::UINT32:
-	case VariantLogicalType::UINT64:
-	case VariantLogicalType::UINT128:
-	case VariantLogicalType::DECIMAL:
-	case VariantLogicalType::BIGNUM:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::BIGNUM:
 		return VariantComparisonType::NUMBER;
 		// FLOAT and DOUBLE fold into a single REAL rank
-	case VariantLogicalType::FLOAT:
-	case VariantLogicalType::DOUBLE:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
 		return VariantComparisonType::REAL;
-	case VariantLogicalType::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return VariantComparisonType::VARCHAR;
-	case VariantLogicalType::BLOB:
+	case LogicalTypeId::BLOB:
 		return VariantComparisonType::BLOB;
-	case VariantLogicalType::UUID:
+	case LogicalTypeId::UUID:
 		return VariantComparisonType::UUID;
 		// DATE folds into the TIMESTAMP rank (a date compares as midnight of that day), together with all
 		// non-tz TIMESTAMP precisions (SEC / MILIS / MICROS / NANOS)
-	case VariantLogicalType::DATE:
-	case VariantLogicalType::TIMESTAMP_SEC:
-	case VariantLogicalType::TIMESTAMP_MILIS:
-	case VariantLogicalType::TIMESTAMP_MICROS:
-	case VariantLogicalType::TIMESTAMP_NANOS:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
 		return VariantComparisonType::TIMESTAMP;
 		// TIMESTAMP WITH TIME ZONE precisions fold into a single TIMESTAMP_TZ rank
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return VariantComparisonType::TIMESTAMP_TZ;
 		// TIME precisions fold into a single TIME rank
-	case VariantLogicalType::TIME_MICROS:
-	case VariantLogicalType::TIME_NANOS:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 		return VariantComparisonType::TIME;
-	case VariantLogicalType::TIME_MICROS_TZ:
+	case LogicalTypeId::TIME_TZ:
 		return VariantComparisonType::TIME_TZ;
-	case VariantLogicalType::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return VariantComparisonType::INTERVAL;
-	case VariantLogicalType::BITSTRING:
+	case LogicalTypeId::BIT:
 		return VariantComparisonType::BITSTRING;
-	case VariantLogicalType::GEOMETRY:
+	case LogicalTypeId::GEOMETRY:
 		return VariantComparisonType::GEOMETRY;
-	case VariantLogicalType::ARRAY:
+	case LogicalTypeId::GEOGRAPHY:
+		return VariantComparisonType::GEOGRAPHY;
+	case LogicalTypeId::LIST:
 		return VariantComparisonType::ARRAY;
-	case VariantLogicalType::OBJECT:
+	case LogicalTypeId::STRUCT:
 		return VariantComparisonType::OBJECT;
 	default:
 		throw NotImplementedException("Variant type %s is not supported", EnumUtil::ToString(type));
 	}
 }
-double VariantGetRealValue(VariantLogicalType type_id, const VariantNode &node) {
+double VariantGetRealValue(LogicalTypeId type_id, const VariantNode &node) {
 	switch (type_id) {
-	case VariantLogicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		// fold FLOAT into the REAL rank by widening to double (lossless)
 		return static_cast<double>(node.GetData<float>());
-	case VariantLogicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return node.GetData<double>();
 	default:
 		throw InternalException("VariantGetRealValue called on non-REAL type");
 	}
 }
 
-VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNode &node) {
+VariantNumberKey VariantGetNumberKey(LogicalTypeId type_id, const VariantNode &node) {
 	switch (type_id) {
-	case VariantLogicalType::DECIMAL: {
+	case LogicalTypeId::DECIMAL: {
 		const auto decimal_data = node.GetDecimal();
 		hugeint_t unscaled;
 		switch (decimal_data.GetPhysicalType()) {
+		case PhysicalType::VARCHAR: {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			const auto decimal_string = Bignum::BignumToVarchar(bignum_t(node.GetWideDecimal()));
+			const bool negative = !decimal_string.empty() && decimal_string[0] == '-';
+			const idx_t offset = negative ? 1 : 0;
+			return BuildNumberKey(negative, decimal_string.data() + offset, decimal_string.size() - offset,
+			                      decimal_data.scale);
+		}
 		case PhysicalType::INT16:
 			unscaled = hugeint_t(Load<int16_t>(decimal_data.value_ptr));
 			break;
@@ -196,7 +182,7 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 		const auto magnitude = HugeintMagnitude(unscaled, negative);
 		return BuildNumberKey(negative, magnitude, decimal_data.scale);
 	}
-	case VariantLogicalType::BIGNUM: {
+	case LogicalTypeId::BIGNUM: {
 		const auto bignum_blob = node.GetString();
 		const auto decimal_string = Bignum::BignumToVarchar(bignum_t(bignum_blob));
 		const bool negative = !decimal_string.empty() && decimal_string[0] == '-';
@@ -204,67 +190,67 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 		return BuildNumberKey(negative, decimal_string.data() + offset, decimal_string.size() - offset, 0);
 	}
 	// integer types - use the native width for the magnitude, only widening to 128-bit when necessary
-	case VariantLogicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return IntegerNumberKey(Load<int8_t>(node.GetDataPointer()));
-	case VariantLogicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return IntegerNumberKey(Load<int16_t>(node.GetDataPointer()));
-	case VariantLogicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return IntegerNumberKey(Load<int32_t>(node.GetDataPointer()));
-	case VariantLogicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		return IntegerNumberKey(Load<int64_t>(node.GetDataPointer()));
-	case VariantLogicalType::UINT8:
+	case LogicalTypeId::UTINYINT:
 		return IntegerNumberKey(Load<uint8_t>(node.GetDataPointer()));
-	case VariantLogicalType::UINT16:
+	case LogicalTypeId::USMALLINT:
 		return IntegerNumberKey(Load<uint16_t>(node.GetDataPointer()));
-	case VariantLogicalType::UINT32:
+	case LogicalTypeId::UINTEGER:
 		return IntegerNumberKey(Load<uint32_t>(node.GetDataPointer()));
-	case VariantLogicalType::UINT64:
+	case LogicalTypeId::UBIGINT:
 		return IntegerNumberKey(Load<uint64_t>(node.GetDataPointer()));
-	case VariantLogicalType::INT128: {
+	case LogicalTypeId::HUGEINT: {
 		bool negative;
 		const auto magnitude = HugeintMagnitude(Load<hugeint_t>(node.GetDataPointer()), negative);
 		return BuildNumberKey(negative, magnitude, 0);
 	}
-	case VariantLogicalType::UINT128:
+	case LogicalTypeId::UHUGEINT:
 		return BuildNumberKey(false, Load<uhugeint_t>(node.GetDataPointer()), 0);
 	default:
 		throw InternalException("VariantGetNumberKey called on non-number type %s", EnumUtil::ToString(type_id));
 	}
 }
 
-hugeint_t VariantGetTimestampValue(VariantLogicalType type_id, const VariantNode &node) {
+hugeint_t VariantGetTimestampValue(LogicalTypeId type_id, const VariantNode &node) {
 	switch (type_id) {
-	case VariantLogicalType::DATE:
+	case LogicalTypeId::DATE:
 		return hugeint_t(node.GetData<int32_t>()) * hugeint_t(NANOS_PER_DAY);
-	case VariantLogicalType::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return hugeint_t(node.GetData<int64_t>()) * hugeint_t(NANOS_PER_SEC);
-	case VariantLogicalType::TIMESTAMP_MILIS:
+	case LogicalTypeId::TIMESTAMP_MS:
 		return hugeint_t(node.GetData<int64_t>()) * hugeint_t(NANOS_PER_MILLI);
-	case VariantLogicalType::TIMESTAMP_MICROS:
+	case LogicalTypeId::TIMESTAMP:
 		return hugeint_t(node.GetData<int64_t>()) * hugeint_t(NANOS_PER_MICRO);
-	case VariantLogicalType::TIMESTAMP_NANOS:
+	case LogicalTypeId::TIMESTAMP_NS:
 		return hugeint_t(node.GetData<int64_t>());
 	default:
 		throw InternalException("VariantGetTimestampValue called on non-TIMESTAMP type");
 	}
 }
 
-hugeint_t VariantGetTimestampTZValue(VariantLogicalType type_id, const VariantNode &node) {
+hugeint_t VariantGetTimestampTZValue(LogicalTypeId type_id, const VariantNode &node) {
 	switch (type_id) {
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return hugeint_t(node.GetData<int64_t>()) * hugeint_t(NANOS_PER_MICRO);
-	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return hugeint_t(node.GetData<int64_t>());
 	default:
 		throw InternalException("VariantGetTimestampTZValue called on non-TIMESTAMP_TZ type");
 	}
 }
 
-int64_t VariantGetTimeValue(VariantLogicalType type_id, const VariantNode &node) {
+int64_t VariantGetTimeValue(LogicalTypeId type_id, const VariantNode &node) {
 	switch (type_id) {
-	case VariantLogicalType::TIME_MICROS:
+	case LogicalTypeId::TIME:
 		return node.GetData<int64_t>() * NANOS_PER_MICRO;
-	case VariantLogicalType::TIME_NANOS:
+	case LogicalTypeId::TIME_NS:
 		return node.GetData<int64_t>();
 	default:
 		throw InternalException("VariantGetTimeValue called on non-TIME type");

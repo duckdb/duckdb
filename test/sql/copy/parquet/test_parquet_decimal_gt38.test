@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/test_parquet_decimal_gt38.test
-# description: Read parquet decimals with precision > 38, which are returned as DOUBLE
+# description: Read parquet decimals with precision > 38, which are returned as wide DECIMALs
 # group: [parquet]
 
 require parquet
@@ -9,7 +9,7 @@ require parquet
 query I
 SELECT typeof(x) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38.parquet') LIMIT 1
 ----
-DOUBLE
+DECIMAL(39,2)
 
 query I
 SELECT x FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38.parquet')
@@ -18,32 +18,32 @@ SELECT x FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_deci
 -2.25
 -0.01
 -0.02
-1.0
--1.0
+1.00
+-1.00
 
 # decimal(50,2) stored as a 21-byte FIXED_LEN_BYTE_ARRAY
 query I
 SELECT x FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38_len21.parquet')
 ----
-1.5
+1.50
 -2.25
-123456789.1
+123456789.10
 
 # decimal(39,2) split across two row groups with min/max statistics; the statistics decode
 # through the same conversion as the values, so zone-map pruning must agree with the data
 query I
 SELECT x FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38_row_groups.parquet') ORDER BY x
 ----
--5.0
--4.0
--3.0
--2.0
--1.0
-1.0
-2.0
-3.0
-4.0
-5.0
+-5.00
+-4.00
+-3.00
+-2.00
+-1.00
+1.00
+2.00
+3.00
+4.00
+5.00
 
 query I
 SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38_row_groups.parquet') WHERE x < -1.5
@@ -63,15 +63,15 @@ SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_leng
 query II
 SELECT min(x), max(x) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_gt38_row_groups.parquet')
 ----
--5.0	5.0
+-5.00	5.00
 
 # decimal(39,2) stored as variable-length BYTE_ARRAY - every value carries its own byte length
 query I
 SELECT x FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/byte_array_decimal_gt38.parquet') ORDER BY x
 ----
 0.01
-3.0
-700.0
+3.00
+700.00
 
 query I
 SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/byte_array_decimal_gt38.parquet') WHERE x > 100
@@ -82,3 +82,89 @@ query I
 SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/byte_array_decimal_gt38.parquet') WHERE x < 1
 ----
 1
+
+# precision above 38 declared on INT32 / INT64 columns (the Parquet format allows at most 9 / 18 digits there).
+# the integers are read into a wide DECIMAL of the declared width, they are not turned into a DOUBLE
+query III
+SELECT typeof(d32), typeof(d64), typeof(dict32) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') LIMIT 1
+----
+DECIMAL(39,2)	DECIMAL(45,3)	DECIMAL(39,2)
+
+query IIIIIII
+SELECT min(d32), max(d32), count(d32), min(d64), max(d64), count(d64), count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet')
+----
+-14.99	14.99	2571	-1499000010.493	1499000010.493	2727	3000
+
+query III
+SELECT d32, d64, dict32 FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') LIMIT 4 OFFSET 1498
+----
+NULL	-2000000.014	1.00
+-0.01	-1000000.007	2.00
+0.00	0.000	-2.00
+0.01	1000000.007	-1.00
+
+# dictionary-encoded pages
+query II
+SELECT dict32, count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') GROUP BY dict32 ORDER BY dict32
+----
+-2.00	600
+-1.00	600
+0.00	600
+1.00	600
+2.00	600
+
+# the integer statistics of the two row groups agree with the data
+query II
+SELECT stats_min_value, stats_max_value FROM parquet_metadata('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE path_in_schema = 'd64' ORDER BY row_group_id
+----
+-1499000010.493	547000003.829
+548000003.836	1499000010.493
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d32 > 14.5
+----
+42
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d64 < -1499000000
+----
+1
+
+query I
+SELECT count(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/int_decimal_gt38.parquet') WHERE d32 = -0.01 AND d64 = -1000000.007
+----
+1
+
+# wide decimals are written in a FIXED_LEN_BYTE_ARRAY whose length is rounded up to a multiple of 8 bytes
+# (39 digits need 17 bytes, 50 need 21, 76 need 32, 120 need 51). DuckDB 1.x reads these columns as DOUBLE and only
+# decodes such lengths correctly, and the Parquet format only requires the length to be large enough
+statement ok
+COPY (
+	SELECT v::DECIMAL(39,2) AS d39, v::DECIMAL(50,2) AS d50, v::DECIMAL(76,4) AS d76, v::DECIMAL(120,2) AS d120
+	FROM (VALUES ('1.50'), ('-2.25'), ('0'), (NULL), ('-0.01'),
+	             ('9999999999999999999999999999999999999.99'), ('-9999999999999999999999999999999999999.99')) t(v)
+) TO '{TEST_DIR}/wide_decimal_lengths.parquet'
+
+query IIII
+SELECT name, type, type_length, precision FROM parquet_schema('{TEST_DIR}/wide_decimal_lengths.parquet') WHERE type IS NOT NULL ORDER BY precision
+----
+d39	FIXED_LEN_BYTE_ARRAY	24	39
+d50	FIXED_LEN_BYTE_ARRAY	24	50
+d76	FIXED_LEN_BYTE_ARRAY	32	76
+d120	FIXED_LEN_BYTE_ARRAY	56	120
+
+query IIII
+SELECT * FROM '{TEST_DIR}/wide_decimal_lengths.parquet'
+----
+1.50	1.50	1.5000	1.50
+-2.25	-2.25	-2.2500	-2.25
+0.00	0.00	0.0000	0.00
+NULL	NULL	NULL	NULL
+-0.01	-0.01	-0.0100	-0.01
+9999999999999999999999999999999999999.99	9999999999999999999999999999999999999.99	9999999999999999999999999999999999999.9900	9999999999999999999999999999999999999.99
+-9999999999999999999999999999999999999.99	-9999999999999999999999999999999999999.99	-9999999999999999999999999999999999999.9900	-9999999999999999999999999999999999999.99
+
+query II
+SELECT stats_min_value, stats_max_value FROM parquet_metadata('{TEST_DIR}/wide_decimal_lengths.parquet') WHERE path_in_schema = 'd50'
+----
+-9999999999999999999999999999999999999.99	9999999999999999999999999999999999999.99

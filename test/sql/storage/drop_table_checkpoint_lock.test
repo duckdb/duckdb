@@ -1,0 +1,172 @@
+# name: test/sql/storage/drop_table_checkpoint_lock.test
+# description: Only the drop of a table without indexes runs alongside checkpoints: every other drop holds them back
+# group: [storage]
+
+require skip_reload
+
+load {TEST_DIR}/drop_table_checkpoint_lock.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+CREATE TABLE plain (i INTEGER, s VARCHAR)
+
+statement ok
+INSERT INTO plain SELECT i, 's' || i FROM range(10000) t(i)
+
+statement ok
+CREATE TABLE pk (i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE idx (i INTEGER, s VARCHAR)
+
+statement ok
+INSERT INTO idx SELECT i, 's' || i FROM range(10000) t(i)
+
+statement ok
+CREATE INDEX idx_s ON idx(s)
+
+statement ok
+CREATE TABLE tick (i INTEGER)
+
+statement ok
+CHECKPOINT
+
+# a table without indexes: the open transaction does not hold a checkpoint back
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE plain
+
+statement ok
+INSERT INTO tick VALUES (1)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# a table with a primary key
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE pk
+
+statement ok
+INSERT INTO tick VALUES (2)
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# a table with an index
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE idx
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# an index
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP INDEX idx_s
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# CASCADE can reach an index of another table
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE plain CASCADE
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# an index that is committed after the drop statement: the drop cannot commit
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE plain
+
+statement ok
+CREATE INDEX plain_s ON plain(s)
+
+statement error con1
+COMMIT
+----
+a dependency was created after the transaction started
+
+query I
+SELECT i FROM plain WHERE s = 's777'
+----
+777
+
+# the table has an index now: its drop holds a checkpoint back
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE plain
+
+statement ok
+INSERT INTO tick VALUES (3)
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+COMMIT
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+SET debug_verify_blocks=true
+
+query I
+SELECT table_name FROM duckdb_tables() ORDER BY ALL
+----
+idx
+pk
+tick
+
+statement ok
+INSERT INTO tick VALUES (4)
+
+statement ok
+CHECKPOINT

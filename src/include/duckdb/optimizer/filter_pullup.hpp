@@ -14,17 +14,20 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class FilterPullup {
 public:
-	explicit FilterPullup(bool pullup = false, bool add_column = false)
-	    : can_pullup(pullup), can_add_column(add_column) {
+	//! The context is needed for the collations an EXCEPT / INTERSECT compares its columns with
+	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = false)
+	    : context(context), can_pullup(pullup), can_add_column(add_column) {
 	}
 
 	//! Perform filter pullup
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 private:
+	optional_ptr<ClientContext> context;
 	vector<unique_ptr<Expression>> filters_expr_pullup;
 
 	// only pull up filters when there is a fork
@@ -52,8 +55,6 @@ private:
 	unique_ptr<LogicalOperator> PullupSemiJoin(unique_ptr<LogicalOperator> op);
 	//! Pullup filter in an inner join
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
-	//! Pullup filter through a distinct
-	unique_ptr<LogicalOperator> PullupDistinct(unique_ptr<LogicalOperator> op);
 	//! Pullup the filters on the partitions of a window
 	unique_ptr<LogicalOperator> PullupWindow(unique_ptr<LogicalOperator> op);
 	//! Pullup filter in LogicalIntersect or LogicalExcept op

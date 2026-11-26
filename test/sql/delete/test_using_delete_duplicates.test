@@ -58,11 +58,11 @@ CREATE or replace TABLE integers AS FROM range(10);
 statement ok
 create table integers_copy as select * from integers;
 
-query I nosort delete_result_1
+query I rowsort delete_result_1
 DELETE FROM integers USING range(100) RETURNING *;
 ----
 
-query I nosort delte_result_1
+query I rowsort delete_result_1
 select * from integers_copy;
 
 
@@ -75,11 +75,11 @@ create or replace table t2 as select range b from range(10);
 statement ok
 create or replace table t2_copy as select * from t2;
 
-query I nosort delete_result_small
+query I rowsort delete_result_small
 delete from t2 using t1 where a=b returning *;
 ----
 
-query I nosort delete_result_small
+query I rowsort delete_result_small
 select * from t2_copy;
 ----
 
@@ -99,11 +99,11 @@ insert into t1 select 12 from range(10);
 statement ok
 create or replace table t2_copy as select * from t2;
 
-query I nosort delete_result_small_2
+query I rowsort delete_result_small_2
 delete from t2 using t1 where a=b returning *;
 ----
 
-query I nosort delete_result_small_2
+query I rowsort delete_result_small_2
 select * from t2_copy
 ----
 
@@ -123,8 +123,8 @@ insert into t1 select 100_050 from range(50);
 statement ok
 create or replace table t2_copy as select * from t2;
 
-query I nosort delete_result
+query I rowsort delete_result
 delete from t2 using t1 where a=b returning *;
 
-query I nosort delete_result;
+query I rowsort delete_result
 select * from t2_copy;

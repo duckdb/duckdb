@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
@@ -67,7 +68,7 @@ struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
 	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
+	AttachOptions(Context &context, const unordered_map<string, Value> &options, const AccessMode default_access_mode);
 
 	//! The setting an attach option controls, lower-cased. All four spellings of the access mode
 	//! (readonly, read_only, readwrite, read_write) share one setting, so two of them in the same
@@ -143,7 +144,17 @@ public:
 	ValidChecker &GetValidChecker() {
 		return validity;
 	}
-	void Invalidate(const string &reason);
+	//! Whether an unrecoverable error in this database can be scoped to it, i.e. it can be detached to recover
+	bool SupportsScopedInvalidation() const;
+	//! Invalidate this database after an unrecoverable error: it rejects all use until it is detached.
+	//! Escalates to the database instance if the invalidation cannot be scoped to this database.
+	//! A database that is already invalidated keeps its original error.
+	void Invalidate(const string &cause, const string &error);
+	//! Invalidate this database for a fatal error it raised, marking the error as handled by this database.
+	//! Errors that are not fatal, or cannot be scoped to this database, are returned unchanged.
+	ErrorData ScopeFatalError(ErrorData error);
+	//! The error rejecting the given operation if this database or its instance has been invalidated
+	ErrorData InvalidationError(const string &operation);
 
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
@@ -202,6 +213,13 @@ public:
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
+	//! A database marked as detached closes with the action recorded by MarkDetached instead.
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database,
+	                                       DatabaseCloseAction close_action);
+	//! The close action a detach issued by this context uses.
+	static DatabaseCloseAction GetDetachCloseAction(ClientContext &context);
+	//! Mark as detached: whoever releases the last reference closes the database with close_action.
+	void MarkDetached(DatabaseCloseAction close_action);
 	//! Obtain a reference unless closing the database has already started.
 	static shared_ptr<AttachedDatabase> TryGetReference(const weak_ptr<AttachedDatabase> &attached_database);
 
@@ -221,6 +239,8 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	bool is_closing = false;
+	bool is_detached = false;
+	DatabaseCloseAction detach_close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;

@@ -359,7 +359,7 @@ using namespace duckdb::capiv2;
 // arrow_importer
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context, struct ArrowSchema *schema,
+DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context, const struct ArrowSchema *schema,
                                                 idx_t batch_size, duckdb_v2_arrow_importer_handle *out_importer,
                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(context);
@@ -495,7 +495,7 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_importer_handle
 //----------------------------------------------------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context,
-                                                const duckdb_v2_logical_type_handle *types, const char **names,
+                                                const duckdb_v2_logical_type_handle *types, const char *const *names,
                                                 const idx_t *names_lengths, idx_t count, idx_t batch_size,
                                                 duckdb_v2_arrow_exporter_handle *out_exporter,
                                                 duckdb_v2_error_info_handle *err) {
@@ -613,12 +613,10 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_destroy(duckdb_v2_arrow_exporter_handle
 // arrow_result
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(duckdb_v2_connection_handle conn,
-                                                  duckdb_v2_sql_statement_handle statement,
-                                                  const char **parameter_names, const idx_t *parameter_names_lengths,
-                                                  const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
-                                                  idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
-                                                  duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(
+    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out_result);
 	*out_result = nullptr;
 	DUCKDB_CHECK_ARG(conn);

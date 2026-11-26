@@ -124,7 +124,7 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			if (offset + size > file_size) {
+			if (offset > file_size || size > file_size - offset) {
 				throw SerializationException(
 				    "Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
 				    "(found entry with size %llu bytes, file size %llu bytes)",
@@ -148,6 +148,9 @@ public:
 		}
 
 		if (state_p.wal_version == 3) {
+			if (!state_p.db.GetStorageManager().IsEncrypted()) {
+				throw IOException("Failed to read WAL: the WAL is marked as encrypted, but the database is not");
+			}
 			auto &database = state_p.db.GetDatabase();
 			//! Version 3 means that the WAL is encrypted
 			//! For encryption, the length field remains plaintext
@@ -184,7 +187,8 @@ public:
 				tag.SetSize(0);
 			}
 
-			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
+			const auto trailer_size = nonce.size() + sizeof(uint64_t) + tag.size();
+			if (offset > file_size || trailer_size > file_size - offset || size > file_size - offset - trailer_size) {
 				throw SerializationException(
 				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
 				    "(found entry with size %llu bytes, file size %llu bytes)",
@@ -485,7 +489,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+	MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
@@ -516,14 +520,14 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 			}
 		}
-		auto profiler = Context::TryGetQueryProfiler(context.GetServices());
+		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
 		if (profiler) {
 			profiler->AddToMetricCounter(MetricStorageWALReplayEntryCount::Name, replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			con.Rollback();
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
@@ -676,7 +680,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+				MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -686,7 +690,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		// serialization failure means a truncated WAL
 		// these failures are ignored unless abort_on_wal_failure is true
 		// other failures always result in an error
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} catch (...) {
@@ -791,7 +795,7 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		ReplayDropTrigger();
 		break;
 	default:
-		throw InternalException("Invalid WAL entry type!");
+		throw DataCorruptionException("Invalid WAL entry type %d - corrupt WAL?", static_cast<int>(entry_type));
 	}
 }
 
@@ -860,12 +864,27 @@ static QualifiedName ReplayQualifiedName(Catalog &catalog, const QualifiedName &
 	return entry_name.WithCatalog(catalog.GetName()).WithName(name);
 }
 
+//! The catalog information of a (checksum-valid) WAL entry can still be missing or of the wrong type
+template <class T>
+static T &CheckedCreateInfo(const unique_ptr<CreateInfo> &info, CatalogType expected_type) {
+	if (!info) {
+		throw DataCorruptionException("Corrupt WAL file: entry is missing its catalog information");
+	}
+	if (info->type != expected_type) {
+		throw DataCorruptionException("Corrupt WAL file: entry carries catalog information of an unexpected type");
+	}
+	return info->Cast<T>();
+}
+
 //===--------------------------------------------------------------------===//
 // Replay Table
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTable() {
 	auto entry = WALCreateTable::Deserialize(deserializer);
 	auto info = std::move(entry.table);
+	if (!info) {
+		throw DataCorruptionException("Corrupt WAL file: entry is missing its catalog information");
+	}
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -958,7 +977,28 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
+	if (!info || info->info_type != ParseInfoType::ALTER_INFO) {
+		throw DataCorruptionException("Corrupt WAL file: alter entry does not carry alter information");
+	}
 	auto &alter_info = info->Cast<AlterInfo>();
+	// IsAddUniqueConstraint() below dereferences the constraint of an ADD_CONSTRAINT entry, so it must be present
+	if (alter_info.type == AlterType::ALTER_TABLE) {
+		auto &table_info = alter_info.Cast<AlterTableInfo>();
+		if (table_info.alter_table_type == AlterTableType::ADD_CONSTRAINT) {
+			if (!table_info.Cast<AddConstraintInfo>().constraint) {
+				throw DataCorruptionException("Corrupt WAL file: add constraint entry is missing its constraint");
+			}
+		}
+		// the table is altered without binding the entry, so the type of a new column or field is not checked later
+		if (table_info.alter_table_type == AlterTableType::ADD_COLUMN &&
+		    !table_info.Cast<AddColumnInfo>().new_column.Type().HasPhysicalType()) {
+			throw DataCorruptionException("Corrupt WAL file: add column entry with a type that no column can have");
+		}
+		if (table_info.alter_table_type == AlterTableType::ADD_FIELD &&
+		    !table_info.Cast<AddFieldInfo>().new_field.Type().HasPhysicalType()) {
+			throw DataCorruptionException("Corrupt WAL file: add field entry with a type that no column can have");
+		}
+	}
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddUniqueConstraint()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
@@ -1030,11 +1070,11 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateView() {
 	auto wal_entry = WALCreateView::Deserialize(deserializer);
-	auto &entry = wal_entry.view;
+	auto &entry = CheckedCreateInfo<CreateViewInfo>(wal_entry.view, CatalogType::VIEW_ENTRY);
 	if (DeserializeOnly()) {
 		return;
 	}
-	catalog.CreateView(context, entry->Cast<CreateViewInfo>());
+	catalog.CreateView(context, entry);
 }
 
 void WriteAheadLogDeserializer::ReplayDropView() {
@@ -1088,12 +1128,12 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateType() {
 	auto wal_entry = WALCreateType::Deserialize(deserializer);
-	auto &info = wal_entry.type;
-	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	auto &info = CheckedCreateInfo<CreateTypeInfo>(wal_entry.type, CatalogType::TYPE_ENTRY);
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
 		return;
 	}
-	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
+	catalog.CreateType(context, info);
 }
 
 void WriteAheadLogDeserializer::ReplayDropType() {
@@ -1114,12 +1154,14 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 	auto wal_entry = WALCreateTrigger::Deserialize(deserializer);
-	auto &info = wal_entry.trigger;
-	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	auto &trigger_info = CheckedCreateInfo<CreateTriggerInfo>(wal_entry.trigger, CatalogType::TRIGGER_ENTRY);
+	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
 		return;
 	}
-	auto &trigger_info = info->Cast<CreateTriggerInfo>();
+	if (!trigger_info.base_table) {
+		throw DataCorruptionException("Corrupt WAL file: trigger entry is missing its base table");
+	}
 	// the trigger lives in the same (possibly nested) schema as its base table
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(
 	    context, ReplayQualifiedName(catalog, trigger_info.GetQualifiedName(), trigger_info.base_table->Table()));
@@ -1138,8 +1180,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger %s",
-		                        info.GetQualifiedName().Name());
+		throw DataCorruptionException("Corrupt WAL file: drop trigger entry is missing its base table");
 	}
 	// the trigger lives in the same (possibly nested) schema as its base table
 	auto &table =
@@ -1154,12 +1195,12 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSequence() {
 	auto wal_entry = WALCreateSequence::Deserialize(deserializer);
-	auto &entry = wal_entry.sequence;
+	auto &entry = CheckedCreateInfo<CreateSequenceInfo>(wal_entry.sequence, CatalogType::SEQUENCE_ENTRY);
 	if (DeserializeOnly()) {
 		return;
 	}
 
-	catalog.CreateSequence(context, entry->Cast<CreateSequenceInfo>());
+	catalog.CreateSequence(context, entry);
 }
 
 void WriteAheadLogDeserializer::ReplayDropSequence() {
@@ -1196,12 +1237,12 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateMacro() {
 	auto wal_entry = WALCreateMacro::Deserialize(deserializer);
-	auto &entry = wal_entry.macro;
+	auto &entry = CheckedCreateInfo<CreateMacroInfo>(wal_entry.macro, CatalogType::MACRO_ENTRY);
 	if (DeserializeOnly()) {
 		return;
 	}
 
-	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
+	catalog.CreateFunction(context, entry);
 }
 
 void WriteAheadLogDeserializer::ReplayDropMacro() {
@@ -1221,11 +1262,11 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 	auto wal_entry = WALCreateTableMacro::Deserialize(deserializer);
-	auto &entry = wal_entry.table_macro;
+	auto &entry = CheckedCreateInfo<CreateMacroInfo>(wal_entry.table_macro, CatalogType::TABLE_MACRO_ENTRY);
 	if (DeserializeOnly()) {
 		return;
 	}
-	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
+	catalog.CreateFunction(context, entry);
 }
 
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
@@ -1246,12 +1287,12 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	auto &info = CheckedCreateInfo<CreateIndexInfo>(create_info, CatalogType::INDEX_ENTRY);
 
 	ReplayIndexData(index_info);
 	if (DeserializeOnly()) {
 		return;
 	}
-	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.
 	if (info.index_type.empty()) {

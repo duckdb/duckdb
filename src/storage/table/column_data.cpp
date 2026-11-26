@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -487,8 +488,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, const Sca
 	        : *state.current;
 	// segment rows are relative to the row group
 	checked_end = checked_segment.GetRowStart() + checked_segment.GetNode().count;
-	return CheckSegmentStatistics(Context::TryGetClientContext(state.context.GetServices()), checked_segment,
-	                              expr_filter);
+	return CheckSegmentStatistics(state.context.GetClientContext(), checked_segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const ScanFilter &filter, idx_t row,
@@ -501,7 +501,7 @@ FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const S
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.filter, "ColumnData::CheckZonemapAt");
 	auto segment = data.GetSegment(row);
 	checked_end = segment->GetRowStart() + segment->GetNode().count;
-	return CheckSegmentStatistics(Context::TryGetClientContext(state.context.GetServices()), *segment, expr_filter);
+	return CheckSegmentStatistics(state.context.GetClientContext(), *segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
@@ -967,9 +967,9 @@ void ColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                     PartialBlockManager &partial_block_manager) {
-	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<ColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
@@ -995,7 +995,8 @@ ColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &checkpoi
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = CreateCheckpointState(row_group, context, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	if (!data.GetRootSegment()) {
@@ -1079,7 +1080,9 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 
 	// Serialize the extra data
-	serializer.WritePropertyWithDefault(99, "extra_data", extra_data);
+	if (!extra_data || extra_data->IsSupported(serializer)) {
+		serializer.WritePropertyWithDefault(99, "extra_data", extra_data);
+	}
 
 	// TODO: Dont special-case this
 	if (logical_type.id() == LogicalTypeId::VARIANT) {
@@ -1146,7 +1149,7 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 		return result;
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
-		if (column_type.id() != LogicalTypeId::GEOMETRY) {
+		if (column_type.id() != LogicalTypeId::GEOMETRY && column_type.id() != LogicalTypeId::GEOGRAPHY) {
 			throw DataCorruptionException("GEOMETRY column data found for a column of type %s", column_type);
 		}
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
@@ -1154,6 +1157,14 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB
 		                                ? deserializer.Get<const LogicalType &>()
 		                                : Geometry::GetVectorizedType(geometry_data.storage_type));
+		result.extra_data = std::move(extra_data);
+		return result;
+	}
+	case ExtraPersistentColumnDataType::LIST: {
+		if (column_type.InternalType() != PhysicalType::LIST) {
+			throw DataCorruptionException("LIST column data found for a column of type %s", column_type);
+		}
+		PersistentColumnData result(column_type);
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -1353,6 +1364,9 @@ void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 		const auto &geometry_data = Cast<GeometryPersistentColumnData>();
 		serializer.WritePropertyWithDefault(101, "storage_type", geometry_data.storage_type, GeometryStorageType::WKB);
 	} break;
+	case ExtraPersistentColumnDataType::LIST:
+		Cast<ListPersistentColumnData>().SerializeFields(serializer);
+		break;
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
 	}
@@ -1371,8 +1385,10 @@ unique_ptr<ExtraPersistentColumnData> ExtraPersistentColumnData::Deserialize(Des
 		    101, "storage_type", GeometryStorageType::WKB);
 		return make_uniq<GeometryPersistentColumnData>(storage_type);
 	}
+	case ExtraPersistentColumnDataType::LIST:
+		return ListPersistentColumnData::Deserialize(deserializer);
 	default:
-		throw InternalException("Unknown PersistentColumnData type");
+		throw DataCorruptionException("Column data with extra data of an unknown type");
 	}
 }
 
@@ -1496,14 +1512,17 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	data.Verify();
 
+	const auto is_geo_type = [](LogicalTypeId id) {
+		return id == LogicalTypeId::GEOMETRY || id == LogicalTypeId::GEOGRAPHY;
+	};
 	bool is_geometry_child_column = false;
-	if (type.id() == LogicalTypeId::GEOMETRY && this->parent && this->parent->type.id() == LogicalTypeId::GEOMETRY) {
-		// Geometry child column
+	if (is_geo_type(type.id()) && this->parent && is_geo_type(this->parent->type.id())) {
+		// Geometry/geography child column
 		is_geometry_child_column = true;
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY ||
-	    (type.id() == LogicalTypeId::GEOMETRY && !is_geometry_child_column)) {
+	    (is_geo_type(type.id()) && !is_geometry_child_column)) {
 		// structs and fixed size lists don't have segments
 		D_ASSERT(!data.GetRootSegment());
 		return;
@@ -1526,7 +1545,7 @@ void ColumnData::Verify(RowGroup &parent) {
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
-	if (type.id() == LogicalTypeId::GEOMETRY) {
+	if (type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY) {
 		return make_shared_ptr<GeoColumnData>(block_manager, info, column_index, type, data_type, parent);
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {

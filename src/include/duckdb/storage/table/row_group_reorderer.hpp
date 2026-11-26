@@ -34,7 +34,7 @@ public:
 	static OffsetPruningResult GetOffsetAfterPruning(OrderByStatistics order_by, OrderByColumnType column_type,
 	                                                 OrderType order_type, OrderByNullType null_order,
 	                                                 const StorageIndex &column_idx, idx_t row_offset,
-	                                                 vector<PartitionStatistics> &stats);
+	                                                 vector<PartitionStatistics> &stats, bool has_secondary_order);
 
 private:
 	const RowGroupOrderOptions options;

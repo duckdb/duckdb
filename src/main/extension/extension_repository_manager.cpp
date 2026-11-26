@@ -4,13 +4,19 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "yyjson.hpp"
+
+#include <algorithm>
+#include <cstring>
 
 using namespace duckdb_yyjson; // NOLINT
 
@@ -126,8 +132,47 @@ string ExtensionRepositoryManager::GetPublicKeyFingerprint(const string &compact
 }
 
 //===--------------------------------------------------------------------===//
-// Repository storage
+// Repository metadata
 //===--------------------------------------------------------------------===//
+//! Read a small file that may live on a remote file system (autoloading the extension that provides it), bounded by
+//! MAX_METADATA_FILE_SIZE: a metadata file is a few lines of json
+//! Remote file systems are provided by extensions - autoload the one `path` needs if necessary. A missing extension is
+//! reported as such: it is not something the remote side did
+static void LoadExtensionForRemotePath(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &path) {
+	auto &fs = db.GetFileSystem();
+	string required_extension;
+	if (fs.IsRemoteFile(path, required_extension) && !db.ExtensionIsLoaded(required_extension)) {
+		if (!context || !Settings::Get<AutoloadKnownExtensionsSetting>(*context)) {
+			throw MissingExtensionException(
+			    StringUtil::Format("reading '%s' requires the %s extension, which is not loaded: run `INSTALL AND LOAD "
+			                       "%s;` first",
+			                       path, required_extension, required_extension));
+		}
+		try {
+			ExtensionHelper::AutoLoadExtension(*context, required_extension);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			throw MissingExtensionException(StringUtil::Format(
+			    "reading '%s' requires the %s extension, which could not be autoloaded: %s\nRun `INSTALL AND LOAD %s;` "
+			    "first",
+			    path, required_extension, error.RawMessage(), required_extension));
+		}
+	}
+}
+
+static string ReadSmallRemoteFile(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &path) {
+	LoadExtensionForRemotePath(db, context, path);
+	auto &fs = db.GetFileSystem();
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	auto file_size = handle->GetFileSize();
+	if (file_size > MAX_METADATA_FILE_SIZE) {
+		throw IOException("File is %llu bytes, which is too large to be a repository metadata file", file_size);
+	}
+	auto buffer = make_unsafe_uniq_array<char>(file_size);
+	handle->Read(buffer.get(), file_size, 0);
+	return string(buffer.get(), file_size);
+}
+
 //! Fetch the public keys that the repository publishes at its prefix. Note that the keys are pinned when the repository
 //! is created: the fingerprints that are reported back are what identify the keys from there on
 vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db, optional_ptr<ClientContext> context,
@@ -136,31 +181,21 @@ vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db,
 	StringUtil::RTrim(metadata_path, "/");
 	metadata_path += "/" + string(METADATA_FILE);
 
-	auto &fs = db.GetFileSystem();
-	// remote file systems are provided by extensions - autoload them if necessary
-	string required_extension;
-	if (context && fs.IsRemoteFile(metadata_path, required_extension) && !db.ExtensionIsLoaded(required_extension) &&
-	    Settings::Get<AutoloadKnownExtensionsSetting>(*context)) {
-		ExtensionHelper::AutoLoadExtension(*context, required_extension);
-	}
-
 	string contents;
 	try {
-		auto handle = fs.OpenFile(metadata_path, FileFlags::FILE_FLAGS_READ);
-		auto file_size = handle->GetFileSize();
-		if (file_size > MAX_METADATA_FILE_SIZE) {
-			throw IOException("File is %llu bytes, which is too large to be a repository metadata file", file_size);
-		}
-		auto buffer = make_unsafe_uniq_array<char>(file_size);
-		handle->Read(buffer.get(), file_size, 0);
-		contents = string(buffer.get(), file_size);
+		contents = ReadSmallRemoteFile(db, context, metadata_path);
+	} catch (MissingExtensionException &) {
+		throw;
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		throw IOException("Failed to read the metadata file of the extension repository from '%s': %s\nProvide the key "
 		                  "directly using `USING PUBLIC KEY '<key>'` if the repository does not serve it",
 		                  metadata_path, error.RawMessage());
 	}
+	return ParsePublicKeys(contents, metadata_path);
+}
 
+vector<string> ExtensionRepositoryManager::ParsePublicKeys(const string &contents, const string &metadata_path) {
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	if (!document.doc) {
 		throw IOException("Failed to read extension repository metadata file '%s': the file is not valid json",
@@ -200,8 +235,8 @@ vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db,
 
 ExtensionRepositoryAccess ExtensionRepositoryManager::ParseAccess(const string &value) {
 	auto lower = StringUtil::Lower(value);
-	if (lower == "undecided") {
-		return ExtensionRepositoryAccess::UNDECIDED;
+	if (lower == "hosts") {
+		return ExtensionRepositoryAccess::HOSTS;
 	}
 	if (lower == "allowed") {
 		return ExtensionRepositoryAccess::ALLOWED;
@@ -209,8 +244,11 @@ ExtensionRepositoryAccess ExtensionRepositoryManager::ParseAccess(const string &
 	if (lower == "forbidden") {
 		return ExtensionRepositoryAccess::FORBIDDEN;
 	}
-	throw InvalidInputException("Invalid value '%s' for allow_extension_repositories: expected 'undecided', 'allowed' "
-	                            "or 'forbidden'",
+	if (lower == "hosts_only") {
+		return ExtensionRepositoryAccess::HOSTS_ONLY;
+	}
+	throw InvalidInputException("Invalid value '%s' for allow_extension_repositories: expected 'hosts', 'allowed', "
+	                            "'hosts_only' or 'forbidden'",
 	                            value);
 }
 
@@ -220,8 +258,10 @@ string ExtensionRepositoryManager::AccessToString(ExtensionRepositoryAccess acce
 		return "allowed";
 	case ExtensionRepositoryAccess::FORBIDDEN:
 		return "forbidden";
+	case ExtensionRepositoryAccess::HOSTS_ONLY:
+		return "hosts_only";
 	default:
-		return "undecided";
+		return "hosts";
 	}
 }
 
@@ -229,24 +269,74 @@ ExtensionRepositoryAccess ExtensionRepositoryManager::GetAccess(DatabaseInstance
 	return ParseAccess(Settings::Get<AllowExtensionRepositoriesSetting>(db));
 }
 
+bool ExtensionRepositoryManager::TrustsExistingRepositories(DatabaseInstance &db) {
+	// the access values that trust existing repositories are listed explicitly, any other value distrusts them
+	switch (GetAccess(db)) {
+	case ExtensionRepositoryAccess::HOSTS:
+	case ExtensionRepositoryAccess::ALLOWED:
+	case ExtensionRepositoryAccess::HOSTS_ONLY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ExtensionRepositoryManager::TrustsRepository(DatabaseInstance &db, const ExtensionRepository &repository) {
+	if (!TrustsExistingRepositories(db)) {
+		return false;
+	}
+	if (GetAccess(db) == ExtensionRepositoryAccess::HOSTS_ONLY) {
+		// only a repository resolved from its host is trusted - one added by prefix is distrusted
+		return !repository.host.empty();
+	}
+	return true;
+}
+
 void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	// modifying the trusted repositories changes the set of keys that are trusted to sign extensions, so it is gated
 	// by the configuration lock: a locked configuration freezes the trust store
+	if (Settings::Get<LockConfigurationSetting>(db)) {
+		throw InvalidInputException("Cannot add or drop extension repositories while the configuration is locked "
+		                            "(lock_configuration is true): they decide which signing keys are trusted, so they "
+		                            "are part of the configuration");
+	}
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
 }
 
-void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db) {
+static constexpr const char *REPOSITORIES_DOCS = "https://duckdb.org/docs/stable/extensions/extension_repositories";
+
+void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host) {
 	CheckNotLocked(db);
-	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first
-	switch (GetAccess(db)) {
-	case ExtensionRepositoryAccess::ALLOWED:
+	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first - except for a
+	// repository resolved from its host: the name says who is trusted, and the host's own file says what, so the
+	// 'hosts' default lets it through
+	auto access = GetAccess(db);
+	if (access == ExtensionRepositoryAccess::ALLOWED || (from_host && access != ExtensionRepositoryAccess::FORBIDDEN)) {
 		return;
-	case ExtensionRepositoryAccess::FORBIDDEN:
-		throw PermissionException("Adding extension repositories has been forbidden through configuration");
-	default:
-		throw PermissionException("Adding extension repositories is not enabled: set "
-		                          "allow_extension_repositories='allowed' to opt in");
 	}
+	string message;
+	if (access == ExtensionRepositoryAccess::FORBIDDEN) {
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is "
+		                             "'forbidden', which does not allow adding any repository.",
+		                             name);
+	} else {
+		// 'hosts' or 'hosts_only', and a prefix was given
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is '%s', "
+		                             "which does not allow adding arbitrary repositories, only repositories named by "
+		                             "their host.",
+		                             name, AccessToString(access));
+		auto host_form = IsHostName(name)
+		                     ? StringUtil::Format("`CREATE EXTENSION REPOSITORY %s` without a prefix", name)
+		                     : string("`CREATE EXTENSION REPOSITORY <host>` without a prefix");
+		if (access == ExtensionRepositoryAccess::HOSTS) {
+			// the default can still be opened up; 'hosts_only' cannot, the setting only tightens
+			message += "\nConsider changing the setting, or creating the repository by its host: " + host_form + ".";
+		} else {
+			message += "\nConsider creating the repository by its host: " + host_form + ".";
+		}
+	}
+	message += StringUtil::Format("\nCheck the docs: %s", REPOSITORIES_DOCS);
+	throw PermissionException(message);
 }
 
 bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, string &result) {
@@ -255,23 +345,300 @@ bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, 
 	}
 	result = StringUtil::Lower(name);
 	for (auto c : result) {
-		if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c) && c != '_' && c != '-') {
+		if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c) && c != '_' && c != '-' && c != '.') {
 			return false;
 		}
 	}
+	// a dot lets a repository be named after a host ('carlopi.github.io'); as a file name it must still be a plain
+	// name: not hidden, not '.' or '..' or a run of dots
+	if (result.front() == '.' || result.back() == '.' || result.find("..") != string::npos) {
+		return false;
+	}
 	return true;
+}
+
+//! The repository name a stored file carries in its name: the file name without the fixed suffix
+static string RepositoryNameOfFile(const string &file_name) {
+	D_ASSERT(StringUtil::EndsWith(file_name, ExtensionRepositoryManager::FILE_EXTENSION));
+	return file_name.substr(0, file_name.size() - strlen(ExtensionRepositoryManager::FILE_EXTENSION));
 }
 
 string ExtensionRepositoryManager::NormalizeRepositoryName(const string &name) {
 	string result;
 	if (!TryNormalizeRepositoryName(name, result)) {
+		string hint;
+		for (auto c : name) {
+			if (static_cast<unsigned char>(c) >= 0x80) {
+				hint = "\nAn internationalised host is spelled in its punycode form, 'xn--...', in quotes";
+				break;
+			}
+		}
 		throw InvalidInputException("Invalid extension repository name '%s': names cannot be empty and can only "
-		                            "contain letters, digits, '_' and '-'",
-		                            name);
+		                            "contain letters, digits, '_', '-' and '.' (not at the start or the end, and not "
+		                            "two in a row)%s",
+		                            name, hint);
 	}
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// Repositories resolved from their host: CREATE EXTENSION REPOSITORY <host> without a prefix
+//
+// The name is the publisher's host. The host serves `https://<host>/.well-known/duckdb-extension-repo.json`, the same
+// metadata file a prefix serves, and only its `{"version": 1, "repository_url": "<url>"}` is read: where the repository
+// is. From there on it is CREATE EXTENSION REPOSITORY <host> WITH PREFIX '<url>', keys fetched from the prefix and
+// pinned. The fetch over https from the host is what makes the file the host's own statement.
+//===--------------------------------------------------------------------===//
+
+static constexpr const idx_t METADATA_FORMAT_VERSION = 1;
+
+//! Whether a name is one DuckDB will reach over the network as a host: two or more labels of letters, digits and '-'
+//! separated by single dots, no label starting or ending with '-', the last label letters only (so no IPv4 literal),
+//! and not localhost. A single word is not a host: it would be resolved through search domains to a host the user did
+//! not name. There is no stricter test short of the public suffix list; this one keeps out what is certainly not a
+//! public host
+//! A host label: one or more words of letters and digits joined by single dashes, so no leading or trailing dash and
+//! no two dashes touching - except the one place two dashes are legitimate, the 'xn--' that opens an internationalised
+//! label in its punycode (A-label) form: 'xn--mnchen-3ya' for 'münchen'
+static bool IsHostLabel(const string &label) {
+	idx_t start = 0;
+	if (label.size() > 4 && StringUtil::CIEquals(label.substr(0, 4), "xn--")) {
+		start = 4;
+	}
+	idx_t word_length = 0;
+	for (idx_t i = start; i <= label.size(); i++) {
+		auto c = i < label.size() ? label[i] : '-';
+		if (c == '-') {
+			if (word_length == 0) {
+				return false;
+			}
+			word_length = 0;
+			continue;
+		}
+		if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c)) {
+			return false;
+		}
+		word_length++;
+	}
+	return true;
+}
+
+bool ExtensionRepositoryManager::IsHostName(const string &text) {
+	// two or more labels separated by single dots, the last one letters only (an IPv4 literal is not a host), and not
+	// localhost
+	if (text.empty() || text.front() == '.' || text.back() == '.' || text.find("..") != string::npos) {
+		return false;
+	}
+	auto labels = StringUtil::Split(text, '.');
+	if (labels.size() < 2) {
+		return false;
+	}
+	for (auto &label : labels) {
+		if (!IsHostLabel(label)) {
+			return false;
+		}
+	}
+	for (auto c : labels.back()) {
+		if (!StringUtil::CharacterIsAlpha(c)) {
+			return false;
+		}
+	}
+	auto lower = StringUtil::Lower(text);
+	return lower != "localhost" && !StringUtil::EndsWith(lower, ".localhost");
+}
+
+//! Read a small file over https for resolving a repository from its host. The file decides which prefix and which
+//! signing keys get trusted, so it is not read through the file system, whose http settings the user controls: the url
+//! must be https, a secret or setting that switches verification off for it is refused, and the server certificate is
+//! verified whatever the provider's defaults are.
+//!
+//! Redirects are followed as the client follows them, wherever they lead, http included. The first hop is verified
+//! https, so a redirect can only come from the host itself: it is the host speaking, and where it sends its visitors
+//! (a moved site, a different domain, even plain http) is the host's own decision and the host's own risk, exactly as
+//! the content of the file is. Nothing here inspects the hops.
+static string ReadAuthenticatedHTTPS(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &url,
+                                     const char *what) {
+	if (!StringUtil::StartsWith(url, "https://")) {
+		throw InvalidInputException("The %s must be reached over https, got '%s'", what, url);
+	}
+	LoadExtensionForRemotePath(db, context, url);
+
+	auto &manager = db.config.GetHTTPTransportManager();
+	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
+	auto &params = session.Parameters();
+	// a secret or setting that switches verification off for this url is refused outright, rather than silently
+	// overruled: it says the user does not want this host verified, and an unverified host cannot vouch for anything
+	if (params.override_verify_ssl && !params.verify_ssl) {
+		throw InvalidInputException(
+		    "Cannot read the %s '%s': certificate verification is disabled for it (a VERIFY_SSL "
+		    "false secret or setting applies), and a repository is only resolved from a host "
+		    "that is verified",
+		    what, url);
+	}
+	// ...and verification is required regardless of the provider's defaults
+	params.RequireServerCertificateVerification();
+	params.keep_alive = false;
+
+	// the body is received through a handler so that the transfer stops as soon as it exceeds the cap, or before it
+	// starts when the announced length does: the cap is on what is downloaded, not on what is kept afterwards
+	string body;
+	bool too_large = false;
+	auto response_handler = [&](const HTTPResponse &response) {
+		// called once per response (a redirect or a retry starts another one): begin afresh
+		body.clear();
+		if (too_large) {
+			// a previous attempt already received too much: do not download it again
+			return false;
+		}
+		if (response.HasHeader("Content-Length")) {
+			idx_t content_length;
+			if (TryCast::Operation<string_t, idx_t>(string_t(response.GetHeaderValue("Content-Length")), content_length,
+			                                        false) &&
+			    content_length > MAX_METADATA_FILE_SIZE) {
+				too_large = true;
+				return false;
+			}
+		}
+		return true;
+	};
+	auto content_handler = [&](const_data_ptr_t data, idx_t data_length) {
+		if (body.size() + data_length > MAX_METADATA_FILE_SIZE) {
+			too_large = true;
+			return false;
+		}
+		body.append(const_char_ptr_cast(data), data_length);
+		return true;
+	};
+	HTTPHeaders headers(db);
+	GetRequestInfo get_request(url, headers, params, response_handler, content_handler);
+	get_request.try_request = true;
+	auto response = session.Request(get_request);
+	if (too_large) {
+		throw IOException("Failed to read the %s '%s': it is larger than the %llu bytes a repository metadata file can "
+		                  "take",
+		                  what, url, MAX_METADATA_FILE_SIZE);
+	}
+	if (response->HasRequestError()) {
+		throw IOException("Failed to read the %s '%s': %s", what, url, response->GetRequestError());
+	}
+	if (!response->Success()) {
+		throw IOException("Failed to read the %s '%s': HTTP %d %s", what, url, static_cast<int32_t>(response->status),
+		                  response->GetError());
+	}
+	return body;
+}
+
+//! The root object of a host's metadata file, after checking its version
+static yyjson_val *ReadVersionedObject(RepositoryJSONDocument &document, const string &path) {
+	if (!document.doc) {
+		throw IOException("Failed to read the extension repository metadata file '%s': the file is not valid json",
+		                  path);
+	}
+	auto root = yyjson_doc_get_root(document.doc);
+	if (!root || !yyjson_is_obj(root)) {
+		throw IOException("Failed to read the extension repository metadata file '%s': expected a json object", path);
+	}
+	auto version = yyjson_obj_get(root, "version");
+	if (!version || !yyjson_is_uint(version)) {
+		throw IOException("Failed to read the extension repository metadata file '%s': missing or invalid field "
+		                  "'version'",
+		                  path);
+	}
+	if (yyjson_get_uint(version) != METADATA_FORMAT_VERSION) {
+		throw IOException("Failed to read the extension repository metadata file '%s': it has version %llu, this "
+		                  "version of DuckDB understands version %llu",
+		                  path, yyjson_get_uint(version), METADATA_FORMAT_VERSION);
+	}
+	return root;
+}
+
+//! How a failed resolution opens, naming what cannot be done: the statement creates a repository, the
+//! extension_repository_url function only looks one up
+static string ResolutionFailure(ExtensionRepositoryHostCaller caller, const string &name) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return StringUtil::Format("Cannot create extension repository '%s'", name);
+	}
+	return StringUtil::Format("Cannot resolve the extension repository of host '%s'", name);
+}
+
+//! What else the user can do, for the caller that has an alternative: the statement can name the location itself
+static string ResolutionHint(ExtensionRepositoryHostCaller caller, const char *hint) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return hint;
+	}
+	return string();
+}
+
+ExtensionRepositoryResolution
+ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                      const string &name_p, ExtensionRepositoryHostCaller caller) {
+	// called by CreateRepository once the access check and the conflict check have passed, and by
+	// extension_repository_url, which reads the same public file without creating or trusting anything
+	auto name = NormalizeRepositoryName(name_p);
+	// only a name that is a host on the public internet is reached: a single word would resolve through search
+	// domains to a host the user did not name, an IP literal or localhost is nobody's statement
+	if (!IsHostName(name)) {
+		throw InvalidInputException(
+		    "%s: '%s' is not a host name. A host has two or more labels separated by "
+		    "dots, each label words of letters and digits joined by single dashes (or a "
+		    "punycode label, 'xn--...'), the last label letters only, and is not localhost%s",
+		    ResolutionFailure(caller, name_p), name,
+		    ResolutionHint(caller, "\nUse `WITH PREFIX '<url>'` to name the repository's location directly"));
+	}
+	// reading the host is an external access: refused up front, as LOAD refuses, rather than as a read error from
+	// the file system once the request is attempted
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
+		throw PermissionException("%s: reading the host's metadata file is an external access, which is disabled "
+		                          "through configuration (enable_external_access)",
+		                          ResolutionFailure(caller, name));
+	}
+	ExtensionRepositoryResolution resolution;
+	resolution.host = name;
+
+	// the host is the name the user typed, reached over verified https: that is what makes the file the host's own
+	// statement
+	auto metadata_path = "https://" + name + "/" + string(METADATA_FILE);
+	string contents;
+	try {
+		contents = ReadAuthenticatedHTTPS(db, context, metadata_path, "host's metadata file");
+	} catch (MissingExtensionException &) {
+		throw;
+	} catch (InvalidInputException &) {
+		// a policy refusal (verification switched off for the url): not something the host did
+		throw;
+	} catch (std::exception &ex) {
+		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
+		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
+		ErrorData error(ex);
+		throw IOException("%s: %s\nA repository is resolved from its host through "
+		                  "https://<host>/.well-known/duckdb-extension-repo.json%s",
+		                  ResolutionFailure(caller, name), error.RawMessage(),
+		                  ResolutionHint(caller, "; use `WITH PREFIX '<url>'` to name the repository's "
+		                                         "location directly"));
+	}
+	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
+	auto root = ReadVersionedObject(document, metadata_path);
+	auto url = yyjson_obj_get(root, "repository_url");
+	if (!url || !yyjson_is_str(url) || yyjson_get_len(url) == 0) {
+		throw IOException("Failed to read the extension repository metadata file '%s': missing or invalid field "
+		                  "'repository_url'",
+		                  metadata_path);
+	}
+	resolution.url = string(yyjson_get_str(url), yyjson_get_len(url));
+	StringUtil::RTrim(resolution.url, "/");
+	// the keys are fetched from the prefix next: over anything but https they could be anyone's
+	if (!StringUtil::StartsWith(resolution.url, "https://")) {
+		throw InvalidInputException("%s: the host names the repository at '%s', "
+		                            "but a repository resolved from its host must be served over https, so that its "
+		                            "signing keys are fetched from where the host says they are",
+		                            ResolutionFailure(caller, name), resolution.url);
+	}
+	return resolution;
+}
+
+//===--------------------------------------------------------------------===//
+// Repository storage
+//===--------------------------------------------------------------------===//
 string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, FileSystem &fs) {
 	auto directory = Settings::Get<ExtensionRepositoryDirectorySetting>(db);
 	if (directory.empty()) {
@@ -347,12 +714,23 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	result.path = ReadJSONString(root, "url", path);
 	result.public_keys = ReadJSONKeys(root, path);
 	result.type = ExtensionRepositoryType::USER_PROVIDED;
+	auto host = yyjson_obj_get(root, "host");
+	if (host && yyjson_is_str(host)) {
+		result.host = string(yyjson_get_str(host), yyjson_get_len(host));
+	}
 
-	auto expected_name = fs.ExtractBaseName(path);
+	auto expected_name = RepositoryNameOfFile(fs.ExtractName(path));
 	if (NormalizeRepositoryName(result.name) != expected_name) {
 		throw IOException("Failed to read extension repository file '%s': the file contains repository '%s', but '%s' "
 		                  "was expected based on the file name",
 		                  path, result.name, expected_name);
+	}
+	// a host means "resolved from that host", and a repository resolved from a host is named after it: a file that
+	// says otherwise was not written by DuckDB, and is not trusted on its word
+	if (!result.host.empty() && (!IsHostName(result.host) || StringUtil::Lower(result.host) != expected_name)) {
+		throw IOException("Failed to read extension repository file '%s': the file names host '%s', but a repository "
+		                  "resolved from a host is named after it ('%s')",
+		                  path, result.host, expected_name);
 	}
 	// a user provided repository must never shadow a built-in repository: those are resolved first, so a file named
 	// after a built-in repository would silently redirect installs to an attacker controlled key and url
@@ -363,42 +741,123 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	return result;
 }
 
+//! How a stored repository differs from what a plain CREATE asks for, or empty when the request describes the stored
+//! repository: a repeated CREATE then passes without fetching anything. Without a prefix the request only names a host,
+//! so it describes the stored repository when that was resolved from the host; with a prefix, the prefix must match
+//! and so must the keys when the request gives any (keys that were not given were fetched from the prefix, and are not
+//! fetched again to compare). Nothing here reaches the network: what the host or the prefix serve today is checked
+//! only by OR REPLACE
+static string DescribeDifference(const ExtensionRepository &stored, const ExtensionRepository &requested,
+                                 bool from_host) {
+	if (from_host) {
+		if (!stored.host.empty()) {
+			return string();
+		}
+		return StringUtil::Format("added with prefix '%s' rather than resolved from its host", stored.path);
+	}
+	if (!stored.host.empty()) {
+		return StringUtil::Format("resolved from its host (prefix '%s') rather than added with a prefix", stored.path);
+	}
+	auto requested_path = requested.path;
+	StringUtil::RTrim(requested_path, "/");
+	auto stored_path = stored.path;
+	StringUtil::RTrim(stored_path, "/");
+	if (requested_path != stored_path) {
+		return StringUtil::Format("with prefix '%s'", stored.path);
+	}
+	if (requested.public_keys.empty()) {
+		return string();
+	}
+	auto requested_keys = ExtensionRepositoryManager::NormalizePublicKeys(requested.public_keys);
+	std::sort(requested_keys.begin(), requested_keys.end());
+	auto stored_keys = stored.public_keys;
+	std::sort(stored_keys.begin(), stored_keys.end());
+	if (requested_keys != stored_keys) {
+		vector<string> fingerprints;
+		for (auto &key : stored.public_keys) {
+			fingerprints.push_back(ExtensionRepositoryManager::GetPublicKeyFingerprint(key));
+		}
+		return StringUtil::Format("with other public keys (%s)", StringUtil::Join(fingerprints, ", "));
+	}
+	return string();
+}
+
 ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstance &db, FileSystem &fs,
                                                                  optional_ptr<ClientContext> context,
-                                                                 const ExtensionRepository &repository,
+                                                                 const ExtensionRepository &requested,
                                                                  OnCreateConflict on_conflict) {
-	CheckCanCreate(db);
+	// no prefix: the name is the host, and the host names the prefix. The host is derived here, never taken from the
+	// caller, so a stored host always means the repository was resolved from it
+	bool from_host = requested.path.empty();
+	// a locked configuration freezes the trust store, whatever the statement; the opt-in is checked once it is known
+	// that the statement would add something (see below)
+	CheckNotLocked(db);
 
-	auto name = NormalizeRepositoryName(repository.name);
+	auto name = NormalizeRepositoryName(requested.name);
 	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
 		throw InvalidInputException("Cannot create extension repository '%s': this is a built-in repository name",
 		                            name);
 	}
-	if (repository.path.empty()) {
-		throw InvalidInputException("Cannot create extension repository '%s': the prefix cannot be empty", name);
+	if (from_host && !requested.public_keys.empty()) {
+		// the keys of a repository resolved from its host come from the repository the host names: a key the caller
+		// supplies would be trusted for whatever the host points at, with nothing vouching for it
+		throw InvalidInputException(
+		    "Cannot create extension repository '%s': a repository resolved from its host takes "
+		    "its signing keys from the repository the host names; USING PUBLIC KEY goes with "
+		    "WITH PREFIX",
+		    name);
 	}
+
+	// the conflict is decided before anything is fetched, and before the opt-in: IF NOT EXISTS returns the stored
+	// definition, a plain CREATE returns it too when it asks for the same repository and reports the difference
+	// otherwise, and only OR REPLACE goes on to resolve - keeping the old definition if that fails. Returning what is
+	// stored adds no trust, so it needs no opt-in, and a difference is a difference whatever the access level
 	auto directory = GetRepositoryDirectory(db, fs);
 	auto file_path = fs.JoinPath(directory, name + FILE_EXTENSION);
 	if (fs.FileExists(file_path)) {
 		switch (on_conflict) {
-		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException(
-			    "Extension repository with name \"%s\" already exists!\nUse CREATE OR REPLACE to overwrite it", name);
+		case OnCreateConflict::ERROR_ON_CONFLICT: {
+			auto stored = ReadRepository(fs, file_path);
+			auto difference = DescribeDifference(stored, requested, from_host);
+			if (difference.empty()) {
+				return stored;
+			}
+			throw CatalogException("Extension repository with name \"%s\" already exists, %s\nUse CREATE OR REPLACE to "
+			                       "overwrite it",
+			                       name, difference);
+		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
 			return ReadRepository(fs, file_path);
 		default:
 			break;
 		}
 	}
+	// from here on something is added: the opt-in applies
+	CheckCanCreate(db, name, from_host);
 
-	// if no key was provided, the repository is expected to serve it at its prefix. The keys are pinned here: they are
-	// stored alongside the repository and never fetched again
-	auto public_keys = repository.public_keys.empty() ? FetchPublicKeys(db, context, repository.path)
-	                                                  : NormalizePublicKeys(repository.public_keys);
+	ExtensionRepository repository(name, requested.path, requested.public_keys);
+	vector<string> public_keys;
+	if (from_host) {
+		auto resolution = ResolveRepositoryFromHost(db, context, name);
+		repository.path = resolution.url;
+		repository.host = name;
+		// the keys come from the prefix the host named, fetched as strictly as the host's own file was
+		auto metadata_path = repository.path + "/" + string(METADATA_FILE);
+		public_keys = ParsePublicKeys(ReadAuthenticatedHTTPS(db, context, metadata_path, "repository's metadata file"),
+		                              metadata_path);
+	} else if (repository.public_keys.empty()) {
+		// no key was provided: the repository is expected to serve it at its prefix
+		public_keys = FetchPublicKeys(db, context, repository.path);
+	} else {
+		public_keys = NormalizePublicKeys(repository.public_keys);
+	}
+	// the keys are pinned here: they are stored alongside the repository and never fetched again
 	if (public_keys.empty()) {
 		throw InvalidInputException("Cannot create extension repository '%s': no public key was provided or served",
 		                            name);
 	}
+	// the fetches took time: the access may have been tightened meanwhile, so check again before persisting
+	CheckCanCreate(db, name, from_host);
 
 	if (!fs.DirectoryExists(directory)) {
 		fs.CreateDirectoriesRecursive(directory);
@@ -410,6 +869,9 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	yyjson_mut_obj_add_uint(document.doc, root, "version", FORMAT_VERSION);
 	yyjson_mut_obj_add_strcpy(document.doc, root, "name", name.c_str());
 	yyjson_mut_obj_add_strcpy(document.doc, root, "url", repository.path.c_str());
+	if (!repository.host.empty()) {
+		yyjson_mut_obj_add_strcpy(document.doc, root, "host", repository.host.c_str());
+	}
 	auto keys_array = yyjson_mut_arr(document.doc);
 	yyjson_mut_obj_add_val(document.doc, root, "public_keys", keys_array);
 	for (auto &public_key : public_keys) {
@@ -439,6 +901,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 
 	ExtensionRepository result(name, repository.path, std::move(public_keys));
 	result.type = ExtensionRepositoryType::USER_PROVIDED;
+	result.host = repository.host;
 	return result;
 }
 
@@ -449,6 +912,10 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(name_p);
+	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
+		// the built-in repositories are not stored files: there is nothing to remove, and no way to distrust them
+		throw NotImplementedException("Extension repository '%s' is built in and cannot be dropped", name);
+	}
 	auto file_path = GetRepositoryPath(db, fs, name);
 	if (!fs.FileExists(file_path)) {
 		if (on_entry_not_found == OnEntryNotFound::RETURN_NULL) {
@@ -476,7 +943,7 @@ vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(Database
 	// sort the files to get a deterministic order
 	std::sort(files.begin(), files.end());
 	for (auto &file_name : files) {
-		auto base_name = fs.ExtractBaseName(file_name);
+		auto base_name = RepositoryNameOfFile(file_name);
 		// ignore files that are named after a built-in repository: those are always served by the built-in table
 		string normalized;
 		if (TryNormalizeRepositoryName(base_name, normalized) &&

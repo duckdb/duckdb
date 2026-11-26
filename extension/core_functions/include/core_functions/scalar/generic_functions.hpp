@@ -35,16 +35,6 @@ struct CurrentSettingFun {
 	static ScalarFunction GetFunction();
 };
 
-struct HashFun {
-	static constexpr const char *Name = "hash";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.";
-	static constexpr const char *Example = "hash('🦆')";
-	static constexpr const char *Categories = "string";
-
-	static ScalarFunction GetFunction();
-};
-
 struct LeastFun {
 	static constexpr const char *Name = "least";
 	static constexpr const char *Parameters = "arg1,...";

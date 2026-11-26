@@ -2,6 +2,8 @@
 # description: Cardinality Estimation Left Join Reordering
 # group: [left_join_reordering]
 
+require vector_size 2048
+
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 

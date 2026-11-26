@@ -20,6 +20,11 @@ struct QuantileValue {
 		const auto &type = val.type();
 		switch (type.id()) {
 		case LogicalTypeId::DECIMAL: {
+			if (type.InternalType() == PhysicalType::VARCHAR) {
+				// a wide decimal quantile has no HUGEINT representation, it is interpolated as DOUBLE
+				val = Value::DOUBLE(dbl);
+				break;
+			}
 			integral = IntegralValue::Get(v);
 			scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
 			break;
@@ -52,7 +57,7 @@ struct QuantileBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
 	                      const BoundAggregateFunction &function);
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function);
