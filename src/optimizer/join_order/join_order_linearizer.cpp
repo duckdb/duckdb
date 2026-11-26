@@ -9,50 +9,6 @@
 
 namespace duckdb {
 
-JoinOrderRank::JoinOrderRank(double log_multiplier) : log_multiplier(log_multiplier), log_work(log_multiplier) {
-	D_ASSERT(!std::isnan(log_multiplier));
-}
-
-static double AddLogValues(double left, double right) {
-	if (left < right) {
-		std::swap(left, right);
-	}
-	if (left == -std::numeric_limits<double>::infinity()) {
-		return left;
-	}
-	return left + std::log1p(std::exp(right - left));
-}
-
-void JoinOrderRank::Append(const JoinOrderRank &other) {
-	log_work = AddLogValues(log_work, log_multiplier + other.log_work);
-	log_multiplier += other.log_multiplier;
-}
-
-static int32_t RankSign(double log_multiplier) {
-	return log_multiplier < 0 ? -1 : log_multiplier > 0 ? 1 : 0;
-}
-
-static double LogRankMagnitude(const JoinOrderRank &rank) {
-	if (rank.log_multiplier < 0) {
-		return std::log(-std::expm1(rank.log_multiplier)) - rank.log_work;
-	}
-	return rank.log_multiplier + std::log(-std::expm1(-rank.log_multiplier)) - rank.log_work;
-}
-
-bool JoinOrderRank::operator<(const JoinOrderRank &other) const {
-	auto sign = RankSign(log_multiplier);
-	auto other_sign = RankSign(other.log_multiplier);
-	if (sign != other_sign) {
-		return sign < other_sign;
-	}
-	if (sign == 0) {
-		return false;
-	}
-	auto magnitude = LogRankMagnitude(*this);
-	auto other_magnitude = LogRankMagnitude(other);
-	return sign < 0 ? magnitude > other_magnitude : magnitude < other_magnitude;
-}
-
 JoinOrderLinearizer::JoinOrderLinearizer(QueryGraphManager &graph, CardinalityEstimator &estimator)
     : graph(graph), estimator(estimator) {
 }
@@ -139,17 +95,13 @@ bool JoinOrderLinearizer::BuildTree() {
 	return true;
 }
 
-struct RankedJoinBlock {
-	RankedJoinBlock(RelationIndex relation, double multiplier) : relations {relation}, rank(multiplier) {
-	}
-	vector<RelationIndex> relations;
-	JoinOrderRank rank;
-};
+JoinOrderLinearizer::Block::Block(RelationIndex relation, double multiplier) : relations {relation}, rank(multiplier) {
+}
 
-static void NormalizeJoinChain(vector<RankedJoinBlock> &chain, ClientContext &context) {
-	vector<RankedJoinBlock> normalized;
+void JoinOrderLinearizer::Normalize(vector<Block> &chain) {
+	vector<Block> normalized;
 	for (auto &block : chain) {
-		context.InterruptCheck();
+		graph.context.InterruptCheck();
 		normalized.push_back(std::move(block));
 		while (normalized.size() > 1 && normalized.back().rank < normalized[normalized.size() - 2].rank) {
 			auto &left = normalized[normalized.size() - 2];
@@ -188,7 +140,7 @@ RankedJoinOrder JoinOrderLinearizer::GetOrder(RelationIndex root) {
 		}
 	}
 	D_ASSERT(preorder.size() == count);
-	vector<vector<RankedJoinBlock>> chains(count);
+	vector<vector<Block>> chains(count);
 	for (idx_t i = preorder.size(); i > 0; i--) {
 		auto node = preorder[i - 1];
 		auto &chain = chains[node];
@@ -196,7 +148,7 @@ RankedJoinOrder JoinOrderLinearizer::GetOrder(RelationIndex root) {
 		vector<idx_t> children;
 		for (auto &edge : adjacency[node]) {
 			if (parent[edge.first] == node && edge.first != root.index) {
-				NormalizeJoinChain(chains[edge.first], graph.context);
+				Normalize(chains[edge.first]);
 				children.push_back(edge.first);
 			}
 		}

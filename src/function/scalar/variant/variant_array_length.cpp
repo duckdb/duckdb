@@ -10,7 +10,7 @@ static void WriteArrayLengthsResult(const optional<VariantNode> &node, VectorWri
 		length_writer.WriteNull();
 		return;
 	}
-	if (node->GetTypeId() != VariantLogicalType::ARRAY) {
+	if (node->GetTypeId() != LogicalTypeId::LIST) {
 		length_writer.WriteValue(0);
 		return;
 	}

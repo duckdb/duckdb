@@ -4,6 +4,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/join_order/greedy_join_enumerator.hpp"
 #include "duckdb/optimizer/join_order/join_order_linearizer.hpp"
+#include "duckdb/optimizer/join_order/join_order_precedence.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/optimizer/join_order/linearized_plan_enumerator.hpp"
@@ -870,5 +871,112 @@ TEST_CASE("Interval trials skip infeasible splits without mutating their inputs"
 		REQUIRE(trial.GetPlans().at(entry.first).get() != entry.second.get());
 	}
 	VerifyLinearizedClosure(*trial.GetPlans().at(root), trial.GetPlans(), costs);
+	connection.Rollback();
+}
+
+TEST_CASE("Generalized schedules retain a legal interval parenthesization", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	idx_t rows = 5;
+	for (auto name : {"a", "b", "c", "d", "e", "f", "x"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i%7 k FROM range(" +
+		                                  to_string(rows) + ") t(i)"));
+		rows *= 2;
+	}
+	connection.BeginTransaction();
+	for (auto query : {"SELECT * FROM (a JOIN b ON a.k=b.k) JOIN (c JOIN d ON c.k=d.k) ON a.k+b.k=c.k+d.k",
+	                   "SELECT * FROM a LEFT JOIN b ON a.k=b.k LEFT JOIN c ON a.k=c.k",
+	                   "SELECT * FROM a SEMI JOIN b ON a.k=b.k ANTI JOIN c ON a.k=c.k",
+	                   "SELECT * FROM a LEFT JOIN (b SEMI JOIN c ON b.k=c.k) ON a.k=b.k",
+	                   "SELECT * FROM (a JOIN b ON a.k=b.k) JOIN "
+	                   "(((c JOIN x ON c.k=x.k) JOIN d ON x.k=d.k) JOIN (e JOIN f ON e.k=f.k) ON x.k=e.k+f.k) "
+	                   "ON a.k+b.k=c.k+d.k"}) {
+		CAPTURE(query);
+		auto plan = PlanLinearizedQuery(connection, query);
+		JoinOrderOptimizer optimizer(*connection.context);
+		QueryGraphManager graph(*connection.context);
+		REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+		CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+		CostModel costs(estimator);
+		LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+		enumerator.InitLeafPlans();
+		LinearizedTestHelper::Input(enumerator);
+		auto &root = LinearizedTotalSet(graph);
+		auto witness = CapturedJoinOrderPlan::Capture(enumerator.plans, root, costs);
+		JoinOrderPrecedence precedence(graph, estimator, enumerator.candidate_evaluator, *witness);
+		auto order = precedence.GetBestOrder();
+		REQUIRE(order.size() == graph.relation_manager.NumRelations());
+		REQUIRE(precedence.GetBestOrder() == order);
+		LinearizedTestHelper::Leaves(enumerator);
+		REQUIRE(LinearizedTestHelper::ForOrder(enumerator, order));
+		if (order.size() <= 4) {
+			auto alternatives = ExhaustiveIntervals(graph, estimator, costs, order, 0, order.size());
+			REQUIRE_FALSE(alternatives.empty());
+			auto best = std::numeric_limits<double>::infinity();
+			for (auto &alternative : alternatives) {
+				best = MinValue(best, alternative->cost);
+			}
+			REQUIRE(enumerator.plans.at(root)->cost == Approx(best));
+		}
+		VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+		auto trial_cost = costs.GetCost(*enumerator.plans.at(root));
+		REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+		REQUIRE_FALSE(trial_cost < costs.GetCost(*enumerator.plans.at(root)));
+		VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Nonseparable hyperedges retain a complete witness through approximate search", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c", "d"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i::INT k FROM range(10) t(i)"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection,
+	                                "SELECT * FROM a JOIN b ON a.k=b.k JOIN c ON a.k+b.k=c.k JOIN d ON a.k+c.k=d.k");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.InitLeafPlans();
+	LinearizedTestHelper::Input(enumerator);
+	auto &root = LinearizedTotalSet(graph);
+	auto witness = CapturedJoinOrderPlan::Capture(enumerator.plans, root, costs);
+	REQUIRE(JoinOrderPrecedence(graph, estimator, enumerator.candidate_evaluator, *witness).GetBestOrder().empty());
+	LinearizedTestHelper::Leaves(enumerator);
+	REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+	REQUIRE_FALSE(costs.GetCost(witness->GetRootNode()) < costs.GetCost(*enumerator.plans.at(root)));
+	VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+	connection.Interrupt();
+	REQUIRE_THROWS_WITH(JoinOrderPrecedence(graph, estimator, enumerator.candidate_evaluator, *witness).GetBestOrder(),
+	                    Catch::Contains("Interrupted!"));
+	connection.Rollback();
+}
+
+TEST_CASE("Generalized search obtains a witness after required cross-product activation", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i::INT k FROM range(10) t(i)"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection, "SELECT * FROM a,b,c WHERE a.k+b.k=c.k");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.InitLeafPlans();
+	LinearizedTestHelper::Input(enumerator);
+	auto &root = LinearizedTotalSet(graph);
+	REQUIRE(enumerator.plans.find(root) == enumerator.plans.end());
+	LinearizedTestHelper::Leaves(enumerator);
+	REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+	VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
 	connection.Rollback();
 }

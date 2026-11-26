@@ -1,0 +1,46 @@
+# name: test/sql/storage_version/blockless_segment_compatibility.test
+# description: Issue #27513 - readers before v1.4.0 treat block-less segments as constant, so files targeting older storage versions must not contain block-less non-constant segments
+# group: [storage_version]
+
+statement ok
+ATTACH '{TEST_DIR}/blockless_v132.db' AS db (STORAGE_VERSION 'v1.3.2');
+
+statement ok
+CREATE TABLE db.t AS SELECT CASE WHEN i = 5 THEN NULL ELSE 'string_' || i::VARCHAR END AS s FROM range(1000) r(i);
+
+statement ok
+CHECKPOINT db;
+
+# every non-constant segment must have a block, otherwise 1.3.x reads the column as all-NULL
+query I
+SELECT count(*) FROM pragma_storage_info('db.t') WHERE block_id = -1 AND compression <> 'Constant';
+----
+0
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/blockless_v132.db' AS db;
+
+query II
+SELECT count(s), count(*) FROM db.t;
+----
+999	1000
+
+statement ok
+DETACH db;
+
+# files targeting v1.4.0 and newer still use the block-less Empty Validity layout
+statement ok
+ATTACH '{TEST_DIR}/blockless_v140.db' AS db2 (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+CREATE TABLE db2.t AS SELECT CASE WHEN i = 5 THEN NULL ELSE 'string_' || i::VARCHAR END AS s FROM range(1000) r(i);
+
+statement ok
+CHECKPOINT db2;
+
+query I
+SELECT count(*) FROM pragma_storage_info('db2.t') WHERE compression = 'Empty Validity' AND block_id = -1;
+----
+1

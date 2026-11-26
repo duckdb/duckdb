@@ -87,6 +87,14 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	row_groups = CreateAlteredCollection(std::move(new_collection));
 }
 
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent)
+    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows.load()),
+      optimistic_writer(new_dt), indexes(parent.indexes) {
+	// a new constraint does not change the data: the row groups are shared with the old version
+	PrepareParentForAlter(context, parent);
+	row_groups = CreateAlteredCollection(parent.row_groups->collection);
+}
+
 LocalTableStorage::~LocalTableStorage() {
 }
 
@@ -841,23 +849,14 @@ void LocalStorage::DropTable(DataTable &table) {
 	storage->is_dropped = true;
 }
 
-void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
+void LocalStorage::MoveStorage(ClientContext &context, DataTable &old_dt, DataTable &new_dt) {
 	// check if there are any pending appends for the old version of the table
-	auto storage = table_manager.GetStorage(old_dt);
+	LocalStorageAlterLocks locks;
+	auto storage = BeginAlter(old_dt, locks);
 	if (!storage) {
 		return;
 	}
-	// statements of other connections that share the transaction can be using the storage
-	auto append_key = storage->append_lock.TryGetExclusiveLock();
-	auto flush_key = storage->flush_lock.TryGetExclusiveLock();
-	if (!append_key || !flush_key) {
-		throw TransactionException("Cannot alter a table that is used by another connection of the shared transaction");
-	}
-	auto new_storage = table_manager.MoveEntry(old_dt);
-	D_ASSERT(new_storage.get() == storage.get());
-	// take over the storage from the old entry
-	new_storage->table_ref = new_dt;
-	table_manager.InsertEntry(new_dt, std::move(new_storage));
+	FinishAlter(old_dt, new_dt, make_shared_ptr<LocalTableStorage>(context, new_dt, *storage));
 }
 
 shared_ptr<LocalTableStorage> LocalStorage::BeginAlter(DataTable &old_dt, LocalStorageAlterLocks &locks) {

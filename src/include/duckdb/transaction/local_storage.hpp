@@ -60,6 +60,8 @@ public:
 	//! Create the LocalTableStorage of the new version of a table from a DROP COLUMN.
 	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
 	                  const idx_t drop_column_index);
+	//! Create the LocalTableStorage of the new version of a table from an ADD CONSTRAINT (the row groups are shared)
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent);
 	//! Create the LocalTableStorage of the new version of a table from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  ExpressionExecutor &default_executor);
@@ -246,7 +248,7 @@ public:
 	void ChangeType(ClientContext &context, DataTable &old_dt, DataTable &new_dt, idx_t changed_idx,
 	                const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
-	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
+	void MoveStorage(ClientContext &context, DataTable &old_dt, DataTable &new_dt);
 	void FetchChunk(DataTable &table, const Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	//! Returns true, if the local storage contains the row id.

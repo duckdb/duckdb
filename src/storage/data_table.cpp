@@ -184,7 +184,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 			VerifyNewConstraint(context, local_storage, parent, not_null);
 		}
 	}
-	local_storage.MoveStorage(parent, *this);
+	local_storage.MoveStorage(context, parent, *this);
 	parent.version = DataTableVersion::ALTERED;
 }
 

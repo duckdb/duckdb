@@ -181,6 +181,24 @@ QUALIFY row_number() OVER (ORDER BY id) BETWEEN 2 AND 4
 3	c	1
 4	b	2
 
+# ORDER BY required
+query II
+EXPLAIN
+SELECT count(*) FROM (
+    SELECT i FROM range(10) t(i)
+    QUALIFY rank() OVER (PARTITION BY i % 2) = 1
+);
+----
+physical_plan	<!REGEX>:.*FILTER.*WINDOW.*Limit.*
+
+query I
+SELECT count(*) FROM (
+    SELECT i FROM range(10) t(i)
+    QUALIFY rank() OVER (PARTITION BY i % 2) = 1
+);
+----
+10
+
 #
 # TopN vs Fusion
 #

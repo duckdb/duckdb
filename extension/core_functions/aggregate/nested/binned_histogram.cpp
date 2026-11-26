@@ -4,6 +4,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/sql_value_map.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -54,7 +55,7 @@ struct HistogramBinState {
 			new_boundaries.push_back(OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input));
 		}
 		// sort the bin boundaries
-		std::sort(new_boundaries.begin(), new_boundaries.end());
+		std::sort(new_boundaries.begin(), new_boundaries.end(), SQLValueLessThan<T>());
 		// ensure there are no duplicate bin boundaries
 		for (idx_t i = 1; i < new_boundaries.size(); i++) {
 			if (Equals::Operation(new_boundaries[i - 1], new_boundaries[i])) {
@@ -92,7 +93,11 @@ struct HistogramBinFunction {
 			target.counts = &counts;
 		} else {
 			// both source and target have bin boundaries
-			if (*target.bin_boundaries != *source.bin_boundaries) {
+			auto &target_bins = *target.bin_boundaries;
+			auto &source_bins = *source.bin_boundaries;
+			if (target_bins.size() != source_bins.size() ||
+			    !std::equal(target_bins.begin(), target_bins.end(), source_bins.begin(),
+			                SQLValueEquality<typename STATE::TYPE>())) {
 				throw NotImplementedException(
 				    "Histogram - cannot combine histograms with different bin boundaries. "
 				    "Bin boundaries must be the same for all histograms within the same group");
@@ -113,7 +118,7 @@ struct HistogramRange {
 
 	template <class T>
 	static idx_t GetBin(T value, const unsafe_arena_vector<T> &bin_boundaries) {
-		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value, SQLValueLessThan<T>());
 		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
 	}
 };
@@ -123,8 +128,8 @@ struct HistogramExact {
 
 	template <class T>
 	static idx_t GetBin(T value, const unsafe_arena_vector<T> &bin_boundaries) {
-		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
-		if (entry == bin_boundaries.end() || !(*entry == value)) {
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value, SQLValueLessThan<T>());
+		if (entry == bin_boundaries.end() || !SQLValueEquality<T>()(*entry, value)) {
 			// entry not found - return last bucket
 			return bin_boundaries.size();
 		}
@@ -344,6 +349,9 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	                           AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>,
 	                           HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr, nullptr);
 	function.GetSignature().AddParameter("arg", type).AddParameter("bins", LogicalType::LIST(type));
+	// a NULL bin list or bin entry throws in the update, different bin boundaries of one group in the combine, and a
+	// bin that is the key of the "other values" bucket while that bucket has entries in the finalize
+	function.SetFallible();
 	return function;
 }
 
