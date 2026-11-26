@@ -19,6 +19,7 @@
         "test/sql/optimizer/distinctness_statistics_plan.test",
         "test/sql/join/inner/distinctness_statistics_filter.test",
         "test/sql/optimizer/power_zonemap_pruning.test",
+        "test/sql/optimizer/interval_arithmetic_zonemap_pruning.test",
         "test/sql/optimizer/modulo_zonemap_pruning.test",
         "test/sql/types/decimal/wide_decimal_statistics.test",
         "test/sql/types/decimal/wide_decimal_unbounded_statistics.test",
