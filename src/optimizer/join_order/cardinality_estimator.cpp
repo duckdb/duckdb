@@ -202,8 +202,14 @@ struct LogicalJoinStats {
 };
 
 struct CardinalityEstimatorState {
+	void InitializeEdgeIndex();
+	bool TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const;
+
 	vector<RelationsSetToStats> relation_set_stats;
 	vector<FilterInfoWithTotalDomains> edges;
+	//! Each edge is indexed by one of the relations required by its filter.
+	vector<vector<idx_t>> edges_by_relation;
+	vector<idx_t> unscoped_edges;
 	vector<CardinalityValue> leaf_cardinalities;
 	//! Per relation, the columns that together identify a row (empty if unknown).
 	vector<vector<idx_t>> unique_keys;
@@ -248,6 +254,45 @@ FilterInfo &FilterInfoWithTotalDomains::GetFilter() const {
 
 JoinPredicate &FilterInfoWithTotalDomains::GetPredicate() const {
 	return predicate.get();
+}
+
+void CardinalityEstimatorState::InitializeEdgeIndex() {
+	edges_by_relation.resize(leaf_cardinalities.size());
+	for (idx_t i = 0; i < edges.size(); i++) {
+		auto &scope = edges[i].GetFilter().set.get();
+		if (scope.Empty()) {
+			unscoped_edges.push_back(i);
+			continue;
+		}
+		auto anchor = scope.relations[0].index;
+		for (idx_t j = 1; j < scope.count; j++) {
+			auto relation = scope.relations[j].index;
+			if (edges_by_relation[relation].size() < edges_by_relation[anchor].size()) {
+				anchor = relation;
+			}
+		}
+		edges_by_relation[anchor].push_back(i);
+	}
+}
+
+bool CardinalityEstimatorState::TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const {
+	idx_t count = unscoped_edges.size();
+	for (idx_t i = 0; i < set.count; i++) {
+		count += edges_by_relation[set.relations[i].index].size();
+	}
+	// Collecting and sorting most edges costs more than scanning them in place.
+	if (count >= edges.size() / 2) {
+		return false;
+	}
+	candidates.reserve(count);
+	candidates.insert(candidates.end(), unscoped_edges.begin(), unscoped_edges.end());
+	for (idx_t i = 0; i < set.count; i++) {
+		auto &entries = edges_by_relation[set.relations[i].index];
+		candidates.insert(candidates.end(), entries.begin(), entries.end());
+	}
+	// Each edge occurs once. Restore the estimator's order before applying any selectivity.
+	std::sort(candidates.begin(), candidates.end());
+	return true;
 }
 
 // The filter was made on top of a logical sample or other projection,
@@ -600,6 +645,9 @@ bool CardinalityEstimator::ApplyCompositeJoinPairCaps(
     CardinalityValue &target_selectivity, JoinRelationSet &scope,
     reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
     reference_set_t<JoinRelationSet> &capped_join_pairs) {
+	if (capped_join_pairs.size() == join_pair_stats.size()) {
+		return false;
+	}
 	bool applied = false;
 	for (auto &entry : join_pair_stats) {
 		auto &join_pair = entry.first.get();
@@ -791,11 +839,21 @@ void CardinalityEstimator::MergeDisconnectedSelectivitySubgraphs(SelectivityStat
 
 CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
 	SelectivityState selectivity_state;
-	for (auto &edge : state->edges) {
+	auto process_edge = [&](FilterInfoWithTotalDomains &edge) {
 		auto &filter = edge.GetFilter();
 		if (edge.GetPredicate().GetJoinType() == JoinType::INNER && filter.left_set != filter.right_set &&
 		    IsFilterApplicable(filter, set) && !IsResidualFilter(filter)) {
 			ProcessSelectivityEdge(edge, set, selectivity_state);
+		}
+	};
+	vector<idx_t> candidates;
+	if (state->TryGetCandidateEdges(set, candidates)) {
+		for (auto index : candidates) {
+			process_edge(state->edges[index]);
+		}
+	} else {
+		for (auto &edge : state->edges) {
+			process_edge(edge);
 		}
 	}
 	MergeDisconnectedSelectivitySubgraphs(selectivity_state);
@@ -871,6 +929,8 @@ CardinalityValue CardinalityEstimator::EstimateCardinality(JoinRelationSet &set)
 		auto right_rows = EstimateCardinality(right);
 		if (op.type == JoinOrderOperatorType::LEFT) {
 			result = MaxValue(left_rows, left_rows * right_rows * boundary->selectivity);
+		} else if (op.type == JoinOrderOperatorType::MARK) {
+			result = left_rows;
 		} else {
 			auto type = op.type == JoinOrderOperatorType::SEMI ? JoinType::SEMI : JoinType::ANTI;
 			result = RelationStatisticsHelper::EstimateSemiAntiJoinFallbackCardinality(
@@ -975,6 +1035,20 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		state->cardinalities.emplace(set_manager.GetJoinRelation(RelationIndex(i)), cardinality);
 		UpdateTotalDomains(RelationIndex(i), stats, sources);
 	}
+	for (auto &op : operators) {
+		if (op->type != JoinOrderOperatorType::MARK) {
+			continue;
+		}
+		D_ASSERT(op->right_relations.get().count == 1);
+		auto rhs = op->right_relations.get().relations[0];
+		// The marker's synthetic slot follows the RHS columns but is produced by the join.
+		auto key = ColumnBinding(TableIndex(rhs.index), ProjectionIndex(relations[rhs.index].columns.size()));
+		for (auto &domain : state->relation_set_stats) {
+			if (domain.equivalent_relations.count(key)) {
+				domain.domain_estimate.Update(key, DistinctCount(3, DistinctCountSource::CARDINALITY), nullptr);
+			}
+		}
+	}
 	RestrictFilterDomains(relations);
 	for (auto &domain : state->relation_set_stats) {
 		for (auto &predicate : domain.predicates) {
@@ -982,6 +1056,7 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		}
 	}
 	std::stable_sort(state->edges.begin(), state->edges.end(), SortEdges);
+	state->InitializeEdgeIndex();
 	for (auto &op : operators) {
 		D_ASSERT(op->index == state->operators.size());
 		state->operators.push_back(*op);

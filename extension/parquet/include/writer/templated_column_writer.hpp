@@ -460,7 +460,8 @@ public:
 	}
 
 	bool SupportsBloomFilterFallback() const override {
-		return !std::is_same<TGT, Int96>::value && !std::is_same<OP, ParquetGeometryOperator>::value;
+		return !std::is_same<TGT, Int96>::value && !std::is_same<OP, ParquetGeometryOperator>::value &&
+		       OP::template WritesBloomFilter<SRC, TGT>();
 	}
 
 	bool HasDictionary(PrimitiveColumnWriterState &state_p) override {
@@ -504,7 +505,7 @@ public:
 		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY ||
 		         state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY);
 
-		if (writer.EnableBloomFilters()) {
+		if (writer.EnableBloomFilters() && OP::template WritesBloomFilter<SRC, TGT>()) {
 			auto bloom_filter_entries =
 			    state.dictionary.GetSize() * OP::template BloomFilterEntriesPerValue<SRC, TGT>();
 			state.bloom_filter =

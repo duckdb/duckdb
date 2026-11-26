@@ -22,6 +22,10 @@ CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemW
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
 }
 
+bool CachingFileHandleWrapper::CanSeek() {
+	return caching_handle->GetFileHandle()->CanSeek();
+}
+
 void CachingFileHandleWrapper::Close() {
 	if (caching_handle) {
 		caching_handle.reset();
@@ -325,11 +329,6 @@ idx_t CachingFileSystemWrapper::SeekPosition(FileHandle &handle) {
 
 bool CachingFileSystemWrapper::IsManuallySet() {
 	return BaseFileSystem::IsManuallySet();
-}
-
-bool CachingFileSystemWrapper::CanSeek() {
-	// cached files are read by offset
-	return true;
 }
 
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {

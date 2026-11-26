@@ -312,7 +312,11 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
 	                                         // compression
 	auto analyze_result = DetectBestCompressionMethod();
-	if (ValidityCoveredByBasedata(analyze_result)) {
+	// Readers prior to v1.4.0 treat any segment without a block as a constant segment,
+	// so the block-less COMPRESSION_EMPTY segments can only be written to v1.4.0+ files.
+	const bool supports_empty_segments =
+	    StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, storage_manager.GetStorageVersion());
+	if (supports_empty_segments && ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
 		auto &validity = analyze_result[1];
 		auto &db = storage_manager.GetDatabase();

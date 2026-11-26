@@ -33,6 +33,7 @@ public:
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 
 	DUCKDB_API void Close() override;
+	DUCKDB_API bool CanSeek() override;
 
 private:
 	// CachingFileSystem is not kept within VFS as other filesystems, so sometimes it's necessary to pin it inside of
@@ -104,7 +105,6 @@ public:
 	DUCKDB_API idx_t SeekPosition(FileHandle &handle) override;
 
 	DUCKDB_API bool IsManuallySet() override;
-	DUCKDB_API bool CanSeek() override;
 	DUCKDB_API bool OnDiskFile(FileHandle &handle) override;
 
 	DUCKDB_API unique_ptr<FileHandle> OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle,

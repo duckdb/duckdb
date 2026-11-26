@@ -5,6 +5,9 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -195,6 +198,19 @@ void AsyncResult::ExecuteTasksSynchronously(ClientContext &context) {
 	result_type = AsyncResultType::HAVE_MORE_OUTPUT;
 }
 
+SourceResultType AsyncResult::ScheduleOrExecute(ExecutionContext &context, OperatorSourceInput &input,
+                                                StateWithBlockableTasks &state) {
+	if (input.interrupt_state.CanCallback()) {
+		annotated_lock_guard<annotated_mutex> guard(state.lock);
+		if (state.CanBlock()) {
+			ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+			return SourceResultType::BLOCKED;
+		}
+	}
+	ExecuteTasksSynchronously(context.client);
+	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
 AsyncResult AsyncResult::FromTasks(vector<unique_ptr<AsyncTask>> &&tasks, TaskSchedulerType pool_type) {
 	if (tasks.empty()) {
 		return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
@@ -265,9 +281,11 @@ bool AsyncResult::TryGenerateTestResult(AsyncResult &result) {
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		break;
 #ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
 	case 1:
 		tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
+		break;
 #endif
 	default:
 		break;

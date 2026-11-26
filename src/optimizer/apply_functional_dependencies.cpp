@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/apply_functional_dependencies.hpp"
 
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -133,6 +134,18 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	//	so there is only one peer group, which is the same as having no ORDER BY clause.
 	auto &partition_bys = wexpr.Partitions();
 	auto &order_bys = wexpr.OrderByMutable();
+	//	A RANGE frame with an offset is measured on the ORDER BY value, so it needs the key even then.
+	const auto range_offset = [](WindowBoundary boundary) {
+		return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	};
+	if (range_offset(wexpr.WindowStart()) || range_offset(wexpr.WindowEnd())) {
+		return;
+	}
+	//	Some functions read the ORDER BY values, unless they have an argument ordering of their own.
+	auto &window_function = wexpr.WindowFunction();
+	if (window_function && window_function->GetDefinition()->RequiresOrdering() && wexpr.ArgOrders().empty()) {
+		return;
+	}
 	if (!partition_bys.empty() && order_bys.size() == 1) {
 		vector<reference<Expression>> refs;
 		for (auto &arg : partition_bys) {

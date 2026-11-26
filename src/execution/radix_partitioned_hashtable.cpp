@@ -843,8 +843,11 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
-	// Set any_combined, then check one last time whether we need to repartition
-	gstate.any_combined = true;
+	// Finish any in-flight partition update before freezing the target.
+	if (!gstate.any_combined) {
+		const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+		gstate.any_combined = true;
+	}
 	MaybeRepartition(context.client, gstate, lstate, true);
 
 	auto &ht = *lstate.ht;

@@ -74,7 +74,7 @@ static vector<CollationFunctionName> GetVarcharCollationFunctions(ClientContext 
 	// replace default collation with system collation
 	auto str_collation = StringType::GetCollation(sql_type);
 	string collation;
-	if (str_collation.empty()) {
+	if (str_collation.empty() && type != CollationType::EXPLICIT_COLLATIONS) {
 		collation = Settings::Get<DefaultCollationSetting>(context);
 	} else {
 		collation = str_collation;

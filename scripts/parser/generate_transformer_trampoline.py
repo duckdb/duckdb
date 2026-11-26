@@ -244,23 +244,49 @@ class FramePlan:
 
 
 class StaticDataEmitter:
-    """Emits each distinct static initializer once and hands out its name."""
+    """Emits each distinct static initializer once and hands out its name.
+
+    An initializer is named after the alphabetically first rule that uses it, never after an emission
+    counter: adding or removing a rule then only touches the lines of that rule instead of renumbering
+    every later entry. Names are placeholders until finalize(), when all users are known."""
 
     def __init__(self):
-        self.names = {}
-        self.counts = {}
-        self.lines = []
+        self.entries = {}
+        self.order = []
 
-    def intern(self, prefix, cpp_type, body, array=False):
+    def intern(self, prefix, cpp_type, body, user, array=False, anchor=None):
+        """Registers `user` for the initializer; `anchor` names an entry that does not belong to any rule."""
         key = (prefix, body)
-        if key in self.names:
-            return self.names[key]
-        name = f"{prefix}_{self.counts.get(prefix, 0)}"
-        self.counts[prefix] = self.counts.get(prefix, 0) + 1
-        suffix = "[]" if array else ""
-        self.lines.append(f"static const {cpp_type} {name}{suffix} = {body};")
-        self.names[key] = name
-        return name
+        entry = self.entries.get(key)
+        if entry is None:
+            entry = {"prefix": prefix, "cpp_type": cpp_type, "body": body, "array": array, "users": set()}
+            entry["placeholder"] = f"@@{prefix}:{len(self.order)}@@"
+            entry["anchor"] = anchor
+            self.entries[key] = entry
+            self.order.append(entry)
+        entry["users"].add(user)
+        return entry["placeholder"]
+
+    def finalize(self):
+        """Resolves the placeholders and returns (static data lines, resolver for other text)."""
+        names = {}
+        for entry in self.order:
+            anchor = entry["anchor"] or min(entry["users"])
+            names[entry["placeholder"]] = f"{entry['prefix']}_{anchor}"
+        if len(set(names.values())) != len(names):
+            raise RuntimeError("static data entries with the same prefix share an alphabetically first user")
+        pattern = re.compile("|".join(re.escape(placeholder) for placeholder in names))
+
+        def resolve(text):
+            return pattern.sub(lambda match: names[match.group(0)], text)
+
+        lines = []
+        for entry in self.order:
+            suffix = "[]" if entry["array"] else ""
+            lines.append(
+                resolve(f"static const {entry['cpp_type']} {names[entry['placeholder']]}{suffix} = {entry['body']};")
+            )
+        return lines, resolve
 
 
 class ManualTransformRegistry:
@@ -704,13 +730,13 @@ class UseGramPreviewEmitter:
         children = "nullptr"
         if plan.children:
             body = "{" + ", ".join(child.cpp() for child in plan.children) + "}"
-            children = data.intern("FRAME_CHILDREN", "TransformChildPlan", body, array=True)
+            children = data.intern("FRAME_CHILDREN", "TransformChildPlan", body, rule_name, array=True)
         choice = "{}"
         if plan.choice is not None:
             names = "nullptr"
             if plan.choice.fallback_names:
                 body = "{" + ", ".join(f'"{name}"' for name in plan.choice.fallback_names) + "}"
-                names = data.intern("FRAME_NAMES", "char *const", body, array=True)
+                names = data.intern("FRAME_NAMES", "char *const", body, rule_name, array=True)
 
             def type_mask(types):
                 if not types:
@@ -727,7 +753,29 @@ class UseGramPreviewEmitter:
             f"{{{children}, {len(plan.children)}, {plan.fixed_slots}, {cpp_bool(plan.has_dynamic)}, {result_slot}, "
             f"{choice}}}"
         )
-        return data.intern("FRAME_PLAN", "TransformFramePlan", body)
+        anchor = None
+        if not plan.children and (plan.choice is None or not plan.choice.fallback_names):
+            anchor = self.shared_plan_anchor(plan, result_slot)
+        return data.intern("FRAME_PLAN", "TransformFramePlan", body, rule_name, anchor=anchor)
+
+    @staticmethod
+    def shared_plan_anchor(plan, result_slot):
+        """A plan without children or rule names is shared by many rules; name it after its shape, not a rule."""
+        parts = ["Leaf" if plan.choice is None else "Choice"]
+        if plan.choice is not None:
+            if plan.choice.early_types:
+                parts.append("Early" + "".join(name.title().replace("_", "") for name in plan.choice.early_types))
+            if plan.choice.fallback_types:
+                parts.append("Fallback" + "".join(name.title().replace("_", "") for name in plan.choice.fallback_types))
+            if plan.choice.early_empty_name:
+                parts.append("EmptyName")
+            if plan.choice.throw_without_process:
+                parts.append("Throw")
+        if plan.has_dynamic:
+            parts.append("Dynamic")
+        if result_slot:
+            parts.append(f"Result{result_slot}")
+        return "".join(parts)
 
     def emit_header_declarations(self):
         lines = []
@@ -913,13 +961,14 @@ class UseGramPreviewEmitter:
         for rule_name in self.emitted_ops_rules():
             if self.frame_plan_of(rule_name) is not None:
                 plan_names[rule_name] = "&" + self.emit_frame_plan(data, rule_name)
-        lines.extend(data.lines)
+        data_lines, resolve = data.finalize()
+        lines.extend(data_lines)
         lines.append("")
         lines.append("static const TransformFrameOps GENERATED_FRAME_OPS[] = {")
         for rule_name in self.emitted_ops_rules():
             lines.append(
                 f'    {{"{rule_name}", &PEGTransformerFactory::{self.initialize_hook(rule_name)}, '
-                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}, {plan_names.get(rule_name, 'nullptr')}}},"
+                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}, {resolve(plan_names.get(rule_name, 'nullptr'))}}},"
             )
         lines.append("};")
         lines.append("")

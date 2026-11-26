@@ -93,9 +93,9 @@ TEST_CASE("CSV initialization only expands the file count it needs", "[api][mult
 	}
 
 	con.BeginTransaction();
-	auto plan = con.ExtractPlan("SELECT i FROM read_csv('" + path +
-	                            "', auto_detect=false, header=true, columns={'i':'INTEGER'}, store_rejects=" +
-	                            string(store_rejects ? "true" : "false") + ")");
+	auto plan = TestExtractPlan(con, "SELECT i FROM read_csv('" + path +
+	                                     "', auto_detect=false, header=true, columns={'i':'INTEGER'}, store_rejects=" +
+	                                     string(store_rejects ? "true" : "false") + ")");
 	optional_ptr<LogicalOperator> op = plan.get();
 	while (op->type != LogicalOperatorType::LOGICAL_GET) {
 		REQUIRE(op->children.size() == 1);

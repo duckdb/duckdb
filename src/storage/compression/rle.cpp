@@ -1,4 +1,5 @@
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -374,7 +375,8 @@ struct RLEScanState : public SegmentScanState {
 
 	explicit RLEScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)), segment_count(segment.count.load()),
-	      layout(ReadSegmentLayout(handle, segment, segment_count)), entry_pos(0), position_in_entry(0) {
+	      can_have_null(segment.GetStats().CanHaveNull()), layout(ReadSegmentLayout(handle, segment, segment_count)),
+	      entry_pos(0), position_in_entry(0) {
 	}
 
 	//! Advances past empty entries within the validated range.
@@ -450,9 +452,75 @@ struct RLEScanState : public SegmentScanState {
 		return selected_rows;
 	}
 
+	void CopyRunValues(Vector &result, idx_t run_count) {
+		const auto values = layout.GetRunValues(run_count);
+		memcpy(FlatVector::GetDataMutable<T>(result), values.data(), run_count * sizeof(T));
+		switch (result.GetType().id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_NS:
+		case LogicalTypeId::TIME_TZ:
+			break;
+		default:
+			return;
+		}
+		// NULL-only and unused legacy runs can contain a placeholder outside these logical domains.
+		// Other types can store the same physical value as a valid value, so preserve it there.
+		auto &validity = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < run_count; i++) {
+			if (values[i] == NullValue<T>()) {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+
+	bool ShouldUseDictionary(idx_t scan_count, idx_t sel_count) const {
+		// Sparse selection can remove the repetition that makes a dictionary useful.
+		return double(sel_count) * double(segment_count) >
+		       2.0 * double(scan_count) * (double(layout.GetEntryCapacity()) + 1.0);
+	}
+
+	bool EnsureDictionary(const LogicalType &type) {
+		static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = DEFAULT_STANDARD_VECTOR_SIZE;
+		if (dictionary) {
+			return true;
+		}
+		// Keep emitted dictionaries within a default-sized vector and avoid poorly compressed segments.
+		const auto capacity = layout.GetEntryCapacity();
+		if (capacity + 1 >= MAX_DICTIONARY_SIZE_THRESHOLD || (capacity + 1) * 2 >= segment_count) {
+			return false;
+		}
+		const auto run_count = layout.ValidateAllRuns();
+		const auto dictionary_count = run_count + (can_have_null ? 1 : 0);
+		dictionary = DictionaryVector::CreateReusableDictionary(type, dictionary_count);
+		CopyRunValues(dictionary->data, run_count);
+		if (can_have_null) {
+			FlatVector::ValidityMutable(dictionary->data).SetInvalid(run_count);
+		}
+		return true;
+	}
+
+	SelectionVector &GetDictionarySelection(idx_t count) {
+		if (dictionary_sel.Capacity() < count || dictionary_sel.sel_data().use_count() > 1) {
+			dictionary_sel.Initialize(count);
+		}
+		return dictionary_sel;
+	}
+
+	void EmitDictionary(Vector &result, idx_t count) {
+		result.Dictionary(dictionary, dictionary_sel, count);
+		if (can_have_null) {
+			// Let validity map NULL rows in place when the result has no other readers.
+			// Non-null segments can retain the selection for reuse by the next scan.
+			dictionary_sel = SelectionVector();
+		}
+	}
+
 	BufferHandle handle;
 	//! Segment row count loaded from the file and used to validate runs as they are reached.
 	const idx_t segment_count;
+	const bool can_have_null;
 	SegmentLayout layout;
 	idx_t entry_pos;
 	idx_t position_in_entry;
@@ -460,6 +528,8 @@ struct RLEScanState : public SegmentScanState {
 	unique_ptr<TableFilterCache> filter_cache;
 	SelectionVector run_indices;
 	SelectionVector selected_rows;
+	SelectionVector dictionary_sel;
+	buffer_ptr<DictionaryEntry> dictionary;
 	vector<idx_t> run_offsets;
 	vector<idx_t> run_row_counts;
 };
@@ -513,6 +583,66 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 	}
 }
 
+template <class T>
+static void RLEFillRun(T *data, idx_t count, T value) {
+	if (count < 4) {
+		for (idx_t i = 0; i < count; i++) {
+			data[i] = value;
+		}
+		return;
+	}
+	for (idx_t i = 0; i + 4 < count; i += 4) {
+		data[i] = value;
+		data[i + 1] = value;
+		data[i + 2] = value;
+		data[i + 3] = value;
+	}
+	// Overlap the last block to avoid a scalar tail.
+	data[count - 4] = value;
+	data[count - 3] = value;
+	data[count - 2] = value;
+	data[count - 1] = value;
+}
+
+template <class T, class OUTPUT_TYPE, class VALUE_OP>
+static void RLEScanValues(RLEScanState<T> &scan_state, OUTPUT_TYPE *result_data, idx_t scan_count, idx_t result_offset,
+                          VALUE_OP make_value) {
+	const idx_t result_end = result_offset + scan_count;
+	auto entry_pos = scan_state.entry_pos;
+	auto position_in_entry = scan_state.position_in_entry;
+	while (result_offset < result_end) {
+		// An empty run writes nothing and advances below, so this loop need not skip it separately.
+		auto run = scan_state.layout.GetValidatedRun(entry_pos);
+		auto run_count = run.length - position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		const auto element = make_value(run.value, entry_pos);
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			RLEFillRun(result_data + result_offset, remaining_scan_count, element);
+			position_in_entry += remaining_scan_count;
+			break;
+		}
+
+		RLEFillRun(result_data + result_offset, run_count, element);
+
+		result_offset += run_count;
+		entry_pos++;
+		position_in_entry = 0;
+	}
+	scan_state.entry_pos = entry_pos;
+	scan_state.position_in_entry = position_in_entry;
+}
+
+template <class T>
+static bool TryRLEScanDictionary(RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
+	if (!scan_state.EnsureDictionary(result.GetType())) {
+		return false;
+	}
+	auto &sel = scan_state.GetDictionarySelection(scan_count);
+	RLEScanValues(scan_state, sel.data(), scan_count, 0, [](T, idx_t run) { return UnsafeNumericCast<sel_t>(run); });
+	scan_state.EmitDictionary(result, scan_count);
+	return true;
+}
+
 template <class T, bool ENTIRE_VECTOR>
 void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
@@ -528,36 +658,12 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 		RLEScanConstant<T>(scan_state, current_run, scan_count, result);
 		return;
 	}
-
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-
-	const idx_t result_end = result_offset + scan_count;
-	auto entry_pos = scan_state.entry_pos;
-	auto position_in_entry = scan_state.position_in_entry;
-	while (result_offset < result_end) {
-		// An empty run writes nothing and advances below, so this loop need not skip it separately.
-		auto run = scan_state.layout.GetValidatedRun(entry_pos);
-		auto run_count = run.length - position_in_entry;
-		idx_t remaining_scan_count = result_end - result_offset;
-		T element = run.value;
-		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
-			for (idx_t i = 0; i < remaining_scan_count; i++) {
-				result_data[result_offset + i] = element;
-			}
-			position_in_entry += remaining_scan_count;
-			break;
-		}
-
-		for (idx_t i = 0; i < run_count; i++) {
-			result_data[result_offset + i] = element;
-		}
-
-		result_offset += run_count;
-		entry_pos++;
-		position_in_entry = 0;
+	if (ENTIRE_VECTOR && TryRLEScanDictionary(scan_state, scan_count, result)) {
+		return;
 	}
-	scan_state.entry_pos = entry_pos;
-	scan_state.position_in_entry = position_in_entry;
+
+	RLEScanValues(scan_state, FlatVector::GetDataMutable<T>(result), scan_count, result_offset,
+	              [](T value, idx_t) { return value; });
 }
 
 template <class T>
@@ -589,7 +695,6 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
-
 	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
 	// Keep the current run until the selection advances past it.
@@ -628,18 +733,25 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		return;
 	}
 	const auto run_values = scan_state.layout.GetRunValues(run_count);
+	const auto has_dictionary = scan_state.EnsureDictionary(result.GetType());
 	if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
-		Vector values(result.GetType(), run_count);
-		memcpy(FlatVector::GetDataMutable<T>(values), run_values.data(), run_count * sizeof(T));
-		FlatVector::SetSize(values, count_t(run_count));
-		scan_state.filter_cache = filter_state.CreateCache(values, run_count);
+		if (has_dictionary) {
+			auto &values = scan_state.dictionary->data;
+			scan_state.filter_cache = filter_state.CreateCache(values, values.size());
+		} else {
+			Vector values(result.GetType(), run_count);
+			scan_state.CopyRunValues(values, run_count);
+			FlatVector::SetSize(values, count_t(run_count));
+			scan_state.filter_cache = filter_state.CreateCache(values, run_count);
+		}
 	}
 	if (scan_state.filter_cache->CanSkipAll()) {
 		scan_state.SkipInternal(vector_count);
 		sel_count = 0;
 		return;
 	}
-	if (scan_state.filter_cache->CanAcceptAll()) {
+	const bool use_dictionary = has_dictionary && scan_state.ShouldUseDictionary(vector_count, sel_count);
+	if (scan_state.filter_cache->CanAcceptAll() && (!has_dictionary || use_dictionary)) {
 		SelectionVector no_values;
 		scan_state.filter_cache->Filter(no_values, sel, sel_count);
 		RLEScan<T>(segment, state, vector_count, result);

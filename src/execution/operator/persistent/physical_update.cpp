@@ -506,4 +506,12 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+InsertionOrderPreservingMap<string> PhysicalUpdate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Table"] =
+	    tableref.schema.GetQualifiedName(tableref.name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	result["Update Mode"] = update_is_del_and_insert ? "Delete + Insert" : "In Place";
+	return result;
+}
+
 } // namespace duckdb

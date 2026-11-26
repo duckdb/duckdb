@@ -14,7 +14,7 @@ void FileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> 
 	GetFileSystem().RegisterCompressionFilesystem(std::move(fs));
 }
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, const FileOpenFlags &flags) {
 	return OpenFile(OpenFileInfo(path), flags);
 }
 
@@ -49,7 +49,7 @@ unique_ptr<FileHandle> FileSystem::OpenCachedFile(const OpenFileInfo &file, cons
 	return GetFileSystem().WrapOpenedFile(GetContext(), std::move(handle), file, flags);
 }
 
-unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                        const MMapOptions &options) {
 	VerifyCanAccessFile(path.path);
 	if (IsDuckDBExtensionName(path.path)) {
@@ -218,6 +218,13 @@ BaseFileSystem &FileSystem::FindFileSystem(const string &path) {
 		return *fixed_fs;
 	}
 	return GetFileSystem().FindFileSystem(path, GetContext());
+}
+
+string FileSystem::JoinPath(const string &a, const string &path) {
+	// BaseFileSystem::JoinPath is not virtual, so any file system joins the same way
+	auto fixed_fs = GetFixedFileSystem();
+	auto &fs = fixed_fs ? *fixed_fs : GetFileSystem().GetDefaultFileSystem();
+	return fs.JoinPath(a, path);
 }
 
 BaseFileSystem &FileSystem::PathFileSystem(const string &path) const {

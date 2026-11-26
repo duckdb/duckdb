@@ -26,6 +26,11 @@ struct CreateSecretInfo;
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT, TRANSACTION };
 
 //! Input passed to a CreateSecretFunction
+//! State a CreateSecretFunction carries along, handed to its function through the CreateSecretInput
+struct CreateSecretFunctionInfo {
+	virtual ~CreateSecretFunctionInfo() = default;
+};
+
 struct CreateSecretInput {
 	//! type
 	Identifier type;
@@ -43,6 +48,8 @@ struct CreateSecretInput {
 	OnCreateConflict on_conflict;
 	//! lifetime of the secret
 	SecretPersistType persist_type;
+	//! the info of the function creating the secret, if it has any
+	optional_ptr<CreateSecretFunctionInfo> function_info;
 };
 
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
@@ -55,6 +62,7 @@ public:
 	Identifier provider;
 	create_secret_function_t function;
 	named_parameter_type_map_t named_parameters;
+	shared_ptr<CreateSecretFunctionInfo> info;
 };
 
 //! CreateSecretFunctionsSet contains multiple functions of a single type, identified by the provider. The provider

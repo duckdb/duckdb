@@ -108,32 +108,6 @@ static bool CanShareSubplanExpression(const Expression &expr) {
 	return !unsafe;
 }
 
-static bool HasFixedSizeState(const LogicalType &type, const AggregateStateField &field) {
-	switch (field.kind) {
-	case AggregateFieldKind::PRIMITIVE:
-		return TypeIsConstantSize(type.InternalType());
-	case AggregateFieldKind::OPTIONAL_VALUE:
-		return field.children.size() == 1 && HasFixedSizeState(type, field.children[0]);
-	case AggregateFieldKind::STRUCT: {
-		if (type.id() != LogicalTypeId::STRUCT) {
-			return false;
-		}
-		const auto &types = StructType::GetChildTypes(type);
-		if (types.size() != field.children.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < types.size(); i++) {
-			if (!HasFixedSizeState(types[i].second, field.children[i])) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default:
-		return false;
-	}
-}
-
 static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) {
 	const auto &function = aggregate.Function();
 	if (aggregate.IsDistinct() || aggregate.GetOrderBys() ||
@@ -143,7 +117,7 @@ static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) 
 	}
 	// Combining growing states can use more memory than evaluating the original aggregates separately.
 	const auto layout = function.GetStateType(aggregate.BindInfo().get());
-	return HasFixedSizeState(layout.type, layout.field);
+	return layout.field.IsFixedSize(layout.type);
 }
 
 enum class ConversionType {
@@ -1100,9 +1074,6 @@ public:
 				min_cte_idx = cte_index;
 			}
 
-			// Resolve types to be used for creating the materialized CTE and refs
-			op->ResolveOperatorTypes();
-
 			const auto &primary_subplan = subplan_info.subplans[0];
 
 			vector<vector<ColumnBinding>> old_bindings(subplan_info.subplans.size());
@@ -1111,6 +1082,8 @@ public:
 			column_binding_set_t required_canonical_binding_set;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				auto &subplan = subplan_info.subplans[subplan_idx];
+				// Earlier extractions can introduce new CTE readers within this subplan.
+				subplan.op.get()->ResolveOperatorTypes();
 				old_bindings[subplan_idx] = subplan.op.get()->GetColumnBindings();
 				old_types[subplan_idx] = subplan.op.get()->types;
 				for (auto &cb : subplan.canonical_bindings) {
@@ -1170,7 +1143,7 @@ public:
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
-			ColumnBindingReplacer replacer;
+			BindingReplacementGraph replacements;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
@@ -1198,7 +1171,7 @@ public:
 				D_ASSERT(old_bindings[subplan_idx].size() == new_bindings.size());
 				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
-					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+					replacements.Add(old_bindings[subplan_idx][i], new_bindings[i]);
 #ifdef D_ASSERT_IS_ENABLED
 					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
 					D_ASSERT(inserted.second);
@@ -1231,6 +1204,7 @@ public:
 			lowest_common_ancestor = std::move(cte);
 
 			// Replace bindings of subplans with those of the CTE refs
+			ColumnBindingReplacer replacer(replacements);
 			replacer.stop_operator = lowest_common_ancestor.get();
 			replacer.VisitOperator(*op);                                  // Replace from the root until CTE
 			replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child

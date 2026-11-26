@@ -1191,4 +1191,32 @@ TEST_CASE("Cached file removed after caching with FILE_FLAGS_NULL_IF_NOT_EXISTS"
 	REQUIRE_THROWS_WITH(handle->GetFileHandle(), Catch::Contains("file does not exist"));
 }
 
+namespace {
+class NonSeekableFileSystem : public LocalFileSystem {
+public:
+	bool CanSeek() override {
+		return false;
+	}
+};
+} // namespace
+
+TEST_CASE("CachingFileSystemWrapper handles report the seekability of the wrapped file system",
+          "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	TestFileGuard test_file("test_caching_seekable.txt", "content");
+
+	auto run_case = [&](BaseFileSystem &fs, bool expect_seekable) {
+		BoundFileSystem bound_fs(fs, nullptr);
+		auto wrapper = make_shared_ptr<CachingFileSystemWrapper>(bound_fs, db_instance, CachingMode::ALWAYS_CACHE);
+		auto handle = wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ, nullptr);
+		REQUIRE(handle->CanSeek() == expect_seekable);
+	};
+
+	TrackingFileSystem seekable_fs;
+	NonSeekableFileSystem non_seekable_fs;
+	run_case(seekable_fs, true);
+	run_case(non_seekable_fs, false);
+}
+
 } // namespace duckdb

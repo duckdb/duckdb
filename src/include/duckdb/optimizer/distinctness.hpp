@@ -28,8 +28,9 @@ class LogicalProjection;
 enum class DistinctnessPropagation : uint8_t {
 	//! Filters, limits, orderings, windows and projections
 	UNARY_OPERATORS,
-	//! Additionally samples, the left side of SEMI / ANTI / MARK / SINGLE joins, and a side of an INNER join (the
-	//! left side of a LEFT join) whose other side is itself distinct on its equality keys
+	//! Additionally samples, the left side of SEMI / ANTI / MARK / SINGLE joins, a side of an INNER join (the
+	//! left side of a LEFT join) whose other side is itself distinct on its equality keys, and the query of a
+	//! materialized CTE (the output of the CTE operator is the output of the query that reads the CTE)
 	UNARY_OPERATORS_AND_JOINS
 };
 

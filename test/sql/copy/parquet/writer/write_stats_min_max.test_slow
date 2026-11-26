@@ -179,11 +179,14 @@ DROP TABLE tbl
 
 endloop
 
-# no stats for these types
+# HUGEINT / UHUGEINT are written as DECIMAL(39,0), with exact statistics over their full range
 statement ok
 CREATE TABLE hugeint_limits AS SELECT (-170141183460469231731687303715884105728)::HUGEINT min, 170141183460469231731687303715884105727::HUGEINT max
 
-foreach type hugeint
+statement ok
+CREATE TABLE uhugeint_limits AS SELECT 0::UHUGEINT min, 340282366920938463463374607431768211455::UHUGEINT max
+
+foreach type hugeint uhugeint
 
 statement ok
 CREATE TABLE tbl(i {type});
@@ -198,24 +201,20 @@ statement ok
 COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
-NULL
 
 statement ok
 DROP TABLE tbl

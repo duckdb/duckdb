@@ -114,9 +114,16 @@ public:
 		return executor->GetContext();
 	}
 
+	bool TryFilterDictionary(SelectionVector &sel, Vector &vector, idx_t &approved_tuple_count);
+
 	unique_ptr<ExpressionExecutor> executor;
 	unique_ptr<ExpressionFilterExecutor> fast_executor;
 	bool can_cache_result = false;
+
+private:
+	string dictionary_id;
+	//! Destroy before the executors, as adaptive caches reference their feedback state.
+	unique_ptr<TableFilterCache> dictionary_cache;
 };
 
 } // namespace duckdb

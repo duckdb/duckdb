@@ -304,6 +304,11 @@ private:
 //! NotImplementedException when there is none. Defined in capi_v2_logical_type.cpp.
 auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType;
 
+//! Throws when the type holds a DECIMAL wider than the factory creates: the max_decimal_width setting of the factory's
+//! client, or the default of the setting for a factory without one. The cost of a wide decimal grows with its width,
+//! so a factory bounds the types and values it creates like a session bounds the ones it binds
+void CheckDecimalWidthV2(CV2Factory &factory, const LogicalType &type);
+
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
 //! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
 //! taken from.

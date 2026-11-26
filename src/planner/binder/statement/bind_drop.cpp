@@ -29,7 +29,7 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, base_table_ref.GetQualifiedName());
 	// the trigger lives in the same (possibly nested) schema as its base table
 	stmt.info->SetQualifiedName(table_entry.ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
-	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
+	properties.RegisterDBModify(table_entry.ParentCatalog(), context, stmt.info->GetModifications());
 }
 
 BoundStatement Binder::Bind(DropStatement &stmt) {

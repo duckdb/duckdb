@@ -73,10 +73,10 @@ statement ok
 load tpcds
 
 # Same here
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS
 ----
-tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1	NULL
 
 restart
 
@@ -134,13 +134,13 @@ query I rowsort parquet_version
 select source_id from pragma_version();
 ----
 
-query IIIII rowsort
+query IIIIII rowsort
 UPDATE EXTENSIONS;
 ----
-icu	(empty)	MISSING_INSTALL_INFO	(empty)	(empty)
-json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
-tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
-tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
+icu	(empty)	MISSING_INSTALL_INFO	(empty)	(empty)	NULL
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1	NULL
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1	NULL
+tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2	NULL
 
 # duckdb_extensions() now also showing updated version
 query IIII rowsort
@@ -156,13 +156,13 @@ statement ok
 FORCE INSTALL icu;
 
 # Rerunning update will now show everything being up-to-date (icu extension was force installed and is now v0.0.2)
-query IIIII rowsort
+query IIIIII rowsort
 UPDATE EXTENSIONS;
 ----
-icu	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
-json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
-tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
-tpch	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+icu	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2	NULL
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1	NULL
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1	NULL
+tpch	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2	NULL
 
 statement ok
 load json;
@@ -268,10 +268,10 @@ SELECT extension_name, install_mode, installed_from, extension_version FROM duck
 icu	REPOSITORY	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	v0.0.2
 
 # Installed from the minio repo now
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS
 ----
-icu	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+icu	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2	NULL
 
 # Rerunning install with matching origin is a NOP and totally fine
 statement ok

@@ -98,6 +98,7 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 }
 
 void MetaTransaction::SetReadOnly() {
+	lock_guard<mutex> guard(modification_lock);
 	if (modified_database) {
 		throw InternalException("Cannot set MetaTransaction to read only - modifications have already been made");
 	}
@@ -242,6 +243,7 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 
 void MetaTransaction::ModifyDatabase(ClientContext &context, AttachedDatabase &db,
                                      DatabaseModificationType modification) {
+	lock_guard<mutex> guard(modification_lock);
 	// Temporary objects are private to the connection, so a read-only transaction may still write them
 	if (IsReadOnly() && !db.IsTemporary()) {
 		throw TransactionException("Cannot write to database %s - transaction is launched in read-only mode",

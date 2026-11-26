@@ -552,22 +552,45 @@ static yyjson_val *ReadVersionedObject(RepositoryJSONDocument &document, const s
 	return root;
 }
 
-ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db,
-                                                                                    optional_ptr<ClientContext> context,
-                                                                                    const string &name_p) {
-	// called by CreateRepository once the access check and the conflict check have passed
+//! How a failed resolution opens, naming what cannot be done: the statement creates a repository, the
+//! extension_repository_url function only looks one up
+static string ResolutionFailure(ExtensionRepositoryHostCaller caller, const string &name) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return StringUtil::Format("Cannot create extension repository '%s'", name);
+	}
+	return StringUtil::Format("Cannot resolve the extension repository of host '%s'", name);
+}
+
+//! What else the user can do, for the caller that has an alternative: the statement can name the location itself
+static string ResolutionHint(ExtensionRepositoryHostCaller caller, const char *hint) {
+	if (caller == ExtensionRepositoryHostCaller::CREATE_STATEMENT) {
+		return hint;
+	}
+	return string();
+}
+
+ExtensionRepositoryResolution
+ExtensionRepositoryManager::ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                      const string &name_p, ExtensionRepositoryHostCaller caller) {
+	// called by CreateRepository once the access check and the conflict check have passed, and by
+	// extension_repository_url, which reads the same public file without creating or trusting anything
 	auto name = NormalizeRepositoryName(name_p);
 	// only a name that is a host on the public internet is reached: a single word would resolve through search
 	// domains to a host the user did not name, an IP literal or localhost is nobody's statement
 	if (!IsHostName(name)) {
-		throw InvalidInputException("Cannot create extension repository '%s': '%s' is not a host name. A host has two "
-		                            "or more labels separated by "
-		                            "dots, each label words of letters and digits joined by single dashes (or a "
-		                            "punycode label, 'xn--...'), the "
-		                            "last label letters only, and is not localhost\nUse `WITH PREFIX '<url>'` to name "
-		                            "the repository's location "
-		                            "directly",
-		                            name_p, name);
+		throw InvalidInputException(
+		    "%s: '%s' is not a host name. A host has two or more labels separated by "
+		    "dots, each label words of letters and digits joined by single dashes (or a "
+		    "punycode label, 'xn--...'), the last label letters only, and is not localhost%s",
+		    ResolutionFailure(caller, name_p), name,
+		    ResolutionHint(caller, "\nUse `WITH PREFIX '<url>'` to name the repository's location directly"));
+	}
+	// reading the host is an external access: refused up front, as LOAD refuses, rather than as a read error from
+	// the file system once the request is attempted
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
+		throw PermissionException("%s: reading the host's metadata file is an external access, which is disabled "
+		                          "through configuration (enable_external_access)",
+		                          ResolutionFailure(caller, name));
 	}
 	ExtensionRepositoryResolution resolution;
 	resolution.host = name;
@@ -587,11 +610,11 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
 		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
 		ErrorData error(ex);
-		throw IOException(
-		    "Cannot create extension repository '%s': %s\nA repository is resolved from its host through "
-		    "https://<host>/.well-known/duckdb-extension-repo.json; use `WITH PREFIX '<url>'` to name the "
-		    "repository's location directly",
-		    name, error.RawMessage());
+		throw IOException("%s: %s\nA repository is resolved from its host through "
+		                  "https://<host>/.well-known/duckdb-extension-repo.json%s",
+		                  ResolutionFailure(caller, name), error.RawMessage(),
+		                  ResolutionHint(caller, "; use `WITH PREFIX '<url>'` to name the repository's "
+		                                         "location directly"));
 	}
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	auto root = ReadVersionedObject(document, metadata_path);
@@ -605,10 +628,10 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 	StringUtil::RTrim(resolution.url, "/");
 	// the keys are fetched from the prefix next: over anything but https they could be anyone's
 	if (!StringUtil::StartsWith(resolution.url, "https://")) {
-		throw InvalidInputException("Cannot create extension repository '%s': the host names the repository at '%s', "
+		throw InvalidInputException("%s: the host names the repository at '%s', "
 		                            "but a repository resolved from its host must be served over https, so that its "
 		                            "signing keys are fetched from where the host says they are",
-		                            name, resolution.url);
+		                            ResolutionFailure(caller, name), resolution.url);
 	}
 	return resolution;
 }

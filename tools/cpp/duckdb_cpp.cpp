@@ -1768,6 +1768,24 @@ auto Connection::GetQueryMetrics() const -> QueryMetrics {
 	return detail::HandleFactory::Make<QueryMetrics>(_h);
 }
 
+namespace {
+// Collects the text a text sink delivers
+void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
+	WithExceptionGuard(err, [&] {
+		if (text && text_length) {
+			static_cast<std::string *>(user_data)->append(text, text_length);
+		}
+	});
+}
+} // namespace
+
+auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
+	               &out);
+	return out;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Value
 //----------------------------------------------------------------------------------------------------------------------
@@ -1812,6 +1830,12 @@ auto Value::GetChild(idx_t index) const -> Value {
 	duckdb_v2_value_handle child = nullptr;
 	CheckedAPICall(duckdb_v2_value_get_child, handle(), index, &child);
 	return detail::HandleFactory::Make<Value>(child);
+}
+
+auto Value::VariantToValue() const -> Value {
+	duckdb_v2_value_handle converted = nullptr;
+	CheckedAPICall(duckdb_v2_value_variant_to_value, handle(), &converted);
+	return detail::HandleFactory::Make<Value>(converted);
 }
 
 template <>
@@ -2146,10 +2170,10 @@ auto Value::Create(Factory &factory, interval_t value) -> Value {
 	MAKE_VALUE_IMPL(factory, duckdb_v2_value_create_interval, &value_interval)
 }
 
-void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
+void Value::GetDecimal(int128_t &out, uint32_t width, uint32_t scale) const {
 	duckdb_v2_hugeint_t payload {};
-	uint8_t actual_width = 0;
-	uint8_t actual_scale = 0;
+	uint32_t actual_width = 0;
+	uint32_t actual_scale = 0;
 	CheckedAPICall(duckdb_v2_value_get_decimal, handle(), &payload, &actual_width, &actual_scale);
 	if (actual_width != width || actual_scale != scale) {
 		throw InvalidInputException("Get<width, scale>: value is DECIMAL(" + std::to_string(actual_width) + ", " +
@@ -2167,7 +2191,7 @@ auto Value::GetDecimal() const -> RuntimeDecimal {
 	return result;
 }
 
-auto Value::CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value {
+auto Value::CreateDecimal(Factory &factory, int128_t value, uint32_t width, uint32_t scale) -> Value {
 	duckdb_v2_value_handle out = nullptr;
 	auto value_hugeint = ToC(value);
 	CheckedAPICall(duckdb_v2_value_create_decimal, factory.handle(), &value_hugeint, width, scale, &out);
@@ -3377,6 +3401,12 @@ auto ScalarFunction::Create(Factory &factory) -> ScalarFunction {
 auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), view.data(), view.size());
+	return *this;
+}
+
+auto ScalarFunction::SetSchema(const std::string &schema) & -> ScalarFunction & {
+	auto view = ToStr(schema);
+	CheckedAPICall(duckdb_v2_scalar_function_set_schema, handle(), view.data(), view.size());
 	return *this;
 }
 
