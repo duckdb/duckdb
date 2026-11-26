@@ -72,8 +72,9 @@ struct RecursiveCTEKeyedProperties {
 	//! Every aggregate result fits a fixed-width or string slot, so the commit can materialize the finalized values
 	//! per group and reads consume them without invoking aggregate callbacks
 	bool materialize_finalized_values = false;
-	//! Per payload aggregate, how its finalized value projects from the state; mode NONE keeps a region slot
-	vector<AggregateStateProjection> state_projections;
+	//! Per payload aggregate, the plain read of its finalized value from the state; an invalid read keeps a
+	//! region slot
+	vector<AggregateStateValueRead> state_projections;
 
 	static RecursiveCTEKeyedProperties Derive(const PhysicalRecursiveCTE &op);
 };

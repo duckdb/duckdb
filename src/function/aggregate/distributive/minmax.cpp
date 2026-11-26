@@ -32,46 +32,37 @@ struct MinMaxState {
 	bool is_set;
 };
 
-template <class T, class OP>
-static AggregateFunction GetTypedMinMaxAggregate(const LogicalType &type) {
-	auto fun = AggregateFunction::UnaryAggregate<MinMaxState<T>, T, T, OP>(type, type);
-	// The finalizer copies state.value when state.is_set and returns NULL otherwise
-	fun.SetStateProjection(
-	    AggregateStateProjection::ValueIfSet(offsetof(MinMaxState<T>, value), offsetof(MinMaxState<T>, is_set)));
-	return fun;
-}
-
 template <class OP>
 static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		return GetTypedMinMaxAggregate<int8_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int8_t>, int8_t, int8_t, OP>(type, type);
 	case PhysicalType::INT8:
-		return GetTypedMinMaxAggregate<int8_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int8_t>, int8_t, int8_t, OP>(type, type);
 	case PhysicalType::INT16:
-		return GetTypedMinMaxAggregate<int16_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int16_t>, int16_t, int16_t, OP>(type, type);
 	case PhysicalType::INT32:
-		return GetTypedMinMaxAggregate<int32_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int32_t>, int32_t, int32_t, OP>(type, type);
 	case PhysicalType::INT64:
-		return GetTypedMinMaxAggregate<int64_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type);
 	case PhysicalType::UINT8:
-		return GetTypedMinMaxAggregate<uint8_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
 	case PhysicalType::UINT16:
-		return GetTypedMinMaxAggregate<uint16_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
 	case PhysicalType::UINT32:
-		return GetTypedMinMaxAggregate<uint32_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case PhysicalType::UINT64:
-		return GetTypedMinMaxAggregate<uint64_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case PhysicalType::INT128:
-		return GetTypedMinMaxAggregate<hugeint_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case PhysicalType::UINT128:
-		return GetTypedMinMaxAggregate<uhugeint_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	case PhysicalType::FLOAT:
-		return GetTypedMinMaxAggregate<float, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type);
 	case PhysicalType::DOUBLE:
-		return GetTypedMinMaxAggregate<double, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type);
 	case PhysicalType::INTERVAL:
-		return GetTypedMinMaxAggregate<interval_t, OP>(type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type);
 	default:
 		throw InternalException("Unimplemented type for min/max aggregate");
 	}
@@ -125,15 +116,6 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		state.value = REDUCE_OP::template Operation<INPUT_TYPE>(state.value, input);
-	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
 	}
 
 	template <class STATE, class OP>

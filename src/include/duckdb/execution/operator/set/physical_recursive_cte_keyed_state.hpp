@@ -104,8 +104,8 @@ private:
 	//! DConstants::INVALID_INDEX
 	vector<idx_t> validity_indexes;
 	vector<PhysicalType> value_types;
-	//! Per aggregate, how its value projects from the state; mode NONE means a region slot
-	vector<AggregateStateProjection> projections;
+	//! Per aggregate, the plain read of its value from the state; an invalid read means a region slot
+	vector<AggregateStateValueRead> projections;
 	//! Aggregate columns with a projection, in aggregate order
 	vector<idx_t> projected_columns;
 	//! Offset of each aggregate's state within a row, recorded from the bound layout

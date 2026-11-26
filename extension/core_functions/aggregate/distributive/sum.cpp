@@ -135,15 +135,6 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		LOCAL_OP::template Execute<STATE>(local, input, count);
 	}
 
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
-
 	template <class STATE_TYPE, class INPUT_TYPE>
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
@@ -357,10 +348,11 @@ template <class OP>
 struct DecimalSumOperation : public OP {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		OP::template Finalize<T, STATE>(state, target, finalize_data);
 		if (!state.is_set) {
+			finalize_data.ReturnNull();
 			return;
 		}
+		target = state.value;
 		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
 		if (target >= max_value || target <= -max_value) {
 			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",
@@ -543,9 +535,6 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		// The finalizer copies state.value when state.is_set and returns NULL otherwise
-		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
-		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -555,9 +544,6 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		// The finalizer copies state.value when state.is_set and returns NULL otherwise
-		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
-		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		return function;
 	}
 	case PhysicalType::INT128: {
@@ -567,9 +553,6 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		// The finalizer copies state.value when state.is_set and returns NULL otherwise
-		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
-		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		function.SetFallible(); // adding HUGEINT values to the HUGEINT accumulator throws on overflow
 		return function;
 	}
@@ -872,9 +855,6 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::UINT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	// The finalizer copies state.value when state.is_set and returns NULL otherwise
-	sum_double.SetStateProjection(
-	    AggregateStateProjection::ValueIfSet(offsetof(SumState<double>, value), offsetof(SumState<double>, is_set)));
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
 	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
