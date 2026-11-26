@@ -1,0 +1,23 @@
+# name: test/issues/general/test_25074.test
+# description: Reading back a deeply nested VARIANT errors cleanly instead of overflowing the stack
+# group: [general]
+
+statement ok
+CREATE TABLE deep AS
+WITH RECURSIVE t(d, v) AS (
+    SELECT 0, [1]::VARIANT
+    UNION ALL
+    SELECT d + 1, [v]::VARIANT FROM t WHERE d < 3500
+)
+SELECT v FROM t WHERE d = 3500;
+
+statement error
+SELECT v::VARCHAR FROM deep;
+----
+<REGEX>:.*VARIANT exceeds maximum recursion depth.*
+
+# A failed traversal must not affect the next one
+query I
+SELECT [1]::VARIANT::VARCHAR;
+----
+[1]

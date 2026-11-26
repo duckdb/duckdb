@@ -1,0 +1,22 @@
+# name: test/issues/general/test_24454.test
+# description: json_deep_merge and json_merge_patch of two deeply nested objects do not overflow the stack
+# group: [general]
+
+require json
+
+# Both sides are objects at every level, so the merge itself (not just a value copy) walks the full depth
+query I
+SELECT length(json_deep_merge(repeat('{"a":',200000) || '1' || repeat('}',200000), repeat('{"a":',200000) || '1' || repeat('}',200000)));
+----
+1200001
+
+query I
+SELECT length(json_merge_patch(repeat('{"a":',200000) || '1' || repeat('}',200000), repeat('{"a":',200000) || '2' || repeat('}',200000)));
+----
+1200001
+
+# Deeply nested merge result is correct at the bottom
+query I
+SELECT json_extract(json_deep_merge(repeat('{"a":',100) || '1' || repeat('}',100), repeat('{"a":',100) || '2' || repeat('}',100)), '$' || repeat('.a', 100));
+----
+2
