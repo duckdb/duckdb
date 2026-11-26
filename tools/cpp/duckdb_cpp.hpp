@@ -5743,6 +5743,8 @@ private:
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
 
+	auto DataSourceHandle() -> void *;
+
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
 	CopyToBindCallback copy_to_bind_callback = nullptr;
@@ -5758,6 +5760,8 @@ private:
 	CopyFromExecCallback copy_from_exec_callback = nullptr;
 	CopyFromProgressCallback copy_from_progress_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the COPY FROM side scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the `COPY ... TO` bind callback works with. Borrowed, valid only for the callback duration.

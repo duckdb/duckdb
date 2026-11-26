@@ -5681,7 +5681,18 @@ CopyFunction::~CopyFunction() {
 auto CopyFunction::Create(Factory &factory) -> CopyFunction {
 	duckdb_v2_copy_function_handle _h = nullptr;
 	CheckedAPICall(duckdb_v2_copy_function_create, factory.handle(), &_h);
-	return detail::HandleFactory::Make<CopyFunction>(_h);
+	auto result = detail::HandleFactory::Make<CopyFunction>(_h);
+	duckdb_v2_data_source_handle source = nullptr;
+	CheckedAPICall(duckdb_v2_data_source_create, factory.handle(), &source);
+	result.data_source = std::shared_ptr<void>(source, [](void *ptr) {
+		auto source_handle = static_cast<duckdb_v2_data_source_handle>(ptr);
+		duckdb_v2_data_source_destroy(&source_handle);
+	});
+	return result;
+}
+
+auto CopyFunction::DataSourceHandle() -> void * {
+	return data_source.get();
 }
 
 auto CopyFunction::SetName(const std::string &name) & -> CopyFunction & {
@@ -5904,16 +5915,17 @@ auto CopyFunction::SetCopyFromBindCallback(CopyFromBindCallback callback) & -> C
 
 auto CopyFunction::SetCopyFromInitGlobalCallback(CopyFromInitGlobalCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_init_global_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_init_global_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_init_global_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_init_global_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromInitGlobalInput>(static_cast<void *>(info),
@@ -5922,23 +5934,25 @@ auto CopyFunction::SetCopyFromInitGlobalCallback(CopyFromInitGlobalCallback call
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_init_global_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_global_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_init_global_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromInitLocalCallback(CopyFromInitLocalCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_init_local_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_init_local_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_init_local_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_local_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_init_local_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromInitLocalInput>(static_cast<void *>(info),
@@ -5947,23 +5961,25 @@ auto CopyFunction::SetCopyFromInitLocalCallback(CopyFromInitLocalCallback callba
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_init_local_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_init_local_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_init_local_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromExecCallback(CopyFromExecCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_exec_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_exec_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_exec_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_exec_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input =
@@ -5972,23 +5988,25 @@ auto CopyFunction::SetCopyFromExecCallback(CopyFromExecCallback callback) & -> C
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_exec_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_exec_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_exec_callback = callback;
 	return *this;
 }
 
 auto CopyFunction::SetCopyFromProgressCallback(CopyFromProgressCallback callback) & -> CopyFunction & {
 	if (!callback) {
-		CheckedAPICall(duckdb_v2_copy_from_set_progress_callback, handle(), nullptr);
+		CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), nullptr);
 		copy_from_progress_callback = nullptr;
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_copy_from_progress_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_progress_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_copy_from_progress_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_progress_get_user_data, info, &user_data);
 			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<CopyFromProgressInput>(static_cast<void *>(info),
@@ -5997,7 +6015,8 @@ auto CopyFunction::SetCopyFromProgressCallback(CopyFromProgressCallback callback
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_copy_from_set_progress_callback, handle(), trampoline);
+	CheckedAPICall(duckdb_v2_data_source_set_progress_callback,
+	               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()), trampoline);
 	copy_from_progress_callback = callback;
 	return *this;
 }
@@ -6014,6 +6033,12 @@ auto CopyFunction::PrepareRegistration() -> void {
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
+	// The scan callbacks of the COPY FROM side live in the data source, which only that side takes
+	if (copy_from_init_global_callback || copy_from_init_local_callback || copy_from_exec_callback ||
+	    copy_from_progress_callback) {
+		CheckedAPICall(duckdb_v2_copy_from_set_data_source, handle(),
+		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()));
+	}
 }
 
 void *CopyFunction::CopyToBindInput::GetUserDataInternal() const {
@@ -6355,28 +6380,28 @@ auto CopyFunction::CopyFromBindInput::GetContext() -> Context & {
 
 void CopyFunction::CopyFromInitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_copy_from_init_global_set_global_state,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_global_state,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &opaque);
 }
 
 void *CopyFunction::CopyFromInitGlobalInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_global_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromInitGlobalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_global_get_user_data,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
 
 auto CopyFunction::CopyFromInitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
-	CheckedAPICall(duckdb_v2_copy_from_init_global_set_max_threads,
-	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), max_threads);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_max_threads,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), max_threads);
 }
 
 auto CopyFunction::CopyFromInitGlobalInput::GetContext() -> Context & {
@@ -6385,28 +6410,28 @@ auto CopyFunction::CopyFromInitGlobalInput::GetContext() -> Context & {
 
 void CopyFunction::CopyFromInitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_copy_from_init_local_set_local_state,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_local_set_local_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &opaque);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_global_state,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_global_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromInitLocalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_init_local_get_user_data,
-	               static_cast<duckdb_v2_copy_from_init_local_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
@@ -6417,28 +6442,28 @@ auto CopyFunction::CopyFromInitLocalInput::GetContext() -> Context & {
 
 void *CopyFunction::CopyFromExecInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_bind_data, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
+	CheckedAPICall(duckdb_v2_data_source_exec_get_bind_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
 	               &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_global_state, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_global_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetLocalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_local_state, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_local_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &data);
 	return RequireCopyLocalState(data);
 }
 
 void *CopyFunction::CopyFromExecInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_user_data, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
+	CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
 	               &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
@@ -6446,8 +6471,8 @@ void *CopyFunction::CopyFromExecInput::GetUserDataInternal() const {
 
 auto CopyFunction::CopyFromExecInput::GetOutputChunk() const -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_exec_get_output_chunk, static_cast<duckdb_v2_copy_from_exec_info_handle>(args),
-	               &chunk);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_output_chunk,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &chunk);
 	// Borrowed: the engine owns the chunk and reuses it across invocations.
 	return detail::HandleFactory::Make<DataChunk>(chunk, false);
 }
@@ -6458,29 +6483,29 @@ auto CopyFunction::CopyFromExecInput::GetContext() -> Context & {
 
 void *CopyFunction::CopyFromProgressInput::GetBindDataInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_bind_data,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_bind_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &data);
 	return RequireCopyBindData(data);
 }
 
 void *CopyFunction::CopyFromProgressInput::GetGlobalStateInternal() const {
 	void *data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_global_state,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &data);
 	return RequireCopyGlobalState(data);
 }
 
 void *CopyFunction::CopyFromProgressInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_copy_from_progress_get_user_data,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_user_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
 	return RequireCopyUserData(function.user_data);
 }
 
 auto CopyFunction::CopyFromProgressInput::SetProgress(double progress) -> void {
-	CheckedAPICall(duckdb_v2_copy_from_progress_set_progress,
-	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), progress);
+	CheckedAPICall(duckdb_v2_data_source_progress_set_progress,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), progress);
 }
 
 auto CopyFunction::CopyFromProgressInput::GetContext() -> Context & {
