@@ -43,9 +43,9 @@ bool DebugFileSystem::CanHandleFile(const string &fpath) {
 
 string DebugFileSystem::ToInner(const string &path) {
 	if (!StringUtil::StartsWith(path, PATH_PREFIX)) {
-		throw InvalidInputException("DebugFileSystem: path \"%s\" does not start with %s", path, PATH_PREFIX);
+		throw InvalidInputException("DebugFileSystem: path \"%s\" does not start with %s", path, string(PATH_PREFIX));
 	}
-	return path.substr(strlen(PATH_PREFIX));
+	return path.substr(PATH_PREFIX.size());
 }
 
 OpenFileInfo DebugFileSystem::ToInner(const OpenFileInfo &file) {
@@ -55,7 +55,7 @@ OpenFileInfo DebugFileSystem::ToInner(const OpenFileInfo &file) {
 }
 
 string DebugFileSystem::FromInner(const string &path) {
-	return PATH_PREFIX + path;
+	return string(PATH_PREFIX) + path;
 }
 
 void DebugFileSystem::SetDelayMeanMs(double v) {
@@ -302,6 +302,7 @@ bool DebugFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpe
 
 void DebugFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
 	vector<string> inner_filenames;
+	inner_filenames.reserve(filenames.size());
 	for (auto &filename : filenames) {
 		inner_filenames.push_back(ToInner(filename));
 	}

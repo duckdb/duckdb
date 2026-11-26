@@ -27,6 +27,11 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
+#include "duckdb/planner/planner.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -120,6 +125,31 @@ void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const strin
 	statement->info = std::move(info);
 	// Execute the CREATE VIEW
 	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+}
+
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query) {
+	auto &context = *con.context;
+	Parser parser(context);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("TestExtractPlan can only plan a single statement");
+	}
+	unique_ptr<LogicalOperator> plan;
+	context.RunFunctionInTransaction([&]() {
+		Planner planner(context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		D_ASSERT(planner.plan);
+
+		Optimizer optimizer(*planner.binder, context);
+		plan = optimizer.Optimize(std::move(planner.plan));
+
+		LogicalPlanVerifier::Verify(context, *plan);
+		// the resolver checks the column references against the operator types, which the optimizer leaves stale
+		plan->ResolveOperatorTypes();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+	});
+	return plan;
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {

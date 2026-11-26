@@ -557,6 +557,7 @@ unittest_release:
 	build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/approximate_join_order.json \
 	test/configs/verify_statement_explain_sql.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \

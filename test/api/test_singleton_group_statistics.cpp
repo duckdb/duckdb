@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "test_helpers.hpp"
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -200,7 +201,7 @@ TEST_CASE("Ordered singleton aggregate domain proof survives rebinding",
 	                                    {"first(items ORDER BY p)", true}, {"first(amount ORDER BY p)", true}};
 	for (const auto &entry : cases) {
 		CAPTURE(entry.first);
-		auto plan = connection.ExtractPlan("SELECT " + entry.first + " FROM roundtrip_keys GROUP BY id");
+		auto plan = TestExtractPlan(connection, "SELECT " + entry.first + " FROM roundtrip_keys GROUP BY id");
 		auto aggregate = FindSingletonAggregate(*plan);
 		REQUIRE(aggregate);
 		REQUIRE(aggregate->CanForwardSingletonInputDomain() == entry.second);

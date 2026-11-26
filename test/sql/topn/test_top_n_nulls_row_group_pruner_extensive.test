@@ -8,10 +8,11 @@ SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 # Alternative verify disables the offset pruning in the optimizer rule
 require no_alternative_verify
 
+load {TEST_DIR}/top_n_nulls_row_group_pruner_extensive_main.duckdb
+
+# Set this after load so pruning counts do not depend on parallel scheduling.
 statement ok
 SET threads TO 1
-
-load {TEST_DIR}/top_n_nulls_row_group_pruner_extensive_main.duckdb
 
 statement ok
 ATTACH '{TEST_DIR}/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db (ROW_GROUP_SIZE 2048)

@@ -286,6 +286,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(FunctionBinder &functi
 		}
 	}
 
+	// The recorded signature already holds the collations the state was built with
+	function_binder.arguments_collated = true;
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto [bound_aggr, bind_info] =
 	    function_binder.ResolveAggregateFunction(best_function.GetBinding(), args, keyword_args);

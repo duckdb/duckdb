@@ -25,7 +25,7 @@ TEST_CASE("Parquet read-ahead supports a schema supplied without binding a file"
 		query = "SELECT i FROM read_parquet('" + path +
 		        "', schema=map{'i': {'name': 'i', 'type': 'BIGINT', 'default_value': NULL}})";
 	}
-	auto plan = con.ExtractPlan(query);
+	auto plan = TestExtractPlan(con, query);
 	auto op = plan.get();
 	while (op->type != LogicalOperatorType::LOGICAL_GET) {
 		REQUIRE(op->children.size() == 1);

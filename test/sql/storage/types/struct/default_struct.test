@@ -63,7 +63,7 @@ statement ok
 INSERT INTO b(i) VALUES (NULL)
 
 query II
-SELECT * FROM b ORDER BY j, i.a NULLS LAST
+SELECT * FROM b ORDER BY j, i.a NULLS LAST, i.b NULLS LAST
 ----
 {'a': 11, 'b': NULL}	42
 {'a': NULL, 'b': 12}	42

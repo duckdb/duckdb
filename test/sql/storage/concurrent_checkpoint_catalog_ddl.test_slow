@@ -121,12 +121,12 @@ onlyif threadid=1
 statement ok
 INSERT INTO t2 (i) VALUES (100000)
 
-# creating table storage still waits for the checkpoint
+# a table without indexes is created alongside the checkpoint
 onlyif threadid=1
 statement ok
 CREATE TABLE created AS SELECT i FROM range(1000) t(i)
 
-# also in a transaction that inserted into a table the checkpoint writes later
+# also in a transaction that is open across the checkpoint
 onlyif threadid=2
 statement ok
 CREATE TABLE in_txn AS SELECT 1 AS one
@@ -241,6 +241,12 @@ SELECT COUNT(*), COUNT(DISTINCT id), MAX(id) FROM ids
 # an open transaction keeps checkpoints from running only if its DDL changes table storage
 statement ok
 CREATE TABLE u (i INTEGER)
+
+statement ok
+CREATE TABLE pk_ref (i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE SCHEMA empty_s
 
 statement ok con1
 BEGIN TRANSACTION
@@ -368,7 +374,41 @@ statement ok con1
 BEGIN TRANSACTION
 
 statement ok con1
-CREATE TABLE x (i INTEGER)
+CREATE TABLE x (i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t2 VALUES (1, 1)
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE TABLE x (i INTEGER, FOREIGN KEY (i) REFERENCES pk_ref(i))
+
+statement ok
+INSERT INTO t2 VALUES (1, 1)
+
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE OR REPLACE TABLE pk_ref (i INTEGER)
 
 statement ok
 INSERT INTO t2 VALUES (1, 1)
@@ -463,6 +503,29 @@ statement error
 CHECKPOINT
 ----
 Cannot CHECKPOINT
+
+statement ok con1
+ROLLBACK
+
+# creating or replacing a table without indexes does not keep them from running, nor does replacing a schema,
+# which drops the existing one without CASCADE: only an empty one
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE TABLE x (i INTEGER)
+
+statement ok con1
+CREATE OR REPLACE TABLE u (i INTEGER)
+
+statement ok con1
+CREATE OR REPLACE SCHEMA empty_s
+
+statement ok
+INSERT INTO t2 VALUES (1, 1)
+
+statement ok
+CHECKPOINT
 
 statement ok con1
 ROLLBACK

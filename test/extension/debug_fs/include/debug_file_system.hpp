@@ -12,6 +12,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 
+#include <string_view>
+
 namespace duckdb {
 
 // Forward declaration.
@@ -35,7 +37,7 @@ class DebugFileSystem : public BaseFileSystem {
 public:
 	explicit DebugFileSystem(DatabaseInstance &db);
 
-	static constexpr const char *PATH_PREFIX = "debugfs://";
+	static constexpr std::string_view PATH_PREFIX = "debugfs://";
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
