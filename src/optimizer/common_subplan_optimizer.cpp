@@ -604,85 +604,31 @@ private:
 	vector<unique_ptr<LogicalOperator>> children;
 };
 
-class PlanSignatureCreateState {
-public:
-	explicit PlanSignatureCreateState(ClientContext &context)
-	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
-	      table_index_map(allocator) {
-	}
-
-public:
-public:
-	//! For serializing operators to a binary string
-	MemoryStream stream;
-	BinarySerializer serializer;
-
-	//! For batching allocations together
-	ArenaAllocator allocator;
-
-	//! Manages mappings
-	PlanSignatureTableIndexMap table_index_map;
-};
+class PlanSignatureCreateState;
 
 class PlanSignature {
-public:
+private:
 	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
+	              vector<reference<const PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
 	    : stream(stream_p), offset(offset_p), length(length_p),
-	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
-	      operator_count(operator_count_p) {
+	      signature_hash(ComputeHash(stream_p, offset_p, length_p, child_signatures_p)),
+	      child_signatures(std::move(child_signatures_p)), operator_count(operator_count_p) {
 	}
 
 public:
-	static arena_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
-	                                       vector<reference<PlanSignature>> &&child_signatures,
-	                                       const vector<vector<ColumnBinding>> &positional_inputs = {}) {
-		if (!OperatorIsSupported(op)) {
-			return nullptr;
-		}
+	static optional_ptr<const PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
+	                                                vector<reference<const PlanSignature>> &&child_signatures,
+	                                                const vector<vector<ColumnBinding>> &positional_inputs = {});
 
-		auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
-
-		// Serialize canonical representation of operator
-		const auto offset = state.stream.GetPosition();
-		state.serializer.Begin();
-		state.serializer.WriteProperty(100, "positional_inputs", positional_inputs);
-		state.serializer.End();
-		state.serializer.Begin();
-		try { // Operators will throw if they cannot serialize, so we need to try/catch here
-			op.Serialize(state.serializer);
-		} catch (std::exception &) {
-			can_materialize = false;
-		}
-		state.serializer.End();
-		const auto length = state.stream.GetPosition() - offset;
-
-		// Convert back from canonical
-		state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
-
-		if (!can_materialize) {
-			return nullptr; // Cannot materialize, no point in adding it
-		}
-
-		// Collect some statistics so we can select a good candidate later
-		idx_t operator_count = 1;
-		for (auto &child_signature : child_signatures) {
-			operator_count += child_signature.get().OperatorCount();
-		}
-		return state.allocator.MakePtr<PlanSignature>(state.stream, offset, length, std::move(child_signatures),
-		                                              operator_count);
-	}
+	PlanSignature(PlanSignature &&) = default;
+	PlanSignature(const PlanSignature &) = delete;
 
 	idx_t OperatorCount() const {
 		return operator_count;
 	}
 
 	hash_t HashSignature() const {
-		auto res = signature_hash;
-		for (auto &child : child_signatures) {
-			res = CombineHash(res, child.get().HashSignature());
-		}
-		return res;
+		return signature_hash;
 	}
 
 	bool Equals(const PlanSignature &other) const {
@@ -692,8 +638,9 @@ public:
 		if (this->child_signatures.size() != other.child_signatures.size()) {
 			return false;
 		}
+		// Children are interned before their parents, so their identities prove exact subtree equality.
 		for (idx_t child_idx = 0; child_idx < this->child_signatures.size(); ++child_idx) {
-			if (!this->child_signatures[child_idx].get().Equals(other.child_signatures[child_idx].get())) {
+			if (!RefersToSameObject(this->child_signatures[child_idx].get(), other.child_signatures[child_idx].get())) {
 				return false;
 			}
 		}
@@ -701,6 +648,15 @@ public:
 	}
 
 private:
+	static hash_t ComputeHash(const MemoryStream &stream, idx_t offset, idx_t length,
+	                          const vector<reference<const PlanSignature>> &children) {
+		auto result = Hash(stream.GetData() + offset, length);
+		for (auto &child : children) {
+			result = CombineHash(result, child.get().HashSignature());
+		}
+		return result;
+	}
+
 	String GetSignature() const {
 		return String(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
 	}
@@ -775,7 +731,7 @@ private:
 
 	const hash_t signature_hash;
 
-	const vector<reference<PlanSignature>> child_signatures;
+	vector<reference<const PlanSignature>> child_signatures;
 	const idx_t operator_count;
 };
 
@@ -790,6 +746,82 @@ struct PlanSignatureEquality {
 		return a.Equals(b);
 	}
 };
+
+class PlanSignatureCreateState {
+public:
+	explicit PlanSignatureCreateState(ClientContext &context)
+	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
+	      table_index_map(allocator) {
+	}
+
+public:
+	//! For serializing operators to a binary string
+	MemoryStream stream;
+	BinarySerializer serializer;
+
+	//! For batching allocations together
+	ArenaAllocator allocator;
+
+	//! Manages mappings
+	PlanSignatureTableIndexMap table_index_map;
+
+private:
+	friend class PlanSignature;
+
+	const PlanSignature &Intern(PlanSignature signature) {
+		auto entry = signatures.find(signature);
+		if (entry != signatures.end()) {
+			return entry->first.get();
+		}
+		auto owned = allocator.MakePtr<PlanSignature>(std::move(signature));
+		auto &result = *owned;
+		signatures.emplace(result, std::move(owned));
+		return result;
+	}
+
+private:
+	//! Own canonical signatures for this discovery pass; parent signatures borrow their children.
+	unordered_map<reference<const PlanSignature>, arena_ptr<PlanSignature>, PlanSignatureHash, PlanSignatureEquality>
+	    signatures;
+};
+
+optional_ptr<const PlanSignature> PlanSignature::Create(PlanSignatureCreateState &state, LogicalOperator &op,
+                                                        vector<reference<const PlanSignature>> &&child_signatures,
+                                                        const vector<vector<ColumnBinding>> &positional_inputs) {
+	if (!OperatorIsSupported(op)) {
+		return nullptr;
+	}
+
+	auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
+
+	// Serialize canonical representation of operator
+	const auto offset = state.stream.GetPosition();
+	state.serializer.Begin();
+	state.serializer.WriteProperty(100, "positional_inputs", positional_inputs);
+	state.serializer.End();
+	state.serializer.Begin();
+	try { // Operators will throw if they cannot serialize, so we need to try/catch here
+		op.Serialize(state.serializer);
+	} catch (std::exception &) {
+		can_materialize = false;
+	}
+	state.serializer.End();
+	const auto length = state.stream.GetPosition() - offset;
+
+	// Convert back from canonical
+	state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
+
+	if (!can_materialize) {
+		return nullptr; // Cannot materialize, no point in adding it
+	}
+
+	// Collect some statistics so we can select a good candidate later
+	idx_t operator_count = 1;
+	for (auto &child_signature : child_signatures) {
+		operator_count += child_signature.get().OperatorCount();
+	}
+	return state.Intern(PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
+}
 
 struct Subplan {
 	reference<unique_ptr<LogicalOperator>> op;
@@ -808,7 +840,8 @@ struct SubplanInfo {
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
-using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+using subplan_map_t =
+    unordered_map<reference<const PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
 
 //! Append generated CTEs in extraction order at each original lowest common ancestor.
 class CommonSubplanCTEPlacement {
@@ -867,7 +900,7 @@ private:
 
 		unique_ptr<LogicalOperator> &parent;
 		const idx_t depth;
-		arena_ptr<PlanSignature> signature;
+		optional_ptr<const PlanSignature> signature;
 	};
 
 	struct StackNode {
@@ -1325,8 +1358,8 @@ private:
 		}
 	}
 
-	arena_ptr<PlanSignature> CreatePlanSignature(unique_ptr<LogicalOperator> &op) {
-		vector<reference<PlanSignature>> child_signatures;
+	optional_ptr<const PlanSignature> CreatePlanSignature(unique_ptr<LogicalOperator> &op) {
+		vector<reference<const PlanSignature>> child_signatures;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
 			D_ASSERT(it != operator_infos.end());
@@ -1673,7 +1706,7 @@ private:
 		       op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
 	}
 
-	optional_ptr<PlanSignature> Signature(unique_ptr<LogicalOperator> &op, Candidate &candidate, bool movable) {
+	optional_ptr<const PlanSignature> Signature(unique_ptr<LogicalOperator> &op, Candidate &candidate, bool movable) {
 		const bool traverse = movable && (IsInnerJoin(*op) || op->type == LogicalOperatorType::LOGICAL_FILTER);
 		if (traverse) {
 			bool safe = true;
@@ -1683,7 +1716,7 @@ private:
 				return nullptr;
 			}
 		}
-		vector<reference<PlanSignature>> children;
+		vector<reference<const PlanSignature>> children;
 		for (auto &child : op->children) {
 			auto signature = Signature(child, candidate, traverse);
 			if (!signature) {
@@ -1692,8 +1725,7 @@ private:
 			children.emplace_back(*signature);
 		}
 		auto create = [&]() {
-			signatures.push_back(PlanSignature::Create(state, *op, std::move(children)));
-			return optional_ptr<PlanSignature>(signatures.back().get());
+			return PlanSignature::Create(state, *op, std::move(children));
 		};
 		if (!movable || op->type != LogicalOperatorType::LOGICAL_GET) {
 			return create();
@@ -1827,9 +1859,8 @@ private:
 
 private:
 	PlanSignatureCreateState state;
-	//! Parent signatures and candidate keys reference these objects.
-	vector<arena_ptr<PlanSignature>> signatures;
-	unordered_map<reference<PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality> candidates;
+	unordered_map<reference<const PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality>
+	    candidates;
 };
 
 //===--------------------------------------------------------------------===//
