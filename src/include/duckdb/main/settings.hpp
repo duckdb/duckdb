@@ -234,13 +234,6 @@ private:
 	static void SetSettingInternal(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 };
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#if __has_warning("-Wc2y-extensions")
-#pragma clang diagnostic ignored "-Wc2y-extensions"
-#endif
-#endif
-
 static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
 
 #define NEXT_SETTING_INDEX() __COUNTER__ - SETTING_INDEX_BASE
@@ -3040,9 +3033,5 @@ struct GeneratedSettingInfo {
 //===----------------------------------------------------------------------===//
 // End of the auto-generated list of settings structures
 //===--------------------------------------------------------------------===//
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 } // namespace duckdb
