@@ -2837,6 +2837,20 @@ struct TableFunctionIdentifierConversionSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct TableSizeSampleRowGroupsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "table_size_sample_row_groups";
+	static constexpr const char *Description =
+	    "The maximum number of row groups to sample per table for the estimated_data_bytes column in duckdb_tables().";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "4";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct TempDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "temp_directory";
