@@ -32,6 +32,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"row_group_pruner", OptimizerType::ROW_GROUP_PRUNER},
     {"top_n", OptimizerType::TOP_N},
     {"top_n_window_elimination", OptimizerType::TOP_N_WINDOW_ELIMINATION},
+    {"window_fusion", OptimizerType::WINDOW_FUSION},
     {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
@@ -59,12 +60,18 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"distinct_aggregate_rewrite", OptimizerType::DISTINCT_AGGREGATE_REWRITE},
     {"aggregate_reuse", OptimizerType::AGGREGATE_REUSE},
     {"duplicate_eliminated_domain", OptimizerType::DUPLICATE_ELIMINATED_DOMAIN},
+    {"case_to_filter_aggregate", OptimizerType::CASE_TO_FILTER_AGGREGATE},
     {"projection_placement", OptimizerType::PROJECTION_PLACEMENT},
     {"redundant_order_keys", OptimizerType::REDUNDANT_ORDER_KEYS},
     {"disjunctive_join_rewriter", OptimizerType::DISJUNCTIVE_JOIN_REWRITER},
     {"redundant_order", OptimizerType::REDUNDANT_ORDER},
+    {"mark_join_simplifier", OptimizerType::MARK_JOIN_SIMPLIFIER},
     {"self_join_aggregate", OptimizerType::SELF_JOIN_AGGREGATE},
     {"scalar_aggregate_merge", OptimizerType::SCALAR_AGGREGATE_MERGE},
+    {"redundant_distinct", OptimizerType::REDUNDANT_DISTINCT},
+    {"set_operation_aggregate", OptimizerType::SET_OPERATION_AGGREGATE},
+    {"join_to_semi_join", OptimizerType::JOIN_TO_SEMI_JOIN},
+    {"group_by_top_key", OptimizerType::GROUP_BY_TOP_KEY},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

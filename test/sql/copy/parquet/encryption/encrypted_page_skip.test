@@ -1,0 +1,44 @@
+# name: test/sql/copy/parquet/encryption/encrypted_page_skip.test
+# description: Skipping pages of an encrypted Parquet file must skip the full on-disk crypto module (issue #29249)
+# group: [encryption]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+# writing encrypted parquet requires a crypto provider; use the built-in mbedtls one
+statement ok
+SET force_mbedtls_unsafe = true
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
+# many small pages per column chunk, with rows ordered so that a pushed-down filter skips leading pages
+statement ok
+COPY (
+	SELECT CASE WHEN i < 4000 THEN 'head' ELSE 'tail' END AS stream, repeat('x', 100) || i AS record
+	FROM range(8000) t(i)
+) TO '{TEST_DIR}/encrypted_page_skip.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'}, DATA_PAGE_SIZE_LIMIT 65536)
+
+query I
+SELECT sum(length(record)) FROM read_parquet('{TEST_DIR}/encrypted_page_skip.parquet',
+	encryption_config={footer_key: 'key256'}) WHERE stream = 'tail'
+----
+416000
+
+query I
+SELECT sum(length(record)) FROM read_parquet('{TEST_DIR}/encrypted_page_skip.parquet',
+	encryption_config={footer_key: 'key256'}) WHERE stream = 'head'
+----
+414890
+
+# unfiltered scan as a sanity check
+query II
+SELECT count(*), sum(length(record)) FROM read_parquet('{TEST_DIR}/encrypted_page_skip.parquet',
+	encryption_config={footer_key: 'key256'})
+----
+8000	830890
+
+statement ok
+SET force_mbedtls_unsafe = false

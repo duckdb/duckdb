@@ -92,7 +92,9 @@ public:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
-			return VisitString(type_id, variant, row, values_idx, std::forward<Args>(args)...);
+		case VariantLogicalType::GEOGRAPHY:
+			return VisitString(VariantTypeToLogicalTypeId(type_id), variant, row, values_idx,
+			                   std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(variant, row, values_idx, std::forward<Args>(args)...);
 		case VariantLogicalType::ARRAY: {
@@ -122,7 +124,8 @@ public:
 		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
 			return Visitor::VisitTimestampTZNanos(Load<timestamp_tz_ns_t>(ptr), std::forward<Args>(args)...);
 		default:
-			return Visitor::VisitDefault(type_id, ptr, std::forward<Args>(args)...);
+			return Visitor::VisitDefault(VariantDefaultType(VariantTypeToLogicalTypeId(type_id)), ptr,
+			                             std::forward<Args>(args)...);
 		}
 	}
 
@@ -130,82 +133,78 @@ public:
 	static ReturnType Visit(const VariantNode &node, idx_t depth, Args &&...args) {
 		CheckDepth(depth);
 		if (node.IsNull() || node.IsMissing()) {
-			VisitMetadata(VariantLogicalType::VARIANT_NULL, args...);
 			return Visitor::VisitNull(std::forward<Args>(args)...);
 		}
 
 		auto type_id = node.GetTypeId();
-		VisitMetadata(type_id, args...);
-
 		switch (type_id) {
-		case VariantLogicalType::VARIANT_NULL:
+		case LogicalTypeId::SQLNULL:
 			return Visitor::VisitNull(std::forward<Args>(args)...);
-		case VariantLogicalType::BOOL_TRUE:
-			return Visitor::VisitBoolean(true, std::forward<Args>(args)...);
-		case VariantLogicalType::BOOL_FALSE:
-			return Visitor::VisitBoolean(false, std::forward<Args>(args)...);
-		case VariantLogicalType::INT8:
+		case LogicalTypeId::BOOLEAN:
+			return Visitor::VisitBoolean(node.GetBool(), std::forward<Args>(args)...);
+		case LogicalTypeId::TINYINT:
 			return Visitor::template VisitInteger<int8_t>(node.GetData<int8_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::INT16:
+		case LogicalTypeId::SMALLINT:
 			return Visitor::template VisitInteger<int16_t>(node.GetData<int16_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::INT32:
+		case LogicalTypeId::INTEGER:
 			return Visitor::template VisitInteger<int32_t>(node.GetData<int32_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::INT64:
+		case LogicalTypeId::BIGINT:
 			return Visitor::template VisitInteger<int64_t>(node.GetData<int64_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::INT128:
+		case LogicalTypeId::HUGEINT:
 			return Visitor::template VisitInteger<hugeint_t>(node.GetData<hugeint_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UINT8:
+		case LogicalTypeId::UTINYINT:
 			return Visitor::template VisitInteger<uint8_t>(node.GetData<uint8_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UINT16:
+		case LogicalTypeId::USMALLINT:
 			return Visitor::template VisitInteger<uint16_t>(node.GetData<uint16_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UINT32:
+		case LogicalTypeId::UINTEGER:
 			return Visitor::template VisitInteger<uint32_t>(node.GetData<uint32_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UINT64:
+		case LogicalTypeId::UBIGINT:
 			return Visitor::template VisitInteger<uint64_t>(node.GetData<uint64_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UINT128:
+		case LogicalTypeId::UHUGEINT:
 			return Visitor::template VisitInteger<uhugeint_t>(node.GetData<uhugeint_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::FLOAT:
+		case LogicalTypeId::FLOAT:
 			return Visitor::VisitFloat(node.GetData<float>(), std::forward<Args>(args)...);
-		case VariantLogicalType::DOUBLE:
+		case LogicalTypeId::DOUBLE:
 			return Visitor::VisitDouble(node.GetData<double>(), std::forward<Args>(args)...);
-		case VariantLogicalType::UUID:
+		case LogicalTypeId::UUID:
 			return Visitor::VisitUUID(node.GetData<hugeint_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::DATE:
+		case LogicalTypeId::DATE:
 			return Visitor::VisitDate(node.GetData<date_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::INTERVAL:
+		case LogicalTypeId::INTERVAL:
 			return Visitor::VisitInterval(node.GetData<interval_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::VARCHAR:
-		case VariantLogicalType::BLOB:
-		case VariantLogicalType::BITSTRING:
-		case VariantLogicalType::BIGNUM:
-		case VariantLogicalType::GEOMETRY:
+		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::BIT:
+		case LogicalTypeId::BIGNUM:
+		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::GEOGRAPHY:
 			return VisitString(type_id, node.GetString(), std::forward<Args>(args)...);
-		case VariantLogicalType::DECIMAL:
+		case LogicalTypeId::DECIMAL:
 			return VisitDecimal(node, std::forward<Args>(args)...);
-		case VariantLogicalType::ARRAY:
+		case LogicalTypeId::LIST:
 			return Visitor::VisitArray(node, depth, std::forward<Args>(args)...);
-		case VariantLogicalType::OBJECT:
+		case LogicalTypeId::STRUCT:
 			return Visitor::VisitObject(node, depth, std::forward<Args>(args)...);
-		case VariantLogicalType::TIME_MICROS:
+		case LogicalTypeId::TIME:
 			return Visitor::VisitTime(node.GetData<dtime_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIME_NANOS:
+		case LogicalTypeId::TIME_NS:
 			return Visitor::VisitTimeNanos(node.GetData<dtime_ns_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIME_MICROS_TZ:
+		case LogicalTypeId::TIME_TZ:
 			return Visitor::VisitTimeTZ(node.GetData<dtime_tz_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			return Visitor::VisitTimestampSec(node.GetData<timestamp_sec_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_MILIS:
+		case LogicalTypeId::TIMESTAMP_MS:
 			return Visitor::VisitTimestampMs(node.GetData<timestamp_ms_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_MICROS:
+		case LogicalTypeId::TIMESTAMP:
 			return Visitor::VisitTimestamp(node.GetData<timestamp_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_NANOS:
+		case LogicalTypeId::TIMESTAMP_NS:
 			return Visitor::VisitTimestampNanos(node.GetData<timestamp_ns_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			return Visitor::VisitTimestampTZ(node.GetData<timestamp_tz_t>(), std::forward<Args>(args)...);
-		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return Visitor::VisitTimestampTZNanos(node.GetData<timestamp_tz_ns_t>(), std::forward<Args>(args)...);
 		default:
-			return Visitor::VisitDefault(type_id, nullptr, std::forward<Args>(args)...);
+			return Visitor::VisitDefault(node.GetType(), nullptr, std::forward<Args>(args)...);
 		}
 	}
 
@@ -255,10 +254,12 @@ public:
 		}
 	}
 
+	//! Visits the children of an object. The key order of an object is not significant, so converters that produce
+	//! output the user sees (text, JSON, values) ask for LEXICOGRAPHIC order to be independent of the stored order
 	template <typename... Args>
 	static child_list_t<ReturnType> VisitObjectItems(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                 const VariantNestedData &object_data, idx_t depth,
-	                                                 Args &&...args) {
+	                                                 VariantIterationOrder order, Args &&...args) {
 		child_list_t<ReturnType> object_items;
 		for (idx_t i = 0; i < object_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, object_data.children_idx + i);
@@ -269,11 +270,13 @@ public:
 
 			object_items.emplace_back(key.GetString(), std::move(val));
 		}
-		std::stable_sort(
-		    object_items.begin(), object_items.end(),
-		    [](const std::pair<Identifier, ReturnType> &lhs, const std::pair<Identifier, ReturnType> &rhs) {
-			    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
-		    });
+		if (order == VariantIterationOrder::LEXICOGRAPHIC) {
+			std::stable_sort(
+			    object_items.begin(), object_items.end(),
+			    [](const std::pair<Identifier, ReturnType> &lhs, const std::pair<Identifier, ReturnType> &rhs) {
+				    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
+			    });
+		}
 		return object_items;
 	}
 
@@ -303,42 +306,48 @@ private:
 	}
 
 	template <typename... Args>
-	static ReturnType VisitString(VariantLogicalType type_id, const UnifiedVariantVectorData &variant, idx_t row,
+	static ReturnType VisitString(LogicalTypeId type_id, const UnifiedVariantVectorData &variant, idx_t row,
 	                              uint32_t values_idx, Args &&...args) {
 		auto decoded_string = VariantUtils::DecodeStringData(variant, row, values_idx);
-		if (type_id == VariantLogicalType::VARCHAR) {
+		if (type_id == LogicalTypeId::VARCHAR) {
 			return Visitor::VisitString(decoded_string, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BLOB) {
+		if (type_id == LogicalTypeId::BLOB) {
 			return Visitor::VisitBlob(decoded_string, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BIGNUM) {
+		if (type_id == LogicalTypeId::BIGNUM) {
 			return Visitor::VisitBignum(decoded_string, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::GEOMETRY) {
+		if (type_id == LogicalTypeId::GEOMETRY) {
 			return Visitor::VisitGeometry(decoded_string, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BITSTRING) {
+		if (type_id == LogicalTypeId::GEOGRAPHY) {
+			return Visitor::VisitGeography(decoded_string, std::forward<Args>(args)...);
+		}
+		if (type_id == LogicalTypeId::BIT) {
 			return Visitor::VisitBitstring(decoded_string, std::forward<Args>(args)...);
 		}
 		throw InternalException("String-backed variant type (%s) not handled", EnumUtil::ToString(type_id));
 	}
 
 	template <typename... Args>
-	static ReturnType VisitString(VariantLogicalType type_id, const string_t &value, Args &&...args) {
-		if (type_id == VariantLogicalType::VARCHAR) {
+	static ReturnType VisitString(LogicalTypeId type_id, const string_t &value, Args &&...args) {
+		if (type_id == LogicalTypeId::VARCHAR) {
 			return Visitor::VisitString(value, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BLOB) {
+		if (type_id == LogicalTypeId::BLOB) {
 			return Visitor::VisitBlob(value, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BIGNUM) {
+		if (type_id == LogicalTypeId::BIGNUM) {
 			return Visitor::VisitBignum(value, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::GEOMETRY) {
+		if (type_id == LogicalTypeId::GEOMETRY) {
 			return Visitor::VisitGeometry(value, std::forward<Args>(args)...);
 		}
-		if (type_id == VariantLogicalType::BITSTRING) {
+		if (type_id == LogicalTypeId::GEOGRAPHY) {
+			return Visitor::VisitGeography(value, std::forward<Args>(args)...);
+		}
+		if (type_id == LogicalTypeId::BIT) {
 			return Visitor::VisitBitstring(value, std::forward<Args>(args)...);
 		}
 		throw InternalException("String-backed variant type (%s) not handled", EnumUtil::ToString(type_id));
@@ -352,7 +361,9 @@ private:
 		auto &scale = decoded_decimal.scale;
 		auto &ptr = decoded_decimal.value_ptr;
 		if (width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			auto blob = VariantUtils::DecodeWideDecimalData(variant, row, values_idx);
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(blob), width, scale, std::forward<Args>(args)...);
 		} else if (width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(Load<hugeint_t>(ptr), width, scale,
 			                                                 std::forward<Args>(args)...);
@@ -372,7 +383,9 @@ private:
 	static ReturnType VisitDecimal(const VariantNode &node, Args &&...args) {
 		auto decimal = node.GetDecimal();
 		if (decimal.width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", decimal.width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(node.GetWideDecimal()), decimal.width,
+			                                                decimal.scale, std::forward<Args>(args)...);
 		} else if (decimal.width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(node.GetData<hugeint_t>(), decimal.width, decimal.scale,
 			                                                 std::forward<Args>(args)...);

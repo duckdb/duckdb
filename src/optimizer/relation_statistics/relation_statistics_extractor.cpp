@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -59,14 +60,19 @@ idx_t RelationStatsExtractor::ExtractedOperatorCount() const {
 	return extracted_operator_count;
 }
 
-static bool IsInnerJoinRegion(LogicalOperator &op) {
+static bool IsJoinEstimationRegion(LogicalOperator &op) {
 	optional_ptr<LogicalOperator> root = op;
 	while (root->type == LogicalOperatorType::LOGICAL_FILTER) {
 		root = *root->children[0];
 	}
-	return root->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
-	       (root->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	        root->Cast<LogicalComparisonJoin>().join_type == JoinType::INNER);
+	if (root->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return true;
+	}
+	if (root->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto type = root->Cast<LogicalComparisonJoin>().join_type;
+	return type == JoinType::INNER || type == JoinType::LEFT;
 }
 
 optional<RelationStats> RelationStatsExtractor::ExtractInternal(LogicalOperator &op) {
@@ -78,11 +84,32 @@ optional<RelationStats> RelationStatsExtractor::ExtractInternal(LogicalOperator 
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		return ExtractCTERef(op.Cast<LogicalCTERef>());
 	}
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		if (op.HasSideEffects()) {
+			return {};
+		}
+		auto &cte = op.Cast<LogicalMaterializedCTE>();
+		// An extraction exception invalidates this extractor; restore the outer lookup on normal return.
+		auto outer_callback = cte_callback;
+		cte_callback = [&cte, outer_callback](TableIndex index) -> optional_ptr<LogicalOperator> {
+			if (index == cte.table_index) {
+				return cte.children[0].get();
+			}
+			return outer_callback ? outer_callback(index) : nullptr;
+		};
+		optional<RelationStats> result;
+		auto stats = Extract(*cte.children[1]);
+		if (stats) {
+			result = RelationStatisticsHelper::ProjectOutputStats(*stats, cte);
+		}
+		cte_callback = std::move(outer_callback);
+		return result;
+	}
 	if (op.type == LogicalOperatorType::LOGICAL_EXPLAIN) {
 		return RelationStatisticsHelper::ExtractExplainStats(op);
 	}
 
-	if (IsInnerJoinRegion(op)) {
+	if (IsJoinEstimationRegion(op)) {
 		auto stats = ExtractJoinStats(op);
 		if (stats) {
 			return stats;
@@ -109,30 +136,31 @@ optional<RelationStats> RelationStatsExtractor::ExtractJoinStats(LogicalOperator
 	if (!graph.BuildForEstimation(*this, op)) {
 		return {};
 	}
-	auto relation_stats = graph.relation_manager.GetRelationStats();
 	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
-	estimator.Initialize(relation_stats, graph.GetJoinOperators(), graph.relation_manager.GetColumnSources());
+	estimator.Initialize(graph.relation_manager.GetRelationStats(), graph.GetJoinOperators(),
+	                     graph.relation_manager.GetColumnSources());
 	unordered_set<RelationIndex> relations;
-	for (idx_t i = 0; i < relation_stats.size(); i++) {
+	for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
 		relations.insert(RelationIndex(i));
 	}
 	auto &set = graph.set_manager.GetJoinRelation(relations);
-	auto estimate = estimator.EstimateCardinality(set);
-	if (estimate.GetDouble() >= static_cast<double>(NumericLimits<idx_t>::Maximum())) {
-		return {};
+	return graph.ProjectRetainedStats(estimator, set, op);
+}
+
+optional_ptr<LogicalOperator> RelationStatsExtractor::GetCTEDefinition(const LogicalCTERef &cte_ref) const {
+	if (cte_ref.is_recurring || !cte_callback) {
+		return nullptr;
 	}
-	return graph.CombineRelationStats(op.GetColumnBindings(), relation_stats, estimate.GetIndex());
+	return cte_callback(cte_ref.cte_index);
 }
 
 optional<RelationStats> RelationStatsExtractor::ExtractCTERef(LogicalCTERef &cte_ref) {
-	if (cte_ref.is_recurring || !cte_callback) {
-		return {};
-	}
-	auto definition = cte_callback(cte_ref.cte_index);
+	auto definition = GetCTEDefinition(cte_ref);
 	if (!definition) {
 		return {};
 	}
-	if (cache.find(*definition) == cache.end()) {
+	// Inherited snapshots already contain the entire plan and remain read-only.
+	if (source_stats && cache.find(*definition) == cache.end()) {
 		source_stats->AddPlan(context, *definition);
 	}
 	auto definition_stats = Extract(*definition);

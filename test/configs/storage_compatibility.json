@@ -12,6 +12,8 @@
     "Aggregate state columns are not supported in storage versions prior to v2.0.0",
     "TUPLE columns are not supported in storage versions prior to v2.0.0",
     "VARIANT columns are not supported in storage versions prior to v1.5.0",
+    "GEOGRAPHY columns are not supported in storage versions prior to v2.1.0",
+    "DECIMAL columns wider than 38 digits are not supported in storage versions prior to v2.1.0",
     "Typed macro parameters are only supported for storage versions v1.4.0 and higher",
     "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
@@ -55,6 +57,13 @@
       ]
     },
     {
+      "reason": "Views over read_duckdb cannot be bound by older versions, which do not have the function.",
+      "paths": [
+        "test/sql/storage/read_duckdb/read_duckdb_filter_mixed_types.test",
+        "test/sql/storage/read_duckdb/read_duckdb_converted_filter_scan.test"
+      ]
+    },
+    {
       "reason": "Stringification too slow",
       "paths": [
         "test/sql/types/bignum/test_bignum_sum.test"
@@ -64,6 +73,7 @@
       "reason": "Time (NS) not supported (new type).",
       "paths": [
         "test/sql/copy/parquet/bloom_filter_fallback_types.test",
+        "test/sql/copy/parquet/bloom_filter_fallback_types.test_slow",
         "test/sql/aggregate/aggregates/summarize_nanosecond_types.test",
         "test/sql/optimizer/expression/test_time_ns_cast_comparison.test",
         "test/optimizer/comparison_simplification_equality_casts.test",
@@ -113,7 +123,10 @@
         "test/sql/types/time/test_time_ns.test",
         "test/sql/copy/parquet/int96_as.test",
         "test/sql/copy/parquet/byte_stream_split_flba.test",
-        "test/sql/function/timestamp/test_icu_time_bucket_timestamptz_ns.test"
+        "test/sql/function/timestamp/test_icu_time_bucket_timestamptz_ns.test",
+        "test/sql/types/timestamp/timestamptz_ns_timestamptz_comparison.test",
+        "test/sql/optimizer/temporal_cast_zonemap_icu.test",
+        "test/optimizer/date_trunc_simplification_icu.test"
       ]
     },
     {
@@ -140,6 +153,8 @@
         "test/sql/types/geo/geometry_crs_projjson.test",
         "test/sql/types/geo/geometry_crs_wkt2.test",
         "test/sql/types/geo/geometry_vertex_extract.test",
+        "test/sql/types/geo/geography.test",
+        "test/sql/types/geo/geography_parquet.test",
         "test/geoparquet/disabled.test",
         "test/geoparquet/geoarrow.test",
         "test/geoparquet/mixed.test",
@@ -199,6 +214,8 @@
         "test/optimizer/statistics/statistics_cast_infinity.test",
         "test/optimizer/statistics/statistics_monotone_infinity.test",
         "test/sql/types/struct/empty_struct.test",
+        "test/sql/types/struct/remap_struct_empty_default.test",
+        "test/sql/alter/struct/alter_struct_with_empty_struct_field.test",
         "test/optimizer/pushdown/cte_domain_join_filter.test",
         "test/sql/subquery/lateral/lateral_domain_join_filter_semantics.test",
         "test/sql/subquery/lateral/lateral_nested_domain_filter.test",
@@ -301,6 +318,12 @@
         "test/sql/types/list/list_extract_types.test_slow",
         "test/sql/types/test_all_types.test_slow",
         "test/sql/window/test_streaming_lead_lag.test_slow"
+      ]
+    },
+    {
+      "reason": "The synchronous task batch does not always reach the scheduler log: timing-dependent assertion (flaky under this config).",
+      "paths": [
+        "test/sql/parallelism/async_task_synchronous_batch.test"
       ]
     }
   ]

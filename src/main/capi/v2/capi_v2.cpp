@@ -403,7 +403,7 @@ static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &o
 	out->name = option.name ? option.name : "";
 	out->description = option.description ? option.description : "";
 	PopulateOptionScopes(out, option);
-	if (!DBConfig::TryGetDefaultValue(&option, out->default_value)) {
+	if (!source.GetConfig().TryGetDefaultValue(&option, out->default_value)) {
 		out->default_value = Value();
 	}
 	out->aliases.clear();

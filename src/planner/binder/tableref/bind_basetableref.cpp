@@ -229,7 +229,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ClientConfig::GetConfig(context).use_replacement_scans &&
 		    Settings::Get<EnableExternalAccessSetting>(config) && ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
-			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
+			if (!VirtualFileSystem::Get(context).IsDisabledForPath(full_path) && fs.FileExists(full_path)) {
 				throw BinderException(
 				    "No extension found that is capable of reading the file \"%s\"\n* If this file is a supported file "
 				    "format you can explicitly use the reader functions, such as read_csv, read_json or read_parquet",
@@ -275,15 +275,19 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<Identifier> table_names;
 		vector<TableColumnType> table_categories;
 
-		vector<LogicalType> return_types;
-		vector<Identifier> return_names;
-		for (auto &col : table.GetColumns().Logical()) {
+		auto &columns = table.GetColumns();
+		table_types.reserve(columns.LogicalColumnCount());
+		table_names.reserve(columns.LogicalColumnCount());
+		for (auto &col : columns.Logical()) {
 			table_types.push_back(col.Type());
 			table_names.emplace_back(col.Name());
-			return_types.push_back(col.Type());
-			return_names.emplace_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		auto return_types = table_types;
+		auto return_names = table_names;
+		// the ColumnList of a table already deduplicates its column names
+		if (!ref.column_name_alias.empty()) {
+			table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		}
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {
@@ -354,8 +358,12 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
-		// update the view binding with the bound view information
-		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		if (GetBindingMode() == BindingMode::STANDARD_BINDING) {
+			// update the view binding with the bound view information
+			// skipped in other binding modes - e.g. in EXTRACT_NAMES mode tables bind as dummy columns,
+			// and storing those would corrupt the view's cached column information
+			view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		}
 		auto root_index = bound_child.plan->GetRootIndex();
 		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
 			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view

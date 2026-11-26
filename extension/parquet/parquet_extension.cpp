@@ -228,7 +228,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 					}
 					name_to_type_map.emplace(names[col_idx], sql_types[col_idx]);
 				}
-				FieldID::GetFieldIDs(option_values[0], bind_data->field_ids, unique_field_ids, name_to_type_map);
+				FieldID::GetFieldIDs(context.GetContext(), option_values[0], bind_data->field_ids, unique_field_ids,
+				                     name_to_type_map);
 			}
 		} else if (option_name == "shredding") {
 			if (option_values[0].type().id() == LogicalTypeId::VARCHAR &&
@@ -391,7 +392,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 }
 
 static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
-	auto &parquet_bind = input.bind_data.Cast<ParquetWriteBindData>();
+	auto &parquet_bind = input.bind_data.write().Cast<ParquetWriteBindData>();
 	auto count = parquet_bind.sql_types.size();
 	if (input.column_stats.size() != count) {
 		return;
@@ -404,8 +405,8 @@ static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
 	}
 }
 
-static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
-                                                                   const string &file_path) {
+static unique_ptr<GlobalFunctionData>
+ParquetWriteInitializeGlobal(ClientContext &context, const FunctionData &bind_data, const string &file_path) {
 	auto global_state = make_uniq<ParquetWriteGlobalState>();
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
@@ -448,13 +449,13 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	return std::move(global_state);
 }
 
-static void ParquetWriteGetWrittenStatistics(ClientContext &context, FunctionData &bind_data,
+static void ParquetWriteGetWrittenStatistics(ClientContext &context, const FunctionData &bind_data,
                                              GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	global_state.writer->SetWrittenStatistics(statistics);
 }
 
-static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
+static void ParquetWriteSink(ExecutionContext &context, const FunctionData &bind_data_p, GlobalFunctionData &gstate,
                              LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
@@ -472,7 +473,7 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 	}
 }
 
-static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
+static void ParquetWriteCombine(ExecutionContext &context, const FunctionData &bind_data_p, GlobalFunctionData &gstate,
                                 LocalFunctionData &lstate) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
@@ -504,7 +505,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	global_state.combine_buffer->Combine(local_state.buffer);
 }
 
-static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+static void ParquetWriteFinalize(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
@@ -515,7 +516,8 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	global_state.writer->Finalize();
 }
 
-static unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
+static unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context,
+                                                                 const FunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
@@ -922,7 +924,7 @@ struct ParquetWriteBatchData : public PreparedBatchData {
 	PreparedRowGroup prepared_row_group;
 };
 
-static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
+static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, const FunctionData &bind_data,
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
@@ -935,7 +937,7 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
 //===--------------------------------------------------------------------===//
 // Flush Batch
 //===--------------------------------------------------------------------===//
-static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void ParquetWriteFlushBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                                    PreparedBatchData &batch_p) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &batch = batch_p.Cast<ParquetWriteBatchData>();
@@ -945,7 +947,7 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
 //===--------------------------------------------------------------------===//
 // Desired Batch Size
 //===--------------------------------------------------------------------===//
-static optional_idx ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
+static optional_idx ParquetWriteDesiredBatchSize(ClientContext &context, const FunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	return bind_data.row_group_size;
 }
@@ -1029,9 +1031,10 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
+		// If this is an EXPORT DATABASE statement, HUGEINT / UHUGEINT are cast to VARCHAR. A COPY writes them as
+		// DECIMAL(39,0), which is exact, but DuckDB versions without wide decimals read that back as a lossy DOUBLE
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
-			// Replace all lossy types with VARCHAR
+			// Replace these types with VARCHAR
 			auto new_type = TypeVisitor::VisitReplace(
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
 
@@ -1084,8 +1087,7 @@ static unique_ptr<FunctionData> ParquetCopyFromBind(ClientContext &context, Copy
 
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
-	auto &fs = db_instance.GetFileSystem();
-	fs.RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet"));
 	scan_fun.SetName("read_parquet");

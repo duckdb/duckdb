@@ -17,7 +17,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 
 	FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	         bool require_payload = false);
+	         bool require_payload = false, optional_idx partition_limit = optional_idx());
 
 public:
 	//===--------------------------------------------------------------------===//

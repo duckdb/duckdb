@@ -7,6 +7,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -206,10 +207,21 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	// FIXME: Theoretically, we should catch all places higher up the call stack where the
-	// FIXME: shared pointer goes out of scope and we need to invoke a checkpoint.
-	// FIXME: However, for now, we keep this to avoid unintentional behavior / oversights.
-	Close(DatabaseCloseAction::TRY_CHECKPOINT);
+	if (!is_closed && is_detached) {
+		// a reference held outside of a transaction outlived the detach
+		auto action = Exception::UncaughtException() ? DatabaseCloseAction::SKIP_CHECKPOINT : detach_close_action;
+		try {
+			Close(action);
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in ~AttachedDatabase():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} catch (...) { // NOLINT
+		}
+	}
+	D_ASSERT(is_closed || Exception::UncaughtException());
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -266,7 +278,7 @@ Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSyste
 	return Identifier(name);
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+DatabaseCloseAction AttachedDatabase::GetDetachCloseAction(ClientContext &context) {
 	auto close_action = DatabaseCloseAction::CHECKPOINT;
 	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
 	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
@@ -276,7 +288,24 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	} else if (!Settings::Get<CheckpointOnShutdownSetting>(context)) {
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	}
+	return close_action;
+}
 
+void AttachedDatabase::MarkDetached(DatabaseCloseAction close_action) {
+	lock_guard<mutex> guard(*close_lock);
+	if (is_detached) {
+		return;
+	}
+	is_detached = true;
+	detach_close_action = close_action;
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+	InvokeCloseIfLastReference(attached_db, GetDetachCloseAction(context));
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
+                                                  DatabaseCloseAction close_action) {
 	auto close_lock = attached_db->close_lock;
 	{
 		lock_guard<mutex> guard(*close_lock);
@@ -285,7 +314,14 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			return;
 		}
 		attached_db->is_closing = true;
+		if (attached_db->is_detached) {
+			close_action = attached_db->detach_close_action;
+		}
 	}
+	// use_count() is a relaxed load, so it doesn't order accesses through references dropped without close_lock.
+	// Dropping a copy does (acq_rel decrement, never reaching zero); a fence would too, but TSan ignores fences.
+	auto synchronizing_reference = attached_db;
+	synchronizing_reference.reset();
 	attached_db->Close(close_action);
 	attached_db.reset();
 }
@@ -356,13 +392,43 @@ bool AttachedDatabase::IsInitialDatabase() const {
 	return is_initial_database;
 }
 
-void AttachedDatabase::Invalidate(const string &reason) {
+bool AttachedDatabase::SupportsScopedInvalidation() const {
+	return !IsSystem() && !IsTemporary() && !IsInitialDatabase();
+}
+
+void AttachedDatabase::Invalidate(const string &cause, const string &error) {
+	if (!SupportsScopedInvalidation()) {
+		ValidChecker::Invalidate(db,
+		                         StringUtil::Format("Database %s has been invalidated because %s. Original error: %s",
+		                                            GetName(), cause, error));
+		return;
+	}
 	string recovery = HasStorageManager() && GetStorageManager().InMemory()
 	                      ? "It is an in-memory database, so its data cannot be recovered."
 	                      : "Detach and reattach it before using it again.";
-	ValidChecker::Invalidate(*this, StringUtil::Format("Database %s has been invalidated because checkpointing "
-	                                                   "failed. %s Original error: %s",
-	                                                   GetName(), recovery, reason));
+	validity.InvalidateIfValid(StringUtil::Format("Database %s has been invalidated because %s. %s Original error: %s",
+	                                              GetName(), cause, recovery, error));
+}
+
+ErrorData AttachedDatabase::ScopeFatalError(ErrorData error) {
+	if (!error.HasError() || !Exception::InvalidatesDatabase(error.Type()) || !SupportsScopedInvalidation()) {
+		return error;
+	}
+	Invalidate("of a fatal error", error.RawMessage());
+	error.SetExtraInfo(Exception::INVALIDATED_DATABASE_KEY, GetName().GetIdentifierName());
+	return error;
+}
+
+ErrorData AttachedDatabase::InvalidationError(const string &operation) {
+	if (ValidChecker::IsInvalidated(*this)) {
+		return ErrorData(IOException("Cannot %s: %s", operation, ValidChecker::InvalidatedMessage(*this)));
+	}
+	if (ValidChecker::IsInvalidated(db)) {
+		auto message = ErrorManager::Get(db).FormatException(ErrorType::INVALIDATED_DATABASE,
+		                                                     ValidChecker::InvalidatedMessage(db));
+		return ErrorData(IOException("Cannot %s: %s", operation, message));
+	}
+	return ErrorData();
 }
 
 void AttachedDatabase::SetInitialDatabase() {

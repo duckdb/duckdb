@@ -1,142 +1,21 @@
 #include "duckdb/optimizer/apply_functional_dependencies.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/parser/constraints/not_null_constraint.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
-void ApplyFunctionalDependencies::VisitLogicalGet(LogicalGet &get) {
-	VisitOperatorChildren(get);
-	// Table-in/out functions need not preserve the multiplicity of their input keys.
-	result.clear();
-
-	auto table = get.GetTable();
-	if (!table || !table->IsDuckTable() || !get.children.empty() || get.GetColumnIds().empty()) {
-		return;
-	}
-	unordered_map<idx_t, ColumnBinding> column_bindings;
-	for (auto &binding : get.GetColumnBindings()) {
-		auto &column_index = get.GetColumnIndex(binding);
-		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn()) {
-			continue;
-		}
-		column_bindings.emplace(column_index.GetPrimaryIndex(), binding);
-	}
-	auto &columns = table->GetColumns();
-	auto &constraints = table->GetConstraints();
-	unordered_set<idx_t> not_null_columns;
-	for (auto &constraint : constraints) {
-		if (constraint->type == ConstraintType::NOT_NULL) {
-			not_null_columns.insert(constraint->Cast<NotNullConstraint>().index.index);
-		}
-	}
-	for (auto &constraint : constraints) {
-		if (constraint->type != ConstraintType::UNIQUE) {
-			continue;
-		}
-		auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.IsDeferred()) {
-			continue;
-		}
-		auto &names = unique.GetColumnNames();
-		if (!unique.HasIndex() && !std::all_of(names.begin(), names.end(),
-		                                       [&](const Identifier &name) { return columns.ColumnExists(name); })) {
-			continue;
-		}
-		column_binding_set_t key;
-		bool usable = true;
-		for (auto &column : unique.GetLogicalIndexes(columns)) {
-			auto entry = column_bindings.find(column.index);
-			if (entry == column_bindings.end() ||
-			    (!unique.IsPrimaryKey() && not_null_columns.find(column.index) == not_null_columns.end())) {
-				usable = false;
-				break;
-			}
-			key.insert(entry->second);
-		}
-		if (usable && !key.empty()) {
-			result.push_back(std::move(key));
-		}
-	}
-}
-
-void ApplyFunctionalDependencies::VisitLogicalAggregate(LogicalAggregate &aggr) {
-	VisitOperatorChildren(aggr);
-
-	//	TODO: use child FDs to simplify groupings.
-	result.clear();
-
-	if (aggr.groups.empty() || aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
-		return;
-	}
-	column_binding_set_t key;
-	if (aggr.grouping_sets.empty()) {
-		for (auto group_idx : ProjectionIndex::GetIndexes(aggr.groups.size())) {
-			key.insert(ColumnBinding(aggr.group_index, group_idx));
-		}
-	} else {
-		for (auto group_idx : aggr.grouping_sets[0]) {
-			if (group_idx.GetIndex() >= aggr.groups.size()) {
-				return;
-			}
-			key.insert(ColumnBinding(aggr.group_index, group_idx));
-		}
-	}
-	if (!key.empty()) {
-		result.push_back(std::move(key));
-	}
-}
-
-void ApplyFunctionalDependencies::VisitLogicalProjection(LogicalProjection &projection) {
-	VisitOperatorChildren(projection);
-
-	vector<column_binding_set_t> child_sets;
-	child_sets.swap(result);
-	if (child_sets.empty()) {
-		return;
-	}
-	column_binding_map_t<ColumnBinding> forwarded;
-	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
-		auto &expr = *projection.expressions[expr_idx];
-		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			forwarded.emplace(expr.Cast<BoundColumnRefExpression>().Binding(),
-			                  ColumnBinding(projection.table_index, expr_idx));
-		}
-	}
-	for (auto &child_set : child_sets) {
-		column_binding_set_t key;
-		bool complete = true;
-		for (auto &binding : child_set) {
-			auto entry = forwarded.find(binding);
-			if (entry == forwarded.end()) {
-				complete = false;
-				break;
-			}
-			key.insert(entry->second);
-		}
-		if (complete) {
-			result.push_back(std::move(key));
-		}
-	}
-}
-
 void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
-	VisitOperatorChildren(order);
-
+	result = distinctness.GetUniqueSets(*order.children[0]);
 	VisitOrderBys(order.orders);
 }
 
 void ApplyFunctionalDependencies::VisitOrderBys(vector<BoundOrderByNode> &orders) const {
-	if (orders.size() < 2 || read_only) {
+	if (orders.size() < 2) {
 		return;
 	}
 
@@ -183,10 +62,6 @@ void ApplyFunctionalDependencies::VisitOrderBys(vector<BoundOrderByNode> &orders
 }
 
 void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression>> &partitions) const {
-	if (read_only) {
-		return;
-	}
-
 	//	Remove partitioning keys that are FD on the others
 	for (idx_t i = 0; i < partitions.size();) {
 		vector<reference<Expression>> refs;
@@ -259,7 +134,19 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	//	so there is only one peer group, which is the same as having no ORDER BY clause.
 	auto &partition_bys = wexpr.Partitions();
 	auto &order_bys = wexpr.OrderByMutable();
-	if (!read_only && !partition_bys.empty() && order_bys.size() == 1) {
+	//	A RANGE frame with an offset is measured on the ORDER BY value, so it needs the key even then.
+	const auto range_offset = [](WindowBoundary boundary) {
+		return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	};
+	if (range_offset(wexpr.WindowStart()) || range_offset(wexpr.WindowEnd())) {
+		return;
+	}
+	//	Some functions read the ORDER BY values, unless they have an argument ordering of their own.
+	auto &window_function = wexpr.WindowFunction();
+	if (window_function && window_function->GetDefinition()->RequiresOrdering() && wexpr.ArgOrders().empty()) {
+		return;
+	}
+	if (!partition_bys.empty() && order_bys.size() == 1) {
 		vector<reference<Expression>> refs;
 		for (auto &arg : partition_bys) {
 			refs.emplace_back(*arg);
@@ -281,32 +168,16 @@ void ApplyFunctionalDependencies::VisitExpression(unique_ptr<Expression> *expres
 }
 
 void ApplyFunctionalDependencies::VisitOperator(LogicalOperator &op) {
+	VisitOperatorChildren(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		VisitLogicalOrder(op.Cast<LogicalOrder>());
 		break;
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-		VisitOperatorChildren(op);
-		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
-		VisitOperatorChildren(op);
+		result = distinctness.GetUniqueSets(*op.children[0]);
 		VisitOperatorExpressions(op);
-		//	Windowing only adds bindings
-		break;
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		VisitLogicalProjection(op.Cast<LogicalProjection>());
-		break;
-	case LogicalOperatorType::LOGICAL_GET:
-		VisitLogicalGet(op.Cast<LogicalGet>());
-		break;
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		VisitLogicalAggregate(op.Cast<LogicalAggregate>());
 		break;
 	default:
-		VisitOperatorChildren(op);
-		//	Clear the keys because we don't know if the operator preserves them.
-		result.clear();
 		break;
 	}
 }

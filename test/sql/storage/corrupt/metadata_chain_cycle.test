@@ -1,0 +1,26 @@
+# name: test/sql/storage/corrupt/metadata_chain_cycle.test
+# description: Reject a chain of metadata blocks that points back into itself
+# group: [corrupt]
+
+require vector_size 2048
+
+# the chain that holds the free list is cyclic: reading the free list never reached the end of the chain
+unzip data/storage/corrupt/metadata_chain_cycle.db.gz {TEST_DIR}/metadata_chain_cycle.db
+
+statement error
+ATTACH '{TEST_DIR}/metadata_chain_cycle.db' AS corrupt_db (READ_ONLY)
+----
+Data Corruption Error: Corrupt database file: metadata block chain contains a cycle
+
+# the chain that holds the table data is cyclic: a list in it was read without bound
+unzip data/storage/corrupt/metadata_chain_cycle_list.db.gz {TEST_DIR}/metadata_chain_cycle_list.db
+
+statement error
+ATTACH '{TEST_DIR}/metadata_chain_cycle_list.db' AS corrupt_db (READ_ONLY)
+----
+Data Corruption Error: Corrupt database file: metadata block chain contains a cycle
+
+query I
+SELECT 42
+----
+42

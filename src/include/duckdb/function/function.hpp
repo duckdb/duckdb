@@ -11,12 +11,14 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/cow_ptr.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
@@ -41,6 +43,9 @@ class FunctionProperties;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
+class Binder;
+class DecimalWidthLimit;
+class FunctionBinder;
 
 struct PragmaInfo;
 
@@ -590,6 +595,16 @@ public:
 		requires_ordered_execution = value;
 	}
 
+	//! Sets a generic property, e.g. "duckdb.collation.combinable", overwriting any previous value
+	DUCKDB_API void SetProperty(const string &name, Value value);
+	//! Returns the value of a generic property, or nullptr if it is not set
+	DUCKDB_API optional_ptr<const Value> GetProperty(const string &name) const;
+	//! Returns whether a generic property is the BOOLEAN true; an absent or non-BOOLEAN property is false
+	DUCKDB_API bool GetBooleanProperty(const string &name) const;
+	auto GetGenericProperties() const -> const unordered_map<string, Value> & {
+		return generic_properties;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -600,6 +615,9 @@ public:
 
 	bool operator==(const FunctionProperties &rhs) const;
 	bool operator!=(const FunctionProperties &rhs) const;
+
+private:
+	bool GenericPropertiesEqual(const FunctionProperties &rhs) const;
 
 public:
 	FunctionStability stability = FunctionStability::CONSISTENT;
@@ -617,6 +635,8 @@ public:
 	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
+	//! Generic properties by name, e.g. "duckdb.collation.combinable"
+	unordered_map<string, Value> generic_properties;
 };
 
 class BoundSimpleFunction {
@@ -712,13 +732,27 @@ public:
 class BindFunctionInput {
 public:
 	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
-	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p)
-	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p) {
+	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p,
+	                  optional_ptr<Binder> binder_p = nullptr,
+	                  optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p), binder(binder_p),
+	      decimal_width_limit(decimal_width_limit_p) {
 	}
 
 	ClientContext &GetClientContext() const {
 		return context;
 	}
+	//! The binder of the query the function is bound in, if any: a rebind outside of a query has none
+	bool HasBinder() const {
+		return binder != nullptr;
+	}
+	DUCKDB_API Binder &GetBinder();
+	//! A binder for the functions the bind nests: it binds as this function is bound, within its query or within its
+	//! fixed decimal width
+	DUCKDB_API FunctionBinder NestedFunctionBinder();
+	//! The widest DECIMAL the bind constructs: the limit of the binder, the fixed limit of a bind outside of a query
+	//! (a deserialized function is rebound within the width it was bound in), or the max_decimal_width setting
+	DUCKDB_API DecimalWidthLimit GetDecimalWidthLimit() const;
 	vector<unique_ptr<Expression>> &GetArguments() const {
 		return arguments;
 	}
@@ -759,6 +793,9 @@ private:
 	const BoundSimpleFunction &function;
 	const FunctionSignature &signature;
 	vector<unique_ptr<Expression>> &arguments;
+	optional_ptr<Binder> binder;
+	//! The fixed limit of a bind outside of a query, if any
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
 };
 
 } // namespace duckdb

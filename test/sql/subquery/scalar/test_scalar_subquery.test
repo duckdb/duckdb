@@ -2,6 +2,10 @@
 # description: Test subqueries
 # group: [scalar]
 
+# results below depend on scan order; small row groups (e.g. STANDARD_VECTOR_SIZE=2) would otherwise scan in parallel
+statement ok
+SET threads=1
+
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
@@ -37,7 +41,7 @@ SELECT (SELECT 42)
 42
 
 statement ok
-PRAGMA explain_output='optimized_only'
+SET explain_output='optimized_only'
 
 query II
 EXPLAIN SELECT (SELECT 42)

@@ -1,0 +1,25 @@
+# name: test/sql/window/window_value_ignore_nulls_32k.test_slow
+# description: Issue #26135: value functions with IGNORE NULLS over more than 1048576 non-NULL values
+# group: [window]
+
+# More than 1048576 non-NULL values adds a sixth merge sort tree level,
+# so the Nth element search descends through two cascaded levels.
+
+statement ok
+CREATE TABLE big AS SELECT i t, CASE WHEN i % 5 = 0 THEN NULL ELSE i::DOUBLE END b FROM range(1400000) r(i);
+
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT last_value(b ORDER BY t IGNORE NULLS) OVER (ORDER BY t) x,
+           max(b) OVER (ORDER BY t) m
+    FROM big);
+----
+1399999	0
+
+query II
+SELECT count(x), count(*) FILTER (x IS DISTINCT FROM m) FROM (
+    SELECT first_value(b ORDER BY t DESC IGNORE NULLS) OVER (ORDER BY t) x,
+           max(b) OVER (ORDER BY t) m
+    FROM big);
+----
+1399999	0

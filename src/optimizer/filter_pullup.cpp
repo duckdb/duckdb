@@ -3,15 +3,81 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 
 namespace duckdb {
 
+static bool HasComputedJoinOperands(const Expression &lhs, const Expression &rhs) {
+	return !lhs.IsScalar() && !rhs.IsScalar() &&
+	       (lhs.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+	        rhs.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF);
+}
+
+static bool NeedsEarlyJoinKeys(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::INNER) {
+			return false;
+		}
+		for (auto &condition : join.conditions) {
+			if (condition.IsComparison() && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL &&
+			    HasComputedJoinOperands(condition.GetLHS(), condition.GetRHS())) {
+				return true;
+			}
+		}
+		return false;
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_FILTER ||
+	    op.children[0]->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return false;
+	}
+	auto &cross = *op.children[0];
+	unordered_set<TableIndex> left_bindings, right_bindings;
+	for (auto &expression : op.expressions) {
+		if (expression->GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &comparison = expression->Cast<BoundFunctionExpression>();
+		auto &lhs = BoundComparisonExpression::Left(comparison);
+		auto &rhs = BoundComparisonExpression::Right(comparison);
+		if (!HasComputedJoinOperands(lhs, rhs)) {
+			continue;
+		}
+		if (left_bindings.empty() && right_bindings.empty()) {
+			LogicalJoin::GetTableReferences(*cross.children[0], left_bindings);
+			LogicalJoin::GetTableReferences(*cross.children[1], right_bindings);
+		}
+		auto lhs_side = JoinSide::GetCurrentJoinSide(lhs, left_bindings, right_bindings);
+		auto rhs_side = JoinSide::GetCurrentJoinSide(rhs, left_bindings, right_bindings);
+		if ((lhs_side == JoinSide::LEFT && rhs_side == JoinSide::RIGHT) ||
+		    (lhs_side == JoinSide::RIGHT && rhs_side == JoinSide::LEFT)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op) {
+	if (can_add_column && op->HasProjectionMap()) {
+		return FinishPullup(std::move(op));
+	}
+	if (!can_pullup && !can_add_column && !op->HasProjectionMap() && NeedsEarlyJoinKeys(*op)) {
+		// Carry hidden keys within this join region and keep its output bindings unchanged.
+		auto output = op->GetColumnBindings();
+		FilterPullup join_pullup(context, false, true);
+		auto rewritten = join_pullup.Rewrite(std::move(op));
+		ColumnBindingLayout layout(rewritten->GetColumnBindings());
+		if (layout.HasSameLayout(output)) {
+			return rewritten;
+		}
+		return LogicalJoin::PromoteJoinSide(std::move(rewritten), layout.CreateProjectionMap(output));
+	}
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 		return PullupFilter(std::move(op));
@@ -44,6 +110,9 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
+	if (can_add_column && (join.join_type != JoinType::INNER || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN)) {
+		return FinishPullup(std::move(op));
+	}
 
 	switch (join.join_type) {
 	case JoinType::INNER:
@@ -70,8 +139,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 unique_ptr<LogicalOperator> FilterPullup::PullupSemiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::SEMI);
-	FilterPullup left_pullup(true, can_add_column);
-	FilterPullup right_pullup(true, can_add_column);
+	FilterPullup left_pullup(context, true, can_add_column);
+	FilterPullup right_pullup(context, true, can_add_column);
 	op->children[0] = left_pullup.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(std::move(op->children[1]));
 
@@ -193,7 +262,7 @@ unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<Logica
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
-		FilterPullup pullup;
+		FilterPullup pullup(context);
 		op->children[i] = pullup.Rewrite(std::move(op->children[i]));
 	}
 	// now pull up any existing filters

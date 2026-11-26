@@ -17,7 +17,7 @@
 namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
-                                     BoundTableFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                     BoundTableFunction function_p, cow_ptr<FunctionData> bind_data_p,
                                      vector<LogicalType> returned_types_p, vector<ColumnIndex> column_ids_p,
                                      vector<idx_t> projection_ids_p, vector<string> names_p,
                                      unique_ptr<TableFilterSet> table_filters_p, idx_t estimated_cardinality,
@@ -88,6 +88,10 @@ public:
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
+			if (context.pipeline && context.pipeline->GetSource().get() == &op && context.pipeline->GetSink()) {
+				input.execution_order = context.pipeline->GetExecutionOrder();
+				input.max_threads = context.pipeline->GetMaxThreads();
+			}
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -194,15 +198,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 				// the function parked
 				return SourceResultType::BLOCKED;
 			}
-			if (input.interrupt_state.CanCallback()) {
-				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
-				if (g_state.CanBlock()) {
-					data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
-					return SourceResultType::BLOCKED;
-				}
-			}
-			data.async_result.ExecuteTasksSynchronously(context.client);
-			return SourceResultType::HAVE_MORE_OUTPUT;
+			return data.async_result.ScheduleOrExecute(context, input, g_state);
 		}
 		return AsyncResult::GetSourceResultType(output_async_result, chunk.size());
 	}

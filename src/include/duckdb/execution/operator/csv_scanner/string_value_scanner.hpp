@@ -230,6 +230,8 @@ public:
 	bool try_row = false;
 
 	unsafe_unique_array<ParseTypeInfo> parse_types;
+	//! Whether a column of the parse chunk is validated as UTF-8
+	bool validates_utf8 = false;
 	vector<string> names;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
@@ -282,6 +284,9 @@ public:
 	}
 	static inline void SkipValue(StringValueResult &result, const idx_t buffer_pos);
 	static inline bool AddRowWithoutValue(StringValueResult &result, const idx_t buffer_pos);
+	static inline bool TracksAscii(const StringValueResult &result) {
+		return result.validates_utf8;
+	}
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(StringValueResult &result);
 	//! Handles QuotedNewline State
@@ -289,6 +294,8 @@ public:
 	void NullPaddingQuotedNewlineCheck() const;
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
+	//! Moves the start of the current line behind an empty line
+	void StartLineAfterEmptyLine();
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();

@@ -1,0 +1,64 @@
+diff --git a/src/include/storage/uc_transaction.hpp b/src/include/storage/uc_transaction.hpp
+index 7cecb3e..3feac3d 100644
+--- a/src/include/storage/uc_transaction.hpp
++++ b/src/include/storage/uc_transaction.hpp
+@@ -21,7 +21,7 @@ enum class UCTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STARTED
+ 
+ class UCTransaction : public Transaction {
+ public:
+-	UCTransaction(UnityCatalog &unity_catalog, TransactionManager &manager, ClientContext &context);
++	UCTransaction(UnityCatalog &unity_catalog, TransactionManager &manager, Context &context);
+ 	~UCTransaction() override;
+ 
+ 	void Start();
+diff --git a/src/include/storage/uc_transaction_manager.hpp b/src/include/storage/uc_transaction_manager.hpp
+index d279f83..f1e6fce 100644
+--- a/src/include/storage/uc_transaction_manager.hpp
++++ b/src/include/storage/uc_transaction_manager.hpp
+@@ -18,9 +18,9 @@ class UCTransactionManager : public TransactionManager {
+ public:
+ 	UCTransactionManager(AttachedDatabase &db_p, UnityCatalog &unity_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+diff --git a/src/storage/uc_transaction.cpp b/src/storage/uc_transaction.cpp
+index 913d92c..f81b4d9 100644
+--- a/src/storage/uc_transaction.cpp
++++ b/src/storage/uc_transaction.cpp
+@@ -7,7 +7,7 @@
+ 
+ namespace duckdb {
+ 
+-UCTransaction::UCTransaction(UnityCatalog &unity_catalog, TransactionManager &manager, ClientContext &context)
++UCTransaction::UCTransaction(UnityCatalog &unity_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), access_mode(unity_catalog.access_mode) {
+ 	//	connection = UCConnection::Open(unity_catalog.path);
+ }
+diff --git a/src/storage/uc_transaction_manager.cpp b/src/storage/uc_transaction_manager.cpp
+index d8b4eec..73cd074 100644
+--- a/src/storage/uc_transaction_manager.cpp
++++ b/src/storage/uc_transaction_manager.cpp
+@@ -10,7 +10,7 @@ UCTransactionManager::UCTransactionManager(AttachedDatabase &db_p, UnityCatalog
+     : TransactionManager(db_p), unity_catalog(unity_catalog) {
+ }
+ 
+-Transaction &UCTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &UCTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
+ 	auto transaction = make_uniq<UCTransaction>(unity_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;
+@@ -27,7 +27,7 @@ ErrorData UCTransactionManager::CommitTransaction(ClientContext &context, Transa
+ 	return ErrorData();
+ }
+ 
+-void UCTransactionManager::RollbackTransaction(Transaction &transaction) {
++void UCTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &uc_transaction = transaction.Cast<UCTransaction>();
+ 	uc_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);

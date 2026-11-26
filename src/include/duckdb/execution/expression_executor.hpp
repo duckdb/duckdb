@@ -81,11 +81,11 @@ public:
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
 
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &result_sel,
-	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
+	                                  optional_ptr<const SelectionVector> current_sel, idx_t current_count);
 
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
 	                                  optional_ptr<SelectionVector> false_sel,
-	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
+	                                  optional_ptr<const SelectionVector> current_sel, idx_t current_count);
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);

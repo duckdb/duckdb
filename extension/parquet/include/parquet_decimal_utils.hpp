@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/bignum.hpp"
+
 #include "column_reader.hpp"
 
 namespace duckdb {
@@ -52,11 +54,16 @@ public:
 
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 
+	//! Converts a big-endian two's complement Parquet decimal into the BIGNUM blob of a wide decimal
+	static string ReadWideDecimalValue(const_data_ptr_t pointer, idx_t size);
+	//! The number of bytes of the FIXED_LEN_BYTE_ARRAY that decimals of the given width are written in, enough to
+	//! hold the width, rounded up to a multiple of 8 bytes
+	static idx_t WideDecimalByteLength(uint32_t width);
+	//! Writes the BIGNUM blob of a wide decimal as a big-endian two's complement value of byte_length bytes
+	static void WriteWideDecimal(const bignum_t &value, idx_t byte_length, data_ptr_t result);
+
 private:
 	[[noreturn]] static void ThrowInvalidDecimalEncoding();
 };
-
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size, const ParquetColumnSchema &schema);
 
 } // namespace duckdb

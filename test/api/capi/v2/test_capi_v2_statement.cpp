@@ -482,11 +482,11 @@ TEST_CASE("V2: statement_execute binds named parameters", "[capi_v2][sql_stateme
 	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 20);
 
 	// Bind by name: order of the arrays is irrelevant, only the name matches.
-	StrArray names = {std::string_view("a"), std::string_view("b")};
+	const char *const names[] = {"a", "b"};
+	const idx_t lengths[] = {1, 1};
 	duckdb_v2_value_handle values[2] = {va, vb};
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names.ptrs(), names.lengths(), values, 2, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, lengths, values, 2, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(StmtScalarI64(r) == 30);
 	duckdb_v2_result_destroy(&r);
 
@@ -824,6 +824,27 @@ TEST_CASE("V2: sql_statement parameter names are statement_bind's, in its order"
 		duckdb_v2_schema_destroy(&params);
 		duckdb_v2_sql_statement_destroy(&stmt);
 	}
+}
+
+TEST_CASE("V2: statement_bind describes a statement that only the planning after the bind refuses",
+          "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t (a INTEGER, b INTEGER)");
+	ExecSQL(fx.conn, "CREATE TABLE u (a INTEGER, b VARCHAR)");
+
+	// Decorrelation refuses the subquery after the bind, so bind describes the statement and execute refuses it.
+	auto stmt = StmtParseOne(fx.conn, "SELECT * FROM t WHERE EXISTS (SELECT * FROM u POSITIONAL JOIN (SELECT t.a) s)");
+	duckdb_v2_schema_handle out = nullptr;
+	REQUIRE(duckdb_v2_statement_bind(fx.conn, stmt, &out, nullptr, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t count = 0;
+	REQUIRE(duckdb_v2_schema_get_count(out, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(count == 2);
+	duckdb_v2_schema_destroy(&out);
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, nullptr, 0, &result, nullptr) ==
+	        DUCKDB_V2_ERROR_QUERY_BINDER);
+	duckdb_v2_result_destroy(&result);
+	duckdb_v2_sql_statement_destroy(&stmt);
 }
 
 TEST_CASE("V2: sql_statement parameter names answer before the catalog can", "[capi_v2][sql_statement]") {

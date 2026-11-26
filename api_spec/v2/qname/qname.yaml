@@ -78,9 +78,8 @@ functions:
     belongs_to: qname
     parameters:
       parts:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: An array of `part_count` non-empty identifiers, outermost first.
       parts_lengths:

@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -77,6 +78,31 @@ static bool DateTimestampComparisonIsInvertible(ClientContext &context, BoundFun
 	return true;
 }
 
+//! For a constant c that lies between two adjacent values of x and is rounded to one of them, picks the range
+//! comparison with the rounded constant that gives the same result: x < 3.4 -> x <= 3, x < 3.5 -> x < 4
+static bool CompareWithRoundedConstant(BoundFunctionExpression &expr, bool column_ref_left, bool rounded_up) {
+	// c op x behaves like x op c rounded the other way: 3.5 < x -> 4 <= x, like x < 3.4 -> x <= 3
+	if (!column_ref_left) {
+		rounded_up = !rounded_up;
+	}
+	ExpressionType comparison_type;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		comparison_type = rounded_up ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		comparison_type =
+		    rounded_up ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+		break;
+	default:
+		return false;
+	}
+	BoundComparisonExpression::SetType(expr, comparison_type);
+	return true;
+}
+
 static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpression &expr,
                                      BoundFunctionExpression &cast_expression, const Value &constant_value,
                                      Value &cast_constant, const LogicalType &target_type, bool column_ref_left,
@@ -88,11 +114,15 @@ static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpres
 	if (cast_type.IsIntegral() && target_type.IsIntegral()) {
 		return true;
 	}
-	// The constant must round-trip exactly; the column side is checked by the caller.
-	if (BoundCastExpression::IsLosslessIntegralToFloatingCast(target_type, cast_type) ||
-	    (target_type.id() == LogicalTypeId::DECIMAL && cast_type.id() == LogicalTypeId::DECIMAL)) {
+	if (BoundCastExpression::CastIsOrderPreserving(target_type, cast_type)) {
 		auto roundtrip = cast_constant.TryCastAs(context, cast_type, nullptr, true);
-		return roundtrip && *roundtrip == constant_value;
+		if (!roundtrip) {
+			return false;
+		}
+		if (Value::NotDistinctFrom(*roundtrip, constant_value)) {
+			return true;
+		}
+		return CompareWithRoundedConstant(expr, column_ref_left, *roundtrip > constant_value);
 	}
 	if (target_type.id() != LogicalTypeId::DATE || cast_type.id() != LogicalTypeId::TIMESTAMP) {
 		return false;
@@ -162,8 +192,7 @@ static unique_ptr<Expression> SimplifyEqualityCastComparison(ClientContext &cont
 static unique_ptr<Expression> CreateNullCheckExpression(ExpressionType expression_type, unique_ptr<Expression> child) {
 	D_ASSERT(expression_type == ExpressionType::OPERATOR_IS_NULL ||
 	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
-	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
-	result->GetChildrenMutable().push_back(std::move(child));
+	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN, std::move(child));
 	return std::move(result);
 }
 
@@ -173,6 +202,31 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
+}
+
+BetweenNullSimplificationRule::BetweenNullSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto between = make_uniq<FunctionExpressionMatcher>();
+	between->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_BETWEEN);
+	between->matchers.push_back(make_uniq<FoldableConstantMatcher>());
+	between->matchers.push_back(make_uniq<ExpressionMatcher>());
+	between->matchers.push_back(make_uniq<ExpressionMatcher>());
+	between->policy = SetMatcher::Policy::ORDERED;
+	root = std::move(between);
+}
+
+unique_ptr<Expression> BetweenNullSimplificationRule::Apply(LogicalOperator &op,
+                                                            vector<reference<Expression>> &bindings, bool &changes_made,
+                                                            bool is_root) {
+	auto &between = bindings[0].get().Cast<BoundFunctionExpression>();
+	if (!BoundBetweenExpression::HasValidBindData(between)) {
+		return nullptr;
+	}
+	Value input_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), bindings[1].get(), input_value) || !input_value.IsNull()) {
+		return nullptr;
+	}
+	// both bound comparisons are NULL whatever the bounds are, so they need not be evaluated
+	return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 }
 
 RowComparisonSimplificationRule::RowComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -273,7 +327,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			                                      changes_made);
 		}
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType()) &&
-		    !BoundCastExpression::IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType())) {
+		    !BoundCastExpression::CastIsOrderPreserving(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
 

@@ -3,7 +3,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -92,8 +92,7 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 		                                                            false_sel.get());
 		return true;
 	case PhysicalType::VARCHAR:
-		result = BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel.get(), count, true_sel.get(),
-		                                                        false_sel.get());
+		result = StringComparison::Select<OP>(left, right, sel.get(), count, true_sel.get(), false_sel.get());
 		return true;
 	default:
 		return false;

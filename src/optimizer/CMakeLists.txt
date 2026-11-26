@@ -14,6 +14,7 @@ add_library_unity(
   aggregate_function_rewriter.cpp
   aggregate_reuse.cpp
   apply_functional_dependencies.cpp
+  group_by_top_key.cpp
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
@@ -29,8 +30,10 @@ add_library_unity(
   cte_join_filter_collector.cpp
   cte_join_filter_pusher.cpp
   cte_runtime_filter_pushdown.cpp
+  cte_semi_join_filter_transfer.cpp
   cte_inlining.cpp
   deliminator.cpp
+  distinctness.cpp
   duplicate_eliminated_domain_optimizer.cpp
   multi_stage_aggregate_rewriter.cpp
   expression_heuristics.cpp
@@ -45,13 +48,18 @@ add_library_unity(
   runtime_filter_cast.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
+  mark_join_simplifier.cpp
   optimizer.cpp
-  outer_join_simplification.cpp
+  join_simplification.cpp
   partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
+  join_to_semi_join.cpp
+  join_build_properties.cpp
+  recursive_join_planning.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
+  remove_redundant_distinct.cpp
   remove_redundant_order.cpp
   remove_redundant_order_keys.cpp
   remove_unused_columns.cpp
@@ -61,6 +69,7 @@ add_library_unity(
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp
+  window_fusion.cpp
   window_join_pushdown.cpp
   window_self_join.cpp
   row_number_rewriter.cpp
@@ -69,6 +78,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   self_join_aggregate.cpp
+  set_operation_aggregate.cpp
   projection_pullup.cpp
   projection_placement.cpp
   remote_pushdown_optimizer.cpp

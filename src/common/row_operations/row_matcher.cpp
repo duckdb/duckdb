@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 
 namespace duckdb {
 
@@ -70,9 +71,15 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 }
 
 template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
-                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
-                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+static idx_t TemplatedMatch(Vector &lhs, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
+                            const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                            const idx_t col_idx, const vector<MatchFunction> &child_functions,
+                            SelectionVector *no_match_sel, idx_t &no_match_count) {
+	if constexpr (std::is_same_v<T, string_t> && StringComparison::IsOrdering<OP>()) {
+		using WIDE_OP = StringOrderingOperator<OP, StringComparisonMode::PREFIX>;
+		return TemplatedMatch<NO_MATCH_SEL, T, WIDE_OP>(lhs, lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                col_idx, child_functions, no_match_sel, no_match_count);
+	}
 #if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);

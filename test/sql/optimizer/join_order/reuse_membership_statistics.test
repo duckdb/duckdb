@@ -1,0 +1,62 @@
+# name: test/sql/optimizer/join_order/reuse_membership_statistics.test
+# description: Reuse prepared grouped membership and outer joins across statistics snapshots
+# group: [join_order]
+
+statement ok
+CREATE TABLE members AS SELECT i, i % 64 AS k FROM range(128) t(i)
+
+statement ok
+CREATE TABLE keys AS SELECT i % 32 AS k FROM range(64) t(i)
+
+statement ok
+CREATE TABLE payload AS SELECT i % 64 AS k FROM range(128) t(i)
+
+statement ok
+ANALYZE members
+
+statement ok
+ANALYZE keys
+
+statement ok
+ANALYZE payload
+
+statement ok
+PREPARE membership AS
+SELECT count(*), sum(m.i)
+FROM (SELECT members.* FROM members SEMI JOIN (SELECT k FROM keys GROUP BY k) s USING (k)) m
+LEFT JOIN payload USING (k)
+
+query II
+EXECUTE membership
+----
+128	6080
+
+query II
+EXECUTE membership
+----
+128	6080
+
+statement ok
+INSERT INTO keys SELECT i FROM range(32, 64) t(i)
+
+statement ok
+ANALYZE keys
+
+query II
+EXECUTE membership
+----
+256	16256
+
+statement ok
+DEALLOCATE membership
+
+statement ok
+PREPARE membership AS
+SELECT count(*), sum(m.i)
+FROM (SELECT members.* FROM members SEMI JOIN (SELECT k FROM keys GROUP BY k) s USING (k)) m
+LEFT JOIN payload USING (k)
+
+query II
+EXECUTE membership
+----
+256	16256

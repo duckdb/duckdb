@@ -60,7 +60,7 @@ static bool MapTryGet(const Value &map_value, const string &key, string &out) {
 	return false;
 }
 
-Value RequireResourceMap(const Value &value, const string &function_name, const string &column) {
+Value RequireResourceMap(Context &context, const Value &value, const string &function_name, const string &column) {
 	if (value.IsNull()) {
 		return value;
 	}
@@ -68,7 +68,7 @@ Value RequireResourceMap(const Value &value, const string &function_name, const 
 		throw InvalidInputException("external resource callback \"%s\" must return a MAP in its '%s' column, got %s",
 		                            function_name, column, value.type().ToString());
 	}
-	return value.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+	return value.CastAs(context, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 }
 
 //===--------------------------------------------------------------------===//
@@ -200,7 +200,7 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	const bool adopting = !bind_data.adopt_handle.IsNull();
 	Value handle;
 	if (adopting) {
-		handle = RequireResourceMap(bind_data.adopt_handle, bind_data.type_name, "handle");
+		handle = RequireResourceMap(context.GetContext(), bind_data.adopt_handle, bind_data.type_name, "handle");
 	} else {
 		if (type->create_function.empty()) {
 			throw InvalidInputException("create_external_resource: resource type \"%s\" has no create function",
@@ -220,7 +220,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
 				                            type->create_function);
 			}
-			handle = RequireResourceMap(result->Collection().GetRows().GetValue(0, 0), type->create_function, "handle");
+			handle = RequireResourceMap(context.GetContext(), result->Collection().GetRows().GetValue(0, 0),
+			                            type->create_function, "handle");
 			if (handle.IsNull()) {
 				// the handle identifies the resource for status and teardown - without one it can never be destroyed
 				throw InvalidInputException("create_external_resource: create function \"%s\" returned a NULL handle",
@@ -288,7 +289,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.timeout_seconds);
 	while (true) {
 		// Cooperative cancellation: this blocking loop never yields back to the executor, so surface a
-		// pending Ctrl-C / max_execution_time ourselves (InterruptCheck throws InterruptException on either).
+		// pending Ctrl-C / max_execution_time ourselves. Polls are seconds apart, so the throttled
+		// FastInterruptCheck() would almost never look at the deadline here.
 		context.InterruptCheck();
 		auto status_sql = "SELECT state, result FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
 		                  handle.ToSQLString() + ")";
@@ -313,7 +315,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				                  bind_data.type_name);
 			}
 			if (status_state == "ready") {
-				status_result = RequireResourceMap(status_rows.GetValue(1, 0), type->status_function, "result");
+				status_result = RequireResourceMap(context.GetContext(), status_rows.GetValue(1, 0),
+				                                   type->status_function, "result");
 				ready = true;
 			} else if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
 				throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",
@@ -330,8 +333,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			break;
 		}
 		// Interruptible wait: sleep the poll interval in short slices, checking for cancellation between them.
-		// The slice is small so InterruptCheck() is called often enough to honor max_execution_time promptly
-		// (its deadline check is throttled to run every Nth call).
+		// FastInterruptCheck() only reads the clock every 256th call, which would delay noticing max_execution_time
+		// by more than a second at this slice size, so the deadline is checked on every slice.
 		auto poll_until = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.poll_interval_seconds);
 		while (std::chrono::steady_clock::now() < poll_until) {
 			context.InterruptCheck();

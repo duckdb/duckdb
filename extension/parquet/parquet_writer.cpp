@@ -1,4 +1,6 @@
 #include "parquet_writer.hpp"
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <functional>
 #include <limits>
@@ -6,6 +8,7 @@
 
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
+#include "writer/parquet_write_stats.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
@@ -118,11 +121,11 @@ public:
 	}
 
 	data_ptr_t Ptr() override {
-		return bloom_filter->Get()->ptr;
+		return bloom_filter->Get()->GetCurrentLoc();
 	}
 
 	idx_t Size() const override {
-		return bloom_filter->Get()->len;
+		return bloom_filter->Get()->GetLength();
 	}
 
 private:
@@ -153,12 +156,14 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
-		parquet_type = Type::DOUBLE;
+		// written as DECIMAL(39,0), which holds the full range of both types
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
@@ -199,6 +204,10 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 			parquet_type = Type::INT64;
 			break;
 		case PhysicalType::INT128:
+			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+			break;
+		case PhysicalType::VARCHAR:
+			// wide decimals are written as big-endian two's complement bytes
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
 		default:
@@ -353,7 +362,19 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.UUID = true;
 		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		// the full range of HUGEINT / UHUGEINT needs 39 digits, so the column is declared as a DECIMAL(39,0)
+		SetSchemaProperties(LogicalType::DECIMAL(ParquetHugeintDecimalTargetType::DECIMAL_WIDTH, 0), schema_ele,
+		                    allow_geometry, context, write_timestamp_as_int96, timestamp_is_adjusted_to_utc);
+		// with a length that is longer than the width needs, see ParquetHugeintDecimalTargetType
+		schema_ele.type_length = NumericCast<int32_t>(ParquetHugeintDecimalTargetType::PARQUET_SIZE);
+		break;
 	case LogicalTypeId::DECIMAL:
+		if (DecimalType::GetWidth(duckdb_type) > idx_t(NumericLimits<int32_t>::Maximum())) {
+			throw NotImplementedException("Parquet DECIMAL precision is a 32-bit integer, %s cannot be written",
+			                              duckdb_type.ToString());
+		}
 		schema_ele.converted_type = ConvertedType::DECIMAL;
 		schema_ele.precision = NumericCast<int32_t>(DecimalType::GetWidth(duckdb_type));
 		schema_ele.scale = NumericCast<int32_t>(DecimalType::GetScale(duckdb_type));
@@ -362,6 +383,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.scale = true;
 		if (duckdb_type.InternalType() == PhysicalType::INT128) {
 			schema_ele.type_length = 16;
+			schema_ele.__isset.type_length = true;
+		} else if (duckdb_type.InternalType() == PhysicalType::VARCHAR) {
+			// wide decimal
+			schema_ele.type_length =
+			    NumericCast<int32_t>(ParquetDecimalUtils::WideDecimalByteLength(DecimalType::GetWidth(duckdb_type)));
 			schema_ele.__isset.type_length = true;
 		}
 		schema_ele.__isset.logicalType = true;
@@ -389,6 +415,31 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 
 				schema_ele.logicalType.GEOMETRY.__isset.crs = true;
 				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
+			}
+		}
+		break;
+	case LogicalTypeId::GEOGRAPHY:
+		if (allow_geometry) { // Don't set this if we write GeoParquet V1
+			schema_ele.__isset.logicalType = true;
+			schema_ele.logicalType.__isset.GEOGRAPHY = true;
+			// GEOGRAPHY assumes geodesic (spherical) edge interpolation.
+			schema_ele.logicalType.GEOGRAPHY.__set_algorithm(duckdb_parquet::EdgeInterpolationAlgorithm::SPHERICAL);
+			if (GeoType::HasCRS(duckdb_type)) {
+				const auto &crs = GeoType::GetCRS(duckdb_type);
+
+				if (crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
+					// Try to convert to GeoJSON
+					const auto lookup =
+					    CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
+					if (lookup) {
+						schema_ele.logicalType.GEOGRAPHY.__isset.crs = true;
+						schema_ele.logicalType.GEOGRAPHY.crs = lookup->GetDefinition();
+						break;
+					}
+				}
+
+				schema_ele.logicalType.GEOGRAPHY.__isset.crs = true;
+				schema_ele.logicalType.GEOGRAPHY.crs = crs.GetDefinition();
 			}
 		}
 		break;
@@ -483,7 +534,6 @@ struct ColumnStatsUnifier {
 	bool max_is_exact = true;
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
-	bool has_nan = false;
 	idx_t nan_count = 0;
 
 	unique_ptr<GeometryStatsData> geo_stats;
@@ -1086,14 +1136,20 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 };
 
 struct GeoStatsUnifier : public ColumnStatsUnifier {
+	explicit GeoStatsUnifier(GeometryModel geometry_model) : geometry_model(geometry_model) {
+	}
+
+	GeometryModel geometry_model;
+
 	void UnifyGeoStats(const GeometryStatsData &other) override {
 		if (geo_stats) {
-			geo_stats->Merge(other);
+			geo_stats->Merge(other, geometry_model);
 		} else {
-			// Make copy
+			// Make copy (GeometryStatsData is trivially constructible, so copy every member explicitly)
 			geo_stats = make_uniq<GeometryStatsData>();
 			geo_stats->extent = other.extent;
 			geo_stats->types = other.types;
+			geo_stats->flags = other.flags;
 		}
 	}
 
@@ -1147,6 +1203,40 @@ struct UUIDStatsUnifier : public BaseStringStatsUnifier {
 		return result;
 	}
 };
+//! Wide decimal statistics are the big-endian two's complement bytes of the FIXED_LEN_BYTE_ARRAY column; they are
+//! compared as BIGNUM blobs, whose byte order is the numeric order
+struct WideDecimalStatsUnifier : public ColumnStatsUnifier {
+	WideDecimalStatsUnifier(uint32_t width, uint32_t scale) : width(width), scale(scale) {
+	}
+
+	uint32_t width;
+	uint32_t scale;
+
+	static string Decode(const string &stats) {
+		return ParquetDecimalUtils::ReadWideDecimalValue(const_data_ptr_cast(stats.data()), stats.size());
+	}
+
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		auto blob = Decode(stats);
+		return Value::DECIMAL(bignum_t(string_t(blob)), width, scale).ToString();
+	}
+
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		// the byte order of the BIGNUM blobs is their numeric order
+		if (!min_is_set || LessThan::Operation(string_t(Decode(new_min)), string_t(Decode(global_min)))) {
+			global_min = new_min;
+			min_is_set = true;
+		}
+		if (!max_is_set || GreaterThan::Operation(string_t(Decode(new_max)), string_t(Decode(global_max)))) {
+			global_max = new_max;
+			max_is_set = true;
+		}
+	}
+};
+
 struct NullStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 	}
@@ -1193,10 +1283,12 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		return make_uniq<NumericStatsUnifier<uint64_t>>();
 	case LogicalTypeId::FLOAT:
 		return make_uniq<NumericStatsUnifier<float>>();
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<NumericStatsUnifier<double>>();
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		// written as DECIMAL(39,0)
+		return make_uniq<WideDecimalStatsUnifier>(ParquetHugeintDecimalTargetType::DECIMAL_WIDTH, 0);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
@@ -1208,6 +1300,9 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 			return make_uniq<DecimalStatsUnifier<int64_t>>(width, scale);
 		case PhysicalType::INT128:
 			return make_uniq<DecimalStatsUnifier<hugeint_t>>(width, scale);
+		case PhysicalType::VARCHAR:
+			// wide decimal stored as a BIGNUM blob
+			return make_uniq<WideDecimalStatsUnifier>(width, scale);
 		default:
 			return make_uniq<NullStatsUnifier>();
 		}
@@ -1215,7 +1310,8 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::BLOB:
 		return make_uniq<BlobStatsUnifier>();
 	case LogicalTypeId::GEOMETRY:
-		return make_uniq<GeoStatsUnifier>();
+	case LogicalTypeId::GEOGRAPHY:
+		return make_uniq<GeoStatsUnifier>(Geometry::GetModel(type));
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
@@ -1291,22 +1387,12 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 
 	// push the stats of this column into the unifier
 	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
-	bool has_nan = false;
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
-		has_nan = writer_stats->HasNaN();
-		// this is called once per row group: accumulate, so NaNs in earlier row groups are not lost
-		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
 		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
 	if (column.meta_data.__isset.statistics) {
-		if (has_nan && writer_stats->HasStats()) {
-			// if we have NaN values we have not written the min/max to the Parquet file
-			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
-			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
-			stats_unifier->min_is_exact = stats_unifier->min_is_exact && writer_stats->MinIsExact();
-			stats_unifier->max_is_exact = stats_unifier->max_is_exact && writer_stats->MaxIsExact();
-		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+		if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
 			stats_unifier->min_is_exact = stats_unifier->min_is_exact &&
 			                              column.meta_data.statistics.__isset.is_min_value_exact &&
@@ -1370,7 +1456,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
 		}
 		if (stats_unifier->can_have_nan) {
-			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->nan_count != 0);
 			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);
 		}
 		if (stats_unifier->geo_stats) {
@@ -1485,7 +1571,7 @@ void ParquetWriter::FlushBloomFilters() {
 		D_ASSERT(!options.encryption_config);
 		// write nonsense bloom filter header
 		duckdb_parquet::BloomFilterHeader filter_header;
-		const auto bloom_filter_size = bloom_filter_entry.bloom_filter->Get()->len;
+		const auto bloom_filter_size = bloom_filter_entry.bloom_filter->Get()->GetLength();
 		filter_header.numBytes = NumericCast<int32_t>(bloom_filter_size);
 		filter_header.algorithm.__set_BLOCK(duckdb_parquet::SplitBlockAlgorithm());
 		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());

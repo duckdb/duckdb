@@ -5,7 +5,7 @@
 # make sure no illegal left join reordering happens
 
 statement ok
-pragma disabled_optimizers='build_side_probe_side';
+SET disabled_optimizers='build_side_probe_side';
 
 statement ok
 create table t1 as from values (0), (1), (2), (3), (NULL) t(a);
@@ -193,4 +193,4 @@ create table lj_opt as select range o_k from range(10000);
 query II
 explain select count(*) from lj_fact join lj_dim on f_d = d_d left join lj_opt on f_k = o_k;
 ----
-physical_plan	<REGEX>:.*f_k = o_k.*f_d = CAST\(d_d AS BIGINT\).*
+physical_plan	<REGEX>:.*f_k = o_k.*(f_d = CAST\(d_d AS BIGINT\)|CAST\(d_d AS BIGINT\) = f_d).*

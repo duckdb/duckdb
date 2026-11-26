@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/main/database.hpp"
@@ -142,13 +143,13 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &se
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &result_sel,
-                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+                                           optional_ptr<const SelectionVector> current_sel, idx_t current_count) {
 	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
                                            optional_ptr<SelectionVector> false_sel,
-                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+                                           optional_ptr<const SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
 	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);
@@ -217,11 +218,15 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		Vector::DebugTransformToDictionary(vector);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
-		// LAMBDA is not a value - its slot only holds a placeholder, so there is nothing to round-trip
+		// LAMBDA is not a value - its slot only holds a placeholder, so there is nothing to round-trip;
+		// VARIANT holds decimals of at most 38 digits
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE ||
 			        type.id() == LogicalTypeId::TUPLE || type.id() == LogicalTypeId::LAMBDA) {
+				    return true;
+			    }
+			    if (type.id() == LogicalTypeId::DECIMAL && DecimalType::GetWidth(type) > Decimal::MAX_WIDTH_INT128) {
 				    return true;
 			    }
 			    return false;

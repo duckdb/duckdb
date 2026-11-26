@@ -1,4 +1,5 @@
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -290,15 +291,13 @@ struct RLEScanState : public SegmentScanState {
 
 		//! Validate enough runs to cover every row in the segment.
 		idx_t ValidateAllRuns() {
-			while (unvalidated_row_count > 0) {
-				ValidateThrough(validated_entry_count);
-			}
+			ValidateUntil(0);
 			return validated_entry_count;
 		}
 
-		//! Validate through entry_index and return that run.
-		ValidatedRun ValidateAndGetRun(idx_t entry_index) {
-			ValidateThrough(entry_index);
+		//! Read a run covered by the range validated before scanning, selecting or skipping.
+		ValidatedRun GetValidatedRun(idx_t entry_index) const {
+			D_ASSERT(entry_index < validated_entry_count);
 			return {values[entry_index], run_counts[entry_index]};
 		}
 
@@ -312,20 +311,39 @@ struct RLEScanState : public SegmentScanState {
 			return entry_capacity;
 		}
 
-	private:
-		//! Validate through entry_index without advancing the scan.
-		void ValidateThrough(idx_t entry_index) {
-			while (validated_entry_count <= entry_index) {
-				if (validated_entry_count >= entry_capacity) {
-					ThrowRLERunCountArrayExhausted();
+		//! Validate through the requested remaining-row count before decoding.
+		void ValidateUntil(idx_t remaining) {
+			static constexpr idx_t BATCH_SIZE = 32;
+			while (unvalidated_row_count > remaining && entry_capacity - validated_entry_count >= BATCH_SIZE) {
+				uint32_t batch_count = 0;
+				for (idx_t i = 0; i < BATCH_SIZE; i++) {
+					batch_count += run_counts[validated_entry_count + i];
 				}
-				auto run_count = run_counts[validated_entry_count];
-				if (run_count > unvalidated_row_count) {
-					ThrowRLERunCountExceedsRemaining(run_count, unvalidated_row_count);
+				// Counts are unsigned 16-bit values, so their sum fits in uint32_t. If the entire
+				// batch ends before the requested row, every prefix fits in the remaining segment.
+				// At the boundary, validate individually to stop at the same run, including zeros.
+				if (batch_count >= unvalidated_row_count - remaining) {
+					break;
 				}
-				unvalidated_row_count -= run_count;
-				validated_entry_count++;
+				unvalidated_row_count -= batch_count;
+				validated_entry_count += BATCH_SIZE;
 			}
+			while (unvalidated_row_count > remaining) {
+				ValidateNextRun();
+			}
+		}
+
+	private:
+		void ValidateNextRun() {
+			if (validated_entry_count >= entry_capacity) {
+				ThrowRLERunCountArrayExhausted();
+			}
+			auto run_count = run_counts[validated_entry_count];
+			if (run_count > unvalidated_row_count) {
+				ThrowRLERunCountExceedsRemaining(run_count, unvalidated_row_count);
+			}
+			unvalidated_row_count -= run_count;
+			validated_entry_count++;
 		}
 
 		//! Values read from the segment between RLE_HEADER_SIZE and rle_count_offset.
@@ -357,13 +375,14 @@ struct RLEScanState : public SegmentScanState {
 
 	explicit RLEScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)), segment_count(segment.count.load()),
-	      layout(ReadSegmentLayout(handle, segment, segment_count)), entry_pos(0), position_in_entry(0) {
+	      can_have_null(segment.GetStats().CanHaveNull()), layout(ReadSegmentLayout(handle, segment, segment_count)),
+	      entry_pos(0), position_in_entry(0) {
 	}
 
-	//! Advances past empty entries while validating the current run.
-	ValidatedRun ValidateAndGetCurrentRun() {
+	//! Advances past empty entries within the validated range.
+	ValidatedRun GetCurrentRun() {
 		while (true) {
-			auto run = layout.ValidateAndGetRun(entry_pos);
+			auto run = layout.GetValidatedRun(entry_pos);
 			if (run.length != 0) {
 				return run;
 			}
@@ -374,7 +393,7 @@ struct RLEScanState : public SegmentScanState {
 
 	inline void SkipInternal(idx_t skip_count) {
 		while (skip_count > 0) {
-			auto run_count = ValidateAndGetCurrentRun().length;
+			auto run_count = GetCurrentRun().length;
 			D_ASSERT(position_in_entry < run_count);
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_count - position_in_entry);
 
@@ -394,9 +413,7 @@ struct RLEScanState : public SegmentScanState {
 		// handled all entries in this RLE value
 		// move to the next entry
 		entry_pos++;
-		if (entry_pos > layout.GetEntryCapacity()) {
-			ThrowRLERunCountArrayExhausted();
-		}
+		D_ASSERT(entry_pos <= layout.GetEntryCapacity());
 		position_in_entry = 0;
 	}
 
@@ -404,15 +421,117 @@ struct RLEScanState : public SegmentScanState {
 		return position_in_entry >= run_length;
 	}
 
+	template <class OP>
+	void VisitSelectedRows(idx_t vector_count, const SelectionVector &sel, idx_t sel_count, OP operation) {
+		auto run = GetCurrentRun();
+		auto entry_index = entry_pos;
+		idx_t run_end = run.length - position_in_entry;
+		idx_t previous = 0;
+		for (idx_t i = 0; i < sel_count; i++) {
+			const auto row = sel.get_index(i);
+			if (row < previous || row >= vector_count) {
+				InternalException::Throw("Invalid row selection in RLE scan");
+			}
+			while (row >= run_end) {
+				run = layout.GetValidatedRun(++entry_index);
+				run_end += run.length;
+			}
+			operation(row, entry_index, run.value);
+			previous = row;
+		}
+		entry_pos = entry_index;
+		position_in_entry = run.length - (run_end - previous);
+		SkipInternal(vector_count - previous);
+	}
+
+	SelectionVector &GetSelectionBuffer(idx_t count) {
+		// A previous result may still reference the selected rows.
+		if (selected_rows.Capacity() < count || selected_rows.sel_data().use_count() > 1) {
+			selected_rows.Initialize(count);
+		}
+		return selected_rows;
+	}
+
+	void CopyRunValues(Vector &result, idx_t run_count) {
+		const auto values = layout.GetRunValues(run_count);
+		memcpy(FlatVector::GetDataMutable<T>(result), values.data(), run_count * sizeof(T));
+		switch (result.GetType().id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_NS:
+		case LogicalTypeId::TIME_TZ:
+			break;
+		default:
+			return;
+		}
+		// NULL-only and unused legacy runs can contain a placeholder outside these logical domains.
+		// Other types can store the same physical value as a valid value, so preserve it there.
+		auto &validity = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < run_count; i++) {
+			if (values[i] == NullValue<T>()) {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+
+	bool ShouldUseDictionary(idx_t scan_count, idx_t sel_count) const {
+		// Sparse selection can remove the repetition that makes a dictionary useful.
+		return double(sel_count) * double(segment_count) >
+		       2.0 * double(scan_count) * (double(layout.GetEntryCapacity()) + 1.0);
+	}
+
+	bool EnsureDictionary(const LogicalType &type) {
+		static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = DEFAULT_STANDARD_VECTOR_SIZE;
+		if (dictionary) {
+			return true;
+		}
+		// Keep emitted dictionaries within a default-sized vector and avoid poorly compressed segments.
+		const auto capacity = layout.GetEntryCapacity();
+		if (capacity + 1 >= MAX_DICTIONARY_SIZE_THRESHOLD || (capacity + 1) * 2 >= segment_count) {
+			return false;
+		}
+		const auto run_count = layout.ValidateAllRuns();
+		const auto dictionary_count = run_count + (can_have_null ? 1 : 0);
+		dictionary = DictionaryVector::CreateReusableDictionary(type, dictionary_count);
+		CopyRunValues(dictionary->data, run_count);
+		if (can_have_null) {
+			FlatVector::ValidityMutable(dictionary->data).SetInvalid(run_count);
+		}
+		return true;
+	}
+
+	SelectionVector &GetDictionarySelection(idx_t count) {
+		if (dictionary_sel.Capacity() < count || dictionary_sel.sel_data().use_count() > 1) {
+			dictionary_sel.Initialize(count);
+		}
+		return dictionary_sel;
+	}
+
+	void EmitDictionary(Vector &result, idx_t count) {
+		result.Dictionary(dictionary, dictionary_sel, count);
+		if (can_have_null) {
+			// Let validity map NULL rows in place when the result has no other readers.
+			// Non-null segments can retain the selection for reuse by the next scan.
+			dictionary_sel = SelectionVector();
+		}
+	}
+
 	BufferHandle handle;
 	//! Segment row count loaded from the file and used to validate runs as they are reached.
 	const idx_t segment_count;
+	const bool can_have_null;
 	SegmentLayout layout;
 	idx_t entry_pos;
 	idx_t position_in_entry;
 	//! If we are running a filter over the column - the runs that match the filter
-	unsafe_unique_array<bool> matching_runs;
-	idx_t matching_run_count = 0;
+	unique_ptr<TableFilterCache> filter_cache;
+	SelectionVector run_indices;
+	SelectionVector selected_rows;
+	SelectionVector dictionary_sel;
+	buffer_ptr<DictionaryEntry> dictionary;
+	vector<idx_t> run_offsets;
+	vector<idx_t> run_row_counts;
 };
 
 template <class T>
@@ -428,9 +547,10 @@ unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegm
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	D_ASSERT(state.GetPositionInSegment() <= segment.count);
-	D_ASSERT(skip_count <= state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+	D_ASSERT(state.GetPositionInSegment() <= scan_state.segment_count);
+	D_ASSERT(skip_count <= state.GetPositionInSegment());
+	scan_state.layout.ValidateUntil(scan_state.segment_count - state.GetPositionInSegment());
 	scan_state.Skip(segment, skip_count);
 }
 
@@ -463,44 +583,87 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 	}
 }
 
+template <class T>
+static void RLEFillRun(T *data, idx_t count, T value) {
+	if (count < 4) {
+		for (idx_t i = 0; i < count; i++) {
+			data[i] = value;
+		}
+		return;
+	}
+	for (idx_t i = 0; i + 4 < count; i += 4) {
+		data[i] = value;
+		data[i + 1] = value;
+		data[i + 2] = value;
+		data[i + 3] = value;
+	}
+	// Overlap the last block to avoid a scalar tail.
+	data[count - 4] = value;
+	data[count - 3] = value;
+	data[count - 2] = value;
+	data[count - 1] = value;
+}
+
+template <class T, class OUTPUT_TYPE, class VALUE_OP>
+static void RLEScanValues(RLEScanState<T> &scan_state, OUTPUT_TYPE *result_data, idx_t scan_count, idx_t result_offset,
+                          VALUE_OP make_value) {
+	const idx_t result_end = result_offset + scan_count;
+	auto entry_pos = scan_state.entry_pos;
+	auto position_in_entry = scan_state.position_in_entry;
+	while (result_offset < result_end) {
+		// An empty run writes nothing and advances below, so this loop need not skip it separately.
+		auto run = scan_state.layout.GetValidatedRun(entry_pos);
+		auto run_count = run.length - position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		const auto element = make_value(run.value, entry_pos);
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			RLEFillRun(result_data + result_offset, remaining_scan_count, element);
+			position_in_entry += remaining_scan_count;
+			break;
+		}
+
+		RLEFillRun(result_data + result_offset, run_count, element);
+
+		result_offset += run_count;
+		entry_pos++;
+		position_in_entry = 0;
+	}
+	scan_state.entry_pos = entry_pos;
+	scan_state.position_in_entry = position_in_entry;
+}
+
+template <class T>
+static bool TryRLEScanDictionary(RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
+	if (!scan_state.EnsureDictionary(result.GetType())) {
+		return false;
+	}
+	auto &sel = scan_state.GetDictionarySelection(scan_count);
+	RLEScanValues(scan_state, sel.data(), scan_count, 0, [](T, idx_t run) { return UnsafeNumericCast<sel_t>(run); });
+	scan_state.EmitDictionary(result, scan_count);
+	return true;
+}
+
 template <class T, bool ENTIRE_VECTOR>
 void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
-	D_ASSERT(state.GetPositionInSegment() <= segment.count);
-	D_ASSERT(scan_count <= segment.count - state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+	D_ASSERT(state.GetPositionInSegment() <= scan_state.segment_count);
+	D_ASSERT(scan_count <= scan_state.segment_count - state.GetPositionInSegment());
+	scan_state.layout.ValidateUntil(scan_state.segment_count - state.GetPositionInSegment() - scan_count);
 
 	// If we are scanning an entire Vector and it contains only a single run
-	auto current_run = scan_state.ValidateAndGetCurrentRun();
+	auto current_run = scan_state.GetCurrentRun();
 	if (scan_state.position_in_entry < current_run.length &&
 	    CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, current_run.length, scan_count)) {
 		RLEScanConstant<T>(scan_state, current_run, scan_count, result);
 		return;
 	}
-
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-
-	const idx_t result_end = result_offset + scan_count;
-	while (result_offset < result_end) {
-		auto run = scan_state.ValidateAndGetCurrentRun();
-		auto run_count = run.length - scan_state.position_in_entry;
-		idx_t remaining_scan_count = result_end - result_offset;
-		T element = run.value;
-		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
-			for (idx_t i = 0; i < remaining_scan_count; i++) {
-				result_data[result_offset + i] = element;
-			}
-			scan_state.position_in_entry += remaining_scan_count;
-			break;
-		}
-
-		for (idx_t i = 0; i < run_count; i++) {
-			result_data[result_offset + i] = element;
-		}
-
-		result_offset += run_count;
-		scan_state.ForwardToNextRun();
+	if (ENTIRE_VECTOR && TryRLEScanDictionary(scan_state, scan_count, result)) {
+		return;
 	}
+
+	RLEScanValues(scan_state, FlatVector::GetDataMutable<T>(result), scan_count, result_offset,
+	              [](T value, idx_t) { return value; });
 }
 
 template <class T>
@@ -521,15 +684,17 @@ template <class T>
 void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+	D_ASSERT(state.GetPositionInSegment() <= scan_state.segment_count);
+	D_ASSERT(vector_count <= scan_state.segment_count - state.GetPositionInSegment());
+	scan_state.layout.ValidateUntil(scan_state.segment_count - state.GetPositionInSegment() - vector_count);
 
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
-	auto current_run = scan_state.ValidateAndGetCurrentRun();
+	auto current_run = scan_state.GetCurrentRun();
 	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR && scan_state.position_in_entry < current_run.length &&
 	    CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
-
 	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
 	// Keep the current run until the selection advances past it.
@@ -543,7 +708,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		D_ASSERT(next_idx < vector_count);
 		while (next_idx >= run_end) {
 			scan_state.ForwardToNextRun();
-			current_run = scan_state.ValidateAndGetCurrentRun();
+			current_run = scan_state.GetCurrentRun();
 			run_end += current_run.length;
 		}
 		result_data.WriteValue(current_run.value);
@@ -560,106 +725,145 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 template <class T>
 void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
                idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	D_ASSERT(sel_count <= vector_count);
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
-
-	if (!scan_state.matching_runs) {
-		// we haven't applied the filter yet
-		// apply the filter to all RLE values at once
-		auto total_run_count = scan_state.layout.ValidateAllRuns();
-		auto run_values = scan_state.layout.GetRunValues(total_run_count);
-		auto data_pointer = const_cast<T *>(run_values.data());
-
-		// initialize the filter set to all false (all runs are filtered out)
-		scan_state.matching_runs = make_unsafe_uniq_array<bool>(total_run_count);
-		memset(scan_state.matching_runs.get(), 0, sizeof(bool) * total_run_count);
-
-		// execute the filter over all runs at once
-		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer), total_run_count);
-
-		SelectionVector run_matches;
-		scan_state.matching_run_count = total_run_count;
-		ColumnSegment::FilterSelection(run_matches, run_vector, filter_state, total_run_count,
-		                               scan_state.matching_run_count);
-
-		// for any runs that pass the filter - set the matches to true
-		for (idx_t i = 0; i < scan_state.matching_run_count; i++) {
-			auto idx = run_matches.get_index(i);
-			scan_state.matching_runs[idx] = true;
+	const auto run_count = scan_state.layout.ValidateAllRuns();
+	if (sel_count == 0) {
+		scan_state.SkipInternal(vector_count);
+		return;
+	}
+	const auto run_values = scan_state.layout.GetRunValues(run_count);
+	const auto has_dictionary = scan_state.EnsureDictionary(result.GetType());
+	if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
+		if (has_dictionary) {
+			auto &values = scan_state.dictionary->data;
+			scan_state.filter_cache = filter_state.CreateCache(values, values.size());
+		} else {
+			Vector values(result.GetType(), run_count);
+			scan_state.CopyRunValues(values, run_count);
+			FlatVector::SetSize(values, count_t(run_count));
+			scan_state.filter_cache = filter_state.CreateCache(values, run_count);
 		}
 	}
-	if (scan_state.matching_run_count == 0) {
-		// early-out, no runs match the filter so the filter can never pass
+	if (scan_state.filter_cache->CanSkipAll()) {
+		scan_state.SkipInternal(vector_count);
 		sel_count = 0;
 		return;
 	}
-	// scan (the subset of) the matching runs AND set the output selection vector with the rows that match
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	idx_t matching_count = 0;
-	SelectionVector matching_sel(sel_count);
+	const bool use_dictionary = has_dictionary && scan_state.ShouldUseDictionary(vector_count, sel_count);
+	if (scan_state.filter_cache->CanAcceptAll() && (!has_dictionary || use_dictionary)) {
+		SelectionVector no_values;
+		scan_state.filter_cache->Filter(no_values, sel, sel_count);
+		RLEScan<T>(segment, state, vector_count, result);
+		return;
+	}
+	const auto current_run = scan_state.GetCurrentRun();
+	if (CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
+		scan_state.filter_cache->FilterConstant(scan_state.entry_pos, sel_count);
+		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
+		return;
+	}
 	if (!sel.IsSet()) {
-		// no selection vector yet - fast path
-		// this is essentially the normal scan, but we apply the filter and fill the selection vector
-		idx_t result_offset = 0;
-		idx_t result_end = sel_count;
-		while (result_offset < result_end) {
-			auto run = scan_state.ValidateAndGetCurrentRun();
-			auto run_count = run.length - scan_state.position_in_entry;
-			idx_t remaining_scan_count = result_end - result_offset;
-			// the run is scanned - scan it
-			T element = run.value;
-			if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
-				if (scan_state.matching_runs[scan_state.entry_pos]) {
-					for (idx_t i = 0; i < remaining_scan_count; i++) {
-						result_data[result_offset + i] = element;
-						matching_sel.set_index(matching_count++, result_offset + i);
+		if (const auto matches = scan_state.filter_cache->GetPureMask()) {
+			auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			auto writer = FlatVector::ScatterWriter<T>(result);
+			idx_t offset = 0;
+			idx_t accepted_rows = 0;
+			while (offset < vector_count) {
+				const auto run = scan_state.GetCurrentRun();
+				const auto count = MinValue<idx_t>(run.length - scan_state.position_in_entry, vector_count - offset);
+				if (offset < sel_count && (*matches)[scan_state.entry_pos]) {
+					const auto end = offset + MinValue<idx_t>(count, sel_count - offset);
+					for (idx_t row = offset; row < end; row++) {
+						writer[row] = run.value;
+						selected_rows.set_index(accepted_rows++, row);
 					}
 				}
-				scan_state.position_in_entry += remaining_scan_count;
-				break;
-			}
-
-			if (scan_state.matching_runs[scan_state.entry_pos]) {
-				for (idx_t i = 0; i < run_count; i++) {
-					result_data[result_offset + i] = element;
-					matching_sel.set_index(matching_count++, result_offset + i);
+				offset += count;
+				scan_state.position_in_entry += count;
+				if (scan_state.ExhaustedRun(run.length)) {
+					scan_state.ForwardToNextRun();
 				}
 			}
-
-			result_offset += run_count;
-			scan_state.ForwardToNextRun();
-		}
-	} else {
-		// we already have a selection applied - this is more complex since we need to merge it with our filter
-		// use a simpler (but slower) approach
-		idx_t prev_idx = 0;
-		for (idx_t i = 0; i < sel_count; i++) {
-			auto read_idx = sel.get_index(i);
-			if (read_idx < prev_idx) {
-				InternalException::Throw("Error in RLEFilter - selection vector indices are not ordered");
+			if (accepted_rows != sel_count) {
+				sel.Initialize(selected_rows);
 			}
-			D_ASSERT(read_idx < vector_count);
-			// skip forward to the next index
-			scan_state.SkipInternal(read_idx - prev_idx);
-			prev_idx = read_idx;
-			auto run = scan_state.ValidateAndGetCurrentRun();
-			if (!scan_state.matching_runs[scan_state.entry_pos]) {
-				// this run is filtered out - we don't need to scan it
-				continue;
-			}
-			// the run is not filtered out - read the element
-			result_data[read_idx] = run.value;
-			matching_sel.set_index(matching_count++, read_idx);
+			sel_count = accepted_rows;
+			return;
 		}
-		// skip the tail
-		scan_state.SkipInternal(vector_count - prev_idx);
+		if (scan_state.run_indices.Capacity() < vector_count) {
+			scan_state.run_indices.Initialize(vector_count);
+		}
+		scan_state.run_offsets.clear();
+		scan_state.run_row_counts.clear();
+		idx_t offset = 0;
+		while (offset < vector_count) {
+			const auto run = scan_state.GetCurrentRun();
+			const auto count = MinValue<idx_t>(run.length - scan_state.position_in_entry, vector_count - offset);
+			if (offset < sel_count) {
+				scan_state.run_indices.set_index(scan_state.run_row_counts.size(), scan_state.entry_pos);
+				scan_state.run_offsets.push_back(offset);
+				scan_state.run_row_counts.push_back(MinValue<idx_t>(count, sel_count - offset));
+			}
+			offset += count;
+			scan_state.position_in_entry += count;
+			if (scan_state.ExhaustedRun(run.length)) {
+				scan_state.ForwardToNextRun();
+			}
+		}
+		SelectionVector selected_runs;
+		idx_t selected_run_count = scan_state.run_row_counts.size();
+		scan_state.filter_cache->FilterRuns(
+		    scan_state.run_indices,
+		    array_ptr<const idx_t>(scan_state.run_row_counts.data(), scan_state.run_row_counts.size()), selected_runs,
+		    selected_run_count);
+		auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto writer = FlatVector::ScatterWriter<T>(result);
+		idx_t accepted_rows = 0;
+		for (idx_t i = 0; i < selected_run_count; i++) {
+			const auto run = selected_runs.get_index(i);
+			const auto value = run_values[scan_state.run_indices.get_index(run)];
+			const auto start = scan_state.run_offsets[run];
+			const auto count = scan_state.run_row_counts[run];
+			for (idx_t row = start; row < start + count; row++) {
+				writer[row] = value;
+				selected_rows.set_index(accepted_rows++, row);
+			}
+		}
+		if (accepted_rows != sel_count) {
+			sel.Initialize(selected_rows);
+		}
+		sel_count = accepted_rows;
+		return;
 	}
-
-	// set up the filter result
-	if (matching_count != sel_count) {
-		sel.Initialize(matching_sel);
-		sel_count = matching_count;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto writer = FlatVector::ScatterWriter<T>(result);
+	if (const auto matches = scan_state.filter_cache->GetPureMask()) {
+		auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
+		idx_t accepted_rows = 0;
+		scan_state.VisitSelectedRows(vector_count, sel, sel_count, [&](idx_t row, idx_t run, T value) {
+			if ((*matches)[run]) {
+				writer[row] = value;
+				selected_rows.set_index(accepted_rows++, row);
+			}
+		});
+		if (accepted_rows != sel_count) {
+			sel.Initialize(selected_rows);
+		}
+		sel_count = accepted_rows;
+		return;
+	}
+	if (scan_state.run_indices.Capacity() < vector_count) {
+		scan_state.run_indices.Initialize(vector_count);
+	}
+	scan_state.VisitSelectedRows(vector_count, sel, sel_count,
+	                             [&](idx_t row, idx_t run, T) { scan_state.run_indices.set_index(row, run); });
+	scan_state.filter_cache->Filter(scan_state.run_indices, sel, sel_count);
+	for (idx_t i = 0; i < sel_count; i++) {
+		const auto row = sel.get_index(i);
+		writer[row] = run_values[scan_state.run_indices.get_index(row)];
 	}
 }
 

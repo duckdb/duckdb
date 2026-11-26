@@ -27,7 +27,8 @@ struct GenericSetting {
 
 struct UserSettingsMap {
 public:
-	void SetUserSetting(idx_t setting_index, Value target_value);
+	//! Returns whether the setting was updated.
+	bool SetUserSetting(idx_t setting_index, Value target_value);
 	void ClearSetting(idx_t setting_index);
 	bool IsSet(idx_t setting_index) const;
 	bool TryGetSetting(idx_t setting_index, Value &result_value) const;
@@ -36,7 +37,6 @@ private:
 	vector<GenericSetting> settings;
 };
 
-#ifndef __MINGW32__
 struct GlobalUserSettings;
 
 struct CachedGlobalSettings {
@@ -50,7 +50,29 @@ struct CachedGlobalSettings {
 	identifier_map_t<idx_t> extension_setting_indexes;
 	hugeint_t uuid;
 };
-#endif
+
+//! The settings cache of a worker thread. While it is initialized, the thread reads settings through it instead of
+//! through the thread_local cache, whose first use registers a destructor that glibc cannot fail to allocate without
+//! ending the process
+class WorkerSettingsCache {
+public:
+	WorkerSettingsCache();
+	~WorkerSettingsCache();
+	WorkerSettingsCache(const WorkerSettingsCache &) = delete;
+	WorkerSettingsCache &operator=(const WorkerSettingsCache &) = delete;
+	WorkerSettingsCache(WorkerSettingsCache &&) = delete;
+	WorkerSettingsCache &operator=(WorkerSettingsCache &&) = delete;
+
+public:
+	bool IsInitialized() const;
+	//! Create the cache, this allocates
+	void Initialize();
+
+private:
+	unique_ptr<CachedGlobalSettings> cache;
+	//! The cache the thread read through before, restored when this one goes away
+	optional_ptr<CachedGlobalSettings> previous;
+};
 
 struct GlobalUserSettings {
 public:

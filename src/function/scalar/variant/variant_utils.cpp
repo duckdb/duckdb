@@ -16,7 +16,10 @@
 namespace duckdb {
 
 PhysicalType VariantDecimalData::GetPhysicalType() const {
-	if (width > DecimalWidth<int64_t>::max) {
+	if (width > DecimalWidth<hugeint_t>::max) {
+		// decimals wider than 38 digits are BIGNUM blobs
+		return PhysicalType::VARCHAR;
+	} else if (width > DecimalWidth<int64_t>::max) {
 		return PhysicalType::INT128;
 	} else if (width > DecimalWidth<int32_t>::max) {
 		return PhysicalType::INT64;
@@ -54,6 +57,18 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	auto value_ptr = ptr;
 	VariantUtils::Available(blob_size, NumericCast<idx_t>(value_ptr - data), 0);
 	return VariantDecimalData(width, scale, value_ptr);
+}
+
+string_t VariantUtils::DecodeWideDecimalData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto decimal = DecodeDecimalData(variant, row, value_index);
+	D_ASSERT(decimal.GetPhysicalType() == PhysicalType::VARCHAR);
+	auto &blob = variant.GetData(row);
+	auto data = const_data_ptr_cast(blob.GetData());
+	auto ptr = decimal.value_ptr;
+	VariantUtils::Available(blob.GetSize(), NumericCast<idx_t>(ptr - data), 1);
+	auto length = VarintDecode<uint32_t>(ptr);
+	VariantUtils::Available(blob.GetSize(), NumericCast<idx_t>(ptr - data), length);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
@@ -112,7 +127,8 @@ void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 		}
 		auto &nested_data_entry = nested_data[i];
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			auto child_idx = component.index;
+			D_ASSERT(component.index >= 0);
+			auto child_idx = static_cast<idx_t>(component.index);
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
 				res_validity.SetInvalid(i);
@@ -457,6 +473,7 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::DECIMAL:
 		return true;
 	default:

@@ -119,7 +119,7 @@ struct CSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Buffer Size (Parallel Scan)
-	CSVOption<idx_t> buffer_size_option = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
+	CSVOption<idx_t> buffer_size_option = CSVBuffer::CSV_BUFFER_SIZE;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether  to pad rows that do not have enough columns with NULL values
@@ -157,26 +157,20 @@ struct CSVReaderOptions {
 	bool GetHeader() const;
 	void SetHeader(bool has_header);
 
-	string GetEscape() const;
 	void SetEscape(const string &escape);
 
 	idx_t GetSkipRows() const;
 	void SetSkipRows(int64_t rows);
 
 	void SetQuote(const string &quote);
-	string GetQuote() const;
 	void SetComment(const string &comment);
-	string GetComment() const;
 	void SetDelimiter(const string &delimiter);
-	string GetDelimiter() const;
 
 	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
 	bool IgnoreErrors() const;
 
-	string GetNewline() const;
 	void SetNewline(const string &input);
 
-	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
 
 	CSVOption<char> GetSingleByteDelimiter() const;
@@ -193,7 +187,6 @@ struct CSVReaderOptions {
 	                   const vector<Identifier> &expected_names);
 	void SetWriteOption(Context &context, const Identifier &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
-	void ToNamedParameters(named_parameter_map_t &out) const;
 	void FromNamedParameters(const named_argument_map_t &in, ClientContext &context, MultiFileOptions &file_options);
 	void ParseOption(ClientContext &context, const Identifier &key, const Value &val);
 	//! Verify options are not conflicting

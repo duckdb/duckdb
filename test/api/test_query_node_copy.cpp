@@ -12,7 +12,6 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
@@ -155,7 +154,6 @@ TEST_CASE("Table reference copies keep the base table reference properties", "[a
 	refs.push_back(TestJoin(TestBaseTable("join_left")));
 	refs.push_back(TestPivot());
 	refs.push_back(make_uniq<EmptyTableRef>());
-	refs.push_back(make_uniq<DelimGetRef>(vector<LogicalType> {LogicalType::INTEGER}));
 	for (auto &ref : refs) {
 		INFO(EnumUtil::ToString(ref->type));
 		SetBaseProperties(*ref, dependency);

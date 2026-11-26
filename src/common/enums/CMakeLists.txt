@@ -12,8 +12,7 @@ add_library_unity(
   logical_operator_type.cpp
   optimizer_type.cpp
   physical_operator_type.cpp
-  statement_type.cpp
-  relation_type.cpp)
+  statement_type.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_enums>
     PARENT_SCOPE)

@@ -234,7 +234,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
-	const auto limit = CanOptimize(*op);
+	const auto limit = CanOptimize(*op, context);
 	if (!limit.IsValid()) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
@@ -309,6 +309,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	if (!AggregateKeepsZeroSign(window, aggregate_payload, params)) {
+		return op;
+	}
 	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
@@ -356,6 +359,33 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 
 	auto fun = GetBuiltinAggregateFunction(context, Identifier(fun_name), ExtractReturnTypes(aggregate_params));
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
+}
+
+//! Whether the aggregate keeps the sign of a zero it returns: a FLOAT or DOUBLE stored as a sort key does not.
+//! Struct-packed payloads are not checked.
+bool TopNWindowElimination::AggregateKeepsZeroSign(const LogicalWindow &window,
+                                                   const vector<unique_ptr<Expression>> &payload,
+                                                   const TopNWindowEliminationParameters &params) const {
+	if (payload.size() > 1) {
+		return true;
+	}
+	auto &order_key = window.expressions[0]->Cast<BoundWindowExpression>().OrderBy()[0].expression;
+	const auto returned_type = payload.empty() ? order_key->GetReturnType() : payload[0]->GetReturnType();
+	if (returned_type.id() != LogicalTypeId::FLOAT && returned_type.id() != LogicalTypeId::DOUBLE) {
+		return true;
+	}
+
+	vector<unique_ptr<Expression>> aggregate_params;
+	if (!payload.empty()) {
+		aggregate_params.push_back(payload[0]->Copy());
+	}
+	aggregate_params.push_back(order_key->Copy());
+	if (params.limit > 1) {
+		aggregate_params.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(params.limit)));
+	}
+	auto aggregate = CreateAggregateExpression(std::move(aggregate_params), !payload.empty(), params);
+	auto &function = aggregate->Cast<BoundAggregateExpression>().Function();
+	return !function.GetProperties().GetBooleanProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY);
 }
 
 unique_ptr<LogicalOperator>
@@ -488,8 +518,8 @@ void TopNWindowElimination::AddStructExtractExprs(
 		fun_args[0] = aggregate_column_ref->Copy();
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 
-		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
-		bound_function->SetAlias(alias);
+		auto bound_function =
+		    function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args), false, nullptr, alias);
 		exprs.push_back(std::move(bound_function));
 	}
 }
@@ -544,16 +574,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
-class ColumnReferenceExtractor : public BaseColumnPruner {
-public:
-	static column_binding_map_t<ReferencedColumn> GetReferences(unique_ptr<Expression> *expression) {
-		ColumnReferenceExtractor extractor;
-		extractor.VisitExpression(expression);
-		return extractor.column_references;
-	}
-};
-
-optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
+optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientContext &client) {
 	const optional_idx cant_optimize;
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return cant_optimize;
@@ -659,7 +680,7 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (child.get().type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return cant_optimize;
 	}
-	const auto &window = child.get().Cast<LogicalWindow>();
+	auto &window = child.get().Cast<LogicalWindow>();
 	if (window.window_index != filter_col_idx) {
 		return cant_optimize;
 	}
@@ -687,11 +708,39 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window_expr.OrderBy().size() != 1) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].type != OrderType::DESCENDING &&
-	    window_expr.OrderBy()[0].type != OrderType::ASCENDING) {
+
+	const auto &order = window_expr.OrderBy()[0];
+	if (order.type != OrderType::DESCENDING && order.type != OrderType::ASCENDING) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].null_order != OrderByNullType::NULLS_LAST) {
+	if (order.null_order != OrderByNullType::NULLS_LAST) {
+		return cant_optimize;
+	}
+
+	// 	Window fusion works better than TopN for certain cases
+
+	//	Fusion does not yet support partitioning
+	if (!window_expr.Partitions().empty()) {
+		return can_optimize;
+	}
+
+	//	Fusion is better for non-numeric keys
+	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
+		return cant_optimize;
+	}
+
+	//	Fusion is better for large ranges
+	if (can_optimize.GetIndex() > 5000) {
+		return cant_optimize;
+	}
+
+	//	TopN is better for k == 1
+	if (can_optimize.GetIndex() == 1) {
+		return can_optimize;
+	}
+
+	//	TopN is better for small cardinalities
+	if (op.EstimateCardinality(client) > 400000) {
 		return cant_optimize;
 	}
 
@@ -713,7 +762,7 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	// Remember order of group columns to recreate that order in new bindings later.
 	// A FLOAT or DOUBLE group holds both 0.0 and -0.0, so such a column is carried in the payload instead.
 	column_binding_map_t<idx_t> group_bindings;
-	for (idx_t i = 0; i < window_expr.PartitionsMutable().size(); i++) {
+	for (idx_t i = 0; i < window_expr.Partitions().size(); i++) {
 		auto &expr = window_expr.PartitionsMutable()[i];
 		const auto &type = expr->GetReturnType();
 		if (TypeVisitor::Contains(type, LogicalTypeId::FLOAT) || TypeVisitor::Contains(type, LogicalTypeId::DOUBLE)) {
@@ -960,7 +1009,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	vector<ColumnBinding> projections(window_expr.Partitions().size() + args.size());
 
 	// Build a projection list for an LHS table scan to recreate the column order of an aggregate with struct packing
-	for (idx_t i = 0; i < window_expr.PartitionsMutable().size(); i++) {
+	for (idx_t i = 0; i < window_expr.Partitions().size(); i++) {
 		auto &partition = window_expr.PartitionsMutable()[i];
 		if (!ExtractSingleBinding(&partition, projections[i])) {
 			return false;
@@ -1056,31 +1105,23 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			if (lidxs.size() != 1 || ridxs.size() != 1) {
 				return false;
 			}
-			auto left_idx = lidxs[0];
-			auto right_idx = ridxs[0];
+			const column_binding_set_t left_bindings(left_column_bindings.begin(), left_column_bindings.end());
+			const column_binding_set_t right_bindings(right_column_bindings.begin(), right_column_bindings.end());
 
 			bool all_left_replaceable = true;
 			bool all_right_replaceable = true;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto &projection = projections[i];
-				if (projection.table_index != left_idx && projection.table_index != right_idx) {
+			for (const auto &projection : projections) {
+				const bool is_left = left_bindings.find(projection) != left_bindings.end();
+				if (!is_left && right_bindings.find(projection) == right_bindings.end()) {
 					return false;
 				}
-				if (projection.table_index == left_idx && projection.column_index >= left_column_bindings.size()) {
-					return false;
+				if (replaceable_bindings.find(projection) != replaceable_bindings.end()) {
+					continue;
 				}
-				if (projection.table_index == right_idx && projection.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection.table_index == left_idx
-				                           ? left_column_bindings[projection.column_index]
-				                           : right_column_bindings[projection.column_index];
-				if (replaceable_bindings.find(column_binding) == replaceable_bindings.end()) {
-					if (column_binding.table_index == left_idx) {
-						all_left_replaceable = false;
-					} else {
-						all_right_replaceable = false;
-					}
+				if (is_left) {
+					all_left_replaceable = false;
+				} else {
+					all_right_replaceable = false;
 				}
 			}
 
@@ -1089,25 +1130,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				return false;
 			}
 
-			TableIndex replace_table_idx = all_right_replaceable ? right_idx : left_idx;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto projection_idx = projections[i];
-				if (projection_idx.table_index != left_idx && projection_idx.table_index != right_idx) {
-					return false;
-				}
-				if (projection_idx.table_index == left_idx &&
-				    projection_idx.column_index >= left_column_bindings.size()) {
-					return false;
-				}
-				if (projection_idx.table_index == right_idx &&
-				    projection_idx.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection_idx.table_index == left_idx
-				                           ? left_column_bindings[projection_idx.column_index]
-				                           : right_column_bindings[projection_idx.column_index];
-				if (column_binding.table_index == replace_table_idx) {
-					projections[i] = replaceable_bindings[column_binding];
+			const auto &replace_bindings = all_right_replaceable ? right_bindings : left_bindings;
+			for (auto &projection : projections) {
+				if (replace_bindings.find(projection) != replace_bindings.end()) {
+					projection = replaceable_bindings[projection];
 				}
 			}
 

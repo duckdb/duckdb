@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "test_helpers.hpp"
@@ -10,7 +10,7 @@ namespace {
 
 class ShortReadFileHandle : public FileHandle {
 public:
-	ShortReadFileHandle(FileSystem &file_system, const string &path)
+	ShortReadFileHandle(BaseFileSystem &file_system, const string &path)
 	    : FileHandle(file_system, path, FileFlags::FILE_FLAGS_READ) {
 	}
 
@@ -20,7 +20,7 @@ public:
 	idx_t position = 0;
 };
 
-class ShortReadFileSystem : public FileSystem {
+class ShortReadFileSystem : public BaseFileSystem {
 public:
 	ShortReadFileSystem(const vector<data_t> &data_p, idx_t max_read_size_p, optional_idx read_boundary_p)
 	    : data(data_p), max_read_size(max_read_size_p), read_boundary(read_boundary_p) {
@@ -71,9 +71,9 @@ private:
 };
 
 vector<data_t> ReadGZipTestFile(const string &name) {
-	auto file_system = FileSystem::CreateLocal();
+	auto &file_system = TestLocalFileSystem();
 	auto path = TestJoinPath(TestGetCurrentDirectory(), "data/csv/test/" + name);
-	auto handle = file_system->OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	auto handle = file_system.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = NumericCast<idx_t>(handle->GetFileSize());
 	vector<data_t> result(file_size);
 	handle->Read(QueryContext(), result.data(), file_size, 0);
@@ -184,24 +184,28 @@ TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 		CAPTURE(footer_bytes);
 		vector<data_t> truncated(compressed_data.begin(),
 		                         compressed_data.begin() + next_header - GZIP_FOOTER_SIZE + footer_bytes);
-		REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+		REQUIRE_THROWS_WITH(ReadCompressedData(truncated, truncated.size()),
+		                    Catch::Contains("Unexpected end of GZIP stream"));
 	}
 	for (idx_t header_bytes = 1; header_bytes < GZIP_HEADER_MINSIZE; header_bytes++) {
 		CAPTURE(header_bytes);
 		vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + next_header + header_bytes);
-		REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+		REQUIRE_THROWS_WITH(ReadCompressedData(truncated, truncated.size()),
+		                    Catch::Contains("Unexpected end of GZIP stream"));
 	}
 
 	SECTION("EOF after a complete subsequent member header") {
 		vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + next_header_end);
-		REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+		REQUIRE_THROWS_WITH(ReadCompressedData(truncated, truncated.size()),
+		                    Catch::Contains("Unexpected end of GZIP stream"));
 	}
 	SECTION("EOF inside a subsequent member") {
 		auto compressed_size = NumericCast<idx_t>(compressed_data.size());
 		for (auto end : {next_header_end + 1, compressed_size - GZIP_FOOTER_SIZE, compressed_size - 1}) {
 			CAPTURE(end);
 			vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + end);
-			REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+			REQUIRE_THROWS_WITH(ReadCompressedData(truncated, truncated.size()),
+			                    Catch::Contains("Unexpected end of GZIP stream"));
 		}
 	}
 	SECTION("EOF inside the first member") {
@@ -209,7 +213,8 @@ TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 		for (auto end : {first_header_end, next_header - GZIP_FOOTER_SIZE - 1, next_header - GZIP_FOOTER_SIZE}) {
 			CAPTURE(end);
 			vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + end);
-			REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+			REQUIRE_THROWS_WITH(ReadCompressedData(truncated, truncated.size()),
+			                    Catch::Contains("Unexpected end of GZIP stream"));
 		}
 	}
 	SECTION("EOF between complete members") {
@@ -220,5 +225,6 @@ TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 
 TEST_CASE("GZIP string decompression rejects a header-only stream with FNAME", "[file_system][gzip]") {
 	const char header[] = {'\x1f', '\x8b', '\x08', '\x08', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'};
-	REQUIRE_THROWS_AS(GZipFileSystem::UncompressGZIPString(header, sizeof(header)), IOException);
+	REQUIRE_THROWS_WITH(GZipFileSystem::UncompressGZIPString(header, sizeof(header)),
+	                    Catch::Contains("Failed to uncompress"));
 }

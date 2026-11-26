@@ -429,36 +429,33 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		column_chunk.meta_data.statistics.__isset.nan_count = true;
 	}
 
-	// if we have NaN values - don't write the min/max here
-	if (!state.stats_state->HasNaN()) {
-		// set min/max/min_value/max_value
-		// this code is not going to win any beauty contests, but well
-		auto min = state.stats_state->GetMin();
-		if (!min.empty()) {
-			column_chunk.meta_data.statistics.min = min;
-			column_chunk.meta_data.statistics.__isset.min = true;
-			column_chunk.meta_data.__isset.statistics = true;
-		}
-		auto max = state.stats_state->GetMax();
-		if (!max.empty()) {
-			column_chunk.meta_data.statistics.max = max;
-			column_chunk.meta_data.statistics.__isset.max = true;
-			column_chunk.meta_data.__isset.statistics = true;
-		}
+	// set min/max/min_value/max_value - NaN values are excluded from these, and only counted in the nan_count
+	// this code is not going to win any beauty contests, but well
+	auto min = state.stats_state->GetMin();
+	if (!min.empty()) {
+		column_chunk.meta_data.statistics.min = min;
+		column_chunk.meta_data.statistics.__isset.min = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
+	auto max = state.stats_state->GetMax();
+	if (!max.empty()) {
+		column_chunk.meta_data.statistics.max = max;
+		column_chunk.meta_data.statistics.__isset.max = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
 
-		if (state.stats_state->HasStats()) {
-			column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
-			column_chunk.meta_data.statistics.__isset.min_value = true;
-			column_chunk.meta_data.__isset.statistics = true;
-			column_chunk.meta_data.statistics.is_min_value_exact = state.stats_state->MinIsExact();
-			column_chunk.meta_data.statistics.__isset.is_min_value_exact = true;
+	if (state.stats_state->HasStats()) {
+		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
+		column_chunk.meta_data.statistics.__isset.min_value = true;
+		column_chunk.meta_data.__isset.statistics = true;
+		column_chunk.meta_data.statistics.is_min_value_exact = state.stats_state->MinIsExact();
+		column_chunk.meta_data.statistics.__isset.is_min_value_exact = true;
 
-			column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
-			column_chunk.meta_data.statistics.__isset.max_value = true;
-			column_chunk.meta_data.__isset.statistics = true;
-			column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
-			column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
-		}
+		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
+		column_chunk.meta_data.statistics.__isset.max_value = true;
+		column_chunk.meta_data.__isset.statistics = true;
+		column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
+		column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
 	}
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = UnsafeNumericCast<int64_t>(DictionarySize(state));
@@ -561,7 +558,7 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		writer.BufferPageIndex(state.col_idx, std::move(page_index));
 	}
 	if (state.bloom_filter && !HasDictionary(state) &&
-	    state.bloom_filter->Get()->len * MIN_COMPRESSED_TO_FILTER_RATIO >
+	    state.bloom_filter->Get()->GetLength() * MIN_COMPRESSED_TO_FILTER_RATIO >
 	        NumericCast<idx_t>(column_chunk.meta_data.total_compressed_size)) {
 		state.bloom_filter.reset();
 	}

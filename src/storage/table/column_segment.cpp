@@ -31,7 +31,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	shared_ptr<BlockHandle> block;
 
 	auto &type = statistics.GetType();
-	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
+	// the compression type is read from the file - it might not exist (for the type of this column)
+	auto compression_function = config.TryGetCompressionFunction(compression_type, type.InternalType());
+	if (!compression_function) {
+		throw DataCorruptionException(
+		    "Persistent segment has compression type %llu, which does not exist for physical type %s",
+		    static_cast<idx_t>(compression_type), EnumUtil::ToString(type.InternalType()));
+	}
+	reference<const CompressionFunction> function(*compression_function);
 	if (block_id == INVALID_BLOCK && !function.get().supports_null_block) {
 		throw DataCorruptionException("Persistent %s segment is missing its data block",
 		                              CompressionTypeToString(compression_type));
@@ -478,7 +485,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		chunk.data.emplace_back(Vector::Ref(vector));
 		chunk.SetChildCardinality(scan_count);
 		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+		optional_ptr<const SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
 		if (!sel.IsSet() && (vector.GetType().IsNested() || approved_tuple_count != scan_count)) {
 			identity_sel = SelectionVector::Incremental(approved_tuple_count);
 			current_sel = &identity_sel;
@@ -499,7 +506,12 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
-	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
+	if (state.TryFilterDictionary(sel, vector, approved_tuple_count)) {
+		return approved_tuple_count;
+	}
+	if (state.fast_executor &&
+	    (scan_count <= STANDARD_VECTOR_SIZE || (vector.GetVectorType() == VectorType::FLAT_VECTOR &&
+	                                            !vector.GetType().IsNested() && scan_count <= vector.size()))) {
 		return state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
 	}
 	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);

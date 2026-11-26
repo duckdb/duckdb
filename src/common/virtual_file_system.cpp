@@ -5,10 +5,10 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/database.hpp"
@@ -19,17 +19,17 @@
 namespace duckdb {
 
 struct FileSystemHandle {
-	explicit FileSystemHandle(unique_ptr<FileSystem> fs) : file_system(std::move(fs)) {
+	explicit FileSystemHandle(unique_ptr<BaseFileSystem> fs) : file_system(std::move(fs)) {
 	}
 
-	unique_ptr<FileSystem> file_system;
+	unique_ptr<BaseFileSystem> file_system;
 };
 
 //! The FileSystemRegistry holds the set of file systems that are registered.
 //! Note that it should be treated as read-only.
 //! When a change is made (e.g. by registering new file system) a copy of the registry is made
 struct FileSystemRegistry {
-	explicit FileSystemRegistry(unique_ptr<FileSystem> fs)
+	explicit FileSystemRegistry(unique_ptr<BaseFileSystem> fs)
 	    : default_fs(make_shared_ptr<FileSystemHandle>(std::move(fs))) {
 	}
 
@@ -40,13 +40,13 @@ struct FileSystemRegistry {
 	map<string, shared_ptr<FileSystemHandle>> compressed_fs;
 
 public:
-	shared_ptr<FileSystemRegistry> RegisterSubSystem(unique_ptr<FileSystem> fs) const;
+	shared_ptr<FileSystemRegistry> RegisterSubSystem(unique_ptr<BaseFileSystem> fs) const;
 	shared_ptr<FileSystemRegistry> RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) const;
 	shared_ptr<FileSystemRegistry> SetDisabledFileSystems(const vector<string> &names) const;
-	shared_ptr<FileSystemRegistry> ExtractSubSystem(const string &name, unique_ptr<FileSystem> &result) const;
+	shared_ptr<FileSystemRegistry> ExtractSubSystem(const string &name, unique_ptr<BaseFileSystem> &result) const;
 };
 
-shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterSubSystem(unique_ptr<FileSystem> fs) const {
+shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterSubSystem(unique_ptr<BaseFileSystem> fs) const {
 	auto new_registry = make_shared_ptr<FileSystemRegistry>(*this);
 	const auto &name = fs->GetName();
 	for (auto &sub_system : new_registry->sub_systems) {
@@ -90,7 +90,7 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::SetDisabledFileSystems(const 
 }
 
 shared_ptr<FileSystemRegistry> FileSystemRegistry::ExtractSubSystem(const string &name,
-                                                                    unique_ptr<FileSystem> &result) const {
+                                                                    unique_ptr<BaseFileSystem> &result) const {
 	auto new_registry = make_shared_ptr<FileSystemRegistry>(*this);
 	// If the subsystem has been disabled, we don't allow extraction and return nullptr here.
 	if (disabled_file_systems.find(name) != disabled_file_systems.end()) {
@@ -110,10 +110,10 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::ExtractSubSystem(const string
 	return nullptr;
 }
 
-VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(make_uniq<LocalFileSystem>()) {
 }
 
-VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
+VirtualFileSystem::VirtualFileSystem(unique_ptr<BaseFileSystem> &&inner)
     : file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
 	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
 }
@@ -121,20 +121,9 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
 VirtualFileSystem::~VirtualFileSystem() {
 }
 
-unique_ptr<MemoryMappedFile> VirtualFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-                                                              const MMapOptions &options,
-                                                              optional_ptr<FileOpener> opener) {
+BaseFileSystem &VirtualFileSystem::GetDefaultFileSystem() {
 	auto registry = file_system_registry.atomic_load();
-	auto &internal_filesystem = FindFileSystem(registry, path.path, opener);
-	return internal_filesystem.MemoryMapFile(path, flags, options, opener);
-}
-
-FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
-	auto &fs = *file_system_registry->default_fs->file_system;
-	if (SubSystemIsDisabled(fs.GetName())) {
-		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
-	}
-	return fs;
+	return *registry->default_fs->file_system;
 }
 
 //! The part of a path whose extension names its compression: a URL's path without its host, query or fragment, or a
@@ -167,9 +156,9 @@ static FileCompressionType CompressionFromExtension(const string &lower_path) {
 	return FileCompressionType::UNCOMPRESSED;
 }
 
-optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
-                                                                      const FileCompressionType &compression,
-                                                                      const string &filepath, bool for_writing) {
+optional_ptr<BaseFileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
+                                                                          const FileCompressionType &compression,
+                                                                          const string &filepath, bool for_writing) {
 	auto resolved = compression;
 	// For auto-detection, check whether any registered compression filesystem can handle this file.
 	if (resolved.IsAutoDetect()) {
@@ -220,31 +209,26 @@ optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystem
 	    resolved.ToString(), hint);
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-                                                           optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+                                                   optional_ptr<FileOpener> opener) {
 	const FileCompressionType compression = flags.Compression();
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
 	auto registry = file_system_registry.atomic_load();
 	auto &internal_filesystem = FindFileSystem(registry, file.path, opener);
-
-	// File handle gets created.
-	unique_ptr<FileHandle> file_handle = nullptr;
-
-	// Handle caching logic.
-	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
-		auto caching_filesystem =
-		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
-		// caching filesystem's lifecycle is extended inside of caching file handle.
-		file_handle = caching_filesystem->OpenFile(file, flags, opener);
-	} else {
-		file_handle = internal_filesystem.OpenFile(file, flags, opener);
-	}
+	auto file_handle = internal_filesystem.OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
+	flags.SetCompression(compression);
+	return WrapOpenedFile(std::move(file_handle), file, flags, opener);
+}
 
+unique_ptr<FileHandle> VirtualFileSystem::WrapOpenedFile(unique_ptr<FileHandle> file_handle, const OpenFileInfo &file,
+                                                         const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
+	const auto &compression = flags.Compression();
+	auto registry = file_system_registry.atomic_load();
 	try {
 		// Evaluate and apply compression option then.
 		QueryContext context;
@@ -275,127 +259,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	return file_handle;
 }
 
-void VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	handle.file_system.Read(handle, buffer, nr_bytes, location);
-}
-
-void VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	handle.file_system.Write(handle, buffer, nr_bytes, location);
-}
-
-int64_t VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	return handle.file_system.Read(handle, buffer, nr_bytes);
-}
-
-int64_t VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	return handle.file_system.Write(handle, buffer, nr_bytes);
-}
-
-int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
-	return handle.file_system.GetFileSize(handle);
-}
-timestamp_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	return handle.file_system.GetLastModifiedTime(handle);
-}
-string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
-	return handle.file_system.GetVersionTag(handle);
-}
-FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
-	return handle.file_system.GetFileType(handle);
-}
-FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
-	return handle.file_system.Stats(handle);
-}
-
-optional<FileMetadata> VirtualFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(file.path, opener).GetStatsIfExists(file, opener);
-}
-
-void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	handle.file_system.Truncate(handle, new_size);
-}
-
-void VirtualFileSystem::FileSync(FileHandle &handle) {
-	handle.file_system.FileSync(handle);
-}
-
-// need to look up correct fs for this
-bool VirtualFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).DirectoryExists(directory, opener);
-}
-void VirtualFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
-}
-
-bool VirtualFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-                                                optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).CreateDirectoryExtended(directory, options, opener);
-}
-
-void VirtualFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
-}
-
-void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
-}
-
-bool VirtualFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-                                                optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).RemoveDirectoryExtended(directory, options, opener);
-}
-
-bool VirtualFileSystem::ListFilesExtended(const string &directory,
-                                          const std::function<void(OpenFileInfo &info)> &callback,
-                                          optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory, opener).ListFiles(directory, callback, opener);
-}
-
-void VirtualFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	FindFileSystem(source, opener).MoveFile(source, target, opener);
-}
-
-bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).FileExists(filename, opener);
-}
-
-bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).IsPipe(filename, opener);
-}
-
-void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	FindFileSystem(filename, opener).RemoveFile(filename, opener);
-}
-
-bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename, opener).TryRemoveFile(filename, opener);
-}
-
-void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
-	reference_map_t<FileSystem, vector<string>> files_by_fs;
-	for (const auto &filename : filenames) {
-		auto &fs = FindFileSystem(filename, opener);
-		files_by_fs[fs].push_back(filename);
-	}
-	for (auto &entry : files_by_fs) {
-		entry.first.get().RemoveFiles(entry.second, opener);
-	}
-}
-
-string VirtualFileSystem::PathSeparator(const string &path) {
-	return FindFileSystem(path, nullptr).PathSeparator(path);
-}
-
-string VirtualFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path_p, opener).CanonicalizePath(path_p, opener);
-}
-
-unique_ptr<MultiFileList> VirtualFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
-                                                               optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path, opener).Glob(path, input, opener);
-}
-
-void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
+void VirtualFileSystem::RegisterSubSystem(unique_ptr<BaseFileSystem> fs) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = file_system_registry->RegisterSubSystem(std::move(fs));
 	file_system_registry.atomic_store(new_registry);
@@ -431,9 +295,9 @@ vector<string> VirtualFileSystem::GetDisabledFileSystems() {
 	return names;
 }
 
-unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
+unique_ptr<BaseFileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
 	lock_guard<mutex> guard(registry_lock);
-	unique_ptr<FileSystem> result;
+	unique_ptr<BaseFileSystem> result;
 	auto new_registry = file_system_registry->ExtractSubSystem(name, result);
 	if (new_registry) {
 		file_system_registry.atomic_store(new_registry);
@@ -474,13 +338,13 @@ bool VirtualFileSystem::IsDisabledForPath(const string &path) {
 	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
 }
 
-FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
+BaseFileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
 	auto registry = file_system_registry.atomic_load();
 	return FindFileSystem(registry, path, opener);
 }
 
-FileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
-                                              optional_ptr<FileOpener> opener) {
+BaseFileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
+                                                  optional_ptr<FileOpener> opener) {
 	auto db_instance = FileOpener::TryGetDatabase(opener);
 	auto fs = FindFileSystemInternal(*registry, path);
 
@@ -503,8 +367,9 @@ FileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &re
 	return *fs;
 }
 
-optional_ptr<FileSystem> VirtualFileSystem::FindFileSystemInternal(FileSystemRegistry &registry, const string &path) {
-	optional_ptr<FileSystem> fs;
+optional_ptr<BaseFileSystem> VirtualFileSystem::FindFileSystemInternal(FileSystemRegistry &registry,
+                                                                       const string &path) {
+	optional_ptr<BaseFileSystem> fs;
 	for (auto &sub_system : registry.sub_systems) {
 		auto &sub_fs = *sub_system->file_system;
 		if (sub_fs.CanHandleFile(path)) {

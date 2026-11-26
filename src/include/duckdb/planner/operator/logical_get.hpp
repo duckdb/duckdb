@@ -20,6 +20,7 @@
 namespace duckdb {
 class TableCatalogEntry;
 class DynamicTableFilterSet;
+class NodeStatistics;
 struct LogicalPlanSQLExportField;
 
 //! LogicalGet represents a scan operation from a data source
@@ -31,7 +32,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
+	LogicalGet(TableIndex table_index, BoundTableFunction function, cow_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
@@ -40,7 +41,7 @@ public:
 	//! The function that is called, together with the argument types this call was bound with
 	BoundTableFunction function;
 	//! The bind data of the function
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 	//! Process-local input that cannot be reconstructed from SQL parameters
 	shared_ptr<TableFunctionInfo> bind_info;
 	//! The types of ALL columns that can be returned by the table function
@@ -104,6 +105,8 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 	//! Estimate cardinality from the source without using this operator's cached estimate.
 	idx_t EstimateSourceCardinality(ClientContext &context);
+	//! Capture the source point and bound with one callback, before consuming bind data.
+	NodeStatistics EstimateSourceStatistics(ClientContext &context);
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
 	void SetPartitionsToScan(vector<idx_t> partition_indices);
