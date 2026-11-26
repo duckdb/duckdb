@@ -1074,9 +1074,6 @@ public:
 				min_cte_idx = cte_index;
 			}
 
-			// Resolve types to be used for creating the materialized CTE and refs
-			op->ResolveOperatorTypes();
-
 			const auto &primary_subplan = subplan_info.subplans[0];
 
 			vector<vector<ColumnBinding>> old_bindings(subplan_info.subplans.size());
@@ -1085,6 +1082,8 @@ public:
 			column_binding_set_t required_canonical_binding_set;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				auto &subplan = subplan_info.subplans[subplan_idx];
+				// Earlier extractions can introduce new CTE readers within this subplan.
+				subplan.op.get()->ResolveOperatorTypes();
 				old_bindings[subplan_idx] = subplan.op.get()->GetColumnBindings();
 				old_types[subplan_idx] = subplan.op.get()->types;
 				for (auto &cb : subplan.canonical_bindings) {
