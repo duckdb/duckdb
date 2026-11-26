@@ -44,24 +44,45 @@ def read_extension_configs(repo_root: Path, configs: str, system_name: str | Non
 
 
 def prepare_test_roots(repo_root: Path, extensions, build_dir: Path | None = None, *, allow_empty: bool = False):
-    roots = []
+    resolved_extensions = []
     for extension in extensions:
+        extension = dict(extension)
         name = extension["name"]
-        if extension["git_url"]:
+        if extension["git_url"] and not extension.get("checkout_dir"):
             fetched_source = build_dir / "_deps" / f"{name}_extension_fc-src" if build_dir else None
             if fetched_source and fetched_source.is_dir():
                 source = fetched_source
             else:
-                sync_out_of_tree_extensions.sync_extension(extension, repo_root / "extension" / "external", repo_root)
+                sync_out_of_tree_extensions.sync_extension(
+                    dict(extension), repo_root / "extension" / "external", repo_root
+                )
                 source = repo_root / "extension" / "external" / name
-            root = source / (extension["test_dir"] or "test/sql")
-        else:
-            source = Path(extension["source_dir"]) if extension["source_dir"] else repo_root / "extension" / name
-            if not source.is_absolute():
-                source = repo_root / source
-            root = Path(extension["test_dir"]) if extension["test_dir"] else source / "test" / "sql"
-            if not root.is_absolute():
-                root = repo_root / root
+            extension["checkout_dir"] = str(source.resolve())
+        resolved_extensions.append(extension)
+    if not resolved_extensions:
+        if allow_empty:
+            return []
+        raise RuntimeError("No extension SQL test roots selected by the extension configs")
+    with tempfile.TemporaryDirectory(prefix="duckdb-extension-paths-") as directory:
+        input_file, output_file = Path(directory) / "input.json", Path(directory) / "output.json"
+        input_file.write_text(json.dumps(resolved_extensions), encoding="utf8")
+        subprocess.run(
+            [
+                "cmake",
+                f"-DPROJECT_SOURCE_DIR={repo_root}",
+                f"-DINPUT_FILE={input_file}",
+                f"-DOUTPUT_FILE={output_file}",
+                "-P",
+                str(REPO_ROOT / "scripts/ci/resolve_extension_test_paths.cmake"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        paths = json.loads(output_file.read_text(encoding="utf8"))
+    roots = []
+    for extension, path in zip(resolved_extensions, paths):
+        name, root = extension["name"], Path(path)
         root = root.resolve()
         if not root.is_dir():
             raise RuntimeError(f"SQL test directory for extension '{name}' does not exist: {root}")

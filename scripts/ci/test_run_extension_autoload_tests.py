@@ -88,7 +88,39 @@ class ExtensionTestConfigTest(unittest.TestCase):
     def test_missing_git_revision_fails_with_config_error(self):
         with self.assertRaises(subprocess.CalledProcessError) as error:
             self.read("duckdb_extension_load(remote LOAD_TESTS GIT_URL url)")
-        self.assertIn("No GIT_TAG specified for remote", error.exception.stderr)
+        self.assertIn("Git URL specified but no valid GIT_TAG was found for remote", error.exception.stderr)
+
+    def test_skip_extensions_and_checkout_override_match_build_resolution(self):
+        checkout = self.root / "overridden checkout"
+        test_root = checkout / "custom tests"
+        test_root.mkdir(parents=True)
+        with mock.patch.dict(os.environ, {"SKIP_EXTENSIONS": "ignored", "DUCKDB_REMOTE_DIRECTORY": str(checkout)}):
+            entries = self.read(
+                '''
+                duckdb_extension_load(ignored LOAD_TESTS)
+                duckdb_extension_load(remote LOAD_TESTS GIT_URL url GIT_TAG pin
+                    SOURCE_DIR loader INCLUDE_DIR headers TEST_DIR "custom tests")
+                duckdb_extension_load(remote LOAD_TESTS SOURCE_DIR different)
+            '''
+            )
+            self.assertEqual([entry["name"] for entry in entries], ["remote"])
+            self.assertEqual(Path(entries[0]["source_path"]), checkout / "loader")
+            self.assertEqual(Path(entries[0]["include_path"]), checkout / "headers")
+            self.assertEqual(Path(entries[0]["test_path"]), test_root)
+            with mock.patch.object(runner.sync_out_of_tree_extensions, "sync_extension") as sync:
+                self.assertEqual(runner.prepare_test_roots(self.root, entries), [test_root])
+                sync.assert_not_called()
+
+    def test_absolute_git_test_root_is_preserved(self):
+        test_root = self.root / "absolute tests"
+        test_root.mkdir()
+        entries = self.read(
+            f'''
+            duckdb_extension_load(remote LOAD_TESTS GIT_URL url GIT_TAG pin TEST_DIR "{test_root}")
+        '''
+        )
+        with mock.patch.object(runner.sync_out_of_tree_extensions, "sync_extension"):
+            self.assertEqual(runner.prepare_test_roots(self.root, entries), [test_root])
 
     def test_complete_extension_set_guard_honors_environment(self):
         config = '''
