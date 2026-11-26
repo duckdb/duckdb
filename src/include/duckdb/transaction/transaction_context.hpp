@@ -106,6 +106,9 @@ private:
 	shared_ptr<MetaTransaction> TakeCurrentTransaction();
 	shared_ptr<MetaTransaction> GetCurrentTransaction();
 	void RollbackTransaction(const shared_ptr<MetaTransaction> &transaction, optional_ptr<ErrorData> error);
+	//! Joins `transaction` and continues in it, discarding the current transaction (if any)
+	void EnterTransaction(shared_ptr<MetaTransaction> transaction, bool inherit, const string &not_active_error,
+	                      const string &aborted_error);
 
 	TransactionContext(const TransactionContext &) = delete;
 };

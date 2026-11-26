@@ -212,28 +212,9 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 			break;
 		}
 	}
-	if (!source || source->IsFinished()) {
-		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
-	}
-	if (ValidChecker::IsInvalidated(*source)) {
-		throw TransactionException("cannot join transaction \"%s\": it was aborted", share_id);
-	}
-	if (!source->Join()) {
-		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
-	}
-	// discard the transaction that was started for this statement and continue in the shared one
-	auto previous = TakeCurrentTransaction();
-	SetCurrentTransaction(source);
-	auto_commit = false;
-	previous->MarkFinished();
-	try {
-		RollbackTransaction(previous, nullptr);
-	} catch (std::exception &) {
-		// the discarded transaction is empty, a failure to end it must not undo the join
-	}
-	for (auto &state : context.GetContext().GetRegisteredState().States()) {
-		state->TransactionBegin(*current_transaction, context);
-	}
+	auto not_active = StringUtil::Format("invalid transaction identifier: \"%s\"", share_id);
+	auto aborted = StringUtil::Format("cannot join transaction \"%s\": it was aborted", share_id);
+	EnterTransaction(std::move(source), false, not_active, aborted);
 }
 
 void TransactionContext::InheritTransaction(ClientContext &source) {
@@ -246,21 +227,37 @@ void TransactionContext::InheritTransaction(ClientContext &source) {
 	if (!auto_commit || current_transaction) {
 		throw TransactionException("cannot inherit a transaction within a transaction");
 	}
-	auto transaction = source.transaction.GetCurrentTransaction();
-	if (!transaction || transaction->IsFinished()) {
-		throw TransactionException("cannot inherit the transaction of a connection that has no active transaction");
-	}
-	if (ValidChecker::IsInvalidated(*transaction)) {
-		throw TransactionException("cannot inherit the transaction: it was aborted");
-	}
-	if (!transaction->Join(true)) {
-		throw TransactionException("cannot inherit the transaction of a connection that has no active transaction");
-	}
-	SetCurrentTransaction(std::move(transaction));
-	auto_commit = false;
-	inherited = true;
 	// errors invalidate the transaction as they would in the connection it was inherited from
 	invalidation_policy = source.transaction.GetInvalidationPolicy();
+	EnterTransaction(source.transaction.GetCurrentTransaction(), true,
+	                 "cannot inherit the transaction of a connection that has no active transaction",
+	                 "cannot inherit the transaction: it was aborted");
+}
+
+void TransactionContext::EnterTransaction(shared_ptr<MetaTransaction> transaction, bool inherit,
+                                          const string &not_active_error, const string &aborted_error) {
+	if (!transaction || transaction->IsFinished()) {
+		throw TransactionException(not_active_error);
+	}
+	if (ValidChecker::IsInvalidated(*transaction)) {
+		throw TransactionException(aborted_error);
+	}
+	if (!transaction->Join(inherit)) {
+		throw TransactionException(not_active_error);
+	}
+	// a JOIN TRANSACTION statement runs in a transaction of its own: discard it and continue in the joined one
+	auto previous = TakeCurrentTransaction();
+	SetCurrentTransaction(std::move(transaction));
+	auto_commit = false;
+	inherited = inherit;
+	if (previous) {
+		previous->MarkFinished();
+		try {
+			RollbackTransaction(previous, nullptr);
+		} catch (std::exception &) {
+			// the discarded transaction is empty, a failure to end it must not undo the join
+		}
+	}
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}
