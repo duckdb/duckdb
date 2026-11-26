@@ -7,14 +7,15 @@ require parquet
 # parquet keys are not persisted across restarts
 require noforcestorage
 
+# Boolean pages keep the per-page writer state small.
 statement ok
-COPY (FROM range(40000)) TO '{TEST_DIR}/many_pages_per_chunk.parquet' (DATA_PAGE_SIZE_LIMIT 1, ROW_GROUP_SIZE 100000)
+COPY (SELECT range % 2 = 0 AS value FROM range(40000)) TO '{TEST_DIR}/many_pages_per_chunk.parquet' (DATA_PAGE_SIZE_LIMIT 1, ROW_GROUP_SIZE 100000)
 
 # an unencrypted file is not subject to the encryption page ordinal limit
 query II
-SELECT count(*), sum(range) FROM '{TEST_DIR}/many_pages_per_chunk.parquet'
+SELECT count(*), sum(value) FROM '{TEST_DIR}/many_pages_per_chunk.parquet'
 ----
-40000	799980000
+40000	20000
 
 # writing encrypted parquet requires a crypto provider; use the built-in mbedtls one
 statement ok
@@ -24,11 +25,11 @@ statement ok
 PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
 
 statement ok
-COPY (FROM range(40000)) TO '{TEST_DIR}/many_pages_per_chunk_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'}, DATA_PAGE_SIZE_LIMIT 1, ROW_GROUP_SIZE 100000)
+COPY (SELECT range % 2 = 0 AS value FROM range(40000)) TO '{TEST_DIR}/many_pages_per_chunk_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'}, DATA_PAGE_SIZE_LIMIT 1, ROW_GROUP_SIZE 100000)
 
 # an encrypted column chunk that exceeds the AAD page ordinal range must raise a clear user-facing error
 statement error
-SELECT sum(range) FROM read_parquet('{TEST_DIR}/many_pages_per_chunk_encrypted.parquet', encryption_config={footer_key: 'key256'})
+SELECT sum(value) FROM read_parquet('{TEST_DIR}/many_pages_per_chunk_encrypted.parquet', encryption_config={footer_key: 'key256'})
 ----
 <REGEX>:Invalid Input Error.*maximum page ordinal.*
 
