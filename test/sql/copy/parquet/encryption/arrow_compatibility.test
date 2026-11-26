@@ -130,4 +130,16 @@ GROUP BY row_group ORDER BY row_group;
 0	8386560
 1	25163776
 
+# Filter columns need their AAD initialized before decoding, including after a row-group change.
+query I rowsort
+SELECT value
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_multipage_{encoding}.parquet',
+    encryption_config={footer_key: 'arrow_multipage_{encoding}'})
+WHERE value >= 4094 AND value < 4098;
+----
+4094
+4095
+4096
+4097
+
 endloop
