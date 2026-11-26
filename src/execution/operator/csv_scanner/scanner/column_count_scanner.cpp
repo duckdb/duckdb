@@ -173,8 +173,11 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
+				const auto &user_options = state_machine->options.dialect_options.state_machine_options;
+				// a quote the user set and reads as a value when it never closes is no sign of a wrong dialect
+				const bool open_quote_is_value = user_options.UnterminatedAsValue() && user_options.quote.IsSetByUser();
 				if (states.IsQuotedCurrent() && !states.IsUnquoted() &&
-				    !state_machine->state_machine_options.LineRecords()) {
+				    !state_machine->state_machine_options.LineRecords() && !open_quote_is_value) {
 					// the file ended inside a quote that never closed, which only line records accept as a NULL field
 					result.error = true;
 					return;

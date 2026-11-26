@@ -606,6 +606,19 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.quoted = false;
 }
 
+bool StringValueResult::IsEscapedNullString(const char *value_ptr, const idx_t size) const {
+	const auto &options = state_machine.state_machine_options;
+	if (size != 2 || quoted || was_quoted || !options.UnquotedEscapes() || value_ptr[0] != options.escape.GetValue()) {
+		return false;
+	}
+	for (idx_t i = 0; i < null_str_count; i++) {
+		if (null_str_size[i] == 2 && null_str_ptr[i][0] == value_ptr[0] && null_str_ptr[i][1] == value_ptr[1]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void StringValueResult::AddUnterminatedQuoteNull() {
 	quoted = false;
 	escaped = false;
@@ -664,6 +677,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				    result.units_before_field, result.value_scratch);
 				result.AddValueToVector(value.GetData(), value.GetSize(), true,
 				                        sm_opts.EscapeAndCharacter(value_ptr, length));
+			} else if (result.IsEscapedNullString(value_ptr, length)) {
+				result.AddValueToVector(value_ptr + 1, 1, false, sm_opts.EscapeAndCharacter(value_ptr, length));
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
 				result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id, result.last_position);
@@ -1920,6 +1935,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 						    sm_options.escape_mode.GetValue(), sm_options.DoubledQuotes(), result.units_before_field,
 						    result.value_scratch);
 						removed_extra_delimiter_bytes = true;
+					} else if (result.IsEscapedNullString(over_buffer_string.c_str(),
+					                                      over_buffer_string.size() - extra_delimiter_bytes)) {
+						value = string_t(over_buffer_string.c_str() + 1,
+						                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1));
 					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,

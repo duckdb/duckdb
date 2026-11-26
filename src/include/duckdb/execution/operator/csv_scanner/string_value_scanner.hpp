@@ -338,10 +338,15 @@ public:
 	}
 	//! Whether the file ended inside an open quote, also one the embedded quote toggle opened with its last byte
 	inline bool FileEndsInsideQuotes() const {
-		return states.IsQuotedCurrent() || (embedded_quote_fields && states.IsState(CSVState::FIELD_QUOTE));
+		// an escape that is the last byte of the file was read inside quotes as well
+		return states.IsQuotedCurrent() || states.IsState(CSVState::ESCAPE) ||
+		       states.IsState(CSVState::ESCAPE_NO_FIELD) ||
+		       (embedded_quote_fields && states.IsState(CSVState::FIELD_QUOTE));
 	}
 	//! Reads the field a record end inside an open quote left in progress as NULL
 	void AddUnterminatedQuoteNull();
+	//! Whether a plain field is the escape and a character that spell a NULL string, which reads as NULL in any type
+	bool IsEscapedNullString(const char *value_ptr, idx_t size) const;
 	//! Routes a quoted field through the embedded quote text pass when that pass could change it
 	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
 		if (!quoted || size == 0 || !state_machine.state_machine_options.ToggleQuotes()) {

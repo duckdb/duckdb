@@ -496,3 +496,70 @@ NULL
 abc"d
 
 endloop
+
+# an escape that is the last byte of the file leaves its quotes open, the toggle's and a plain quoted value's
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"\')) TO '{TEST_DIR}/rule_toggle_escape_eof.csv' (FORMAT BLOB);
+
+statement ok
+COPY (SELECT encode('x' || chr(10) || '"a\')) TO '{TEST_DIR}/rule_quoted_escape_eof.csv' (FORMAT BLOB);
+
+foreach parallel true false
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_toggle_escape_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', embedded_quotes='toggle', new_line='\n', parallel={parallel});
+----
+Value with unterminated quote found
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_quoted_escape_eof.csv', columns={'v': 'VARCHAR'}, header=false, auto_detect=false, quote='"', escape='\', new_line='\n', parallel={parallel});
+----
+Value with unterminated quote found
+
+endloop
+
+# the escape and a character that spell a NULL string read as NULL in a typed column as well
+statement ok
+COPY (SELECT * FROM (VALUES ('123456'), ('\N'), ('2')) t(line)) TO '{TEST_DIR}/rule_typed_null.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach escape_mode quotes_only anywhere
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_null.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N');
+----
+123456
+NULL
+2
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_null.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='{escape_mode}', nullstr='\N', buffer_size=8, max_line_size=7, parallel=false);
+----
+123456
+NULL
+2
+
+endloop
+
+# any other escaped value of a typed column is still an error
+statement ok
+COPY (SELECT * FROM (VALUES ('7'), ('\5')) t(line)) TO '{TEST_DIR}/rule_typed_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_typed_escape.csv', columns={'v': 'INTEGER'}, header=false, auto_detect=false, quote='"', escape='\', escape_mode='anywhere', nullstr='\N');
+----
+Could not convert string
+
+# the sniffer accepts a quote the user set that never closes when it reads as a value
+statement ok
+COPY (SELECT encode('x' || chr(10) || 'a"b')) TO '{TEST_DIR}/rule_sniff_open_quote.csv' (FORMAT BLOB);
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/rule_sniff_open_quote.csv', header=false, all_varchar=true, delim=',', quote='"', escape='\', embedded_quotes='toggle', unterminated_quote='value', new_line='\n');
+----
+x
+ab
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_sniff_open_quote.csv', header=false, all_varchar=true, delim=',', quote='"', escape='\', embedded_quotes='toggle', new_line='\n');
+----
+<REGEX>:.*(unterminated quote|not possible to automatically detect).*
