@@ -219,7 +219,29 @@ SELECT count(*), sum(a) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query
 ----
 2128	4647128
 
+### a value of the rows (read by readers that gather it)
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM (VALUES (2::BIGINT, 5::BIGINT, NULL::BIT, 7::BIGINT), (8::BIGINT, NULL::BIGINT, NULL::BIT, NULL::BIGINT))'}])
+----
+2
+3
+4
+8
+9
+
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, NULL::BIGINT, ''101''::BIT, 3::BIGINT'}])
+----
+1
+3
+
 ### errors
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, 2::BIGINT, NULL::BIT, 3::INTEGER'}])
+----
+must return (row_start BIGINT, row_end BIGINT, bits BIT
 
 statement error
 SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT * FROM read_parquet(''{TEST_DIR}/does_not_exist.parquet'')'}])
@@ -229,17 +251,17 @@ Failed to read the filter query of file
 statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT ''1''::BIT'}])
 ----
-must return (row_start BIGINT, row_end BIGINT, bits BIT)
+must return (row_start BIGINT, row_end BIGINT, bits BIT
 
 statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, 2::BIGINT'}])
 ----
-must return (row_start BIGINT, row_end BIGINT, bits BIT)
+must return (row_start BIGINT, row_end BIGINT, bits BIT
 
 statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::INTEGER, 2::INTEGER, NULL::BIT'}])
 ----
-must return (row_start BIGINT, row_end BIGINT, bits BIT)
+must return (row_start BIGINT, row_end BIGINT, bits BIT
 
 statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT -1::BIGINT, NULL::BIGINT, ''1''::BIT'}])

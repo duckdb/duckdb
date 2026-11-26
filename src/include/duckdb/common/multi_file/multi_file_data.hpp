@@ -15,6 +15,7 @@
 #include <numeric>
 
 namespace duckdb {
+class Vector;
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
 
@@ -24,6 +25,13 @@ public:
 
 public:
 	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
+	//! Whether the rows that are scanned have a value
+	virtual bool HasRowValues() const {
+		return false;
+	}
+	//! Set the values of the rows with the given file row numbers in the result - rows without a value are not changed
+	virtual void GatherRowValues(const Vector &file_row_numbers, Vector &result, idx_t count) {
+	}
 };
 
 //! A delete filter that forwards to one owned by somebody else - used to hand a reader the filter of the scan it is
@@ -36,6 +44,12 @@ public:
 public:
 	idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) override {
 		return filter.Filter(start_row_index, count, result_sel);
+	}
+	bool HasRowValues() const override {
+		return filter.HasRowValues();
+	}
+	void GatherRowValues(const Vector &file_row_numbers, Vector &result, idx_t count) override {
+		filter.GatherRowValues(file_row_numbers, result, count);
 	}
 
 private:
