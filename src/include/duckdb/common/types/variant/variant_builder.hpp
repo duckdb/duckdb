@@ -35,6 +35,14 @@
 
 namespace duckdb {
 
+//! Grants the variant builder access to the storage-level type of a VariantNode / ParquetVariantNode
+struct VariantNodeStorageAccess {
+	template <class NODE>
+	static VariantLogicalType GetStorageType(const NODE &node) {
+		return node.GetVariantType();
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Building a VARIANT in a single pass
 //===--------------------------------------------------------------------===//
@@ -361,6 +369,12 @@ struct VariantBuilder {
 		byte_offsets.push_back(byte_offset);
 	}
 
+	//! Emit a primitive value sourced from a VariantNode-like cursor, using the storage type of the cursor
+	template <class NODE>
+	void EmitPrimitiveNode(const NODE &it) {
+		EmitPrimitiveNode(it, VariantNodeStorageAccess::GetStorageType(it));
+	}
+
 	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by
 	//! value via 'it.GetData<T>()' (chosen by 'type_id'); strings via 'it.GetString()'; decimals via
 	//! 'it.GetDecimalProperties()' followed by 'it.GetData<T>()' at the physical type implied by the width.
@@ -554,7 +568,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 			builder.EmitNull();
 			return;
 		}
-		auto type_id = node.GetTypeId();
+		auto type_id = VariantNodeStorageAccess::GetStorageType(node);
 		switch (type_id) {
 		case VariantLogicalType::OBJECT: {
 			auto children = CollectObjectChildren(node);

@@ -227,7 +227,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const OpenFileInfo &file, Fil
 
 unique_ptr<FileHandle> VirtualFileSystem::WrapOpenedFile(unique_ptr<FileHandle> file_handle, const OpenFileInfo &file,
                                                          const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	const FileCompressionType compression = flags.Compression();
+	const auto &compression = flags.Compression();
 	auto registry = file_system_registry.atomic_load();
 	try {
 		// Evaluate and apply compression option then.

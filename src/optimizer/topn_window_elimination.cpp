@@ -3,6 +3,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
@@ -193,6 +194,26 @@ LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t colu
 	return result;
 }
 
+//! Whether the top-n aggregate keeps the sign of a zero in a single FLOAT or DOUBLE payload column: types that
+//! arg_min/arg_max do not store natively are stored as sort keys, which store 0.0 and -0.0 alike.
+static bool PayloadKeepsZeroSign(const LogicalType &type, const bool n_aggregate) {
+	if (type.id() != LogicalTypeId::FLOAT && type.id() != LogicalTypeId::DOUBLE) {
+		return true;
+	}
+	if (n_aggregate) {
+#if DUCKDB_SMALLER_BINARY(arg_min_max_n_types)
+		return false;
+#else
+		return true;
+#endif
+	}
+#if DUCKDB_SMALLER_BINARY(arg_min_max_types)
+	return false;
+#else
+	return type.id() == LogicalTypeId::DOUBLE;
+#endif
+}
+
 //! Late materialization recreates a payload by re-scanning the base table column and re-applying a single default
 //! (strict) cast at the topmost projection. That only reproduces the original value when the projection expression
 //! is a plain column reference, optionally wrapped in a single non-try cast. A value-transforming expression
@@ -309,6 +330,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && aggregate_payload.size() == 1 &&
+	    !PayloadKeepsZeroSign(aggregate_payload[0]->GetReturnType(), params.limit > 1)) {
+		return op;
+	}
 	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
