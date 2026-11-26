@@ -49,6 +49,7 @@ add_library_unity(
   capi_v2_tokenizer.cpp
   capi_v2_utf8.cpp
   capi_v2_value.cpp
+  capi_v2_vcatalog.cpp
   capi_v2_vector.cpp)
 
 set(ALL_OBJECT_FILES

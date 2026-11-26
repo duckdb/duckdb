@@ -1,6 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 #include "duckdb/main/capi_v2/capi_v2_function_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
@@ -42,10 +43,14 @@ public:
 	vector<LogicalType> column_types;
 	vector<Identifier> column_names;
 
+	//! The table this is a scan of, if it is the scan of a catalog table
+	optional_ptr<TableCatalogEntry> table;
+
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2TableFunctionData>();
 		copy->handle = handle;
 		copy->info = info;
+		copy->table = table;
 		copy->cardinality = cardinality;
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
@@ -56,7 +61,7 @@ public:
 
 	auto Equals(const FunctionData &other) const -> bool override {
 		const auto &other_data = other.Cast<CV2TableFunctionData>();
-		return handle && other_data.handle && handle->Equals(*other_data.handle);
+		return table == other_data.table && handle && other_data.handle && handle->Equals(*other_data.handle);
 	}
 };
 
@@ -405,9 +410,9 @@ static_assert(static_cast<int>(OrderPreservationType::INSERTION_ORDER) == DUCKDB
 static_assert(static_cast<int>(OrderPreservationType::FIXED_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER,
               "OrderPreservationType::FIXED_ORDER mismatch");
 
-static auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType {
+auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType {
 	if (static_cast<uint32_t>(value) > DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER) {
-		throw duckdb::InvalidInputException("Invalid value in duckdb_v2_table_function_bind_set_order_preservation");
+		throw duckdb::InvalidInputException("Invalid order preservation value");
 	}
 	return static_cast<OrderPreservationType>(value);
 }
@@ -1217,6 +1222,10 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 	return args.out_partition_info;
 }
 
+static auto CV2TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data) -> optional_ptr<TableCatalogEntry> {
+	return bind_data ? bind_data->Cast<CV2TableFunctionData>().table : nullptr;
+}
+
 class CV2TableFunction {
 public:
 	explicit CV2TableFunction(DatabaseInstance &db) : db(db) {
@@ -1231,13 +1240,7 @@ public:
 		if (!info.bind_cb) {
 			throw InvalidInputException("Bind callback must be set for the function.");
 		}
-		if (!info.exec_cb) {
-			throw InvalidInputException("Exec callback must be set for the function.");
-		}
-		// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
-		if (info.partitioning_cb && !info.partition_data_cb) {
-			throw InvalidInputException("Partition data callback must be set when the partitioning callback is set.");
-		}
+		VerifyScanCallbacks();
 		// A table function declares the columns it returns from its bind callback, not through a return type.
 		if (signature.GetReturnType().id() != LogicalTypeId::INVALID) {
 			throw InvalidInputException("A table function signature cannot set a return type.");
@@ -1251,9 +1254,47 @@ public:
 
 		signature.Verify();
 
+		info.name = name;
+		auto function = CreateFunction(make_shared_ptr<CV2TableFunctionInfo>(std::move(info)));
+		function.bind = CV2TableBind;
 		// A table function holds a signature of its own, so the declared one is handed over as-is
-		TableFunction function(name, {}, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
 		function.GetSignature() = signature;
+		// a function registered through the C API makes no stability promise unless one was declared
+		function.stability = stability;
+		return function;
+	}
+
+	//! Validates the configuration and builds the function tables of `target` are scanned with. It has no bind
+	//! callback: CV2BindTableScan binds it.
+	TableFunction BuildTableScan(DatabaseInstance &target, const Identifier &default_name) const {
+		CheckRegistrationTarget(db, target, "table function");
+		VerifyScanCallbacks();
+		if (signature.GetParameterCount() > 0) {
+			throw InvalidInputException("The scan function of a table cannot have parameters.");
+		}
+		auto scan_info = make_shared_ptr<CV2TableFunctionInfo>(info);
+		scan_info->name = name.empty() ? default_name : name;
+		auto function = CreateFunction(std::move(scan_info));
+		function.get_table_entry = CV2TableScanGetTableEntry;
+		// Keeps the stability of a table scan: unlike a call of the function, a table reads the same within a query
+		return function;
+	}
+
+private:
+	void VerifyScanCallbacks() const {
+		if (!info.exec_cb) {
+			throw InvalidInputException("Exec callback must be set for the function.");
+		}
+		// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
+		if (info.partitioning_cb && !info.partition_data_cb) {
+			throw InvalidInputException("Partition data callback must be set when the partitioning callback is set.");
+		}
+	}
+
+	//! The function running the callbacks of `function_info`, short of its bind
+	static TableFunction CreateFunction(shared_ptr<CV2TableFunctionInfo> function_info) {
+		auto &info = *function_info;
+		TableFunction function(info.name, {}, CV2TableExec, nullptr, CV2TableInitGlobal, CV2TableInitLocal);
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -1291,13 +1332,7 @@ public:
 		if (info.to_string_cb) {
 			function.to_string = CV2TableToString;
 		}
-
-		// a function registered through the C API makes no stability promise unless one was declared
-		function.stability = stability;
-
-		info.name = name;
-		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
-
+		function.function_info = std::move(function_info);
 		return function;
 	}
 
@@ -1316,6 +1351,29 @@ static auto Convert(duckdb_v2_table_function_handle func) -> CV2TableFunction * 
 }
 static auto Convert(CV2TableFunction *func) -> duckdb_v2_table_function_handle {
 	return reinterpret_cast<duckdb_v2_table_function_handle>(func);
+}
+
+auto CV2BuildTableScanFunction(duckdb_v2_table_function_handle function, DatabaseInstance &target,
+                               const Identifier &default_name) -> TableFunction {
+	return Convert(function)->BuildTableScan(target, default_name);
+}
+
+auto CV2BindTableScan(TableFunction &function, TableCatalogEntry &table, CV2TableScanBindResult bind)
+    -> unique_ptr<FunctionData> {
+	auto result = make_uniq<CV2TableFunctionData>();
+	result->info = &function.function_info->Cast<CV2TableFunctionInfo>();
+	result->handle = std::move(bind.bind_data);
+	result->cardinality = bind.cardinality;
+	result->cardinality_is_exact = bind.cardinality_is_exact;
+	result->cardinality_set = bind.cardinality_set;
+	result->table = table;
+	for (auto &column : table.GetColumns().Logical()) {
+		result->column_types.push_back(column.Type());
+		result->column_names.push_back(column.Name());
+	}
+	// GetScanFunction hands each scan its own copy of the function, so this does not leak into other scans.
+	function.order_preservation_type = bind.order_preservation;
+	return std::move(result);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

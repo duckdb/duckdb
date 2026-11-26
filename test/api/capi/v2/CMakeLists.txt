@@ -41,6 +41,7 @@ add_library_unity(
   test_capi_v2_statement.cpp
   test_capi_v2_stats.cpp
   test_capi_v2_table_function.cpp
+  test_capi_v2_vcatalog.cpp
   test_capi_v2_tokenizer.cpp
   test_capi_v2_static_extension.cpp
   test_capi_v2_value.cpp

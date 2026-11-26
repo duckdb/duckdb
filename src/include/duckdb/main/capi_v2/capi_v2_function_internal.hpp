@@ -184,4 +184,23 @@ inline auto Convert(CV2FunctionBindInfo *info) -> duckdb_v2_function_bind_info_h
 	return reinterpret_cast<duckdb_v2_function_bind_info_handle>(info);
 }
 
+auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType;
+
+//! What a scan of a catalog table is bound with, in place of what the bind callback of a table function reports
+struct CV2TableScanBindResult {
+	shared_ptr<CV2UserData> bind_data;
+	idx_t cardinality = 0;
+	bool cardinality_is_exact = false;
+	bool cardinality_set = false;
+	OrderPreservationType order_preservation = OrderPreservationType::INSERTION_ORDER;
+};
+
+//! Builds the function tables of `target` are scanned with: `function` without its bind callback, which the table
+//! stands in for. Named `default_name` unless `function` has a name.
+auto CV2BuildTableScanFunction(duckdb_v2_table_function_handle function, DatabaseInstance &target,
+                               const Identifier &default_name) -> TableFunction;
+//! Binds a scan of `table` with a function built by CV2BuildTableScanFunction
+auto CV2BindTableScan(TableFunction &function, TableCatalogEntry &table, CV2TableScanBindResult result)
+    -> unique_ptr<FunctionData>;
+
 } // namespace duckdb::capiv2
