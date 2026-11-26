@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/projection_placement.hpp"
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
@@ -66,7 +67,7 @@ struct LiftOption {
 };
 
 struct LiftPlacement {
-	optional_ptr<LogicalProjection> source;
+	TableIndex source_table_index;
 	idx_t expression_index;
 	ColumnBinding source_binding;
 	vector<ExpressionBindingWidth> dependencies;
@@ -87,7 +88,7 @@ struct LiftedExpression {
 };
 
 struct LiftPlacementGroup {
-	optional_ptr<LogicalProjection> source;
+	TableIndex source_table_index;
 	vector<LiftedExpression> expressions;
 	vector<LiftPathStep> path;
 	vector<ColumnBinding> target_bindings;
@@ -96,8 +97,8 @@ struct LiftPlacementGroup {
 	column_binding_map_t<idx_t> result_indexes;
 
 	bool TryAdd(LiftPlacement placement) {
-		if (source) {
-			if (source != placement.source ||
+		if (source_table_index.IsValid()) {
+			if (source_table_index != placement.source_table_index ||
 			    !RefersToSameObject(path.back().op.get(), placement.path.back().op.get())) {
 				return false;
 			}
@@ -108,7 +109,7 @@ struct LiftPlacementGroup {
 				path[path_idx].result_bindings.insert(bindings.begin(), bindings.end());
 			}
 		} else {
-			source = placement.source;
+			source_table_index = placement.source_table_index;
 			path = std::move(placement.path);
 			target_bindings = std::move(placement.target_bindings);
 		}
@@ -438,7 +439,7 @@ static bool FindLiftPlacement(LogicalProjection &projection, idx_t expression_in
 	}
 
 	auto &option = options[best_option.GetIndex()];
-	result.source = projection;
+	result.source_table_index = projection.table_index;
 	result.expression_index = expression_index;
 	result.source_binding = source_binding;
 	result.dependencies = std::move(dependencies);
@@ -511,16 +512,36 @@ static void ExposeBinding(LogicalOperator &op, idx_t child_index, const ColumnBi
 	}
 }
 
+static void SetProjectionTypes(LogicalProjection &projection) {
+	projection.types.clear();
+	for (auto &expression : projection.expressions) {
+		projection.types.push_back(expression->GetReturnType());
+	}
+}
+
+//! Select types from the current child layouts, including any columns exposed by a changed projection map.
+//! Children on the rewritten path are already updated; other child subtrees do not need type resolution.
+static void UpdateLiftTypes(LogicalOperator &op) {
+	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_FILTER || IsEligibleJoin(op));
+	column_binding_map_t<LogicalType> types;
+	for (auto &child : op.children) {
+		auto bindings = child->GetColumnBindings();
+		D_ASSERT(bindings.size() == child->types.size());
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			types.emplace(bindings[i], child->types[i]);
+		}
+	}
+	op.types.clear();
+	for (auto &binding : op.GetColumnBindings()) {
+		op.types.push_back(types.at(binding));
+	}
+}
+
 static ProjectionRewrite
 RebuildProjection(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
-                  unique_ptr<LogicalOperator> &root, LogicalProjection &projection,
-                  const column_binding_set_t &removed_bindings, vector<LiftDependency> &dependencies,
-                  BindingReplacementGraph &binding_replacements, optional_ptr<LogicalOperator> &lowest_rebuilt) {
-	auto projection_ptr = FindOperator(root, projection);
-	if (!projection_ptr) {
-		throw InternalException("Projection placement lost a projection while lifting an expression");
-	}
-
+                  unique_ptr<LogicalOperator> &op, const column_binding_set_t &removed_bindings,
+                  vector<LiftDependency> &dependencies, BindingReplacementGraph &binding_replacements) {
+	auto &projection = op->Cast<LogicalProjection>();
 	auto old_bindings = projection.GetColumnBindings();
 	vector<unique_ptr<Expression>> expressions;
 	vector<optional_idx> dependency_indexes(dependencies.size());
@@ -535,8 +556,7 @@ RebuildProjection(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStat
 		if (expression->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			auto &colref = expression->Cast<BoundColumnRefExpression>();
 			if (colref.Depth() == 0) {
-				// the expressions still refer to the bindings of projections rebuilt below us: the binding replacer
-				// only runs once the whole placement is in place (see ApplyLiftPlacement)
+				// Retained expressions can still refer to projections rebuilt below us.
 				auto current_binding = binding_replacements.Resolve(colref.Binding());
 				for (idx_t dependency_idx = 0; dependency_idx < dependencies.size(); dependency_idx++) {
 					if (!dependency_indexes[dependency_idx].IsValid() &&
@@ -566,8 +586,7 @@ RebuildProjection(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStat
 		replacement->SetEstimatedCardinality(projection.estimated_cardinality);
 	}
 	replacement->children.push_back(std::move(projection.children[0]));
-	optional_ptr<LogicalOperator> replacement_ptr = *replacement;
-	*projection_ptr = std::move(replacement);
+	op = std::move(replacement);
 
 	for (auto &retained_binding : retained_bindings) {
 		auto new_binding = ColumnBinding(table_index, ProjectionIndex(retained_binding.second));
@@ -580,14 +599,12 @@ RebuildProjection(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStat
 		CopyStatistics(statistics_map, old_binding, new_binding);
 		dependencies[dependency_idx].current_binding = new_binding;
 	}
-	if (!lowest_rebuilt) {
-		lowest_rebuilt = replacement_ptr;
-	}
-	// The references to the old bindings are replaced later, in one go, once the lifted expression has been placed:
-	// the projection maps of the operators above us are only made consistent with the new column layout step by
-	// step (RemapParentProjectionMap, ExposeBinding, and finally the restore projection), and walking the plan with
-	// a ColumnBindingReplacer before that resolves the column bindings of every operator through these stale maps.
-	return {std::move(old_bindings), replacement_ptr->GetColumnBindings()};
+	// Only visit this projection's expressions. The enclosing path still has partially rebuilt layouts,
+	// but resolving its child bindings does not require inspecting those layouts or walking other subtrees.
+	ColumnBindingReplacer replacer(binding_replacements);
+	replacer.VisitOperatorBindings(*op);
+	SetProjectionTypes(op->Cast<LogicalProjection>());
+	return {std::move(old_bindings), op->GetColumnBindings()};
 }
 
 static void RewriteLiftedExpression(unique_ptr<Expression> &expression, const vector<LiftDependency> &dependencies) {
@@ -605,19 +622,20 @@ static void RewriteLiftedExpression(unique_ptr<Expression> &expression, const ve
 	    });
 }
 
-static void ApplyLiftPlacementGroup(Optimizer &optimizer,
-                                    column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
-                                    unique_ptr<LogicalOperator> &root, LiftPlacementGroup &group) {
-	D_ASSERT(group.source);
+static BindingReplacementGraph
+RewriteLiftPlacementGroup(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
+                          unique_ptr<LogicalOperator> &target, LiftPlacementGroup &group) {
 	D_ASSERT(!group.expressions.empty());
-	auto &source = *group.source;
 	auto &path = group.path;
+	D_ASSERT(RefersToSameObject(*target, path.back().op.get()));
+	auto &source_op = path.front().op.get().children[path.front().child_index];
+	auto &source = source_op->Cast<LogicalProjection>();
+	D_ASSERT(source.table_index == group.source_table_index);
 	auto &dependencies = group.dependencies;
 	auto &result_indexes = group.result_indexes;
-	// Discovery only needs bindings and cardinalities. Resolve types once, at the selected output boundary,
-	// before rebuilding the path, and keep that original layout for the restore projection.
+	// Types are initialized once before lifting and maintained along each rewritten path.
+	// Keep the original output layout for the restore projection.
 	auto &original_target = path.back().op.get();
-	original_target.ResolveOperatorTypes();
 	auto target_types = original_target.types;
 	vector<unique_ptr<Expression>> expressions;
 	column_binding_set_t source_bindings;
@@ -627,9 +645,8 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 	}
 	BindingReplacementGraph binding_replacements;
 
-	optional_ptr<LogicalOperator> lowest_rebuilt;
-	auto source_rewrite = RebuildProjection(optimizer, statistics_map, root, source, source_bindings, dependencies,
-	                                        binding_replacements, lowest_rebuilt);
+	auto source_rewrite =
+	    RebuildProjection(optimizer, statistics_map, source_op, source_bindings, dependencies, binding_replacements);
 	RemapParentProjectionMap(path[0].op.get(), path[0].child_index, source_rewrite.old_bindings,
 	                         source_rewrite.new_bindings);
 
@@ -637,13 +654,22 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 		auto &step = path[path_idx];
 		ProjectionRewrite rewrite {step.output_bindings, step.output_bindings};
 		if (step.op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			rewrite = RebuildProjection(optimizer, statistics_map, root, step.op.get().Cast<LogicalProjection>(),
-			                            step.result_bindings, dependencies, binding_replacements, lowest_rebuilt);
+			// The destination is a join, so every rebuilt projection has an unchanged parent above it.
+			// Replace its owning child slot and immediately refresh the borrowed path reference.
+			D_ASSERT(path_idx + 1 < path.size());
+			auto &parent = path[path_idx + 1];
+			auto &projection = parent.op.get().children[parent.child_index];
+			rewrite = RebuildProjection(optimizer, statistics_map, projection, step.result_bindings, dependencies,
+			                            binding_replacements);
+			step.op = *projection;
 		} else {
 			for (auto &dependency : dependencies) {
 				ExposeBinding(step.op.get(), step.child_index, dependency.current_binding);
 			}
 			rewrite.new_bindings = step.op.get().GetColumnBindings();
+			ColumnBindingReplacer replacer(binding_replacements);
+			replacer.VisitOperatorBindings(step.op.get());
+			UpdateLiftTypes(step.op.get());
 		}
 		if (path_idx + 1 < path.size()) {
 			RemapParentProjectionMap(path[path_idx + 1].op.get(), path[path_idx + 1].child_index, rewrite.old_bindings,
@@ -654,14 +680,7 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 	for (auto &expression : expressions) {
 		RewriteLiftedExpression(expression, dependencies);
 	}
-	auto &target_step = path.back();
-	auto target_ptr = FindOperator(root, target_step.op.get());
-	if (!target_ptr) {
-		throw InternalException("Projection placement lost its target join");
-	}
-	auto &target = **target_ptr;
-	target.ResolveOperatorTypes();
-	auto current_target_bindings = target.GetColumnBindings();
+	auto current_target_bindings = target->GetColumnBindings();
 
 	vector<unique_ptr<Expression>> compute_expressions;
 	vector<ColumnBinding> compute_inputs;
@@ -683,8 +702,8 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 		if (compute_entry == compute_inputs.end()) {
 			compute_idx = compute_inputs.size();
 			compute_inputs.push_back(current_binding);
-			auto type_idx = NumericCast<idx_t>(current_entry - current_target_bindings.begin());
-			compute_expressions.push_back(make_uniq<BoundColumnRefExpression>(target.types[type_idx], current_binding));
+			compute_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(target_types[target_idx], current_binding));
 		} else {
 			compute_idx = NumericCast<idx_t>(compute_entry - compute_inputs.begin());
 		}
@@ -697,10 +716,11 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 	}
 	auto compute_table_index = optimizer.binder.GenerateTableIndex();
 	auto compute_projection = make_uniq<LogicalProjection>(compute_table_index, std::move(compute_expressions));
-	if (target.has_estimated_cardinality) {
-		compute_projection->SetEstimatedCardinality(target.estimated_cardinality);
+	SetProjectionTypes(*compute_projection);
+	if (target->has_estimated_cardinality) {
+		compute_projection->SetEstimatedCardinality(target->estimated_cardinality);
 	}
-	compute_projection->children.push_back(std::move(*target_ptr));
+	compute_projection->children.push_back(std::move(target));
 
 	vector<unique_ptr<Expression>> restore_expressions;
 	restore_expressions.reserve(group.target_bindings.size());
@@ -714,12 +734,12 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 	}
 	auto restore_table_index = optimizer.binder.GenerateTableIndex();
 	auto restore_projection = make_uniq<LogicalProjection>(restore_table_index, std::move(restore_expressions));
-	if (target.has_estimated_cardinality) {
-		restore_projection->SetEstimatedCardinality(target.estimated_cardinality);
+	restore_projection->types = std::move(target_types);
+	if (original_target.has_estimated_cardinality) {
+		restore_projection->SetEstimatedCardinality(original_target.estimated_cardinality);
 	}
 	restore_projection->children.push_back(std::move(compute_projection));
-	optional_ptr<LogicalOperator> restore_ptr = *restore_projection;
-	*target_ptr = std::move(restore_projection);
+	target = std::move(restore_projection);
 
 	for (idx_t compute_idx = 0; compute_idx < compute_inputs.size(); compute_idx++) {
 		CopyStatistics(statistics_map, compute_inputs[compute_idx],
@@ -730,66 +750,194 @@ static void ApplyLiftPlacementGroup(Optimizer &optimizer,
 		               ColumnBinding(compute_table_index, ProjectionIndex(first_candidate_idx + placement_idx)));
 	}
 
-	// now that the restore projection reproduces the target's original column layout, every projection map in the
-	// plan is consistent again: replace the references to the bindings of the rebuilt projections (resolved through
-	// the chain of rebuilds) everywhere above the lowest rebuilt projection
-	ColumnBindingReplacer rebuild_replacer(binding_replacements);
-	rebuild_replacer.stop_operator = lowest_rebuilt;
-	rebuild_replacer.VisitOperator(*root);
-
-	ColumnBindingReplacer replacer;
+	// The complete subtree now restores the original ordered values. Its callers only need these output changes;
+	// references inside the subtree have already been repaired at each rebuilt operator.
+	BindingReplacementGraph output_replacements;
 	for (idx_t target_idx = 0; target_idx < group.target_bindings.size(); target_idx++) {
 		auto restore_binding = ColumnBinding(restore_table_index, ProjectionIndex(target_idx));
 		auto &old_binding = group.target_bindings[target_idx];
-		replacer.replacement_bindings.emplace_back(old_binding, restore_binding);
-		if (result_indexes.find(old_binding) == result_indexes.end()) {
-			auto current_binding = binding_replacements.Resolve(old_binding);
-			if (current_binding != old_binding) {
-				replacer.replacement_bindings.emplace_back(current_binding, restore_binding);
-			}
+		if (!output_replacements.Find(old_binding)) {
+			// Repeated output bindings are aliases of the same value: retain the first restore slot.
+			output_replacements.Add(old_binding, restore_binding);
 		}
 		auto compute_idx = restore_indexes[target_idx];
 		CopyStatistics(statistics_map, ColumnBinding(compute_table_index, ProjectionIndex(compute_idx)),
 		               restore_binding);
 	}
-	replacer.BuildIndex();
-	replacer.stop_operator = restore_ptr;
-	replacer.VisitOperator(*root);
+	return output_replacements;
 }
 
-static bool LiftFirstProfitableExpression(Optimizer &optimizer,
-                                          column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
-                                          unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
-                                          vector<PathStep> &ancestors) {
-	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
-		ancestors.push_back({*op, child_idx});
-		auto changed =
-		    LiftFirstProfitableExpression(optimizer, statistics_map, root, op->children[child_idx], ancestors);
-		ancestors.pop_back();
-		if (changed) {
-			return true;
-		}
+//! Own traversal progress and its invalidation together. Rewrites must refresh the active path and forget
+//! replaced operators before destruction; only newly exposed dependency producers need reconsideration.
+class LiftTraversal {
+public:
+	LiftTraversal(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
+	              unique_ptr<LogicalOperator> &root)
+	    : optimizer(optimizer), statistics_map(statistics_map), root(root) {
 	}
-	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+
+	void Optimize();
+
+private:
+	unique_ptr<LogicalOperator> &GetOperator(idx_t depth);
+	void Apply(LiftPlacementGroup &group);
+	bool InvalidateInputs(LogicalOperator &op, const column_binding_set_t &bindings);
+
+	Optimizer &optimizer;
+	column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map;
+	unique_ptr<LogicalOperator> &root;
+	vector<PathStep> ancestors;
+	reference_set_t<LogicalOperator> completed;
+};
+
+unique_ptr<LogicalOperator> &LiftTraversal::GetOperator(idx_t depth) {
+	if (depth == 0) {
+		return root;
+	}
+	auto &parent = ancestors[depth - 1];
+	return parent.op.get().children[parent.child_index];
+}
+
+bool LiftTraversal::InvalidateInputs(LogicalOperator &op, const column_binding_set_t &bindings) {
+	if (bindings.empty()) {
 		return false;
 	}
-	auto &projection = op->Cast<LogicalProjection>();
-	auto reading_expressions = CountReadingExpressions(projection);
-	LiftPlacementGroup group;
-	for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
-		LiftPlacement placement;
-		if (!FindLiftPlacement(projection, expression_idx, ancestors, statistics_map, reading_expressions, placement)) {
-			continue;
+	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = op.Cast<LogicalProjection>();
+		column_binding_set_t inputs;
+		bool affected = false;
+		for (auto &binding : bindings) {
+			if (binding.table_index != projection.table_index) {
+				continue;
+			}
+			affected = true;
+			auto &expression = projection.GetExpression(binding);
+			if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				auto &colref = expression.Cast<BoundColumnRefExpression>();
+				if (colref.Depth() == 0) {
+					inputs.insert(colref.Binding());
+				}
+			}
 		}
-		// Like lowering, lift expressions from one projection to a common destination in a single rewrite.
-		// Other destinations must be reconsidered after the bindings and input-reading counts change.
-		group.TryAdd(std::move(placement));
-	}
-	if (!group.expressions.empty()) {
-		ApplyLiftPlacementGroup(optimizer, statistics_map, root, group);
+		if (!affected) {
+			return false;
+		}
+		completed.erase(op);
+		// Follow aliases to their producers. A computed producer is reconsidered here; its own inputs
+		// only gain an opportunity if that expression subsequently moves.
+		InvalidateInputs(*op.children[0], inputs);
 		return true;
 	}
-	return false;
+	if (op.type != LogicalOperatorType::LOGICAL_FILTER && !IsEligibleJoin(op)) {
+		return false;
+	}
+	bool affected = false;
+	for (auto &child : op.children) {
+		column_binding_set_t inputs;
+		for (auto &binding : child->GetColumnBindings()) {
+			if (bindings.find(binding) != bindings.end()) {
+				inputs.insert(binding);
+			}
+		}
+		affected |= InvalidateInputs(*child, inputs);
+	}
+	if (affected) {
+		completed.erase(op);
+	}
+	return affected;
+}
+
+void LiftTraversal::Apply(LiftPlacementGroup &group) {
+	const auto target_depth = ancestors.size() - group.path.size();
+	struct AncestorRewrite {
+		idx_t depth;
+		vector<ColumnBinding> child_bindings;
+	};
+	vector<AncestorRewrite> rewrites;
+	column_binding_set_t affected_bindings(group.target_bindings.begin(), group.target_bindings.end());
+	for (idx_t depth = target_depth; depth > 0; depth--) {
+		auto &ancestor = ancestors[depth - 1];
+		auto child_bindings = ancestor.op.get().children[ancestor.child_index]->GetColumnBindings();
+		bool affected = false;
+		for (auto &binding : child_bindings) {
+			if (affected_bindings.find(binding) != affected_bindings.end()) {
+				affected = true;
+				break;
+			}
+		}
+		if (!affected) {
+			break;
+		}
+		rewrites.push_back({depth - 1, std::move(child_bindings)});
+	}
+	// No completion entry may outlive the operator it names, including when an allocator reuses its address.
+	completed.erase(*GetOperator(ancestors.size()));
+	for (auto &step : group.path) {
+		completed.erase(step.op);
+	}
+	auto &target = GetOperator(target_depth);
+	auto replacements = RewriteLiftPlacementGroup(optimizer, statistics_map, target, group);
+	for (auto &rewrite : rewrites) {
+		auto &parent = GetOperator(rewrite.depth);
+		ColumnBindingRewrite::ApplyToChild(parent, ancestors[rewrite.depth].child_index,
+		                                   std::move(rewrite.child_bindings), replacements);
+	}
+	// Refresh the active path before returning: projections on it have been replaced, and the destination
+	// now has a restore/compute pair above it. Child indexes preserve progress through unaffected siblings.
+	for (idx_t path_idx = 0; path_idx < group.path.size(); path_idx++) {
+		ancestors[ancestors.size() - 1 - path_idx].op = group.path[path_idx].op;
+	}
+	ancestors.insert(ancestors.begin() + target_depth, {{*target, 0}, {*target->children[0], 0}});
+	column_binding_set_t inputs;
+	for (auto &dependency : group.dependencies) {
+		inputs.insert(dependency.original_binding);
+	}
+	InvalidateInputs(*GetOperator(ancestors.size())->children[0], inputs);
+}
+
+void LiftTraversal::Optimize() {
+	root->ResolveOperatorTypes();
+	bool visit_children = true;
+	while (true) {
+		auto &op = GetOperator(ancestors.size());
+		if (completed.find(*op) == completed.end()) {
+			if (visit_children && !op->children.empty()) {
+				ancestors.push_back({*op, 0});
+				continue;
+			}
+			if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				auto &projection = op->Cast<LogicalProjection>();
+				auto reading_expressions = CountReadingExpressions(projection);
+				LiftPlacementGroup group;
+				for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
+					LiftPlacement placement;
+					if (FindLiftPlacement(projection, expression_idx, ancestors, statistics_map, reading_expressions,
+					                      placement)) {
+						// Other destinations must be reconsidered after bindings and input-reading counts change.
+						group.TryAdd(std::move(placement));
+					}
+				}
+				if (!group.expressions.empty()) {
+					Apply(group);
+					// Revisit exposed input producers and the rebuilt source, then continue through the
+					// updated path. Completion entries skip unrelated descendants and sibling subtrees.
+					visit_children = true;
+					continue;
+				}
+			}
+			completed.insert(*op);
+		}
+		if (ancestors.empty()) {
+			return;
+		}
+		auto &parent = ancestors.back();
+		if (++parent.child_index < parent.op.get().children.size()) {
+			visit_children = true;
+		} else {
+			ancestors.pop_back();
+			visit_children = false;
+		}
+	}
 }
 
 static optional_idx GetExpressionChild(const Expression &expression, LogicalOperator &op) {
@@ -1043,10 +1191,7 @@ ProjectionPlacementOptimizer::ProjectionPlacementOptimizer(
 }
 
 void ProjectionPlacementOptimizer::Optimize(unique_ptr<LogicalOperator> &plan) {
-	vector<PathStep> ancestors;
-	while (LiftFirstProfitableExpression(optimizer, statistics_map, plan, plan, ancestors)) {
-		plan->ResolveOperatorTypes();
-	}
+	LiftTraversal(optimizer, statistics_map, plan).Optimize();
 	OptimizeOperator(optimizer, statistics_map, plan);
 	plan->ResolveOperatorTypes();
 }
