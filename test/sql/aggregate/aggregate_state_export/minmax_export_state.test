@@ -159,12 +159,20 @@ cannot export state
 
 # but a prepared parameter n is constant per execution
 statement ok
-PREPARE top_n AS SELECT finalize(max(i, $1::BIGINT) EXPORT_STATE), finalize(arg_max(i, i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
+PREPARE top_n AS SELECT finalize(max(i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
 
-query II
+query I
 EXECUTE top_n(2);
 ----
-[2, 1]	[2, 1]
+[2, 1]
+
+statement ok
+PREPARE arg_top_n AS SELECT finalize(arg_max(i, i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
+
+query I
+EXECUTE arg_top_n(2);
+----
+[2, 1]
 
 # but an empty state combines with any n
 query I
