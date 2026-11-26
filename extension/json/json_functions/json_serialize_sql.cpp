@@ -107,7 +107,10 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
-				options->storage_compatibility = state.GetContext().GetDatabase().config.options.storage_compatibility;
+				// JSON exports use the current AST format unless the caller requests an older one.
+				auto &compatibility = state.GetContext().GetDatabase().config.options.storage_compatibility;
+				options->storage_compatibility =
+				    compatibility.manually_set ? compatibility : StorageCompatibility::Latest();
 				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 

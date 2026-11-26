@@ -17,6 +17,9 @@ statement ok
 CREATE VIEW named AS SELECT CASE i WHEN 1 THEN 2 ELSE 0 END FROM (VALUES (1)) t(i)
 
 statement ok
+CREATE VIEW multi_named AS SELECT CASE i WHEN 1 THEN 2 WHEN 2 THEN 4 END FROM range(3) t(i)
+
+statement ok
 CREATE VIEW dependent AS SELECT "CASE  WHEN ((i = 1)) THEN (2) ELSE 0 END" AS result FROM named
 
 # Generated lambda inputs can capture a CHECK column without changing its scope.
@@ -51,6 +54,11 @@ SELECT result FROM dependent
 
 query I
 SELECT sql LIKE '%CASE (i) WHEN (1)%' FROM duckdb_views() WHERE view_name='named'
+----
+true
+
+query I
+SELECT sql LIKE '%CASE (i) WHEN (1) THEN (2) WHEN (2) THEN (4)%' FROM duckdb_views() WHERE view_name='multi_named'
 ----
 true
 

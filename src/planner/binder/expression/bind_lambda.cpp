@@ -215,9 +215,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
 			auto &column_binding = expr->Cast<BoundColumnRefExpression>().Binding();
-			if (IsUnnestColumn(column_binding)) {
-				throw BinderException("UNNEST in lambda expressions is not supported");
-			}
+			ThrowIfUnnestInLambda(column_binding);
 		}
 
 		// move the expr because we are going to replace it

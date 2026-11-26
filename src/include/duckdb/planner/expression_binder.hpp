@@ -369,9 +369,7 @@ protected:
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);
 
-	void CaptureCaseInput(unique_ptr<Expression> &input, vector<unique_ptr<Expression>> &captures,
-	                      bool volatile_operand, const CaseExpression &source);
-	virtual bool IsUnnestColumn(const ColumnBinding &column_binding);
+	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 
 } // namespace duckdb

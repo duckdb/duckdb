@@ -65,6 +65,18 @@ string CaseExpression::ToString() const {
 		result =
 		    "CASE (" + test.Left().ToString() + ") WHEN " + FormatAlternative(test.GetExpressionType(), test.Right());
 		result += " THEN (" + check.then_expr->ToString() + ")";
+	} else if (case_operand && rendering_column_name) {
+		result = "CASE ";
+		for (auto &arm : simple_checks) {
+			auto condition =
+			    StringUtil::Join(arm.when, arm.when.size(), " OR ", [&](const ComparisonExpressionTail &test) {
+				    return ComparisonExpression::ToString(test.comparison_type, *case_operand, *test.expression);
+			    });
+			if (arm.when.size() > 1) {
+				condition = "(" + condition + ")";
+			}
+			result += " WHEN (" + condition + ") THEN (" + arm.then_expr->ToString() + ")";
+		}
 	} else if (case_operand) {
 		result = "CASE (" + case_operand->ToString() + ")";
 		for (auto &check : simple_checks) {

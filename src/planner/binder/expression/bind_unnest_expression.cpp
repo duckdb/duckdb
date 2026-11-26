@@ -62,7 +62,7 @@ static unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &conte
 	return result;
 }
 
-bool SelectBinder::IsUnnestColumn(const ColumnBinding &column_binding) {
+void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 	// Extract the unnests and check if any match the column index.
 	auto check_unnests = [&](const BoundUnnestMap &unnests) {
 		for (auto &node_pair : unnests) {
@@ -70,13 +70,13 @@ bool SelectBinder::IsUnnestColumn(const ColumnBinding &column_binding) {
 
 			if (unnest_node.index == column_binding.table_index) {
 				if (column_binding.column_index < unnest_node.expressions.size()) {
-					return true;
+					throw BinderException("UNNEST in lambda expressions is not supported");
 				}
 			}
 		}
-		return false;
 	};
-	return check_unnests(node.unnests.SelectList()) || check_unnests(node.unnests.GroupBy());
+	check_unnests(node.unnests.SelectList());
+	check_unnests(node.unnests.GroupBy());
 }
 
 static void AddUnnestExpression(Binder &binder, BoundUnnestMap &unnests, idx_t current_level,

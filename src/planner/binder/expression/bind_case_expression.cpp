@@ -1,6 +1,5 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
@@ -15,23 +14,10 @@
 namespace duckdb {
 
 //! Bind arms in their original SQL scope. Only their inputs cross into the generated lambda.
-void ExpressionBinder::CaptureCaseInput(unique_ptr<Expression> &input, vector<unique_ptr<Expression>> &captures,
-                                        bool volatile_operand, const CaseExpression &source) {
+static void CaptureCaseInput(unique_ptr<Expression> &input, vector<unique_ptr<Expression>> &captures) {
 	switch (input->GetExpressionClass()) {
 	case ExpressionClass::BOUND_SUBQUERY:
-		if (volatile_operand) {
-			throw BinderException(
-			    source,
-			    "A simple CASE with a volatile operand and multiple comparisons cannot contain a subquery in a branch");
-		}
-		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
-		if (volatile_operand && IsUnnestColumn(input->Cast<BoundColumnRefExpression>().Binding())) {
-			throw BinderException(
-			    source,
-			    "A simple CASE with a volatile operand and multiple comparisons cannot contain UNNEST in a branch");
-		}
-		break;
 	case ExpressionClass::BOUND_PARAMETER:
 	case ExpressionClass::BOUND_REF:
 	case ExpressionClass::BOUND_LAMBDA_REF:
@@ -40,9 +26,8 @@ void ExpressionBinder::CaptureCaseInput(unique_ptr<Expression> &input, vector<un
 		// Its captures are children of the enclosing function.
 		return;
 	default:
-		ExpressionIterator::EnumerateChildren(*input, [&](unique_ptr<Expression> &child) {
-			CaptureCaseInput(child, captures, volatile_operand, source);
-		});
+		ExpressionIterator::EnumerateChildren(
+		    *input, [&](unique_ptr<Expression> &child) { CaptureCaseInput(child, captures); });
 		return;
 	}
 	auto reference =
@@ -70,7 +55,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	auto bind_arm_child = [&](unique_ptr<ParsedExpression> &child) {
 		auto result = BindChild(child, depth, error);
 		if (result && share_operand) {
-			CaptureCaseInput(result, captures, volatile_operand, expr);
+			CaptureCaseInput(result, captures);
 		}
 		return result;
 	};
