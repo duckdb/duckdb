@@ -931,7 +931,19 @@ bool TestConfiguration::TestRunStorageFuzzer() {
 	return test_config.RunStorageFuzzer();
 }
 
-FailureSummary::FailureSummary() : failures_summary_counter(0) {
+FailureSummary::FailureSummary() {
+}
+
+FailureSummary::Scope::Scope() {
+	auto &summary = FailureSummary::Instance();
+	lock_guard<mutex> lock(summary.failures_lock);
+	std::swap(previous, summary.state);
+}
+
+FailureSummary::Scope::~Scope() {
+	auto &summary = FailureSummary::Instance();
+	lock_guard<mutex> lock(summary.failures_lock);
+	summary.state = std::move(previous);
 }
 
 FailureSummary &FailureSummary::Instance() {
@@ -947,7 +959,7 @@ string FailureSummary::GetFailureSummary() {
 	auto &summary = FailureSummary::Instance();
 	lock_guard<mutex> guard(summary.failures_lock);
 	std::ostringstream oss;
-	for (auto &line : summary.failures_summary) {
+	for (auto &line : summary.state.messages) {
 		oss << line;
 	}
 	return oss.str();
@@ -956,12 +968,13 @@ string FailureSummary::GetFailureSummary() {
 void FailureSummary::Log(string log_message) {
 	auto &summary = FailureSummary::Instance();
 	lock_guard<mutex> lock(summary.failures_lock);
-	summary.failures_summary.push_back(std::move(log_message));
+	summary.state.messages.push_back(std::move(log_message));
 }
 
 idx_t FailureSummary::GetSummaryCounter() {
 	auto &summary = FailureSummary::Instance();
-	return ++summary.failures_summary_counter;
+	lock_guard<mutex> lock(summary.failures_lock);
+	return ++summary.state.counter;
 }
 
 // don't log the same test failure many times:
@@ -977,10 +990,10 @@ bool FailureSummary::SkipLoggingSameErrorInternal(const string &file_name) {
 		return false;
 	}
 	lock_guard<mutex> lock(failures_lock);
-	if (reported_files.count(file_name) > 0) {
+	if (state.reported_files.count(file_name) > 0) {
 		return true;
 	}
-	reported_files.insert(file_name);
+	state.reported_files.insert(file_name);
 	return false;
 }
 

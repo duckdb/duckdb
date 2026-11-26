@@ -56,6 +56,7 @@ private:
 	string working_directory;
 	TestConfiguration configuration;
 	shared_ptr<TestHelperState> helper_state;
+	FailureSummary::Scope failure_summary;
 	bool has_home;
 	string home;
 };

@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "test_environment.hpp"
 #include "test_exception_matcher.hpp"
 #include "test_helpers.hpp"
 
@@ -40,6 +41,28 @@ TEST_CASE("Runner regression passing", "[test_runner]") {
 	if (RunnerRegressionEnabled()) {
 		REQUIRE(TestLocalFileSystem().DirectoryExists(GetTempDirHome()));
 	}
+}
+
+TEST_CASE("Failure summaries follow nested test environments", "[test_runner]") {
+	TestEnvironmentScope outer;
+	TestConfiguration::Get().ParseOption("summarize_failures", Value(true));
+	REQUIRE_FALSE(FailureSummary::SkipLoggingSameError("outer.test"));
+	REQUIRE(FailureSummary::SkipLoggingSameError("outer.test"));
+	FailureSummary::Log("outer diagnostic");
+	REQUIRE(FailureSummary::GetSummaryCounter() == 1);
+	try {
+		TestEnvironmentScope inner;
+		TestConfiguration::Get().ParseOption("summarize_failures", Value(true));
+		REQUIRE(FailureSummary::GetFailureSummary().empty());
+		REQUIRE_FALSE(FailureSummary::SkipLoggingSameError("outer.test"));
+		REQUIRE(FailureSummary::GetSummaryCounter() == 1);
+		FailureSummary::Log("inner diagnostic");
+		throw std::runtime_error("leave inner environment");
+	} catch (const std::runtime_error &) {
+	}
+	REQUIRE(FailureSummary::GetFailureSummary() == "outer diagnostic");
+	REQUIRE(FailureSummary::SkipLoggingSameError("outer.test"));
+	REQUIRE(FailureSummary::GetSummaryCounter() == 2);
 }
 
 TEST_CASE("Runner regression failure followed by skip", "[test_runner]") {

@@ -134,6 +134,27 @@ def verify_process_lifecycle(binary, directory):
             load_error = connection.query(load)
             assert load_error is None, load_error
         first, second = connections
+        failure_file = root / "failure.test"
+        failure_file.write_text("statement ok\nSELECT nonexistent_column;\n")
+        for index, connection in enumerate((first, second, first)):
+            state_database = root / f"sql_failure_{index}.duckdb"
+            query = (
+                f"SELECT * FROM run_tests({run_tests.sql_string_list(['sql:' + failure_file.as_posix()])}, "
+                f"test_roots={run_tests.sql_string_list([root])}, "
+                f"test_flags={run_tests.sql_string_list(['--temp-dir-root', str(root / 'temp'), '--temp-dir-destroy', 'always'])}, "
+                f"state_database={run_tests.sql_string(state_database)});"
+            )
+            assert connection.query(query) is None
+            alias = f"failure_{index}"
+            assert connection.query(f"ATTACH {run_tests.sql_string(state_database)} AS {alias};") is None
+            error = connection.query(
+                "SELECT CASE WHEN count(*) = 1 AND "
+                "bool_and(status='failed' AND contains(diagnostics, 'Binder Error') "
+                "AND contains(diagnostics, 'nonexistent_column')) "
+                f"THEN true ELSE error('Missing failure diagnostics') END FROM {alias}.test_results;"
+            )
+            assert error is None, error
+            assert_restored()
         # Discovery must leave each database free to choose flags for later calls.
         assert first.query("SELECT count(*) FROM scan_tests([], test_roots=[]);") is None
         invalid = second.query("SELECT * FROM run_tests([], test_flags=['--temp-dir-root']);")
@@ -248,6 +269,38 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         self.assertFalse((self.temp_root / "integration").exists())
         rows = self.query("SELECT test_id, status FROM test_results;", database)
         self.assertEqual(rows, [{"test_id": test_id, "status": "passed"}])
+
+    def test_repeated_sql_failures_preserve_diagnostics(self):
+        failing = self.create_test("failure.test", "statement ok\nSELECT nonexistent_column;\n")
+        passing = self.create_test("passing.test", "query I\nSELECT 42\n----\n42\n")
+        statements = []
+        for index, test_id in enumerate((failing, failing, passing, failing)):
+            database = self.root / f"results_{index}.duckdb"
+            statements.append(
+                f"SELECT * FROM run_tests({run_tests.sql_string_list([test_id])}, "
+                f"test_roots={run_tests.sql_string_list([self.test_root])}, "
+                f"test_flags={run_tests.sql_string_list(['--temp-dir-root', str(self.temp_root)])}, "
+                f"state_database={run_tests.sql_string(database)});"
+            )
+            statements.append(f"ATTACH {run_tests.sql_string(database)} AS result_{index};")
+        statements.append(
+            " UNION ALL ".join(
+                f"SELECT {index} AS invocation, status, diagnostics FROM result_{index}.test_results"
+                for index in range(4)
+            )
+            + " ORDER BY invocation;"
+        )
+        rows = self.query(run_tests.build_test_protocol_sql(self.binary, "\n".join(statements)))
+        results = [row for row in rows if "invocation" in row]
+        self.assertEqual(len(results), 4, rows)
+        for index, row in enumerate(results):
+            if index == 2:
+                self.assertEqual(row["status"], "passed")
+                self.assertNotIn("Binder Error", row["diagnostics"] or "")
+            else:
+                self.assertEqual(row["status"], "failed")
+                self.assertIn("Binder Error", row["diagnostics"])
+                self.assertIn("nonexistent_column", row["diagnostics"])
 
     def test_legacy_unittest_entrypoint_runs_tests_from_generated_extension_roots(self):
         self.create_test(
