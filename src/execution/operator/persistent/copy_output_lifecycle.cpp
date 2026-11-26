@@ -104,13 +104,6 @@ static string ParentDirectory(FileSystem &fs, const string &path) {
 	return pos == 0 ? separator : path.substr(0, pos);
 }
 
-unique_ptr<FileHandle> CopyOutputLifecycle::OpenDirectory(const string &directory) const {
-	auto &fs = FileSystem::GetFileSystem(context);
-	// the file system checks an opened path as a file, so check the directory as one before opening it
-	fs.VerifyCanAccessDirectory(directory);
-	return fs.OpenFile(directory, FileFlags::FILE_FLAGS_READ);
-}
-
 bool CopyOutputLifecycle::IsSynced(const string &path) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	for (auto &file : files) {
@@ -126,7 +119,7 @@ void CopyOutputLifecycle::MoveFile(const string &path, const string &new_path) {
 #ifndef _WIN32
 	if (IsSynced(path)) {
 		// a directory that cannot be opened for its sync fails before the rename publishes the file
-		OpenDirectory(ParentDirectory(fs, new_path));
+		fs.OpenDirectory(ParentDirectory(fs, new_path));
 	}
 #endif
 	// the replacement of an existing file is kept on failure, as the replaced file is gone
@@ -164,7 +157,7 @@ void CopyOutputLifecycle::SyncDirectories() {
 		}
 	}
 	for (auto &directory : directories) {
-		OpenDirectory(directory)->Sync();
+		fs.OpenDirectory(directory)->Sync();
 	}
 #endif
 }

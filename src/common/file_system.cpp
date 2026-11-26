@@ -52,6 +52,11 @@ unique_ptr<FileHandle> FileSystem::OpenCachedFile(const OpenFileInfo &file, cons
 	return GetFileSystem().WrapOpenedFile(std::move(handle), file, flags, GetOpener());
 }
 
+unique_ptr<FileHandle> FileSystem::OpenDirectory(const string &directory) {
+	VerifyCanAccessDirectory(directory);
+	return FindFileSystem(directory).OpenFile(directory, FileFlags::FILE_FLAGS_READ, GetOpener());
+}
+
 unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                        const MMapOptions &options) {
 	VerifyCanAccessFile(path.path);

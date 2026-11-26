@@ -9,8 +9,15 @@ require skip_reload
 # enable_external_access = false disables extension loading
 require no_extension_autoloading "EXPECTED: Test disable loading of extensions"
 
+# a directory that is allowed as a directory below
+statement ok
+COPY (SELECT 1 AS p, 41 AS i) TO '{TEST_DIR}/fsync_allowed_dir' (FORMAT csv, PARTITION_BY p, OVERWRITE_OR_IGNORE)
+
 statement ok
 SET allowed_paths = ['{TEST_DIR}/fsync_allowed.csv', '{TEST_DIR}/tmp_fsync_allowed.csv']
+
+statement ok
+SET allowed_directories = ['{TEST_DIR}/fsync_allowed_dir']
 
 statement ok
 SET enable_external_access = false
@@ -54,6 +61,15 @@ query I
 SELECT i FROM '{TEST_DIR}/fsync_allowed.csv'
 ----
 43
+
+# an allowed directory is synced as a directory, it does not have to be an allowed path
+statement ok
+COPY (SELECT 46 AS i) TO '{TEST_DIR}/fsync_allowed_dir/fsync_allowed.csv' (FSYNC)
+
+query I
+SELECT i FROM '{TEST_DIR}/fsync_allowed_dir/fsync_allowed.csv'
+----
+46
 
 # fsync_mode none turns the syncs off, so the directory is not accessed either
 statement ok

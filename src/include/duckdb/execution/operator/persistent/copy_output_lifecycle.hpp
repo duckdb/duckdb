@@ -10,13 +10,11 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class ClientContext;
-class FileHandle;
 
 enum class CopyOutputOwnership : uint8_t {
 	//! Preserve the path because this query cannot prove that it created it.
@@ -50,8 +48,6 @@ private:
 
 private:
 	CopyOutputOwnership GetOwnership(const string &path) const DUCKDB_EXCLUDES(lock);
-	//! Opens a directory for a sync, checking that it can be accessed
-	unique_ptr<FileHandle> OpenDirectory(const string &directory) const;
 	bool IsSynced(const string &path) DUCKDB_EXCLUDES(lock);
 	void Cleanup() DUCKDB_EXCLUDES(lock);
 
