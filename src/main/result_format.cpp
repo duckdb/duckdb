@@ -31,13 +31,17 @@ ChunkFormat::ChunkFormat(QueryResultMemoryType memory_type_p) : memory_type(memo
 }
 
 const shared_ptr<ResultFormat> &ChunkFormat::InMemory() {
-	static const shared_ptr<ResultFormat> format = make_shared_ptr<ChunkFormat>(QueryResultMemoryType::IN_MEMORY);
-	return format;
+	// never destroyed - queries can still run on other threads during static destruction
+	static const auto *format =
+	    new shared_ptr<ResultFormat>(make_shared_ptr<ChunkFormat>(QueryResultMemoryType::IN_MEMORY));
+	return *format;
 }
 
 const shared_ptr<ResultFormat> &ChunkFormat::BufferManaged() {
-	static const shared_ptr<ResultFormat> format = make_shared_ptr<ChunkFormat>(QueryResultMemoryType::BUFFER_MANAGED);
-	return format;
+	// never destroyed - queries can still run on other threads during static destruction
+	static const auto *format =
+	    new shared_ptr<ResultFormat>(make_shared_ptr<ChunkFormat>(QueryResultMemoryType::BUFFER_MANAGED));
+	return *format;
 }
 
 QueryResultMemoryType ChunkFormat::MemoryType() const {
