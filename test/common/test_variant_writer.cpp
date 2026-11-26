@@ -25,9 +25,17 @@ struct VariantSource {
 			) t(v)
 		)");
 		REQUIRE_NO_FAIL(*result);
-		chunk = result->Fetch();
-		REQUIRE(chunk);
-		REQUIRE(chunk->size() == 8);
+		// the rows arrive in several chunks when STANDARD_VECTOR_SIZE is smaller than 8
+		const idx_t row_count = 8;
+		chunk = make_uniq<DataChunk>();
+		chunk->Initialize(Allocator::DefaultAllocator(), result->GetTypes(), row_count);
+		while (auto next = result->Fetch()) {
+			if (next->size() == 0) {
+				break;
+			}
+			chunk->Append(*next);
+		}
+		REQUIRE(chunk->size() == row_count);
 	}
 
 	Vector &Variants() {
