@@ -217,6 +217,7 @@ bool MetaTransaction::Join(bool inherited) {
 	participants++;
 	if (inherited) {
 		inherited_participants++;
+		this->inherited = true;
 	}
 	return true;
 }

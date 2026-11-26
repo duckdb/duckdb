@@ -67,9 +67,10 @@ public:
 	string ShareTransaction();
 	//! The identifier under which the transaction was shared (empty if not shared)
 	string GetShareId();
-	//! Whether the transaction was shared with other connections
+	//! Whether the transaction was shared with other connections, or inherited by one
 	bool IsShared() {
-		return !GetShareId().empty();
+		lock_guard<mutex> guard(shared_lock);
+		return !share_id.empty() || inherited;
 	}
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
 	//! An inheriting participant cannot keep the transaction alive on its own (see Leave).
@@ -152,6 +153,8 @@ private:
 	idx_t participants = 1;
 	//! The number of participants that inherited the transaction (included in participants)
 	idx_t inherited_participants = 0;
+	//! Whether a connection ever inherited the transaction
+	bool inherited = false;
 	//! Whether a participant voted to roll back
 	bool rollback_vote = false;
 	//! The identifier the transaction was exported under

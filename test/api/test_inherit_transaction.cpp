@@ -189,6 +189,19 @@ TEST_CASE("Test a connection that inherits the transaction of another connection
 		child = Connection(db);
 		RequireValue(con, "SELECT SUM(i) FROM tbl", 5);
 	}
+	SECTION("closing the inheriting connection leaves the transaction, also while one of its results is open") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		unique_ptr<QueryResult> result;
+		{
+			auto child = Connection::CreateInTransaction(*con.context);
+			REQUIRE_NO_FAIL(child.Query("INSERT INTO tbl VALUES (2)"));
+			result = child.Submit("SELECT * FROM range(100000)");
+			REQUIRE_NO_FAIL(*result);
+		}
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		RequireValue(other, "SELECT SUM(i) FROM tbl", 3);
+		result.reset();
+	}
 	SECTION("a transaction that was shared and joined") {
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 		auto share_id = con.Query("SELECT share_transaction()")->Collection().GetValue(0, 0).ToString();
