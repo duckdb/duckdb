@@ -15,10 +15,15 @@
 namespace duckdb {
 
 struct UpdateExtensionsGlobalState : public GlobalSourceState {
-	UpdateExtensionsGlobalState() : offset(0) {
+	UpdateExtensionsGlobalState() : updates_scheduled(false), offset(0) {
 	}
 
+	//! One entry per extension, pending updates fill in their entry when they are executed
 	vector<ExtensionUpdateResult> update_result_entries;
+	//! The extensions that need a download, executed concurrently as async tasks
+	vector<PendingExtensionUpdate> pending_updates;
+	//! Whether the pending updates have been scheduled
+	bool updates_scheduled;
 	idx_t offset;
 };
 
@@ -32,7 +37,7 @@ public:
 	                                  idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE_EXTENSIONS,
 	                       {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                        LogicalType::VARCHAR},
+	                        LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}

@@ -62,7 +62,7 @@ private:
 	}
 	//! The default of a setting with a constant default
 	template <class OP, class SOURCE>
-	static typename OP::RETURN_TYPE GetDefault(const SOURCE &, long) {
+	static typename OP::RETURN_TYPE GetDefault(const SOURCE &, int64_t) {
 		return FromDefault<typename OP::RETURN_TYPE>(OP::DefaultValue);
 	}
 

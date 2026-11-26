@@ -1,8 +1,13 @@
 #include "duckdb/optimizer/scalar_aggregate_merger.hpp"
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -12,36 +17,11 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// Branch: [projection ->] ungrouped aggregate -> filters -> plain scan(s)
-//===--------------------------------------------------------------------===//
-//! One leaf of a cross-product tree that can be merged with its siblings
-struct ScalarAggregateMerger::Branch {
-	//! The leaf's slot in the cross-product tree
-	reference<unique_ptr<LogicalOperator>> leaf;
-	//! The projection over the aggregate, if any
-	optional_ptr<LogicalProjection> projection;
-	reference<LogicalAggregate> aggregate;
-	//! The slot under the filters: the scan, or the cross product of scans of different tables (a FROM list)
-	reference<unique_ptr<LogicalOperator>> relation;
-	vector<reference<LogicalGet>> scans;
-	//! The filters' predicates, with ANDs split into their conjuncts
-	vector<reference<const Expression>> conjuncts;
-};
-
-//! One of the first branch's scans, which the merged leaf keeps, and the columns it gains for the other branches
-struct ScalarAggregateMerger::MergeTarget {
-	reference<LogicalGet> scan;
-	//! A column the scan gains, and the binding that column lands on
-	vector<std::pair<column_t, ColumnBinding>> added_columns;
-};
 
 //! The aggregates that are merged: FILTER (WHERE p) feeds exactly the rows where p holds, so the result over the rows
 //! where p holds equals the result with FILTER (WHERE p) over any superset of them, for empty input too
@@ -136,6 +116,7 @@ static bool SameNamedParameters(const named_argument_map_t &a, const named_argum
 
 //! Two plain scans that read the same rows: the same catalog table, or the same table function (read_parquet,
 //! read_csv, ...) called with the same arguments. What a call without arguments reads is known to its bind data alone.
+//! HashRelation must stay consistent with changes to this comparison.
 static bool IsSameRelation(const LogicalGet &a, const LogicalGet &b) {
 	if (a.function != b.function || !SameValues(a.parameters, b.parameters) ||
 	    !SameNamedParameters(a.named_parameters, b.named_parameters)) {
@@ -177,6 +158,7 @@ static bool RecordsRejects(const LogicalGet &get) {
 //! Two scans that one scan reading both of their columns can replace: the same relation, and the rows a scan returns do
 //! not depend on the columns it reads. A scan that drops the rows it fails to parse (ignore_errors) returns a row when
 //! every column it reads parses, so such scans are only shared when they read the same columns.
+//! HashScan must hash compatible scans alike; keep it consistent with changes to this comparison.
 static bool CanShareScan(const LogicalGet &a, const LogicalGet &b) {
 	if (!IsSameRelation(a, b) || RecordsRejects(a)) {
 		return false;
@@ -184,48 +166,203 @@ static bool CanShareScan(const LogicalGet &a, const LogicalGet &b) {
 	return !HasOption(a, "ignore_errors") || ReadColumns(a) == ReadColumns(b);
 }
 
-//! The plain scans under `op`: one scan, or a cross product of scans of different relations (a self-join's copies of
-//! a table would not pair one to one with another branch's)
-static bool CollectScans(LogicalOperator &op, vector<reference<LogicalGet>> &scans) {
-	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-		for (auto &child : op.children) {
-			if (!CollectScans(*child, scans)) {
+static hash_t HashScanParameter(const Value &value) {
+	auto result = value.type().Hash();
+	// VARIANT equality can equate different representations that Value::Hash distinguishes.
+	if (TypeVisitor::Contains(value.type(), LogicalTypeId::VARIANT)) {
+		return result;
+	}
+	return CombineHash(result, value.Hash());
+}
+
+//! Equal relations must hash alike. Bind data without arguments has no generic hash and is omitted.
+//! Column selection is excluded: a target may gain columns without changing which relation it reads.
+static hash_t HashRelation(const LogicalGet &scan) {
+	auto result = CombineHash(scan.function.GetName().Hash(), Hash(CastPointerToValue(scan.GetTable().get())));
+	for (auto &parameter : scan.parameters) {
+		result = CombineHash(Hash(result), HashScanParameter(parameter));
+	}
+	hash_t named_parameters = 0;
+	for (auto &entry : scan.named_parameters) {
+		named_parameters += Hash(CombineHash(entry.first.Hash(), HashScanParameter(entry.second)));
+	}
+	return CombineHash(result, named_parameters);
+}
+
+//! Compatible scans must hash alike. CanShareWith checks collisions before grouping branches.
+static hash_t HashScan(const LogicalGet &scan) {
+	auto result = HashRelation(scan);
+	if (HasOption(scan, "ignore_errors")) {
+		for (auto column : ReadColumns(scan)) {
+			result = CombineHash(Hash(result), Hash(column));
+		}
+	}
+	return result;
+}
+
+//! Borrows the ordered scans of one branch while matching and merging, indexed by relation identity.
+//! Adding columns during merging does not change relation identity or invalidate the index.
+class ScalarAggregateMerger::ScanCollection {
+public:
+	//! One plain scan, or a cross product of scans of different relations (self-joins do not pair one to one).
+	bool Collect(LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			for (auto &child : op.children) {
+				if (!Collect(*child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (op.type != LogicalOperatorType::LOGICAL_GET) {
+			return false;
+		}
+		auto &scan = op.Cast<LogicalGet>();
+		// Reject-recording scans cannot share even with an identical scan; exclude them before candidate grouping.
+		return IsPlainScan(scan) && !RecordsRejects(scan) && TryAdd(scan);
+	}
+
+	//! Each stored scan must have a compatible scan in other, preserving the comparison's left/right order.
+	bool CanShareWith(const ScanCollection &other) const {
+		if (scans.size() != other.scans.size()) {
+			return false;
+		}
+		for (auto &scan : scans) {
+			auto candidates = other.FindCandidates(scan.get());
+			if (!candidates) {
+				return false;
+			}
+			bool found = false;
+			for (auto index : *candidates) {
+				if (CanShareScan(scan.get(), other.scans[index].get())) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
 				return false;
 			}
 		}
 		return true;
 	}
-	if (op.type != LogicalOperatorType::LOGICAL_GET) {
-		return false;
-	}
-	auto &scan = op.Cast<LogicalGet>();
-	if (!IsPlainScan(scan)) {
-		return false;
-	}
-	for (auto &other : scans) {
-		if (IsSameRelation(other.get(), scan)) {
-			return false;
-		}
-	}
-	scans.push_back(scan);
-	return true;
-}
 
-//! Two branches read the same tables when their scans pair up one to one as scans that can be shared
-static bool ReadSameTables(const ScalarAggregateMerger::Branch &a, const ScalarAggregateMerger::Branch &b) {
-	if (a.scans.size() != b.scans.size()) {
-		return false;
-	}
-	for (auto &scan : a.scans) {
-		bool found = false;
-		for (auto &other : b.scans) {
-			found = found || CanShareScan(scan.get(), other.get());
+	//! The last compatible stored scan, in iteration order, matching the original target-selection order.
+	optional_idx FindCompatible(const LogicalGet &scan) const {
+		auto candidates = FindCandidates(scan);
+		if (!candidates) {
+			return optional_idx();
 		}
-		if (!found) {
-			return false;
+		optional_idx result;
+		for (auto index : *candidates) {
+			if (CanShareScan(scans[index].get(), scan)) {
+				result = index;
+			}
+		}
+		return result;
+	}
+
+	idx_t size() const {
+		return scans.size();
+	}
+
+	using const_iterator = vector<reference<LogicalGet>>::const_iterator;
+	const_iterator begin() const {
+		return scans.begin();
+	}
+	const_iterator end() const {
+		return scans.end();
+	}
+
+private:
+	bool TryAdd(LogicalGet &scan) {
+		auto &candidates = relation_index[HashRelation(scan)];
+		for (auto index : candidates) {
+			if (IsSameRelation(scans[index].get(), scan)) {
+				return false;
+			}
+		}
+		candidates.push_back(scans.size());
+		scans.push_back(scan);
+		return true;
+	}
+
+	optional_ptr<const vector<idx_t>> FindCandidates(const LogicalGet &scan) const {
+		auto entry = relation_index.find(HashRelation(scan));
+		if (entry == relation_index.end()) {
+			return nullptr;
+		}
+		return &entry->second;
+	}
+
+	vector<reference<LogicalGet>> scans;
+	unordered_map<hash_t, vector<idx_t>> relation_index;
+};
+
+//===--------------------------------------------------------------------===//
+// Branch: [projection ->] ungrouped aggregate -> filters -> plain scan(s)
+//===--------------------------------------------------------------------===//
+//! One leaf of a cross-product tree that can be merged with its siblings
+struct ScalarAggregateMerger::Branch {
+	//! The leaf's position in the collected cross-product leaves
+	idx_t leaf_index;
+	//! The projection over the aggregate, if any
+	optional_ptr<LogicalProjection> projection;
+	reference<LogicalAggregate> aggregate;
+	//! The slot under the filters: the scan, or the cross product of scans of different tables (a FROM list)
+	reference<unique_ptr<LogicalOperator>> relation;
+	ScanCollection scans;
+	//! The filters' predicates, with ANDs split into their conjuncts
+	vector<reference<const Expression>> conjuncts;
+};
+
+//! One of the first branch's scans, which the merged leaf keeps, and the columns it gains for the other branches
+struct ScalarAggregateMerger::MergeTarget {
+	explicit MergeTarget(LogicalGet &scan_p) : scan(scan_p) {
+		auto &column_ids = scan_p.GetColumnIds();
+		column_bindings.reserve(column_ids.size());
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			// Keep the first position if a column occurs more than once.
+			column_bindings.emplace(column_ids[i].GetPrimaryIndex(),
+			                        ColumnBinding(scan_p.table_index, ProjectionIndex(i)));
 		}
 	}
-	return true;
+
+	//! Where this target reads column, allocating a position without changing the scan until the merge is accepted.
+	ColumnBinding BindingFor(column_t column) {
+		auto entry = column_bindings.find(column);
+		if (entry != column_bindings.end()) {
+			return entry->second;
+		}
+		ColumnBinding binding(scan.get().table_index,
+		                      ProjectionIndex(scan.get().GetColumnIds().size() + added_columns.size()));
+		column_bindings.emplace(column, binding);
+		added_columns.emplace_back(column, binding);
+		return binding;
+	}
+
+	void ApplyAddedColumns() {
+		for (auto &entry : added_columns) {
+			auto position = scan.get().AddColumnId(entry.first);
+			D_ASSERT(position == entry.second.column_index);
+			(void)position;
+		}
+		added_columns.clear();
+	}
+
+private:
+	reference<LogicalGet> scan;
+	//! A column the scan gains, and the binding that column lands on
+	vector<std::pair<column_t, ColumnBinding>> added_columns;
+	unordered_map<column_t, ColumnBinding> column_bindings;
+};
+
+static hash_t HashBranch(const ScalarAggregateMerger::Branch &branch) {
+	auto result = Hash(branch.scans.size());
+	// CanShareWith matches scans irrespective of their order.
+	for (auto &scan : branch.scans) {
+		result += Hash(HashScan(scan.get()));
+	}
+	return result;
 }
 
 //! Equal conjuncts, or the same comparison with its sides swapped (a = b and b = a)
@@ -243,14 +380,46 @@ static bool IsSameConjunct(const Expression &a, const Expression &b) {
 	       BoundComparisonExpression::Right(left).Equals(BoundComparisonExpression::Left(right));
 }
 
-static bool ContainsConjunct(const vector<unique_ptr<Expression>> &conjuncts, const Expression &expr) {
-	for (auto &conjunct : conjuncts) {
-		if (IsSameConjunct(*conjunct, expr)) {
-			return true;
-		}
+//! Borrows immutable expressions. Keep the index within the lifetime of the expressions it searches.
+class ScalarAggregateMerger::ConjunctIndex {
+public:
+	void Add(const Expression &expr) {
+		conjuncts[HashConjunct(expr)].push_back(expr);
 	}
-	return false;
-}
+
+	bool Contains(const Expression &expr) const {
+		auto entry = conjuncts.find(HashConjunct(expr));
+		return entry != conjuncts.end() && Contains(entry->second, expr);
+	}
+
+private:
+	static hash_t HashConjunct(const Expression &expr) {
+		if (!BoundComparisonExpression::IsComparison(expr)) {
+			return expr.Hash();
+		}
+		// IsSameConjunct also matches flipped comparisons, without comparing their function bind data.
+		auto type = expr.GetExpressionType();
+		auto flipped_type = FlipComparisonExpression(type);
+		if (flipped_type < type) {
+			type = flipped_type;
+		}
+		auto &comparison = expr.Cast<BoundFunctionExpression>();
+		auto operands = Hash(BoundComparisonExpression::Left(comparison).Hash()) +
+		                Hash(BoundComparisonExpression::Right(comparison).Hash());
+		return CombineHash(Hash(static_cast<uint32_t>(type)), operands);
+	}
+
+	static bool Contains(const vector<const_reference<Expression>> &bucket, const Expression &expr) {
+		for (auto &conjunct : bucket) {
+			if (IsSameConjunct(conjunct.get(), expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	unordered_map<hash_t, vector<const_reference<Expression>>> conjuncts;
+};
 
 static void CollectBindings(const Expression &expr, column_binding_set_t &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
@@ -292,25 +461,6 @@ static bool TreeHasProjectionMap(const LogicalOperator &op) {
 	return false;
 }
 
-//! Where `target` reads `column`: the binding it has, or the one it gains once its group merges
-static ColumnBinding TargetBinding(ScalarAggregateMerger::MergeTarget &target, column_t column) {
-	auto &scan = target.scan.get();
-	auto &column_ids = scan.GetColumnIds();
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].GetPrimaryIndex() == column) {
-			return ColumnBinding(scan.table_index, ProjectionIndex(i));
-		}
-	}
-	for (auto &entry : target.added_columns) {
-		if (entry.first == column) {
-			return entry.second;
-		}
-	}
-	ColumnBinding binding(scan.table_index, ProjectionIndex(column_ids.size() + target.added_columns.size()));
-	target.added_columns.emplace_back(column, binding);
-	return binding;
-}
-
 //===--------------------------------------------------------------------===//
 // ScalarAggregateMerger
 //===--------------------------------------------------------------------===//
@@ -318,16 +468,17 @@ ScalarAggregateMerger::ScalarAggregateMerger(Optimizer &optimizer) : optimizer(o
 }
 
 void ScalarAggregateMerger::Optimize(unique_ptr<LogicalOperator> &plan) {
-	// rebuilding a cross-product tree would move the positions a projection map names: only plans without them
+	// Merging or removing leaves moves the positions a projection map names: only plans without them.
 	if (TreeHasProjectionMap(*plan)) {
 		return;
 	}
 	VisitOperator(plan);
-	if (replacements.empty()) {
+	if (replacements.Empty()) {
 		return;
 	}
-	ColumnBindingReplacer replacer;
-	replacer.replacement_bindings = std::move(replacements);
+	auto binding_replacements = std::move(replacements);
+	replacements = BindingReplacementGraph();
+	ColumnBindingReplacer replacer(binding_replacements);
 	replacer.VisitOperator(*plan);
 	plan->ResolveOperatorTypes();
 }
@@ -352,14 +503,19 @@ static void CollectLeaves(unique_ptr<LogicalOperator> &op, vector<reference<uniq
 	leaves.push_back(op);
 }
 
-static idx_t LeafPosition(const vector<reference<unique_ptr<LogicalOperator>>> &leaves,
-                          const unique_ptr<LogicalOperator> &leaf) {
-	for (idx_t i = 0; i < leaves.size(); i++) {
-		if (&leaves[i].get() == &leaf) {
-			return i;
-		}
+//! Remove empty cross products and collapse those with only one surviving child.
+static void PruneCrossProduct(unique_ptr<LogicalOperator> &op) {
+	if (!op || op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return;
 	}
-	throw InternalException("ScalarAggregateMerger: a branch's leaf is not among its tree's leaves");
+	D_ASSERT(op->children.size() == 2);
+	for (auto &child : op->children) {
+		PruneCrossProduct(child);
+	}
+	if (!op->children[0] || !op->children[1]) {
+		auto child = std::move(op->children[op->children[0] ? 0 : 1]);
+		op = std::move(child);
+	}
 }
 
 bool ScalarAggregateMerger::IsWorthMerging(const Branch &branch) {
@@ -382,21 +538,25 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 		VisitOperator(leaf.get());
 	}
 	vector<Branch> branches;
-	for (auto &leaf : leaves) {
-		TryMatchBranch(leaf, branches);
+	for (idx_t i = 0; i < leaves.size(); i++) {
+		TryMatchBranch(leaves, i, branches);
 	}
 	// groups of branches that read the same tables, in the order their first branch appears
 	vector<vector<idx_t>> groups;
+	unordered_map<hash_t, vector<idx_t>> group_index;
 	for (idx_t i = 0; i < branches.size(); i++) {
 		bool placed = false;
-		for (auto &group : groups) {
-			if (ReadSameTables(branches[group[0]], branches[i])) {
+		auto &candidates = group_index[HashBranch(branches[i])];
+		for (auto group_idx : candidates) {
+			auto &group = groups[group_idx];
+			if (branches[group[0]].scans.CanShareWith(branches[i].scans)) {
 				group.push_back(i);
 				placed = true;
 				break;
 			}
 		}
 		if (!placed) {
+			candidates.push_back(groups.size());
 			groups.push_back({i});
 		}
 	}
@@ -412,33 +572,31 @@ void ScalarAggregateMerger::MergeCrossProduct(unique_ptr<LogicalOperator> &op) {
 		if (!merged_leaf) {
 			continue;
 		}
-		merged_leaves[LeafPosition(leaves, branches[group[0]].leaf.get())] = std::move(merged_leaf);
+		merged_leaves[branches[group[0]].leaf_index] = std::move(merged_leaf);
 		for (idx_t k = 1; k < group.size(); k++) {
-			removed[LeafPosition(leaves, branches[group[k]].leaf.get())] = true;
+			removed[branches[group[k]].leaf_index] = true;
 		}
 		changed = true;
 	}
 	if (!changed) {
 		return;
 	}
-	// rebuild the tree over the leaves that remain: a cross product's bindings are its children's, so their order
-	// changes nothing above it
-	vector<unique_ptr<LogicalOperator>> kept;
+	// Keep the surviving tree's shape instead of rebuilding it as a left-deep chain.
+	// Finish all leaf-slot updates before pruning, which invalidates the references in leaves and branches.
 	for (idx_t i = 0; i < leaves.size(); i++) {
 		if (removed[i]) {
-			continue;
+			leaves[i].get().reset();
+		} else if (merged_leaves[i]) {
+			leaves[i].get() = std::move(merged_leaves[i]);
 		}
-		kept.push_back(merged_leaves[i] ? std::move(merged_leaves[i]) : std::move(leaves[i].get()));
 	}
-	auto tree = std::move(kept[0]);
-	for (idx_t i = 1; i < kept.size(); i++) {
-		tree = LogicalCrossProduct::Create(std::move(tree), std::move(kept[i]));
-	}
-	op = std::move(tree);
+	PruneCrossProduct(op);
+	D_ASSERT(op);
 }
 
-void ScalarAggregateMerger::TryMatchBranch(unique_ptr<LogicalOperator> &leaf, vector<Branch> &branches) {
-	reference<LogicalOperator> op = *leaf;
+void ScalarAggregateMerger::TryMatchBranch(const vector<reference<unique_ptr<LogicalOperator>>> &leaves,
+                                           idx_t leaf_index, vector<Branch> &branches) {
+	reference<LogicalOperator> op = *leaves[leaf_index].get();
 	optional_ptr<LogicalProjection> projection;
 	if (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		projection = &op.get().Cast<LogicalProjection>();
@@ -471,11 +629,11 @@ void ScalarAggregateMerger::TryMatchBranch(unique_ptr<LogicalOperator> &leaf, ve
 			return;
 		}
 	}
-	vector<reference<LogicalGet>> scans;
-	if (!CollectScans(*relation.get(), scans)) {
+	ScanCollection scans;
+	if (!scans.Collect(*relation.get())) {
 		return;
 	}
-	branches.push_back(Branch {leaf, projection, aggregate, relation, std::move(scans), std::move(conjuncts)});
+	branches.push_back(Branch {leaf_index, projection, aggregate, relation, std::move(scans), std::move(conjuncts)});
 }
 
 unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> &branches, const vector<idx_t> &group) {
@@ -483,21 +641,19 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	auto &first = branches[group[0]];
 	// every branch's scan bindings land on the first branch's scan of the same table, which gains the columns it
 	// lacks once the group is known to merge
+	// Targets have the first branch's scan order, which FindCompatible returns.
 	vector<MergeTarget> targets;
+	targets.reserve(first.scans.size());
 	for (auto &scan : first.scans) {
-		targets.push_back(MergeTarget {scan, {}});
+		targets.emplace_back(scan.get());
 	}
 	vector<column_binding_map_t<ColumnBinding>> remaps(group.size());
 	for (idx_t k = 1; k < group.size(); k++) {
 		for (auto &branch_scan : branches[group[k]].scans) {
 			auto &scan = branch_scan.get();
-			optional_ptr<MergeTarget> target;
-			for (auto &candidate : targets) {
-				if (CanShareScan(candidate.scan.get(), scan)) {
-					target = &candidate;
-				}
-			}
-			D_ASSERT(target);
+			auto target_index = first.scans.FindCompatible(scan);
+			D_ASSERT(target_index.IsValid());
+			auto &target = targets[target_index.GetIndex()];
 			auto &column_ids = scan.GetColumnIds();
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				// nothing refers to the empty placeholder
@@ -505,7 +661,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 					continue;
 				}
 				remaps[k][ColumnBinding(scan.table_index, ProjectionIndex(i))] =
-				    TargetBinding(*target, column_ids[i].GetPrimaryIndex());
+				    target.BindingFor(column_ids[i].GetPrimaryIndex());
 			}
 		}
 	}
@@ -519,20 +675,35 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 		}
 	}
 	vector<unique_ptr<Expression>> shared;
-	for (auto &conjunct : conjuncts[0]) {
-		bool everywhere = !ContainsConjunct(shared, *conjunct);
-		for (idx_t k = 1; everywhere && k < group.size(); k++) {
-			everywhere = ContainsConjunct(conjuncts[k], *conjunct);
-		}
-		if (everywhere) {
-			shared.push_back(conjunct->Copy());
-		}
-	}
 	vector<vector<unique_ptr<Expression>>> own(group.size());
-	for (idx_t k = 0; k < group.size(); k++) {
-		for (auto &conjunct : conjuncts[k]) {
-			if (!ContainsConjunct(shared, *conjunct)) {
-				own[k].push_back(std::move(conjunct));
+	{
+		vector<ConjunctIndex> conjunct_indexes(group.size());
+		for (idx_t k = 1; k < group.size(); k++) {
+			for (auto &conjunct : conjuncts[k]) {
+				conjunct_indexes[k].Add(*conjunct);
+			}
+		}
+		ConjunctIndex shared_index;
+		expression_set_t tested;
+		for (auto &conjunct : conjuncts[0]) {
+			// Do not repeat failed searches for identical conjuncts either.
+			if (!tested.insert(*conjunct).second || shared_index.Contains(*conjunct)) {
+				continue;
+			}
+			bool everywhere = true;
+			for (idx_t k = 1; everywhere && k < group.size(); k++) {
+				everywhere = conjunct_indexes[k].Contains(*conjunct);
+			}
+			if (everywhere) {
+				shared.push_back(conjunct->Copy());
+				shared_index.Add(*shared.back());
+			}
+		}
+		for (idx_t k = 0; k < group.size(); k++) {
+			for (auto &conjunct : conjuncts[k]) {
+				if (!shared_index.Contains(*conjunct)) {
+					own[k].push_back(std::move(conjunct));
+				}
 			}
 		}
 	}
@@ -558,11 +729,7 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 
 	// the group merges: the target scans read the added columns
 	for (auto &target : targets) {
-		for (auto &entry : target.added_columns) {
-			auto position = target.scan.get().AddColumnId(entry.first);
-			D_ASSERT(position == entry.second.column_index);
-			(void)position;
-		}
+		target.ApplyAddedColumns();
 	}
 	// each branch's own predicate (none: every row the shared conjuncts keep)
 	vector<unique_ptr<Expression>> predicates(group.size());
@@ -613,14 +780,14 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 			for (idx_t i = 0; i < expressions.size(); i++) {
 				auto copy = expressions[i]->Copy();
 				RemapBindings(copy, to_merged);
-				replacements.emplace_back(ColumnBinding(branch.projection->table_index, ProjectionIndex(i)),
-				                          ColumnBinding(projection_index, ProjectionIndex(columns.size())));
+				replacements.Add(ColumnBinding(branch.projection->table_index, ProjectionIndex(i)),
+				                 ColumnBinding(projection_index, ProjectionIndex(columns.size())));
 				columns.push_back(std::move(copy));
 			}
 		} else {
 			for (idx_t j = 0; j < aggregate.expressions.size(); j++) {
-				replacements.emplace_back(ColumnBinding(aggregate.aggregate_index, ProjectionIndex(j)),
-				                          ColumnBinding(projection_index, ProjectionIndex(columns.size())));
+				replacements.Add(ColumnBinding(aggregate.aggregate_index, ProjectionIndex(j)),
+				                 ColumnBinding(projection_index, ProjectionIndex(columns.size())));
 				columns.push_back(make_uniq<BoundColumnRefExpression>(
 				    aggregate.expressions[j]->GetReturnType(),
 				    ColumnBinding(aggregate_index, ProjectionIndex(offsets[k] + j))));
@@ -634,9 +801,13 @@ unique_ptr<LogicalOperator> ScalarAggregateMerger::MergeBranches(vector<Branch> 
 	if (every_branch_restricted) {
 		// branches with the same predicate (q9 has three per range) contribute one alternative
 		vector<unique_ptr<Expression>> alternatives;
-		for (auto &predicate : predicates) {
-			if (!ContainsConjunct(alternatives, *predicate)) {
-				alternatives.push_back(predicate->Copy());
+		{
+			ConjunctIndex alternative_index;
+			for (auto &predicate : predicates) {
+				if (!alternative_index.Contains(*predicate)) {
+					alternatives.push_back(predicate->Copy());
+					alternative_index.Add(*alternatives.back());
+				}
 			}
 		}
 		// the OR is a new expression: the rewrite rules that ran before the merge (predicate factoring) derive from it

@@ -63,10 +63,12 @@ explain select b.idb,sum(a.valuea) from b left join a on b.idb=a.ida group by b.
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
+# the condition on the inner side becomes a filter of its scan: it only removes inner rows, the inner side stays
+# distinct on the join key and every row of b is returned once
 query II
 explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = 1;
 ----
-physical_plan	<REGEX>:.*JOIN.*
+physical_plan	<!REGEX>:.*JOIN.*
 
 query II
 explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb ;

@@ -25,7 +25,8 @@ public:
 		groups.push_back(make_uniq<BoundReferenceExpression>(group_type, 0));
 		vector<unique_ptr<Expression>> aggregates;
 		if (aggregate) {
-			auto plan = con.ExtractPlan("SELECT i::VARCHAR k, string_agg(i::VARCHAR) FROM range(10) t(i) GROUP BY k");
+			auto plan =
+			    TestExtractPlan(con, "SELECT i::VARCHAR k, string_agg(i::VARCHAR) FROM range(10) t(i) GROUP BY k");
 			optional_ptr<LogicalOperator> aggr = plan.get();
 			while (aggr->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 				aggr = aggr->children[0].get();

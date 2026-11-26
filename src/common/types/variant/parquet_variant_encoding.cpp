@@ -130,49 +130,30 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 
 namespace {
 
-static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::ANY) {
-		return {};
-	}
+static unordered_set<LogicalTypeId> GetVariantType(const LogicalType &type) {
 	switch (type.id()) {
+	case LogicalTypeId::ANY:
+		return {};
 	case LogicalTypeId::STRUCT:
-		return {VariantLogicalType::OBJECT};
 	case LogicalTypeId::LIST:
-		return {VariantLogicalType::ARRAY};
 	case LogicalTypeId::BOOLEAN:
-		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
 	case LogicalTypeId::TINYINT:
-		return {VariantLogicalType::INT8};
 	case LogicalTypeId::SMALLINT:
-		return {VariantLogicalType::INT16};
 	case LogicalTypeId::INTEGER:
-		return {VariantLogicalType::INT32};
 	case LogicalTypeId::BIGINT:
-		return {VariantLogicalType::INT64};
 	case LogicalTypeId::FLOAT:
-		return {VariantLogicalType::FLOAT};
 	case LogicalTypeId::DOUBLE:
-		return {VariantLogicalType::DOUBLE};
 	case LogicalTypeId::DECIMAL:
-		return {VariantLogicalType::DECIMAL};
 	case LogicalTypeId::DATE:
-		return {VariantLogicalType::DATE};
 	case LogicalTypeId::TIME:
-		return {VariantLogicalType::TIME_MICROS};
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
-		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS};
 	case LogicalTypeId::BLOB:
-		return {VariantLogicalType::BLOB};
 	case LogicalTypeId::VARCHAR:
-		return {VariantLogicalType::VARCHAR};
 	case LogicalTypeId::UUID:
-		return {VariantLogicalType::UUID};
+		return {type.id()};
 	default:
 		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
 	}
@@ -185,12 +166,12 @@ public:
 	}
 
 public:
-	const unordered_set<VariantLogicalType> &GetVariantTypes() override {
+	const unordered_set<LogicalTypeId> &GetVariantTypes() override {
 		return variant_types;
 	}
 
 private:
-	unordered_set<VariantLogicalType> variant_types;
+	unordered_set<LogicalTypeId> variant_types;
 };
 
 struct ParquetVariantShredding : public VariantShredding {

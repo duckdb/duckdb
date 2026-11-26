@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/collation_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -64,14 +65,20 @@ public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
 	                           vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr,
-	                           optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr);
+	                           optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr,
+	                           bool arguments_collated_p = false);
 
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
+	//! The collations to push into the arguments: arguments bound before do not get the default collation again
+	CollationType GetCollationType() const {
+		return arguments_collated ? CollationType::EXPLICIT_COLLATIONS : CollationType::ALL_COLLATIONS;
+	}
 
 private:
 	BoundAggregateFunction &bound_function;
+	bool arguments_collated;
 };
 
 class FunctionExpression;
@@ -933,6 +940,10 @@ public:
 	const LogicalType &GetLogicalReturnType() const {
 		return logical_return_type;
 	}
+	//! Whether EXPORT_STATE replaced the return type
+	bool ReturnsExportedState() const {
+		return GetReturnType().IsAggregateState() && GetReturnType() != logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -978,7 +989,7 @@ inline AggregateStateLayout AggregateFunction::StructStateLayout(AggregateLayout
 	using ST = typename STATE::STATE_TYPE;
 	auto &bound = input.function;
 	AggregateStateLayout layout;
-	if (bound.GetReturnType().IsAggregateState()) {
+	if (bound.ReturnsExportedState()) {
 		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
 		// its return type IS the state type already
 		layout.type = bound.GetReturnType();

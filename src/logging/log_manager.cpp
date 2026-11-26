@@ -235,8 +235,7 @@ void LogManager::SetLogSinkInternal(DatabaseInstance &db, LogConfig &new_config,
 	}
 
 	if (sink_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
-		auto &fs = FileSystem::GetFileSystem(db);
-		if (fs.SubSystemIsDisabled("LocalFileSystem")) {
+		if (VirtualFileSystem::Get(db).SubSystemIsDisabled("LocalFileSystem")) {
 			throw InvalidConfigurationException("Can not enable file logging with the LocalFileSystem disabled");
 		}
 	}
@@ -342,6 +341,7 @@ void LogManager::RegisterDefaultLogTypes() {
 	RegisterLogType(make_uniq<ParquetPrefetchLogType>());
 	RegisterLogType(make_uniq<AsyncTaskScheduleLogType>());
 	RegisterLogType(make_uniq<ReadAheadBudgetLogType>());
+	RegisterLogType(make_uniq<ExternalFileCacheLogType>());
 	RegisterLogType(make_uniq<ExternalResourceLogType>());
 	RegisterLogType(make_uniq<ProgressVerificationLogType>());
 }

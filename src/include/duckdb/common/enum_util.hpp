@@ -252,6 +252,8 @@ enum class ExtensionLoadResult : uint8_t;
 
 enum class ExtensionRepositoryAccess : uint8_t;
 
+enum class ExtensionRepositoryHostCaller : uint8_t;
+
 enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
@@ -331,6 +333,8 @@ enum class IndexConstraintType : uint8_t;
 enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
+
+enum class IntegerRounding : uint8_t;
 
 enum class InterruptMode : uint8_t;
 
@@ -665,6 +669,10 @@ enum class TemporaryCompressionLevel : int;
 enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TopNBoundaryRowOrder : uint8_t;
+
+enum class TopNBoundaryTies : uint8_t;
 
 enum class TransactionInvalidationPolicy : uint8_t;
 
@@ -1056,6 +1064,9 @@ template<>
 const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryHostCaller>(ExtensionRepositoryHostCaller value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
 
 template<>
@@ -1174,6 +1185,9 @@ const char* EnumUtil::ToChars<IndexDeltaType>(IndexDeltaType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
+
+template<>
+const char* EnumUtil::ToChars<IntegerRounding>(IntegerRounding value);
 
 template<>
 const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
@@ -1677,6 +1691,12 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TopNBoundaryRowOrder>(TopNBoundaryRowOrder value);
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryTies>(TopNBoundaryTies value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
 
 template<>
@@ -2095,6 +2115,9 @@ template<>
 ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
 
 template<>
+ExtensionRepositoryHostCaller EnumUtil::FromString<ExtensionRepositoryHostCaller>(const char *value);
+
+template<>
 ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
 
 template<>
@@ -2213,6 +2236,9 @@ IndexDeltaType EnumUtil::FromString<IndexDeltaType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);
+
+template<>
+IntegerRounding EnumUtil::FromString<IntegerRounding>(const char *value);
 
 template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
@@ -2714,6 +2740,12 @@ ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TopNBoundaryRowOrder EnumUtil::FromString<TopNBoundaryRowOrder>(const char *value);
+
+template<>
+TopNBoundaryTies EnumUtil::FromString<TopNBoundaryTies>(const char *value);
 
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);

@@ -274,7 +274,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 
 	HTTPHeaders headers(db);
 	if (options.use_etags && install_info && !install_info->etag.empty()) {
-		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
+		headers.InsertIfAbsent("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 
 	string download_url = url;
