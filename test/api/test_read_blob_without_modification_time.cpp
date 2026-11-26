@@ -69,12 +69,12 @@ public:
 		if (time_fails) {
 			throw IOException("no time today");
 		}
-		return FileSystem::GetLastModifiedTime(handle);
+		return BaseFileSystem::GetLastModifiedTime(handle);
 	}
 
 	//! The generic stats ask GetLastModifiedTime, the local stat call would not
 	FileMetadata Stats(FileHandle &handle) override {
-		return FileSystem::Stats(handle);
+		return BaseFileSystem::Stats(handle);
 	}
 
 	//! Avoid recursion through the overridden Stats
@@ -87,11 +87,11 @@ public:
 	}
 
 	string GetVersionTag(FileHandle &handle) override {
-		return FileSystem::GetVersionTag(handle);
+		return BaseFileSystem::GetVersionTag(handle);
 	}
 
 	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
-		return FileSystem::GetStatsIfExists(file, opener);
+		return BaseFileSystem::GetStatsIfExists(file, opener);
 	}
 
 private:
