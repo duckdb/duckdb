@@ -18984,22 +18984,22 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
  * A VARIANT holds a value of any other type, e.g. a TINYINT, a VARCHAR or a LIST of STRUCTs, that is only known per
  * value: this reads it back, with the type that it was stored with. The value is built with the content of the variant,
  * so a stored list gives a LIST with its elements, and a stored object a STRUCT with its fields. The elements of a list
- * that were stored with different types, which a LIST cannot hold, stay VARIANT values: a LIST of VARIANT. Read those
- * with this function in turn. A NULL VARIANT gives a NULL value. A value that is not a VARIANT returns
+ * that were stored with different types, which a LIST cannot hold, stay VARIANT values: a LIST of VARIANT. Convert
+ * those with this function in turn. A NULL VARIANT gives a NULL value. A value that is not a VARIANT returns
  * ERROR_INPUT_INVALID. The inverse is value_cast to a VARIANT type, which factory_create_type_from_text gives. The
  * returned value is caller-owned; destroy it via value_destroy.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param value The VARIANT value to read.
- * @param out_content Receives the owned value.
+ * @param value The VARIANT value to convert.
+ * @param out_value Receives the owned value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_variant_content(duckdb_v2_value_handle value,
-                                                                 duckdb_v2_value_handle *out_content,
-                                                                 duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_variant_to_value(duckdb_v2_value_handle value,
+                                                              duckdb_v2_value_handle *out_value,
+                                                              duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

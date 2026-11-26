@@ -920,18 +920,18 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_child_count(duckdb_v2_value_handle value, id
 	return WithErrorHandler(err, [&]() { *out_count = CompositeChildCount(*Convert(value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_get_variant_content(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_content,
-                                                    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_variant_to_value(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value,
+                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(value);
-	DUCKDB_CHECK_ARG(out_content);
-	*out_content = nullptr;
+	DUCKDB_CHECK_ARG(out_value);
+	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &v = *Convert(value);
 		if (v.type().id() != duckdb::LogicalTypeId::VARIANT) {
-			throw duckdb::InvalidInputException("duckdb_v2_value_get_variant_content expects a VARIANT value");
+			throw duckdb::InvalidInputException("duckdb_v2_value_variant_to_value expects a VARIANT value");
 		}
 		if (v.IsNull()) {
-			*out_content = Emit(duckdb::Value());
+			*out_value = Emit(duckdb::Value());
 			return;
 		}
 		duckdb::Vector vec(v.type());
@@ -939,7 +939,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_variant_content(duckdb_v2_value_handle value
 		duckdb::RecursiveUnifiedVectorFormat format;
 		duckdb::Vector::RecursiveToUnifiedFormat(vec, format);
 		duckdb::UnifiedVariantVectorData data(format);
-		*out_content = Emit(duckdb::VariantUtils::ConvertVariantToValue(data, 0, 0));
+		*out_value = Emit(duckdb::VariantUtils::ConvertVariantToValue(data, 0, 0));
 	});
 }
 

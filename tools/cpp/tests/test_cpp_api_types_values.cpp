@@ -672,7 +672,7 @@ TEST_CASE("Stable C++API: Factory creates chunks and collections, and an instanc
 	REQUIRE_THROWS_AS(builtins.ParseType("mood"), InvalidInputException);
 }
 
-TEST_CASE("Stable C++API: GetVariantContent returns the value that a VARIANT value holds", "[cpp_api]") {
+TEST_CASE("Stable C++API: VariantToValue returns the value that a VARIANT value holds", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	auto db = Instance(":memory:");
@@ -683,26 +683,26 @@ TEST_CASE("Stable C++API: GetVariantContent returns the value that a VARIANT val
 
 	auto tinyint = chunk.GetVector(0).GetValue(0);
 	REQUIRE(tinyint.GetLogicalType().GetTypeId() == LogicalTypeId::VARIANT);
-	auto content = tinyint.GetVariantContent();
-	REQUIRE(content.GetLogicalType().GetTypeId() == LogicalTypeId::TINYINT);
-	REQUIRE(content.Get<int8_t>() == 41);
+	auto converted = tinyint.VariantToValue();
+	REQUIRE(converted.GetLogicalType().GetTypeId() == LogicalTypeId::TINYINT);
+	REQUIRE(converted.Get<int8_t>() == 41);
 
-	auto text = chunk.GetVector(1).GetValue(0).GetVariantContent();
+	auto text = chunk.GetVector(1).GetValue(0).VariantToValue();
 	REQUIRE(text.GetLogicalType().GetTypeId() == LogicalTypeId::VARCHAR);
 	REQUIRE(text.ToText() == "foo");
 
-	auto list = chunk.GetVector(2).GetValue(0).GetVariantContent();
+	auto list = chunk.GetVector(2).GetValue(0).VariantToValue();
 	REQUIRE(list.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
 	REQUIRE(list.GetChildCount() == 2);
 	REQUIRE(list.GetChild(1).ToText() == "b");
 
-	REQUIRE(chunk.GetVector(3).GetValue(0).GetVariantContent().IsNull());
+	REQUIRE(chunk.GetVector(3).GetValue(0).VariantToValue().IsNull());
 
-	// Only a VARIANT has content to get
-	REQUIRE_THROWS_AS(chunk.GetVector(4).GetValue(0).GetVariantContent(), InvalidInputException);
+	// Only a VARIANT can be converted
+	REQUIRE_THROWS_AS(chunk.GetVector(4).GetValue(0).VariantToValue(), InvalidInputException);
 }
 
-TEST_CASE("Stable C++API: the content of a VARIANT keeps the elements of different types as variants", "[cpp_api]") {
+TEST_CASE("Stable C++API: converting a VARIANT keeps the elements of different types as variants", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	auto db = Instance(":memory:");
@@ -710,20 +710,20 @@ TEST_CASE("Stable C++API: the content of a VARIANT keeps the elements of differe
 	auto result = conn.Execute("SELECT [1::INTEGER::VARIANT, 'a'::VARIANT]::VARIANT, [1, 2]::VARIANT");
 	auto chunk = result.FetchChunk();
 
-	auto mixed = chunk.GetVector(0).GetValue(0).GetVariantContent();
+	auto mixed = chunk.GetVector(0).GetValue(0).VariantToValue();
 	REQUIRE(mixed.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
 	REQUIRE(mixed.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::VARIANT);
 	REQUIRE(mixed.GetChildCount() == 2);
-	REQUIRE(mixed.GetChild(0).GetVariantContent().Get<int32_t>() == 1);
-	REQUIRE(mixed.GetChild(1).GetVariantContent().ToText() == "a");
+	REQUIRE(mixed.GetChild(0).VariantToValue().Get<int32_t>() == 1);
+	REQUIRE(mixed.GetChild(1).VariantToValue().ToText() == "a");
 
 	// the elements of the same type give a list of that type
-	auto same = chunk.GetVector(1).GetValue(0).GetVariantContent();
+	auto same = chunk.GetVector(1).GetValue(0).VariantToValue();
 	REQUIRE(same.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::INTEGER);
 	REQUIRE(same.GetChild(1).Get<int32_t>() == 2);
 }
 
-TEST_CASE("Stable C++API: the content of a value cast to VARIANT is the value", "[cpp_api]") {
+TEST_CASE("Stable C++API: a value cast to VARIANT converts back to the value", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	auto db = Instance(":memory:");
@@ -733,14 +733,14 @@ TEST_CASE("Stable C++API: the content of a value cast to VARIANT is the value", 
 
 	auto integer = Value::Create(factory, int32_t(42)).Cast(factory, variant_type);
 	REQUIRE(integer.GetLogicalType().GetTypeId() == LogicalTypeId::VARIANT);
-	auto content = integer.GetVariantContent();
-	REQUIRE(content.GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
-	REQUIRE(content.Get<int32_t>() == 42);
+	auto converted = integer.VariantToValue();
+	REQUIRE(converted.GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(converted.Get<int32_t>() == 42);
 
 	std::vector<Value> elements;
 	elements.push_back(Value::Create(factory, varchar_t("a")));
 	elements.push_back(Value::Create(factory, varchar_t("b")));
-	auto list = Value::CreateList(factory, elements).Cast(factory, variant_type).GetVariantContent();
+	auto list = Value::CreateList(factory, elements).Cast(factory, variant_type).VariantToValue();
 	REQUIRE(list.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::VARCHAR);
 	REQUIRE(list.GetChildCount() == 2);
 }

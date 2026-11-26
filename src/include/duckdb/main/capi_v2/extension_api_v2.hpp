@@ -1713,8 +1713,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_profiling_information)
 	(duckdb_v2_connection_handle conn, const char *format, idx_t format_length, duckdb_v2_text_sink_fn sink,
 	 void *user_data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_value_get_variant_content)
-	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_content, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_value_variant_to_value)
+	(duckdb_v2_value_handle value, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2484,7 +2484,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_to_string_set = duckdb_v2_table_function_to_string_set;
 	result.duckdb_v2_instance_open_shared = duckdb_v2_instance_open_shared;
 	result.duckdb_v2_connection_get_profiling_information = duckdb_v2_connection_get_profiling_information;
-	result.duckdb_v2_value_get_variant_content = duckdb_v2_value_get_variant_content;
+	result.duckdb_v2_value_variant_to_value = duckdb_v2_value_variant_to_value;
 	return result;
 }
 

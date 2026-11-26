@@ -1832,10 +1832,10 @@ auto Value::GetChild(idx_t index) const -> Value {
 	return detail::HandleFactory::Make<Value>(child);
 }
 
-auto Value::GetVariantContent() const -> Value {
-	duckdb_v2_value_handle content = nullptr;
-	CheckedAPICall(duckdb_v2_value_get_variant_content, handle(), &content);
-	return detail::HandleFactory::Make<Value>(content);
+auto Value::VariantToValue() const -> Value {
+	duckdb_v2_value_handle converted = nullptr;
+	CheckedAPICall(duckdb_v2_value_variant_to_value, handle(), &converted);
+	return detail::HandleFactory::Make<Value>(converted);
 }
 
 template <>
