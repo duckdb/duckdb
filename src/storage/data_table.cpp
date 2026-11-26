@@ -455,13 +455,12 @@ shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransacti
                                            unique_ptr<BoundIndex> index, idx_t index_oid,
                                            ConstraintCheckMode check_mode) {
 	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
-	auto &transaction_manager = DuckTransactionManager::Get(db);
 	if (!entry) {
 		// no building entry: publish between commits
 		D_ASSERT(!index->SupportsDeltaIndexes());
 		unique_lock<mutex> table_lock;
 		auto commit_lock = LockMainTableForIndex(table_lock);
-		return info->indexes.AddIndex(std::move(index), index_oid, check_mode, transaction_manager.GetLastCommit());
+		return info->indexes.AddIndex(std::move(index), index_oid, check_mode);
 	}
 	idx_t rounds = 0;
 	idx_t growing_rounds = 0;

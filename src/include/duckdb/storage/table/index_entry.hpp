@@ -124,7 +124,7 @@ struct IndexBuildDeltas {
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode, transaction_t last_commit);
+	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Creates the entry of an index that is being built, from an empty copy of the template
 	IndexEntry(const BoundIndex &index_template, transaction_t build_commit, transaction_t build_transaction);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
@@ -255,7 +255,7 @@ private:
 	atomic<IndexBindState> bind_state;
 	//! The OID of this index (set when a build finishes)
 	atomic<idx_t> index_oid;
-	//! The last commit before the index was added to the index list (0 if loaded or created with the table)
+	//! The commit an online build scanned through (0 if not built online)
 	const transaction_t last_commit;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;

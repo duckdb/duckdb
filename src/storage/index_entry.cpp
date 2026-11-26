@@ -14,9 +14,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p, const ConstraintCheckMode check_mode_p,
-                       transaction_t last_commit_p)
-    : index_oid(index_oid_p), last_commit(last_commit_p), owned_index(std::move(index_p)), check_mode(check_mode_p),
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p, const ConstraintCheckMode check_mode_p)
+    : index_oid(index_oid_p), last_commit(0), owned_index(std::move(index_p)), check_mode(check_mode_p),
       building(false), build_transaction(0) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
