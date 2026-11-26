@@ -687,18 +687,14 @@ relassert: ${EXTENSION_CONFIG_STEP}
 .PHONY: relassert-artifact
 
 relassert-artifact:
-	RELEASE_ARTIFACT_SOURCE_DIR="$(RELEASE_ARTIFACT_SOURCE_DIR)" \
-	RELEASE_ARTIFACT_STAGING_DIR="$(RELEASE_ARTIFACT_STAGING_DIR)" \
-	RELEASE_ARTIFACT_TARBALL="$(RELEASE_ARTIFACT_TARBALL)" \
-	bash scripts/prepare_build_artifact.sh relassert
+	bash scripts/prepare_build_artifact.sh relassert \
+		"$(RELEASE_ARTIFACT_SOURCE_DIR)" "$(RELEASE_ARTIFACT_STAGING_DIR)" "$(RELEASE_ARTIFACT_TARBALL)"
 
 .PHONY: release-artifact
 
 release-artifact:
-	RELEASE_ARTIFACT_SOURCE_DIR="$(RELEASE_ARTIFACT_SOURCE_DIR)" \
-	RELEASE_ARTIFACT_STAGING_DIR="$(RELEASE_ARTIFACT_STAGING_DIR)" \
-	RELEASE_ARTIFACT_TARBALL="$(RELEASE_ARTIFACT_TARBALL)" \
-	bash scripts/prepare_build_artifact.sh release
+	bash scripts/prepare_build_artifact.sh release \
+		"$(RELEASE_ARTIFACT_SOURCE_DIR)" "$(RELEASE_ARTIFACT_STAGING_DIR)" "$(RELEASE_ARTIFACT_TARBALL)"
 
 .PHONY: cli-release-artifact
 

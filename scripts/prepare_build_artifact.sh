@@ -2,16 +2,16 @@
 
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-	echo "Usage: $0 <build_type>" >&2
+if [[ $# -lt 1 || $# -gt 4 ]]; then
+	echo "Usage: $0 <build_type> [source_dir [staging_dir [tarball]]]" >&2
 	exit 1
 fi
 
 BUILD_TYPE="$1"
-BUILD_DIR="${RELEASE_ARTIFACT_SOURCE_DIR:-build/$BUILD_TYPE}"
-ARTIFACT_ROOT="${RELEASE_ARTIFACT_STAGING_DIR:-build/$BUILD_TYPE-artifact}"
+BUILD_DIR="${2:-${RELEASE_ARTIFACT_SOURCE_DIR:-build/$BUILD_TYPE}}"
+ARTIFACT_ROOT="${3:-${RELEASE_ARTIFACT_STAGING_DIR:-build/$BUILD_TYPE-artifact}}"
 ARTIFACT_DIR="$ARTIFACT_ROOT/$BUILD_TYPE"
-ARTIFACT_TARBALL="${RELEASE_ARTIFACT_TARBALL:-build/$BUILD_TYPE-artifact.tar.gz}"
+ARTIFACT_TARBALL="${4:-${RELEASE_ARTIFACT_TARBALL:-build/$BUILD_TYPE-artifact.tar.gz}}"
 
 if [[ ! -d "$BUILD_DIR" ]]; then
 	echo "Build directory '$BUILD_DIR' does not exist" >&2
