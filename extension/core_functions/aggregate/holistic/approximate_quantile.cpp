@@ -26,8 +26,9 @@ struct ApproxQuantileState {
 };
 
 struct ApproxQuantileCoding {
+	//! Encodes an input value for the sketch; type is the type of the input, which only the wide decimals read
 	template <typename INPUT_TYPE, typename SAVE_TYPE>
-	static SAVE_TYPE Encode(const INPUT_TYPE &input) {
+	static SAVE_TYPE Encode(const INPUT_TYPE &input, const LogicalType &type) {
 		return Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(input);
 	}
 
@@ -44,9 +45,11 @@ struct ApproxQuantileCoding {
 		return false;
 	}
 
+	//! Decodes a quantile of the sketch into a value of the type of the result vector
 	template <typename SAVE_TYPE, typename TARGET_TYPE>
-	static void Decode(const SAVE_TYPE &source, TARGET_TYPE &target, const LogicalType &type) {
+	static void Decode(const SAVE_TYPE &source, TARGET_TYPE &target, Vector &result) {
 		Decode(source, target);
+		const auto &type = result.GetType();
 		if (type.id() != LogicalTypeId::DECIMAL) {
 			return;
 		}
@@ -63,55 +66,56 @@ struct ApproxQuantileCoding {
 
 //! The bignum_t tier of decimals (above 38 digits) sketches the value of the decimal (the unscaled value divided by
 //! the power of ten of its scale) as a DOUBLE, so that the magnitude of a value decides whether the sketch holds it,
-//! not the number of digits of its width or scale: the unscaled value of 1 as a DECIMAL(310,309) has 310 digits.
-//! A quantile of the sketch is converted to the nearest value of the DECIMAL type
-struct ApproxQuantileBignumCoding {
-	static double Encode(const string_t &input, const LogicalType &type) {
-		const auto val = DecimalHelper<bignum_t>::ToDouble(bignum_t(input), DecimalType::GetScale(type));
-		if (!Value::DoubleIsFinite(val)) {
-			// skipping the value like an infinite DOUBLE would change the result
-			throw OutOfRangeException("approx_quantile sketches its input as DOUBLE: a %s value with a magnitude "
-			                          "beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch",
-			                          type.ToString());
-		}
-		return val;
+//! not the number of digits of its width or scale: the unscaled value of 1 as a DECIMAL(310,309) has 310 digits
+template <>
+double ApproxQuantileCoding::Encode(const bignum_t &input, const LogicalType &type) {
+	const auto val = DecimalHelper<bignum_t>::ToDouble(input, DecimalType::GetScale(type));
+	if (!Value::DoubleIsFinite(val)) {
+		// skipping the value like an infinite DOUBLE would change the result
+		throw OutOfRangeException("approx_quantile sketches its input as DOUBLE: a %s value with a magnitude "
+		                          "beyond the DOUBLE range (about 1.8e308) cannot be added to the sketch",
+		                          type.ToString());
 	}
+	return val;
+}
 
-	static string_t Decode(const double &source, Vector &result) {
-		const auto &type = result.GetType();
-		const auto width = DecimalType::GetWidth(type);
-		const auto scale = DecimalType::GetScale(type);
-		if (!Value::DoubleIsFinite(source)) {
-			// the arithmetic of the sketch overflowed (values close to the limits of the DOUBLE range)
-			throw OutOfRangeException("approx_quantile: the sketch of the %s values overflowed the DOUBLE range, the "
-			                          "approximate quantile is not a finite value",
-			                          type.ToString());
-		}
-		string unscaled;
-		if (DecimalHelper<bignum_t>::TryFromDouble(source, width, scale, unscaled)) {
-			return StringVector::AddStringOrBlob(result, unscaled);
-		}
-		// The DOUBLE nearest to a value at the top of the width can lie just beyond the largest value of the type
-		// (the DOUBLE of forty nines is 1e40): such a quantile is the largest value. Anything further out is not a
-		// quantile of values of this type (an imported state can carry any sketch)
-		string digits = source < 0 ? "-" : "";
-		digits.append(width, '9');
-		string limit;
-		if (!DecimalHelper<bignum_t>::TryParse(digits.c_str(), digits.size(), width, 0, limit)) {
-			throw InternalException("approx_quantile: could not construct the DECIMAL limit");
-		}
-		const auto limit_double = DecimalHelper<bignum_t>::ToDouble(bignum_t(string_t(limit)), scale);
-		if (std::fabs(source) > std::fabs(limit_double)) {
-			throw OutOfRangeException("approx_quantile: the approximate quantile %s is out of the range of %s",
-			                          Value::DOUBLE(source).ToString(), type.ToString());
-		}
-		return StringVector::AddStringOrBlob(result, limit);
+//! A quantile of the sketch is converted to the nearest value of the DECIMAL type
+template <>
+void ApproxQuantileCoding::Decode(const double &source, bignum_t &target, Vector &result) {
+	const auto &type = result.GetType();
+	const auto width = DecimalType::GetWidth(type);
+	const auto scale = DecimalType::GetScale(type);
+	if (!Value::DoubleIsFinite(source)) {
+		// the arithmetic of the sketch overflowed (values close to the limits of the DOUBLE range)
+		throw OutOfRangeException("approx_quantile: the sketch of the %s values overflowed the DOUBLE range, the "
+		                          "approximate quantile is not a finite value",
+		                          type.ToString());
 	}
-};
+	string unscaled;
+	if (DecimalHelper<bignum_t>::TryFromDouble(source, width, scale, unscaled)) {
+		target = bignum_t(StringVector::AddStringOrBlob(result, unscaled));
+		return;
+	}
+	// The DOUBLE nearest to a value at the top of the width can lie just beyond the largest value of the type
+	// (the DOUBLE of forty nines is 1e40): such a quantile is the largest value. Anything further out is not a
+	// quantile of values of this type (an imported state can carry any sketch)
+	string digits = source < 0 ? "-" : "";
+	digits.append(width, '9');
+	string limit;
+	if (!DecimalHelper<bignum_t>::TryParse(digits.c_str(), digits.size(), width, 0, limit)) {
+		throw InternalException("approx_quantile: could not construct the DECIMAL limit");
+	}
+	const auto limit_double = DecimalHelper<bignum_t>::ToDouble(bignum_t(string_t(limit)), scale);
+	if (std::fabs(source) > std::fabs(limit_double)) {
+		throw OutOfRangeException("approx_quantile: the approximate quantile %s is out of the range of %s",
+		                          Value::DOUBLE(source).ToString(), type.ToString());
+	}
+	target = bignum_t(StringVector::AddStringOrBlob(result, limit));
+}
 
 template <>
-double ApproxQuantileCoding::Encode(const dtime_t &input) {
-	return Encode<int64_t, double>(input.value);
+double ApproxQuantileCoding::Encode(const dtime_t &input, const LogicalType &type) {
+	return Encode<int64_t, double>(input.value, type);
 }
 
 template <>
@@ -127,8 +131,8 @@ bool ApproxQuantileCoding::Decode(const double &source, dtime_t &target) {
 }
 
 template <>
-double ApproxQuantileCoding::Encode(const dtime_tz_t &input) {
-	return Encode<uint64_t, double>(input.sort_key());
+double ApproxQuantileCoding::Encode(const dtime_tz_t &input, const LogicalType &type) {
+	return Encode<uint64_t, double>(input.sort_key(), type);
 }
 
 template <>
@@ -151,8 +155,8 @@ bool ApproxQuantileCoding::Decode(const double &source, dtime_tz_t &target) {
 }
 
 template <>
-double ApproxQuantileCoding::Encode(const timestamp_t &input) {
-	return Encode<int64_t, double>(input.value);
+double ApproxQuantileCoding::Encode(const timestamp_t &input, const LogicalType &type) {
+	return Encode<int64_t, double>(input.value, type);
 }
 
 template <>
@@ -220,13 +224,8 @@ struct ApproxQuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		SAVE_TYPE val;
-		if constexpr (std::is_same<INPUT_TYPE, string_t>::value) {
-			// only DECIMALs wider than 38 digits are aggregated as strings
-			val = ApproxQuantileBignumCoding::Encode(input, unary_input.input.function.GetArguments()[0]);
-		} else {
-			val = ApproxQuantileCoding::template Encode<INPUT_TYPE, SAVE_TYPE>(input);
-		}
+		const auto &type = unary_input.input.function.GetArguments()[0];
+		const auto val = ApproxQuantileCoding::template Encode<INPUT_TYPE, SAVE_TYPE>(input, type);
 		if (!Value::DoubleIsFinite(val)) {
 			return;
 		}
@@ -276,11 +275,7 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto source = state.h->quantile(bind_data.quantiles[0]);
-		if constexpr (std::is_same<TARGET_TYPE, string_t>::value) {
-			target = ApproxQuantileBignumCoding::Decode(source, finalize_data.result);
-		} else {
-			ApproxQuantileCoding::Decode(source, target, finalize_data.result.GetType());
-		}
+		ApproxQuantileCoding::Decode(source, target, finalize_data.result);
 	}
 };
 
@@ -468,7 +463,7 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 		}
 		// the bignum_t tier of decimals (above 38 digits)
 		auto function =
-		    AggregateFunction::UnaryAggregate<ApproxQuantileState, string_t, string_t, ApproxQuantileScalarOperation>(
+		    AggregateFunction::UnaryAggregate<ApproxQuantileState, bignum_t, bignum_t, ApproxQuantileScalarOperation>(
 		        type, type);
 		// a value beyond the DOUBLE range does not fit the sketch
 		function.SetFallible();
@@ -603,12 +598,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		for (size_t q = 0; q < entry.length; ++q) {
 			const auto &quantile = bind_data.quantiles[q];
 			const auto &source = state.h->quantile(quantile);
-			auto &target = rdata[ridx + q];
-			if constexpr (std::is_same<CHILD_TYPE, string_t>::value) {
-				target = ApproxQuantileBignumCoding::Decode(source, result);
-			} else {
-				ApproxQuantileCoding::Decode(source, target, result.GetType());
-			}
+			ApproxQuantileCoding::Decode(source, rdata[ridx + q], result);
 		}
 
 		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
@@ -672,7 +662,7 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 			return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 		case PhysicalType::VARCHAR: {
 			// the bignum_t tier of decimals (above 38 digits)
-			auto function = GetTypedApproxQuantileListAggregateFunction<string_t, string_t>(type);
+			auto function = GetTypedApproxQuantileListAggregateFunction<bignum_t, bignum_t>(type);
 			// a value beyond the DOUBLE range does not fit the sketch
 			function.SetFallible();
 			return function;
