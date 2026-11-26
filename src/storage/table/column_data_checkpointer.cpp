@@ -405,12 +405,11 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			extra_info += "\n";
 			extra_info += StringUtil::Format("Start %d, count %d", s.GetRowStart(), s.GetNode().count.load());
 		}
-		throw InternalException(
-		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
-		    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
-		    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-		    row_group.count.load(), current_row, error_segment_start.GetIndex(), col_data.column_index, col_data.type,
-		    col_data.type, col_data.info.GetSchemaName(), col_data.info.GetTableName(), extra_info);
+		throw InternalException("ColumnDataCheckpointer::WritePersistentSegments - the segments of %s are unaligned "
+		                        "with the row group start\nRow group count: %llu\nCurrent row: %llu\nSegment start: "
+		                        "%llu\nAll segments:%s",
+		                        DescribeColumn(col_data), row_group.count.load(), current_row,
+		                        error_segment_start.GetIndex(), extra_info);
 	}
 }
 
