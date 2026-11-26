@@ -184,7 +184,7 @@ public:
 	}
 
 	bool CanApplyCap(CardinalityValue cap) const {
-		return has_distinct_count && max_distinct_count > 0 &&
+		return has_distinct_count && cap > 0 && max_distinct_count > 0 &&
 		       cap <= max_distinct_count * MAX_CARDINALITY_TO_DISTINCT_RATIO;
 	}
 
