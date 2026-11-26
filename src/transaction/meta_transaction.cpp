@@ -209,25 +209,39 @@ string MetaTransaction::GetShareId() {
 	return share_id;
 }
 
-bool MetaTransaction::Join() {
+bool MetaTransaction::Join(bool inherited) {
 	lock_guard<mutex> guard(shared_lock);
 	if (finished) {
 		return false;
 	}
 	participants++;
+	if (inherited) {
+		inherited_participants++;
+	}
 	return true;
 }
 
-MetaTransaction::LeaveResult MetaTransaction::Leave(bool commit) {
+MetaTransaction::LeaveResult MetaTransaction::Leave(bool commit, bool inherited) {
 	lock_guard<mutex> guard(shared_lock);
 	D_ASSERT(participants > 0);
+	D_ASSERT(!inherited || inherited_participants > 0);
 	if (!commit) {
 		rollback_vote = true;
 	}
 	participants--;
+	if (inherited) {
+		inherited_participants--;
+	}
 	LeaveResult result;
 	result.last = participants == 0;
+	result.orphaned = !inherited && !result.last && participants == inherited_participants;
+	if (result.orphaned) {
+		// the inheriting connections cannot end the transaction on their own: it is rolled back once they leave
+		rollback_vote = true;
+	}
 	result.commit = !rollback_vote;
+	// a transaction that only inheriting connections are in is rolled back
+	D_ASSERT(!inherited || !result.last || !result.commit);
 	if (result.last) {
 		finished = true;
 	}

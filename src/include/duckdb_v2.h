@@ -1967,6 +1967,36 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_hand
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Opens a connection that runs in the transaction of a context.
+ *
+ * Lets a callback run SQL inside the transaction it is called in, such as a table function's bind callback reading a
+ * table. The connection sees everything the context's transaction sees, including its uncommitted changes and the
+ * context's temporary objects, and what it changes is part of that transaction. A statement of the connection that
+ * fails invalidates the transaction as a failure of the context's own statement would.
+ *
+ * The connection cannot start, commit or roll back a transaction: those statements fail with
+ * ERROR_DATABASE_TRANSACTION, and like any failing statement invalidate the transaction. The connection stays in the
+ * transaction until it is destroyed, which neither commits nor rolls the transaction back. Destroy it before the
+ * transaction ends, typically before the callback returns: a transaction that is committed while such a connection is
+ * still open is rolled back instead, and the connection's statements fail from then on. Interrupting the context's
+ * query also interrupts the connection's. The caller destroys it via `duckdb_v2_connection_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param ctx The context whose transaction the connection runs in. It must have an active transaction.
+ * @param out_conn Receives the new connection handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_in_transaction(duckdb_v2_context_handle ctx,
+                                                                        duckdb_v2_connection_handle *out_conn,
+                                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Destroys the connection.
  *
  * Always succeeds. Releases the connection's reference on the underlying database instance, which survives for as long

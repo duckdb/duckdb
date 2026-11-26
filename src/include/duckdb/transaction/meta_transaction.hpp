@@ -72,15 +72,19 @@ public:
 		return !GetShareId().empty();
 	}
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
-	bool Join();
+	//! An inheriting participant cannot keep the transaction alive on its own (see Leave).
+	bool Join(bool inherited = false);
 	struct LeaveResult {
 		//! Whether the participant that left was the last one - it then has to commit or roll back
 		bool last;
 		//! Whether all participants that left voted to commit
 		bool commit;
+		//! Whether only inheriting participants remain: the transaction can no longer commit
+		bool orphaned;
 	};
-	//! A participant leaves the transaction, voting for a commit or rollback
-	LeaveResult Leave(bool commit);
+	//! A participant leaves the transaction, voting for a commit or rollback. When the last participant that did not
+	//! inherit the transaction leaves while inheriting ones remain, the transaction is rolled back.
+	LeaveResult Leave(bool commit, bool inherited = false);
 	//! Whether the transaction was committed or rolled back
 	bool IsFinished() const {
 		return finished;
@@ -146,6 +150,8 @@ private:
 	mutex shared_lock;
 	//! The number of connections participating in the transaction, starting with the one that created it
 	idx_t participants = 1;
+	//! The number of participants that inherited the transaction (included in participants)
+	idx_t inherited_participants = 0;
 	//! Whether a participant voted to roll back
 	bool rollback_vote = false;
 	//! The identifier the transaction was exported under
