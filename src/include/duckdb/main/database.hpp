@@ -72,8 +72,6 @@ public:
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API LogManager &GetLogManager() const;
-	//! Whether the log manager exists yet (it does not during early initialization)
-	DUCKDB_API bool HasLogManager() const;
 	DUCKDB_API OSUtil &GetOSUtil();
 	DUCKDB_API MetricsManager &GetMetricsManager();
 	DUCKDB_API ParserCache &GetParserCache();

@@ -943,7 +943,7 @@ FileMetadata FileHandle::Stats() {
 }
 
 void FileHandle::TryAddLogger(Context &context) {
-	if (flags.DisableLogging() || !context.GetDatabase().HasLogManager()) {
+	if (flags.DisableLogging()) {
 		return;
 	}
 

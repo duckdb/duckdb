@@ -18,8 +18,7 @@ namespace duckdb {
 CleanupState::CleanupState(DuckTransaction &transaction, VisibilityBound lowest_visibility_bound,
                            ActiveTransactionState transaction_state)
     : lowest_visibility_bound(lowest_visibility_bound), transaction_state(transaction_state),
-      index_data_remover(transaction, transaction.manager.GetDB().GetDatabase().GetContext(),
-                         IndexRemovalType::DELETED_ROWS_IN_USE) {
+      index_data_remover(transaction, transaction.manager.GetDB().GetContext(), IndexRemovalType::DELETED_ROWS_IN_USE) {
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {

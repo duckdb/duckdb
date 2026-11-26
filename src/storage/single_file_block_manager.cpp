@@ -1218,7 +1218,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	handle->Read(db.GetDatabase().GetContext(), block, location);
+	handle->Read(db.GetContext(), block, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -1260,7 +1260,7 @@ void SingleFileBlockManager::ReadBlocks(Context &context, FileBuffer &buffer, bl
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
-	Write(db.GetDatabase().GetContext(), buffer, block_id);
+	Write(db.GetContext(), buffer, block_id);
 }
 
 void SingleFileBlockManager::Write(Context &context, FileBuffer &buffer, block_id_t block_id) {

@@ -1,4 +1,5 @@
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/http/http_transport_manager_state.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -9,25 +10,6 @@
 namespace duckdb {
 
 static constexpr idx_t HTTP_TRANSPORT_MAX_CAPACITY = 256;
-
-class HTTPTransportManagerState {
-public:
-	HTTPTransportManagerState(shared_ptr<HTTPUtil> http_util_p, HTTPTransportReusePolicy reuse_policy_p,
-	                          idx_t provider_epoch_p)
-	    : http_util(std::move(http_util_p)), reuse_policy(reuse_policy_p), provider_epoch(provider_epoch_p) {
-	}
-
-	//! Provider retained for this publication.
-	const shared_ptr<HTTPUtil> http_util;
-	//! Client reuse contract reported by the provider.
-	const HTTPTransportReusePolicy reuse_policy;
-	//! Stable manager-issued provider identity.
-	const idx_t provider_epoch;
-	//! Current connection generation for explicit invalidation.
-	uint64_t connection_epoch = 0;
-	//! Whether epoch exhaustion permanently disabled reuse.
-	bool reuse_poisoned = false;
-};
 
 class HTTPTransportCapacityGuard;
 
@@ -340,11 +322,6 @@ HTTPTransportManager::Session HTTPTransportManager::CreateSession(ClientContext 
 
 HTTPTransportManager::Session HTTPTransportManager::CreateSession(Context &context, optional_ptr<FileLookupInfo> info) {
 	ValidateDatabase(context.GetDatabase());
-	return CreateSessionUnchecked(context, info);
-}
-
-HTTPTransportManager::Session HTTPTransportManager::CreateSessionUnchecked(Context &context,
-                                                                           optional_ptr<FileLookupInfo> info) {
 	auto reservation = ReserveSession();
 	return FinishSession(reservation, reservation.state->http_util->InitializeParameters(context, info));
 }

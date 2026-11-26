@@ -18,6 +18,7 @@
 namespace duckdb {
 struct CompiledGrammar;
 class Catalog;
+class Context;
 class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
@@ -141,6 +142,8 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+	//! The database-wide Context of the database instance this database is attached to
+	DUCKDB_API Context &GetContext();
 	ValidChecker &GetValidChecker() {
 		return validity;
 	}

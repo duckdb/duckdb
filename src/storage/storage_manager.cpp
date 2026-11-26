@@ -176,7 +176,7 @@ StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOption
 	auto &fs = FileSystem::Get(db);
 	path = fs.ExpandPath(path);
 
-	auto &services = db.GetDatabase().GetContext();
+	auto &services = db.GetContext();
 	storage_options.Initialize(services, options.options);
 }
 

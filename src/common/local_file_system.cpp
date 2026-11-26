@@ -126,8 +126,7 @@ static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
 	return std::wstring(buf.data(), written);
 }
 
-static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const string &path, Context &context) {
-	string normalized_path = FileSystem::ExpandPath(context, path);
+static std::wstring NormalizeExpandedPathToUnicode(const string &normalized_path) {
 	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
 
 	// We need to get absolute path to check the length. Normalizing it (removing "." and "..",
@@ -153,6 +152,19 @@ static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const s
 	}
 
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
+}
+
+static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const string &path, Context &context) {
+	return NormalizeExpandedPathToUnicode(FileSystem::ExpandPath(context, path));
+}
+
+//! Removes a file whose path is already expanded (no Context needed): used when aborting a write
+static void RemoveExpandedFile(const string &expanded_path) {
+	auto unicode_path = NormalizeExpandedPathToUnicode(expanded_path);
+	if (!DeleteFileW(unicode_path.c_str()) && GetLastError() != ERROR_FILE_NOT_FOUND) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to delete file \"%s\": %s", expanded_path, error);
+	}
 }
 
 bool LocalFileSystem::FileExists(Context &context, const string &filename) {
@@ -204,6 +216,14 @@ static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
 
 static void ApplyLocalFileSystemDelay(Context &context) {
 	ApplyLocalFileSystemDelay(&context.GetDatabase());
+}
+
+//! Removes a file whose path is already expanded (no Context needed): used when aborting a write
+static void RemoveExpandedFile(const string &expanded_path) {
+	if (std::remove(expanded_path.c_str()) != 0 && errno != ENOENT) {
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", expanded_path,
+		                  strerror(errno));
+	}
 }
 
 struct UnixFileHandle : public FileHandle {
@@ -2007,12 +2027,7 @@ void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
 	auto path = handle.GetPath();
 	handle.Close();
 	if (remove_path) {
-#ifndef _WIN32
-		auto &db = handle.Cast<UnixFileHandle>().db;
-#else
-		auto &db = handle.Cast<WindowsFileHandle>().db;
-#endif
-		TryRemoveFile(db->GetContext(), path);
+		RemoveExpandedFile(path);
 	}
 }
 

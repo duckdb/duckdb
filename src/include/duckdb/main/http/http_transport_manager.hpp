@@ -134,8 +134,6 @@ private:
 
 	//! Session lifecycle helpers.
 	void ValidateDatabase(DatabaseInstance &db) const;
-	//! Creates a session without checking that the context belongs to the database of this manager
-	Session CreateSessionUnchecked(Context &context, optional_ptr<FileLookupInfo> info) DUCKDB_EXCLUDES(lock);
 	SessionReservation ReserveSession() DUCKDB_EXCLUDES(lock);
 	Session FinishSession(SessionReservation reservation, unique_ptr<HTTPParams> params) DUCKDB_EXCLUDES(lock);
 	void DestroySession(idx_t session_id) noexcept DUCKDB_EXCLUDES(lock);

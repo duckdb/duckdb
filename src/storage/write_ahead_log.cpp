@@ -55,10 +55,10 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	}
 	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
-		writer = make_uniq<BufferedFileWriter>(
-		    FileSystem::Get(GetDatabase()), GetDatabase().GetDatabase().GetContext(), wal_path,
-		    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_APPEND |
-		        FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
+		writer =
+		    make_uniq<BufferedFileWriter>(FileSystem::Get(GetDatabase()), GetDatabase().GetContext(), wal_path,
+		                                  FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
 			writer->Truncate(storage_manager.GetWALSize());
 		} else {

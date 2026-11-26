@@ -356,6 +356,9 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	}
 
 	Configure(*config_ptr, database_path);
+	// the log manager comes first: opening a file (e.g. from an extension callback) logs through it
+	log_manager = make_uniq<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
 	// publish what this binary links, unless the config already carries a set handed to us
 	ExtensionHelper::RegisterLinkedExtensions(config);
 	for (auto &linked : config.linked_extensions) {
@@ -377,9 +380,6 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	} else {
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
-
-	log_manager = make_uniq<LogManager>(*this, LogConfig());
-	log_manager->Initialize();
 
 	metrics_manager = make_uniq<MetricsManager>();
 
@@ -703,10 +703,6 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
                                                    optional_ptr<ClientContext> context, bool statically_linked) {
 	D_ASSERT(invoke_capi_v2);
 	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
-}
-
-bool DatabaseInstance::HasLogManager() const {
-	return log_manager != nullptr;
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {

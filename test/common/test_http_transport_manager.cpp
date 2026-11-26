@@ -6,6 +6,7 @@
 #include "duckdb/common/file_lookup_info.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/http/http_transport_manager_state.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -50,7 +51,9 @@ static Context &HTTPTestContext() {
 struct HTTPTransportManagerTestHelper {
 	//! Creates a session on a manager that does not belong to a database
 	static HTTPTransportManager::Session CreateSession(HTTPTransportManager &manager) {
-		return manager.CreateSessionUnchecked(HTTPTestContext(), nullptr);
+		auto reservation = manager.ReserveSession();
+		return manager.FinishSession(reservation,
+		                             reservation.state->http_util->InitializeParameters(HTTPTestContext(), nullptr));
 	}
 
 	static unique_ptr<HTTPTransportManager> Create(const shared_ptr<HTTPUtil> &provider, idx_t capacity) {
