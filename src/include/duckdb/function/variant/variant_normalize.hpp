@@ -94,8 +94,6 @@ struct VariantNormalizer {
 
 public:
 	static void Normalize(const Vector &input, Vector &output);
-	//! Normalize only the first `count` rows of the input
-	static void Normalize(const Vector &input, Vector &output, idx_t count);
 };
 
 } // namespace duckdb

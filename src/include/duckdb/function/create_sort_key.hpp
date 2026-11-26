@@ -61,12 +61,8 @@ struct CreateSortKeyHelpers {
 	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result);
 	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result,
 	                          CreateSortKeyState &state);
-	//! The key of a VARIANT is created from its normalized form, so that objects stored with a different key order
-	//! get the same key - pass canonical_variants = false when the key is only used to store the value as it is
-	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result,
-	                          bool canonical_variants = true);
-	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result,
-	                          bool canonical_variants = true);
+	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result);
+	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);
 	static bool IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order);
 	static idx_t DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
 	static void DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,

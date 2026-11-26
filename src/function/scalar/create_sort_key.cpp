@@ -14,7 +14,6 @@
 #include "duckdb/common/swar.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/function/variant/variant_normalize.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -103,21 +102,9 @@ struct SortKeyVectorData {
 	static constexpr data_t LIST_DELIMITER = 0;
 	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
-	//! Objects of a VARIANT can be stored in any key order, so the key is created from the normalized variant
-	static const Vector &CanonicalVector(const Vector &input, idx_t size, bool canonical_variants,
-	                                     unique_ptr<Vector> &normalized) {
-		if (!canonical_variants || size == 0 || input.GetType().id() != LogicalTypeId::VARIANT) {
-			return input;
-		}
-		normalized = make_uniq<Vector>(LogicalType::VARIANT(), size);
-		VariantNormalizer::Normalize(input, *normalized, size);
-		return *normalized;
-	}
-
-	SortKeyVectorData(const Vector &input, idx_t size, OrderModifiers modifiers, bool canonical_variants = true)
-	    : vec(CanonicalVector(input, size, canonical_variants, normalized)) {
+	SortKeyVectorData(const Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
-			vec.ToUnifiedFormat(format);
+			input.ToUnifiedFormat(format);
 		} else {
 			format.physical_type = input.GetType().InternalType();
 		}
@@ -135,26 +122,24 @@ struct SortKeyVectorData {
 		auto child_null_type =
 		    modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
-		switch (vec.GetType().InternalType()) {
+		switch (input.GetType().InternalType()) {
 		case PhysicalType::STRUCT: {
-			auto &children = StructVector::GetEntries(vec);
+			auto &children = StructVector::GetEntries(input);
 			for (auto &child : children) {
-				child_data.push_back(make_uniq<SortKeyVectorData>(child, size, child_modifiers, canonical_variants));
+				child_data.push_back(make_uniq<SortKeyVectorData>(child, size, child_modifiers));
 			}
 			break;
 		}
 		case PhysicalType::ARRAY: {
 			const auto &child_entry = ArrayVector::GetChild(input);
 			auto array_size = ArrayType::GetSize(input.GetType());
-			child_data.push_back(
-			    make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers, canonical_variants));
+			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 			break;
 		}
 		case PhysicalType::LIST: {
 			const auto &child_entry = ListVector::GetChild(input);
 			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
-			child_data.push_back(
-			    make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers, canonical_variants));
+			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
 		}
 		default:
@@ -172,7 +157,6 @@ struct SortKeyVectorData {
 		return vec.GetType().InternalType();
 	}
 
-	unique_ptr<Vector> normalized;
 	const Vector &vec;
 	idx_t size;
 	UnifiedVectorFormat format;
@@ -972,14 +956,13 @@ static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_k
 
 } // namespace
 
-void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result,
-                                         bool canonical_variants) {
+void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
 	CreateSortKeyState state;
 	// prepare the sort key data
 	const auto input_count = input.size();
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
-	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier, canonical_variants));
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
 	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
@@ -1000,11 +983,11 @@ void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderMod
 }
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, idx_t input_count, OrderModifiers order_modifier,
-                                         Vector &result, bool canonical_variants) {
+                                         Vector &result) {
 	CreateSortKeyState state;
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
-	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier, canonical_variants));
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count, state);
 }
 
