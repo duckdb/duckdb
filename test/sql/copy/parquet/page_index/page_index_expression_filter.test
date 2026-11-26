@@ -1,0 +1,50 @@
+# name: test/sql/copy/parquet/page_index/page_index_expression_filter.test
+# description: Skipping pages with the Parquet page index for filters on expressions over a column
+# group: [page_index]
+
+require parquet
+
+# the page row counts and boundaries below assume the default vector size
+require vector_size 2048
+
+# one row group, BIGINT pages of 512 rows: 196 pages for 100000 rows
+statement ok
+COPY (SELECT range AS id FROM range(100000)) TO '{TEST_DIR}/page_index_expression_filter.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+# ids 55000 - 55999 lie in three pages
+query III
+SELECT count(*), min(id), max(id) FROM '{TEST_DIR}/page_index_expression_filter.parquet' WHERE id // 1000 = 55
+----
+1000	55000	55999
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT event, count(*), sum(info['rows_skipped']::BIGINT) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1	NULL
+SkipPages	1	98464
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+# the bounds of every page include a matching value: no page is skipped
+query I
+SELECT count(*) FROM '{TEST_DIR}/page_index_expression_filter.parquet' WHERE id % 1000 = 5
+----
+100
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' AND event = 'SkipPages'
+----
+0

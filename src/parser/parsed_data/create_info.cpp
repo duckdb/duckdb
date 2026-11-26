@@ -3,21 +3,36 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
+//! PRIMARY KEY, UNIQUE and FOREIGN KEY constraints are backed by indexes
+static bool HasIndexConstraint(const CreateTableInfo &info) {
+	for (auto &constraint : info.constraints) {
+		if (constraint->type != ConstraintType::NOT_NULL && constraint->type != ConstraintType::CHECK) {
+			return true;
+		}
+	}
+	return false;
+}
+
 DatabaseModificationType CreateInfo::GetModifications() const {
 	switch (type) {
-	case CatalogType::TABLE_ENTRY:
-	case CatalogType::INDEX_ENTRY:
-	case CatalogType::TRIGGER_ENTRY:
-		return DatabaseModificationType::CREATE_CATALOG_ENTRY;
-	case CatalogType::SCHEMA_ENTRY:
-		// replacing a schema drops the existing one
-		if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+	case CatalogType::TABLE_ENTRY: {
+		auto &table_info = Cast<CreateTableInfo>();
+		// FIXME: temporary, until tables with indexes run alongside checkpoints as well
+		if (HasIndexConstraint(table_info)) {
 			return DatabaseModificationType::CREATE_CATALOG_ENTRY;
 		}
+		// no checkpoint lock, but like INSERT ... SELECT, CREATE TABLE AS keeps checkpoints from vacuuming meanwhile
+		if (table_info.query) {
+			return DatabaseModificationType::INSERT_DATA;
+		}
 		return DatabaseModificationType();
+	}
+	case CatalogType::INDEX_ENTRY:
+		return DatabaseModificationType::CREATE_CATALOG_ENTRY;
 	default:
 		return DatabaseModificationType();
 	}

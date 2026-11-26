@@ -418,6 +418,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
                                   const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
+	page_ordinal = 0;
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
 	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
@@ -504,9 +505,9 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 }
 
 void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
-	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, page_ordinal);
 	aad_crypto_metadata.page_ordinal =
-	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, page_ordinal);
 	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
 }
 
@@ -978,9 +979,7 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
                                     optional_ptr<TableFilterState> filter_state, idx_t rows_to_skip) {
-	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
-		aad_crypto_metadata.page_ordinal = page_ordinal;
 		PrepareRead(filter, filter_state, rows_to_skip);
 		page_ordinal++;
 	}

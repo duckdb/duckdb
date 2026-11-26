@@ -126,7 +126,7 @@ TEST_CASE("Native scan affinity returns cached rows while remote reads are pendi
 	path = fs.CanonicalizePath(path);
 	auto gated_fs = make_uniq<NativeGatedFileSystem>(path);
 	auto &gate = *gated_fs;
-	fs.RegisterSubSystem(std::move(gated_fs));
+	VirtualFileSystem::Get(*con.context).RegisterSubSystem(std::move(gated_fs));
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + StringUtil::Replace(path, "'", "''") + "' AS remote_scan (READ_ONLY)"));
 	auto attached = DatabaseManager::Get(*con.context).GetDatabase("remote_scan");
 	REQUIRE(attached);
