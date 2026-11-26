@@ -166,6 +166,8 @@ public:
 	OrderMasks order_masks;
 	unordered_map<idx_t, AllocatedData> order_mask_data;
 	OnceFlag masks_initialized;
+	//! The number of partitions
+	atomic<idx_t> partition_count = 0;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
 	//! The processing stage for this group
@@ -642,6 +644,7 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
 	if (!block_begin) {
 		partition_mask.SetValidUnsafe(0);
+		++partition_count;
 	}
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetRangeInvalid(count, begin_entry, end_entry);
@@ -687,6 +690,7 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 		                   for (idx_t i = 0; i < ndistinct; ++i) {
 			                   const idx_t curr_index = row_idx + distinct.get_index(i);
 			                   partition_mask.SetValidUnsafe(curr_index);
+			                   ++partition_count;
 			                   for (auto &order_mask : order_masks) {
 				                   order_mask.second.SetValidUnsafe(curr_index);
 			                   }
@@ -1265,7 +1269,9 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	//	Apply co-evaluation with early stop
-	if (gsource.gsink.op.partition_limit.IsValid()) {
+	const auto partition_avg = LossyNumericCast<double, idx_t>(window_hash_group->count) /
+	                           LossyNumericCast<double, idx_t>(window_hash_group->partition_count.load());
+	if (gsource.gsink.op.partition_limit.IsValid() && partition_avg < STANDARD_VECTOR_SIZE) {
 		CoEvaluate(context, result, interrupt);
 		return;
 	}
