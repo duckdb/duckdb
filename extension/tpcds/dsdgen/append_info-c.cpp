@@ -2,120 +2,97 @@
 
 #include "append_info.h"
 #include "config.h"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/storage_info.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "porting.h"
 
+#include <cstdlib>
 #include <cstring>
-#include <memory>
 #include <string>
-#include "duckdb/common/unique_ptr.hpp"
 
 using namespace tpcds;
+using duckdb::cxx::DataChunk;
+using duckdb::cxx::varchar_t;
 
-tpcds_append_information::tpcds_append_information(duckdb::ClientContext &context_p, duckdb::TableCatalogEntry *table,
-                                                   TPCDSAppendMode mode, duckdb::idx_t flush_count,
-                                                   duckdb::OptimisticWritePartialManagers partial_manager_type)
-    : context(context_p), types(table->GetTypes()) {
-	if (mode == TPCDSAppendMode::APPENDER) {
-		appender = duckdb::make_uniq<duckdb::InternalAppender>(context_p, *table, flush_count);
-	} else {
-		table_entry = table->TryGetDuckTableEntry();
-		if (!table_entry) {
-			throw duckdb::InvalidInputException("dsdgen is only supported for DuckDB database files");
-		}
-		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(table_entry->GetStorage());
-		auto collection = optimistic_writer->CreateCollection(context.GetContext(), table_entry->GetStorage(), types, partial_manager_type);
-		auto &row_collection = *collection->collection;
-		row_collection.InitializeEmpty();
-		// the transaction id keeps the rows invisible to other transactions until the commit
-		row_collection.InitializeAppend(duckdb::DuckTransaction::Get(context, table_entry->catalog), append_state);
-		optimistic_collection_index =
-		    table_entry->GetStorage().CreateOptimisticCollection(context, std::move(collection));
-		optimistic_collection = table_entry->GetStorage().GetOptimisticCollection(context, optimistic_collection_index);
+static constexpr idx_t INVALID_ROW = static_cast<idx_t>(-1);
+
+//! Parses the width and scale of "DECIMAL(width, scale)"
+static void ParseDecimal(const std::string &type_name, uint32_t &width, uint32_t &scale) {
+	auto open = type_name.find('(');
+	auto comma = type_name.find(',');
+	if (open == std::string::npos || comma == std::string::npos) {
+		INTERNAL("unexpected TPC-DS decimal type");
 	}
-	append_types.reserve(types.size());
-	decimal_scales.reserve(types.size());
-	for (auto &type : types) {
+	width = static_cast<uint32_t>(std::strtoul(type_name.c_str() + open + 1, nullptr, 10));
+	scale = static_cast<uint32_t>(std::strtoul(type_name.c_str() + comma + 1, nullptr, 10));
+}
+
+TPCDSTableLayout::TPCDSTableLayout(duckdb::cxx::Factory &factory, const char *const *type_names,
+                                   idx_t column_count) {
+	for (idx_t i = 0; i < column_count; i++) {
+		std::string type_name(type_names[i]);
+		types.push_back(factory.ParseType(type_name));
 		decimal_scales.push_back(0);
-		switch (type.id()) {
-		case duckdb::LogicalTypeId::INTEGER:
+		if (type_name == "INTEGER") {
 			append_types.push_back(TPCDSAppendType::INT32);
-			break;
-		case duckdb::LogicalTypeId::BIGINT:
+		} else if (type_name == "BIGINT") {
 			append_types.push_back(TPCDSAppendType::INT64);
-			break;
-		case duckdb::LogicalTypeId::VARCHAR:
+		} else if (type_name == "VARCHAR") {
 			append_types.push_back(TPCDSAppendType::VARCHAR);
-			break;
-		case duckdb::LogicalTypeId::BOOLEAN:
+		} else if (type_name == "BOOLEAN") {
 			append_types.push_back(TPCDSAppendType::BOOLEAN);
-			break;
-		case duckdb::LogicalTypeId::DATE:
+		} else if (type_name == "DATE") {
 			append_types.push_back(TPCDSAppendType::DATE);
-			break;
-		case duckdb::LogicalTypeId::DECIMAL:
-			decimal_scales.back() = duckdb::DecimalType::GetScale(type);
-			switch (type.InternalType()) {
-			case duckdb::PhysicalType::INT16:
+		} else if (type_name.rfind("DECIMAL", 0) == 0) {
+			uint32_t width;
+			ParseDecimal(type_name, width, decimal_scales.back());
+			if (width <= 4) {
 				append_types.push_back(TPCDSAppendType::DECIMAL16);
-				break;
-			case duckdb::PhysicalType::INT32:
+			} else if (width <= 9) {
 				append_types.push_back(TPCDSAppendType::DECIMAL32);
-				break;
-			case duckdb::PhysicalType::INT64:
+			} else if (width <= 18) {
 				append_types.push_back(TPCDSAppendType::DECIMAL64);
-				break;
-			case duckdb::PhysicalType::INT128:
+			} else {
 				append_types.push_back(TPCDSAppendType::DECIMAL128);
-				break;
-			default:
-				throw duckdb::InternalException("Unexpected TPC-DS decimal column type");
 			}
-			break;
-		default:
-			throw duckdb::InternalException("Unexpected TPC-DS column type");
+		} else {
+			INTERNAL("unexpected TPC-DS column type");
 		}
 	}
-	chunk.Initialize(context, types);
 }
 
-tpcds_append_information::~tpcds_append_information() {
-	if (optimistic_writer) {
-		optimistic_writer->Rollback();
+tpcds_append_information::tpcds_append_information(duckdb::cxx::Factory &factory, const TPCDSTableLayout &layout_p)
+    : layout(layout_p), chunk(factory, layout_p.types), buffer(factory, layout_p.types) {
+	append_state = std::make_unique<duckdb::cxx::ColumnDataCollection::AppendState>(buffer.CreateAppendState());
+	capacity = chunk.GetCapacity();
+	PrepareChunk();
+}
+
+void tpcds_append_information::PrepareChunk() {
+	vectors.clear();
+	column_data.clear();
+	heaps.clear();
+	validity.clear();
+	for (idx_t col = 0; col < layout.types.size(); col++) {
+		auto vector = chunk.GetVector(col);
+		vector.SetSize(capacity);
+		column_data.push_back(vector.GetDataMutable());
+		if (layout.append_types[col] == TPCDSAppendType::VARCHAR) {
+			heaps.push_back(std::make_unique<duckdb::cxx::Arena>(vector.GetHeap()));
+		} else {
+			heaps.push_back(nullptr);
+		}
+		validity.push_back(nullptr);
+		vectors.push_back(std::move(vector));
 	}
-}
-
-void tpcds_append_information::ResetOptimisticCollection() {
-	D_ASSERT(table_entry);
-	D_ASSERT(optimistic_collection_index.IsValid());
-	table_entry->GetStorage().ResetOptimisticCollection(context, optimistic_collection_index);
-	optimistic_collection_index = duckdb::PhysicalIndex(duckdb::DConstants::INVALID_INDEX);
-	optimistic_collection = nullptr;
-}
-
-append_info *append_info_get(void *info_list, int table_id) {
-	auto &append_vector = *((duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> *)info_list);
-	return (append_info *)append_vector[table_id].get();
 }
 
 bool tpcds_append_information::IsNull(int nColumn) {
 	auto column_offset = nColumn - table_def.first_column;
-	D_ASSERT(column_offset >= 0);
 	auto bit_mask = int64_t(1) << column_offset;
 	return ((*table_def.null_bitmap & bit_mask) != 0);
 }
 
 void tpcds_append_information::BeginRow() {
-	D_ASSERT(appender || optimistic_collection);
-	D_ASSERT(active_row == duckdb::DConstants::INVALID_INDEX);
-	if (row >= STANDARD_VECTOR_SIZE) {
+	if (row >= capacity) {
 		FlushChunk();
 	}
 	active_row = row;
@@ -123,176 +100,97 @@ void tpcds_append_information::BeginRow() {
 }
 
 void tpcds_append_information::EndRow() {
-	D_ASSERT(active_row != duckdb::DConstants::INVALID_INDEX);
-	D_ASSERT(active_col == chunk.ColumnCount());
+	if (active_col != layout.types.size()) {
+		INTERNAL("a TPC-DS row was not completely written");
+	}
 	row++;
-	active_row = duckdb::DConstants::INVALID_INDEX;
+	active_row = INVALID_ROW;
 }
 
 void tpcds_append_information::FlushChunk() {
 	if (row == 0) {
 		return;
 	}
-	D_ASSERT(active_row == duckdb::DConstants::INVALID_INDEX);
-	chunk.SetChildCardinality(row);
-	if (appender) {
-		appender->AppendDataChunk(chunk);
-	} else {
-		D_ASSERT(optimistic_writer);
-		D_ASSERT(optimistic_collection);
-		auto &row_collection = *optimistic_collection->collection;
-		auto flushed_row_group_idx = row_collection.Append(chunk, append_state);
-		if (flushed_row_group_idx.IsValid()) {
-			optimistic_writer->WriteNewRowGroup(context.GetContext(), *optimistic_collection, flushed_row_group_idx.GetIndex());
-		}
+	for (auto &vector : vectors) {
+		vector.SetSize(row);
 	}
-	chunk.Reset();
+	buffer.Append(*append_state, chunk);
+	chunk.Clear();
 	row = 0;
 	active_col = 0;
+	PrepareChunk();
 }
 
-void tpcds_append_information::FinalizeOptimisticAppend() {
-	D_ASSERT(optimistic_collection);
-	if (finalized) {
-		return;
-	}
-	FlushChunk();
-	auto &row_collection = *optimistic_collection->collection;
-	row_collection.FinalizeAppend(append_state.transaction, append_state);
-	finalized = true;
+void tpcds_append_information::ResetBuffer() {
+	append_state.reset();
+	buffer.Clear();
+	append_state = std::make_unique<duckdb::cxx::ColumnDataCollection::AppendState>(buffer.CreateAppendState());
 }
 
-void tpcds_append_information::PrepareOptimisticWriteToDisk() {
-	if (!optimistic_collection) {
-		return;
-	}
-	D_ASSERT(table_entry);
-	D_ASSERT(optimistic_writer);
-	FinalizeOptimisticAppend();
-	auto &storage = table_entry->GetStorage();
-	auto &row_collection = *optimistic_collection->collection;
-	if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
-		optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
-		optimistic_writer->FinalFlush(context.GetContext());
-	}
-}
-
-void tpcds_append_information::FlushOptimistic() {
-	D_ASSERT(table_entry);
-	D_ASSERT(optimistic_writer);
-	D_ASSERT(optimistic_collection);
-	FinalizeOptimisticAppend();
-
-	auto &row_collection = *optimistic_collection->collection;
-	auto append_count = row_collection.GetTotalRows();
-	if (append_count == 0) {
-		ResetOptimisticCollection();
-		optimistic_writer.reset();
-		finalized = false;
-		return;
-	}
-
-	auto &table = *table_entry;
-	auto &storage = table.GetStorage();
-	if (append_count < storage.GetRowGroupSize()) {
-		auto binder = duckdb::Binder::CreateBinder(context);
-		auto bound_constraints = binder->BindConstraints(table);
-		duckdb::LocalAppendState local_append_state;
-		storage.InitializeLocalAppend(local_append_state, table, context, bound_constraints);
-		auto &transaction = duckdb::DuckTransaction::Get(context, table.catalog);
-		for (auto &insert_chunk : row_collection.Chunks(transaction)) {
-			storage.LocalAppend(local_append_state, table, context, insert_chunk, false);
-		}
-		storage.FinalizeLocalAppend(local_append_state);
-		ResetOptimisticCollection();
-	} else {
-		optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
-		storage.LocalMerge(context, table, *optimistic_collection);
-		auto &storage_writer = storage.GetOptimisticWriter(context);
-		storage_writer.Merge(context.GetContext(), *optimistic_writer);
-		ResetOptimisticCollection();
-	}
-	optimistic_writer.reset();
-	finalized = false;
-}
-
-void tpcds_append_information::Close() {
-	FlushChunk();
-	if (appender) {
-		appender->Close();
-		appender.reset();
-	} else if (optimistic_collection) {
-		FlushOptimistic();
-	}
-}
-
-duckdb::Vector &tpcds_append_information::NextColumn() {
-	D_ASSERT(active_row != duckdb::DConstants::INVALID_INDEX);
-	D_ASSERT(active_col < chunk.ColumnCount());
-	return chunk.data[active_col++];
+idx_t tpcds_append_information::NextColumn() {
+	return active_col++;
 }
 
 TPCDSAppendType tpcds_append_information::ActiveAppendType() const {
-	D_ASSERT(active_col < append_types.size());
-	return append_types[active_col];
+	return layout.append_types[active_col];
 }
 
 uint32_t tpcds_append_information::ActiveDecimalScale() const {
-	D_ASSERT(active_col < decimal_scales.size());
-	return decimal_scales[active_col];
+	return layout.decimal_scales[active_col];
+}
+
+template <class T>
+static T *ColumnData(std::vector<void *> &column_data, idx_t col) {
+	return static_cast<T *>(column_data[col]);
 }
 
 void tpcds_append_information::AppendNull() {
-	auto &vector = NextColumn();
-	duckdb::FlatVector::SetNull(vector, active_row, true);
+	auto col = NextColumn();
+	if (!validity[col]) {
+		validity[col] = vectors[col].GetValidityMutable().words;
+	}
+	validity[col][active_row >> 6] &= ~(uint64_t(1) << (active_row & 63));
 }
 
 void tpcds_append_information::AppendVarchar(const char *value) {
-	D_ASSERT(ActiveAppendType() == TPCDSAppendType::VARCHAR);
-	auto &vector = NextColumn();
-	duckdb::FlatVector::GetDataMutable<duckdb::string_t>(vector)[active_row] =
-	    duckdb::StringVector::AddString(vector, value);
+	auto col = NextColumn();
+	// dsdgen text is ASCII
+	ColumnData<varchar_t>(column_data, col)[active_row] = heaps[col]->AddStringUnsafe(value);
 }
 
 void tpcds_append_information::AppendKey(int64_t value) {
 	auto append_type = ActiveAppendType();
-	auto &vector = NextColumn();
+	auto col = NextColumn();
 	switch (append_type) {
 	case TPCDSAppendType::INT64:
-		duckdb::FlatVector::GetDataMutable<int64_t>(vector)[active_row] = value;
+		ColumnData<int64_t>(column_data, col)[active_row] = value;
 		break;
 	case TPCDSAppendType::INT32:
-		duckdb::FlatVector::GetDataMutable<int32_t>(vector)[active_row] = static_cast<int32_t>(value);
+		ColumnData<int32_t>(column_data, col)[active_row] = static_cast<int32_t>(value);
 		break;
-	case TPCDSAppendType::VARCHAR: {
-		auto value_string = std::to_string(value);
-		duckdb::FlatVector::GetDataMutable<duckdb::string_t>(vector)[active_row] =
-		    duckdb::StringVector::AddString(vector, value_string);
+	case TPCDSAppendType::VARCHAR:
+		ColumnData<varchar_t>(column_data, col)[active_row] = heaps[col]->AddStringUnsafe(std::to_string(value));
 		break;
-	}
 	default:
-		throw duckdb::InternalException("Unexpected TPC-DS key column type");
+		INTERNAL("unexpected TPC-DS key column type");
 	}
 }
 
 void tpcds_append_information::AppendInteger(int32_t value) {
 	auto append_type = ActiveAppendType();
-	auto &vector = NextColumn();
+	auto col = NextColumn();
 	switch (append_type) {
 	case TPCDSAppendType::INT64:
-		duckdb::FlatVector::GetDataMutable<int64_t>(vector)[active_row] = value;
+		ColumnData<int64_t>(column_data, col)[active_row] = value;
 		break;
 	case TPCDSAppendType::INT32:
-		duckdb::FlatVector::GetDataMutable<int32_t>(vector)[active_row] = value;
+		ColumnData<int32_t>(column_data, col)[active_row] = value;
 		break;
-	case TPCDSAppendType::VARCHAR: {
-		auto value_string = std::to_string(value);
-		duckdb::FlatVector::GetDataMutable<duckdb::string_t>(vector)[active_row] =
-		    duckdb::StringVector::AddString(vector, value_string);
+	case TPCDSAppendType::VARCHAR:
+		ColumnData<varchar_t>(column_data, col)[active_row] = heaps[col]->AddStringUnsafe(std::to_string(value));
 		break;
-	}
 	default:
-		throw duckdb::InternalException("Unexpected TPC-DS integer column type");
+		INTERNAL("unexpected TPC-DS integer column type");
 	}
 }
 
@@ -301,36 +199,46 @@ void tpcds_append_information::AppendIntegerDecimal(int32_t value) {
 }
 
 void tpcds_append_information::AppendBoolean(int32_t value) {
-	D_ASSERT(ActiveAppendType() == TPCDSAppendType::BOOLEAN);
-	auto &vector = NextColumn();
-	duckdb::FlatVector::GetDataMutable<bool>(vector)[active_row] = value != 0;
+	if (ActiveAppendType() != TPCDSAppendType::BOOLEAN) {
+		INTERNAL("unexpected TPC-DS boolean column type");
+	}
+	auto col = NextColumn();
+	ColumnData<bool>(column_data, col)[active_row] = value != 0;
 }
 
-void tpcds_append_information::AppendDate(duckdb::date_t value) {
-	D_ASSERT(ActiveAppendType() == TPCDSAppendType::DATE);
-	auto &vector = NextColumn();
-	duckdb::FlatVector::GetDataMutable<duckdb::date_t>(vector)[active_row] = value;
+void tpcds_append_information::AppendDate(int32_t days) {
+	if (ActiveAppendType() != TPCDSAppendType::DATE) {
+		INTERNAL("unexpected TPC-DS date column type");
+	}
+	auto col = NextColumn();
+	ColumnData<duckdb::cxx::date_t>(column_data, col)[active_row] = duckdb::cxx::date_t {days};
 }
 
 void tpcds_append_information::AppendDecimal(int64_t value) {
 	auto append_type = ActiveAppendType();
-	auto &vector = NextColumn();
+	auto col = NextColumn();
 	switch (append_type) {
 	case TPCDSAppendType::DECIMAL16:
-		duckdb::FlatVector::GetDataMutable<int16_t>(vector)[active_row] = static_cast<int16_t>(value);
+		ColumnData<int16_t>(column_data, col)[active_row] = static_cast<int16_t>(value);
 		break;
 	case TPCDSAppendType::DECIMAL32:
-		duckdb::FlatVector::GetDataMutable<int32_t>(vector)[active_row] = static_cast<int32_t>(value);
+		ColumnData<int32_t>(column_data, col)[active_row] = static_cast<int32_t>(value);
 		break;
 	case TPCDSAppendType::DECIMAL64:
-		duckdb::FlatVector::GetDataMutable<int64_t>(vector)[active_row] = value;
+		ColumnData<int64_t>(column_data, col)[active_row] = value;
 		break;
 	case TPCDSAppendType::DECIMAL128:
-		duckdb::FlatVector::GetDataMutable<duckdb::hugeint_t>(vector)[active_row] = value;
+		ColumnData<duckdb::cxx::int128_t>(column_data, col)[active_row] =
+		    duckdb::cxx::int128_t {static_cast<uint64_t>(value), value < 0 ? -1 : 0};
 		break;
 	default:
-		throw duckdb::InternalException("Unexpected TPC-DS decimal column type");
+		INTERNAL("unexpected TPC-DS decimal column type");
 	}
+}
+
+append_info *append_info_get(void *info_list, int table_id) {
+	auto &append_vector = *((std::vector<std::unique_ptr<tpcds_append_information>> *)info_list);
+	return (append_info *)append_vector[table_id].get();
 }
 
 void append_row_start(append_info info) {
@@ -395,7 +303,7 @@ void append_date(append_info info, int64_t value, int nColumn) {
 		append_info->AppendNull();
 	} else {
 		static constexpr int64_t UNIX_EPOCH_JULIAN = 2440588;
-		append_info->AppendDate(duckdb::date_t(static_cast<int32_t>(value - UNIX_EPOCH_JULIAN)));
+		append_info->AppendDate(static_cast<int32_t>(value - UNIX_EPOCH_JULIAN));
 	}
 }
 
@@ -405,6 +313,5 @@ void append_decimal(append_info info, decimal_t *val, int nColumn) {
 		append_info->AppendNull();
 		return;
 	}
-	D_ASSERT(append_info->ActiveDecimalScale() == static_cast<uint32_t>(val->precision));
 	append_info->AppendDecimal(val->number);
 }

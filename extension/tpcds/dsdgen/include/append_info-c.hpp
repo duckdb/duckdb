@@ -1,23 +1,14 @@
 #pragma once
 
-#include "duckdb/main/appender.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/constraints/not_null_constraint.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/storage/optimistic_data_writer.hpp"
-#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb_cpp.hpp"
 
-#include <memory>
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace tpcds {
+
+using duckdb::cxx::idx_t;
 
 struct tpcds_table_def {
 	const char *name;
@@ -42,45 +33,24 @@ enum class TPCDSAppendType : uint8_t {
 	DECIMAL128
 };
 
-enum class TPCDSAppendMode : uint8_t { APPENDER, OPTIMISTIC };
+//! The columns of a TPC-DS table, as DuckDB types and as the generator writes them
+struct TPCDSTableLayout {
+	TPCDSTableLayout(duckdb::cxx::Factory &factory, const char *const *type_names, idx_t column_count);
 
+	std::vector<duckdb::cxx::LogicalType> types;
+	std::vector<TPCDSAppendType> append_types;
+	std::vector<uint32_t> decimal_scales;
+};
+
+//! Buffers the rows the generator produces for one table, until they are inserted
 struct tpcds_append_information {
-	tpcds_append_information(duckdb::ClientContext &context_p, duckdb::TableCatalogEntry *table,
-	                         TPCDSAppendMode mode = TPCDSAppendMode::APPENDER,
-	                         duckdb::idx_t flush_count = duckdb::BaseAppender::DEFAULT_FLUSH_COUNT,
-	                         duckdb::OptimisticWritePartialManagers partial_manager_type =
-	                             duckdb::OptimisticWritePartialManagers::PER_COLUMN);
-
-	duckdb::ClientContext &context;
-	duckdb::unique_ptr<duckdb::InternalAppender> appender;
-	duckdb::unique_ptr<duckdb::OptimisticDataWriter> optimistic_writer;
-	duckdb::optional_ptr<duckdb::OptimisticWriteCollection> optimistic_collection;
-	duckdb::optional_ptr<duckdb::DuckTableEntry> table_entry;
-	duckdb::PhysicalIndex optimistic_collection_index = duckdb::PhysicalIndex(duckdb::DConstants::INVALID_INDEX);
-	duckdb::TableAppendState append_state;
-	duckdb::DataChunk chunk;
-	duckdb::vector<duckdb::LogicalType> types;
-	duckdb::vector<TPCDSAppendType> append_types;
-	duckdb::vector<uint32_t> decimal_scales;
-	duckdb::idx_t row = 0;
-	duckdb::idx_t active_row = duckdb::DConstants::INVALID_INDEX;
-	duckdb::idx_t active_col = 0;
-	bool finalized = false;
+	tpcds_append_information(duckdb::cxx::Factory &factory, const TPCDSTableLayout &layout);
 
 	tpcds_table_def table_def;
-
-	~tpcds_append_information();
 
 	bool IsNull(int nColumn);
 	void BeginRow();
 	void EndRow();
-	void FlushChunk();
-	void FlushOptimistic();
-	void FinalizeOptimisticAppend();
-	void PrepareOptimisticWriteToDisk();
-	void ResetOptimisticCollection();
-	void Close();
-	duckdb::Vector &NextColumn();
 	TPCDSAppendType ActiveAppendType() const;
 	uint32_t ActiveDecimalScale() const;
 	void AppendNull();
@@ -89,8 +59,39 @@ struct tpcds_append_information {
 	void AppendInteger(int32_t value);
 	void AppendIntegerDecimal(int32_t value);
 	void AppendBoolean(int32_t value);
-	void AppendDate(duckdb::date_t value);
+	void AppendDate(int32_t days);
 	void AppendDecimal(int64_t value);
+
+	//! Moves the rows of the chunk being filled into the buffer
+	void FlushChunk();
+	//! The buffered rows, complete after FlushChunk
+	const duckdb::cxx::ColumnDataCollection &GetBuffer() const {
+		return buffer;
+	}
+	//! The rows buffered or in the chunk being filled
+	idx_t RowCount() const {
+		return buffer.GetRowCount() + row;
+	}
+	//! Empties the buffer after its rows were inserted
+	void ResetBuffer();
+
+private:
+	void PrepareChunk();
+	idx_t NextColumn();
+
+	const TPCDSTableLayout &layout;
+	duckdb::cxx::DataChunk chunk;
+	duckdb::cxx::ColumnDataCollection buffer;
+	std::unique_ptr<duckdb::cxx::ColumnDataCollection::AppendState> append_state;
+	idx_t capacity;
+	//! The columns of the chunk, with their data, heap and validity, taken again whenever it is cleared
+	std::vector<duckdb::cxx::Vector> vectors;
+	std::vector<void *> column_data;
+	std::vector<std::unique_ptr<duckdb::cxx::Arena>> heaps;
+	std::vector<uint64_t *> validity;
+	idx_t row = 0;
+	idx_t active_row = static_cast<idx_t>(-1);
+	idx_t active_col = 0;
 };
 
 } // namespace tpcds

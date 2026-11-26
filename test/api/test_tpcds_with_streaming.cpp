@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "tpcds_extension.hpp"
 
 using namespace duckdb;
 

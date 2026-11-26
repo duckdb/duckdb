@@ -124,7 +124,6 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
 endif()
 
 if(DUCKDB_EXTENSION_TPCDS_SHOULD_LINK)
-  include_directories(../../extension/tpcds/include)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpcds_with_streaming.cpp)
 endif()
 

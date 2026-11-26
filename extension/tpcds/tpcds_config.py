@@ -1,9 +1,12 @@
 import os
 
+# built against the stable C++ API, on top of the V2 C API
+extension_kind = 'CAPI_V2'
+
 # list all include directories
 include_directories = [
     os.path.sep.join(x.split('/'))
-    for x in ['extension/tpcds/include', 'extension/tpcds/dsdgen/include', 'extension/tpcds/dsdgen/include/dsdgen-c']
+    for x in ['extension/tpcds/dsdgen/include', 'extension/tpcds/dsdgen/include/dsdgen-c', 'tools/cpp']
 ]
 # source files
 source_files = [os.path.sep.join(x.split('/')) for x in ['extension/tpcds/tpcds_extension.cpp']]
@@ -13,6 +16,8 @@ source_files += [
         'extension/tpcds/dsdgen/dsdgen.cpp',
         'extension/tpcds/dsdgen/append_info-c.cpp',
         'extension/tpcds/dsdgen/dsdgen_helpers.cpp',
+        'extension/tpcds/dsdgen/tpcds_errors.cpp',
+        'tools/cpp/duckdb_cpp.cpp',
     ]
 ]
 source_files += [
