@@ -398,6 +398,13 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 			throw InvalidInputException(format_string, extension_name, repo, install_info->repository_url, custom_path,
 			                            extension);
 		}
+		// a custom path install keeps the origin its FROM named, which a NOP install must not appear to replace
+		auto requested_type = repository ? repository->type : ExtensionRepositoryType::CORE;
+		if (install_info->mode == ExtensionInstallMode::CUSTOM_PATH &&
+		    install_info->repository_type != requested_type) {
+			throw InvalidInputException(format_string, extension_name, custom_path, install_info->full_path,
+			                            repository ? repo : custom_path, repository ? repository->path : extension);
+		}
 	}
 }
 

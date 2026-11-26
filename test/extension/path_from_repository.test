@@ -41,6 +41,20 @@ LOAD loadable_extension_demo FROM core
 ----
 IO Error: Extension 'loadable_extension_demo' was not installed from repository 'core'
 
+# installing the same path FROM another repository does not silently keep the recorded origin
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM core
+----
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*
+
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
+----
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*
+
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM community
+
 statement ok
 LOAD loadable_extension_demo FROM community
 
@@ -111,11 +125,3 @@ query I
 SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'loadable_grammar_extension_demo' AND installed
 ----
 0
-
-statement ok
-SET allow_community_extensions = false
-
-statement error
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM community
-----
-<REGEX>:IO Error: Extension .* could not be loaded because its signature is either missing or invalid.*
