@@ -237,6 +237,18 @@ uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainde
 		remainder = lhs;
 		return uhugeint_t(0);
 	}
+	if (rhs == 1) {
+		remainder = uhugeint_t(0);
+		return lhs;
+	}
+	if (lhs == rhs) {
+		remainder = uhugeint_t(0);
+		return uhugeint_t(1);
+	}
+	if (lhs < rhs) {
+		remainder = lhs;
+		return uhugeint_t(0);
+	}
 	const auto result = Uint128DivMod(lhs.upper, lhs.lower, rhs.upper, rhs.lower);
 	remainder = uhugeint_t(result.remainder_upper, result.remainder_lower);
 	return uhugeint_t(result.quotient_upper, result.quotient_lower);
