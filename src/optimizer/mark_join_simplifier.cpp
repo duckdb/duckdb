@@ -30,6 +30,10 @@ static bool IsConstantInputComparisonOptimizable(const JoinCondition &condition)
 	if (!condition.IsComparison() || condition.GetRHS().IsVolatile()) {
 		return false;
 	}
+	// A NULL-only hash build can skip evaluating the probe expression.
+	if (condition.GetLHS().IsVolatile() || condition.GetLHS().CanThrow()) {
+		return false;
+	}
 
 	const auto comparison_type = condition.GetComparisonType();
 	if ((condition.GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||

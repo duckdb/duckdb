@@ -157,6 +157,43 @@ SELECT a, a IN (SELECT NULL::INTEGER) AS marker FROM (VALUES (1), (NULL)) t(a);
 1	NULL
 NULL	NULL
 
+# A NULL-only build must not introduce errors or side effects from the probe operand.
+statement ok
+CREATE TABLE cast_probe(i VARCHAR);
+
+statement ok
+INSERT INTO cast_probe VALUES ('bad');
+
+query I
+SELECT i::INTEGER IN (SELECT NULL::INTEGER) FROM cast_probe;
+----
+NULL
+
+query I
+SELECT error('unexpected probe evaluation') IN (SELECT NULL::INTEGER);
+----
+NULL
+
+statement ok
+CREATE SEQUENCE null_build_probe;
+
+query I
+SELECT nextval('null_build_probe') IN (SELECT NULL::BIGINT) FROM range(3);
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='null_build_probe';
+----
+NULL
+
+query II
+EXPLAIN SELECT random() IN (SELECT NULL::DOUBLE) FROM probe;
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*
+
 # The filter above the MARK join still consumes the computed marker.
 query I
 SELECT a FROM (VALUES (1), (NULL)) t(a) WHERE a NOT IN (SELECT NULL::INTEGER);
