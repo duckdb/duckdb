@@ -11,7 +11,6 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -19,6 +18,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/table_function_query_filter.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
@@ -370,7 +370,7 @@ public:
 		    reader_data, bind_data, global_columns, global_column_ids, table_filters, context, global_state);
 		if (result == ReaderInitializeType::INITIALIZED && !reader.deletion_filter) {
 			// the file list can describe the rows of a file to scan with its options
-			reader.deletion_filter = DatabaseInstance::GetDatabase(context).CreateFileFilter(context, reader.file);
+			reader.deletion_filter = TableFunctionQueryFilter::TryCreate(context, reader.file);
 		}
 		return result;
 	}
