@@ -163,7 +163,7 @@ public:
 	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                   idx_t scan_count);
 
-	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result,
+	virtual void ScanCommittedRange(idx_t offset_in_row_group, idx_t count, Vector &result,
 	                                VisibilityBound visibility_bound);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
