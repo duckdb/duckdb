@@ -1,0 +1,214 @@
+diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
+index 5e567d9..aefdf49 100644
+--- a/src/function/ducklake/iceberg_to_ducklake.cpp
++++ b/src/function/ducklake/iceberg_to_ducklake.cpp
+@@ -17,7 +17,8 @@
+ #include "duckdb/parser/tableref/emptytableref.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/types/uuid.hpp"
+ #include "duckdb/common/numeric_utils.hpp"
+diff --git a/src/function/metadata/iceberg_column_stats.cpp b/src/function/metadata/iceberg_column_stats.cpp
+index f84c41b..32aa562 100644
+--- a/src/function/metadata/iceberg_column_stats.cpp
++++ b/src/function/metadata/iceberg_column_stats.cpp
+@@ -1,6 +1,7 @@
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/string.hpp"
+ #include "duckdb/storage/statistics/geometry_stats.hpp"
+diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/iceberg_metadata.cpp
+index a4e0bc3..a841a96 100644
+--- a/src/function/metadata/iceberg_metadata.cpp
++++ b/src/function/metadata/iceberg_metadata.cpp
+@@ -17,7 +17,8 @@
+ #include "duckdb/parser/tableref/emptytableref.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/string.hpp"
+ 
+diff --git a/src/function/metadata/iceberg_partition_stats.cpp b/src/function/metadata/iceberg_partition_stats.cpp
+index 13c5820..2cd9d32 100644
+--- a/src/function/metadata/iceberg_partition_stats.cpp
++++ b/src/function/metadata/iceberg_partition_stats.cpp
+@@ -17,7 +17,8 @@
+ #include "duckdb/parser/tableref/emptytableref.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/string.hpp"
+ 
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index cd3c1c2..0aab616 100644
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -1,4 +1,5 @@
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
+diff --git a/src/function/scan/iceberg_scan.cpp b/src/function/scan/iceberg_scan.cpp
+index 32fdf3a..ed10628 100644
+--- a/src/function/scan/iceberg_scan.cpp
++++ b/src/function/scan/iceberg_scan.cpp
+@@ -18,7 +18,8 @@
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+ #include "duckdb/storage/table/row_group_reorderer.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+ 
+diff --git a/test/native_catalog/catalog_transport.cpp b/test/native_catalog/catalog_transport.cpp
+index dbfad8a..4c702be 100644
+--- a/test/native_catalog/catalog_transport.cpp
++++ b/test/native_catalog/catalog_transport.cpp
+@@ -3,9 +3,8 @@
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/function/table_function.hpp"
+ #include "duckdb/main/client_context.hpp"
+-#include "duckdb/main/client_context_file_opener.hpp"
+ #include "duckdb/main/database.hpp"
+-#include "duckdb/main/database_file_opener.hpp"
++#include "duckdb/main/database_file_system.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ 
+@@ -74,15 +73,13 @@ public:
+ 	}
+ 	unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &url) override {
+ 		CheckOrigin(url);
+-		ClientContextFileOpener opener(context.GetContext());
+-		return HTTPUtil::InitializeParameters(&opener, nullptr);
++		return HTTPUtil::InitializeParameters(context.GetContext(), nullptr);
+ 	}
+ 	unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &url) override {
+ 		CheckOrigin(url);
+-		DatabaseFileOpener opener(db);
+-		return HTTPUtil::InitializeParameters(&opener, nullptr);
++		return HTTPUtil::InitializeParameters(db.GetContext(), nullptr);
+ 	}
+-	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener>, optional_ptr<FileOpenerInfo>) override {
++	unique_ptr<HTTPParams> InitializeParameters(Context &context, optional_ptr<FileLookupInfo>) override {
+ 		// HTTPFS casts filesystem-session parameters to its own HTTPFSParams before
+ 		// making requests. Reject that entry point rather than returning base params
+ 		// to an incompatible consumer. Iceberg uses the context overload above.
+diff --git a/test/native_catalog/test_native_catalog.cpp b/test/native_catalog/test_native_catalog.cpp
+index 1c90e18..f02a7ea 100644
+--- a/test/native_catalog/test_native_catalog.cpp
++++ b/test/native_catalog/test_native_catalog.cpp
+@@ -1,6 +1,7 @@
+ #define CATCH_CONFIG_RUNNER
+ #include "catch.hpp"
+-#include "bound_file_system.hpp"
++#include "duckdb/common/file_system.hpp"
++#include "duckdb/common/virtual_file_system.hpp"
+ #include "catalog_model.hpp"
+ #include "duckdb.hpp"
+ #include "duckdb/common/local_file_system.hpp"
+@@ -30,21 +31,20 @@ public:
+ 	string GetName() const override {
+ 		return "NativeCatalogFailingFileSystem";
+ 	}
+-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+-	                                optional_ptr<FileOpener> opener) override {
++	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override {
+ 		if (flags.OpenForWriting() && StringUtil::EndsWith(path, ".metadata.json")) {
+ 			metadata_writes++;
+ 			if (fail_at && metadata_writes == fail_at) {
+ 				throw IOException("Injected metadata write failure");
+ 			}
+ 		}
+-		return local->OpenFile(path, flags, opener);
++		return local->OpenFile(context, path, flags);
+ 	}
+-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override {
+-		local->CreateDirectoriesRecursive(path, opener);
++	void CreateDirectoriesRecursive(Context &context, const string &path) override {
++		local->CreateDirectoriesRecursive(context, path);
+ 	}
+-	void RemoveOwnedRoot(const string &root) {
+-		local->RemoveDirectory(root, nullptr);
++	void RemoveOwnedRoot(Context &context, const string &root) {
++		local->RemoveDirectory(context, root);
+ 	}
+ 
+ 	idx_t metadata_writes = 0;
+@@ -54,6 +54,28 @@ private:
+ 	unique_ptr<LocalFileSystem> local;
+ };
+ 
++//! A file system bound to a context that sends every path to the given file system
++class TestBoundFileSystem : public FileSystem {
++public:
++	TestBoundFileSystem(BaseFileSystem &fs_p, Context &context_p) : fs(fs_p), context(context_p) {
++	}
++
++protected:
++	VirtualFileSystem &GetFileSystem() const override {
++		return VirtualFileSystem::Get(context.GetDatabase());
++	}
++	Context &GetContext() const override {
++		return context;
++	}
++	optional_ptr<BaseFileSystem> GetFixedFileSystem() const override {
++		return &fs;
++	}
++
++private:
++	BaseFileSystem &fs;
++	Context &context;
++};
++
+ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+ 	auto result = connection.Query(sql);
+ 	if (result->HasError()) {
+@@ -68,7 +90,9 @@ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+ TEST_CASE("Native catalog publishes no table when the second metadata write fails", "[iceberg_native]") {
+ 	FailingFileSystem fs;
+ 	auto root = TestRoot();
+-	BoundFileSystem bound_fs(fs, nullptr);
++	DuckDB fs_database(nullptr);
++	auto &fs_context = fs_database.instance->GetContext();
++	TestBoundFileSystem bound_fs(fs, fs_context);
+ 	iceberg_test::Catalog catalog(bound_fs, root);
+ 	REQUIRE(catalog.Request("POST", "/v1/namespaces", R"({"namespace":["atomic"]})")->status == HTTPStatusCode::OK_200);
+ 	for (auto name : {"a", "b"}) {
+@@ -106,7 +130,7 @@ TEST_CASE("Native catalog publishes no table when the second metadata write fail
+ 		REQUIRE(metadata.At("properties").At("changed").String() == "yes");
+ 		REQUIRE(metadata.At("metadata-log").Items().size() == 1);
+ 	}
+-	fs.RemoveOwnedRoot(root);
++	fs.RemoveOwnedRoot(fs_context, root);
+ }
+ 
+ TEST_CASE("Native catalog state belongs to the database, not its initializing connection", "[iceberg_native]") {
+@@ -145,7 +169,8 @@ TEST_CASE("Native catalog state belongs to the database, not its initializing co
+ 		                    "SELECT status FROM iceberg_test_catalog_request('GET', '/v1/namespaces/survives', NULL)");
+ 		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 404);
+ 	}
+-	TestLocalFileSystem().RemoveDirectory(root, nullptr);
++	DuckDB cleanup_database(nullptr);
++	TestLocalFileSystem().RemoveDirectory(cleanup_database.instance->GetContext(), root);
+ }
+ 
+ int main(int argc, char **argv) {

@@ -1,0 +1,1179 @@
+diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
+index 0a6f720..85c232b 100644
+--- a/src/azure_blob_filesystem.cpp
++++ b/src/azure_blob_filesystem.cpp
+@@ -3,7 +3,8 @@
+ #include "azure_http_state.hpp"
+ #include "azure_storage_account_client.hpp"
+ #include "duckdb/common/exception.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "duckdb/common/shared_ptr.hpp"
+@@ -122,10 +123,7 @@ void AzureBlobStorageFileHandle::Close() {
+ 
+ //////// AzureBlobStorageFileSystem ////////
+ unique_ptr<AzureFileHandle> AzureBlobStorageFileSystem::CreateHandle(const OpenFileInfo &info, FileOpenFlags flags,
+-                                                                     optional_ptr<FileOpener> opener) {
+-	if (!opener) {
+-		throw InternalException("Unsupported(INTERNAL): cannot create an Azure blob Handle without FileOpener");
+-	}
++                                                                     Context &context) {
+ 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
+ 		throw InternalException("Unsupported(INTERNAL): cannot open an Azure blob in compressed mode");
+ 	}
+@@ -137,7 +135,7 @@ unique_ptr<AzureFileHandle> AzureBlobStorageFileSystem::CreateHandle(const OpenF
+ 	}
+ 
+ 	auto parsed_url = ParseUrl(info.path);
+-	auto storage_context = GetOrCreateStorageContext(opener, info.path, parsed_url);
++	auto storage_context = GetOrCreateStorageContext(context, info.path, parsed_url);
+ 	auto container = storage_context->As<AzureBlobContextState>().GetBlobContainerClient(parsed_url.container);
+ 	auto blob_client = container.GetBlockBlobClient(parsed_url.path);
+ 
+@@ -153,19 +151,15 @@ bool AzureBlobStorageFileSystem::CanHandleFile(const string &fpath) {
+ 	return fpath.rfind(PATH_PREFIX, 0) * fpath.rfind(SHORT_PATH_PREFIX, 0) == 0;
+ }
+ 
+-vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(const string &path, FileOpener *opener) {
+-	if (opener == nullptr) {
+-		throw InternalException("Cannot do Azure storage Glob without FileOpener");
+-	}
+-
++vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(Context &context, const string &path) {
+ 	auto azure_url = ParseUrl(path);
+-	auto storage_context = GetOrCreateStorageContext(opener, path, azure_url);
++	auto storage_context = GetOrCreateStorageContext(context, path, azure_url);
+ 
+ 	// Azure matches on prefix, not glob pattern, so we take a substring until the first wildcard
+ 	auto first_wildcard_pos = azure_url.path.find_first_of("*[\\");
+ 	if (first_wildcard_pos == string::npos) {
+ 		vector<OpenFileInfo> rv;
+-		if (FileExists(path, opener)) {
++		if (FileExists(context, path)) {
+ 			rv.emplace_back(path);
+ 		}
+ 		return rv;
+@@ -229,16 +223,15 @@ vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(const string &path, FileOp
+ }
+ 
+ // Caller beware -- this is always recursive, performance may be terrible.
+-bool AzureBlobStorageFileSystem::ListFilesExtended(const string &path_in,
+-                                                   const std::function<void(OpenFileInfo &info)> &callback,
+-                                                   optional_ptr<FileOpener> opener) {
++bool AzureBlobStorageFileSystem::ListFilesExtended(Context &context, const string &path_in,
++                                                   const std::function<void(OpenFileInfo &info)> &callback) {
+ 	if (path_in.find('*') != string::npos) {
+ 		throw InvalidInputException("ListFiles does not support globs");
+ 	}
+ 	// Normalize: to end with '/' so it's a clear dir prefix
+ 	auto path = (!path_in.empty() && path_in.back() == '/') ? path_in : (path_in + '/');
+ 	auto url = ParseUrl(path);
+-	auto storage_context = GetOrCreateStorageContext(opener, path, url);
++	auto storage_context = GetOrCreateStorageContext(context, path, url);
+ 	auto container = storage_context->As<AzureBlobContextState>().GetBlobContainerClient(url.container);
+ 
+ 	// NOTE: this code fakes dir listings by keeping a small cache of seen directories. Since blob store has no such
+@@ -349,19 +342,16 @@ void AzureBlobStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	}
+ }
+ 
+-bool AzureBlobStorageFileSystem::DirectoryExists(const string &dirname, optional_ptr<FileOpener> opener) {
++bool AzureBlobStorageFileSystem::DirectoryExists(Context &context, const string &dirname) {
+ 	// NOTE: existance of directory makes no sense in Blob -- since the concept isn't present.
+ 	// That said we fake it -- if glob(dir/*) returns anything at all, say it exists, otherwise not.
+ 	// If we want to, could add an option to behave in this, way, always return true or even always false.
+ 	// This mechanism of relying on dir/ is also frequently used to fake dirs in e.g. S3, so it's consistent
+ 	// with other common practice.
+-	if (opener == nullptr) {
+-		throw InternalException("Cannot do Azure storage directory test without FileOpener");
+-	}
+-	// auto handle = OpenFile(dirname, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
++	// auto handle = OpenFile(context, dirname, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+ 	auto dir_slashed = dirname[dirname.length() - 1] == '/' ? dirname : (dirname + '/');
+ 	auto dir_url = ParseUrl(dir_slashed);
+-	auto storage_context = GetOrCreateStorageContext(opener, dirname, dir_url);
++	auto storage_context = GetOrCreateStorageContext(context, dirname, dir_url);
+ 	auto container_client = storage_context->As<AzureBlobContextState>().GetBlobContainerClient(dir_url.container);
+ 
+ 	Azure::Storage::Blobs::ListBlobsOptions options;
+@@ -376,8 +366,8 @@ bool AzureBlobStorageFileSystem::DirectoryExists(const string &dirname, optional
+ 	return !res.Blobs.empty();
+ }
+ 
+-bool AzureBlobStorageFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+-	auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
++bool AzureBlobStorageFileSystem::FileExists(Context &context, const string &filename) {
++	auto handle = OpenFile(context, filename, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+ 	if (handle != nullptr) {
+ 		auto &sfh = handle->Cast<AzureBlobStorageFileHandle>();
+ 		return sfh.length >= 0; // aka return true; -- avoid optimizers and shenanigans -- deref handle to be sure
+@@ -385,9 +375,9 @@ bool AzureBlobStorageFileSystem::FileExists(const string &filename, optional_ptr
+ 	return false;
+ }
+ 
+-void AzureBlobStorageFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
++void AzureBlobStorageFileSystem::RemoveFile(Context &context, const string &filename) {
+ 	auto url = ParseUrl(filename);
+-	auto storage_context = GetOrCreateStorageContext(opener, filename, url);
++	auto storage_context = GetOrCreateStorageContext(context, filename, url);
+ 	auto container = storage_context->As<AzureBlobContextState>().GetBlobContainerClient(url.container);
+ 	auto blob_client = container.GetBlockBlobClient(url.path);
+ 	try {
+@@ -398,9 +388,9 @@ void AzureBlobStorageFileSystem::RemoveFile(const string &filename, optional_ptr
+ 	}
+ }
+ 
+-bool AzureBlobStorageFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
++bool AzureBlobStorageFileSystem::TryRemoveFile(Context &context, const string &filename) {
+ 	auto url = ParseUrl(filename);
+-	auto storage_context = GetOrCreateStorageContext(opener, filename, url);
++	auto storage_context = GetOrCreateStorageContext(context, filename, url);
+ 	auto container = storage_context->As<AzureBlobContextState>().GetBlobContainerClient(url.container);
+ 	auto blob_client = container.GetBlockBlobClient(url.path);
+ 	return blob_client.DeleteIfExists().Value.Deleted;
+@@ -428,12 +418,12 @@ void AzureBlobStorageFileSystem::ReadRange(AzureFileHandle &handle, idx_t file_o
+ 	}
+ }
+ 
+-shared_ptr<AzureContextState> AzureBlobStorageFileSystem::CreateStorageContext(optional_ptr<FileOpener> opener,
++shared_ptr<AzureContextState> AzureBlobStorageFileSystem::CreateStorageContext(Context &context,
+                                                                                const string &path,
+                                                                                const AzureParsedUrl &parsed_url) {
+-	auto azure_options = ParseAzureOptions(opener);
++	auto azure_options = ParseAzureOptions(context);
+ 
+-	return make_shared_ptr<AzureBlobContextState>(ConnectToBlobStorageAccount(opener, path, parsed_url), azure_options);
++	return make_shared_ptr<AzureBlobContextState>(ConnectToBlobStorageAccount(context, path, parsed_url), azure_options);
+ }
+ 
+ int64_t AzureBlobStorageFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
+index c34ecf2..07fbfdb 100644
+--- a/src/azure_dfs_filesystem.cpp
++++ b/src/azure_dfs_filesystem.cpp
+@@ -149,10 +149,7 @@ void AzureDfsStorageFileHandle::Close() {
+ 
+ //////// AzureDfsStorageFileSystem ////////
+ unique_ptr<AzureFileHandle> AzureDfsStorageFileSystem::CreateHandle(const OpenFileInfo &info, FileOpenFlags flags,
+-                                                                    optional_ptr<FileOpener> opener) {
+-	if (!opener) {
+-		throw InternalException("Unsupported(INTERNAL): cannot create an Azure file Handle without FileOpener");
+-	}
++                                                                    Context &context) {
+ 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
+ 		throw InternalException("Unsupported(INTERNAL): cannot open an Azure file in compressed mode");
+ 	}
+@@ -164,7 +161,7 @@ unique_ptr<AzureFileHandle> AzureDfsStorageFileSystem::CreateHandle(const OpenFi
+ 	}
+ 
+ 	auto parsed_url = ParseUrl(info.path);
+-	auto storage_context = GetOrCreateStorageContext(opener, info.path, parsed_url);
++	auto storage_context = GetOrCreateStorageContext(context, info.path, parsed_url);
+ 	auto file_system_client = storage_context->As<AzureDfsContextState>().GetDfsFileSystemClient(parsed_url.container);
+ 
+ 	// A trailing '/' is only a directory hint, not part of the resource name. Some DFS endpoints (e.g. OneLake)
+@@ -186,29 +183,26 @@ bool AzureDfsStorageFileSystem::CanHandleFile(const string &fpath) {
+ 	return IsDfsScheme(fpath);
+ }
+ 
+-bool AzureDfsStorageFileSystem::DirectoryExists(const string &dirname, optional_ptr<FileOpener> opener) {
+-	auto handle = OpenFile(dirname, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
++bool AzureDfsStorageFileSystem::DirectoryExists(Context &context, const string &dirname) {
++	auto handle = OpenFile(context, dirname, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+ 	return handle && handle->Cast<AzureDfsStorageFileHandle>().GetType() == FileType::FILE_TYPE_DIR;
+ }
+ 
+-void AzureDfsStorageFileSystem::CreateDirectory(const string &dirname, optional_ptr<FileOpener> opener) {
+-	if (!opener) {
+-		throw InternalException("Unsupported(INTERNAL): cannot create an Azure directory without FileOpener");
+-	}
++void AzureDfsStorageFileSystem::CreateDirectory(Context &context, const string &dirname) {
+ 	auto dir_url = ParseUrl(dirname);
+-	auto storage_context = GetOrCreateStorageContext(opener, dirname, dir_url);
++	auto storage_context = GetOrCreateStorageContext(context, dirname, dir_url);
+ 	auto file_system_client = storage_context->As<AzureDfsContextState>().GetDfsFileSystemClient(dir_url.container);
+ 	file_system_client.GetDirectoryClient(dir_url.path).Create();
+ }
+ 
+-bool AzureDfsStorageFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+-	auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
++bool AzureDfsStorageFileSystem::FileExists(Context &context, const string &filename) {
++	auto handle = OpenFile(context, filename, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+ 	return handle && handle->Cast<AzureDfsStorageFileHandle>().GetType() == FileType::FILE_TYPE_REGULAR;
+ }
+ 
+-void AzureDfsStorageFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
++void AzureDfsStorageFileSystem::RemoveFile(Context &context, const string &filename) {
+ 	auto url = ParseUrl(filename);
+-	auto storage_context = GetOrCreateStorageContext(opener, filename, url);
++	auto storage_context = GetOrCreateStorageContext(context, filename, url);
+ 	auto file_system_client = storage_context->As<AzureDfsContextState>().GetDfsFileSystemClient(url.container);
+ 	auto file_client = file_system_client.GetFileClient(url.path);
+ 	try {
+@@ -219,33 +213,29 @@ void AzureDfsStorageFileSystem::RemoveFile(const string &filename, optional_ptr<
+ 	}
+ }
+ 
+-bool AzureDfsStorageFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
++bool AzureDfsStorageFileSystem::TryRemoveFile(Context &context, const string &filename) {
+ 	auto url = ParseUrl(filename);
+-	auto storage_context = GetOrCreateStorageContext(opener, filename, url);
++	auto storage_context = GetOrCreateStorageContext(context, filename, url);
+ 	auto file_system_client = storage_context->As<AzureDfsContextState>().GetDfsFileSystemClient(url.container);
+ 	auto file_client = file_system_client.GetFileClient(url.path);
+ 	return file_client.DeleteIfExists().Value.Deleted;
+ }
+ 
+-vector<OpenFileInfo> AzureDfsStorageFileSystem::Glob(const string &path, FileOpener *opener) {
+-	if (opener == nullptr) {
+-		throw InternalException("Cannot do Azure storage Glob without FileOpener");
+-	}
+-
++vector<OpenFileInfo> AzureDfsStorageFileSystem::Glob(Context &context, const string &path) {
+ 	auto azure_url = ParseUrl(path);
+ 
+ 	// If path does not contains any wildcard, we assume that an absolute path therefor nothing to do
+ 	auto first_wildcard_pos = azure_url.path.find_first_of("*[\\");
+ 	if (first_wildcard_pos == string::npos) {
+ 		vector<OpenFileInfo> rv;
+-		if (FileExists(path, opener)) {
++		if (FileExists(context, path)) {
+ 			rv.emplace_back(path);
+ 		}
+ 		return rv;
+ 	}
+ 
+ 	// The path contains wildcard try to list file with the minimum calls
+-	auto dfs_storage_service = ConnectToDfsStorageAccount(opener, path, azure_url);
++	auto dfs_storage_service = ConnectToDfsStorageAccount(context, path, azure_url);
+ 	auto dfs_filesystem_client = dfs_storage_service.GetFileSystemClient(azure_url.container);
+ 
+ 	auto index_root_dir = azure_url.path.rfind('/', first_wildcard_pos);
+@@ -275,15 +265,14 @@ vector<OpenFileInfo> AzureDfsStorageFileSystem::Glob(const string &path, FileOpe
+ 	return result;
+ }
+ 
+-bool AzureDfsStorageFileSystem::ListFilesExtended(const string &path_in,
+-                                                  const std::function<void(OpenFileInfo &info)> &callback,
+-                                                  optional_ptr<FileOpener> opener) {
++bool AzureDfsStorageFileSystem::ListFilesExtended(Context &context, const string &path_in,
++                                                  const std::function<void(OpenFileInfo &info)> &callback) {
+ 	if (path_in.find('*') != string::npos) {
+ 		throw InvalidInputException("ListFiles does not support globs");
+ 	}
+ 	// Normalize: to end with '/' so it's a clear dir prefix
+ 	auto url = ParseUrl(path_in);
+-	auto storage_context = GetOrCreateStorageContext(opener, path_in, url);
++	auto storage_context = GetOrCreateStorageContext(context, path_in, url);
+ 	auto fs = storage_context->As<AzureDfsContextState>().GetDfsFileSystemClient(url.container);
+ 	auto dir_client = fs.GetDirectoryClient(url.path);
+ 
+@@ -389,12 +378,12 @@ void AzureDfsStorageFileSystem::ReadRange(AzureFileHandle &handle, idx_t file_of
+ 	}
+ }
+ 
+-shared_ptr<AzureContextState> AzureDfsStorageFileSystem::CreateStorageContext(optional_ptr<FileOpener> opener,
++shared_ptr<AzureContextState> AzureDfsStorageFileSystem::CreateStorageContext(Context &context,
+                                                                               const string &path,
+                                                                               const AzureParsedUrl &parsed_url) {
+-	auto azure_options = ParseAzureOptions(opener);
++	auto azure_options = ParseAzureOptions(context);
+ 
+-	return make_shared_ptr<AzureDfsContextState>(ConnectToDfsStorageAccount(opener, path, parsed_url), azure_options);
++	return make_shared_ptr<AzureDfsContextState>(ConnectToDfsStorageAccount(context, path, parsed_url), azure_options);
+ }
+ 
+ int64_t AzureDfsStorageFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index 7d42ea0..346e28f 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -91,19 +91,17 @@ bool AzureStorageFileSystem::LoadFileInfo(AzureFileHandle &handle) {
+ 	return true;
+ }
+ 
+-unique_ptr<FileHandle> AzureStorageFileSystem::OpenFileExtended(const OpenFileInfo &info, FileOpenFlags flags,
+-                                                                optional_ptr<FileOpener> opener) {
+-	auto handle = CreateHandle(info, flags, opener);
+-	if (handle && opener) {
+-		handle->TryAddLogger(*opener);
++unique_ptr<FileHandle> AzureStorageFileSystem::OpenFileExtended(Context &context, const OpenFileInfo &info, FileOpenFlags flags) {
++	auto handle = CreateHandle(info, flags, context);
++	if (handle) {
++		handle->TryAddLogger(context);
+ 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
+ 	}
+ 	return std::move(handle);
+ }
+ 
+-unique_ptr<FileHandle> AzureStorageFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+-                                                        optional_ptr<FileOpener> opener) {
+-	return OpenFileExtended(OpenFileInfo(path), flags, opener);
++unique_ptr<FileHandle> AzureStorageFileSystem::OpenFile(Context &context, const string &path, FileOpenFlags flags) {
++	return OpenFileExtended(context, OpenFileInfo(path), flags);
+ }
+ 
+ int64_t AzureStorageFileSystem::GetFileSize(FileHandle &handle) {
+@@ -207,7 +205,7 @@ int64_t AzureStorageFileSystem::Read(FileHandle &handle, void *buffer, int64_t n
+ 	return nr_bytes;
+ }
+ 
+-static string GetContextKeyPath(optional_ptr<FileOpener> opener, const string &path, const AzureParsedUrl &parsed) {
++static string GetContextKeyPath(Context &context, const string &path, const AzureParsedUrl &parsed) {
+ 	// context key == proto://{storage_account}{.}{endpoint}
+ 	// when storage account / endpoint unavailable, try to fetch via secret manager
+ 	string account;
+@@ -218,7 +216,7 @@ static string GetContextKeyPath(optional_ptr<FileOpener> opener, const string &p
+ 		endpoint = parsed.endpoint;
+ 	} else {
+ 		// no storage account? map it from the secret if possible
+-		auto secret_match = LookupSecret(opener, path);
++		auto secret_match = LookupSecret(context, path);
+ 		if (secret_match.HasMatch()) {
+ 			const auto &secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+ 
+@@ -245,56 +243,55 @@ static string GetContextKeyPath(optional_ptr<FileOpener> opener, const string &p
+ 	return has_account ? account : endpoint;
+ }
+ 
+-shared_ptr<AzureContextState> AzureStorageFileSystem::GetOrCreateStorageContext(optional_ptr<FileOpener> opener,
++shared_ptr<AzureContextState> AzureStorageFileSystem::GetOrCreateStorageContext(Context &context,
+                                                                                 const string &path,
+                                                                                 const AzureParsedUrl &parsed_url) {
+ 	Value value;
+ 	bool azure_context_caching = true;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_context_caching", value)) {
++	if (context.TryGetCurrentSetting("azure_context_caching", value)) {
+ 		azure_context_caching = value.GetValue<bool>();
+ 	}
+-	auto context = FileOpener::TryGetContext(opener);
+ 
+ 	shared_ptr<AzureContextState> result;
+-	if (azure_context_caching && context && context->IsClient()) {
+-		string key_path = GetContextKeyPath(opener, path, parsed_url);
+-		auto &registered_state = context->GetRegisteredState();
++	if (azure_context_caching && context.IsClient()) {
++		string key_path = GetContextKeyPath(context, path, parsed_url);
++		auto &registered_state = context.GetRegisteredState();
+ 
+ 		// Ok, now use account in key, or otherwise skip the cache
+ 		if (!key_path.empty()) {
+ 			auto context_key = GetContextPrefix() + key_path;
+ 			result = registered_state.Get<AzureContextState>(context_key);
+ 			if (!result || !result->IsValid()) {
+-				result = CreateStorageContext(opener, path, parsed_url);
++				result = CreateStorageContext(context, path, parsed_url);
+ 				registered_state.Insert(context_key, result);
+ 				return result;
+ 			}
+ 		}
+ 	}
+ 
+-	return CreateStorageContext(opener, path, parsed_url);
++	return CreateStorageContext(context, path, parsed_url);
+ }
+ 
+-AzureOptions AzureStorageFileSystem::ParseAzureOptions(optional_ptr<FileOpener> opener) {
++AzureOptions AzureStorageFileSystem::ParseAzureOptions(Context &context) {
+ 	AzureOptions options;
+ 
+ 	Value concurrency_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_concurrency", concurrency_val)) {
++	if (context.TryGetCurrentSetting("azure_read_transfer_concurrency", concurrency_val)) {
+ 		options.read_transfer_concurrency = concurrency_val.GetValue<int32_t>();
+ 	}
+ 
+ 	Value chunk_size_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_chunk_size", chunk_size_val)) {
++	if (context.TryGetCurrentSetting("azure_read_transfer_chunk_size", chunk_size_val)) {
+ 		options.read_transfer_chunk_size = chunk_size_val.GetValue<int64_t>();
+ 	}
+ 
+ 	Value buffer_size_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_buffer_size", buffer_size_val)) {
++	if (context.TryGetCurrentSetting("azure_read_buffer_size", buffer_size_val)) {
+ 		options.read_buffer_size = buffer_size_val.GetValue<idx_t>();
+ 	}
+ 
+ 	Value write_block_size_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_write_block_size", write_block_size_val)) {
++	if (context.TryGetCurrentSetting("azure_write_block_size", write_block_size_val)) {
+ 		auto size = write_block_size_val.GetValue<idx_t>();
+ 		if (size > AzureOptions::WRITE_BLOCK_SIZE_MAX) {
+ 			throw InvalidInputException("azure_write_block_size must be at most 4000 MiB");
+@@ -303,8 +300,7 @@ AzureOptions AzureStorageFileSystem::ParseAzureOptions(optional_ptr<FileOpener>
+ 	}
+ 
+ 	Value write_staged_blocks_per_commit_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_write_staged_blocks_per_commit",
+-	                                     write_staged_blocks_per_commit_val)) {
++	if (context.TryGetCurrentSetting("azure_write_staged_blocks_per_commit", write_staged_blocks_per_commit_val)) {
+ 		options.write_staged_blocks_per_commit = write_staged_blocks_per_commit_val.GetValue<idx_t>();
+ 	}
+ 
+diff --git a/src/azure_http_state.cpp b/src/azure_http_state.cpp
+index f4bd47a..017040c 100644
+--- a/src/azure_http_state.cpp
++++ b/src/azure_http_state.cpp
+@@ -18,13 +18,8 @@ shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(ClientContext &context) {
+ }
+ 
+ shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(Context &context) {
+-	return context.GetRegisteredState().GetOrCreate<AzureHTTPState>("azure_http_state");
+-}
+-
+-shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(optional_ptr<FileOpener> opener) {
+-	auto context = FileOpener::TryGetContext(opener);
+-	if (context && context->IsClient()) {
+-		return TryGetState(*context);
++	if (context.IsClient()) {
++		return context.GetRegisteredState().GetOrCreate<AzureHTTPState>("azure_http_state");
+ 	}
+ 	return nullptr;
+ }
+diff --git a/src/azure_storage_account_client.cpp b/src/azure_storage_account_client.cpp
+index 592dcc1..0bcc7b6 100644
+--- a/src/azure_storage_account_client.cpp
++++ b/src/azure_storage_account_client.cpp
+@@ -2,7 +2,8 @@
+ 
+ #include "duckdb/catalog/catalog_transaction.hpp"
+ #include "duckdb/common/exception.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/logging/logger.hpp"
+@@ -38,9 +39,9 @@ namespace duckdb {
+ const static std::string DEFAULT_BLOB_ENDPOINT = "blob.core.windows.net";
+ const static std::string DEFAULT_DFS_ENDPOINT = "dfs.core.windows.net";
+ 
+-static std::string TryGetCurrentSetting(optional_ptr<FileOpener> opener, const Identifier &name) {
++static std::string TryGetCurrentSetting(Context &context, const Identifier &name) {
+ 	Value val;
+-	if (FileOpener::TryGetCurrentSetting(opener, name, val)) {
++	if (context.TryGetCurrentSetting(name, val)) {
+ 		return val.ToString();
+ 	}
+ 	return "";
+@@ -96,16 +97,16 @@ private:
+ 	std::string user_agent;
+ };
+ 
+-static shared_ptr<AzureHTTPState> GetHttpState(optional_ptr<FileOpener> opener) {
++static shared_ptr<AzureHTTPState> GetHttpState(Context &context) {
+ 	Value value;
+ 	bool enable_http_stats = false;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_stats", value)) {
++	if (context.TryGetCurrentSetting("azure_http_stats", value)) {
+ 		enable_http_stats = value.GetValue<bool>();
+ 	}
+ 
+ 	shared_ptr<AzureHTTPState> http_state;
+ 	if (enable_http_stats) {
+-		http_state = AzureHTTPState::TryGetState(opener);
++		http_state = AzureHTTPState::TryGetState(context);
+ 	}
+ 
+ 	return http_state;
+@@ -113,13 +114,13 @@ static shared_ptr<AzureHTTPState> GetHttpState(optional_ptr<FileOpener> opener)
+ 
+ template <typename T>
+ static T ToClientOptions(const Azure::Core::Http::Policies::TransportOptions &transport_options,
+-                         optional_ptr<FileOpener> opener) {
++                         Context &context) {
+ 	static_assert(std::is_base_of<Azure::Core::_internal::ClientOptions, T>::value,
+ 	              "type parameter must be an Azure ClientOptions");
+ 	T options;
+ 	options.Transport = transport_options;
+ 
+-	auto http_state = GetHttpState(opener);
++	auto http_state = GetHttpState(context);
+ 	if (http_state != nullptr) {
+ 		// Because we mainly want to have stats on what has been needed and not on
+ 		// what has been used on the network, we register the policy on `PerOperationPolicies`
+@@ -128,29 +129,24 @@ static T ToClientOptions(const Azure::Core::Http::Policies::TransportOptions &tr
+ 		options.PerOperationPolicies.emplace_back(new HttpStatePolicy(std::move(http_state)));
+ 	}
+ 	// Set DuckDB user-agent (per-retry, overrides user-agent after the SDK's built-in telemetry policy)
+-	auto db = FileOpener::TryGetDatabase(opener);
+-	if (db) {
+-		options.PerRetryPolicies.emplace_back(
+-		    new UserAgentPolicy(StringUtil::Format("%s %s", db->config.UserAgent(), DuckDB::SourceID())));
+-	}
++	options.PerRetryPolicies.emplace_back(new UserAgentPolicy(
++	    StringUtil::Format("%s %s", context.GetDatabase().config.UserAgent(), DuckDB::SourceID())));
+ 
+ 	// Add HTTP logging policy (per-retry, so user-agent is already set above).
+ 	// Logging follows DuckDB's HTTP log settings by default; azure_http_logging=false disables it.
+ 	Value enable_http_logging_value;
+ 	bool http_logging_enabled = true;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_logging", enable_http_logging_value)) {
++	if (context.TryGetCurrentSetting("azure_http_logging", enable_http_logging_value)) {
+ 		http_logging_enabled = enable_http_logging_value.GetValue<bool>();
+ 	}
+ 	if (http_logging_enabled) {
+-		auto context = FileOpener::TryGetContext(opener);
+-		if (context && context->IsClient() && context->GetLoggerPtr()) {
++		if (context.IsClient() && context.GetLoggerPtr()) {
+ 			// Read redaction config options
+ 			std::unordered_set<std::string> redact_query_params;
+ 			std::unordered_set<std::string> redact_headers;
+ 
+ 			Value redact_query_params_value;
+-			if (FileOpener::TryGetCurrentSetting(opener, "azure_http_logging_redact_query_params",
+-			                                     redact_query_params_value) &&
++			if (context.TryGetCurrentSetting("azure_http_logging_redact_query_params", redact_query_params_value) &&
+ 			    !redact_query_params_value.IsNull()) {
+ 				for (auto &param : StringUtil::Split(redact_query_params_value.GetValue<std::string>(), ';')) {
+ 					auto trimmed = param;
+@@ -162,7 +158,7 @@ static T ToClientOptions(const Azure::Core::Http::Policies::TransportOptions &tr
+ 			}
+ 
+ 			Value redact_headers_value;
+-			if (FileOpener::TryGetCurrentSetting(opener, "azure_http_logging_redact_headers", redact_headers_value) &&
++			if (context.TryGetCurrentSetting("azure_http_logging_redact_headers", redact_headers_value) &&
+ 			    !redact_headers_value.IsNull()) {
+ 				for (auto &hdr : StringUtil::Split(redact_headers_value.GetValue<std::string>(), ';')) {
+ 					auto trimmed = hdr;
+@@ -175,7 +171,7 @@ static T ToClientOptions(const Azure::Core::Http::Policies::TransportOptions &tr
+ 			}
+ 
+ 			options.PerRetryPolicies.emplace_back(new HttpLoggingPolicy(
+-			    context->GetLoggerPtr(), std::move(redact_query_params), std::move(redact_headers)));
++			    context.GetLoggerPtr(), std::move(redact_query_params), std::move(redact_headers)));
+ 		}
+ 	}
+ 	return options;
+@@ -183,14 +179,14 @@ static T ToClientOptions(const Azure::Core::Http::Policies::TransportOptions &tr
+ 
+ static Azure::Storage::Blobs::BlobClientOptions
+ ToBlobClientOptions(const Azure::Core::Http::Policies::TransportOptions &transport_options,
+-                    optional_ptr<FileOpener> opener) {
+-	return ToClientOptions<Azure::Storage::Blobs::BlobClientOptions>(transport_options, opener);
++                    Context &context) {
++	return ToClientOptions<Azure::Storage::Blobs::BlobClientOptions>(transport_options, context);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeClientOptions
+ ToDfsClientOptions(const Azure::Core::Http::Policies::TransportOptions &transport_options,
+-                   optional_ptr<FileOpener> opener) {
+-	return ToClientOptions<Azure::Storage::Files::DataLake::DataLakeClientOptions>(transport_options, opener);
++                   Context &context) {
++	return ToClientOptions<Azure::Storage::Files::DataLake::DataLakeClientOptions>(transport_options, context);
+ }
+ 
+ static Azure::Core::Credentials::TokenCredentialOptions
+@@ -376,9 +372,9 @@ static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(const s
+ 	return transport_options;
+ }
+ 
+-static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(optional_ptr<FileOpener> opener,
++static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(Context &context,
+                                                                          const KeyValueSecret &secret) {
+-	auto transport_option_type = TryGetCurrentSetting(opener, "azure_transport_option_type");
++	auto transport_option_type = TryGetCurrentSetting(context, "azure_transport_option_type");
+ 
+ 	std::string http_proxy;
+ 	auto http_proxy_val = secret.TryGetValue("http_proxy");
+@@ -408,9 +404,9 @@ static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(optiona
+ }
+ 
+ static Azure::Storage::Blobs::BlobServiceClient
+-GetBlobStorageAccountClientFromConfigProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetBlobStorageAccountClientFromConfigProvider(Context &context, const KeyValueSecret &secret,
+                                               const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 
+ 	// If connection string, we're done heres
+ 	auto connection_string_val = secret.TryGetValue("connection_string");
+@@ -422,21 +418,21 @@ GetBlobStorageAccountClientFromConfigProvider(optional_ptr<FileOpener> opener, c
+ 			                            azure_parsed_url.storage_account_name);
+ 		}
+ 
+-		auto blob_options = ToBlobClientOptions(transport_options, opener);
++		auto blob_options = ToBlobClientOptions(transport_options, context);
+ 		return Azure::Storage::Blobs::BlobServiceClient::CreateFromConnectionString(connection_string, blob_options);
+ 	}
+ 
+ 	// Default provider (config) with no connection string => public storage account
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_BLOB_ENDPOINT);
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 	return Azure::Storage::Blobs::BlobServiceClient(account_url, blob_options);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClientFromConfigProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClientFromConfigProvider(Context &context, const KeyValueSecret &secret,
+                                              const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 
+ 	// If connection string, we're done heres
+ 	auto connection_string_val = secret.TryGetValue("connection_string");
+@@ -448,7 +444,7 @@ GetDfsStorageAccountClientFromConfigProvider(optional_ptr<FileOpener> opener, co
+ 			                            azure_parsed_url.storage_account_name);
+ 		}
+ 
+-		auto dfs_options = ToDfsClientOptions(transport_options, opener);
++		auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 		return Azure::Storage::Files::DataLake::DataLakeServiceClient::CreateFromConnectionString(connection_string,
+ 		                                                                                          dfs_options);
+ 	}
+@@ -456,40 +452,40 @@ GetDfsStorageAccountClientFromConfigProvider(optional_ptr<FileOpener> opener, co
+ 	// Default provider (config) with no connection string => public storage account
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_DFS_ENDPOINT);
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, dfs_options);
+ }
+ 
+ static Azure::Storage::Blobs::BlobServiceClient
+-GetBlobStorageAccountClientFromCredentialChainProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetBlobStorageAccountClientFromCredentialChainProvider(Context &context, const KeyValueSecret &secret,
+                                                        const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	// Create credential chain
+ 	auto credential = CreateChainedTokenCredential(secret, transport_options);
+ 
+ 	// Connect to storage account
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_BLOB_ENDPOINT);
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 	return Azure::Storage::Blobs::BlobServiceClient(account_url, std::move(credential), blob_options);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClientFromCredentialChainProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClientFromCredentialChainProvider(Context &context, const KeyValueSecret &secret,
+                                                       const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	// Create credential chain
+ 	auto credential = CreateChainedTokenCredential(secret, transport_options);
+ 
+ 	// Connect to storage account
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_DFS_ENDPOINT);
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, std::move(credential), dfs_options);
+ }
+ 
+ static std::shared_ptr<Azure::Identity::ManagedIdentityCredential>
+-GetManagedIdentityCredential(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetManagedIdentityCredential(Context &context, const KeyValueSecret &secret,
+                              const Azure::Core::Http::Policies::TransportOptions &tp_opts) {
+ 	using namespace Azure::Identity;
+ 
+@@ -522,140 +518,140 @@ GetManagedIdentityCredential(optional_ptr<FileOpener> opener, const KeyValueSecr
+ }
+ 
+ static Azure::Storage::Blobs::BlobServiceClient
+-GetBlobStorageAccountClientFromManagedIdentityProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetBlobStorageAccountClientFromManagedIdentityProvider(Context &context, const KeyValueSecret &secret,
+                                                        const AzureParsedUrl &azure_parsed_url) {
+ 	// Connect to (blob) storage account
+-	auto transport_options = GetTransportOptions(opener, secret);
+-	auto mi_cred = GetManagedIdentityCredential(opener, secret, transport_options);
++	auto transport_options = GetTransportOptions(context, secret);
++	auto mi_cred = GetManagedIdentityCredential(context, secret, transport_options);
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_BLOB_ENDPOINT);
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 	return Azure::Storage::Blobs::BlobServiceClient(account_url, mi_cred, blob_options);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClientFromManagedIdentityProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClientFromManagedIdentityProvider(Context &context, const KeyValueSecret &secret,
+                                                       const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
+-	auto mi_cred = GetManagedIdentityCredential(opener, secret, transport_options);
++	auto transport_options = GetTransportOptions(context, secret);
++	auto mi_cred = GetManagedIdentityCredential(context, secret, transport_options);
+ 
+ 	// Connect to ADLS storage account
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_DFS_ENDPOINT);
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, mi_cred, dfs_options);
+ }
+ 
+ static Azure::Storage::Blobs::BlobServiceClient
+-GetBlobStorageAccountClientFromServicePrincipalProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetBlobStorageAccountClientFromServicePrincipalProvider(Context &context, const KeyValueSecret &secret,
+                                                         const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	auto token_credential = CreateClientCredential(secret, transport_options);
+ 
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_BLOB_ENDPOINT);
+ 	;
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 	return Azure::Storage::Blobs::BlobServiceClient(account_url, token_credential, blob_options);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClientFromServicePrincipalProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClientFromServicePrincipalProvider(Context &context, const KeyValueSecret &secret,
+                                                        const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	auto token_credential = CreateClientCredential(secret, transport_options);
+ 
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_DFS_ENDPOINT);
+ 	;
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, token_credential, dfs_options);
+ }
+ 
+ static Azure::Storage::Blobs::BlobServiceClient
+-GetBlobStorageAccountClientFromAccessTokenProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetBlobStorageAccountClientFromAccessTokenProvider(Context &context, const KeyValueSecret &secret,
+                                                    const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	auto token_credential = CreateAccessTokenCredential(secret);
+ 
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_BLOB_ENDPOINT);
+ 	;
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 	return Azure::Storage::Blobs::BlobServiceClient(account_url, token_credential, blob_options);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClientFromAccessTokenProvider(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClientFromAccessTokenProvider(Context &context, const KeyValueSecret &secret,
+                                                   const AzureParsedUrl &azure_parsed_url) {
+-	auto transport_options = GetTransportOptions(opener, secret);
++	auto transport_options = GetTransportOptions(context, secret);
+ 	auto token_credential = CreateAccessTokenCredential(secret);
+ 
+ 	auto account_url =
+ 	    azure_parsed_url.is_fully_qualified ? AccountUrl(azure_parsed_url) : AccountUrl(secret, DEFAULT_DFS_ENDPOINT);
+ 	;
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, token_credential, dfs_options);
+ }
+ 
+-static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(optional_ptr<FileOpener> opener,
++static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(Context &context,
+                                                                             const KeyValueSecret &secret,
+                                                                             const AzureParsedUrl &azure_parsed_url) {
+ 	auto &provider = secret.GetProvider();
+ 	// default provider
+ 	if (provider == "config") {
+-		return GetBlobStorageAccountClientFromConfigProvider(opener, secret, azure_parsed_url);
++		return GetBlobStorageAccountClientFromConfigProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "credential_chain") {
+-		return GetBlobStorageAccountClientFromCredentialChainProvider(opener, secret, azure_parsed_url);
++		return GetBlobStorageAccountClientFromCredentialChainProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "managed_identity") {
+-		return GetBlobStorageAccountClientFromManagedIdentityProvider(opener, secret, azure_parsed_url);
++		return GetBlobStorageAccountClientFromManagedIdentityProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "service_principal") {
+-		return GetBlobStorageAccountClientFromServicePrincipalProvider(opener, secret, azure_parsed_url);
++		return GetBlobStorageAccountClientFromServicePrincipalProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "access_token") {
+-		return GetBlobStorageAccountClientFromAccessTokenProvider(opener, secret, azure_parsed_url);
++		return GetBlobStorageAccountClientFromAccessTokenProvider(context, secret, azure_parsed_url);
+ 	}
+ 
+ 	throw InvalidInputException("Unsupported provider type %s for azure", provider);
+ }
+ 
+ static Azure::Storage::Files::DataLake::DataLakeServiceClient
+-GetDfsStorageAccountClient(optional_ptr<FileOpener> opener, const KeyValueSecret &secret,
++GetDfsStorageAccountClient(Context &context, const KeyValueSecret &secret,
+                            const AzureParsedUrl &azure_parsed_url) {
+ 	auto &provider = secret.GetProvider();
+ 	// default provider
+ 	if (provider == "config") {
+-		return GetDfsStorageAccountClientFromConfigProvider(opener, secret, azure_parsed_url);
++		return GetDfsStorageAccountClientFromConfigProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "credential_chain") {
+-		return GetDfsStorageAccountClientFromCredentialChainProvider(opener, secret, azure_parsed_url);
++		return GetDfsStorageAccountClientFromCredentialChainProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "managed_identity") {
+-		return GetDfsStorageAccountClientFromManagedIdentityProvider(opener, secret, azure_parsed_url);
++		return GetDfsStorageAccountClientFromManagedIdentityProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "service_principal") {
+-		return GetDfsStorageAccountClientFromServicePrincipalProvider(opener, secret, azure_parsed_url);
++		return GetDfsStorageAccountClientFromServicePrincipalProvider(context, secret, azure_parsed_url);
+ 	} else if (provider == "access_token") {
+-		return GetDfsStorageAccountClientFromAccessTokenProvider(opener, secret, azure_parsed_url);
++		return GetDfsStorageAccountClientFromAccessTokenProvider(context, secret, azure_parsed_url);
+ 	}
+ 
+ 	throw InvalidInputException("Unsupported provider type %s for azure", provider);
+ }
+ 
+-static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(optional_ptr<FileOpener> opener) {
+-	auto azure_transport_option_type = TryGetCurrentSetting(opener, "azure_transport_option_type");
++static Azure::Core::Http::Policies::TransportOptions GetTransportOptions(Context &context) {
++	auto azure_transport_option_type = TryGetCurrentSetting(context, "azure_transport_option_type");
+ 
+ 	// Load proxy options
+-	auto http_proxy = TryGetCurrentSetting(opener, "azure_http_proxy");
+-	auto http_proxy_user_name = TryGetCurrentSetting(opener, "azure_proxy_user_name");
+-	auto http_proxy_password = TryGetCurrentSetting(opener, "azure_proxy_password");
++	auto http_proxy = TryGetCurrentSetting(context, "azure_http_proxy");
++	auto http_proxy_user_name = TryGetCurrentSetting(context, "azure_proxy_user_name");
++	auto http_proxy_password = TryGetCurrentSetting(context, "azure_proxy_password");
+ 
+ 	return GetTransportOptions(azure_transport_option_type, http_proxy, http_proxy_user_name, http_proxy_password);
+ }
+ 
+-static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(optional_ptr<FileOpener> opener,
++static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(Context &context,
+                                                                             const std::string &provided_storage_account,
+                                                                             const std::string &provided_endpoint) {
+-	auto transport_options = GetTransportOptions(opener);
+-	auto blob_options = ToBlobClientOptions(transport_options, opener);
++	auto transport_options = GetTransportOptions(context);
++	auto blob_options = ToBlobClientOptions(transport_options, context);
+ 
+-	auto connection_string = TryGetCurrentSetting(opener, "azure_storage_connection_string");
++	auto connection_string = TryGetCurrentSetting(context, "azure_storage_connection_string");
+ 	if (!connection_string.empty() &&
+ 	    ConnectionStringMatchStorageAccountName(connection_string, provided_storage_account)) {
+ 		return Azure::Storage::Blobs::BlobServiceClient::CreateFromConnectionString(connection_string, blob_options);
+@@ -663,7 +659,7 @@ static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(opti
+ 
+ 	std::string endpoint;
+ 	if (provided_endpoint.empty()) {
+-		endpoint = TryGetCurrentSetting(opener, "azure_endpoint");
++		endpoint = TryGetCurrentSetting(context, "azure_endpoint");
+ 		if (endpoint.empty()) {
+ 			endpoint = DEFAULT_BLOB_ENDPOINT;
+ 		}
+@@ -673,7 +669,7 @@ static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(opti
+ 
+ 	std::string azure_account_name;
+ 	if (provided_storage_account.empty()) {
+-		azure_account_name = TryGetCurrentSetting(opener, "azure_account_name");
++		azure_account_name = TryGetCurrentSetting(context, "azure_account_name");
+ 	} else {
+ 		azure_account_name = provided_storage_account;
+ 	}
+@@ -683,7 +679,7 @@ static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(opti
+ 
+ 	auto account_url = AccountUrl(azure_account_name, endpoint);
+ 	// Credential chain secret equivalent
+-	auto credential_chain = TryGetCurrentSetting(opener, "azure_credential_chain");
++	auto credential_chain = TryGetCurrentSetting(context, "azure_credential_chain");
+ 	if (!credential_chain.empty()) {
+ 		auto credential = CreateChainedTokenCredential(credential_chain, transport_options);
+ 
+@@ -694,37 +690,32 @@ static Azure::Storage::Blobs::BlobServiceClient GetBlobStorageAccountClient(opti
+ 	return Azure::Storage::Blobs::BlobServiceClient {account_url, blob_options};
+ }
+ 
+-const SecretMatch LookupSecret(optional_ptr<FileOpener> opener, const std::string &path) {
+-	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+-	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+-
+-	if (secret_manager && transaction) {
+-		return secret_manager->LookupSecret(*transaction, path, "azure");
+-	}
+-
+-	return {};
++const SecretMatch LookupSecret(Context &context, const std::string &path) {
++	auto &secret_manager = context.GetDatabase().GetSecretManager();
++	auto transaction = context.GetSystemCatalogTransaction();
++	return secret_manager.LookupSecret(transaction, path, "azure");
+ }
+ 
+-Azure::Storage::Blobs::BlobServiceClient ConnectToBlobStorageAccount(optional_ptr<FileOpener> opener,
++Azure::Storage::Blobs::BlobServiceClient ConnectToBlobStorageAccount(Context &context,
+                                                                      const std::string &path,
+                                                                      const AzureParsedUrl &azure_parsed_url) {
+-	auto secret_match = LookupSecret(opener, path);
++	auto secret_match = LookupSecret(context, path);
+ 	if (secret_match.HasMatch()) {
+ 		const auto &base_secret = secret_match.GetSecret();
+-		return GetBlobStorageAccountClient(opener, dynamic_cast<const KeyValueSecret &>(base_secret), azure_parsed_url);
++		return GetBlobStorageAccountClient(context, dynamic_cast<const KeyValueSecret &>(base_secret), azure_parsed_url);
+ 	}
+ 
+ 	// No secret found try to connect with variables
+-	return GetBlobStorageAccountClient(opener, azure_parsed_url.storage_account_name, azure_parsed_url.endpoint);
++	return GetBlobStorageAccountClient(context, azure_parsed_url.storage_account_name, azure_parsed_url.endpoint);
+ }
+ 
+ Azure::Storage::Files::DataLake::DataLakeServiceClient
+-ConnectToDfsStorageAccount(optional_ptr<FileOpener> opener, const std::string &path,
++ConnectToDfsStorageAccount(Context &context, const std::string &path,
+                            const AzureParsedUrl &azure_parsed_url) {
+-	auto secret_match = LookupSecret(opener, path);
++	auto secret_match = LookupSecret(context, path);
+ 	if (secret_match.HasMatch()) {
+ 		const auto &base_secret = secret_match.GetSecret();
+-		return GetDfsStorageAccountClient(opener, dynamic_cast<const KeyValueSecret &>(base_secret), azure_parsed_url);
++		return GetDfsStorageAccountClient(context, dynamic_cast<const KeyValueSecret &>(base_secret), azure_parsed_url);
+ 	}
+ 
+ 	if (!azure_parsed_url.is_fully_qualified) {
+@@ -735,9 +726,9 @@ ConnectToDfsStorageAccount(optional_ptr<FileOpener> opener, const std::string &p
+ 	}
+ 
+ 	// No secret but FQDN has been provided, connect to a public storage account
+-	auto transport_options = GetTransportOptions(opener);
++	auto transport_options = GetTransportOptions(context);
+ 	auto account_url = "https://" + azure_parsed_url.storage_account_name + '.' + azure_parsed_url.endpoint;
+-	auto dfs_options = ToDfsClientOptions(transport_options, opener);
++	auto dfs_options = ToDfsClientOptions(transport_options, context);
+ 	return Azure::Storage::Files::DataLake::DataLakeServiceClient(account_url, dfs_options);
+ }
+ 
+diff --git a/src/include/azure_blob_filesystem.hpp b/src/include/azure_blob_filesystem.hpp
+index 68c94f8..d2f4c2c 100644
+--- a/src/include/azure_blob_filesystem.hpp
++++ b/src/include/azure_blob_filesystem.hpp
+@@ -45,9 +45,8 @@ public:
+ 
+ class AzureBlobStorageFileSystem : public AzureStorageFileSystem {
+ public:
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+-	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+-	                       optional_ptr<FileOpener> opener) override;
++	vector<OpenFileInfo> Glob(Context &context, const string &path) override;
++	bool ListFilesExtended(Context &context, const string &directory, const std::function<void(OpenFileInfo &info)> &callback) override;
+ 
+ 	bool SupportsListFilesExtended() const override {
+ 		return true;
+@@ -55,10 +54,10 @@ public:
+ 
+ 	// FS methods
+ 	bool CanHandleFile(const string &fpath) override;
+-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
++	void CreateDirectory(Context &context, const string &directory) override {
+ 	}
+-	bool DirectoryExists(const string &dirname, optional_ptr<FileOpener> opener) override;
+-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
++	bool DirectoryExists(Context &context, const string &dirname) override;
++	bool FileExists(Context &context, const string &filename) override;
+ 	string GetName() const override {
+ 		return "AzureBlobStorageFileSystem";
+ 	}
+@@ -69,8 +68,8 @@ public:
+ 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	void FileSync(FileHandle &handle) override;
+ 
+-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+-	virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
++	void RemoveFile(Context &context, const string &filename) override;
++	virtual bool TryRemoveFile(Context &context, const string &filename) override;
+ 
+ public:
+ 	static const string SCHEME;
+@@ -84,10 +83,10 @@ protected:
+ 	const string &GetContextPrefix() const override {
+ 		return PATH_PREFIX;
+ 	}
+-	shared_ptr<AzureContextState> CreateStorageContext(optional_ptr<FileOpener> opener, const string &path,
++	shared_ptr<AzureContextState> CreateStorageContext(Context &context, const string &path,
+ 	                                                   const AzureParsedUrl &parsed_url) override;
+ 	unique_ptr<AzureFileHandle> CreateHandle(const OpenFileInfo &info, FileOpenFlags flags,
+-	                                         optional_ptr<FileOpener> opener) override;
++	                                         Context &context) override;
+ 
+ 	void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
+ };
+diff --git a/src/include/azure_dfs_filesystem.hpp b/src/include/azure_dfs_filesystem.hpp
+index 67eb8b8..95c7ba0 100644
+--- a/src/include/azure_dfs_filesystem.hpp
++++ b/src/include/azure_dfs_filesystem.hpp
+@@ -1,7 +1,8 @@
+ #pragma once
+ 
+ #include "azure_filesystem.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/common/unique_ptr.hpp"
+ 
+@@ -48,17 +49,16 @@ public:
+ 
+ class AzureDfsStorageFileSystem : public AzureStorageFileSystem {
+ public:
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+-	bool ListFilesExtended(const string &path_in, const std::function<void(OpenFileInfo &info)> &callback,
+-	                       optional_ptr<FileOpener> opener) override;
++	vector<OpenFileInfo> Glob(Context &context, const string &path) override;
++	bool ListFilesExtended(Context &context, const string &path_in, const std::function<void(OpenFileInfo &info)> &callback) override;
+ 	bool SupportsListFilesExtended() const override {
+ 		return true;
+ 	}
+ 
+ 	bool CanHandleFile(const string &fpath) override;
+-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+-	bool DirectoryExists(const string &filename, optional_ptr<FileOpener> opener) override;
+-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
++	void CreateDirectory(Context &context, const string &directory) override;
++	bool DirectoryExists(Context &context, const string &filename) override;
++	bool FileExists(Context &context, const string &filename) override;
+ 	string GetName() const override {
+ 		return "AzureDfsStorageFileSystem";
+ 	}
+@@ -69,8 +69,8 @@ public:
+ 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	void FileSync(FileHandle &handle) override;
+ 
+-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+-	virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
++	void RemoveFile(Context &context, const string &filename) override;
++	virtual bool TryRemoveFile(Context &context, const string &filename) override;
+ 
+ public:
+ 	static const string SCHEME;
+@@ -83,10 +83,10 @@ protected:
+ 	const string &GetContextPrefix() const override {
+ 		return PATH_PREFIX;
+ 	}
+-	shared_ptr<AzureContextState> CreateStorageContext(optional_ptr<FileOpener> opener, const string &path,
++	shared_ptr<AzureContextState> CreateStorageContext(Context &context, const string &path,
+ 	                                                   const AzureParsedUrl &parsed_url) override;
+ 	unique_ptr<AzureFileHandle> CreateHandle(const OpenFileInfo &info, FileOpenFlags flags,
+-	                                         optional_ptr<FileOpener> opener) override;
++	                                         Context &context) override;
+ 
+ 	void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
+ };
+diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
+index 879738f..e3361f6 100644
+--- a/src/include/azure_filesystem.hpp
++++ b/src/include/azure_filesystem.hpp
+@@ -2,7 +2,8 @@
+ 
+ #include "azure_parsed_url.hpp"
+ #include "duckdb/common/assert.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+@@ -96,8 +97,7 @@ public:
+ class AzureStorageFileSystem : public BaseFileSystem {
+ public:
+ 	// FS methods
+-	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+-	                                        optional_ptr<FileOpener> opener = nullptr) override;
++	duckdb::unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override;
+ 
+ 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+@@ -107,7 +107,7 @@ public:
+ 	bool OnDiskFile(FileHandle &handle) override {
+ 		return false;
+ 	}
+-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
++	bool IsPipe(Context &context, const string &filename) override {
+ 		return false;
+ 	}
+ 	int64_t GetFileSize(FileHandle &handle) override;
+@@ -123,25 +123,24 @@ public:
+ 	}
+ 
+ protected:
+-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &info, FileOpenFlags flags,
+-	                                        optional_ptr<FileOpener> opener) override;
++	unique_ptr<FileHandle> OpenFileExtended(Context &context, const OpenFileInfo &info, FileOpenFlags flags) override;
+ 
+ 	bool SupportsOpenFileExtended() const override {
+ 		return true;
+ 	}
+ 
+ 	virtual duckdb::unique_ptr<AzureFileHandle> CreateHandle(const OpenFileInfo &info, FileOpenFlags flags,
+-	                                                         optional_ptr<FileOpener> opener) = 0;
++	                                                         Context &context) = 0;
+ 	virtual void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) = 0;
+ 
+ 	virtual const string &GetContextPrefix() const = 0;
+-	shared_ptr<AzureContextState> GetOrCreateStorageContext(optional_ptr<FileOpener> opener, const string &path,
++	shared_ptr<AzureContextState> GetOrCreateStorageContext(Context &context, const string &path,
+ 	                                                        const AzureParsedUrl &parsed_url);
+-	virtual shared_ptr<AzureContextState> CreateStorageContext(optional_ptr<FileOpener> opener, const string &path,
++	virtual shared_ptr<AzureContextState> CreateStorageContext(Context &context, const string &path,
+ 	                                                           const AzureParsedUrl &parsed_url) = 0;
+ 
+ 	virtual void LoadRemoteFileInfo(AzureFileHandle &handle) = 0;
+-	static AzureOptions ParseAzureOptions(optional_ptr<FileOpener> opener);
++	static AzureOptions ParseAzureOptions(Context &context);
+ 
+ public:
+ 	static timestamp_t ToTimestamp(const Azure::DateTime &dt);
+diff --git a/src/include/azure_http_state.hpp b/src/include/azure_http_state.hpp
+index 8507581..f802eb2 100644
+--- a/src/include/azure_http_state.hpp
++++ b/src/include/azure_http_state.hpp
+@@ -1,7 +1,8 @@
+ #pragma once
+ 
+ #include "duckdb/common/atomic.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/main/client_context_state.hpp"
+ 
+@@ -18,7 +19,6 @@ public:
+ 	//! Helper functions to get the HTTP state
+ 	static shared_ptr<AzureHTTPState> TryGetState(ClientContext &context);
+ 	static shared_ptr<AzureHTTPState> TryGetState(Context &context);
+-	static shared_ptr<AzureHTTPState> TryGetState(optional_ptr<FileOpener> opener);
+ 
+ 	bool IsEmpty() {
+ 		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
+diff --git a/src/include/azure_storage_account_client.hpp b/src/include/azure_storage_account_client.hpp
+index 274f4e8..2adb4d1 100644
+--- a/src/include/azure_storage_account_client.hpp
++++ b/src/include/azure_storage_account_client.hpp
+@@ -5,20 +5,21 @@
+ #include <azure/storage/blobs/blob_service_client.hpp>
+ #include <azure/storage/files/datalake/datalake_service_client.hpp>
+ 
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ 
+ #include "azure_parsed_url.hpp"
+ 
+ namespace duckdb {
+ 
+-Azure::Storage::Blobs::BlobServiceClient ConnectToBlobStorageAccount(optional_ptr<FileOpener> opener,
++Azure::Storage::Blobs::BlobServiceClient ConnectToBlobStorageAccount(Context &context,
+                                                                      const std::string &path,
+                                                                      const AzureParsedUrl &azure_parsed_url);
+ 
+ Azure::Storage::Files::DataLake::DataLakeServiceClient
+-ConnectToDfsStorageAccount(optional_ptr<FileOpener> opener, const std::string &path,
++ConnectToDfsStorageAccount(Context &context, const std::string &path,
+                            const AzureParsedUrl &azure_parsed_url);
+ 
+-const SecretMatch LookupSecret(optional_ptr<FileOpener> opener, const std::string &path);
++const SecretMatch LookupSecret(Context &context, const std::string &path);
+ } // namespace duckdb

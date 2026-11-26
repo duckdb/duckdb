@@ -1,0 +1,37 @@
+diff --git a/test/cpp/test_writer_cleanup.cpp b/test/cpp/test_writer_cleanup.cpp
+index 04224d9..63f91b8 100644
+--- a/test/cpp/test_writer_cleanup.cpp
++++ b/test/cpp/test_writer_cleanup.cpp
+@@ -76,19 +76,19 @@ public:
+ 	string PathSeparator(const string &) override {
+ 		return "/";
+ 	}
+-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener>) override {
++	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override {
+ 		// Binding has already finished. The next Avro allocations create the
+ 		// memory writers, file writer and codec, in that order.
+ 		fail_allocation = faults.fail_create_allocation;
+ 		return make_uniq<Handle>(*this, path, flags);
+ 	}
+-	bool FileExists(const string &, optional_ptr<FileOpener>) override {
++	bool FileExists(Context &context, const string &) override {
+ 		return false;
+ 	}
+-	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
++	bool DirectoryExists(Context &context, const string &) override {
+ 		return false;
+ 	}
+-	bool IsPipe(const string &, optional_ptr<FileOpener>) override {
++	bool IsPipe(Context &context, const string &) override {
+ 		return false;
+ 	}
+ 	void Write(FileHandle &, void *, int64_t, idx_t) override {
+@@ -102,7 +102,7 @@ public:
+ 	}
+ 	void AbortFileWrite(FileHandle &) override {
+ 	}
+-	void RemoveFile(const string &, optional_ptr<FileOpener>) override {
++	void RemoveFile(Context &context, const string &) override {
+ 	}
+ 
+ private:

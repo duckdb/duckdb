@@ -1,0 +1,27 @@
+diff --git a/src/postgres_binary_copy.cpp b/src/postgres_binary_copy.cpp
+index a94fa94..7a3b0cf 100644
+--- a/src/postgres_binary_copy.cpp
++++ b/src/postgres_binary_copy.cpp
+@@ -67,7 +67,7 @@ PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeGlobal(ClientContext &c
+                                                                 const string &file_path) {
+ 	auto result = make_uniq<PostgresBinaryCopyGlobalState>(context);
+ 	auto &fs = FileSystem::GetFileSystem(context);
+-	result->file_writer = make_uniq<BufferedFileWriter>(fs, file_path);
++	result->file_writer = make_uniq<BufferedFileWriter>(fs, context, file_path);
+ 	// write the header
+ 	result->WriteHeader();
+ 	return std::move(result);
+diff --git a/src/postgres_logging.cpp b/src/postgres_logging.cpp
+index 2701382..2eb6492 100644
+--- a/src/postgres_logging.cpp
++++ b/src/postgres_logging.cpp
+@@ -1,7 +1,8 @@
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/logging/log_type.hpp"
+-#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_lookup_info.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/http_util.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/database.hpp"
