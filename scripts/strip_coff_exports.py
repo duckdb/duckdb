@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove COFF DLL export directives using LLVM and rebuild the Windows archive."""
+"""Remove COFF DLL export directives; preserve archives containing LLVM bitcode."""
 
 import argparse
 from collections import Counter
@@ -8,10 +8,12 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 
 EXPORT = re.compile(rb'(?i)(?<!\S)[/-]export:(?:"[^"]*"|[^\s"]+)(?:,[^\s]*)?')
+LLVM_BITCODE_MAGIC = (b"BC\xc0\xde", b"\xde\xc0\x17\x0b")
 
 
 def filter_directives(directives):
@@ -45,6 +47,13 @@ def strip_exports(path, objcopy="llvm-objcopy", ar="llvm-ar", librarian="llvm-li
             objects = [members / Path(name).name for name in names]
             if not all(obj.is_file() for obj in objects):
                 raise ValueError("Unexpected archive extraction layout")
+
+        # Bitcode has no COFF sections. Check all members first so mixed archives stay intact too.
+        for obj in objects:
+            with obj.open("rb") as member:
+                if member.read(4) in LLVM_BITCODE_MAGIC:
+                    print(f"Keeping DLL exports in {path}: archive contains LLVM bitcode (IPO/LTO)", file=sys.stderr)
+                    return 0
 
         def filter_object(obj):
             directives_file = obj.with_name(obj.name + ".directives")
