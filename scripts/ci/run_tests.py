@@ -210,6 +210,15 @@ class BatchRunState:
         self.failed_attempts = {}
         self.failed_test_names = set()
         self.timed_out_test_names = []
+        self.test_results = {}
+
+    def record_test_results(self, result, batch):
+        for row in result["results"]:
+            if row["test_id"] in batch and row.get("status") in {"passed", "failed", "skipped"}:
+                self.test_results[row["test_id"]] = row
+        active = find_active_protocol_test(result, batch)
+        if result["failed"] and active:
+            self.test_results[active] = {"test_id": active, "status": "failed"}
 
     def record_retry(self):
         self.retry_count += 1
@@ -1695,9 +1704,6 @@ def normalize_protocol_event_output(output: str, batch):
         events = parse_test_events(line)
         if len(events) == 1:
             event = events[0]
-            # Terminal events are reconstructed from durable results.
-            if event.get("event") == "end":
-                continue
             name = event.get("name")
             if isinstance(name, str):
                 event["name"] = test_ids.get(name, name)
@@ -2138,6 +2144,8 @@ def run_batch(config: TestRunnerConfig, batch):
     )
     sql = build_test_protocol_sql(config.unittest_bin, query, config.invocation)
     durable_results = []
+    incomplete_tests = []
+    missing_tests = list(batch)
     protocol_file_path = None
     if config.test_command is not None:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as protocol_file:
@@ -2292,6 +2300,8 @@ def run_batch(config: TestRunnerConfig, batch):
 
     return {
         "results": durable_results,
+        "pending_tests": incomplete_tests,
+        "missing_tests": missing_tests,
         "failed": failed,
         "stdout": stdout,
         "stderr": stderr,
@@ -2359,6 +2369,22 @@ def can_warn_timeout(config: TestRunnerConfig, batch, result):
     )
 
 
+def find_active_protocol_test(result, batch):
+    if not result.get("returncode") and not result.get("timed_out"):
+        return None
+    terminal = {row["test_id"] for row in result["results"] if row.get("status") in {"passed", "failed", "skipped"}}
+    active = set()
+    for event in parse_test_events(result["stdout"]) + parse_test_events(result["stderr"]):
+        name = event.get("name")
+        if name not in batch or name in terminal:
+            continue
+        if event.get("event") == "begin":
+            active.add(name)
+        elif event.get("event") == "end":
+            active.discard(name)
+    return next(iter(active)) if len(active) == 1 else None
+
+
 def render_durable_failure(result, batch):
     rows = [row for row in result["results"] if row.get("status") == "failed"]
     names, lines = [], []
@@ -2380,16 +2406,15 @@ def render_durable_failure(result, batch):
         for field in ("message", "diagnostics"):
             if row.get(field):
                 lines.extend(str(row[field]).splitlines())
+    active = find_active_protocol_test(result, batch)
+    if active:
+        names.append(active)
+        lines.extend(format_fail_header(active))
     if result.get("returncode") or not rows or result.get("timed_out"):
         lines.extend(
             [result.get("message") or "test batch failed", *render_raw_output_tail(result["stdout"], result["stderr"])]
         )
-    test_name = names[0] if names else None
-    if not test_name:
-        for event in reversed(parse_test_events(result["stderr"])):
-            if event.get("name") in batch:
-                test_name = event["name"]
-                break
+    test_name = active or (names[0] if names else None)
     match = re.search(r"after ([0-9.]+) seconds", result.get("message") or "")
     failure = FailureInfo(
         kind="timeout" if result.get("timed_out") else "generic",
@@ -2402,10 +2427,10 @@ def render_durable_failure(result, batch):
         expected_result_lines=[],
         actual_result_lines=[],
         detail_lines=[],
-        reproduce_batch=[test_name] if test_name and not names else batch,
+        reproduce_batch=[active] if active and not rows else batch,
         timeout_seconds=float(match.group(1)) if match else None,
     )
-    return failure, lines, names or list(batch)
+    return failure, lines, names
 
 
 def handle_failed_batch(ctx: RunContext, batch_info, result):
@@ -2423,6 +2448,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
     ):
         test_name = batch_info["batch"][0]
         ctx.state.timed_out_test_names.append(test_name)
+        if "results" in result:
+            ctx.state.test_results[test_name] = {"test_id": test_name, "status": "timed_out"}
         ctx.progress.print_message(
             f"warn: timeout ({format_duration_seconds(failure.timeout_seconds)}s) for {test_name}; not retried."
         )
@@ -2453,7 +2480,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         )
 
     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
-    ctx.state.record_failed_test_names(attempt_summaries)
+    if "results" not in result:
+        ctx.state.record_failed_test_names(attempt_summaries)
     ctx.progress.print_message(
         format_batch_failure(
             batch_info["batch"],
@@ -2463,7 +2491,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
             retry_count=batch_info["attempt"],
         )
     )
-    failure_count = sum(row.get("status") == "failed" for row in result.get("results", []))
+    failure_count = sum(ctx.state.test_results.get(name, {}).get("status") == "failed" for name in batch_info["batch"])
     ctx.state.record_failure(max(1, failure_count))
     if ctx.state.should_stop(ctx.config):
         ctx.state.stop_launching = True
@@ -3008,7 +3036,7 @@ def print_config_run_summary(run_result: ConfigRunResult):
         partial_skip_suffix += f", {len(run_result.timed_out_test_names)} timed out"
     if run_result.not_run_tests:
         partial_skip_suffix += f", {run_result.not_run_tests} not run"
-    if run_result.failed_tests > 0:
+    if run_result.returncode != 0 or run_result.failed_tests > 0:
         print(
             "❌ ran tests: "
             f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
@@ -3343,7 +3371,9 @@ def run_tests(
     state = BatchRunState()
     progress = DotProgressBar(len(batches), output)
     total_skipped_tests = 0
-    completed_tests = 0
+    legacy_completed_tests = 0
+    legacy_failed_tests = 0
+    legacy_timed_out_tests = 0
     partially_skipped_test_names = set()
     skipped_reason_counts = {}
     partial_skip_reason_test_names = {}
@@ -3403,16 +3433,13 @@ def run_tests(
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
                 report_batch_metrics(ctx, batch_info, result, elapsed)
+                if "results" in result:
+                    state.record_test_results(result, batch_info["batch"])
+                previous_failure_count = state.failed_count
+                previous_timeout_count = len(state.timed_out_test_names)
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
-                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_result_skips(result)
-                    total_skipped_tests += skipped_count
-                    partially_skipped_test_names.update(partial_names)
-                    for reason, count in skipped_reasons.items():
-                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
-                    for reason, test_names in partial_reason_names.items():
-                        partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
                 else:
                     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
                     if attempt_summaries:
@@ -3425,6 +3452,10 @@ def run_tests(
                                 retry_count=batch_info["attempt"],
                             )
                         )
+                if "results" not in result:
+                    legacy_completed_tests += len(batch_info["batch"])
+                    legacy_failed_tests += state.failed_count - previous_failure_count
+                    legacy_timed_out_tests += len(state.timed_out_test_names) - previous_timeout_count
                     skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_result_skips(result)
                     total_skipped_tests += skipped_count
                     partially_skipped_test_names.update(partial_names)
@@ -3432,7 +3463,6 @@ def run_tests(
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                     for reason, test_names in partial_reason_names.items():
                         partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
-                completed_tests += len(batch_info["batch"])
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching and not stop_requested():
@@ -3441,11 +3471,24 @@ def run_tests(
 
     progress.flush_line()
     elapsed = time.monotonic() - start
+    passed_tests = max(0, legacy_completed_tests - legacy_failed_tests - total_skipped_tests - legacy_timed_out_tests)
+    passed_tests += sum(row["status"] == "passed" for row in state.test_results.values())
+    failed_tests = legacy_failed_tests + sum(row["status"] == "failed" for row in state.test_results.values())
+    state.failed_test_names.update(name for name, row in state.test_results.items() if row["status"] == "failed")
+    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_result_skips(
+        {"results": list(state.test_results.values())}
+    )
+    total_skipped_tests += skipped_count
+    partially_skipped_test_names.update(partial_names)
+    for reason, count in skipped_reasons.items():
+        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+    for reason, test_names in partial_reason_names.items():
+        partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
     total_partially_skipped_tests = len(partially_skipped_test_names)
     if stop_requested():
         return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=elapsed)
     exit_code = 0
-    if state.failed_count:
+    if state.failed_count or failed_tests:
         exit_code = 1
     elif state.timed_out_test_names:
         print(f"finished in {elapsed:.0f}s with {len(state.timed_out_test_names)} timeout warnings", file=output)
@@ -3469,8 +3512,6 @@ def run_tests(
         print(f"Partially skipped tests ({total_partially_skipped_tests}):", file=output)
         for reason in sorted(partial_skip_reason_test_names):
             print(f"{reason}: {len(partial_skip_reason_test_names[reason])}", file=output)
-    failed_tests = state.failed_count
-    passed_tests = max(0, completed_tests - failed_tests - total_skipped_tests - len(state.timed_out_test_names))
     failed_test_names = []
     for batch in batches:
         for test_name in batch:
@@ -3486,7 +3527,7 @@ def run_tests(
         partially_skipped_tests=total_partially_skipped_tests,
         failed_test_names=tuple(failed_test_names),
         timed_out_test_names=tuple(state.timed_out_test_names),
-        not_run_tests=max(0, total_tests - completed_tests),
+        not_run_tests=max(0, total_tests - legacy_completed_tests - len(state.test_results)),
     )
 
 

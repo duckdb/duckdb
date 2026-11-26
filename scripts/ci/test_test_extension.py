@@ -789,10 +789,18 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         )
         result = run_tests.run_batch(config, batch)
         self.assertTrue(result["timed_out"], result)
-        failure, lines, _ = run_tests.render_durable_failure(result, batch)
+        failure, lines, failed_names = run_tests.render_durable_failure(result, batch)
         self.assertEqual(failure.test_name, hanging)
         self.assertEqual(failure.reproduce_batch, [hanging])
+        self.assertEqual(failed_names, [hanging])
+        self.assertEqual(result["pending_tests"], [hanging, skipped])
+        self.assertEqual(result["missing_tests"], [])
         self.assertIn("incomplete tests:", "\n".join(lines))
+        with mock.patch.object(run_tests, "run_batch", return_value=result):
+            summary = run_tests.run_tests(config, [batch], len(batch))
+        self.assertEqual(summary.returncode, 1)
+        self.assertEqual((summary.passed_tests, summary.failed_tests, summary.not_run_tests), (1, 1, 1))
+        self.assertEqual(summary.failed_test_names, (hanging,))
 
 
 if __name__ == "__main__":

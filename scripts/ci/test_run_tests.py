@@ -186,6 +186,130 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual((summary.passed_tests, summary.failed_tests, summary.skipped_tests), (1, 2, 1))
         self.assertEqual(summary.failed_test_names, tuple(ids[1:3]))
 
+    def durable_batch_result(self, rows=(), *, active=None, returncode=1, timed_out=False, events=()):
+        events = list(events)
+        if active:
+            events.extend(
+                [{"version": 2, "event": "begin", "name": active}, {"event": "execution-begin", "name": active}]
+            )
+        return {
+            "results": list(rows),
+            "failed": returncode != 0 or any(row["status"] == "failed" for row in rows),
+            "stdout": "",
+            "stderr": "".join(run_tests.TEST_EVENT_MARKER + json.dumps(event) + "\n" for event in events),
+            "returncode": returncode,
+            "message": "batch timed out after 2 seconds" if timed_out else "process error",
+            "timed_out": timed_out,
+            "peak_rss_bytes": 0,
+        }
+
+    def test_structured_timeout_counts_only_completed_and_active_tests(self):
+        ids = ["sql:first.test", "sql:hanging.test", "sql:unstarted.test"]
+        result = self.durable_batch_result(
+            [{"test_id": ids[0], "status": "passed"}], active=ids[1], timed_out=True, returncode=-9
+        )
+        with mock.patch.object(run_tests, "run_batch", return_value=result):
+            summary = run_tests.run_tests(protocol_config(batch_size=3), [ids], len(ids), output=StringIO())
+        self.assertEqual(summary.returncode, 1)
+        self.assertEqual((summary.passed_tests, summary.failed_tests, summary.not_run_tests), (1, 1, 1))
+        self.assertEqual(summary.failed_test_names, (ids[1],))
+
+    def test_structured_process_errors_do_not_blame_finished_or_unstarted_tests(self):
+        ids = ["sql:first.test", "sql:second.test", "sql:unstarted.test"]
+        cases = [
+            ([], [], 1, (0, 0, 3)),
+            ([{"test_id": name, "status": "passed"} for name in ids], [], 1, (3, 0, 0)),
+            ([{"test_id": ids[0], "status": "passed"}], [], 0, (1, 0, 2)),
+            (
+                [],
+                [{"event": kind, "name": ids[0]} for kind in ("begin", "execution-begin", "end")],
+                1,
+                (0, 0, 3),
+            ),
+            ([], [{"event": "begin", "name": name} for name in ids[:2]], -9, (0, 0, 3)),
+        ]
+        for rows, events, returncode, expected in cases:
+            with self.subTest(rows=rows, events=events, returncode=returncode):
+                result = self.durable_batch_result(rows, events=events, returncode=returncode)
+                result["failed"] = True
+                output = StringIO()
+                with mock.patch.object(run_tests, "run_batch", return_value=result) as child:
+                    summary = run_tests.run_tests(
+                        protocol_config(batch_size=3, max_failures=1),
+                        [ids, ["sql:not_launched.test"]],
+                        4,
+                        output=output,
+                    )
+                self.assertEqual(child.call_count, 1)
+                self.assertEqual(summary.returncode, 1)
+                self.assertEqual(
+                    (summary.passed_tests, summary.failed_tests, summary.not_run_tests),
+                    (expected[0], expected[1], expected[2] + 1),
+                )
+                self.assertEqual(summary.failed_test_names, ())
+                self.assertIn("process error", output.getvalue())
+                self.assertNotIn("all tests passed", output.getvalue())
+
+    def test_structured_retry_recovery_replaces_failed_and_skipped_outcomes(self):
+        ids = ["sql:passing.test", "sql:flaky.test", "sql:skipped.test"]
+        first = self.durable_batch_result(
+            [
+                {"test_id": name, "status": status, "message": "initial diagnostic"}
+                for name, status in zip(ids, ("passed", "failed", "skipped"))
+            ]
+        )
+        second = self.durable_batch_result([{"test_id": name, "status": "passed"} for name in ids], returncode=0)
+        output = StringIO()
+        with mock.patch.object(run_tests, "run_batch", side_effect=[first, second]) as child:
+            summary = run_tests.run_tests(
+                protocol_config(batch_size=3, retry=1, max_retries=1), [ids], 3, output=output
+            )
+        self.assertEqual(child.call_count, 2)
+        self.assertEqual(summary.returncode, 0)
+        self.assertEqual((summary.passed_tests, summary.failed_tests, summary.skipped_tests), (3, 0, 0))
+        self.assertEqual(summary.failed_test_names, ())
+        self.assertIn("initial diagnostic", output.getvalue())
+        self.assertIn("recovered: passed on retry", output.getvalue())
+
+    def test_structured_exhausted_retries_use_final_outcomes_and_keep_previous_results(self):
+        ids = ["sql:passing.test", "sql:flaky.test", "sql:hanging.test", "sql:unstarted.test"]
+        first = self.durable_batch_result(
+            [{"test_id": ids[0], "status": "passed"}, {"test_id": ids[1], "status": "failed"}]
+        )
+        second = self.durable_batch_result(
+            [{"test_id": name, "status": "passed"} for name in ids[:2]], active=ids[2], returncode=-9, timed_out=True
+        )
+        for last, expected, failed_names in (
+            (second, (2, 1, 1), (ids[2],)),
+            (self.durable_batch_result(returncode=-11), (1, 1, 2), (ids[1],)),
+        ):
+            with self.subTest(expected=expected), mock.patch.object(run_tests, "run_batch", side_effect=[first, last]):
+                summary = run_tests.run_tests(
+                    protocol_config(batch_size=4, retry=1, max_retries=1), [ids], 4, output=StringIO()
+                )
+                self.assertEqual(summary.returncode, 1)
+                self.assertEqual((summary.passed_tests, summary.failed_tests, summary.not_run_tests), expected)
+                self.assertEqual(summary.failed_test_names, failed_names)
+
+    def test_structured_timeout_warning_preserves_exact_counts(self):
+        ids = ["sql:slow.test", "sql:pass.test", "sql:skip.test"]
+        attempts = [
+            self.durable_batch_result(active=ids[0], timed_out=True, returncode=-9),
+            self.durable_batch_result([{"test_id": ids[1], "status": "passed"}], returncode=0),
+            self.durable_batch_result(
+                [{"test_id": ids[2], "status": "skipped", "message": "require missing"}], returncode=0
+            ),
+        ]
+        with mock.patch.object(run_tests, "run_batch", side_effect=attempts):
+            summary = run_tests.run_tests(
+                protocol_config(timeout_policy="warn"), [[name] for name in ids], 3, output=StringIO()
+            )
+        self.assertEqual(summary.returncode, 0)
+        self.assertEqual((summary.passed_tests, summary.failed_tests, summary.skipped_tests), (1, 0, 1))
+        self.assertEqual(summary.not_run_tests, 0)
+        self.assertEqual(summary.failed_test_names, ())
+        self.assertEqual(summary.timed_out_test_names, (ids[0],))
+
     def test_structured_failure_uses_the_real_source_location(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "source.cpp"
@@ -279,7 +403,9 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual(partial, {test_ids[0]})
         self.assertEqual(partial_reasons, {"mode skip unsupported": {test_ids[0]}})
         self.assertEqual(result["stdout"], "")
-        self.assertEqual(len(run_tests.parse_test_events(result["stderr"])), 0)
+        events = run_tests.parse_test_events(result["stderr"])
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0]["event"], events[0]["name"]), ("end", test_ids[0]))
 
     def test_missing_state_reports_test_ids_and_recovery_cause(self):
         passed_id = "sql:test/sql/passed.test"
