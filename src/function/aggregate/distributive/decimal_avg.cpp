@@ -182,37 +182,8 @@ static void WideDecimalAvgImportState(AggregateImportInputData &input) {
 			// an empty state
 			continue;
 		}
-		const auto sum_entry = entry.template GetChildValue<0>();
-		const auto count_entry = entry.template GetChildValue<1>();
-		if (!count_entry.IsValid() || count_entry.GetValue() == 0) {
-			continue;
-		}
-		if (!sum_entry.IsValid()) {
-			throw InvalidInputException(
-			    "Invalid decimal_average state - the sum cannot be NULL when the count is not 0");
-		}
-		const auto blob = sum_entry.GetValue();
-		const auto size = blob.GetSize();
-		if (size < Bignum::BIGNUM_HEADER_SIZE + 1) {
-			throw InvalidInputException(
-			    "Invalid decimal_average state - the sum is shorter than a BIGNUM header and a byte");
-		}
-		// the header holds the data size, inverted for negative values (see Bignum::SetHeader)
-		auto header = const_data_ptr_cast(blob.GetData());
-		uint32_t data_size = (uint32_t(header[0]) << 16) | (uint32_t(header[1]) << 8) | uint32_t(header[2]);
-		if ((header[0] & 0x80) == 0) {
-			data_size = ~data_size;
-		}
-		data_size &= 0x7FFFFF;
-		if (size != data_size + Bignum::BIGNUM_HEADER_SIZE) {
-			throw InvalidInputException(
-			    "Invalid decimal_average state - the BIGNUM header of the sum does not match its size");
-		}
-		// the state owns a copy of the sum in the arena
-		auto ptr = input.allocator.Allocate(size);
-		memcpy(ptr, blob.GetData(), size);
-		state.count = count_entry.GetValue();
-		state.value = BignumIntermediate(ptr, size);
+		BignumAggregates::ImportAvgState(state, entry.GetChildValue<1>(), entry.GetChildValue<0>(), input.allocator,
+		                                 "decimal_average");
 	}
 }
 
