@@ -148,10 +148,8 @@ struct WideDecimalAvgOperation : BignumAvgOperation {
 		if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(quotient), DecimalType::GetWidth(result_type))) {
 			throw OutOfRangeException("decimal_average: the result does not fit in %s", result_type.ToString());
 		}
-		// the result outlives the scratch heap in the arena of the aggregate
-		auto result_data = finalize_data.input.allocator.Allocate(quotient.GetSize());
-		memcpy(result_data, quotient.GetData(), quotient.GetSize());
-		target = bignum_t(string_t(const_char_ptr_cast(result_data), UnsafeNumericCast<uint32_t>(quotient.GetSize())));
+		// the result vector owns a copy of the quotient, the scratch heap is released with the finalize
+		target = bignum_t(finalize_data.ReturnString(quotient));
 	}
 };
 
