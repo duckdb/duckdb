@@ -2230,6 +2230,13 @@ public:
 	/// @param index Child index in [0, GetChildCount()).
 	auto GetChild(idx_t index) const -> Value;
 
+	/// The value that a VARIANT value holds, with the type that it was stored with: a TINYINT, a VARCHAR, a LIST of
+	/// STRUCTs, ... A stored list gives a LIST of its elements, a stored object a STRUCT of its fields; elements that
+	/// were stored with different types stay VARIANT values (a LIST of VARIANT), convert those in turn. A NULL VARIANT
+	/// gives a NULL value. The inverse is `Cast` to the VARIANT type, `factory.ParseType("VARIANT")`.
+	/// @throws InvalidInputException When the value is not a VARIANT.
+	auto VariantToValue() const -> Value;
+
 	/// Shorthand for `GetChild`.
 	auto operator[](idx_t index) const -> Value {
 		return GetChild(index);
