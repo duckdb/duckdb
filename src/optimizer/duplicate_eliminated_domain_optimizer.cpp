@@ -968,8 +968,10 @@ static bool HasRuntimeFilterTargets(LogicalAggregate &aggregate) {
 	if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(*aggregate.groups[0], column)) {
 		return false;
 	}
+	vector<JoinFilterPushdownColumn> columns;
+	columns.push_back(std::move(column));
 	vector<PushdownFilterTarget> targets;
-	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*aggregate.children[0], {std::move(column)}, targets,
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*aggregate.children[0], columns, targets,
 	                                                      EqualityPropagation::ENABLED);
 	return !targets.empty();
 }
