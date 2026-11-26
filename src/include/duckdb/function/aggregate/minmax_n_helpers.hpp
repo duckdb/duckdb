@@ -608,7 +608,7 @@ struct MinMaxNOperation {
 		AggregateStateLayout layout;
 		layout.type = LogicalType::STRUCT(std::move(children));
 		layout.total_state_size = AlignValue(input.function.GetStateSize(input.bind_data.get()));
-		layout.uses_arena = true;
+		layout.spill_opaque_arena_memory = true;
 		return layout;
 	}
 

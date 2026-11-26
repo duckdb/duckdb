@@ -67,7 +67,7 @@ unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(c
 	bool arena_backed = false;
 	for (auto &serializer : plan->serializers) {
 		auto &state_layout = serializer.layout;
-		if (state_layout.uses_arena || FieldHasArenaReferences(state_layout.type, state_layout.field)) {
+		if (state_layout.spill_opaque_arena_memory || FieldHasArenaReferences(state_layout.type, state_layout.field)) {
 			arena_backed = true;
 			break;
 		}
