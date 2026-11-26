@@ -203,8 +203,8 @@ functions:
       Associates an opaque pointer with the data source, retrievable from its callbacks via
       `[[data_source_init_global_get_user_data]]`, `[[data_source_exec_get_user_data]]` and their counterparts on
       the other phases. The opaque handle bundles the pointer with an optional destructor, invoked when the data is no
-      longer needed. A data source without user data hands its callbacks the user data of the table function or copy function that
-      scans it, if that has any.
+      longer needed. A data source without user data, or whose user data pointer is null, hands its callbacks the user
+      data of the table function or copy function that scans it, if that has any.
     parameters:
       source:
         type: data_source
@@ -389,7 +389,7 @@ functions:
       changing it afterwards does not change them.
 
       The callbacks of the data source read the bind data the bind callback of the function sets, and the user data of
-      the data source or, if it has none, the user data of the function.
+      the data source or, if it has none or its pointer is null, the user data of the function.
     parameters:
       function:
         type: table_function
@@ -425,7 +425,7 @@ functions:
   data_source_init_global_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_init_global_info
@@ -562,7 +562,7 @@ functions:
   data_source_init_local_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_init_local_info
@@ -702,7 +702,7 @@ functions:
   data_source_exec_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_exec_info
@@ -864,7 +864,7 @@ functions:
   data_source_progress_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_progress_info
@@ -949,7 +949,7 @@ functions:
   data_source_partition_data_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-15" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_partition_data_info
@@ -1190,7 +1190,7 @@ functions:
   data_source_metrics_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-10-27" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_metrics_info
@@ -1293,7 +1293,7 @@ functions:
   data_source_claim_batch_get_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-18" ]
-    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none.
+    description: Retrieves the user data set via `[[data_source_set_user_data]]`, or the user data of the table function or copy function that scans it when the data source has none or its pointer is null.
     parameters:
       info:
         type: data_source_claim_batch_info

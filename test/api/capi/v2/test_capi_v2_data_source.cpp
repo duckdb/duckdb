@@ -278,6 +278,14 @@ TEST_CASE("V2 data source: user data is the source's own, else the function's", 
 	duckdb_v2_data_source_destroy(&without_data);
 	REQUIRE(DsQueryI64(fx.conn, "SELECT max(a)::BIGINT FROM ds_function_data(3)") == 42);
 
+	// User data with a null pointer counts as none: they see the user data of the function
+	auto null_data = DsMakeCountSource(fx.factory);
+	duckdb_v2_opaque empty = {};
+	REQUIRE(duckdb_v2_data_source_set_user_data(null_data, &empty, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DsRegisterWithSource(fx, "ds_null_data", DsCountBindCb<1, 1>, null_data, &function_payload);
+	duckdb_v2_data_source_destroy(&null_data);
+	REQUIRE(DsQueryI64(fx.conn, "SELECT max(a)::BIGINT FROM ds_null_data(3)") == 42);
+
 	// And without any, they see none
 	auto neither = DsMakeCountSource(fx.factory);
 	DsRegisterWithSource(fx, "ds_no_data", DsCountBindCb<1, 1>, neither);
@@ -402,6 +410,31 @@ TEST_CASE("V2 data source: refusals", "[capi_v2][data_source]") {
 		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_table_function_destroy(&function);
 		duckdb_v2_data_source_destroy(&source);
+	}
+
+	// A refused registration leaves nothing behind: the retry scans with the user data set before it
+	{
+		int64_t first = 42;
+		int64_t second = 99;
+		auto source = DsMakeCountSource(fx.factory);
+		auto function = DsMakeFunction(fx.factory, "ds_retry");
+		DsSetCountSignature(fx.factory, function);
+		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, DsCountBindCb<1, 1>, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_opaque first_data = {&first, nullptr, nullptr};
+		REQUIRE(duckdb_v2_table_function_set_user_data(function, &first_data, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_add_virtual_column(function, DUCKDB_V2_TABLE_VIRTUAL_COLUMN_FILE_ROW_NUMBER,
+		                                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		duckdb_v2_opaque second_data = {&second, nullptr, nullptr};
+		REQUIRE(duckdb_v2_table_function_set_user_data(function, &second_data, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, true, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_table_function_destroy(&function);
+		duckdb_v2_data_source_destroy(&source);
+		REQUIRE(DsQueryI64(fx.conn, "SELECT max(a)::BIGINT FROM ds_retry(3)") == 99);
 	}
 
 	// A data source of another database cannot scan for this one's functions

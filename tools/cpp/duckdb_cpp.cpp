@@ -6039,9 +6039,10 @@ auto CopyFunction::PrepareRegistration() -> void {
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-	// The scan callbacks of the COPY FROM side live in the data source, which only that side takes
-	if (copy_from_init_global_callback || copy_from_init_local_callback || copy_from_exec_callback ||
-	    copy_from_progress_callback) {
+	// The scan callbacks of the COPY FROM side live in the data source, which only that side takes. It is attached
+	// anew on every registration, so the function scans with the callbacks set now.
+	if (copy_from_bind_callback || copy_from_init_global_callback || copy_from_init_local_callback ||
+	    copy_from_exec_callback || copy_from_progress_callback) {
 		CheckedAPICall(duckdb_v2_copy_from_set_data_source, handle(),
 		               static_cast<duckdb_v2_data_source_handle>(DataSourceHandle()));
 	}

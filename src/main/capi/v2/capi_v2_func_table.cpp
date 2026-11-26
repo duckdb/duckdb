@@ -410,12 +410,6 @@ public:
 			throw InvalidInputException("A table function signature cannot set a return type.");
 		}
 
-		// The data source gets its own name for its error messages, and the user data of the function unless it has
-		// some
-		info.source.name = name;
-		if (!info.source.user_data) {
-			info.source.user_data = info.user_data;
-		}
 		info.source.Verify();
 		// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
 		if (info.partitioning_cb && !info.source.partition_data_cb) {
@@ -428,8 +422,6 @@ public:
 			throw InvalidInputException(
 			    "A table function that produces a virtual column requires projection pushdown.");
 		}
-		info.scan.user_data = info.user_data;
-
 		signature.Verify();
 
 		// A table function holds a signature of its own, so the declared one is handed over as-is
@@ -469,6 +461,11 @@ public:
 		// a function registered through the C API makes no stability promise unless one was declared
 		function.stability = stability;
 
+		// Only once nothing can refuse the registration: a refused one leaves the configuration as it was.
+		// The data source gets the name for its error messages, and the user data of the function unless it has some.
+		info.source.name = name;
+		info.source.InheritUserData(info.user_data);
+		info.scan.user_data = info.user_data;
 		info.name = name;
 		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 

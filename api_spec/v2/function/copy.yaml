@@ -1088,12 +1088,14 @@ functions:
       Makes the scan of the COPY FROM side of the copy function the given data source.
 
       A copy function takes care of everything that is decided when a `COPY ... FROM` statement is bound - the bind
-      callback receives the file path, the options and the columns of the target table - and scans with a data source:
-      the callbacks that set up the scan at execution time and produce its rows. The data source produces every
-      column of the target table. The callbacks of the data source read the bind data the bind callback sets, and the
-      user data of the data source or, if it has none, the user data of the copy function. A data source must be set
-      before the function is registered. The function keeps a copy of the data source as it is when this is called, so
-      the same data source can be given to any number of functions, and changing it afterwards does not change them.
+      callback receives the file path, the options and the columns to copy into - and scans with a data source: the
+      callbacks that set up the scan at execution time and produce its rows. The data source produces the columns the
+      bind callback receives: those of the statement's column list, so `COPY target(b) FROM ...` produces one column,
+      or every column of the target table when the statement has none. The callbacks of the data source read the bind
+      data the bind callback sets, and the user data of the data source or, if it has none or its pointer is null, the
+      user data of the copy function. A data source with an exec callback must be set before the function is
+      registered. The function keeps a copy of the data source as it is when this is called, so the same data source
+      can be given to any number of functions, and changing it afterwards does not change them.
     parameters:
       function:
         type: copy_function
@@ -1417,7 +1419,8 @@ functions:
       The function is registered on the connection's database, visible to every connection, in the connection's
       transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
       and a rollback undoes it. Registration requires a name and at least one configured side: a `COPY ... TO` side
-      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind callback and a data source with an exec
+      callback, set via `[[copy_from_set_data_source]]`. A statement in a
       direction the function does not implement fails with an error. The copy function must have been created through a
       factory of the same database. The caller still owns the handle after registration and must destroy it with
       `[[copy_function_destroy]]`, which does not affect the registered function.
@@ -1444,7 +1447,8 @@ functions:
 
       The function is registered on the loading extension's database and attributed to the extension. Use this from the
       extension's load callback. Registration requires a name and at least one configured side: a `COPY ... TO` side
-      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind callback and a data source with an exec
+      callback, set via `[[copy_from_set_data_source]]`. A statement in a
       direction the function does not implement fails with an error. The copy function must have been created through a
       factory of the same database. The caller still owns the handle after registration and must destroy it with
       `[[copy_function_destroy]]`, which does not affect the registered function.

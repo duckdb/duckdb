@@ -28,7 +28,7 @@ public:
 	//! outlives.
 	CV2DataSourceInfo from_source;
 	bool from_source_set = false;
-	//! COPY FROM pushes nothing down: the scan produces every column of the target table
+	//! COPY FROM pushes nothing down: the scan produces every column the bind callback receives
 	CV2ScanOptions from_scan;
 
 	shared_ptr<CV2UserData> user_data = nullptr;
@@ -596,14 +596,13 @@ public:
 			if (!info.from_source_set) {
 				throw InvalidInputException("A data source must be set for the COPY FROM side of the function.");
 			}
-			// The data source gets the name for its error messages, and the user data of the function unless it has
-			// some
-			info.from_source.name = name;
-			if (!info.from_source.user_data) {
-				info.from_source.user_data = info.user_data;
-			}
-			info.from_scan.user_data = info.user_data;
 			info.from_source.Verify();
+			// Only once nothing can refuse the registration: a refused one leaves the configuration as it was.
+			// The data source gets the name for its error messages, and the user data of the function unless it has
+			// some.
+			info.from_source.name = name;
+			info.from_source.InheritUserData(info.user_data);
+			info.from_scan.user_data = info.user_data;
 		}
 
 		auto function_info = make_shared_ptr<CV2CopyFunctionInfo>(std::move(info));

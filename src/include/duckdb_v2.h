@@ -16961,8 +16961,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_create(duckdb_v2_factory_hand
  * Associates an opaque pointer with the data source, retrievable from its callbacks via
  * `duckdb_v2_data_source_init_global_get_user_data()`, `duckdb_v2_data_source_exec_get_user_data()` and their
  * counterparts on the other phases. The opaque handle bundles the pointer with an optional destructor, invoked when the
- * data is no longer needed. A data source without user data hands its callbacks the user data of the table function or
- * copy function that scans it, if that has any.
+ * data is no longer needed. A data source without user data, or whose user data pointer is null, hands its callbacks
+ * the user data of the table function or copy function that scans it, if that has any.
  *
  * history:
  * - unstable: v2.0.0
@@ -17146,7 +17146,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_set_claim_batch_callback(
  * them.
  *
  * The callbacks of the data source read the bind data the bind callback of the function sets, and the user data of the
- * data source or, if it has none, the user data of the function.
+ * data source or, if it has none or its pointer is null, the user data of the function.
  *
  * history:
  * - unstable: v2.0.0
@@ -17182,7 +17182,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_destroy(duckdb_v2_data_source
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17303,7 +17303,7 @@ duckdb_v2_data_source_init_global_get_column_index(duckdb_v2_data_source_init_gl
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17424,7 +17424,7 @@ duckdb_v2_data_source_init_local_get_column_index(duckdb_v2_data_source_init_loc
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17565,7 +17565,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_index(duckdb_
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17640,7 +17640,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_progress_set_progress(
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17851,7 +17851,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_partition_data_set_partition_
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -17938,7 +17938,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_set(duckdb_v2_data_so
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_data_source_set_user_data()`, or the user data of the table function or
- * copy function that scans it when the data source has none.
+ * copy function that scans it when the data source has none or its pointer is null.
  *
  * history:
  * - unstable: v2.0.0
@@ -18938,12 +18938,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_finalize_get_init_data(duckdb_v2_
  * Makes the scan of the COPY FROM side of the copy function the given data source.
  *
  * A copy function takes care of everything that is decided when a `COPY ... FROM` statement is bound - the bind
- * callback receives the file path, the options and the columns of the target table - and scans with a data source: the
- * callbacks that set up the scan at execution time and produce its rows. The data source produces every column of the
- * target table. The callbacks of the data source read the bind data the bind callback sets, and the user data of the
- * data source or, if it has none, the user data of the copy function. A data source must be set before the function is
- * registered. The function keeps a copy of the data source as it is when this is called, so the same data source can be
- * given to any number of functions, and changing it afterwards does not change them.
+ * callback receives the file path, the options and the columns to copy into - and scans with a data source: the
+ * callbacks that set up the scan at execution time and produce its rows. The data source produces the columns the bind
+ * callback receives: those of the statement's column list, so `COPY target(b) FROM ...` produces one column, or every
+ * column of the target table when the statement has none. The callbacks of the data source read the bind data the bind
+ * callback sets, and the user data of the data source or, if it has none or its pointer is null, the user data of the
+ * copy function. A data source with an exec callback must be set before the function is registered. The function keeps
+ * a copy of the data source as it is when this is called, so the same data source can be given to any number of
+ * functions, and changing it afterwards does not change them.
  *
  * history:
  * - unstable: v2.0.0
@@ -19207,10 +19209,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_from_bind_set_cardinality(duckdb_v2_
  * The function is registered on the connection's database, visible to every connection, in the connection's
  * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
  * a rollback undoes it. Registration requires a name and at least one configured side: a `COPY ... TO` side needs its
- * batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
- * function does not implement fails with an error. The copy function must have been created through a factory of the
- * same database. The caller still owns the handle after registration and must destroy it with
- * `duckdb_v2_copy_function_destroy()`, which does not affect the registered function.
+ * batch and flush callbacks, a `COPY ... FROM` side needs its bind callback and a data source with an exec callback,
+ * set via `duckdb_v2_copy_from_set_data_source()`. A statement in a direction the function does not implement fails
+ * with an error. The copy function must have been created through a factory of the same database. The caller still owns
+ * the handle after registration and must destroy it with `duckdb_v2_copy_function_destroy()`, which does not affect the
+ * registered function.
  *
  * history:
  * - unstable: v2.0.0
@@ -19232,10 +19235,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_copy_function(duckdb_
  *
  * The function is registered on the loading extension's database and attributed to the extension. Use this from the
  * extension's load callback. Registration requires a name and at least one configured side: a `COPY ... TO` side needs
- * its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction
- * the function does not implement fails with an error. The copy function must have been created through a factory of
- * the same database. The caller still owns the handle after registration and must destroy it with
- * `duckdb_v2_copy_function_destroy()`, which does not affect the registered function.
+ * its batch and flush callbacks, a `COPY ... FROM` side needs its bind callback and a data source with an exec
+ * callback, set via `duckdb_v2_copy_from_set_data_source()`. A statement in a direction the function does not implement
+ * fails with an error. The copy function must have been created through a factory of the same database. The caller
+ * still owns the handle after registration and must destroy it with `duckdb_v2_copy_function_destroy()`, which does not
+ * affect the registered function.
  *
  * history:
  * - unstable: v2.0.0

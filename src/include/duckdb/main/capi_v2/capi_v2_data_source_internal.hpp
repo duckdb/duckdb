@@ -34,6 +34,12 @@ public:
 
 	//! Throws unless the configuration is complete and consistent
 	void Verify() const;
+	//! Takes `fallback` as its user data unless it has some: user data with a null pointer counts as none
+	void InheritUserData(const shared_ptr<CV2UserData> &fallback) {
+		if (!user_data || !user_data->GetData()) {
+			user_data = fallback;
+		}
+	}
 
 	//! Makes the function scan with this data source. The data source must outlive every call of the function, as the
 	//! bind data of a call refers to it.
