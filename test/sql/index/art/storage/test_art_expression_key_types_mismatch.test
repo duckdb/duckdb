@@ -156,8 +156,8 @@ SELECT count(*) FROM d.t
 statement ok
 DETACH d
 
-# a decimal key of another width and another physical type does not: DECIMAL(19,1) keys are INT128 (the record now
-# names DECIMAL(15,1), the type the index was last checkpointed with, whose keys are encoded like the DECIMAL(18,1) ones)
+# a decimal key of another width and another physical type does not: DECIMAL(19,1) keys are INT128 (the record names
+# the original DECIMAL(18,1), or DECIMAL(15,1) if a checkpoint rewrote the index after the width-only change)
 statement ok
 CREATE OR REPLACE MACRO key_of(v) AS v::DECIMAL(19,1)
 
@@ -167,7 +167,7 @@ ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d
 statement error
 INSERT INTO d.t VALUES (15, 6, TIMESTAMP '2025-01-01 00:00:00')
 ----
-<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the stored keys of .*x.* have the type DECIMAL\(15,1\), the expression binds to DECIMAL\(19,1\) now.*
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the stored keys of .*x.* have the type DECIMAL\((15|18),1\), the expression binds to DECIMAL\(19,1\) now.*
 
 query I
 SELECT count(*) FROM d.t
