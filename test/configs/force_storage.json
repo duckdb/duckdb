@@ -67,6 +67,7 @@
         "test/optimizer/compressed_materialization_topn.test",
         "test/optimizer/joins/joins_with_correlated_subqueries.test",
         "test/sql/aggregate/aggregates/test_arg_min_max.test",
+        "test/sql/cte/recursive_cte_correlated_complex.test",
         "test/sql/types/numeric/numeric_aggregate_state_export.test",
         "test/sql/types/numeric/numeric_alter_type_nulls.test",
         "test/sql/types/numeric/numeric_canonical_encoding.test",

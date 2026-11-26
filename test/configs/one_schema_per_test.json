@@ -133,6 +133,35 @@
       "paths": [
         "test/sql/unnest/unnest_constant_reference_types.test"
       ]
+    },
+    {
+      "reason": "NUMERIC columns in the default database require storage version v2.1.0.",
+      "paths": [
+        "test/issues/rigger/test_value_binop.test",
+        "test/optimizer/comparison_simplification_numeric_casts.test",
+        "test/optimizer/compressed_materialization_topn.test",
+        "test/optimizer/joins/joins_with_correlated_subqueries.test",
+        "test/sql/aggregate/aggregates/test_arg_min_max.test",
+        "test/sql/cte/recursive_cte_correlated_complex.test",
+        "test/sql/types/numeric/numeric_aggregate_state_export.test",
+        "test/sql/types/numeric/numeric_alter_type_nulls.test",
+        "test/sql/types/numeric/numeric_canonical_encoding.test",
+        "test/sql/types/numeric/numeric_casts.test",
+        "test/sql/types/numeric/numeric_join_filter_pushdown.test",
+        "test/sql/types/numeric/numeric_limits_review.test",
+        "test/sql/types/numeric/numeric_magnitude_overflow.test",
+        "test/sql/types/numeric/numeric_to_float_rounding.test",
+        "test/sql/types/numeric/numeric_to_float_rounding_representation.test",
+        "test/sql/types/numeric/numeric_type.test",
+        "test/sql/types/numeric/numeric_type_arithmetic.test",
+        "test/sql/types/numeric/numeric_type_copy.test",
+        "test/sql/types/numeric/numeric_type_widening.test",
+        "test/sql/types/numeric/postgres_numeric.test",
+        "test/sql/types/numeric/postgres_numeric_big.test",
+        "test/sql/types/numeric/test_empty_numeric.test",
+        "test/sql/upsert/postgres/planner_preprocessing.test",
+        "test/sql/window/test_tpcds_q49.test"
+      ]
     }
   ]
 }
