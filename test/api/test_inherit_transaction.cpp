@@ -143,8 +143,9 @@ TEST_CASE("Test a connection that inherits the transaction of another connection
 				REQUIRE(child.HasActiveTransaction());
 				REQUIRE_THROWS(child.Commit());
 			}
-			// the refused statement failed in the transaction, which invalidated it
-			REQUIRE_FAIL(con.Query("COMMIT"));
+			// the refused statement failed in the transaction, which invalidated it: the COMMIT rolls back
+			REQUIRE_FAIL(con.Query("SELECT 42"));
+			REQUIRE_NO_FAIL(con.Query("COMMIT"));
 			RequireValue(other, "SELECT SUM(i) FROM tbl", 1);
 		}
 	}
@@ -157,7 +158,8 @@ TEST_CASE("Test a connection that inherits the transaction of another connection
 			REQUIRE_FAIL(child.Query("SELECT 42"));
 		}
 		REQUIRE_FAIL(con.Query("SELECT 42"));
-		REQUIRE_FAIL(con.Query("COMMIT"));
+		// the COMMIT of an invalidated transaction rolls it back
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 		RequireValue(con, "SELECT SUM(i) FROM tbl", 1);
 	}
 	SECTION("the transaction cannot commit while an inheriting connection is open") {
@@ -189,7 +191,7 @@ TEST_CASE("Test a connection that inherits the transaction of another connection
 	}
 	SECTION("a transaction that was shared and joined") {
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		auto share_id = con.Query("SELECT share_transaction()")->GetValue(0, 0).ToString();
+		auto share_id = con.Query("SELECT share_transaction()")->Collection().GetValue(0, 0).ToString();
 		REQUIRE_NO_FAIL(other.Query("JOIN TRANSACTION '" + share_id + "'"));
 		auto child = Connection::CreateInTransaction(*other.context);
 		REQUIRE_NO_FAIL(child.Query("INSERT INTO tbl VALUES (2)"));
