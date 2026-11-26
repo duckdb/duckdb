@@ -1413,6 +1413,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
+      - autocomplete-diagnostics
       - linux-relassert
       - linux-relassert-tests
       - regression
