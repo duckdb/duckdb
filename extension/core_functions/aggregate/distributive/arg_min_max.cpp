@@ -412,6 +412,8 @@ AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_h
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.GetProperties().SetProperty(BoundAggregateExpression::NON_NULL_SELECTOR_DOMAIN_PROPERTY,
 	                                     Value::BOOLEAN(true));
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
+	                                     Value::BOOLEAN(true));
 	return function;
 }
 
@@ -429,6 +431,8 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	AggregateFunction::WireStructStateType<STATE>(function);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.GetProperties().SetProperty(BoundAggregateExpression::NON_NULL_SELECTOR_DOMAIN_PROPERTY,
+	                                     Value::BOOLEAN(true));
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
 	                                     Value::BOOLEAN(true));
 	return function;
 #else
@@ -754,11 +758,18 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 //------------------------------------------------------------------------------
 // Bind
 //------------------------------------------------------------------------------
+template <class VAL_TYPE>
+void SetArgStorageProperty(BoundAggregateFunction &function) {
+	function.GetProperties().SetProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY,
+	                                     Value::BOOLEAN(std::is_same<VAL_TYPE, MinMaxFallbackValue>::value));
+}
+
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
 void SpecializeArgMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
+	SetArgStorageProperty<VAL_TYPE>(function);
 	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
 	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
 	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
@@ -825,6 +836,7 @@ void SpecializeArgMinMaxNullNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
+	SetArgStorageProperty<VAL_TYPE>(function);
 	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
 	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
 	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
