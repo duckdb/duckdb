@@ -1330,15 +1330,16 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memo
 	// Trimmed allocations join the other fallback frees, and are purged with them.
 	TrimCachedMemory(memory_headroom);
 	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
-	if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
-		return false;
-	}
-	if (deallocated <= memory_headroom && GetCachedMemory() <= memory_headroom - deallocated) {
-		return false;
-	}
-	if (!estimated_unflushed_memory.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
-		return false;
-	}
+	do {
+		if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
+			return false;
+		}
+		if (deallocated <= memory_headroom && GetCachedMemory() <= memory_headroom - deallocated) {
+			return false;
+		}
+		// A failed claim reloads the estimate: frees added meanwhile do not cancel the purge, a claim by another
+		// thread does.
+	} while (!estimated_unflushed_memory.compare_exchange_weak(deallocated, 0, std::memory_order_relaxed));
 	const auto mapped_memory = allocator.GetMappedMemory();
 	if (mapped_memory.IsValid()) {
 		// Repeated frees of reused memory cannot retain more than the fallback allocator's mapped footprint.

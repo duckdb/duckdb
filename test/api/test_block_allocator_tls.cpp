@@ -896,6 +896,40 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 	CHECK(pool.GetUsedMemory() == 0);
 }
 
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("BlockAllocator purges trimmed allocations while other threads free", "[api][block_allocator]") {
+	constexpr idx_t SIZE = 2 * 1024 * 1024;
+	// Neither cached nor pooled, so every free adds to the estimate of unflushed memory.
+	constexpr idx_t UNCACHED_SIZE = 4097;
+	atomic<idx_t> live_bytes {0};
+	// Without mapped statistics nothing but the threshold and the headroom decides.
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	BlockAllocator allocator(fallback, 65536, 0);
+	atomic<bool> stop {false};
+	std::thread freeing([&] {
+		while (!stop.load()) {
+			auto pointer = allocator.AllocateData(UNCACHED_SIZE);
+			allocator.FreeData(pointer, UNCACHED_SIZE);
+		}
+	});
+	idx_t purges = 0;
+	constexpr idx_t ROUNDS = 20000;
+	for (idx_t i = 0; i < ROUNDS; i++) {
+		auto first = allocator.AllocateData(SIZE);
+		auto second = allocator.AllocateData(SIZE);
+		allocator.FreeData(first, SIZE);
+		allocator.FreeData(second, SIZE);
+		// One cached allocation has to go: it exceeds the threshold, and does not fit next to the other one.
+		purges += allocator.TryFlushDeallocated(SIZE / 4, SIZE + SIZE / 2);
+		allocator.FlushAll();
+	}
+	stop = true;
+	freeing.join();
+	CHECK(purges == (Allocator::SupportsFlush() ? ROUNDS : 0));
+}
+#endif
+
 TEST_CASE("BlockAllocator fallback pressure shares headroom with cached blocks", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	Allocator fallback;
