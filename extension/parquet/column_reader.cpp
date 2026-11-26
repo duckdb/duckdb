@@ -289,6 +289,9 @@ bool ColumnReader::TrySkipPagesWithOffsetIndex(idx_t skipped_so_far, idx_t &to_s
 		// no page index, or still inside a page
 		return false;
 	}
+	// this path does not maintain page_ordinal, which is safe only while
+	// the page index is never used for encrypted files
+	D_ASSERT(!reader.parquet_options.encryption_config);
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	auto &locations = offset_index->page_locations;
 	while (trans.GetLocation() < NumericCast<idx_t>(locations[0].offset)) {
