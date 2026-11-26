@@ -103,3 +103,52 @@ statement error
 SELECT * FROM (VALUES (0)) x(a), (VALUES (1)) y(b) WHERE get_bit('1'::BIT, a + b) = 1 AND a + b < 1;
 ----
 bit index 1 out of valid range
+
+# Exact projection statistics must not let the later false predicate erase the error.
+statement error
+SELECT * FROM (SELECT 0 AS a) x, (SELECT 1 AS b) y WHERE get_bit('1'::BIT, a + b) = 1 AND a + b < 1;
+----
+bit index 1 out of valid range
+
+query II
+SELECT * FROM (SELECT 0 AS a) x, (SELECT 1 AS b) y WHERE a + b < 1 AND get_bit('1'::BIT, a + b) = 1;
+----
+
+# Pruning the first conjunct must still unwrap the remaining effectful child.
+statement ok
+CREATE SEQUENCE conjunction_visits;
+
+query I
+SELECT i >= 0 AND nextval('conjunction_visits') > 0 FROM range(3) t(i);
+----
+true
+true
+true
+
+query I
+SELECT currval('conjunction_visits');
+----
+3
+
+# Exercise the same ordering when predicates remain in a LogicalFilter.
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+statement error
+SELECT * FROM (VALUES (0, 1)) v(a, b) WHERE get_bit('1'::BIT, a + b) = 1 AND a + b < 1;
+----
+bit index 1 out of valid range
+
+query II
+SELECT * FROM (VALUES (0, 1)) v(a, b) WHERE a + b < 1 AND get_bit('1'::BIT, a + b) = 1;
+----
+
+# A known predicate value does not make its fallible children removable.
+statement error
+SELECT * FROM (VALUES (0, 1)) v(a, b) WHERE constant_or_null(true, get_bit('1'::BIT, a + b)) AND a + b < 1;
+----
+bit index 1 out of valid range
+
+query II
+SELECT * FROM (VALUES (0, 1)) v(a, b) WHERE a + b < 1 AND constant_or_null(true, get_bit('1'::BIT, a + b));
+----

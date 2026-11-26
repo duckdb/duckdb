@@ -393,6 +393,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);
+		} else if (!IsRemovable(*condition)) {
+			// Later predicates must not erase this effect.
+			return std::move(node_stats);
 		}
 	}
 	SimplifyConstantOrNull(filter.expressions);
