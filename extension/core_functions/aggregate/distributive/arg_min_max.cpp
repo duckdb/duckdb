@@ -951,6 +951,10 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 	} else {
 		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
 	}
+	if (arguments[2]->HasParameter()) {
+		// n is constant per execution: bind again once its value is known
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[2]->IsFoldable()) {
 		MinMaxNOperation::BindPerRowN(function);
 	}

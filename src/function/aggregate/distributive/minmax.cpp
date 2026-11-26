@@ -624,6 +624,10 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
 	function.GetArguments()[0] = arguments[0]->GetReturnType();
+	if (arguments[1]->HasParameter()) {
+		// n is constant per execution: bind again once its value is known
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		MinMaxNOperation::BindPerRowN(function);
 	}

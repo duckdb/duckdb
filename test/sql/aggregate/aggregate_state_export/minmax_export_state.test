@@ -157,7 +157,16 @@ SELECT max(x, x) EXPORT_STATE FROM range(1, 3) t(x);
 ----
 cannot export state
 
-# .. but an empty state combines with any n
+# but a prepared parameter n is constant per execution
+statement ok
+PREPARE top_n AS SELECT finalize(max(i, $1::BIGINT) EXPORT_STATE), finalize(arg_max(i, i, $1::BIGINT) EXPORT_STATE) FROM range(3) t(i);
+
+query II
+EXECUTE top_n(2);
+----
+[2, 1]	[2, 1]
+
+# but an empty state combines with any n
 query I
 SELECT finalize(combine(to_aggregate_state({'n': 1, 'entries': []}, 'max', ['BIGINT', 'BIGINT']), to_aggregate_state({'n': 2, 'entries': [7]}, 'max', ['BIGINT', 'BIGINT'])));
 ----
@@ -172,7 +181,7 @@ SELECT finalize(combine_aggr(s, 2)) FROM (SELECT to_aggregate_state({'n': 2, 'en
 ----
 [fffffe98d0963d27015c198262d97221, fffffe98d0963d27015c198262d97221]
 
-# .. also with a multiplicity far beyond n
+# also with a multiplicity far beyond n
 query II
 SELECT len(m), list_distinct(m) = [(SELECT max(repeat(md5(i::VARCHAR), 256)) FROM range(256) t(i))] FROM (SELECT finalize(combine_aggr(s, 1::BIGINT << 40)) m FROM (SELECT max(repeat(md5(i::VARCHAR), 256), 256) EXPORT_STATE s FROM range(256) t(i)));
 ----
