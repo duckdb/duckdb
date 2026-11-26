@@ -78,12 +78,12 @@ SET checkpoint_threshold='1TB';
 statement ok maintenance
 COMMIT;
 
-# A lock already held for a write must remain transaction-scoped (an UPDATE does not hold it).
+# A lock already held for a write must remain transaction-scoped (an indexed CREATE TABLE holds one).
 statement ok maintenance
 BEGIN;
 
 statement ok maintenance
-CREATE TABLE written(i INTEGER);
+CREATE TABLE written(i INTEGER PRIMARY KEY);
 
 statement ok maintenance
 {operation} t;

@@ -104,7 +104,7 @@ statement ok
 SET force_compression='dict_fsst'
 
 statement ok
-ATTACH '{TEST_DIR}/concurrent_checkpoint_update_old_snapshot_dict_fsst.db' AS fsst (STORAGE_VERSION 'v1.3.0')
+ATTACH '{TEST_DIR}/concurrent_checkpoint_update_old_snapshot_dict_fsst.db' AS fsst (STORAGE_VERSION 'v1.4.0')
 
 statement ok
 CREATE TABLE fsst.t AS SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE 'value_' || (i % 50) END s FROM range(5000) t(i)
