@@ -83,11 +83,6 @@ idx_t RowIdColumnData::Scan(TransactionData transaction, idx_t vector_index, Col
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowIdColumnData::ScanCommittedRange(idx_t offset_in_row_group, idx_t count, Vector &result,
-                                         VisibilityBound visibility_bound) {
-	throw InternalException("ScanCommittedRange is not supported for row id columns");
-}
-
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto row_start = GetRowStart(state);
 	if (result_offset != 0) {
@@ -201,11 +196,6 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const R
 
 unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
                                                               const BaseStatistics &old_stats) {
-	throw InternalException("RowIdColumnData cannot be checkpointed");
-}
-
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
-                                     VisibilityBound visibility_bound) const {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

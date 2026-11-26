@@ -171,112 +171,61 @@ void UpdateInfo::Verify() {
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-//! The tuples [start, end) of a vector that a fetch writes, to the result from result_offset on
-struct UpdateFetchRange {
-	UpdateFetchRange() : start(0), end(STANDARD_VECTOR_SIZE), result_offset(0) {
-	}
-	UpdateFetchRange(idx_t start, idx_t end, idx_t result_offset)
-	    : start(start), end(end), result_offset(result_offset) {
-	}
-
-	bool IsWholeVector() const {
-		return start == 0 && end == STANDARD_VECTOR_SIZE && result_offset == 0;
-	}
-	//! PARTIAL is false for a whole vector, which writes each tuple to its own index
-	template <bool PARTIAL>
-	bool Contains(idx_t tuple_idx) const {
-		return !PARTIAL || (tuple_idx >= start && tuple_idx < end);
-	}
-	template <bool PARTIAL>
-	idx_t ResultIndex(idx_t tuple_idx) const {
-		return PARTIAL ? result_offset + tuple_idx - start : tuple_idx;
-	}
-
-	idx_t start;
-	idx_t end;
-	idx_t result_offset;
-};
-
-template <bool PARTIAL>
-static void MergeValidityInfo(UpdateInfo &current, const UpdateFetchRange &range, ValidityMask &result_mask) {
+static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
 	auto tuples = current.GetTuples();
 	auto info_data = current.GetData<bool>();
 	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = tuples[i];
-		if (PARTIAL && tuple_idx < range.start) {
-			continue;
-		}
-		if (PARTIAL && tuple_idx >= range.end) {
-			break;
-		}
-		result_mask.Set(range.ResultIndex<PARTIAL>(tuple_idx), info_data[i]);
+		result_mask.Set(tuples[i], info_data[i]);
 	}
 }
 
-template <class T, bool PARTIAL>
-static void MergeUpdateInfo(UpdateInfo &current, const UpdateFetchRange &range, T *result_data) {
+template <class T>
+static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 	auto tuples = current.GetTuples();
 	auto info_data = current.GetData<T>();
 	if (current.N == STANDARD_VECTOR_SIZE) {
 		// special case: update touches ALL tuples of this vector
 		// in this case we can just memcpy the data
 		// since the layout of the update info is guaranteed to be [0, 1, 2, 3, ...]
-		memcpy(result_data + range.ResultIndex<PARTIAL>(range.start), info_data + range.start,
-		       sizeof(T) * (range.end - range.start));
-		return;
-	}
-	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = tuples[i];
-		if (PARTIAL && tuple_idx < range.start) {
-			continue;
+		memcpy(result_data, info_data, sizeof(T) * current.N);
+	} else {
+		for (idx_t i = 0; i < current.N; i++) {
+			result_data[tuples[i]] = info_data[i];
 		}
-		if (PARTIAL && tuple_idx >= range.end) {
-			break;
-		}
-		result_data[range.ResultIndex<PARTIAL>(tuple_idx)] = info_data[i];
 	}
 }
 
-template <class T, bool PARTIAL>
+template <class T>
 struct UpdateDataResult {
-	explicit UpdateDataResult(Vector &result, UpdateFetchRange range = UpdateFetchRange())
-	    : data(FlatVector::GetDataMutable<T>(result)), range(range) {
+	explicit UpdateDataResult(Vector &result) : data(FlatVector::GetDataMutable<T>(result)) {
 	}
 	T Get(idx_t idx) const {
-		return data[range.ResultIndex<PARTIAL>(idx)];
+		return data[idx];
 	}
 	void Set(idx_t idx, T value) {
-		if (range.Contains<PARTIAL>(idx)) {
-			data[range.ResultIndex<PARTIAL>(idx)] = value;
-		}
+		data[idx] = value;
 	}
 	void Apply(UpdateInfo &info) {
-		MergeUpdateInfo<T, PARTIAL>(info, range, data);
+		MergeUpdateInfo<T>(info, data);
 	}
 
 	T *data;
-	UpdateFetchRange range;
 };
 
-template <bool PARTIAL>
 struct UpdateValidityResult {
-	explicit UpdateValidityResult(Vector &result, UpdateFetchRange range = UpdateFetchRange())
-	    : mask(FlatVector::ValidityMutable(result)), range(range) {
+	explicit UpdateValidityResult(Vector &result) : mask(FlatVector::ValidityMutable(result)) {
 	}
 	bool Get(idx_t idx) const {
-		return mask.RowIsValid(range.ResultIndex<PARTIAL>(idx));
+		return mask.RowIsValid(idx);
 	}
 	void Set(idx_t idx, bool value) {
-		if (range.Contains<PARTIAL>(idx)) {
-			mask.Set(range.ResultIndex<PARTIAL>(idx), value);
-		}
+		mask.Set(idx, value);
 	}
 	void Apply(UpdateInfo &info) {
-		MergeValidityInfo<PARTIAL>(info, range, mask);
+		MergeValidityInfo(info, mask);
 	}
 
 	ValidityMask &mask;
-	UpdateFetchRange range;
 };
 
 //! Apply the stored values of an update info to the tuples that are valid in the apply mask
@@ -354,29 +303,15 @@ static void FetchUpdatesInternal(const SnapshotView &view, UpdateInfo &root, RES
 	}
 }
 
-static void UpdateMergeValidity(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-                                Vector &result) {
-	UpdateFetchRange range(start, end, result_offset);
-	if (range.IsWholeVector()) {
-		UpdateValidityResult<false> validity_result(result);
-		FetchUpdatesInternal<bool>(view, info, validity_result);
-	} else {
-		UpdateValidityResult<true> validity_result(result, range);
-		FetchUpdatesInternal<bool>(view, info, validity_result);
-	}
+static void UpdateMergeValidity(const SnapshotView &view, UpdateInfo &info, Vector &result) {
+	UpdateValidityResult validity_result(result);
+	FetchUpdatesInternal<bool>(view, info, validity_result);
 }
 
 template <class T>
-static void UpdateMergeFetch(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-                             Vector &result) {
-	UpdateFetchRange range(start, end, result_offset);
-	if (range.IsWholeVector()) {
-		UpdateDataResult<T, false> data_result(result);
-		FetchUpdatesInternal<T>(view, info, data_result);
-	} else {
-		UpdateDataResult<T, true> data_result(result, range);
-		FetchUpdatesInternal<T>(view, info, data_result);
-	}
+static void UpdateMergeFetch(const SnapshotView &view, UpdateInfo &info, Vector &result) {
+	UpdateDataResult<T> data_result(result);
+	FetchUpdatesInternal<T>(view, info, data_result);
 }
 
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type) {
@@ -436,7 +371,7 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	// FIXME: normalify if this is not the case... need to pass in count?
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
-	fetch_update_function(transaction.view, UpdateInfo::Get(pin), 0, STANDARD_VECTOR_SIZE, 0, result);
+	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
 	AddStringHeapReference(*lock_handle, vector_index, result);
 }
 
@@ -546,13 +481,13 @@ void UpdateSegment::CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vecto
 //===--------------------------------------------------------------------===//
 static void FetchCommittedValidity(UpdateInfo &info, Vector &result) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
-	MergeValidityInfo<false>(info, UpdateFetchRange(), result_mask);
+	MergeValidityInfo(info, result_mask);
 }
 
 template <class T>
 static void TemplatedFetchCommitted(UpdateInfo &info, Vector &result) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	MergeUpdateInfo<T, false>(info, UpdateFetchRange(), result_data);
+	MergeUpdateInfo<T>(info, result_data);
 }
 
 static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type) {
@@ -604,41 +539,6 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	auto pin = node.Pin();
 	fetch_committed_function(UpdateInfo::Get(pin), result);
 	AddStringHeapReference(*lock_handle, vector_index, result);
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch Range
-//===--------------------------------------------------------------------===//
-void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result) {
-	D_ASSERT(count > 0);
-	if (!root) {
-		return;
-	}
-	D_ASSERT(start_row <= column_data.count);
-	D_ASSERT(start_row + count <= column_data.count);
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	idx_t end_row = start_row + count;
-	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
-	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
-	D_ASSERT(start_vector <= end_vector);
-
-	auto lock_handle = lock.GetSharedLock();
-	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
-		auto entry = GetUpdateNode(*lock_handle, vector_idx);
-		if (!entry.IsSet()) {
-			continue;
-		}
-		auto pin = entry.Pin();
-		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
-		idx_t end_in_vector =
-		    vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-		D_ASSERT(start_in_vector < end_in_vector);
-		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
-		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
-		fetch_update_function(view, UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
-		AddStringHeapReference(*lock_handle, vector_idx, result);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -700,7 +600,7 @@ static void FetchRowsInternal(const SnapshotView &view, UpdateInfo &root, const 
 static void FetchRowsValidity(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
                               const SelectionVector &sel, idx_t fetch_offset, idx_t count, idx_t vector_offset,
                               Vector &result, idx_t result_offset) {
-	UpdateValidityResult<false> validity_result(result);
+	UpdateValidityResult validity_result(result);
 	FetchRowsInternal<bool>(view, info, offsets, sel, fetch_offset, count, vector_offset, validity_result,
 	                        result_offset);
 }
@@ -709,7 +609,7 @@ template <class T>
 static void TemplatedFetchRows(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
                                const SelectionVector &sel, idx_t fetch_offset, idx_t count, idx_t vector_offset,
                                Vector &result, idx_t result_offset) {
-	UpdateDataResult<T, false> data_result(result);
+	UpdateDataResult<T> data_result(result);
 	FetchRowsInternal<T>(view, info, offsets, sel, fetch_offset, count, vector_offset, data_result, result_offset);
 }
 
