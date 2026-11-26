@@ -253,34 +253,6 @@ idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }
 
-bool MetadataManager::BlocksAreSparse(const vector<MetaBlockPointer> &pointers) {
-	// free sub-blocks of a disk-backed block are only reusable once the whole block is free,
-	// so a chain that is alone in its blocks pins them - rewriting it lets the blocks be freed
-	if (pointers.empty()) {
-		return false;
-	}
-	unique_lock<mutex> guard(block_lock);
-	for (auto &pointer : pointers) {
-		auto entry = blocks.find(pointer.GetBlockId());
-		if (entry == blocks.end()) {
-			return false;
-		}
-		auto &block = entry->second;
-		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
-			// transient blocks are still being filled by this checkpoint
-			return false;
-		}
-		idx_t free_count = block.free_blocks.size();
-		for (idx_t mask = block.pending_reuse; mask != 0; mask &= mask - 1) {
-			free_count++;
-		}
-		if (METADATA_BLOCK_COUNT - free_count > METADATA_BLOCK_COUNT / 4) {
-			return false;
-		}
-	}
-	return true;
-}
-
 void MetadataManager::Flush(QueryContext context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;

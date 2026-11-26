@@ -57,4 +57,4 @@ SELECT count(*) FROM t;
 query III
 SELECT total_blocks, used_blocks, free_blocks FROM pragma_database_size();
 ----
-1	1	0
+3	2	1

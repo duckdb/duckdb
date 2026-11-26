@@ -251,10 +251,6 @@ public:
 	//! Count visible rows in a scan assignment starting at a vector boundary
 	idx_t GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
-	//! Whether reusable metadata should be rewritten instead, to free the mostly-free blocks it sits in
-	bool ShouldCompactMetadata(RowGroupWriter &writer) const;
-	//! The per-column variant of ShouldCompactMetadata
-	bool ShouldCompactColumnMetadata(RowGroupWriter &writer, idx_t column_idx) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);

@@ -84,9 +84,6 @@ public:
 
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
-	//! Whether every block these pointers touch is a mostly-free disk-backed block
-	bool BlocksAreSparse(const vector<MetaBlockPointer> &pointers);
-
 	//! Frees the blocks the checkpoint no longer uses. With readers, returns them instead, for ReuseFreedBlocks
 	unordered_map<block_id_t, idx_t> MarkBlocksAsModified(bool has_readers);
 	//! Lets blocks that MarkBlocksAsModified returned be reused
