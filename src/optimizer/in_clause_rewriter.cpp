@@ -8,10 +8,24 @@
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+static bool IsGuarded(const Expression &expr) {
+	return expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION ||
+	       expr.GetExpressionClass() == ExpressionClass::BOUND_CASE ||
+	       expr.GetExpressionType() == ExpressionType::OPERATOR_COALESCE;
+}
+
+// Match VisitExpression: skip TRY / HAS_ERROR, and later AND/OR/CASE/COALESCE arms that can throw.
+static bool RecurseIntoChild(const Expression &parent, const Expression &child, bool first) {
+	auto type = parent.GetExpressionType();
+	if (type == ExpressionType::OPERATOR_TRY || type == ExpressionType::OPERATOR_HAS_ERROR) {
+		return false;
+	}
+	return !IsGuarded(parent) || first || !child.CanThrow();
+}
 
 bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
@@ -32,10 +46,12 @@ bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
 		}
 	}
 	bool result = false;
+	bool first = true;
 	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!result && HasRewritableInClause(child)) {
+		if (!result && RecurseIntoChild(expr, child, first) && HasRewritableInClause(child)) {
 			result = true;
 		}
+		first = false;
 	});
 	return result;
 }
@@ -63,19 +79,11 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 void InClauseRewriter::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;
 	const auto expression_type = expr.GetExpressionType();
-	if (expression_type == ExpressionType::OPERATOR_TRY || expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
-		// an IN below an error capture must stay an expression, the mark join would raise outside the capture
-		return;
-	}
-	// in conjunctions, CASE, and COALESCE only the first child evaluates unconditionally, the mark
-	// join would evaluate a guarded arm's probe for every row (the Select paths run later children
-	// on a remaining-row selection, so untaken arms never raise)
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION ||
-	    expr.GetExpressionClass() == ExpressionClass::BOUND_CASE ||
-	    expression_type == ExpressionType::OPERATOR_COALESCE) {
+	if (expression_type == ExpressionType::OPERATOR_TRY || expression_type == ExpressionType::OPERATOR_HAS_ERROR ||
+	    IsGuarded(expr)) {
 		bool first = true;
 		ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
-			if (first) {
+			if (RecurseIntoChild(expr, *child, first)) {
 				VisitExpression(&child);
 			}
 			first = false;

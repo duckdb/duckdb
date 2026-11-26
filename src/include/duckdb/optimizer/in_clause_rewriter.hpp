@@ -29,11 +29,11 @@ public:
 public:
 	// Minimum number of values to use a hash join
 	static constexpr idx_t IN_CLAUSE_REWRITE_THRESHOLD = 6;
+	//! True if VisitExpression would rewrite a large constant IN in this tree.
 	static bool HasRewritableInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
-	//! skips error-capture interiors (TRY, has_error) and guarded conjunction/CASE/COALESCE children:
-	//! the rewrite would move the probe's evaluation (and its errors) below the operator, outside the
-	//! capture or the guard
+	//! Rewrites large constant IN to a mark join. Skips TRY / HAS_ERROR. Later AND/OR/CASE/COALESCE
+	//! arms are rewritten only when the probe cannot throw.
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
