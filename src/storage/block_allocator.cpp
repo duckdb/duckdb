@@ -1140,10 +1140,7 @@ public:
 		                                           BlockAllocator::ReclaimMode::DECAY);
 		const auto cache_freed = allocator.FlushAllocationCache(
 		    BlockAllocatorConfig::MAX_FLUSH_BLOCKS * allocator.block_size, BlockAllocator::ReclaimMode::DECAY);
-		if (cache_freed > 0) {
-			allocator.FlushFallbackAllocator(
-			    allocator.estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-		}
+		allocator.FlushDeallocated();
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
 		const bool reschedule = allocator.flush_state == FlushState::RESCHEDULE_REQUESTED;
 		allocator.flush_state = FlushState::IDLE;
@@ -1212,9 +1209,8 @@ void BlockAllocator::ThreadIdle() const {
 		if (!scheduler_ref || !TryScheduleFlush(*scheduler_ref)) {
 			const auto mode = scheduler_ref ? ReclaimMode::DECAY : ReclaimMode::FORCE;
 			FlushPool(optional_idx(), optional_idx(), mode);
-			if (FlushAllocationCache(NumericLimits<idx_t>::Maximum(), mode) > 0) {
-				FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-			}
+			FlushAllocationCache(NumericLimits<idx_t>::Maximum(), mode);
+			FlushDeallocated();
 		}
 	} catch (...) {
 		// Reclamation is best effort on scheduler threads.
@@ -1266,7 +1262,8 @@ static idx_t AllocationCacheIdleCutoff() {
 
 bool BlockAllocator::HasReclaimableMemory() const {
 	return GetReclaimableBlockCount(ReclaimMode::DECAY) > 0 ||
-	       allocation_cache->GetCachedMemory(AllocationCacheIdleCutoff()) > 0;
+	       allocation_cache->GetCachedMemory(AllocationCacheIdleCutoff()) > 0 ||
+	       estimated_unflushed_memory.load(std::memory_order_relaxed) > 0;
 }
 
 bool BlockAllocator::HasPendingCacheDecay() const {
@@ -1288,28 +1285,26 @@ idx_t BlockAllocator::FlushAllocationCache(idx_t byte_limit, ReclaimMode mode) c
 	return freed;
 }
 
-idx_t BlockAllocator::TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit) const noexcept {
+void BlockAllocator::TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit) const noexcept {
 	const auto cached = allocation_cache->GetCachedMemory();
 	// Avoid reading the fixed pool's per-thread counters when even its capacity fits.
 	if (cached <= memory_headroom && (GetUsableBlockCount() * block_size <= memory_headroom - cached ||
 	                                  GetCachedPoolMemory() <= memory_headroom - cached)) {
-		return 0;
+		return;
 	}
-	idx_t freed = 0;
 	idx_t pool_headroom;
 	{
 		annotated_lock_guard<annotated_mutex> guard(flush_lock);
 		const auto total = GetCachedMemory();
 		if (total <= memory_headroom) {
-			return 0;
+			return;
 		}
-		freed = allocation_cache->Flush(total - memory_headroom);
+		const auto freed = allocation_cache->Flush(total - memory_headroom);
 		estimated_unflushed_memory.fetch_add(freed, std::memory_order_relaxed);
 		const auto remaining = allocation_cache->GetCachedMemory();
 		pool_headroom = memory_headroom - MinValue(memory_headroom, remaining);
 	}
 	FlushPool(pool_block_limit, optional_idx(), ReclaimMode::FORCE, DivBlockSize(pool_headroom));
-	return freed;
 }
 
 void BlockAllocator::FlushAll() const noexcept {
@@ -1329,21 +1324,22 @@ void BlockAllocator::FlushForAllocation(const idx_t extra_memory, const idx_t me
 }
 
 bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_headroom) const noexcept {
-	if (TrimCachedMemory(memory_headroom) > 0) {
-		FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-		return true;
-	}
+	// Trimmed allocations join the other fallback frees, and are purged with them.
+	TrimCachedMemory(memory_headroom);
 	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
-	if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
-		return false;
-	}
-	if (deallocated <= memory_headroom && GetCachedMemory() <= memory_headroom - deallocated) {
-		return false;
-	}
-	if (!estimated_unflushed_memory.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
-		return false;
-	}
-	const auto mapped_memory = allocator.GetMappedMemory();
+	do {
+		if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
+			return false;
+		}
+		if (deallocated <= memory_headroom && GetCachedMemory() <= memory_headroom - deallocated) {
+			return false;
+		}
+		// A failed claim reloads the estimate: frees added meanwhile do not cancel the purge, a claim by another
+		// thread does.
+	} while (!estimated_unflushed_memory.compare_exchange_weak(deallocated, 0, std::memory_order_relaxed));
+	// Allocator statistics can only defer the purge when the room next to the cached memory holds a threshold.
+	const auto room = memory_headroom - MinValue(memory_headroom, GetCachedMemory());
+	const auto mapped_memory = room >= threshold ? allocator.GetMappedMemory() : optional_idx();
 	if (mapped_memory.IsValid()) {
 		// Repeated frees of reused memory cannot retain more than the fallback allocator's mapped footprint.
 		const auto unflushed = MinValue(deallocated, mapped_memory.GetIndex());
@@ -1355,6 +1351,13 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memo
 	}
 	FlushFallbackAllocator(deallocated);
 	return true;
+}
+
+void BlockAllocator::FlushDeallocated() const noexcept {
+	const auto deallocated = estimated_unflushed_memory.exchange(0, std::memory_order_relaxed);
+	if (deallocated > 0) {
+		FlushFallbackAllocator(deallocated);
+	}
 }
 
 void BlockAllocator::FlushFallbackAllocator(const idx_t deallocated) const noexcept {

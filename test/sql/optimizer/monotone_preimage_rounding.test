@@ -1,0 +1,96 @@
+# name: test/sql/optimizer/monotone_preimage_rounding.test
+# description: Rewrite floor/ceil/trunc(col) OP const into a range on col for DOUBLE, FLOAT and DECIMAL columns
+# group: [optimizer]
+
+statement ok
+CREATE TABLE r AS SELECT (range - 250000) / 1000 AS d, ((range - 250000) / 1000)::FLOAT AS f,
+	((range - 250000) / 1000)::DECIMAL(9,2) AS dec FROM range(500000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE floor(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d >= 5\.0\) AND \(d < 6\.0\).*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE ceil(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d > 4\.0\) AND \(d <= 5\.0\).*
+
+# trunc rounds toward zero
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE trunc(d) = -3;
+----
+analyzed_plan	<REGEX>:.*Filters: \(d > -4\.0\) AND \(d <= -3\.0\).*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE floor(f) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(f >= 5\.0\) AND \(f < 6\.0\).*
+
+# DECIMAL columns are bisected over their unscaled integers
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE ceil(dec) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: \(dec >= 4\.01\) AND \(dec <= 5\.00\).*
+
+# round is not rewritten on a floating-point column
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM r WHERE round(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Filters: round\(d\) = 5\.0.*
+
+# correctness on NaN, the infinities, signed zero, NULL and the edges of the exact integers (2^24 for FLOAT, 2^53 for
+# DOUBLE, 10^18 - 1 unscaled for DECIMAL(18,3)). The reference wraps the rounding in a volatile CASE that always takes
+# its branch, which is not rewritten.
+statement ok
+CREATE TABLE v(d DOUBLE, f FLOAT, dec18 DECIMAL(18,3));
+
+statement ok
+INSERT INTO v VALUES
+	('nan', 'nan', -2.500), ('inf', 'inf', -2.499), ('-inf', '-inf', -2.501), ('-0.0', '-0.0', 0.000),
+	(0.5, 0.5, 4.999), (-0.5, -0.5, 5.000), (-2.5, -2.5, 5.001),
+	(9007199254740989, 16777213, 999999999999998.001), (9007199254740990, 16777214, 999999999999999.000),
+	(9007199254740991, 16777215, 999999999999999.999), (9007199254740992, 16777216, -999999999999999.999),
+	(-9007199254740991, -16777215, -999999999999999.000), (NULL, NULL, NULL);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM v WHERE ceil(dec18) = 999999999999999::DECIMAL(18,0);
+----
+analyzed_plan	<REGEX>:.*Filters:.*\(dec18 >= 999999999999998\.001\) AND \(dec18 <= 999999999999999\.000\).*
+
+foreach fn floor ceil trunc
+
+foreach op = > >= < <=
+
+foreach c -2.5 0.0 5.0 16777214 16777215 9007199254740990 9007199254740991 'nan'
+
+query I
+SELECT count(*) FROM v
+WHERE ({fn}(d) {op} {c}::DOUBLE) IS DISTINCT FROM (CASE WHEN random() >= 0 THEN {fn}(d) END {op} {c}::DOUBLE)
+	OR ({fn}(f) {op} {c}::FLOAT) IS DISTINCT FROM (CASE WHEN random() >= 0 THEN {fn}(f) END {op} {c}::FLOAT)
+----
+0
+
+endloop
+
+endloop
+
+endloop
+
+foreach fn floor ceil trunc round
+
+foreach op = > >= < <=
+
+foreach c -2.5 5 999999999999999::DECIMAL(18,0) 1000000000000000::DECIMAL(18,0)
+
+query I
+SELECT count(*) FROM v
+WHERE ({fn}(dec18) {op} {c}) IS DISTINCT FROM (CASE WHEN random() >= 0 THEN {fn}(dec18) END {op} {c})
+----
+0
+
+endloop
+
+endloop
+
+endloop

@@ -62,9 +62,14 @@ public final class LogicalType {
 public extension LogicalType {
 
   /// Properties associated with a decimal type
+  ///
+  /// DuckDB reports width and scale as 8-bit numbers. Both are zero for a
+  /// decimal of more than 255 digits.
   struct DecimalProperties {
     let width: UInt8
     let scale: UInt8
+    /// The type of the unscaled value: an integer type for up to 38 digits,
+    /// ``DatabaseType/bignum`` for wider decimals
     let storageType: DatabaseType
   }
 

@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
 
@@ -25,9 +26,9 @@ void JoinOrderSourceStats::AddPlan(ClientContext &context, LogicalOperator &root
 		if (op.type == LogicalOperatorType::LOGICAL_GET && op.children.empty()) {
 			auto &get = op.Cast<LogicalGet>();
 			if (scans.find(get.table_index) == scans.end()) {
-				auto cardinality = get.EstimateSourceCardinality(context);
-				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, cardinality);
-				scans.emplace(get.table_index, ScanStats {cardinality, std::move(stats)});
+				auto source = get.EstimateSourceStatistics(context);
+				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, source);
+				scans.emplace(get.table_index, ScanStats {source.estimated_cardinality, std::move(stats)});
 			}
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {

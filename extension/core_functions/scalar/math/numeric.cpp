@@ -628,7 +628,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		ceil_function.SetResolveTypesCallback(resolve_func);
 		ceil.AddFunction(NameXArgument(std::move(ceil_function), type));
 	}
-	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing().RoundsToInteger(IntegerRounding::CEIL));
 	return ceil;
 }
 
@@ -670,7 +670,7 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		floor_function.SetResolveTypesCallback(resolve_func);
 		floor.AddFunction(NameXArgument(std::move(floor_function), type));
 	}
-	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing().RoundsToInteger(IntegerRounding::FLOOR));
 	return floor;
 }
 
@@ -961,12 +961,14 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		}
 		ScalarFunction trunc_function({}, type, trunc_func);
 		trunc_function.SetResolveTypesCallback(resolve_func);
+		trunc_function.SetUnaryArgProperties(
+		    ArgProperties().NonDecreasing().RoundsToInteger(IntegerRounding::TRUNCATE));
 		trunc.AddFunction(NameXArgument(std::move(trunc_function), type));
 		ScalarFunction trunc_prec_function({}, type, trunc_prec_func, bind_prec_func);
 		trunc_prec_function.SetResolveTypesCallback(resolve_prec_func);
+		trunc_prec_function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 		trunc.AddFunction(NameXPrecisionArguments(std::move(trunc_prec_function), type));
 	}
-	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return trunc;
 }
 

@@ -31,6 +31,8 @@ class RelationStatsExtractor;
 struct JoinOrderExtraction {
 	vector<unique_ptr<FilterInfo>> filters;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
+	//! Original FILTER expressions owned by reconstruction, including duplicate predicates.
+	expression_set_t extracted_filter_expressions;
 };
 
 //! Represents a single relation and any metadata accompanying that relation

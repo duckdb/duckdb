@@ -1,0 +1,29 @@
+# name: test/sql/copy/parquet/bloom_filter_nested_stats_decided.test
+# description: A nested filter does not read Bloom filters of row groups that min/max already decides
+# group: [parquet]
+
+require parquet
+
+# row group k holds the values {2k, 2k + 1}
+statement ok
+COPY (SELECT [(2 * (i // 2048) + i % 2)::INTEGER] AS l FROM range(20480) t(i))
+TO '{TEST_DIR}/bloom_nested_stats_decided.parquet' (ROW_GROUP_SIZE 2048);
+
+statement ok
+CALL enable_logging('FileSystem', storage = 'memory');
+
+# IN (6, 7) covers the min/max of row group 3 and rules out the others
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_nested_stats_decided.parquet' WHERE l[1] IN (6, 7);
+----
+2048
+
+query I
+SELECT count(*)
+FROM duckdb_logs_parsed('FileSystem'), (
+	SELECT min(bloom_filter_offset) AS span_begin, max(bloom_filter_offset + bloom_filter_length) AS span_end
+	FROM parquet_metadata('{TEST_DIR}/bloom_nested_stats_decided.parquet')
+)
+WHERE op = 'READ' AND pos >= span_begin AND pos + bytes <= span_end;
+----
+0

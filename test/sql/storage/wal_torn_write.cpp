@@ -70,7 +70,7 @@ TEST_CASE("Test torn WAL writes", "[storage][.]") {
 	auto source_database = TestCreatePath("storage_test_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -114,7 +114,7 @@ TEST_CASE("Test torn WAL writes followed by successful commits", "[storage][.]")
 	auto storage_database = TestCreatePath("storage_test");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -178,7 +178,7 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 	auto source_database = TestCreatePath("wal_checksum_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -234,7 +234,7 @@ TEST_CASE("Test WAL entry size that overflows the bound check", "[storage][.]") 
 	auto source_database = TestCreatePath("wal_size_overflow_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -273,7 +273,7 @@ TEST_CASE("Test encrypted WAL version on an unencrypted database", "[storage][.]
 	auto storage_database = TestCreatePath("wal_version_encrypted");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	DeleteDatabase(storage_database);
@@ -331,7 +331,7 @@ TEST_CASE("Test WAL catalog entry without catalog information", "[storage][.]") 
 	auto storage_database = TestCreatePath("wal_missing_info");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	DeleteDatabase(storage_database);
@@ -394,7 +394,7 @@ TEST_CASE("Test WAL entry with an unknown entry type", "[storage][.]") {
 	auto storage_database = TestCreatePath("wal_unknown_entry_type");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));

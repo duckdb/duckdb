@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,25 @@ static vector<FunctionArgument> &GetFunctionArgumentsMutable(ParsedExpression &e
 		return expr.Cast<WindowExpression>().GetArgumentsMutable();
 	}
 	return expr.Cast<FunctionExpression>().GetArgumentsMutable();
+}
+
+static void FindColumnsRelation(const ParsedExpression &expr, optional<Identifier> &relation_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		auto &star = expr.Cast<StarExpression>();
+		if (star.IsColumns()) {
+			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
+		}
+		if (relation_name && *relation_name != star.RelationName()) {
+			if (relation_name->empty() || star.RelationName().empty()) {
+				throw BinderException(expr, "COLUMNS cannot mix qualified and unqualified stars");
+			}
+			throw BinderException(expr, "COLUMNS cannot combine stars from different relations");
+		}
+		relation_name = star.RelationName();
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { FindColumnsRelation(child, relation_name); });
 }
 
 StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
@@ -95,6 +115,18 @@ StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr
 			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
 		}
 		in_columns = true;
+
+		if (current_star.Expression()) {
+			// Preserve the selection scope before inner stars become lists of unqualified names.
+			optional<Identifier> relation_name;
+			if (!current_star.RelationName().empty()) {
+				relation_name = current_star.RelationName();
+			}
+			FindColumnsRelation(*current_star.Expression(), relation_name);
+			if (relation_name) {
+				current_star.RelationNameMutable() = *relation_name;
+			}
+		}
 
 		if (*star) {
 			// we can have multiple

@@ -60,14 +60,19 @@ idx_t RelationStatsExtractor::ExtractedOperatorCount() const {
 	return extracted_operator_count;
 }
 
-static bool IsInnerJoinRegion(LogicalOperator &op) {
+static bool IsJoinEstimationRegion(LogicalOperator &op) {
 	optional_ptr<LogicalOperator> root = op;
 	while (root->type == LogicalOperatorType::LOGICAL_FILTER) {
 		root = *root->children[0];
 	}
-	return root->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
-	       (root->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	        root->Cast<LogicalComparisonJoin>().join_type == JoinType::INNER);
+	if (root->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return true;
+	}
+	if (root->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto type = root->Cast<LogicalComparisonJoin>().join_type;
+	return type == JoinType::INNER || type == JoinType::LEFT;
 }
 
 optional<RelationStats> RelationStatsExtractor::ExtractInternal(LogicalOperator &op) {
@@ -104,7 +109,7 @@ optional<RelationStats> RelationStatsExtractor::ExtractInternal(LogicalOperator 
 		return RelationStatisticsHelper::ExtractExplainStats(op);
 	}
 
-	if (IsInnerJoinRegion(op)) {
+	if (IsJoinEstimationRegion(op)) {
 		auto stats = ExtractJoinStats(op);
 		if (stats) {
 			return stats;
@@ -131,19 +136,15 @@ optional<RelationStats> RelationStatsExtractor::ExtractJoinStats(LogicalOperator
 	if (!graph.BuildForEstimation(*this, op)) {
 		return {};
 	}
-	auto relation_stats = graph.relation_manager.GetRelationStats();
 	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
-	estimator.Initialize(relation_stats, graph.GetJoinOperators(), graph.relation_manager.GetColumnSources());
+	estimator.Initialize(graph.relation_manager.GetRelationStats(), graph.GetJoinOperators(),
+	                     graph.relation_manager.GetColumnSources());
 	unordered_set<RelationIndex> relations;
-	for (idx_t i = 0; i < relation_stats.size(); i++) {
+	for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
 		relations.insert(RelationIndex(i));
 	}
 	auto &set = graph.set_manager.GetJoinRelation(relations);
-	auto estimate = estimator.EstimateCardinality(set);
-	if (estimate.GetDouble() >= static_cast<double>(NumericLimits<idx_t>::Maximum())) {
-		return {};
-	}
-	return graph.CombineRelationStats(op.GetColumnBindings(), relation_stats, estimate.GetIndex());
+	return graph.ProjectRetainedStats(estimator, set, op);
 }
 
 optional_ptr<LogicalOperator> RelationStatsExtractor::GetCTEDefinition(const LogicalCTERef &cte_ref) const {

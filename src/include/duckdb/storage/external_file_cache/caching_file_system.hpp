@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -124,7 +125,7 @@ private:
 private:
 	QueryContext context;
 
-	//! The client file system, held directly because the caching file system can be destroyed before this handle
+	//! The file system, held directly because the caching file system can be destroyed before this handle
 	FileSystem &file_system;
 	//! The DatabaseInstance
 	DatabaseInstance &db;
