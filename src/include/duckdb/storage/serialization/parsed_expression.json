@@ -86,11 +86,11 @@
     "class": "CaseExpression",
     "base": "ParsedExpression",
     "enum": "CASE",
+    "use_legacy_serialization": "v2.1.0",
     "members": [
       {
         "id": 200,
         "name": "case_checks",
-        "serialize_property": "GetCaseChecksForSerialization(serializer)",
         "type": "vector<CaseCheck>",
         "accessor_mut": "CaseChecksMutable()",
         "accessor": "CaseChecks()"

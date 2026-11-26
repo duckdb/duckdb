@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
@@ -92,12 +93,31 @@ string CaseExpression::ToString() const {
 	return result + " ELSE " + else_expr->ToString() + " END";
 }
 
-const vector<CaseCheck> &CaseExpression::GetCaseChecksForSerialization(Serializer &serializer) const {
-	if (case_operand && !serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
-		throw SerializationException(
-		    "Persisting a simple CASE with multiple comparisons requires storage version v2.1.0 or higher");
+void CaseExpression::ConvertToSearched() {
+	for (auto &arm : simple_checks) {
+		vector<unique_ptr<ParsedExpression>> conditions;
+		for (auto &alternative : arm.when) {
+			conditions.push_back(make_uniq<ComparisonExpression>(alternative.comparison_type, case_operand->Copy(),
+			                                                     std::move(alternative.expression)));
+		}
+		CaseCheck check;
+		if (conditions.size() == 1) {
+			check.when_expr = std::move(conditions[0]);
+		} else {
+			check.when_expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(conditions));
+		}
+		check.then_expr = std::move(arm.then_expr);
+		case_checks.push_back(std::move(check));
 	}
-	return case_checks;
+	simple_checks.clear();
+	case_operand.reset();
+	single_comparison = false;
+}
+
+void CaseExpression::LegacySerialize(Serializer &serializer) const {
+	auto copy = Copy();
+	copy->Cast<CaseExpression>().ConvertToSearched();
+	copy->Serialize(serializer);
 }
 
 void CaseExpression::VerifyShape() const {

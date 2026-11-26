@@ -31,6 +31,11 @@ public:
 	                           const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
 	                           const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback);
 
+	//! Also visit expressions in structural clauses and table-reference inputs of a stored query.
+	static void
+	EnumerateAllQueryNodeChildren(QueryNode &node,
+	                              const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
+
 	static void
 	EnumerateQueryNodeModifiers(QueryNode &node,
 	                            const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);

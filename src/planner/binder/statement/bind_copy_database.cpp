@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/legacy_case.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -38,6 +39,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 			// this path bypasses the CREATE binder, enforce the storage-version gate here
 			CheckMacroStorageVersion(target_catalog, create_info->Cast<CreateMacroInfo>());
 		}
+		NormalizeLegacyCase(target_catalog, *create_info);
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
 		// Update all the dependencies of the entry to point to the newly created entries on the target database

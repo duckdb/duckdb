@@ -52,7 +52,12 @@ public:
 	const vector<CaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
-	const vector<CaseCheck> &GetCaseChecksForSerialization(Serializer &serializer) const;
+	//! Expand the simple operand into each comparison for pre-v2.1 storage.
+	void ConvertToSearched();
+	bool UseLegacySerialization() const {
+		return case_operand != nullptr;
+	}
+	void LegacySerialize(Serializer &serializer) const;
 	const unique_ptr<ParsedExpression> &CaseOperand() const {
 		return case_operand;
 	}

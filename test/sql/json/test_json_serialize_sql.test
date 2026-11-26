@@ -37,11 +37,17 @@ SELECT currval('json_case_seq')
 statement ok
 SET storage_compatibility_version='v1.0.0'
 
-# Explicit legacy export still observes the requested format.
-query T
-SELECT json_serialize_sql('SELECT CASE 1 WHEN 1, 2 THEN 42 END')->>'error'
+# Explicit legacy export writes searched CASE, with one operand evaluation per comparison.
+query I
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql(
+    'SELECT CASE nextval(''json_case_seq'') WHEN -1, -2 THEN 0 ELSE 42 END'))
 ----
-true
+42
+
+query I
+SELECT currval('json_case_seq')
+----
+5
 
 # Example with simple query
 statement ok

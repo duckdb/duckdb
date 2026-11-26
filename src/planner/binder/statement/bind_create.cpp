@@ -35,6 +35,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/legacy_case.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -480,6 +481,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
 	CheckMacroStorageVersion(catalog, base);
+	NormalizeLegacyCase(catalog, base);
 	for (auto &function : base.macros) {
 		if (!store_types) {
 			for (const auto &type : function->types) {
@@ -746,6 +748,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	create_trigger_info.temporary = table.temporary;
 
 	auto &schema = BindCreateSchema(create_trigger_info);
+	NormalizeLegacyCase(schema.ParentCatalog(), create_trigger_info);
 
 	// Block trigger creation on databases with an older storage version
 	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.GetQualifiedName().Catalog());
@@ -965,6 +968,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				attached.GetStorageManager().CheckQueryDecimalsAreSupported(*base.query->node);
 			}
 		}
+		NormalizeLegacyCase(schema.ParentCatalog(), base);
 		BindCreateViewInfo(base);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
@@ -1014,6 +1018,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			stmt.info->temporary = true;
 		}
 		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
+		NormalizeLegacyCase(table.catalog, create_index_info);
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
