@@ -44,7 +44,7 @@ void GeoColumnData::InitializeChildScanStates(ColumnScanState &state) {
 	state.child_states.clear();
 
 	// Initialize using the type of the base column
-	state.Initialize(*state.context, base_column->type, state.scan_options);
+	state.Initialize(state.context, base_column->type, state.scan_options);
 }
 
 void GeoColumnData::InitializeScan(ColumnScanState &state) {
@@ -383,8 +383,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 		// Setup scan from the old column
 		DataChunk scan_chunk;
-		ColumnScanState scan_state(nullptr);
-		scan_state.context = &GetDatabase().GetContext();
+		ColumnScanState scan_state(nullptr, GetDatabase().GetContext());
 		scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->type}, STANDARD_VECTOR_SIZE);
 		InitializeScan(scan_state);
 
@@ -486,8 +485,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 	// Setup scan from the old column
 	DataChunk scan_chunk;
-	ColumnScanState scan_state(nullptr);
-	scan_state.context = &GetDatabase().GetContext();
+	ColumnScanState scan_state(nullptr, GetDatabase().GetContext());
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->type}, STANDARD_VECTOR_SIZE);
 	InitializeScan(scan_state);
 

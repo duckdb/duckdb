@@ -398,8 +398,7 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
-	ColumnScanState child_state(nullptr);
-	child_state.context = &GetDatabase().GetContext();
+	ColumnScanState child_state(nullptr, GetDatabase().GetContext());
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
 	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -489,7 +488,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, const Sca
 	        : *state.current;
 	// segment rows are relative to the row group
 	checked_end = checked_segment.GetRowStart() + checked_segment.GetNode().count;
-	return CheckSegmentStatistics(Context::TryGetClientContext(state.context), checked_segment, expr_filter);
+	return CheckSegmentStatistics(state.context.get().TryGetClientContext(), checked_segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const ScanFilter &filter, idx_t row,
@@ -502,7 +501,7 @@ FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const S
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.filter, "ColumnData::CheckZonemapAt");
 	auto segment = data.GetSegment(row);
 	checked_end = segment->GetRowStart() + segment->GetNode().count;
-	return CheckSegmentStatistics(Context::TryGetClientContext(state.context), *segment, expr_filter);
+	return CheckSegmentStatistics(state.context.get().TryGetClientContext(), *segment, expr_filter);
 }
 
 FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
@@ -777,8 +776,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	if (fetch_count == 0) {
 		return;
 	}
-	FetchBaseRows(state.context ? *state.context : GetDatabase().GetContext(), offsets, sel, fetch_count, result,
-	              result_offset);
+	FetchBaseRows(state.context, offsets, sel, fetch_count, result, result_offset);
 	{
 		const lock_guard<mutex> update_guard(update_lock);
 		if (updates) {
@@ -793,8 +791,8 @@ void ColumnData::FetchScannedRows(ColumnScanState &state, const SelectionVector 
 	for (idx_t i = 0; i < count; i++) {
 		offsets[i] = state.offset_in_column + sel.get_index(i);
 	}
-	FetchBaseRows(state.context ? *state.context : GetDatabase().GetContext(), offsets.data(),
-	              *FlatVector::IncrementalSelectionVector(), count, result, result_offset);
+	FetchBaseRows(state.context, offsets.data(), *FlatVector::IncrementalSelectionVector(), count, result,
+	              result_offset);
 }
 
 void ColumnData::FetchBaseRows(Context &context, const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count,
@@ -802,8 +800,7 @@ void ColumnData::FetchBaseRows(Context &context, const idx_t *offsets, const Sel
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	ColumnScanState scan_state(nullptr);
-	scan_state.context = &context;
+	ColumnScanState scan_state(nullptr, context);
 	scan_state.string_scan_type = StringScanType::COPY_STRINGS;
 	SelectionVector window_sel;
 	idx_t idx = 0;

@@ -291,7 +291,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		// Fetch needs a flat vector, but deduplication may have sliced del_row_ids into a dictionary.
 		del_row_ids.Flatten();
 		fetch_chunk.Reset();
-		auto fetch_state = ColumnFetchState();
+		auto fetch_state = ColumnFetchState(context.client);
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		table.Fetch(transaction, fetch_chunk, column_ids, del_row_ids, update_count, fetch_state);
 

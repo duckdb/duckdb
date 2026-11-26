@@ -97,12 +97,13 @@ public:
 };
 
 struct ColumnScanState {
-	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
+	ColumnScanState(optional_ptr<CollectionScanState> parent_p, Context &context_p)
+	    : parent(parent_p), context(context_p) {
 	}
 
 	optional_ptr<CollectionScanState> parent;
 	//! The context for this scan
-	optional_ptr<Context> context;
+	reference<Context> context;
 	//! The column segment that is currently being scanned
 	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Column segment tree
@@ -162,9 +163,12 @@ enum class FetchType {
 };
 
 struct ColumnFetchState {
+	explicit ColumnFetchState(Context &context_p) : context(context_p) {
+	}
+
 	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
 	//! The context for this fetch
-	optional_ptr<Context> context;
+	reference<Context> context;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
 	//! The current row group we are fetching from

@@ -151,7 +151,6 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
 	if (state.expression_state) {
 		auto &expression_state = *state.expression_state;
-		D_ASSERT(state.context);
 		auto &executor = expression_state.executor;
 		auto &target = expression_state.target;
 		auto &input = expression_state.input;

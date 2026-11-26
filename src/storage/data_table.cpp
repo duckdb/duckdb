@@ -284,8 +284,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(db.GetDatabase().GetContext(), state.table_state, column_ids, start_row,
-	                                     end_row);
+	row_groups->InitializeScanWithOffset(db.GetContext(), state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -429,7 +428,7 @@ void DataTable::RebuildIndexes() {
 		CreateIndexScanState state;
 		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
 		state.Initialize(scan_column_ids, nullptr);
-		Context &context = db.GetDatabase().GetContext();
+		Context &context = db.GetContext();
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
 		row_groups->InitializeCreateIndexScan(state);
 
@@ -550,7 +549,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	local_chunk.Initialize(allocator, result.GetTypes());
 	Vector local_row_ids(row_identifiers, local_sel, local_count);
 	local_row_ids.Flatten();
-	ColumnFetchState local_fetch_state;
+	ColumnFetchState local_fetch_state(state.context);
 	local_storage.FetchChunk(*this, local_row_ids, local_count, column_ids, local_chunk, local_fetch_state);
 
 	// Append local rows after committed rows in the result.
@@ -1397,7 +1396,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 		if (is_transaction_delete) {
 			if (state.has_delete_constraints) {
 				// Verify any delete constraints.
-				ColumnFetchState fetch_state;
+				ColumnFetchState fetch_state(context);
 				local_storage.FetchChunk(*this, offset_ids, current_count, state.col_ids, state.verify_chunk,
 				                         fetch_state);
 				VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
@@ -1409,7 +1408,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 		// This is a regular DELETE.
 		if (state.has_delete_constraints) {
 			// Verify any delete constraints.
-			ColumnFetchState fetch_state;
+			ColumnFetchState fetch_state(context);
 			Fetch(transaction, state.verify_chunk, state.col_ids, offset_ids, current_count, fetch_state);
 			VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
 		}

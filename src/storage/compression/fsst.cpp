@@ -743,7 +743,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	if (enable_fsst_vectors) {
 		// The result could outlive the ScanState, so keep the segment block pinned with the result vector
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		StringVector::AddHandle(result, buffer_manager.Pin(*state.context, segment.GetBlockHandle()));
+		StringVector::AddHandle(result, buffer_manager.Pin(state.context, segment.GetBlockHandle()));
 		for (idx_t i = 0; i < scan_count; i++) {
 			auto compressed_string = strings.GetCompressedString(i);
 			result_data[i] = string_t(const_char_ptr_cast(compressed_string.data()),

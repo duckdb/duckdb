@@ -125,6 +125,9 @@ struct TableScanLocalState : public LocalTableFunctionState {
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
+	explicit IndexScanLocalState(ClientContext &context) : fetch_state(context) {
+	}
+
 	//! The batch index, which determines the offset in the row ID vector.
 	idx_t batch_index;
 	//! The DataChunk containing all read columns.
@@ -211,7 +214,7 @@ public:
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
-		auto l_state = make_uniq<IndexScanLocalState>();
+		auto l_state = make_uniq<IndexScanLocalState>(context.client);
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}

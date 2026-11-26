@@ -257,9 +257,8 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 }
 
 void ColumnScanState::PushDownCast(const LogicalType &original_type, const LogicalType &cast_type) {
-	D_ASSERT(context);
 	D_ASSERT(!expression_state);
-	auto &client_context = *Context::TryGetClientContext(context);
+	auto &client_context = *context.get().TryGetClientContext();
 
 	auto input = make_uniq<BoundReferenceExpression>(original_type, 0ULL);
 	auto cast_expression = BoundCastExpression::AddCastToType(client_context, std::move(input), cast_type);
@@ -275,7 +274,7 @@ void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, co
 	auto &children = column_id.GetChildIndexes();
 	// Register the options in the state
 	scan_options = options;
-	context = &context_p;
+	context = context_p;
 	storage_index = column_id;
 
 	D_ASSERT(type.id() != LogicalTypeId::INVALID);
@@ -304,19 +303,17 @@ void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, co
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.reserve(struct_children.size() + 1);
 		for (idx_t i = 0; i <= struct_children.size(); i++) {
-			child_states.emplace_back(parent);
-			child_states.back().context = context;
+			child_states.emplace_back(parent, context);
 		}
 
 		if (children.empty()) {
 			// scan all struct children
 			scan_child_column.resize(struct_children.size(), true);
 			for (idx_t i = 0; i < struct_children.size(); i++) {
-				child_states[i + 1].Initialize(*context, struct_children[i].second, options);
+				child_states[i + 1].Initialize(context, struct_children[i].second, options);
 			}
 		} else {
 			if (storage_index.IsPushdownExtract()) {
-				D_ASSERT(context);
 				scan_child_column.resize(1, true);
 				D_ASSERT(children.size() == 1);
 				auto &child = children[0];
@@ -325,7 +322,7 @@ void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, co
 				if (!child.HasChildren() && child_type != child.GetType()) {
 					PushDownCast(child_type, child.GetType());
 				}
-				child_states[1].Initialize(*context, struct_children[child_index].second, child, options);
+				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
 			} else {
 				// only scan the specified subset of columns
 				scan_child_column.resize(struct_children.size(), false);
@@ -333,7 +330,7 @@ void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, co
 					auto &child = children[i];
 					auto index = child.GetPrimaryIndex();
 					scan_child_column[index] = true;
-					child_states[index + 1].Initialize(*context, struct_children[index].second, child, options);
+					child_states[index + 1].Initialize(context, struct_children[index].second, child, options);
 				}
 			}
 		}
@@ -341,23 +338,20 @@ void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, co
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		for (idx_t i = 0; i < 2; i++) {
-			child_states.emplace_back(parent);
-			child_states.back().context = context;
+			child_states.emplace_back(parent, context);
 		}
-		child_states[1].Initialize(*context, ListType::GetChildType(type), options);
+		child_states[1].Initialize(context, ListType::GetChildType(type), options);
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		for (idx_t i = 0; i < 2; i++) {
-			child_states.emplace_back(parent);
-			child_states.back().context = context;
+			child_states.emplace_back(parent, context);
 		}
 		child_states[0].scan_options = options;
-		child_states[1].Initialize(*context, ArrayType::GetChildType(type), options);
+		child_states[1].Initialize(context, ArrayType::GetChildType(type), options);
 	} else {
 		// validity
-		child_states.emplace_back(parent);
-		child_states.back().context = context;
+		child_states.emplace_back(parent, context);
 		child_states[0].scan_options = options;
 	}
 }
@@ -373,7 +367,7 @@ void CollectionScanState::Initialize(Context &context_p, const vector<LogicalTyp
 	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		column_scans.emplace_back(*this);
+		column_scans.emplace_back(*this, context_p);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {

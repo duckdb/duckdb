@@ -98,8 +98,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	if (row_idx >= count) {
 		throw DataCorruptionException("Corrupted database: list offset row ID is out of range");
 	}
-	ColumnScanState offset_state(nullptr);
-	offset_state.context = &GetDatabase().GetContext();
+	ColumnScanState offset_state(nullptr, GetDatabase().GetContext());
 	ColumnData::InitializeScanWithOffset(offset_state, row_idx);
 	Vector result(LogicalType::UBIGINT, 1);
 	ScanVector(offset_state, result, 1, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -337,7 +336,7 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
                                idx_t result_offset) {
 	// insert the validity child state
 	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>(state.context);
 		state.child_states.push_back(std::move(child_state));
 	}
 
@@ -384,12 +383,11 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
 		// now we need to read from the child all the elements between [offset...length]
 		auto child_scan_count = list_entry.length;
 		if (child_scan_count > 0) {
-			ColumnScanState child_state(nullptr);
-			child_state.context = &GetDatabase().GetContext();
+			ColumnScanState child_state(nullptr, state.context);
 			auto &child_type = ListType::GetChildType(result.GetType());
 			Vector child_scan(child_type, child_scan_count);
 			// seek the scan towards the specified position and read [length] entries
-			child_state.Initialize(*child_state.context, child_type, nullptr);
+			child_state.Initialize(state.context, child_type, nullptr);
 			child_column->InitializeScanWithOffset(child_state, start_offset);
 			D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
 			         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());

@@ -145,7 +145,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto entry = strings.GetEntry(i);
-		auto str = FetchStringFromEntry(*state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(state.context, segment, result, entry);
 		// overflow strings are already owned by the result
 		result_data[result_offset + i] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
@@ -174,7 +174,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	auto write_entry = [&](idx_t i, const StringDictionaryEntry &entry) {
-		auto str = FetchStringFromEntry(*state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(state.context, segment, result, entry);
 		result_data[result_offset + i] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
 	};
