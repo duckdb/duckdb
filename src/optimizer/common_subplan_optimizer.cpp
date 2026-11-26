@@ -924,15 +924,12 @@ private:
 	};
 
 	struct SubplanStats {
-		idx_t base_table_count;
-		idx_t max_base_table_cardinality;
-
-		void Combine(const SubplanStats &other) {
-			this->base_table_count += other.base_table_count;
-			this->max_base_table_cardinality =
-			    MaxValue(this->max_base_table_cardinality, other.max_base_table_cardinality);
-		}
+		idx_t base_table_count = 0;
+		idx_t max_base_table_cardinality = 0;
+		bool ends_in_aggregate_or_distinct = false;
 	};
+
+	using subplan_stats_map_t = reference_map_t<const LogicalOperator, SubplanStats>;
 
 	struct SubplanBindings {
 		struct ExpressionSource {
@@ -1002,6 +999,14 @@ private:
 
 public:
 	void FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+		// Filtering does not change the tree. Discard its statistics before CTE extraction starts.
+		subplan_stats_map_t subplan_stats;
+		CollectCommonSubplans(root, subplan_stats);
+		FilterSubplans(subplan_stats);
+	}
+
+private:
+	void CollectCommonSubplans(reference<unique_ptr<LogicalOperator>> root, subplan_stats_map_t &subplan_stats) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
 			root = root.get()->children[0];
@@ -1022,6 +1027,11 @@ public:
 				stack.emplace_back(child);
 				continue;
 			}
+
+			subplan_stats.emplace(
+			    *current.op, GetSubplanStats(*current.op, [&](const LogicalOperator &child) -> const SubplanStats & {
+				    return subplan_stats.at(child);
+			    }));
 
 			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
@@ -1070,7 +1080,7 @@ public:
 		}
 	}
 
-	void FilterSubplans() {
+	void FilterSubplans(const subplan_stats_map_t &subplan_stats) {
 		// Filter out redundant or ineligible subplans before returning
 		vector<subplan_map_t::key_type> to_remove;
 		for (auto &entry : subplans) {
@@ -1097,7 +1107,7 @@ public:
 					const auto parent_subplan_count = parent_it->second.subplans.size();
 					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
 					if (parent_subplan_count != 1 && parent_count >= subplan_count &&
-					    ShouldMaterialize(parent_it->second)) {
+					    ShouldMaterialize(parent_it->second, subplan_stats)) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
@@ -1134,6 +1144,7 @@ public:
 		}
 	}
 
+public:
 	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
 		const auto sorted_subplans = GetSortedSubplans();
 		CommonSubplanCTEPlacement placement;
@@ -1562,32 +1573,48 @@ private:
 		        IsSelectiveMultiTablePlan(*subplan, subplan->estimated_cardinality));
 	}
 
+	bool ShouldMaterialize(const SubplanInfo &subplan_info, const subplan_stats_map_t &subplan_stats) const {
+		auto &subplan = *subplan_info.subplans[0].op.get();
+		const auto &stats = subplan_stats.at(subplan);
+		return stats.ends_in_aggregate_or_distinct ||
+		       (subplan.has_estimated_cardinality && IsSelectiveMultiTablePlan(stats, subplan.estimated_cardinality));
+	}
+
 	static bool CanExpandScan(const LogicalGet &get) {
 		return get.children.empty() && !get.has_pushed_projection && !get.extra_info.sample_options &&
 		       !get.dynamic_filters;
 	}
 
-	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+	template <class GET_CHILD_STATS>
+	static SubplanStats GetSubplanStats(const LogicalOperator &op, GET_CHILD_STATS get_child_stats) {
 		SubplanStats subplan_stats;
+		subplan_stats.ends_in_aggregate_or_distinct = CTEInlining::IsAggregateOrWindow(op);
 		if (op.children.empty()) {
 			subplan_stats.base_table_count = 1;
 			subplan_stats.max_base_table_cardinality = op.has_estimated_cardinality ? op.estimated_cardinality : 0;
 		} else {
-			subplan_stats = GetSubplanStats(*op.children[0]);
-			for (idx_t i = 1; i < op.children.size(); i++) {
-				subplan_stats.Combine(GetSubplanStats(*op.children[i]));
+			for (auto &child : op.children) {
+				const auto &child_stats = get_child_stats(*child);
+				subplan_stats.base_table_count += child_stats.base_table_count;
+				subplan_stats.max_base_table_cardinality =
+				    MaxValue(subplan_stats.max_base_table_cardinality, child_stats.max_base_table_cardinality);
+				if (op.children.size() == 1) {
+					subplan_stats.ends_in_aggregate_or_distinct |= child_stats.ends_in_aggregate_or_distinct;
+				}
 			}
 		}
 		return subplan_stats;
 	}
 
-public:
-	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
+	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+		return GetSubplanStats(op, [](const LogicalOperator &child) { return GetSubplanStats(child); });
+	}
+
+	static bool IsSelectiveMultiTablePlan(const SubplanStats &subplan_stats, idx_t cardinality) {
 		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
 
 		// Must select more than 1 base table
-		const auto subplan_stats = GetSubplanStats(op);
 		if (subplan_stats.base_table_count < 2) {
 			return false;
 		}
@@ -1599,6 +1626,11 @@ public:
 
 		// Otherwise, materialize if it is selective enough
 		return cardinality < subplan_stats.max_base_table_cardinality / CARDINALITY_RATIO;
+	}
+
+public:
+	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
+		return IsSelectiveMultiTablePlan(GetSubplanStats(op), cardinality);
 	}
 
 private:
@@ -1878,7 +1910,6 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	// Bottom-up identification of identical subplans
 	CommonSubplanFinder finder(optimizer.context);
 	finder.FindCommonSubplans(op);
-	finder.FilterSubplans();
 	finder.ConvertSubplansToCTEs(optimizer, op);
 	return op;
 }
