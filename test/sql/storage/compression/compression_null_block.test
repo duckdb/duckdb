@@ -2,7 +2,7 @@
 # description: Constant and Empty Validity segments can be read without backing blocks
 # group: [compression]
 
-load {TEST_DIR}/compression_null_block.db readwrite v1.3.0
+load {TEST_DIR}/compression_null_block.db readwrite v1.4.0
 
 statement ok
 CREATE TABLE constants AS SELECT 42::INTEGER AS a, NULL::DOUBLE AS b FROM range(6000);
