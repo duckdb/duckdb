@@ -2,6 +2,9 @@
 # description: Join filters compare the raw key when the scan statistics prove the casts of the probe key value-preserving
 # group: [optimizer]
 
+# the probe casts can fail, so an IN subquery stays a MARK join (MarkJoinSimplifier): use SEMI JOIN to get join
+# filters
+
 statement ok
 SET dynamic_or_filter_threshold = 100
 
@@ -19,18 +22,18 @@ CREATE TABLE wide AS SELECT i::BIGINT AS k FROM range(30000) r(i) UNION ALL SELE
 
 # a user cast whose input fits the target type
 query II
-EXPLAIN ANALYZE SELECT k FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+EXPLAIN ANALYZE SELECT k FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*optional: \(k IN \(.*
 
 query II
-SELECT count(*), sum(k) FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*), sum(k) FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 20	189430
 
 # a user cast over a key outside the target type keeps raising
 statement error
-SELECT count(*) FROM wide WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM wide SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -42,12 +45,12 @@ statement ok
 CREATE TABLE bound_keys AS SELECT * FROM (VALUES ((-32768)::SMALLINT), (7::SMALLINT), (32767::SMALLINT)) t(g);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM bounds WHERE k::SMALLINT IN (SELECT g FROM bound_keys);
+EXPLAIN ANALYZE SELECT count(*) FROM bounds SEMI JOIN bound_keys ON k::SMALLINT = g;
 ----
 analyzed_plan	<REGEX>:.*optional: \(k IN \(-32768, 7, 32767\)\).*
 
 query I
-SELECT count(*) FROM bounds WHERE k::SMALLINT IN (SELECT g FROM bound_keys);
+SELECT count(*) FROM bounds SEMI JOIN bound_keys ON k::SMALLINT = g;
 ----
 2
 
@@ -55,7 +58,7 @@ statement ok
 INSERT INTO bounds VALUES (32768)
 
 statement error
-SELECT count(*) FROM bounds WHERE k::SMALLINT IN (SELECT g FROM bound_keys);
+SELECT count(*) FROM bounds SEMI JOIN bound_keys ON k::SMALLINT = g;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -64,7 +67,7 @@ statement ok
 CREATE TABLE bounds_low AS SELECT * FROM (VALUES ((-32768)::BIGINT), (0::BIGINT), (32767::BIGINT)) t(k);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM bounds_low WHERE k::SMALLINT IN (SELECT g FROM bound_keys);
+EXPLAIN ANALYZE SELECT count(*) FROM bounds_low SEMI JOIN bound_keys ON k::SMALLINT = g;
 ----
 analyzed_plan	<REGEX>:.*optional: \(k IN \(-32768, 7, 32767\)\).*
 
@@ -72,7 +75,7 @@ statement ok
 INSERT INTO bounds_low VALUES (-32769)
 
 statement error
-SELECT count(*) FROM bounds_low WHERE k::SMALLINT IN (SELECT g FROM bound_keys);
+SELECT count(*) FROM bounds_low SEMI JOIN bound_keys ON k::SMALLINT = g;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -84,7 +87,7 @@ statement ok
 INSERT INTO fits VALUES (40000)
 
 statement error
-SELECT count(*) FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -98,7 +101,7 @@ statement ok
 UPDATE fits SET k = 40000 WHERE k = 1
 
 statement error
-SELECT count(*) FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -108,13 +111,13 @@ ROLLBACK
 # a DML CTE writes rows the main scan reads after the statistics were taken
 statement error
 WITH ins AS MATERIALIZED (INSERT INTO fits VALUES (40000) RETURNING k)
-SELECT count(*) FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
 statement error
 WITH upd AS MATERIALIZED (UPDATE fits SET k = 40000 WHERE k = 1 RETURNING k)
-SELECT count(*) FROM fits WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM fits SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
@@ -128,7 +131,7 @@ statement ok
 CREATE TABLE prepared_keys AS SELECT * FROM fits;
 
 statement ok
-PREPARE proof AS SELECT count(*) FROM prepared_keys WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+PREPARE proof AS SELECT count(*) FROM prepared_keys SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 
 query I
 EXECUTE proof
@@ -146,29 +149,29 @@ EXECUTE proof
 # each UNION ALL child is proven on its own scan
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM (SELECT k FROM fits UNION ALL SELECT k FROM fits) u
-WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 analyzed_plan	<REGEX>:.*optional: \(k IN \(.*optional: \(k IN \(.*
 
 query I
-SELECT count(*) FROM (SELECT k FROM fits UNION ALL SELECT k FROM fits) u WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM (SELECT k FROM fits UNION ALL SELECT k FROM fits) u SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 40
 
 statement error
-SELECT count(*) FROM (SELECT k FROM fits UNION ALL SELECT k FROM wide) u WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM (SELECT k FROM fits UNION ALL SELECT k FROM wide) u SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
 # a partially pushed OR filter stays optional on the scan and does not bound the statistics
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM (SELECT * FROM wide WHERE k < 100 OR k = 39999) w
-WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 analyzed_plan	<REGEX>:.*optional: \(\(k < 100\) OR \(k = 39999\)\).*TRY_CAST\(k AS SMALLINT\) IS NULL.*
 
 query I
-SELECT count(*) FROM (SELECT * FROM wide WHERE k < 100 OR k = 39999) w WHERE k::SMALLINT IN (SELECT g::SMALLINT FROM keys);
+SELECT count(*) FROM (SELECT * FROM wide WHERE k < 100 OR k = 39999) w SEMI JOIN keys ON k::SMALLINT = g::SMALLINT;
 ----
 1
 
@@ -209,11 +212,11 @@ statement ok
 CREATE TABLE negative_keys AS SELECT (i * 997 % 30000)::INTEGER - 5 AS g FROM range(20) r(i);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM unsigned_keys WHERE k::INTEGER IN (SELECT g FROM negative_keys);
+EXPLAIN ANALYZE SELECT count(*) FROM unsigned_keys SEMI JOIN negative_keys ON k::INTEGER = g;
 ----
 analyzed_plan	<REGEX>:.*TRY_CAST\(k AS INTEGER\) IN \(-5, .*PRF.*
 
 query I
-SELECT count(*) FROM unsigned_keys WHERE k::INTEGER IN (SELECT g FROM negative_keys);
+SELECT count(*) FROM unsigned_keys SEMI JOIN negative_keys ON k::INTEGER = g;
 ----
 19
