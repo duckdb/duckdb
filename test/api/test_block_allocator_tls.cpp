@@ -896,6 +896,22 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 	CHECK(pool.GetUsedMemory() == 0);
 }
 
+TEST_CASE("BlockAllocator purges trimmed allocations below the threshold when idle", "[api][block_allocator]") {
+	constexpr idx_t SIZE = 1024 * 1024;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, 65536, 0);
+	auto pointer = allocator.AllocateData(SIZE);
+	allocator.FreeData(pointer, SIZE);
+	REQUIRE(allocator.GetCachedMemory() == SIZE);
+	// No headroom trims the cache, and the trimmed allocation is far below the threshold.
+	CHECK_FALSE(allocator.TryFlushDeallocated(64 * SIZE, 0));
+	REQUIRE(allocator.GetCachedMemory() == 0);
+	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == SIZE);
+	// The cache is empty, so only the estimate tells an idle thread that there is something to purge.
+	allocator.ThreadIdle();
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+}
+
 #ifndef DUCKDB_NO_THREADS
 TEST_CASE("BlockAllocator purges trimmed allocations while other threads free", "[api][block_allocator]") {
 	constexpr idx_t SIZE = 2 * 1024 * 1024;

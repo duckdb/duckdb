@@ -144,6 +144,8 @@ private:
 	idx_t GetCachedPoolMemory() const;
 	void ReturnThreadLocalBlocks() const;
 	void FlushFallbackAllocator(idx_t deallocated) const noexcept;
+	//! Purge the fallback allocator if frees are waiting for it. Idle threads do this without pressure.
+	void FlushDeallocated() const noexcept;
 	//! Trim cached backing to the headroom. Bytes released to the fallback allocator join the unflushed estimate.
 	void TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit = optional_idx()) const noexcept
 	    DUCKDB_EXCLUDES(flush_lock);

@@ -1140,10 +1140,7 @@ public:
 		                                           BlockAllocator::ReclaimMode::DECAY);
 		const auto cache_freed = allocator.FlushAllocationCache(
 		    BlockAllocatorConfig::MAX_FLUSH_BLOCKS * allocator.block_size, BlockAllocator::ReclaimMode::DECAY);
-		if (cache_freed > 0) {
-			allocator.FlushFallbackAllocator(
-			    allocator.estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-		}
+		allocator.FlushDeallocated();
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
 		const bool reschedule = allocator.flush_state == FlushState::RESCHEDULE_REQUESTED;
 		allocator.flush_state = FlushState::IDLE;
@@ -1212,9 +1209,8 @@ void BlockAllocator::ThreadIdle() const {
 		if (!scheduler_ref || !TryScheduleFlush(*scheduler_ref)) {
 			const auto mode = scheduler_ref ? ReclaimMode::DECAY : ReclaimMode::FORCE;
 			FlushPool(optional_idx(), optional_idx(), mode);
-			if (FlushAllocationCache(NumericLimits<idx_t>::Maximum(), mode) > 0) {
-				FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
-			}
+			FlushAllocationCache(NumericLimits<idx_t>::Maximum(), mode);
+			FlushDeallocated();
 		}
 	} catch (...) {
 		// Reclamation is best effort on scheduler threads.
@@ -1266,7 +1262,8 @@ static idx_t AllocationCacheIdleCutoff() {
 
 bool BlockAllocator::HasReclaimableMemory() const {
 	return GetReclaimableBlockCount(ReclaimMode::DECAY) > 0 ||
-	       allocation_cache->GetCachedMemory(AllocationCacheIdleCutoff()) > 0;
+	       allocation_cache->GetCachedMemory(AllocationCacheIdleCutoff()) > 0 ||
+	       estimated_unflushed_memory.load(std::memory_order_relaxed) > 0;
 }
 
 bool BlockAllocator::HasPendingCacheDecay() const {
@@ -1354,6 +1351,13 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memo
 	}
 	FlushFallbackAllocator(deallocated);
 	return true;
+}
+
+void BlockAllocator::FlushDeallocated() const noexcept {
+	const auto deallocated = estimated_unflushed_memory.exchange(0, std::memory_order_relaxed);
+	if (deallocated > 0) {
+		FlushFallbackAllocator(deallocated);
+	}
 }
 
 void BlockAllocator::FlushFallbackAllocator(const idx_t deallocated) const noexcept {
