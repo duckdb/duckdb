@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
@@ -52,17 +53,10 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		// Even without a volatile scalar call, a subquery can sample or choose an unordered row.
 		share_operand = volatile_operand || operand->HasSubquery();
 	}
-	auto bind_arm_child = [&](unique_ptr<ParsedExpression> &child) {
-		auto result = BindChild(child, depth, error);
-		if (result && share_operand) {
-			CaptureCaseInput(result, captures);
-		}
-		return result;
-	};
 	for (auto &arm : expr.SimpleChecksMutable()) {
 		vector<unique_ptr<Expression>> conditions;
 		for (auto &test : arm.when) {
-			auto rhs = bind_arm_child(test.expression);
+			auto rhs = BindChild(test.expression, depth, error);
 			if (!rhs) {
 				return BindResult(std::move(error));
 			}
@@ -77,17 +71,22 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 				error.AddQueryLocation(expr);
 				return BindResult(std::move(error));
 			}
+			if (share_operand) {
+				// Comparison binding assigns a type to an untyped parameter before it becomes a lambda input.
+				CaptureCaseInput(BoundComparisonExpression::RightMutable(comparison->Cast<BoundFunctionExpression>()),
+				                 captures);
+			}
 			conditions.push_back(std::move(comparison));
 		}
 		auto condition = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(conditions));
-		checks.emplace_back(std::move(condition), bind_arm_child(arm.then_expr));
+		checks.emplace_back(std::move(condition), BindChild(arm.then_expr, depth, error));
 	}
 	for (auto &check : expr.CaseChecksMutable()) {
 		auto when_expr = BindChild(check.when_expr, depth, error);
 		auto then_expr = BindChild(check.then_expr, depth, error);
 		checks.emplace_back(std::move(when_expr), std::move(then_expr));
 	}
-	auto else_expr = bind_arm_child(expr.ElseMutable());
+	auto else_expr = BindChild(expr.ElseMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
@@ -118,6 +117,11 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		return BindResult(std::move(result));
 	}
 
+	for (auto &check : result->CaseChecksMutable()) {
+		CaptureCaseInput(check.then_expr, captures);
+	}
+	CaptureCaseInput(result->ElseMutable(), captures);
+
 	Identifier parameter_name("__case_operand");
 	if (lambda_bindings) {
 		identifier_set_t outer_parameters;
@@ -139,6 +143,11 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	auto invoke = FunctionBinder(binder).BindScalarFunction(DEFAULT_SCHEMA, "invoke", std::move(arguments), false,
 	                                                        &binder, expr.GetAlias(), expr.GetQueryLocation());
 	for (auto &capture : captures) {
+		if (volatile_operand && capture->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			// An eager invoke argument would execute even if the optimizer could discard the arm.
+			throw BinderException(expr, "A simple CASE with a volatile operand and multiple comparisons cannot "
+			                            "contain a subquery in a branch");
+		}
 		invoke->Cast<BoundFunctionExpression>().GetChildrenMutable().push_back(std::move(capture));
 	}
 	return BindResult(std::move(invoke));
