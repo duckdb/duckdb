@@ -235,11 +235,7 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	//! Whether a snapshot with this bound sees every commit the index contains
-	bool ScannableAt(VisibilityBound bound) const {
-		return last_commit < bound;
-	}
-	//! Whether the index was added before the bound: every commit from the bound on maintained it
+	//! Whether the index was added before the bound: every delete the build skipped precedes it
 	bool AddedBefore(VisibilityBound bound) const {
 		return last_commit < bound;
 	}

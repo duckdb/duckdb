@@ -1193,7 +1193,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		if (!entry->ScannableAt(transaction.view.visibility_bound)) {
+		if (!entry->AddedBefore(transaction.view.visibility_bound)) {
 			continue;
 		}
 		{
