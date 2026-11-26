@@ -4,6 +4,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
@@ -191,6 +192,26 @@ void MetaTransaction::Rollback(ClientContext &context) {
 }
 
 void MetaTransaction::Finalize(ClientContext &context) {
+	bool attachments_committed = false;
+	for (auto &transaction : transactions) {
+		if (transaction.first.get().IsSystem() && transaction.second.state == TransactionState::COMMITTED) {
+			attachments_committed = true;
+			break;
+		}
+	}
+	if (attachments_committed) {
+		for (auto &database : replacement_databases) {
+			database.get().SetPendingReplacement(false);
+		}
+		for (auto &database : replaced_databases) {
+			auto deleter = database.get().ExtractDeleter();
+			database.get().OnDetach(context);
+			database.get().MarkDetached(AttachedDatabase::GetDetachCloseAction(context));
+			if (deleter) {
+				deleter->TryDelete();
+			}
+		}
+	}
 	// Try to checkpoint any attached databases potentially still held by this transaction.
 	for (auto &database : referenced_databases) {
 		// If the use count is down to one, then we already detached the database.
@@ -223,6 +244,14 @@ void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
 	used_databases.erase(database.GetName());
 }
 
+void MetaTransaction::ReplaceDatabase(shared_ptr<AttachedDatabase> &database) {
+	lock_guard<mutex> guard(referenced_database_lock);
+	auto &database_ref = *database;
+	used_databases.erase(database_ref.GetName());
+	referenced_databases.emplace(reference<AttachedDatabase>(database_ref), database);
+	replaced_databases.push_back(database_ref);
+}
+
 AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &database) {
 	auto &db_ref = *database;
 	lock_guard<mutex> guard(referenced_database_lock);
@@ -238,6 +267,12 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
 	}
+	return db_ref;
+}
+
+AttachedDatabase &MetaTransaction::AttachDatabase(shared_ptr<AttachedDatabase> &database) {
+	auto &db_ref = UseDatabase(database);
+	replacement_databases.push_back(db_ref);
 	return db_ref;
 }
 

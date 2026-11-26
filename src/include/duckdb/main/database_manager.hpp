@@ -73,6 +73,8 @@ public:
 	//! Rollback the attach of a database, given the database only when its name still refers to it
 	shared_ptr<AttachedDatabase> DetachInternal(const Identifier &name,
 	                                            optional_ptr<AttachedDatabase> database = nullptr);
+	//! Rollback an attach that replaced a database: the replaced database takes its alias back
+	shared_ptr<AttachedDatabase> RollbackAttach(AttachedDatabase &database, AttachedDatabase &replaced_database);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 

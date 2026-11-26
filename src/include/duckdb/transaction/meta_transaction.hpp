@@ -80,6 +80,8 @@ public:
 	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const Identifier &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
+	AttachedDatabase &AttachDatabase(shared_ptr<AttachedDatabase> &database);
+	void ReplaceDatabase(shared_ptr<AttachedDatabase> &database);
 
 private:
 	friend class SecretManager;
@@ -102,6 +104,10 @@ private:
 	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
 	//! Map of name -> database for databases that are in-use by this transaction.
 	identifier_map_t<reference<AttachedDatabase>> used_databases;
+	//! Databases replaced by an attachment in this transaction.
+	vector<reference<AttachedDatabase>> replaced_databases;
+	//! Replacement databases attached in this transaction.
+	vector<reference<AttachedDatabase>> replacement_databases;
 	//! Secrets that only live for the duration of this transaction.
 	unique_ptr<SecretStorage> transaction_secret_storage;
 };

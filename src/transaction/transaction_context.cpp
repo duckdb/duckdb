@@ -60,6 +60,7 @@ void TransactionContext::Commit() {
 		for (auto const &s : context.GetContext().GetRegisteredState().States()) {
 			s->TransactionRollback(*transaction, context, error);
 		}
+		transaction->Finalize(context);
 		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// throw fatal / internal exceptions directly
 			error.Throw();
