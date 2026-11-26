@@ -491,8 +491,11 @@ private:
 	void InitializeSchema(ClientContext &context);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
-	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
-	                                         idx_t &next_file_idx, ClientContext &context);
+	struct ParseSchemaFrame;
+	ParquetColumnSchema ParseSchemaTree(ClientContext &context, idx_t &next_schema_idx, idx_t &next_file_idx);
+	bool ParseSchemaElement(ClientContext &context, idx_t depth, idx_t max_define, idx_t max_repeat, idx_t schema_idx,
+	                        idx_t &next_file_idx, vector<ParseSchemaFrame> &frames, ParquetColumnSchema &result);
+	ParquetColumnSchema FinishSchemaElement(ParseSchemaFrame &frame, idx_t next_file_idx);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
