@@ -137,6 +137,9 @@ concurrentloop threadid 0 8
 statement ok
 JOIN TRANSACTION '{txid}'
 
+# let every connection join before a failing statement can abort the shared transaction
+sleep 2 second
+
 statement maybe
 INSERT INTO pk VALUES (100000 + {threadid}, 0, 'duplicate')
 ----
