@@ -32,7 +32,8 @@ shared_ptr<MetaTransaction> TransactionContext::TakeCurrentTransaction() {
 
 shared_ptr<MetaTransaction> TransactionContext::GetSharedTransaction(const string &share_id) {
 	lock_guard<mutex> guard(current_transaction_lock);
-	if (current_transaction && current_transaction->GetShareId() == share_id) {
+	// a transaction that was never shared has an empty share id, which must not match
+	if (!share_id.empty() && current_transaction && current_transaction->GetShareId() == share_id) {
 		return current_transaction;
 	}
 	return nullptr;

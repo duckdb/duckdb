@@ -246,6 +246,14 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_FAIL(con2.Query("JOIN TRANSACTION 'unknown'"));
 		REQUIRE_NO_FAIL(con2.Query("SELECT 42"));
 
+		// a transaction that was never shared cannot be joined with an empty identifier
+		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (42)"));
+		REQUIRE_FAIL(con2.Query("JOIN TRANSACTION ''"));
+		RequireValue(con2, "SELECT COUNT(*) FROM tbl WHERE i = 42", 0);
+		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
+		RequireValue(con2, "SELECT COUNT(*) FROM tbl WHERE i = 42", 1);
+
 		// cannot join from within a transaction
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		auto share_id = ShareTransaction(con1);
