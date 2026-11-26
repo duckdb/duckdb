@@ -74,18 +74,6 @@ unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const
 // Regexp Matches
 //===--------------------------------------------------------------------===//
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p,
-                                             bool constant_pattern)
-    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern) {
-	if (constant_pattern) {
-		// an invalid pattern is reported when the function state is initialized
-		auto pattern = make_uniq<RE2>(constant_string, options);
-		range_success = pattern->ok() && pattern->PossibleMatchRange(&range_min, &range_max, 1000);
-	} else {
-		range_success = false;
-	}
-}
-
-RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p,
                                              bool constant_pattern, string range_min_p, string range_max_p,
                                              bool range_success)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern), range_min(std::move(range_min_p)),
@@ -108,9 +96,22 @@ unique_ptr<FunctionData> RegexpMatchesBind(BindScalarFunctionInput &input) {
 	}
 
 	string constant_string;
-	bool constant_pattern;
-	constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
-	return make_uniq<RegexpMatchesBindData>(options, std::move(constant_string), constant_pattern);
+	const bool constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
+	string range_min;
+	string range_max;
+	bool range_success = false;
+	if (constant_pattern) {
+		RE2 pattern(constant_string, options);
+		// Invalid patterns are reported when the function state is initialized.
+		if (pattern.ok()) {
+			range_success = pattern.PossibleMatchRange(&range_min, &range_max, 1000);
+			if (constant_string.find("\\C") == string::npos) {
+				input.GetBoundFunction().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+			}
+		}
+	}
+	return make_uniq<RegexpMatchesBindData>(options, std::move(constant_string), constant_pattern, std::move(range_min),
+	                                        std::move(range_max), range_success);
 }
 
 struct RegexPartialMatch {

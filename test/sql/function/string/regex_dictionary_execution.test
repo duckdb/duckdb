@@ -1,0 +1,69 @@
+# name: test/sql/function/string/regex_dictionary_execution.test
+# description: Valid constant regex match patterns reuse dictionary results
+# group: [string]
+
+require vector_size 2048
+
+load {TEST_DIR}/regex_dictionary_execution.db readwrite v2.0.0
+
+statement ok
+SET force_compression = 'dict_fsst'
+
+statement ok
+CREATE TABLE strings AS
+SELECT CASE i % 4
+           WHEN 0 THEN 'GetResource'
+           WHEN 1 THEN 'ListResource'
+           WHEN 2 THEN 'Prefix GetResource'
+       END AS s
+FROM range(16387) t(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+WITH types AS MATERIALIZED (
+    SELECT vector_type(s) AS input_type,
+           vector_type(regexp_full_match(s, 'Get[A-Z].*')) AS full_match_type,
+           vector_type(regexp_matches(s, 'get[a-z]', 'i')) AS partial_match_type
+    FROM strings
+)
+SELECT count(*) > 0, bool_and(full_match_type = 'DICTIONARY_VECTOR'),
+       bool_and(partial_match_type = 'DICTIONARY_VECTOR')
+FROM types
+WHERE input_type = 'DICTIONARY_VECTOR'
+----
+true	true	true
+
+query III
+SELECT count(*) FILTER (WHERE regexp_full_match(s, 'get[a-z]+', 'i')),
+       count(*) FILTER (WHERE regexp_matches(s, 'Get[A-Z]')),
+       count(*) FILTER (WHERE regexp_full_match(s, 'Get[A-Z].*') IS NULL)
+FROM strings
+----
+4097	8194	4096
+
+statement ok
+PREPARE invalid_constant_pattern AS SELECT regexp_full_match(s, '[') FROM strings
+
+statement error
+EXECUTE invalid_constant_pattern
+----
+missing ]: [
+
+query II
+SELECT count(TRY(regexp_full_match(s, '['))), count(TRY(regexp_matches(s, '[')))
+FROM strings
+----
+0	0
+
+query II
+SELECT count(TRY(regexp_full_match(s, p))), count(TRY(regexp_matches(s, p)))
+FROM (
+    SELECT s, CASE WHEN s LIKE 'Get%' THEN 'Get.*' ELSE '[' END AS p
+    FROM strings
+)
+----
+4097	4097

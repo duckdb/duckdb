@@ -82,7 +82,6 @@ struct RegexpExtractAllStruct {
 };
 
 struct RegexpMatchesBindData : public RegexpBaseBindData {
-	RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern);
 	RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
 	                      string range_min, string range_max, bool range_success);
 
