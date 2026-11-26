@@ -308,7 +308,12 @@ void QueryGraphManager::PreparePredicateModel(LogicalOperator &op) {
 	filters_and_bindings = std::move(extraction.filters);
 	join_operators = std::move(extraction.join_operators);
 	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
+	candidate_constraints.clear();
 	for (auto &join_operator : join_operators) {
+		if (join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT ||
+		    JoinOrderConflictDetector::MustApplyAsOperator(*join_operator)) {
+			candidate_constraints.push_back(*join_operator);
+		}
 		for (auto predicate_index : join_operator->costing_predicate_indices) {
 			filters_and_bindings[predicate_index]->semantic_left_set =
 			    optional_ptr<JoinRelationSet>(join_operator->left_total_set.get());
@@ -1221,6 +1226,9 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	if (generated_cross_product && !CanCreateCrossProduct(left, right)) {
 		return false;
 	}
+	if (!selected_operator && candidate_constraints.empty()) {
+		return true;
+	}
 	auto &combined = set_manager.Union(left, right);
 	if (selected_operator && (!JoinOrderConflictDetector::IsApplicable(*selected_operator, left, right) ||
 	                          JoinOrderConflictDetector::IsCompletedBy(*selected_operator, left) ||
@@ -1228,11 +1236,8 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	                          !JoinOrderConflictDetector::IsCompletedBy(*selected_operator, combined))) {
 		return false;
 	}
-	for (auto &operator_ptr : join_operators) {
-		auto &op = *operator_ptr;
-		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT && !JoinOrderConflictDetector::MustApplyAsOperator(op)) {
-			continue;
-		}
+	for (auto &constraint : candidate_constraints) {
+		auto &op = constraint.get();
 		if (JoinOrderConflictDetector::IsCompletedBy(op, left) || JoinOrderConflictDetector::IsCompletedBy(op, right) ||
 		    !JoinOrderConflictDetector::IsCompletedBy(op, combined)) {
 			continue;
@@ -1241,7 +1246,7 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 				return false;
 			}
-		} else if (selected_operator != &op) {
+		} else if (selected_operator.get() != &op) {
 			return false;
 		}
 	}
