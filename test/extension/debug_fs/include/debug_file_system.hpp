@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 
@@ -33,7 +33,7 @@ struct DebugFileHandle : public FileHandle {
 
 //! Handles "debugfs://<local path>": forwards to the local file system and injects configurable latency on
 //! open/read/write.
-class DebugFileSystem : public FileSystem {
+class DebugFileSystem : public BaseFileSystem {
 public:
 	explicit DebugFileSystem(DatabaseInstance &db);
 
@@ -58,8 +58,7 @@ public:
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
 	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
-	                                        optional_ptr<FileOpener> opener = nullptr) override;
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	void FileSync(FileHandle &handle) override;
 	void AbortFileWrite(FileHandle &handle) override;
@@ -74,11 +73,11 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override;
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
@@ -87,6 +86,8 @@ public:
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 	string PathSeparator(const string &path) override;
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
+	string GetHomeDirectory() override;
+	string ExpandPath(const string &path) override;
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
 	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
 
@@ -117,7 +118,7 @@ private:
 	static OpenFileInfo ToInner(const OpenFileInfo &file);
 	static string FromInner(const string &path);
 
-	unique_ptr<FileSystem> inner_fs;
+	unique_ptr<BaseFileSystem> inner_fs;
 	DatabaseInstance &db;
 	annotated_mutex random_engine_lock;
 	unique_ptr<RandomEngine> random_engine DUCKDB_GUARDED_BY(random_engine_lock);

@@ -300,7 +300,7 @@ FileWriteMode AsyncFileWriter::GetWriteMode() {
 }
 
 bool AsyncFileWriter::IsLocalFile() {
-	auto local_file = fs.IsLocalFileSystem();
+	auto local_file = handle && handle->file_system.IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {
 			local_file = handle->OnDiskFile();

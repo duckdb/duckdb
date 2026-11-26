@@ -205,7 +205,7 @@ TEST_CASE("Test that adding trusted extension repositories must be opted into", 
 static void WriteTextFile(const string &path, const string &contents) {
 	// the database file system refuses to write *.duckdb_extension* files, so write through a raw local file system
 	LocalFileSystem fs;
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, nullptr);
 	handle->Write(QueryContext(), (void *)contents.data(), contents.size(), 0);
 	handle->Sync();
 }

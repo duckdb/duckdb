@@ -47,7 +47,7 @@ add_library_unity(
   exception_format_value.cpp
   logical_type_info.cpp
   file_buffer.cpp
-  file_system.cpp
+  base_file_system.cpp
   filename_pattern.cpp
   path.cpp
   fsst.cpp
@@ -63,7 +63,7 @@ add_library_unity(
   local_file_system.cpp
   memory_mapped_file.cpp
   error_data.cpp
-  opener_file_system.cpp
+  file_system.cpp
   open_file_info.cpp
   optional_idx.cpp
   printer.cpp
