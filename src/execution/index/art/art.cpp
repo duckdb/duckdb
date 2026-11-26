@@ -1167,16 +1167,16 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 	if (storage_version != StorageVersion::INVALID) {
 		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
-	// From the storage version of wide decimals on, the physical types of the keys are recorded: the stored keys are
-	// encoded from them, so an index whose expressions bind to other physical types when it is loaded (the result
-	// type of a key expression is decided by the engine that binds it) is not used with keys it cannot match
+	// From the storage version of wide decimals on, the types of the keys are recorded: the stored keys are encoded
+	// from them, so an index whose expressions bind to other types when it is loaded (the result type of a key
+	// expression is decided by the engine that binds it) is not used with keys it cannot match
 	if (storage_version != StorageVersion::INVALID &&
 	    !StorageManager::IsPriorToVersion(Decimal::WIDE_VERSION_ADDED, storage_version)) {
 		vector<Value> key_types;
 		for (auto &type : logical_types) {
-			key_types.push_back(Value::UTINYINT(static_cast<uint8_t>(type.InternalType())));
+			key_types.push_back(Value::TYPE(type));
 		}
-		info.options["key_physical_types"] = Value::LIST(LogicalType::UTINYINT, std::move(key_types));
+		info.options["key_types"] = Value::LIST(LogicalType::TYPE(), std::move(key_types));
 	}
 
 #ifdef DEBUG

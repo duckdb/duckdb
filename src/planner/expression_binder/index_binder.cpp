@@ -270,15 +270,53 @@ void ThrowMismatchedStoredKey(const UnboundIndex &unbound_index, StorageVersion 
 	                      name);
 }
 
+//! The types the keys of an index were stored with, from the record of the index: a record that is not a list of
+//! types is a damaged file
+vector<LogicalType> ReadStoredKeyTypes(const UnboundIndex &unbound_index, const Value &record) {
+	auto corrupt = [&](const string &what) {
+		return DataCorruptionException("Corrupt index %s on table %s: the record of the types of its keys %s",
+		                               unbound_index.GetIndexName(), unbound_index.GetTableName(), what);
+	};
+	if (record.IsNull() || record.type().id() != LogicalTypeId::LIST ||
+	    ListType::GetChildType(record.type()).id() != LogicalTypeId::TYPE) {
+		throw corrupt(StringUtil::Format("is not a list of types (%s)", record.ToSQLString()));
+	}
+	vector<LogicalType> result;
+	for (auto &stored : ListValue::GetChildren(record)) {
+		if (stored.IsNull()) {
+			throw corrupt("holds a NULL");
+		}
+		try {
+			result.push_back(TypeValue::GetType(stored));
+		} catch (std::exception &ex) {
+			throw corrupt(StringUtil::Format("holds a type that cannot be read: %s", ErrorData(ex).RawMessage()));
+		}
+	}
+	return result;
+}
+
+//! Whether keys stored with a type are encoded like the keys an expression of another type computes: the types are
+//! the same, or decimals of the same scale and physical type, whose width does not enter the encoding
+bool StoredKeyTypeMatches(const LogicalType &stored, const LogicalType &bound) {
+	if (stored == bound) {
+		return true;
+	}
+	if (stored.id() != LogicalTypeId::DECIMAL || bound.id() != LogicalTypeId::DECIMAL) {
+		return false;
+	}
+	return stored.InternalType() == bound.InternalType() &&
+	       DecimalType::GetScale(stored) == DecimalType::GetScale(bound);
+}
+
 //! Why the stored keys of an index stored from the storage version of wide decimals on cannot be matched by the keys
-//! its expressions compute now, empty when they can. The stored keys are encoded from the physical types the
-//! expressions were bound to, which the index records: an expression that binds to another physical type now (the
-//! result type of a function is decided by the engine that binds it) computes keys of another encoding. The engines
-//! of that storage version that stored no record bound the same column types, so their keys over plain columns match;
-//! the type their key expressions had is unknown
-string DescribeStoredKeyTypeDifference(const vector<unique_ptr<Expression>> &keys,
+//! its expressions compute now, empty when they can. The stored keys are encoded from the types the expressions were
+//! bound to, which the index records: an expression that binds to another type now (the result type of a function is
+//! decided by the engine that binds it) computes keys of another encoding. The engines of that storage version that
+//! stored no record bound the same column types, so their keys over plain columns match; the type their key
+//! expressions had is unknown
+string DescribeStoredKeyTypeDifference(const UnboundIndex &unbound_index, const vector<unique_ptr<Expression>> &keys,
                                        const IndexStorageInfo &storage_info) {
-	auto entry = storage_info.options.find("key_physical_types");
+	auto entry = storage_info.options.find("key_types");
 	if (entry == storage_info.options.end()) {
 		for (auto &key : keys) {
 			if (key->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF &&
@@ -290,19 +328,16 @@ string DescribeStoredKeyTypeDifference(const vector<unique_ptr<Expression>> &key
 		}
 		return string();
 	}
-	auto &stored_types = ListValue::GetChildren(entry->second);
+	auto stored_types = ReadStoredKeyTypes(unbound_index, entry->second);
 	if (stored_types.size() != keys.size()) {
 		return StringUtil::Format("the index stores %llu keys, its definition has %llu", stored_types.size(),
 		                          keys.size());
 	}
 	for (idx_t i = 0; i < keys.size(); i++) {
-		const auto stored_type = static_cast<PhysicalType>(stored_types[i].GetValue<uint8_t>());
 		auto &type = keys[i]->GetReturnType();
-		if (type.InternalType() != stored_type) {
-			return StringUtil::Format("the stored keys of %s have the physical type %s, the expression binds to %s "
-			                          "(physical type %s) now",
-			                          keys[i]->ToString(), TypeIdToString(stored_type), type.ToString(),
-			                          TypeIdToString(type.InternalType()));
+		if (!StoredKeyTypeMatches(stored_types[i], type)) {
+			return StringUtil::Format("the stored keys of %s have the type %s, the expression binds to %s now",
+			                          keys[i]->ToString(), stored_types[i].ToString(), type.ToString());
 		}
 	}
 	return string();
@@ -437,7 +472,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index,
 			ThrowMismatchedStoredKey(unbound_index, binding.version, difference);
 		}
 	} else if (storage_info.IsValid()) {
-		auto difference = DescribeStoredKeyTypeDifference(unbound_expressions, storage_info);
+		auto difference = DescribeStoredKeyTypeDifference(unbound_index, unbound_expressions, storage_info);
 		if (!difference.empty()) {
 			if (skip_mismatched_keys) {
 				return nullptr;
