@@ -283,6 +283,8 @@ private:
 	idx_t retained_build_executions = 0;
 	idx_t retained_cte_materializations = 0;
 	idx_t retained_cte_reuses = 0;
+	//! Payload aggregates whose finalized values are read from the frozen state
+	idx_t state_projected_payloads = 0;
 };
 
 class RecursiveCTESchedulerState {
