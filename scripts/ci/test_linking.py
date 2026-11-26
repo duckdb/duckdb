@@ -2,7 +2,6 @@
 
 import importlib.util
 from collections import Counter
-import re
 import shutil
 import subprocess
 import sys
@@ -18,12 +17,6 @@ EXPORTS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXPORTS)
 LLVM_TOOLS = ["clang-cl", "llvm-lib", "lld-link", "llvm-readobj", "llvm-objcopy", "llvm-ar"]
 CMAKE_TOOLS = ["cmake", "ninja", *LLVM_TOOLS]
-
-
-def static_export_hook():
-    source = (ROOT / "src/CMakeLists.txt").read_text()
-    first = source.index("if(", source.index("duckdb_make_native_lto_archive(duckdb_static)"))
-    return source[first : source.index("\n#\n# FIXME", first)]
 
 
 def non_export_directives(archive):
@@ -211,7 +204,8 @@ class WindowsStaticExportConfigureTests(unittest.TestCase):
                 "set(MSVC TRUE)\n"
                 "set(Python3_FOUND FALSE)\n"
                 "option(WINDOWS_STATIC_LIBRARY_EXPORTS \"Keep exports\" OFF)\n"
-                + static_export_hook()
+                + f'include("{ROOT.as_posix()}/extension/extension_linking.cmake")\n'
+                + f'duckdb_add_windows_static_export_archive(duckdb_static duckdb_static_no_exports "{SCRIPT.as_posix()}")\n'
                 + "\nif(TARGET duckdb_static_no_exports)\n"
                 '  message(FATAL_ERROR "Unexpected filtered archive without LLVM")\n'
                 "endif()\n"
@@ -246,17 +240,6 @@ class WindowsStaticExtensionLinkTests(unittest.TestCase):
                 self.check_archive_loadables(triple, platform)
 
     def check_archive_loadables(self, triple, platform):
-        hook = static_export_hook()
-        tools = (ROOT / "extension/extension_build_tools.cmake").read_text()
-        functions = "\n".join(
-            re.search(r"^function\(" + name + r"\b.*?^endfunction\(\)", tools, re.M | re.S).group()
-            for name in [
-                "duckdb_link_static_extension_core",
-                "build_loadable_extension_directory",
-                "build_static_extension",
-                "build_extension_library",
-            ]
-        )
         with tempfile.TemporaryDirectory(prefix="duckdb linking ") as directory:
             root = Path(directory)
             (root / "scripts").mkdir()
@@ -309,7 +292,7 @@ set(DUCKDB_MODULE_BASE_DIR "@REPO@")
 set(DuckDB_BINARY_DIR "${CMAKE_BINARY_DIR}")
 file(WRITE "${CMAKE_BINARY_DIR}/duckdb_platform_out" @PLATFORM@)
 add_custom_target(duckdb_platform)
-@FUNCTIONS@
+include("@REPO@/extension/extension_linking.cmake")
 # Match DuckDB's configure order: extensions precede src/CMakeLists.txt.
 build_extension_library(fixture extension.c)
 build_loadable_extension_directory(direct CPP extension/direct "" "" "" direct.c)
@@ -318,7 +301,7 @@ target_link_options(direct_loadable_extension PRIVATE "/MAP:${CMAKE_BINARY_DIR}/
 add_library(core_objects OBJECT core.c)
 set(ALL_OBJECT_FILES $<TARGET_OBJECTS:core_objects>)
 add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
-@HOOK@
+duckdb_add_windows_static_export_archive(duckdb_static duckdb_static_no_exports "${CMAKE_SOURCE_DIR}/scripts/strip_coff_exports.py")
 add_library(host SHARED extension.c)
 target_link_libraries(host fixture_extension)
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
@@ -337,10 +320,9 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
   TARGET host)
 """.replace(
                     "@REPO@", ROOT.as_posix()
+                ).replace(
+                    "@PLATFORM@", platform
                 )
-                .replace("@FUNCTIONS@", functions)
-                .replace("@HOOK@", hook)
-                .replace("@PLATFORM@", platform)
             )
 
             def run(*command):
