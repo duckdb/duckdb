@@ -180,7 +180,8 @@ struct JSONConverter : JSONConverterBase {
 	static yyjson_mut_val *VisitObject(const UnifiedVariantVectorData &variant, idx_t row,
 	                                   const VariantNestedData &nested_data, idx_t depth, yyjson_mut_doc *doc) {
 		auto obj = yyjson_mut_obj(doc);
-		auto object_items = VariantVisitor<JSONConverter>::VisitObjectItems(variant, row, nested_data, depth, doc);
+		auto object_items = VariantVisitor<JSONConverter>::VisitObjectItems(variant, row, nested_data, depth,
+		                                                                    VariantIterationOrder::LEXICOGRAPHIC, doc);
 		for (auto &entry : object_items) {
 			yyjson_mut_obj_put(obj, yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size()), entry.second);
 		}
