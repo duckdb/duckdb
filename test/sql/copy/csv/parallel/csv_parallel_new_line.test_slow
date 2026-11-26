@@ -41,6 +41,7 @@ select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_r.csv', buf
 statement error
 select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i})
 ----
+<REGEX>:.*(reached an invalid state|not possible to automatically detect).*
 
 query IIII
 select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size={i}, escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')

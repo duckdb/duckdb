@@ -5,6 +5,7 @@
 statement error
 FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"')
 ----
+* Read a quote that is never closed as a value (unterminated_quote='value')
 
 statement ok
 FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"', escape_mode='anywhere', new_line=['\n', '\r', '\r\n'], ignore_extra_columns=true, allow_unescaped_quotes=true, unterminated_quote='value')
