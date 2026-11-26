@@ -154,18 +154,7 @@ public:
 	//! Whether every value in the current row group's column chunk is NULL (according to its statistics)
 	bool AllValuesAreNull() const;
 
-	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
-	                              idx_t row_group_ordinal_p, const ParquetEncryptionConfig &encryption_config) {
-		if (encryption_algorithm.__isset.AES_GCM_V1) {
-			auto &algorithm = encryption_algorithm.AES_GCM_V1;
-			aad_crypto_metadata.Initialize(algorithm.aad_file_unique, encryption_config.ResolveAADPrefix(algorithm),
-			                               row_group_ordinal_p, ColumnIndex());
-		} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-			throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
-		} else {
-			throw InvalidInputException("File is encrypted but no encryption algorithm is set");
-		}
-	}
+	void InitializeCryptoMetadata(idx_t row_group_ordinal_p);
 
 	virtual idx_t FileOffset() const;
 	//! Adds the indexes of the row group's column chunks this reader reads

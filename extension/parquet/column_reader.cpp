@@ -147,6 +147,22 @@ ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchem
 ColumnReader::~ColumnReader() {
 }
 
+void ColumnReader::InitializeCryptoMetadata(idx_t row_group_ordinal_p) {
+	D_ASSERT(reader.metadata->crypto_metadata);
+	D_ASSERT(reader.parquet_options.encryption_config);
+	const auto &encryption_algorithm = reader.metadata->crypto_metadata->encryption_algorithm;
+	const auto &encryption_config = *reader.parquet_options.encryption_config;
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		auto &algorithm = encryption_algorithm.AES_GCM_V1;
+		aad_crypto_metadata.Initialize(algorithm.aad_file_unique, encryption_config.ResolveAADPrefix(algorithm),
+		                               row_group_ordinal_p, ColumnIndex());
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
+	} else {
+		throw InvalidInputException("File is encrypted but no encryption algorithm is set");
+	}
+}
+
 Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
 }
