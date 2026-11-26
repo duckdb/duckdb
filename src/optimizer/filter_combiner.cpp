@@ -258,6 +258,70 @@ static optional_ptr<const Expression> GetConstraintKey(const Expression &filter)
 	return key;
 }
 
+void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+                                               const std::function<bool(const Expression &)> &can_project,
+                                               const std::function<void(unique_ptr<Expression>)> &callback) {
+	FilterCombiner combiner(context);
+	auto &groups = combiner.equivalence_map;
+	auto &group_ids = combiner.equivalence_set_map;
+	for (auto &filter : filters) {
+		if (filter->GetExpressionType() != ExpressionType::COMPARE_EQUAL || !CanCopyFilter(*filter)) {
+			continue;
+		}
+		auto &comparison = filter->Cast<BoundFunctionExpression>();
+		if (BoundComparisonExpression::Left(comparison).IsScalar() ||
+		    BoundComparisonExpression::Right(comparison).IsScalar()) {
+			continue;
+		}
+		auto left = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::LeftMutable(comparison)));
+		auto right = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::RightMutable(comparison)));
+		if (left == right) {
+			continue;
+		}
+		// Merge smaller classes and discard old buckets: hidden chains must not retain quadratic state.
+		if (groups[left].size() < groups[right].size()) {
+			std::swap(left, right);
+		}
+		auto &target = groups[left];
+		for (auto &member : groups[right]) {
+			group_ids[member] = left;
+			target.push_back(member);
+		}
+		groups.erase(right);
+		combiner.constant_values.erase(right);
+	}
+	unordered_map<idx_t, reference<const Expression>> representatives;
+	for (auto &entry : groups) {
+		for (auto &member : entry.second) {
+			if (!can_project(member)) {
+				continue;
+			}
+			auto representative = representatives.find(entry.first);
+			if (representative == representatives.end()) {
+				representatives.emplace(entry.first, member.get());
+			} else {
+				// A star connects the visible members without generating pairs involving hidden keys.
+				callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+				                                           representative->second.get().Copy(), member.get().Copy()));
+			}
+		}
+	}
+	for (auto &filter : filters) {
+		auto key = GetConstraintKey(*filter);
+		if (!key || !IsKeyConstraint(*filter, {*key})) {
+			continue;
+		}
+		auto entry = group_ids.find(*key);
+		if (entry == group_ids.end()) {
+			continue;
+		}
+		auto representative = representatives.find(entry->second);
+		if (representative != representatives.end() && !key->Equals(representative->second)) {
+			callback(ExpressionIterator::ReplaceExpression(*filter, *key, representative->second));
+		}
+	}
+}
+
 void FilterCombiner::GenerateEquivalentKeyFilters(const Expression &filter,
                                                   const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	if (!CanMatchExpression(filter)) {

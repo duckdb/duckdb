@@ -61,6 +61,10 @@ public:
 	static bool CanCopyFilter(const Expression &filter);
 	//! A safe predicate with the same truth value for keys equal under NOT DISTINCT FROM.
 	static bool IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys);
+	//! Derive a linear set of visible equalities and key constraints, retaining the source filters.
+	static void GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+	                                      const std::function<bool(const Expression &)> &can_project,
+	                                      const std::function<void(unique_ptr<Expression>)> &callback);
 	//! Remove exact duplicate, non-throwing, non-volatile predicates.
 	static void DeduplicateFilters(vector<unique_ptr<Expression>> &filters);
 	void GenerateEquivalentFilters(const Expression &filter,

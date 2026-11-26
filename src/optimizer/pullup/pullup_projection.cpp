@@ -2,6 +2,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
@@ -92,17 +93,24 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	}
 
 	vector<unique_ptr<Expression>> exported;
-	for (auto &expr : filters_expr_pullup) {
-		if (!FilterCombiner::CanCopyFilter(*expr)) {
-			continue;
+	auto export_filter = [&](const Expression &expr) {
+		if (!FilterCombiner::CanCopyFilter(expr)) {
+			return;
 		}
-		auto compared = FilterCombiner::GetComparedExpression(*expr);
-		auto &operand = compared ? *compared : *expr;
+		auto compared = FilterCombiner::GetComparedExpression(expr);
+		auto &operand = compared ? *compared : expr;
 		const bool match_computed = !CanRewrite(operand, projections, false);
 		if (!match_computed || CanRewrite(operand, projections, true)) {
-			auto copy = expr->Copy();
+			auto copy = expr.Copy();
+			bool rewrite_children = compared;
+			if (!rewrite_children && BoundComparisonExpression::IsComparison(expr)) {
+				rewrite_children = true;
+				ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+					rewrite_children &= CanRewrite(child, projections, match_computed);
+				});
+			}
 			// Keep the comparison available for inference, even when it is also a Boolean output.
-			if (compared) {
+			if (rewrite_children) {
 				ExpressionIterator::EnumerateChildren(*copy, [&](unique_ptr<Expression> &child) {
 					child = RewritePredicate(std::move(child), proj, projections, match_computed);
 				});
@@ -111,6 +119,14 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 			}
 			exported.push_back(std::move(copy));
 		}
+	};
+	for (auto &expr : filters_expr_pullup) {
+		export_filter(*expr);
+	}
+	if (context) {
+		FilterCombiner::GenerateProjectionFilters(
+		    *context, filters_expr_pullup, [&](const Expression &key) { return CanRewrite(key, projections, true); },
+		    [&](unique_ptr<Expression> derived) { export_filter(*derived); });
 	}
 	// Retain the full batch: its predicates can guard fallible operators above this projection.
 	proj.children[0] = GeneratePullupFilter(std::move(proj.children[0]), filters_expr_pullup);
