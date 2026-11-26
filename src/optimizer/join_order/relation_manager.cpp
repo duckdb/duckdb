@@ -783,7 +783,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		OptimizeChild(child_optimizer, *op, 0, &child_stats);
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
-		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
+		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats, context);
 		if (!proj_stats) {
 			stats_complete = false;
 			return false;
@@ -940,6 +940,9 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 		} else {
 			for (auto &column : dj_stats.columns) {
 				column.semi_anti_join_domain_evidence.Invalidate();
+				if (delim_join.join_type == JoinType::OUTER) {
+					column.base_stats = nullptr;
+				}
 			}
 		}
 
