@@ -18982,9 +18982,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
  * Returns the value that a VARIANT value holds, as a value of its own type.
  *
  * A VARIANT holds a value of any other type, e.g. a TINYINT, a VARCHAR or a LIST of STRUCTs, that is only known per
- * value: this reads it back, with the type that it was stored with. A nested value is unpacked all the way down, so a
- * variant that holds a list of variants gives a list of typed values. A NULL VARIANT gives a NULL value. A value that
- * is not a VARIANT returns ERROR_INPUT_INVALID. The returned value is caller-owned; destroy it via value_destroy.
+ * value: this reads it back, with the type that it was stored with. The value is built with the content of the variant,
+ * so a stored list gives a LIST with its elements, and a stored object a STRUCT with its fields. The elements of a list
+ * that were stored with different types, which a LIST cannot hold, stay VARIANT values: a LIST of VARIANT. Unpack those
+ * with this function in turn. A NULL VARIANT gives a NULL value. A value that is not a VARIANT returns
+ * ERROR_INPUT_INVALID. The returned value is caller-owned; destroy it via value_destroy.
  *
  * history:
  * - unstable: v2.0.0

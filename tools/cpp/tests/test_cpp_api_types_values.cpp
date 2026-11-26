@@ -701,3 +701,24 @@ TEST_CASE("Stable C++API: a VARIANT value unpacks to the value it holds", "[cpp_
 	// Only a VARIANT can be unpacked
 	REQUIRE_THROWS_AS(chunk.GetVector(4).GetValue(0).UnpackVariant(), InvalidInputException);
 }
+
+TEST_CASE("Stable C++API: unpacking a VARIANT keeps the elements of different types as variants", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto result = conn.Execute("SELECT [1::INTEGER::VARIANT, 'a'::VARIANT]::VARIANT, [1, 2]::VARIANT");
+	auto chunk = result.FetchChunk();
+
+	auto mixed = chunk.GetVector(0).GetValue(0).UnpackVariant();
+	REQUIRE(mixed.GetLogicalType().GetTypeId() == LogicalTypeId::LIST);
+	REQUIRE(mixed.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::VARIANT);
+	REQUIRE(mixed.GetChildCount() == 2);
+	REQUIRE(mixed.GetChild(0).UnpackVariant().Get<int32_t>() == 1);
+	REQUIRE(mixed.GetChild(1).UnpackVariant().ToText() == "a");
+
+	// the elements of the same type give a list of that type
+	auto same = chunk.GetVector(1).GetValue(0).UnpackVariant();
+	REQUIRE(same.GetLogicalType().GetListChildType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(same.GetChild(1).Get<int32_t>() == 2);
+}
