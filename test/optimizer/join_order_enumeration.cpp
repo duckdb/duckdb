@@ -55,7 +55,7 @@ TEST_CASE("Connected hypergraphs can require original cross products", "[optimiz
 		REQUIRE(enumerator.SolveJoinOrder());
 		auto result = connection.Query(query);
 		REQUIRE_NO_FAIL(*result);
-		CHECK_COLUMN(result, 0, {10});
+		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 	connection.Rollback();
 }
@@ -171,9 +171,9 @@ static vector<unique_ptr<DPJoinNode>> EnumerateAlternatives(QueryGraphManager &g
 						continue;
 					}
 					auto rows = estimator.EstimateCardinality(set);
-					auto node = make_uniq<DPJoinNode>(
-					    set, edge.join_operator, edge.predicates, edge.generated_cross_product, left->set, right->set,
-					    costs.ComputeCost(*left, *right, edge.join_operator, rows.GetDouble()));
+					auto node = make_uniq<DPJoinNode>(set, edge.join_operator, edge.predicates,
+					                                  edge.generated_cross_product, left->set, right->set,
+					                                  costs.ComputeCost(*left, *right, edge.join_operator, set));
 					node->cardinality = rows;
 					result.push_back(std::move(node));
 				}

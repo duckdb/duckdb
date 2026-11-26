@@ -19,8 +19,9 @@ class LogicalOperator;
 
 struct JoinColumnSource {
 	ColumnBinding binding;
+	//! The provider's integer row count, before estimated scan/filter selectivity.
 	idx_t source_cardinality;
-	idx_t scan_cardinality;
+	CardinalityValue scan_cardinality;
 	DistinctCount domain;
 };
 

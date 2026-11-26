@@ -36,7 +36,7 @@ unique_ptr<CapturedJoinOrderPlan> CapturedJoinOrderPlan::Capture(const JoinOrder
 		if (!node->is_leaf) {
 			auto &left = *result.at(node->left_set);
 			auto &right = *result.at(node->right_set);
-			node->cost = cost_model.ComputeCost(left, right, node->join_operator, node->cardinality.GetDouble());
+			node->cost = cost_model.ComputeCost(left, right, node->join_operator, node->set);
 			cost_model.UpdateBuildMemory(*node, left, right);
 		}
 		result.emplace(node->set, std::move(node));

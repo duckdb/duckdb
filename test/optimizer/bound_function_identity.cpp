@@ -253,6 +253,8 @@ TEST_CASE("Aggregate reuse keeps the definition of combine_aggr()", "[optimizer]
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE reuse_fact(k INTEGER, v INTEGER, w INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query(
 	    "INSERT INTO reuse_fact VALUES (1, 10, 1), (1, 20, 2), (2, 5, 3), (3, 40, 4), (3, 50, 5), (4, NULL, 6)"));
+	// Collect all distinct values so the expected join order is independent of vector-size sampling.
+	REQUIRE_NO_FAIL(con.Query("ANALYZE reuse_owner; ANALYZE reuse_dim; ANALYZE reuse_fact;"));
 
 	con.BeginTransaction();
 	auto functions = PlanIdentityFunctions(con, "SELECT o.k, d.label, sum(f.v) "

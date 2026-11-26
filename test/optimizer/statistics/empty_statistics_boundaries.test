@@ -1,0 +1,68 @@
+# name: test/optimizer/statistics/empty_statistics_boundaries.test
+# group: [statistics]
+
+# Empty inputs retain their SQL semantics across statistics boundaries.
+query I
+WITH e AS MATERIALIZED (SELECT i FROM range(3) r(i) LIMIT 0)
+SELECT i+1 FROM e
+----
+
+query I
+WITH e AS MATERIALIZED (SELECT i FROM range(3) r(i) LIMIT 0)
+SELECT i FROM e GROUP BY i
+----
+
+# An ungrouped aggregate still produces one row, with the correct value.
+query I
+WITH e AS MATERIALIZED (SELECT i FROM range(3) r(i) LIMIT 0)
+SELECT count(*) FROM e
+----
+0
+
+query I
+SELECT * FROM range(3) a(i)
+SEMI JOIN (SELECT * FROM range(3) LIMIT 0) b ON a.i=b.range
+----
+
+query I
+SELECT * FROM range(3) a(i)
+ANTI JOIN (SELECT * FROM range(3) LIMIT 0) b ON a.i=b.range
+ORDER BY a.i
+----
+0
+1
+2
+
+query II
+SELECT * FROM range(3) a(i)
+LEFT JOIN (SELECT * FROM range(3) LIMIT 0) b ON a.i=b.range
+ORDER BY a.i
+----
+0	NULL
+1	NULL
+2	NULL
+
+query II
+SELECT * FROM (SELECT * FROM range(3) LIMIT 0) a
+FULL JOIN range(3) b ON a.range=b.range
+ORDER BY b.range
+----
+NULL	0
+NULL	1
+NULL	2
+
+# NULL keys do not match each other under ordinary equality.
+query II
+SELECT a.i,b.i FROM (VALUES (NULL),(1)) a(i)
+FULL JOIN (VALUES (NULL),(1)) b(i) ON a.i=b.i
+ORDER BY a.i NULLS LAST, b.i NULLS LAST
+----
+1	1
+NULL	NULL
+NULL	NULL
+
+query I
+SELECT a.i FROM (VALUES (NULL),(1)) a(i)
+ANTI JOIN (VALUES (NULL),(1)) b(i) ON a.i=b.i
+----
+NULL

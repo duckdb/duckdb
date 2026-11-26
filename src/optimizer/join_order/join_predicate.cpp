@@ -180,6 +180,23 @@ bool JoinPredicate::IsEquivalencePredicate() const {
 	return CanBuildEqualityClosure();
 }
 
+bool JoinPredicate::IsResidualFilter() const {
+	auto &info = filter.get();
+	if (info.join_type != JoinType::INNER) {
+		return false;
+	}
+	// FILTERs collected from inside this join region are not included in leaf statistics.
+	// An unsupported expression still has one fallback estimate and one runtime owner.
+	if (info.from_logical_filter && !CanBuildEqualityClosure() && !CanBuildSelectivityDomain()) {
+		return true;
+	}
+	if (info.set.get().count < 2 && !info.source_operator_index.IsValid()) {
+		return false;
+	}
+	return info.must_remain_filter || info.from_residual_predicate ||
+	       (info.filter && info.filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR);
+}
+
 void JoinPredicate::SetEqualityClassIndex(optional_idx equality_class_index) {
 	this->equality_class_index = equality_class_index;
 	filter.get().edge_equivalence_index = equality_class_index;
