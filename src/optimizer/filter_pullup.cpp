@@ -64,10 +64,10 @@ static bool NeedsEarlyJoinKeys(LogicalOperator &op) {
 }
 
 unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op) {
-	if (can_add_column && op->HasProjectionMap()) {
+	if (op->HasProjectionMap()) {
 		return FinishPullup(std::move(op));
 	}
-	if (!can_pullup && !can_add_column && !op->HasProjectionMap() && NeedsEarlyJoinKeys(*op)) {
+	if (!can_pullup && !can_add_column && NeedsEarlyJoinKeys(*op)) {
 		// Carry hidden keys within this join region and keep its output bindings unchanged.
 		auto output = op->GetColumnBindings();
 		FilterPullup join_pullup(context, false, true);
@@ -110,6 +110,18 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		if (op->Cast<LogicalAnyJoin>().condition->IsVolatile()) {
+			return FinishPullup(std::move(op));
+		}
+	} else {
+		for (auto &condition : op->Cast<LogicalComparisonJoin>().conditions) {
+			if (condition.IsComparison() ? condition.GetLHS().IsVolatile() || condition.GetRHS().IsVolatile()
+			                             : condition.GetJoinExpression().IsVolatile()) {
+				return FinishPullup(std::move(op));
+			}
+		}
+	}
 	if (can_add_column && (join.join_type != JoinType::INNER || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN)) {
 		return FinishPullup(std::move(op));
 	}

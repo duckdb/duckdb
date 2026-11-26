@@ -64,9 +64,6 @@ private:
 
 	//! Finish pull up at this operator
 	unique_ptr<LogicalOperator> FinishPullup(unique_ptr<LogicalOperator> op);
-	//! special treatment for SetOperations and projections
-	void ProjectSetOperation(LogicalProjection &proj);
-
 }; // end FilterPullup
 
 } // namespace duckdb
