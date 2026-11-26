@@ -35,6 +35,11 @@ struct ExpressionPlacement {
 	idx_t expression_index = 0;
 	vector<PathStep> path;
 	unique_ptr<Expression> expression;
+};
+
+struct PlacementCandidate {
+	idx_t path_size;
+	unique_ptr<Expression> expression;
 	double evaluation_cardinality = 0;
 	double output_transport_cardinality = 0;
 	double input_transport_savings_cardinality = 0;
@@ -1022,7 +1027,7 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 	double input_transport_savings_cardinality = 0;
 	// Beyond the first direct join, the source can be live for another path expression or join condition.
 	bool can_credit_input_transport = true;
-	vector<ExpressionPlacement> candidates;
+	vector<PlacementCandidate> candidates;
 
 	// Compare every position on the dependency path instead of making a greedy per-join decision.
 	while (current.get()) {
@@ -1072,9 +1077,8 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 			input_transport_savings_cardinality += static_cast<double>(op.estimated_cardinality);
 		}
 		can_credit_input_transport = false;
-		ExpressionPlacement candidate;
-		candidate.expression_index = expression_index;
-		candidate.path = path;
+		PlacementCandidate candidate;
+		candidate.path_size = path.size();
 		candidate.expression = current_expression->Copy();
 		candidate.evaluation_cardinality = static_cast<double>(child->estimated_cardinality);
 		candidate.output_transport_cardinality = transport_cardinality;
@@ -1086,7 +1090,7 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 	const double current_cost =
 	    current_evaluation_cost + input_transport_savings_cardinality * static_cast<double>(exclusive_input_width);
 	double best_cost = current_cost * MINIMUM_COST_RATIO;
-	bool found = false;
+	optional_ptr<PlacementCandidate> best_candidate;
 	for (auto &candidate : candidates) {
 		const double remaining_input_transport =
 		    input_transport_savings_cardinality - candidate.input_transport_savings_cardinality;
@@ -1095,11 +1099,18 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 		                              remaining_input_transport * static_cast<double>(exclusive_input_width);
 		if (candidate_cost < best_cost) {
 			best_cost = candidate_cost;
-			result = std::move(candidate);
-			found = true;
+			best_candidate = candidate;
 		}
 	}
-	return found;
+	if (!best_candidate) {
+		return false;
+	}
+	// Materialize only the selected prefix, without retaining capacity for the rest of the explored path.
+	result.expression_index = expression_index;
+	auto path_end = path.begin() + NumericCast<vector<PathStep>::difference_type>(best_candidate->path_size);
+	result.path.assign(path.begin(), path_end);
+	result.expression = std::move(best_candidate->expression);
+	return true;
 }
 
 static void ExposeBinding(PathStep &step, const ColumnBinding &binding) {
