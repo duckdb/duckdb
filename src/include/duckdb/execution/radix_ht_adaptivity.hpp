@@ -28,9 +28,9 @@ public:
 	void Reset();
 
 	//! Minimum cumulative input before lookups may first be skipped
-	static constexpr idx_t MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP = 1024 * 1024;
+	static constexpr idx_t MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP = 1024ULL * 1024;
 	//! Minimum input processed while skipping before retrying lookups
-	static constexpr idx_t MIN_LOOKUP_RETRY_ROWS = 128 * 1024;
+	static constexpr idx_t MIN_LOOKUP_RETRY_ROWS = 128ULL * 1024;
 
 private:
 	//! Grow a profitable table within the memory budget, resuming lookups on success.
@@ -41,8 +41,8 @@ private:
 	void MaybeResumeLookups(GroupedAggregateHashTable &ht) const;
 
 private:
-	static constexpr idx_t LOOKUP_HISTORY_DECAY_THRESHOLD_ROWS = 128 * 1024;
-	static constexpr idx_t MAX_LOOKUP_RETRY_ROWS = 1024 * 1024;
+	static constexpr idx_t LOOKUP_HISTORY_DECAY_THRESHOLD_ROWS = 128ULL * 1024;
+	static constexpr idx_t MAX_LOOKUP_RETRY_ROWS = 1024ULL * 1024;
 	static constexpr idx_t LOOKUP_RETRY_MATERIALIZED_ROWS_DIVISOR = 8;
 	static constexpr double GROWTH_DUPLICATE_BYTES_FACTOR = 1.0;
 	static constexpr double MINIMUM_LOOKUP_REDUCTION = 0.05;

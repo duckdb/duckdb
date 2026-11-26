@@ -1911,4 +1911,50 @@ TEST_CASE("V2: GEOMETRY vector cells read and write as WKB", "[capi_v2][value][c
 	duckdb_v2_logical_type_destroy(&geom_type);
 }
 
+TEST_CASE("V2 value: variant_to_value returns the value that a VARIANT holds", "[capi_v2][value]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 41::TINYINT::VARIANT, NULL::VARIANT, 1", &result) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	REQUIRE(duckdb_v2_result_fetch_chunk(result, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(chunk != nullptr);
+
+	auto cell = [&](idx_t column) {
+		duckdb_v2_vector_handle vector = nullptr;
+		REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, column, &vector, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_value_handle value = nullptr;
+		REQUIRE(duckdb_v2_vector_get_value(vector, 0, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+		return value;
+	};
+
+	auto variant = cell(0);
+	duckdb_v2_value_handle converted = nullptr;
+	REQUIRE(duckdb_v2_value_variant_to_value(variant, &converted, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(converted != nullptr);
+	int8_t tinyint = 0;
+	REQUIRE(duckdb_v2_value_get_tinyint(converted, &tinyint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(tinyint == 41);
+	duckdb_v2_value_destroy(&converted);
+	duckdb_v2_value_destroy(&variant);
+
+	// A NULL variant gives a NULL value
+	auto null_variant = cell(1);
+	REQUIRE(duckdb_v2_value_variant_to_value(null_variant, &converted, nullptr) == DUCKDB_V2_ERROR_NONE);
+	bool is_null = false;
+	REQUIRE(duckdb_v2_value_is_null(converted, &is_null, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(is_null);
+	duckdb_v2_value_destroy(&converted);
+	duckdb_v2_value_destroy(&null_variant);
+
+	// Only a VARIANT can be converted
+	auto integer = cell(2);
+	REQUIRE(duckdb_v2_value_variant_to_value(integer, &converted, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(converted == nullptr);
+	duckdb_v2_value_destroy(&integer);
+
+	REQUIRE(duckdb_v2_value_variant_to_value(nullptr, &converted, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_data_chunk_destroy(&chunk);
+	duckdb_v2_result_destroy(&result);
+}
+
 } // namespace test_capi_v2

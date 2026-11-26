@@ -394,17 +394,17 @@ static bool ContainsWideDecimal(const VariantNode &root) {
 		auto node = pending.back();
 		pending.pop_back();
 		switch (node.GetTypeId()) {
-		case VariantLogicalType::DECIMAL:
+		case LogicalTypeId::DECIMAL:
 			if (Decimal::IsWide(node.GetDecimalProperties().width)) {
 				return true;
 			}
 			break;
-		case VariantLogicalType::OBJECT:
+		case LogicalTypeId::STRUCT:
 			for (auto &entry : node.GetObjectChildren()) {
 				pending.push_back(entry.value);
 			}
 			break;
-		case VariantLogicalType::ARRAY:
+		case LogicalTypeId::LIST:
 			for (auto child : node.GetArrayChildren()) {
 				pending.push_back(child);
 			}

@@ -85,6 +85,10 @@ target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_threads(duckdb_static PUBLIC)
 duckdb_make_native_lto_archive(duckdb_static)
 
+duckdb_add_windows_static_export_archive(
+  duckdb_static duckdb_static_no_exports
+  "${PROJECT_SOURCE_DIR}/scripts/strip_coff_exports.py")
+
 #
 # FIXME file(COPY ${CMAKE_SOURCE_DIR}/libduckdb_static.a  DESTINATION
 # ${CMAKE_CURRENT_BINARY_DIR}) add_library(duckdb_static STATIC IMPORTED GLOBAL)

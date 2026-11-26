@@ -389,7 +389,7 @@ shared_ptr<FileHandle> CachingFileHandle::TryGetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	file_handle = file_system.OpenFile(path, internal_flags, opener);
+	file_handle = file_system.OpenFile(path, internal_flags);
 	if (!file_handle) {
 		return nullptr;
 	}

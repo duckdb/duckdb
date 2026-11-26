@@ -1,0 +1,141 @@
+# name: test/sql/join/hash_join/hash_join_same_slot_collisions.test
+# description: Hundreds of keys in one hash table slot, with equal and different salts
+# group: [hash_join]
+
+statement ok
+SET threads=4
+
+statement ok
+SET perfect_ht_threshold=0
+
+statement ok
+PRAGMA disable_optimizer
+
+# Inverse of MurmurHash64: a key whose hash is any chosen value
+statement ok
+CREATE MACRO fold32(x) AS xor(x, x >> 32)
+
+statement ok
+CREATE MACRO mulmod64(a, b) AS (((a & 4294967295)::UHUGEINT * b::UHUGEINT
+    + (((a >> 32)::UHUGEINT * b::UHUGEINT) % 4294967296) * 4294967296) % 18446744073709551616)::UBIGINT
+
+statement ok
+CREATE MACRO unmurmur(h) AS fold32(mulmod64(fold32(mulmod64(fold32(h), 14982988110149298331)), 14982988110149298331))
+
+# Salt s in the top 16 bits, m in bits 20..27; bits 0..19 and 28..47 are fixed, so every key has the same slot in
+# tables up to 2^20 slots, with or without the bucket shift
+statement ok
+CREATE TABLE keys AS
+SELECT s, m, unmurmur(((4096 + s)::UBIGINT << 48) | (370085::UBIGINT << 28) | (m::UBIGINT << 20) | 246723::UBIGINT) k
+FROM range(8) t1(s), range(256) t2(m)
+
+query II
+SELECT count(DISTINCT hash(k) & 1048575), count(DISTINCT (hash(k) >> 28) & 1048575) FROM keys
+----
+1	1
+
+# 4 salts with 128 keys each; every 8th key three times, so it has a chain
+statement ok
+CREATE TABLE build AS
+SELECT k, s * 1000 + m AS payload FROM keys, range(3) t(copy) WHERE s < 4 AND m < 128 AND (copy = 0 OR m % 8 = 0)
+
+# Hits, same-salt misses that compare against every key of their salt, other-salt misses, and NULL keys
+statement ok
+CREATE TABLE probe AS
+SELECT k, s, m FROM keys WHERE s < 6 UNION ALL SELECT NULL, NULL, NULL FROM range(10)
+
+query II
+SELECT count(*), sum(b.payload) FROM probe p JOIN build b USING (k)
+----
+640	1000192
+
+query II
+SELECT count(*), count(b.k) FROM probe p LEFT JOIN build b USING (k)
+----
+1674	640
+
+query I
+SELECT count(*) FROM probe WHERE k IN (SELECT k FROM build)
+----
+512
+
+query I
+SELECT count(*) FROM probe p WHERE NOT EXISTS (SELECT 1 FROM build b WHERE b.k = p.k)
+----
+1034
+
+query III
+SELECT count(*) FILTER (mark), count(*) FILTER (NOT mark), count(*) FILTER (mark IS NULL)
+FROM (SELECT k IN (SELECT k FROM build) AS mark FROM probe)
+----
+512	1024	10
+
+query II
+SELECT count(*), count(p.k) FROM probe p FULL OUTER JOIN build b USING (k)
+----
+1674	1664
+
+query II
+SELECT count(*), count(p.k) FROM (SELECT * FROM probe WHERE s < 4 AND m % 2 = 0) p RIGHT JOIN build b USING (k)
+----
+640	384
+
+# A build large enough for the partitioned layout, so the slot comes from the bucket shift
+statement ok
+CREATE TABLE big_build AS SELECT k, payload FROM build UNION ALL SELECT i::UBIGINT, -1 FROM range(500000) t(i)
+
+statement ok
+PRAGMA verify_parallelism
+
+query II
+SELECT count(*), sum(b.payload) FROM probe p JOIN big_build b USING (k)
+----
+640	1000192
+
+query I
+SELECT count(*) FROM probe p WHERE NOT EXISTS (SELECT 1 FROM big_build b WHERE b.k = p.k)
+----
+1034
+
+# Salts 0 and 1 in the last slot: the chain wraps through slot 0, where a salt 0 entry has ht offset and salt 0
+statement ok
+CREATE TABLE wrap_keys AS
+SELECT s, m, unmurmur((s::UBIGINT << 48) | (1048575::UBIGINT << 28) | (m::UBIGINT << 20) | 1048575::UBIGINT) k
+FROM range(2) t1(s), range(128) t2(m)
+
+query IIII
+SELECT count(DISTINCT hash(k) & 1048575), min(hash(k) & 1048575), min((hash(k) >> 28) & 1048575), min(hash(k) >> 48)
+FROM wrap_keys
+----
+1	1048575	1048575	0
+
+statement ok
+CREATE TABLE wrap_build AS SELECT k, s * 1000 + m AS payload FROM wrap_keys WHERE m < 64 ORDER BY s, m
+
+# 40 copies of every key, so the retries after a key mismatch hold more than 32 rows
+statement ok
+CREATE TABLE wrap_probe AS SELECT k FROM wrap_keys, range(40) t(copy)
+
+query II
+SELECT count(*), sum(b.payload) FROM wrap_probe p JOIN wrap_build b USING (k)
+----
+5120	2721280
+
+query I
+SELECT count(*) FROM wrap_probe p WHERE NOT EXISTS (SELECT 1 FROM wrap_build b WHERE b.k = p.k)
+----
+5120
+
+statement ok
+CREATE TABLE big_wrap_build AS
+SELECT k, payload FROM wrap_build UNION ALL SELECT i::UBIGINT, -1 FROM range(500000) t(i)
+
+query II
+SELECT count(*), sum(b.payload) FROM wrap_probe p JOIN big_wrap_build b USING (k)
+----
+5120	2721280
+
+query I
+SELECT count(*) FROM wrap_probe p WHERE NOT EXISTS (SELECT 1 FROM big_wrap_build b WHERE b.k = p.k)
+----
+5120

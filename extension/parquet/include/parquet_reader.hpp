@@ -491,8 +491,11 @@ private:
 	void InitializeSchema(ClientContext &context);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
-	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
-	                                         idx_t &next_file_idx, ClientContext &context);
+	struct ParseSchemaFrame;
+	ParquetColumnSchema ParseSchemaTree(ClientContext &context, idx_t &next_schema_idx, idx_t &next_file_idx);
+	bool ParseSchemaElement(ClientContext &context, idx_t depth, idx_t max_define, idx_t max_repeat, idx_t schema_idx,
+	                        idx_t &next_file_idx, vector<ParseSchemaFrame> &frames, ParquetColumnSchema &result);
+	ParquetColumnSchema FinishSchemaElement(ParseSchemaFrame &frame, idx_t next_file_idx);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
@@ -516,11 +519,10 @@ private:
 	bool TryAttachPageIndexBuffer(ThriftFileTransport &transport) const;
 	struct BloomFilterReadPlan;
 	BloomFilterReadPlan PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport,
-	                                         ColumnReader &column_reader, const TableFilter &filter, bool nested_filter,
+	                                         ColumnReader &column_reader, const TableFilter &filter,
 	                                         idx_t column_chunk_idx);
 	bool TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
-	                                  ColumnReader &column_reader, const TableFilter &filter, bool nested_filter,
-	                                  idx_t column_chunk_idx);
+	                                  ColumnReader &column_reader, const TableFilter &filter, idx_t column_chunk_idx);
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);

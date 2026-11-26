@@ -82,7 +82,7 @@ protected:
 		return {reinterpret_cast<atomic<uint64_t> *>(match_entries.get()), EntryCount()};
 	}
 
-	static constexpr idx_t MAX_BYTES = 8 * 1024 * 1024;
+	static constexpr idx_t MAX_BYTES = 8ULL * 1024 * 1024;
 	HugeAllocation entries;
 	mutable HugeAllocation match_entries;
 	const bool nulls_equal;

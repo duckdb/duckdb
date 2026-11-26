@@ -216,3 +216,26 @@ SELECT finalize(combine(to_aggregate_state({
 }, 'approx_top_k', ['VARCHAR', 'BIGINT']), (SELECT approx_top_k(y, 2) EXPORT_STATE FROM (VALUES ('a'), ('b'), ('a')) s(y))));
 ----
 [a, b]
+
+# a repeated combine keeps its intermediate states out of the target's arena
+statement ok
+SET memory_limit='64MB';
+
+query I
+SELECT len(finalize(combine_aggr(s, 1000))) FROM (SELECT to_aggregate_state({
+	'k': 2::UBIGINT,
+	'values': [{'value': md5(i::VARCHAR), 'count': 1::UBIGINT}]::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(64), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']) s FROM range(100000) r(i));
+----
+2
+
+# and frees them when the combine fails
+statement error
+SELECT finalize(combine_aggr(to_aggregate_state({
+	'k': k,
+	'values': [{'value': 'a'::VARCHAR, 'count': 1::UBIGINT}]::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(filter_size), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']), 3)) FROM (VALUES (2::UBIGINT, 64), (3::UBIGINT, 128)) t(k, filter_size);
+----
+<REGEX>:.*cannot combine approx_top_K with different k values.*

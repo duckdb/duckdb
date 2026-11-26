@@ -1,0 +1,48 @@
+# name: test/optimizer/projection_placement_batch.test
+# description: Lift several expressions together while preserving shared inputs, aliases and NULLs
+# group: [optimizer]
+
+statement ok
+SET disabled_optimizers = 'projection_pullup,common_subplan,compressed_materialization';
+
+statement ok
+CREATE TABLE batch_dimension AS
+SELECT i::INTEGER AS i, lpad(i::VARCHAR, 100, 'x') AS v,
+       CASE WHEN i % 20 = 0 THEN NULL ELSE lpad(i::VARCHAR, 20, 'y') END AS w
+FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE batch_selective AS SELECT (i * 10)::INTEGER AS i FROM range(100) t(i);
+
+# Distinct and shared dependencies, duplicated/reordered aliases, and a NULL-producing input.
+query IIIIIII
+SELECT sum(length(a)), sum(length(b)), sum(length(a_again)), sum(length(c)), count(c), sum(length(raw)), sum(flag::INTEGER)
+FROM (
+    SELECT b, a AS a_again, c, i, a, raw, flag
+    FROM (
+        SELECT i, repeat(v, 2) AS a, repeat(v, 3) AS b, repeat(w, 4) AS c, v AS raw, i > 490 AS flag
+        FROM batch_dimension
+    ) expressions
+) aliases
+JOIN batch_selective USING (i);
+----
+20000	30000	20000	4000	50	10000	50
+
+statement ok
+SET disabled_optimizers = 'projection_pullup,common_subplan,compressed_materialization,projection_placement';
+
+query IIIIIII
+SELECT sum(length(a)), sum(length(b)), sum(length(a_again)), sum(length(c)), count(c), sum(length(raw)), sum(flag::INTEGER)
+FROM (
+    SELECT b, a AS a_again, c, i, a, raw, flag
+    FROM (
+        SELECT i, repeat(v, 2) AS a, repeat(v, 3) AS b, repeat(w, 4) AS c, v AS raw, i > 490 AS flag
+        FROM batch_dimension
+    ) expressions
+) aliases
+JOIN batch_selective USING (i);
+----
+20000	30000	20000	4000	50	10000	50
+
+statement ok
+RESET disabled_optimizers;

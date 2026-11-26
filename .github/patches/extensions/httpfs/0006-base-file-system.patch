@@ -1,0 +1,92 @@
+diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
+index f38e906..0faba20 100644
+--- a/src/http/httpfs.cpp
++++ b/src/http/httpfs.cpp
+@@ -238,7 +238,7 @@ static bool IsStrongETag(string etag) {
+ 	return true;
+ }
+ 
+-HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
++HTTPFileHandle::HTTPFileHandle(BaseFileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+                                shared_ptr<HTTPRequestSession> request_session_p, HTTPObjectVersion object_version_p)
+     : FileHandle(fs, file.path, flags), request_session(std::move(request_session_p)), flags(flags), length(0),
+       last_modified(0), force_full_download(false), file_offset(0), object_version(std::move(object_version_p)) {
+diff --git a/src/include/hffs.hpp b/src/include/hffs.hpp
+index d63bdb2..11b1e91 100644
+--- a/src/include/hffs.hpp
++++ b/src/include/hffs.hpp
+@@ -26,7 +26,7 @@ public:
+ 
+ public:
+ 	//! FileSystem overrides
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
++	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+ 	bool CanHandleFile(const string &fpath) override {
+ 		return fpath.rfind("hf://", 0) == 0;
+ 	}
+@@ -63,7 +63,7 @@ class HFFileHandle : public HTTPFileHandle {
+ 	friend class HuggingFaceFileSystem;
+ 
+ public:
+-	HFFileHandle(FileSystem &fs, ParsedHFUrl hf_url, const OpenFileInfo &file, FileOpenFlags flags,
++	HFFileHandle(BaseFileSystem &fs, ParsedHFUrl hf_url, const OpenFileInfo &file, FileOpenFlags flags,
+ 	             shared_ptr<HTTPRequestSession> request_session)
+ 	    : HTTPFileHandle(fs, file, flags, std::move(request_session)), parsed_url(std::move(hf_url)) {
+ 	}
+diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
+index 961c8ab..57cc9d6 100644
+--- a/src/include/http/httpfs.hpp
++++ b/src/include/http/httpfs.hpp
+@@ -55,7 +55,7 @@ class HTTPFileHandle : public FileHandle {
+ 	friend class S3FileSystem;
+ 
+ public:
+-	HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
++	HTTPFileHandle(BaseFileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+ 	               shared_ptr<HTTPRequestSession> request_session, HTTPObjectVersion object_version = {});
+ 	~HTTPFileHandle() override;
+ 
+@@ -145,7 +145,7 @@ private:
+ 	static constexpr idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16;
+ };
+ 
+-class HTTPFileSystem : public FileSystem {
++class HTTPFileSystem : public BaseFileSystem {
+ public:
+ 	static bool TryParseLastModifiedTime(const string &timestamp, timestamp_t &result);
+ 	//! Compute the freshness deadline (exclusive) from HTTP caching headers (RFC 9111): Cache-Control max-age,
+@@ -155,7 +155,7 @@ public:
+ 	                                                    timestamp_t response_time);
+ 
+ 	//! FileSystem overrides.
+-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
++	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+ 
+ 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+diff --git a/src/include/s3/s3fs.hpp b/src/include/s3/s3fs.hpp
+index 188ad16..2b4bdd6 100644
+--- a/src/include/s3/s3fs.hpp
++++ b/src/include/s3/s3fs.hpp
+@@ -58,7 +58,7 @@ private:
+ 	};
+ 
+ public:
+-	S3FileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
++	S3FileHandle(BaseFileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+ 	             shared_ptr<HTTPRequestSession> request_session, const S3AuthParams &auth_params_p,
+ 	             const S3UploadConfig &upload_config, optional<S3MultipartUploadPolicy> multipart_upload_policy);
+ 	~S3FileHandle() override;
+diff --git a/src/s3/s3fs.cpp b/src/s3/s3fs.cpp
+index dd0cf99..284ce37 100644
+--- a/src/s3/s3fs.cpp
++++ b/src/s3/s3fs.cpp
+@@ -29,7 +29,7 @@ S3FileHandle::UploadClaim::~UploadClaim() {
+ 	}
+ }
+ 
+-S3FileHandle::S3FileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
++S3FileHandle::S3FileHandle(BaseFileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+                            shared_ptr<HTTPRequestSession> request_session_p, const S3AuthParams &auth_params_p,
+                            const S3UploadConfig &upload_config,
+                            optional<S3MultipartUploadPolicy> multipart_upload_policy)

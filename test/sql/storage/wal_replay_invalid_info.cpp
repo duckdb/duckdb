@@ -28,7 +28,7 @@ static void TestReplayInvalidEntry(const string &name, const std::function<void(
 	auto storage_database = TestCreatePath(name);
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	auto &lfs = TestLocalFileSystem();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	// a deserialization error in an entry is otherwise taken for the torn end of the WAL

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
@@ -55,10 +56,10 @@ struct LifecycleCopyPreparedData : PreparedBatchData {};
 
 // A remote output sink for the lifecycle COPY function, which does not write payloads.
 // No network service or local backing files are needed to exercise partition path construction.
-class PartitionCopyFileSystem : public FileSystem {
+class PartitionCopyFileSystem : public BaseFileSystem {
 public:
 	struct Handle : FileHandle {
-		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		Handle(BaseFileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
 		}
 		void Close() override {
 		}
@@ -97,10 +98,10 @@ public:
 };
 
 // A remote output sink that counts the existence checks of a COPY, the files it opens and removes, and keeps nothing.
-class ExistenceCountingFileSystem : public FileSystem {
+class ExistenceCountingFileSystem : public BaseFileSystem {
 public:
 	struct Handle : FileHandle {
-		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		Handle(BaseFileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
 		}
 		void Close() override {
 		}

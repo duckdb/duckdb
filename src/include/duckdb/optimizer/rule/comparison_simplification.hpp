@@ -21,6 +21,15 @@ public:
 	                             bool is_root) override;
 };
 
+//! Rewrites a BETWEEN on a constant NULL input into a constant NULL (i.e. [NULL BETWEEN x AND y] => [NULL])
+class BetweenNullSimplificationRule : public Rule {
+public:
+	explicit BetweenNullSimplificationRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 //! Rewrites row comparisons (`=` and `IS NOT DISTINCT FROM`), with a row constructor or a folded row constant on
 //! either side, into per-field comparisons using IS NOT DISTINCT FROM - row comparisons are defined that way.
 class RowComparisonSimplificationRule : public Rule {

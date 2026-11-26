@@ -33,7 +33,7 @@ private:
 	// only pull up filters when there is a fork
 	bool can_pullup = false;
 
-	// identify case the branch is a set operation (INTERSECT or EXCEPT)
+	// Whether a projection can carry additional columns needed by pulled filters.
 	bool can_add_column = false;
 
 private:

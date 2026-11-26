@@ -67,6 +67,8 @@ private:
 	                                vector<ColumnBinding> &new_bindings);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,
 	                                                 const TopNWindowEliminationParameters &params) const;
+	bool AggregateKeepsZeroSign(const LogicalWindow &window, const vector<unique_ptr<Expression>> &payload,
+	                            const TopNWindowEliminationParameters &params) const;
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;

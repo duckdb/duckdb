@@ -20,10 +20,13 @@ bool JoinOrderLinearizer::BuildTree() {
 		}
 	}
 	auto count = graph.relation_manager.NumRelations();
+	vector<CardinalityValue> input_cardinalities;
+	input_cardinalities.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
 		graph.context.InterruptCheck();
 		auto &set = graph.set_manager.GetJoinRelation(RelationIndex(i));
-		cardinalities.push_back(estimator.EstimateCardinality(set).GetLog());
+		input_cardinalities.push_back(estimator.EstimateCardinality(set));
+		cardinalities.push_back(input_cardinalities.back().GetLog());
 	}
 	vector<Edge> edges;
 	bool edges_complete = true;
@@ -39,7 +42,9 @@ bool JoinOrderLinearizer::BuildTree() {
 		auto &set = graph.set_manager.Union(left, right);
 		double selectivity = 0;
 		if (std::isfinite(cardinalities[lhs]) && std::isfinite(cardinalities[rhs])) {
-			selectivity = estimator.EstimateCardinality(set).GetLog() - cardinalities[lhs] - cardinalities[rhs];
+			// Divide before taking logs: subtracting large logs can reorder equal-selectivity edges.
+			auto input_rows = input_cardinalities[lhs] * input_cardinalities[rhs];
+			selectivity = (estimator.EstimateCardinality(set) / input_rows).GetLog();
 		}
 		edges.push_back({MinValue(lhs, rhs), MaxValue(lhs, rhs), selectivity});
 		return false;
