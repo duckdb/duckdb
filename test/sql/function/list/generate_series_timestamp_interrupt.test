@@ -1,0 +1,37 @@
+# name: test/sql/function/list/generate_series_timestamp_interrupt.test
+# description: Counting the elements of a timestamp range with billions of steps stops at the statement timeout
+# group: [list]
+
+statement ok
+SET max_execution_time = 500;
+
+# the list would have more than 2^32 elements: without an interrupt check the statement only fails after counting them
+statement error
+SELECT generate_series(c0, c1, c2) FROM (VALUES (TIMESTAMP '2021-03-14 02:30:00', TIMESTAMP '2024-12-31 23:59:59.999999', INTERVAL '1 microsecond')) t(c0, c1, c2);
+----
+Query exceeded maximum execution time
+
+statement error
+SELECT range(c0, c1, c2) FROM (VALUES (TIMESTAMP '2024-12-31 23:59:59.999999', TIMESTAMP '2021-03-14 02:30:00', INTERVAL '-1 microsecond')) t(c0, c1, c2);
+----
+Query exceeded maximum execution time
+
+# constant arguments
+statement error
+SELECT generate_series(TIMESTAMP '2021-03-14 02:30:00', TIMESTAMP '2024-12-31 23:59:59.999999', INTERVAL '1 microsecond');
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time;
+
+# short ranges are unaffected
+query I
+SELECT generate_series(TIMESTAMP '2021-03-14 02:30:00', TIMESTAMP '2021-03-14 02:30:00.000003', INTERVAL '1 microsecond');
+----
+['2021-03-14 02:30:00', '2021-03-14 02:30:00.000001', '2021-03-14 02:30:00.000002', '2021-03-14 02:30:00.000003']
+
+query I
+SELECT len(generate_series(c0, c1, c2)) FROM (VALUES (TIMESTAMP '2021-03-14 02:30:00', TIMESTAMP '2021-03-14 02:30:01', INTERVAL '1 microsecond')) t(c0, c1, c2);
+----
+1000001

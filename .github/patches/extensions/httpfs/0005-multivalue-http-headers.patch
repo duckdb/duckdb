@@ -1,0 +1,434 @@
+diff --git a/src/http/http_request.cpp b/src/http/http_request.cpp
+index 5ed1193..7979a9b 100644
+--- a/src/http/http_request.cpp
++++ b/src/http/http_request.cpp
+@@ -15,17 +15,13 @@ static string StripETagQuotes(const string &etag) {
+ 
+ static void ApplyReadCondition(HTTPHeaders &headers, const HTTPReadConfig &read_config) {
+ 	if (read_config.condition.type == HTTPReadConditionType::ETAG) {
+-		headers["If-Match"] = read_config.condition.value;
++		headers.Set("If-Match", read_config.condition.value);
+ 	}
+ }
+ 
+ static HTTPHeaders RemoveRangeHeader(const HTTPHeaders &headers) {
+-	HTTPHeaders result;
+-	for (const auto &header : headers) {
+-		if (!StringUtil::CIEquals(header.first, "Range")) {
+-			result[header.first] = header.second;
+-		}
+-	}
++	auto result = headers;
++	result.RemoveAll("Range");
+ 	return result;
+ }
+ 
+@@ -255,7 +251,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::RunGetRangeRequest(HTTPFileHandle &hfh,
+                                                             const HTTPSendCallback &send_request) {
+ 	auto range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);
+ 	auto request_headers = header_map;
+-	request_headers["Range"] = range_expr;
++	request_headers.Set("Range", range_expr);
+ 	ApplyReadCondition(request_headers, read_config);
+ 
+ 	D_ASSERT(hfh.file_state);
+diff --git a/src/http/http_request_session.cpp b/src/http/http_request_session.cpp
+index 6dbd29c..666eddb 100644
+--- a/src/http/http_request_session.cpp
++++ b/src/http/http_request_session.cpp
+@@ -25,10 +25,12 @@ HTTPSessionRequest HTTPRequestSnapshot::CreateRequest(HTTPHeaders headers) const
+ 	request_params->user_agent.clear();
+ 	request_params->extra_headers.clear();
+ 	if (!configured_headers.user_agent.empty()) {
+-		headers.Insert("User-Agent", configured_headers.user_agent);
++		// Use the configured User-Agent only if the request has none.
++		// An entry in extra_headers takes precedence over both.
++		headers.InsertIfAbsent("User-Agent", configured_headers.user_agent);
+ 	}
+ 	for (const auto &header : configured_headers.extra_headers) {
+-		headers[header.first] = header.second;
++		headers.Set(header.first, header.second);
+ 	}
+ 	return {std::move(headers), std::move(request_params), std::move(configured_headers)};
+ }
+diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
+index 21b06e8..acaf404 100644
+--- a/src/http/httpfs.cpp
++++ b/src/http/httpfs.cpp
+@@ -52,7 +52,7 @@ void HTTPFSUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> res
+ 		return;
+ 	}
+ 	auto sanitized_request = request;
+-	sanitized_request.headers["x-amz-server-side-encryption-customer-key"] = "redacted";
++	sanitized_request.headers.Set("x-amz-server-side-encryption-customer-key", "redacted");
+ 	HTTPUtil::LogRequest(sanitized_request, response);
+ }
+ 
+diff --git a/src/http/httpfs_curl_client.cpp b/src/http/httpfs_curl_client.cpp
+index 1d43064..3c9565c 100644
+--- a/src/http/httpfs_curl_client.cpp
++++ b/src/http/httpfs_curl_client.cpp
+@@ -39,7 +39,7 @@ static size_t RequestHeaderCallback(void *contents, size_t size, size_t nmemb, v
+ 	// so we push back a new header_collection and store headers from the redirect there.
+ 	if (header.rfind("HTTP/", 0) == 0) {
+ 		header_collection.emplace_back();
+-		header_collection.back().Insert("__RESPONSE_STATUS__", header);
++		header_collection.back().InsertIfAbsent("__RESPONSE_STATUS__", header);
+ 	}
+ 
+ 	idx_t colon_pos = header.find(':');
+@@ -478,7 +478,7 @@ public:
+ 	}
+ 	static void AddUserAgentIfAvailable(HTTPFSParams &http_params, HTTPHeaders &header_map) {
+ 		if (!http_params.user_agent.empty()) {
+-			header_map.Insert("User-Agent", http_params.user_agent);
++			header_map.InsertIfAbsent("User-Agent", http_params.user_agent);
+ 		}
+ 	}
+ 
+@@ -779,16 +779,9 @@ private:
+ 		response->url = request_info->url;
+ 		response->reason = HTTPUtil::GetStatusMessage(status_code);
+ 		if (!request_info->header_collection.empty()) {
+-			auto &response_headers = request_info->header_collection.back();
+-			for (auto &header : response_headers) {
+-				// We should not return __RESPONSE_STATUS__ to the user. It's only there for debugging.
+-				if (header.first == "__RESPONSE_STATUS__") {
+-					continue;
+-				}
+-				for (auto &value : response_headers.GetHeaderValues(header.first)) {
+-					response->headers.Append(header.first, std::move(value));
+-				}
+-			}
++			response->headers = request_info->header_collection.back();
++			// We should not return __RESPONSE_STATUS__ to the user. It's only there for debugging.
++			response->headers.RemoveAll("__RESPONSE_STATUS__");
+ 		}
+ 		// ResetRequestInfo();
+ 		return response;
+diff --git a/src/http/httpfs_httplib_client.cpp b/src/http/httpfs_httplib_client.cpp
+index 8cf60ee..8534f03 100644
+--- a/src/http/httpfs_httplib_client.cpp
++++ b/src/http/httpfs_httplib_client.cpp
+@@ -154,7 +154,7 @@ public:
+ 
+ 	static void AddUserAgentIfAvailable(HTTPFSParams &http_params, HTTPHeaders &header_map) {
+ 		if (!http_params.user_agent.empty()) {
+-			header_map.Insert("User-Agent", http_params.user_agent);
++			header_map.InsertIfAbsent("User-Agent", http_params.user_agent);
+ 		}
+ 	}
+ 
+diff --git a/src/s3/s3_provider.cpp b/src/s3/s3_provider.cpp
+index 089a36f..b2dc611 100644
+--- a/src/s3/s3_provider.cpp
++++ b/src/s3/s3_provider.cpp
+@@ -120,7 +120,7 @@ void S3Provider::ApplyReadCondition(const HTTPReadCondition &condition, HTTPHead
+ 	if (GetType() != S3ProviderType::GCS) {
+ 		throw InvalidInputException("GCS generation checks require a GCS provider");
+ 	}
+-	headers["x-goog-if-generation-match"] = condition.value;
++	headers.Set("x-goog-if-generation-match", condition.value);
+ }
+ 
+ string S3Provider::GetVersionTag(const HTTPObjectVersion &version, const string &etag) const {
+diff --git a/src/s3/s3_request.cpp b/src/s3/s3_request.cpp
+index 02cc9eb..2b6fff6 100644
+--- a/src/s3/s3_request.cpp
++++ b/src/s3/s3_request.cpp
+@@ -188,15 +188,16 @@ public:
+ 
+ public:
+ 	void Create() {
+-		headers["Host"] = host;
++		headers.Set("Host", host);
+ 		InitializeDefaults();
+ 		AddRequestHeaders();
+ 		auto canonical_headers = BuildCanonicalHeaders();
+ 		auto signed_headers = BuildSignedHeaders(canonical_headers);
+ 		auto canonical_request = BuildCanonicalRequest(canonical_headers, signed_headers);
+ 		auto signature = CreateSignature(canonical_request);
+-		headers["Authorization"] = "AWS4-HMAC-SHA256 Credential=" + auth_params.GetCredentials().access_key_id + "/" +
+-		                           CredentialScope() + ", SignedHeaders=" + signed_headers + ", Signature=" + signature;
++		headers.Set("Authorization", "AWS4-HMAC-SHA256 Credential=" + auth_params.GetCredentials().access_key_id + "/" +
++		                                 CredentialScope() + ", SignedHeaders=" + signed_headers +
++		                                 ", Signature=" + signature);
+ 	}
+ 
+ private:
+@@ -212,31 +213,31 @@ private:
+ 	}
+ 
+ 	void AddRequestHeaders() {
+-		headers["x-amz-date"] = datetime_now;
+-		headers["x-amz-content-sha256"] = payload_hash;
++		headers.Set("x-amz-date", datetime_now);
++		headers.Set("x-amz-content-sha256", payload_hash);
+ 		auto &credentials = auth_params.GetCredentials();
+ 		auto &request_options = auth_params.GetRequestOptions();
+ 		if (!credentials.session_token.empty()) {
+-			headers["x-amz-security-token"] = credentials.session_token;
++			headers.Set("x-amz-security-token", credentials.session_token);
+ 		}
+ 		if (use_sse_kms) {
+-			headers["x-amz-server-side-encryption"] = "aws:kms";
+-			headers["x-amz-server-side-encryption-aws-kms-key-id"] = request_options.kms_key_id;
++			headers.Set("x-amz-server-side-encryption", "aws:kms");
++			headers.Set("x-amz-server-side-encryption-aws-kms-key-id", request_options.kms_key_id);
+ 		}
+ 		if (use_sse_customer) {
+ 			auto &sse_customer_key = *request_options.sse_customer_key;
+-			headers["x-amz-server-side-encryption-customer-algorithm"] = "AES256";
+-			headers["x-amz-server-side-encryption-customer-key"] = sse_customer_key.GetKey();
+-			headers["x-amz-server-side-encryption-customer-key-md5"] = sse_customer_key.GetKeyMD5();
++			headers.Set("x-amz-server-side-encryption-customer-algorithm", "AES256");
++			headers.Set("x-amz-server-side-encryption-customer-key", sse_customer_key.GetKey());
++			headers.Set("x-amz-server-side-encryption-customer-key-md5", sse_customer_key.GetKeyMD5());
+ 		}
+ 		if (request_options.requester_pays && auth_params.GetProvider().GetType() != S3ProviderType::GCS) {
+-			headers["x-amz-request-payer"] = "requester";
++			headers.Set("x-amz-request-payer", "requester");
+ 		}
+ 		if (!content_md5.empty()) {
+-			headers["content-md5"] = content_md5;
++			headers.Set("content-md5", content_md5);
+ 		}
+ 		if (!content_type.empty()) {
+-			headers["content-type"] = content_type;
++			headers.Set("content-type", content_type);
+ 		}
+ 	}
+ 
+@@ -364,10 +365,10 @@ static HTTPHeaders CreateConfiguredS3Headers(const HTTPConfiguredHeaders &config
+ 
+ 	HTTPHeaders result;
+ 	for (auto &header : sorted_headers) {
+-		result[header.first] = header.second;
++		result.InsertIfAbsent(header.first, header.second);
+ 	}
+ 	if (!configured_headers.user_agent.empty()) {
+-		result.Insert("User-Agent", configured_headers.user_agent);
++		result.InsertIfAbsent("User-Agent", configured_headers.user_agent);
+ 	}
+ 	return result;
+ }
+@@ -414,11 +415,11 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
+ 		provider.ApplyReadCondition(read_condition, headers);
+ 	}
+ 	if (provider.GetType() == S3ProviderType::GCS && !request_options.user_project.empty()) {
+-		headers["x-goog-user-project"] = request_options.user_project;
++		headers.Set("x-goog-user-project", request_options.user_project);
+ 	}
+ 	switch (auth_type) {
+ 	case S3AuthType::ANONYMOUS: {
+-		headers["Host"] = host;
++		headers.Set("Host", host);
+ 		return headers;
+ 	}
+ 	case S3AuthType::SIGV4: {
+@@ -429,13 +430,13 @@ HTTPHeaders S3RequestUtil::CreateHeaders(EncryptionUtil &encryption_util, const
+ 		return headers;
+ 	}
+ 	case S3AuthType::BEARER: {
+-		headers["Authorization"] = "Bearer " + credentials.oauth2_bearer_token;
+-		headers["Host"] = host;
++		headers.Set("Authorization", "Bearer " + credentials.oauth2_bearer_token);
++		headers.Set("Host", host);
+ 		if (!content_type.empty()) {
+-			headers["Content-Type"] = content_type;
++			headers.Set("Content-Type", content_type);
+ 		}
+ 		if (!content_md5.empty()) {
+-			headers["Content-MD5"] = content_md5;
++			headers.Set("Content-MD5", content_md5);
+ 		}
+ 		return headers;
+ 	}
+diff --git a/test/unittest/http/connection_reuse_test.cpp b/test/unittest/http/connection_reuse_test.cpp
+index 80f687b..7ab70fd 100644
+--- a/test/unittest/http/connection_reuse_test.cpp
++++ b/test/unittest/http/connection_reuse_test.cpp
+@@ -50,7 +50,7 @@ static void RunCurlTerminalTransportErrorIsNotReused() {
+ 	auto session = db.instance->config.GetHTTPTransportManager().CreateSession(*con.context, server.HTTPPath());
+ 	auto &params = session.Parameters();
+ 	HTTPHeaders headers;
+-	headers.Insert("Range", "bytes=0-3");
++	headers.InsertIfAbsent("Range", "bytes=0-3");
+ 	GetRequestInfo failed_request(server.HTTPPath(), headers, params, nullptr, nullptr);
+ 	failed_request.try_request = true;
+ 	auto failed_response = session.Request(failed_request);
+@@ -124,9 +124,9 @@ static void RunCurlRequestHeaderScenario() {
+ 	HTTPFSParams params(http_util);
+ 	auto client = http_util.InitializeClient(params, "http://" + server.Endpoint());
+ 	HTTPHeaders headers;
+-	headers["X-Empty"] = "";
+-	headers["X-Whitespace"] = " \t ";
+-	headers["X-Value"] = "value";
++	headers.InsertIfAbsent("X-Empty", "");
++	headers.InsertIfAbsent("X-Whitespace", " \t ");
++	headers.InsertIfAbsent("X-Value", "value");
+ 	HeadRequestInfo request(server.HTTPPath(), headers, params);
+ 	auto response = http_util.Request(request, client);
+ 	REQUIRE(response);
+@@ -398,14 +398,22 @@ TEST_CASE("HTTP clients send session headers once", "[httpfs][headers]") {
+ 			auto session = db.instance->config.GetHTTPTransportManager().CreateSession(*con.context, server.HTTPPath());
+ 			auto &params = session.Parameters();
+ 			HTTPHeaders headers;
+-			headers.Insert("X-Both", "request");
++			headers.Append("X-Both", "first");
++			headers.Append("x-both", "second");
+ 			HeadRequestInfo request(server.HTTPPath(), headers, params);
+ 			REQUIRE(session.Request(request)->Success());
++
++			headers.Set("X-Both", "replacement");
++			HeadRequestInfo replacement(server.HTTPPath(), headers, params);
++			REQUIRE(session.Request(replacement)->Success());
++
+ 			auto observations = server.Observations();
+-			REQUIRE(observations.size() == 1);
+-			REQUIRE(MockS3HeaderValues(observations[0], "X-Session") == vector<string> {"session"});
+-			// A header of the request takes precedence over a session header with the same name
+-			REQUIRE(MockS3HeaderValues(observations[0], "X-Both") == vector<string> {"request"});
++			REQUIRE(observations.size() == 2);
++			for (const auto &observation : observations) {
++				REQUIRE(MockS3HeaderValues(observation, "X-Session") == vector<string> {"session"});
++			}
++			REQUIRE(MockS3HeaderValues(observations[0], "X-Both") == vector<string> {"first", "second"});
++			REQUIRE(MockS3HeaderValues(observations[1], "X-Both") == vector<string> {"replacement"});
+ 			HTTPTestHelper::RequireQueryOk(con, "ROLLBACK");
+ 		}
+ 	}
+@@ -423,7 +431,7 @@ TEST_CASE("HTTP PUT respects explicit Content-Type and retains the fallback", "[
+ 				const string fallback_type = "application/octet-stream";
+ 				HTTPHeaders headers;
+ 				if (explicit_header) {
+-					headers.Insert("cOnTeNt-TyPe", "application/xml");
++					headers.InsertIfAbsent("cOnTeNt-TyPe", "application/xml");
+ 				}
+ 				const string body = "payload";
+ 				PutRequestInfo request(server.HTTPPath(), headers, params, const_data_ptr_cast(body.data()),
+diff --git a/test/unittest/http/http_request_session_test.cpp b/test/unittest/http/http_request_session_test.cpp
+index c3af4b9..ff26cf9 100644
+--- a/test/unittest/http/http_request_session_test.cpp
++++ b/test/unittest/http/http_request_session_test.cpp
+@@ -146,16 +146,17 @@ TEST_CASE("HTTP request snapshots are immutable and checked", "[httpfs][request-
+ 	REQUIRE(initial_request.params->extra_headers.empty());
+ 
+ 	HTTPHeaders caller_headers;
+-	caller_headers["User-Agent"] = "caller-agent";
+-	caller_headers["X-Test"] = "caller";
++	caller_headers.InsertIfAbsent("User-Agent", "caller-agent");
++	caller_headers.Append("X-Test", "caller");
++	caller_headers.Append("x-test", "another caller value");
+ 	auto current_request = current.snapshot->CreateRequest(std::move(caller_headers));
+ 	REQUIRE(current_request.headers.GetHeaderValue("User-Agent") == "caller-agent");
+-	REQUIRE(current_request.headers.GetHeaderValue("X-Test") == "second");
++	REQUIRE(current_request.headers.GetHeaderValues("X-Test") == vector<string> {"second"});
+ 
+ 	params.extra_headers["uSeR-aGeNt"] = "extra-agent";
+ 	auto override_snapshot = make_shared_ptr<HTTPRequestSnapshot>(params);
+ 	HTTPHeaders overridden_headers;
+-	overridden_headers["USER-AGENT"] = "caller-agent";
++	overridden_headers.InsertIfAbsent("USER-AGENT", "caller-agent");
+ 	auto override_request = override_snapshot->CreateRequest(std::move(overridden_headers));
+ 	REQUIRE(override_request.headers.GetHeaderValue("User-Agent") == "extra-agent");
+ 
+diff --git a/test/unittest/http/positional_read_test.cpp b/test/unittest/http/positional_read_test.cpp
+index 5068fff..3e3c15f 100644
+--- a/test/unittest/http/positional_read_test.cpp
++++ b/test/unittest/http/positional_read_test.cpp
+@@ -541,6 +541,31 @@ TEST_CASE("HTTP reads select only usable ETag conditions", "[httpfs][positional-
+ 	RunETagConditionCase("\"strong\"", "", true);
+ }
+ 
++TEST_CASE("HTTP HEAD removes Range but preserves other repeated headers", "[httpfs][positional-read][headers]") {
++	MockS3Server server {MockS3ServerConfig()};
++	DuckDB db(nullptr);
++	Connection con(db);
++	ConfigureHTTPReadTest(db, con, "curl");
++	RequireQueryOk(con, "BEGIN TRANSACTION");
++	auto &fs = FileSystem::GetFileSystem(*con.context);
++	auto url = server.HTTPPath();
++	auto handle = fs.OpenFile(url, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
++
++	HTTPHeaders headers;
++	headers.Append("Range", "bytes=0-1");
++	headers.Append("range", "bytes=2-3");
++	headers.Append("X-Repeated", "first");
++	headers.Append("x-repeated", "second");
++	auto response = handle->file_system.Cast<HTTPFileSystem>().HeadRequest(*handle, url, std::move(headers));
++	REQUIRE(response->Success());
++	auto observations = server.Observations();
++	REQUIRE_FALSE(observations.empty());
++	REQUIRE(observations.back().method == "HEAD");
++	REQUIRE(MockS3HeaderValues(observations.back(), "Range").empty());
++	REQUIRE(MockS3HeaderValues(observations.back(), "X-Repeated") == vector<string> {"first", "second"});
++	RequireQueryOk(con, "COMMIT");
++}
++
+ TEST_CASE("configured headers do not override positional read headers", "[httpfs][positional-read][headers]") {
+ 	RunConfiguredReadHeaderCollision();
+ 	RunConfiguredIfMatchCollision();
+diff --git a/test/unittest/s3/s3_file_credentials_test.cpp b/test/unittest/s3/s3_file_credentials_test.cpp
+index f09d4c4..c4be336 100644
+--- a/test/unittest/s3/s3_file_credentials_test.cpp
++++ b/test/unittest/s3/s3_file_credentials_test.cpp
+@@ -940,8 +940,8 @@ TEST_CASE("Named S3 files retain metadata through credential refresh and region
+ 				    S3RequestExecutor::RunSession(encryption_util, *session, spec, [&](S3RequestData &request_data) {
+ 					    buffer.clear();
+ 					    auto headers = request_data.headers;
+-					    headers.Insert("Range", "bytes=0-1023");
+-					    headers.Insert("If-Match", etag);
++					    headers.InsertIfAbsent("Range", "bytes=0-1023");
++					    headers.InsertIfAbsent("If-Match", etag);
+ 					    GetRequestInfo request(
+ 					        request_data.http_url, headers, *request_data.http_params,
+ 					        [](const HTTPResponse &) { return true; },
+diff --git a/test/unittest/s3/s3_request_test.cpp b/test/unittest/s3/s3_request_test.cpp
+index 4e350fc..bc4b437 100644
+--- a/test/unittest/s3/s3_request_test.cpp
++++ b/test/unittest/s3/s3_request_test.cpp
+@@ -1945,10 +1945,10 @@ TEST_CASE("S3 provider version policy preserves version semantics", "[httpfs][s3
+ 
+ 		HTTPHeaders headers;
+ 		REQUIRE_FALSE(provider.ReadObjectVersion(headers).IsSet());
+-		headers.Insert("x-amz-version-id", "");
++		headers.InsertIfAbsent("x-amz-version-id", "");
+ 		REQUIRE_FALSE(provider.ReadObjectVersion(headers).IsSet());
+ 		HTTPHeaders version_headers;
+-		version_headers.Insert("x-amz-version-id", "null");
++		version_headers.InsertIfAbsent("x-amz-version-id", "null");
+ 		auto metadata_version = provider.ReadObjectVersion(version_headers);
+ 		REQUIRE(metadata_version.GetType() == HTTPObjectVersionType::S3_VERSION_ID);
+ 		REQUIRE(metadata_version.GetValue() == "null");
+@@ -2162,7 +2162,7 @@ TEST_CASE("S3 HTTP errors preserve metadata and provider-specific context", "[ht
+ 	response.reason = "Forbidden by test";
+ 	response.body = "<Error><Code>InvalidAccessKeyId</Code><Message>bad credentials</Message>"
+ 	                "<AWSAccessKeyId>test-key</AWSAccessKeyId></Error>";
+-	response.headers.Insert("x-test-request-id", "request-42");
++	response.headers.InsertIfAbsent("x-test-request-id", "request-42");
+ 
+ 	auto config = TestAuthConfig();
+ 	config.credentials.region = "eu-west-1";
+@@ -2241,7 +2241,7 @@ TEST_CASE("S3 region correction retains spent retries", "[httpfs][s3][retry][sha
+ 			attempts++;
+ 			if (attempts == 2) {
+ 				auto response = make_uniq<HTTPResponse>(HTTPStatusCode::MovedPermanently_301);
+-				response->headers.Insert("x-amz-bucket-region", "eu-west-1");
++				response->headers.InsertIfAbsent("x-amz-bucket-region", "eu-west-1");
+ 				if (throw_redirect) {
+ 					throw HTTPException(*response, "region correction");
+ 				}
+diff --git a/test/unittest/s3/s3_url_parameters_test.cpp b/test/unittest/s3/s3_url_parameters_test.cpp
+index 6a2c814..99959c9 100644
+--- a/test/unittest/s3/s3_url_parameters_test.cpp
++++ b/test/unittest/s3/s3_url_parameters_test.cpp
+@@ -410,7 +410,7 @@ TEST_CASE("S3 URL policy preserves the configured HTTP redirect setting", "[http
+ 			S3RequestExecutor::RunSession(encryption_util, session, spec, [&](S3RequestData &request) {
+ 				REQUIRE(request.http_params->follow_location == follow_location);
+ 				HTTPResponse redirect(HTTPStatusCode(307));
+-				redirect.headers.Insert("Location", "https://storage.example/redirected");
++				redirect.headers.InsertIfAbsent("Location", "https://storage.example/redirected");
+ 				redirect.body = "redirect response";
+ 				auto error = ErrorData(S3RequestUtil::GetRequestError(request, redirect));
+ 				REQUIRE_FALSE(StringUtil::Contains(error.RawMessage(), MIGRATION_HINT));

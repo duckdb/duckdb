@@ -673,8 +673,7 @@ TEST_CASE("Filter cache capabilities reject mutable, throwing, and unsupported a
 	REQUIRE_FALSE(TableFilterState::Initialize(*con.context, hidden_throw)->can_cache);
 }
 
-TEST_CASE("Adaptive predicate caches share row feedback with fallback and preserve mandatory filters",
-          "[filter][adaptive_cache]") {
+TEST_CASE("Adaptive predicate caches share row feedback with fallback", "[filter][adaptive_cache]") {
 	const auto in_filter = GENERATE(false, true);
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -694,16 +693,19 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 		REQUIRE_FALSE(state->Cast<ExpressionFilterState>().can_cache_result);
 		auto cache = state->CreateCache(dictionary, dictionary.size());
 		REQUIRE(cache->IsValidFor(*state));
+		bool saw_pause = false, saw_recovery = false;
 		for (idx_t batch = 0; batch < 60; batch++) {
 			CAPTURE(mandatory, batch);
 			Vector input(LogicalType::BIGINT, STANDARD_VECTOR_SIZE);
 			SelectionVector codes(STANDARD_VECTOR_SIZE), incoming(STANDARD_VECTOR_SIZE);
 			idx_t count = 0;
+			idx_t matching_count = 0;
 			{
 				auto writer = FlatVector::Writer<int64_t>(input, STANDARD_VECTOR_SIZE);
 				auto values = dictionary.Values<int64_t>();
 				for (idx_t row = 0; row < STANDARD_VECTOR_SIZE; row++) {
-					const auto code = batch < 6 ? 3 : (batch + row) % dictionary.size();
+					// Only the optional lower bound or IN predicate rejects these values, in either order.
+					const auto code = batch < 6 || (batch + row) % 4 == 0 ? 3 : 1;
 					codes.set_index(row, code);
 					const auto value = values[code];
 					if (value.IsValid()) {
@@ -711,8 +713,9 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 					} else {
 						writer.WriteNull();
 					}
-					if (batch % 11 != 10 && (batch < 6 || row % 3 != 0)) {
+					if (batch % 11 != 10 && (batch < 6 || row % 3 != 1)) {
 						incoming.set_index(count++, row);
+						matching_count += code == 3;
 					}
 				}
 			}
@@ -733,10 +736,16 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 			for (idx_t row = 0; row < actual_count; row++) {
 				REQUIRE(selected.get_index(row) == expected.get_index(row));
 			}
+			if (batch >= 6 && count > matching_count) {
+				saw_pause |= actual_count == count;
+				saw_recovery |= saw_pause && actual_count == matching_count;
+			}
 			if (batch == 5 || batch == 6 || batch == 10) {
 				cache = state->CreateCache(dictionary, dictionary.size());
 			}
 		}
+		REQUIRE(saw_pause);
+		REQUIRE(saw_recovery);
 		auto replacement = TableFilterState::Initialize(*con.context, *filter);
 		REQUIRE_FALSE(cache->IsValidFor(*replacement));
 		state.reset();
@@ -774,18 +783,41 @@ TEST_CASE("Constant cached batches preserve adaptive feedback and mandatory pred
 		auto state = TableFilterState::Initialize(*con.context, *filter);
 		auto oracle = TableFilterState::Initialize(*con.context, *filter);
 		auto cache = state->CreateCache(dictionary, dictionary.size());
+		bool saw_pause = false, saw_recovery = false;
 		for (idx_t batch = 0; batch < 60; batch++) {
 			CAPTURE(mandatory, batch);
-			const auto code = batch < 6 ? 3 : batch % keys.size();
+			const auto code = batch < 6 || batch % 4 == 0 ? 3 : 1;
 			Vector input(keys[code], count_t(STANDARD_VECTOR_SIZE));
 			idx_t count = batch > 6 && batch % 11 == 0 ? 0 : STANDARD_VECTOR_SIZE;
+			const auto input_count = count;
 			idx_t expected_count = count;
 			SelectionVector expected;
 			ColumnSegment::FilterSelection(expected, input, *oracle, STANDARD_VECTOR_SIZE, expected_count);
 			cache->FilterConstant(code, count);
 			REQUIRE(count == expected_count);
+			if (code == 1 && input_count > 0) {
+				saw_pause |= count == input_count;
+				saw_recovery |= saw_pause && count == 0;
+			}
 			if (batch == 5 || batch == 6) {
 				cache = state->CreateCache(dictionary, dictionary.size());
+			}
+		}
+		REQUIRE(saw_pause);
+		REQUIRE(saw_recovery);
+		if (mandatory) {
+			// Mandatory failures must still be rejected immediately after the optional children pause.
+			for (const idx_t code : {0, 5}) {
+				auto mandatory_state = TableFilterState::Initialize(*con.context, *filter);
+				auto mandatory_cache = mandatory_state->CreateCache(dictionary, dictionary.size());
+				for (idx_t batch = 0; batch < 6; batch++) {
+					idx_t count = STANDARD_VECTOR_SIZE;
+					mandatory_cache->FilterConstant(3, count);
+					REQUIRE(count == STANDARD_VECTOR_SIZE);
+				}
+				idx_t count = STANDARD_VECTOR_SIZE;
+				mandatory_cache->FilterConstant(code, count);
+				REQUIRE(count == 0);
 			}
 		}
 		state.reset();

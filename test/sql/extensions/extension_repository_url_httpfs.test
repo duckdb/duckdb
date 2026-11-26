@@ -1,0 +1,36 @@
+# name: test/sql/extensions/extension_repository_url_httpfs.test
+# description: extension_repository_url(host) reads the host's metadata file as the CREATE statement does
+# group: [extensions]
+
+require httpfs
+
+statement ok
+SET extension_repository_directory='{TEST_DIR}/extension_repositories'
+
+# A secret that switches certificate verification off for the host is refused, as it is for the statement: an
+# unverified host cannot say where its repository is. The refusal comes before any request is made.
+statement ok
+CREATE SECRET lax (TYPE http, VERIFY_SSL false)
+
+statement error
+SELECT extension_repository_url('lax.example')
+----
+<REGEX>:Invalid Input Error.*certificate verification is disabled.*VERIFY_SSL.*
+
+statement ok
+DROP SECRET lax
+
+# A host that does not resolve fails on the read, naming the file it could not read.
+statement error
+SELECT extension_repository_url('lax.example')
+----
+<REGEX>:IO Error.*Cannot resolve the extension repository of host 'lax.example': Failed to read the host's metadata file 'https://lax.example/.well-known/duckdb-extension-repo.json'.*
+
+# Reading a host is an external access, and is refused when those are disabled.
+statement ok
+SET enable_external_access=false
+
+statement error
+SELECT extension_repository_url('lax.example')
+----
+<REGEX>:(Permission|Invalid Input) Error.*

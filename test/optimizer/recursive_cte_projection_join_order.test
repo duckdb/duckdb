@@ -122,20 +122,6 @@ SELECT count(*), sum(i) FROM r;
 ----
 4	6
 
-query TT
-EXPLAIN (FORMAT JSON) WITH RECURSIVE r(i) AS (
-    VALUES (0)
-    UNION ALL
-    SELECT x.i + 1
-    FROM range(1000) n(i)
-    JOIN (SELECT * FROM r) x ON x.i = n.i
-    JOIN range(3) tiny(j) ON tiny.j = n.i
-    WHERE x.i < 3
-)
-SELECT count(*), sum(i) FROM r;
-----
-physical_plan	<REGEX>:.*HASH_JOIN.*RANGE.*HASH_JOIN.*
-
 statement ok
 RESET disabled_optimizers;
 

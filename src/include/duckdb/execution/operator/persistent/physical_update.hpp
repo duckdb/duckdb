@@ -45,6 +45,9 @@ public:
 	bool index_update;
 
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;

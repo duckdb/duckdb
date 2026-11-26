@@ -181,6 +181,9 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
+			if (error.Type() == ExceptionType::OUT_OF_MEMORY) {
+				throw;
+			}
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
 			// error type and message
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",

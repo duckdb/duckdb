@@ -46,7 +46,7 @@ public:
 		}
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
-		auto headers = TransformHeaders(info.headers, info.params);
+		duckdb_httplib::Headers headers(info.headers.begin(), info.headers.end());
 		if (!info.response_handler && !info.content_handler) {
 			return TransformResult(client->Get(info.path, headers));
 		} else {
@@ -84,14 +84,6 @@ public:
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
-	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
-		duckdb_httplib::Headers headers;
-		for (auto &entry : header_map) {
-			headers.insert(entry);
-		}
-		return headers;
-	}
-
 	unique_ptr<HTTPResponse> TransformResponse(const duckdb_httplib::Response &response) {
 		auto status_code = HTTPUtil::ToStatusCode(response.status);
 		auto result = make_uniq<HTTPResponse>(status_code);

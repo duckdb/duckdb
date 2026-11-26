@@ -120,11 +120,6 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 	return result;
 }
 
-BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, idx_t column_index) {
-	auto bindings = op.GetColumnBindings();
-	return FindBaseTableColumn(op, bindings[column_index]);
-}
-
 BoundStatement Binder::BindDescribeQuery(ShowRef &ref) {
 	// bind the child plan of the DESCRIBE statement
 	auto child_binder = Binder::CreateBinder(context, this);
@@ -140,9 +135,10 @@ BoundStatement Binder::BindDescribeQuery(ShowRef &ref) {
 	auto collection = make_uniq<ColumnDataCollection>(context, return_types);
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
+	auto bindings = plan.plan->GetColumnBindings();
 	for (idx_t column_idx = 0; column_idx < plan.types.size(); column_idx++) {
 		// check if we can trace the column to a base table so that we can figure out constraint information
-		auto result = FindBaseTableColumn(*plan.plan, column_idx);
+		auto result = FindBaseTableColumn(*plan.plan, bindings[column_idx]);
 		idx_t row_index = output.size();
 		auto &alias = plan.names[column_idx];
 		if (result.table) {

@@ -1,0 +1,59 @@
+# name: test/sql/parser/test_nested_cte_depth.test
+# description: Deeply nested common table expressions are rejected by the expression depth limit
+# group: [parser]
+
+statement ok
+SET max_expression_depth=10;
+
+statement error
+WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (SELECT 1 AS x) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t;
+----
+<REGEX>:Parser Error.*Max expression depth.*
+
+# a nesting below the limit works
+query I
+WITH t AS (WITH t AS (WITH t AS (WITH t AS (WITH t AS (SELECT 1 AS x) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t) SELECT * FROM t;
+----
+1
+
+# common table expressions next to each other do not nest: every body peaks at seven levels, six of them would
+# exceed the limit if a finished definition kept its level
+query I
+WITH a AS (SELECT abs(abs(abs(abs(abs(1)))))), b AS (SELECT abs(abs(abs(abs(abs(1)))))), c AS (SELECT abs(abs(abs(abs(abs(1)))))), d AS (SELECT abs(abs(abs(abs(abs(1)))))), e AS (SELECT abs(abs(abs(abs(abs(1)))))), f AS (SELECT abs(abs(abs(abs(abs(1)))))) SELECT 1;
+----
+1
+
+statement ok
+RESET max_expression_depth;
+
+# many sibling common table expressions bind under the default limit
+query I
+WITH a0 AS (SELECT 0 AS x), a1 AS (SELECT 1 AS x), a2 AS (SELECT 2 AS x), a3 AS (SELECT 3 AS x), a4 AS (SELECT 4 AS x), a5 AS (SELECT 5 AS x), a6 AS (SELECT 6 AS x), a7 AS (SELECT 7 AS x), a8 AS (SELECT 8 AS x), a9 AS (SELECT 9 AS x), a10 AS (SELECT 10 AS x), a11 AS (SELECT 11 AS x), a12 AS (SELECT 12 AS x), a13 AS (SELECT 13 AS x), a14 AS (SELECT 14 AS x) SELECT x FROM a14;
+----
+14
+
+# a nesting far beyond the limit is rejected while it is parsed, before a tree of that depth exists
+statement error
+FROM query(repeat('WITH t AS (', 60000) || 'SELECT 1' || repeat(') SELECT * FROM t', 60000));
+----
+<REGEX>:Parser Error.*Max expression depth.*
+
+# a data-modifying statement in a common table expression counts as well
+statement ok
+CREATE TABLE cte_depth_tbl(i INTEGER);
+
+statement ok
+SET max_expression_depth=3;
+
+statement error
+WITH a AS (WITH b AS (WITH c AS (WITH d AS (INSERT INTO cte_depth_tbl VALUES (1) RETURNING i) SELECT * FROM d) SELECT * FROM c) SELECT * FROM b) SELECT * FROM a;
+----
+<REGEX>:Parser Error.*Max expression depth.*
+
+statement ok
+RESET max_expression_depth;
+
+query I
+SELECT count(*) FROM cte_depth_tbl;
+----
+0
