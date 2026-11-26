@@ -2082,7 +2082,8 @@ typedef void (*duckdb_v2_context_state_init_callback_fn)(duckdb_v2_context_handl
  * queries DuckDB runs on behalf of another. No transaction is guaranteed to be active.
  *
  * An error reported through `err` fails the query. The query still ends: the query end callbacks of all states, the
- * rejecting one included, receive the error, and a transaction the query started is rolled back.
+ * rejecting one included, receive the error, and a transaction the query started is rolled back. Inside an explicit
+ * transaction the failure aborts the transaction, as any failed query does.
  */
 typedef void (*duckdb_v2_context_state_query_begin_callback_fn)(duckdb_v2_context_handle context, void *user_data,
                                                                 duckdb_v2_error_info_handle *err);

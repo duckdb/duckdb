@@ -328,15 +328,17 @@ TEST_CASE("V2 connection state: failures", "[capi_v2][state]") {
 			REQUIRE(Count(*other, "query_end") == 2);
 		}
 
-		// inside an explicit transaction, a rejected query leaves the transaction open and usable
+		// inside an explicit transaction, a rejected query aborts the transaction like any failed query
 		REQUIRE(RunSql(fx.conn, "BEGIN") == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(RunSql(fx.conn, "CREATE TABLE v2_state_t (i INTEGER)") == DUCKDB_V2_ERROR_NONE);
 		recorder->fail_query_begin = true;
 		REQUIRE(RunSql(fx.conn, "SELECT 1") == DUCKDB_V2_ERROR_INPUT_INVALID);
 		recorder->fail_query_begin = false;
-		REQUIRE(RunSql(fx.conn, "INSERT INTO v2_state_t VALUES (1)") == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(RunSql(fx.conn, "COMMIT") == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(RunSql(fx.conn, "SELECT * FROM v2_state_t") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "INSERT INTO v2_state_t VALUES (1)") == DUCKDB_V2_ERROR_DATABASE_TRANSACTION);
+		REQUIRE(RunSql(fx.conn, "ROLLBACK") == DUCKDB_V2_ERROR_NONE);
+		// the connection is usable again, and the rolled back table is gone
+		REQUIRE(RunSql(fx.conn, "SELECT 1") == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "SELECT * FROM v2_state_t") != DUCKDB_V2_ERROR_NONE);
 	}
 
 	SECTION("a transaction whose begin a state rejects is rolled back") {
