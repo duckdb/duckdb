@@ -411,15 +411,7 @@ jobs:
 
     - name: Tidy Check (clang-tidy)
       shell: bash
-      run: |
-        log_file=clang-tidy.log
-        if make tidy-check TIDY_BINARY=clang-tidy-20 >"${log_file}" 2>&1; then
-          tidy_status=0
-        else
-          tidy_status=$?
-        fi
-        python3 scripts/ci/summarize_clang_tidy.py "${log_file}" --command-exit-code "${tidy_status}"
-        exit "${tidy_status}"
+      run: python3 scripts/ci/run_clang_tidy_check.py -- make tidy-check TIDY_BINARY=clang-tidy-20
 
     - name: Upload clang-tidy log
       if: ${{ failure() }}

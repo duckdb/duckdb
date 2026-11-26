@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUMMARIZER_PATH = REPO_ROOT / "scripts" / "ci" / "summarize_clang_tidy.py"
-SPEC = importlib.util.spec_from_file_location("summarize_clang_tidy", SUMMARIZER_PATH)
+SUMMARIZER_PATH = REPO_ROOT / "scripts" / "ci" / "run_clang_tidy_check.py"
+SPEC = importlib.util.spec_from_file_location("run_clang_tidy_check", SUMMARIZER_PATH)
 SUMMARIZE_CLANG_TIDY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SUMMARIZE_CLANG_TIDY)
 
