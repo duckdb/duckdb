@@ -14,7 +14,7 @@ void FileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> 
 	GetFileSystem().RegisterCompressionFilesystem(std::move(fs));
 }
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, const FileOpenFlags &flags) {
 	return OpenFile(OpenFileInfo(path), flags);
 }
 
@@ -52,7 +52,7 @@ unique_ptr<FileHandle> FileSystem::OpenCachedFile(const OpenFileInfo &file, cons
 	return GetFileSystem().WrapOpenedFile(std::move(handle), file, flags, GetOpener());
 }
 
-unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                        const MMapOptions &options) {
 	VerifyCanAccessFile(path.path);
 	if (IsDuckDBExtensionName(path.path)) {

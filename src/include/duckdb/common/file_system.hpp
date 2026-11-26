@@ -116,9 +116,9 @@ public:
 	}
 
 	//! Path-level operations: the access is verified, then forwarded together with the opener
-	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags);
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, const FileOpenFlags &flags);
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags);
-	DUCKDB_API unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                      const MMapOptions &options);
 
 	DUCKDB_API bool DirectoryExists(const string &directory);
