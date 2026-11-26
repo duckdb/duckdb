@@ -1340,7 +1340,9 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memo
 		// A failed claim reloads the estimate: frees added meanwhile do not cancel the purge, a claim by another
 		// thread does.
 	} while (!estimated_unflushed_memory.compare_exchange_weak(deallocated, 0, std::memory_order_relaxed));
-	const auto mapped_memory = allocator.GetMappedMemory();
+	// Allocator statistics can only defer the purge when the room next to the cached memory holds a threshold.
+	const auto room = memory_headroom - MinValue(memory_headroom, GetCachedMemory());
+	const auto mapped_memory = room >= threshold ? allocator.GetMappedMemory() : optional_idx();
 	if (mapped_memory.IsValid()) {
 		// Repeated frees of reused memory cannot retain more than the fallback allocator's mapped footprint.
 		const auto unflushed = MinValue(deallocated, mapped_memory.GetIndex());
