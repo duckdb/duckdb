@@ -29,6 +29,20 @@ idx_t GetMinimumQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats,
 	}
 
 	if (type == OrderByColumnType::NUMERIC) {
+		if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+			// the bignum_t tier of decimals
+			if (!BignumStats::HasMinMax(stats)) {
+				return 0;
+			}
+			// a cut bound is not attained by a value, so it only guarantees one qualifying tuple
+			if (!BignumStats::MinIsExact(stats) || !BignumStats::MaxIsExact(stats)) {
+				return 1;
+			}
+			if (BignumStats::Min(stats) == BignumStats::Max(stats)) {
+				return 1;
+			}
+			return 2;
+		}
 		if (!NumericStats::HasMinMax(stats)) {
 			return 0;
 		}
