@@ -76,11 +76,11 @@ const vector<unique_ptr<Rule>> &ExpressionRewriter::GetRules() {
 		return rules;
 	}
 	auto &client_data = ClientData::Get(context);
-	if (!client_data.default_expression_rewriter) {
+	CallOnce(client_data.default_expression_rewriter_once, [&] {
 		auto default_rewriter = make_uniq<ExpressionRewriter>(context);
 		default_rewriter->rules = CreateDefaultRules(*default_rewriter);
 		client_data.default_expression_rewriter = std::move(default_rewriter);
-	}
+	});
 	return client_data.default_expression_rewriter->rules;
 }
 

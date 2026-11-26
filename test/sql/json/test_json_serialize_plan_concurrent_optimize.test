@@ -1,0 +1,35 @@
+# name: test/sql/json/test_json_serialize_plan_concurrent_optimize.test
+# description: Concurrent json_serialize_plan calls optimize their plans in the same fresh client
+# group: [json]
+
+require json
+
+statement ok
+CREATE TABLE t AS SELECT i AS a, i % 7 AS b FROM range(2000) t(i);
+
+statement ok
+CREATE MACRO plan_error(q) AS (
+    SELECT json_extract_string(plan, '$.error')
+    FROM (SELECT json_serialize_plan(q::VARCHAR, optimize := true) AS plan)
+);
+
+# each iteration starts a fresh client; with the outer query unoptimized its scalar subqueries run in parallel, so
+# the first optimizer runs of the client happen concurrently on several threads
+loop i 0 30
+
+reconnect
+
+statement ok
+SET debug_disable_optimizer=true
+
+query IIIIII
+SELECT plan_error('SELECT b FROM t'),
+       plan_error('SELECT b FROM t WHERE a >= 0'),
+       plan_error('SELECT b FROM t WHERE a > 500'),
+       plan_error('SELECT b FROM t WHERE a > 500 AND b = 3'),
+       plan_error('SELECT b FROM t WHERE a > 500 OR b = 3'),
+       plan_error('SELECT b FROM t WHERE NOT (a < 10)');
+----
+false	false	false	false	false	false
+
+endloop
