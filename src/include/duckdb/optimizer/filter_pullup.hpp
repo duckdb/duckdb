@@ -19,7 +19,7 @@ class ClientContext;
 class FilterPullup {
 public:
 	//! The context is needed for the collations an EXCEPT / INTERSECT compares its columns with
-	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = true)
+	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = false)
 	    : context(context), can_pullup(pullup), can_add_column(add_column) {
 	}
 
