@@ -78,7 +78,8 @@ string ParquetFileMetadataCache::CreateEncryptionKeyHash(const ParquetEncryption
                                                          const EncryptionUtil &encryption_util) {
 	string result(CryptoHash::GetHexDigestSize(CryptoHashFunction::SHA256), '\0');
 	const auto &footer_key = encryption_config.GetFooterKey();
-	const auto input = std::to_string(footer_key.size()) + ":" + footer_key + encryption_config.GetFileAAD(algorithm);
+	auto input = std::to_string(footer_key.size()) + ":" + footer_key + encryption_config.ResolveAADPrefix(algorithm);
+	input.append(algorithm.aad_file_unique.data(), algorithm.aad_file_unique.size());
 	encryption_util.HashHex(CryptoHashFunction::SHA256, const_data_ptr_cast(input.data()), input.size(), &result[0]);
 	return result;
 }

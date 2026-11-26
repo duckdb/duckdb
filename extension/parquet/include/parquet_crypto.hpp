@@ -74,8 +74,9 @@ private:
 
 struct CryptoMetaData {
 	CryptoMetaData(Allocator &allocator);
-	void Initialize(const std::string &file_aad_p, int16_t row_group_ordinal = -1, int16_t column_ordinal = -1,
-	                int8_t module = -1, int16_t page_ordinal = -1);
+	void Initialize(const std::string &unique_file_identifier_p, const std::string &aad_prefix,
+	                int16_t row_group_ordinal = -1, int16_t column_ordinal = -1, int8_t module = -1,
+	                int16_t page_ordinal = -1);
 	void ClearAdditionalAuthenticatedData();
 	void SetModule(int8_t module_p);
 	bool IsEmpty() const;
@@ -120,7 +121,7 @@ public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
 	const string &GetFooterKey() const;
 	const optional<string> &GetAADPrefix() const;
-	string GetFileAAD(const duckdb_parquet::AesGcmV1 &algorithm) const;
+	string ResolveAADPrefix(const duckdb_parquet::AesGcmV1 &algorithm) const;
 
 public:
 	void Serialize(Serializer &serializer) const;

@@ -403,11 +403,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
-		auto file_aad = encryption_config->GetFileAAD(crypto_metadata->encryption_algorithm.AES_GCM_V1);
+		auto &algorithm = crypto_metadata->encryption_algorithm.AES_GCM_V1;
+		auto aad_prefix = encryption_config->ResolveAADPrefix(algorithm);
 		CryptoMetaData aad_crypto_metadata = CryptoMetaData(allocator);
 
-		if (!file_aad.empty()) {
-			aad_crypto_metadata.Initialize(file_aad);
+		if (!algorithm.aad_file_unique.empty()) {
+			aad_crypto_metadata.Initialize(algorithm.aad_file_unique, aad_prefix);
 			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);

@@ -189,7 +189,7 @@ const optional<string> &ParquetEncryptionConfig::GetAADPrefix() const {
 	return aad_prefix;
 }
 
-string ParquetEncryptionConfig::GetFileAAD(const duckdb_parquet::AesGcmV1 &algorithm) const {
+string ParquetEncryptionConfig::ResolveAADPrefix(const duckdb_parquet::AesGcmV1 &algorithm) const {
 	string prefix(algorithm.aad_prefix.data(), algorithm.aad_prefix.size());
 	if (algorithm.__isset.supply_aad_prefix && algorithm.supply_aad_prefix) {
 		if (algorithm.__isset.aad_prefix) {
@@ -205,7 +205,7 @@ string ParquetEncryptionConfig::GetFileAAD(const duckdb_parquet::AesGcmV1 &algor
 	if (!prefix.empty() && algorithm.aad_file_unique.empty()) {
 		throw InvalidInputException("Parquet file with an AAD prefix is missing its unique file identifier");
 	}
-	return prefix + string(algorithm.aad_file_unique.data(), algorithm.aad_file_unique.size());
+	return prefix;
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
@@ -626,14 +626,15 @@ CryptoMetaData::CryptoMetaData(Allocator &allocator) {
 	additional_authenticated_data = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
 }
 
-void CryptoMetaData::Initialize(const std::string &file_aad_p, int16_t row_group_ordinal_p, int16_t column_ordinal_p,
-                                int8_t module_p, int16_t page_ordinal_p) {
-	if (file_aad_p.empty()) {
+void CryptoMetaData::Initialize(const std::string &unique_file_identifier_p, const std::string &aad_prefix,
+                                int16_t row_group_ordinal_p, int16_t column_ordinal_p, int8_t module_p,
+                                int16_t page_ordinal_p) {
+	if (unique_file_identifier_p.empty()) {
 		// aad not used for encryption
 		// this happens with old duckdb-parquet encryption
 		return;
 	}
-	file_aad = file_aad_p;
+	file_aad = aad_prefix + unique_file_identifier_p;
 	module = module_p;
 	row_group_ordinal = row_group_ordinal_p;
 	column_ordinal = column_ordinal_p;
