@@ -10,6 +10,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/function/aggregate/bignum_aggregates.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -121,60 +122,12 @@ struct DecimalAvgOperation {
 //===--------------------------------------------------------------------===//
 // The bignum_t tier: decimals wider than 38 digits
 //
-// The state is an exact BIGNUM sum and a non-NULL row count; the sum is divided once at the end with the rounding of
-// the fixed-size tiers (half to even). The sum has no bound, so this tier cannot overflow.
+// The state is the shared BIGNUM average accumulator (an exact sum and a non-NULL row count); the sum is divided once
+// at the end with the rounding of the fixed-size tiers (half to even). The sum has no bound, so this tier cannot
+// overflow.
 //===--------------------------------------------------------------------===//
 
-struct WideDecimalAvgState {
-	uint64_t count;
-	BignumIntermediate sum;
-};
-
-struct WideDecimalAvgOperation {
-	static bool IgnoreNull() {
-		return true;
-	}
-
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.sum = BignumIntermediate();
-	}
-
-	template <class INPUT, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT &input, AggregateUnaryInput &unary_input) {
-		if (state.count == 0) {
-			state.sum.Initialize(unary_input.input.allocator);
-		}
-		state.count++;
-		const BignumIntermediate value(input);
-		state.sum.AddInPlace(unary_input.input.allocator, value);
-	}
-
-	template <class INPUT, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT &input, AggregateUnaryInput &unary_input, idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
-		if (source.count == 0) {
-			return;
-		}
-		// the counts of imported states can be anything, the count of rows of a table cannot overflow
-		uint64_t count;
-		if (!TryAddOperator::Operation(target.count, source.count, count)) {
-			throw OutOfRangeException("Overflow in aggregate state combine");
-		}
-		if (target.count == 0) {
-			target.sum.Initialize(input.allocator);
-		}
-		target.count = count;
-		target.sum.AddInPlace(input.allocator, source.sum);
-	}
-
+struct WideDecimalAvgOperation : BignumAvgOperation {
 	template <class RESULT, class STATE>
 	static void Finalize(STATE &state, RESULT &target, AggregateFinalizeData &finalize_data) {
 		// the state is only read: it is exported while other threads may still read it
@@ -189,7 +142,7 @@ struct WideDecimalAvgOperation {
 		const BignumIntermediate divisor(count_value);
 		string_t quotient;
 		string_t remainder;
-		if (!BignumIntermediate::TryDivMod(heap, arithmetic, state.sum, divisor, quotient, remainder)) {
+		if (!BignumIntermediate::TryDivMod(heap, arithmetic, state.value, divisor, quotient, remainder)) {
 			throw InternalException("decimal_average: division of the sum by the count failed");
 		}
 		if (!DecimalHelper<bignum_t>::IsZero(bignum_t(remainder))) {
@@ -227,23 +180,16 @@ struct WideDecimalAvgOperation {
 //! The states are exported as STRUCT(sum BIGNUM, count UBIGINT), the sum is NULL for an empty state
 static AggregateStateLayout WideDecimalAvgStateLayout(AggregateLayoutInput &input) {
 	return AggregateStateLayout(LogicalType::STRUCT({{"sum", LogicalType::BIGNUM}, {"count", LogicalType::UBIGINT}}),
-	                            AlignValue<idx_t>(sizeof(WideDecimalAvgState)));
+	                            AlignValue<idx_t>(sizeof(BignumAvgState)));
 }
 
-static void WideDecimalAvgExportState(Vector &state_vector, AggregateFinalizeInputData &input, Vector &result,
-                                      idx_t count, idx_t offset) {
-	auto states = state_vector.Values<WideDecimalAvgState *>();
+static void WideDecimalAvgExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                                      idx_t offset) {
+	auto states = state_vector.Values<BignumAvgState *>();
 	auto writer = FlatVector::Writer<VectorStructType<string_t, uint64_t>>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
 		writer.WriteValue([&](auto &sum_writer, auto &count_writer) {
-			if (state.count == 0) {
-				sum_writer.WriteNull();
-			} else {
-				// the sum is trimmed on the way out, the state itself is only read
-				sum_writer.WriteValue(state.sum.ToBignum(input.allocator).data);
-			}
-			count_writer.WriteValue(state.count);
+			BignumAggregates::WriteAvgState(*states[i].GetValue(), count_writer, sum_writer);
 		});
 	}
 }
@@ -251,8 +197,8 @@ static void WideDecimalAvgExportState(Vector &state_vector, AggregateFinalizeInp
 static void WideDecimalAvgImportState(AggregateImportInputData &input) {
 	auto entries = input.input_vec.Values<VectorStructType<string_t, uint64_t>>();
 	for (idx_t i = 0; i < input.input_vec.size(); i++) {
-		auto &state = *reinterpret_cast<WideDecimalAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
-		WideDecimalAvgOperation::Initialize(state);
+		auto &state = *reinterpret_cast<BignumAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
+		BignumAvgOperation::Initialize(state);
 		const auto entry = entries[i];
 		if (!entry.IsValid()) {
 			// an empty state
@@ -288,13 +234,13 @@ static void WideDecimalAvgImportState(AggregateImportInputData &input) {
 		auto ptr = input.allocator.Allocate(size);
 		memcpy(ptr, blob.GetData(), size);
 		state.count = count_entry.GetValue();
-		state.sum = BignumIntermediate(ptr, size);
+		state.value = BignumIntermediate(ptr, size);
 	}
 }
 
 static AggregateFunction MakeWideDecimalAvgFunction(const LogicalType &type) {
 	auto function =
-	    AggregateFunction::UnaryAggregate<WideDecimalAvgState, bignum_t, bignum_t, WideDecimalAvgOperation>(type, type);
+	    AggregateFunction::UnaryAggregate<BignumAvgState, bignum_t, bignum_t, WideDecimalAvgOperation>(type, type);
 	function.SetFallible(); // the finalize throws when the average of an imported state does not fit the width
 	function.SetStateExportCallbacks(WideDecimalAvgStateLayout, WideDecimalAvgExportState, WideDecimalAvgImportState);
 	return function;
