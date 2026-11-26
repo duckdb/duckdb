@@ -184,16 +184,6 @@ static unique_ptr<LogicalOperator> CreateProjection(Optimizer &optimizer, unique
 	return std::move(projection);
 }
 
-static bool HasVolatileExpression(const LogicalOperator &op) {
-	bool has_volatile = false;
-	LogicalOperatorVisitor::EnumerateExpressions(
-	    op, [&](const unique_ptr<Expression> *expr) { has_volatile |= (*expr)->IsVolatile(); });
-	for (auto &child : op.children) {
-		has_volatile = has_volatile || HasVolatileExpression(*child);
-	}
-	return has_volatile;
-}
-
 static bool DistinctInputsCanThrow(const BoundAggregateExpression &aggregate) {
 	for (auto &child : aggregate.GetChildren()) {
 		if (child->CanThrow()) {
@@ -843,7 +833,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		                                            input_replacements);
 	};
 
-	const bool input_has_volatile = aggr.groups.empty() && HasVolatileExpression(*op->children[0]);
+	const bool input_has_volatile = aggr.groups.empty() && op->children[0]->HasVolatileExpressions();
 	for (auto &set : distinct_sets) {
 		column_binding_map_t<ColumnBinding> input_replacements;
 		auto branch = CreateDistinctBranch(optimizer, aggr, set, CreateBranchInput(input_replacements),
