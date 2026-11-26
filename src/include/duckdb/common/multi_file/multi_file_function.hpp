@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
@@ -808,19 +807,12 @@ public:
 	}
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
-	                                MultiFileGlobalState &gstate) {
+	                                MultiFileGlobalState &gstate, optional_idx read_ahead_row_limit) {
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		// Small ordered limits only need read-ahead for their requested rows.
-		optional_idx auto_row_limit;
-		if (gstate.op && gstate.op->type == PhysicalOperatorType::TABLE_SCAN) {
-			const auto limit_rows = gstate.op->Cast<PhysicalTableScan>().limit_rows;
-			if (limit_rows.IsValid() && limit_rows.GetIndex() <= STANDARD_VECTOR_SIZE) {
-				auto_row_limit = limit_rows;
-			}
-		}
-		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, auto_row_limit);
+		gstate.read_ahead =
+		    ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED, true, 1, 0, read_ahead_row_limit);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -937,7 +929,7 @@ public:
 				}
 			}
 		}
-		InitializeReadAhead(context, bind_data, *result);
+		InitializeReadAhead(context, bind_data, *result, input.read_ahead_row_limit);
 		return std::move(result);
 	}
 

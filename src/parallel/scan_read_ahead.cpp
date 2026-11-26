@@ -2,6 +2,7 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_type.hpp"
@@ -255,6 +256,9 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanRead
 		return nullptr;
 	}
 	if (configured_depth < 0) {
+		if (auto_row_limit.IsValid() && auto_row_limit.GetIndex() > STANDARD_VECTOR_SIZE) {
+			auto_row_limit.SetInvalid();
+		}
 		return make_uniq<ScanReadAhead>(context, policy, NumericLimits<idx_t>::Maximum(),
 		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()), true, shard_count,
 		                                scan_concurrency, auto_row_limit);

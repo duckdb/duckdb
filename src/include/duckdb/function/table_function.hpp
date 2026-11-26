@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
@@ -165,6 +166,8 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
+	//! Optional ordered row demand for automatic read-ahead, supplied during global initialization.
+	optional_idx read_ahead_row_limit;
 	//! (Optional) Set when a multi-file scan initializes this function to read one of its files
 	optional_ptr<const TableFunctionFileInitInput> multi_file_input;
 	//! Runtime pipeline requirements, supplied only when initializing the source's local state.

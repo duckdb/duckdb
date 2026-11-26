@@ -219,7 +219,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 		if (total_limit.IsValid() && op.limit_val.GetConstantValue() > 0) {
 			auto scan = FindUnfilteredTableScan(*limit_child);
 			if (scan && !scan->dynamic_filters && !scan->extra_info.sample_options && !scan->function.in_out_function) {
-				scan->limit_rows = total_limit;
+				scan->read_ahead_row_limit = total_limit;
 			}
 		}
 		auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
