@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include <random>
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -199,9 +199,7 @@ string MetaTransaction::ShareTransaction() {
 	lock_guard<mutex> guard(shared_lock);
 	if (share_id.empty()) {
 		// the identifier grants access to the transaction, so it must not be predictable
-		std::random_device random_device;
-		share_id = StringUtil::Format("%08x-%08x-%08x-%08x", random_device(), random_device(), random_device(),
-		                              random_device());
+		share_id = UUID::ToString(UUIDv4::GenerateRandomUUID());
 	}
 	return share_id;
 }

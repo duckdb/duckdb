@@ -131,6 +131,7 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_FAIL(con1.Query("COMMIT"));
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 1);
 	}
+#ifndef DUCKDB_NO_THREADS
 	SECTION("concurrent inserts into a shared transaction") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		auto share_id = ShareTransaction(con1);
@@ -175,6 +176,7 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 		REQUIRE_NO_FAIL(con1.Query("ROLLBACK"));
 	}
+#endif
 	SECTION("the transaction outlives the connection that created it, with optimistic writes to disk") {
 		auto path = TestCreatePath("shared_transaction_outlives_owner.db");
 		DeleteDatabase(path);
@@ -201,6 +203,7 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		Connection check(reopened);
 		RequireValue(check, "SELECT COUNT(*) FROM big", 600000);
 	}
+#ifndef DUCKDB_NO_THREADS
 	SECTION("a read of one connection sees the rows written by another connection grow") {
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT)"));
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
@@ -235,6 +238,7 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 	}
+#endif
 	SECTION("errors") {
 		// sharing requires a transaction
 		REQUIRE_FAIL(con1.Query("SELECT share_transaction()"));

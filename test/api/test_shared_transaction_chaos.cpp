@@ -12,6 +12,8 @@
 
 using namespace duckdb;
 
+#ifndef DUCKDB_NO_THREADS
+
 namespace {
 
 //! Statements that connections of a shared transaction run in random order. Most of them conflict with each other.
@@ -300,3 +302,5 @@ TEST_CASE("Random concurrent statements on a shared transaction with interrupts"
 		RunChaosRound(round, string(), 5, 40, true);
 	}
 }
+
+#endif

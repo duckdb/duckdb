@@ -11,6 +11,8 @@
 
 using namespace duckdb;
 
+#ifndef DUCKDB_NO_THREADS
+
 namespace {
 
 //! Collects the errors of statements that run on other threads
@@ -823,3 +825,5 @@ TEST_CASE("Joining and leaving a shared transaction while it is in use", "[api][
 		shared.Commit();
 	}
 }
+
+#endif
