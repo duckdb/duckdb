@@ -273,62 +273,6 @@ jobs:
           git diff --exit-code
           echo "::endgroup::"
 
- autocomplete-diagnostics:
-    name: Diagnose autocomplete
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 29391 }}
-    needs: prepare
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      actions: read
-    container:
-      image: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:20261125-2939f510
-      options: --cap-add SYS_PTRACE --security-opt seccomp=unconfined
-    env:
-      DUCKDB_COMMIT: 849f47c5eafac4af274ebd609fd147c0a9eac0b1
-      DUCKDB_VERSION: v2.1.0-dev95770
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          repository: duckdb/duckdb
-          ref: 849f47c5eafac4af274ebd609fd147c0a9eac0b1
-      - uses: actions/download-artifact@v8
-        with:
-          github-token: ${{ github.token }}
-          repository: duckdb/duckdb
-          run-id: 45803483310
-          name: duckdb-static-libs-linux-amd64.tar.gz
-          path: repro/libs
-      - uses: actions/download-artifact@v8
-        with:
-          github-token: ${{ github.token }}
-          repository: duckdb/duckdb
-          run-id: 45803483310
-          name: core-extensions-linux-amd64
-          path: repro/extensions
-      - name: Build the deployment test runtime without LTO
-        shell: bash
-        run: |
-          dnf install -y gdb
-          tar -xzf repro/libs/duckdb-static-libs-linux-amd64.tar.gz -C repro/libs
-          cmake -S . -B build/diagnose -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHELL=OFF \
-            -DENABLE_UNITTEST_CPP_TESTS=OFF -DEXTENSION_TESTS_ONLY=ON \
-            -DDUCKDB_CAPABILITIES='httplib;loadable_extensions' \
-            -DSTATICALLY_LINK_EXTENSIONS=core_functions \
-            -DDUCKDB_EXTENSION_CORE_FUNCTIONS_PREBUILT_PATH="$PWD/repro/libs/libcore_functions_extension.a" \
-            '-DSKIP_EXTENSIONS=icu;json;parquet'
-          python3 scripts/ci/filter_ninja_output.py -- cmake --build build/diagnose --target unittest -j "$(( $(nproc) * 3 / 4 ))"
-      - name: Capture the failing test's backtrace
-        shell: bash
-        run: |
-          export LOCAL_EXTENSION_REPO="$PWD/repro/extensions"
-          # shellcheck disable=SC2016
-          gdb -batch -ex run -ex 'thread apply all bt 30' -ex 'info registers' -ex 'x/16i $pc-24' \
-            --args build/diagnose/test/unittest --autoloading available --skip-compiled \
-            test/sql/function/autocomplete/copy.test || true
-
  linux-relassert:
     name: Linux Relassert
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
@@ -1413,7 +1357,6 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
-      - autocomplete-diagnostics
       - linux-relassert
       - linux-relassert-tests
       - regression

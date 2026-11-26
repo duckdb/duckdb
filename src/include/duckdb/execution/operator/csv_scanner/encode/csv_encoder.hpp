@@ -78,7 +78,7 @@ private:
 	//! The maximum number of input bytes that make up one character
 	idx_t minimum_input_window = 1;
 	//! The maximum number of input bytes decoded per call, so the decoded string stays cache resident
-	static constexpr idx_t MAX_DECODE_SLICE = 64 * 1024;
+	static constexpr idx_t MAX_DECODE_SLICE = idx_t(64) * 1024;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;
