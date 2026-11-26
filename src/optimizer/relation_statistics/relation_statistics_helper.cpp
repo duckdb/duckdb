@@ -557,8 +557,12 @@ static bool TryMapProjectionGroups(LogicalOperator &op, vector<idx_t> &groups) {
 static optional<CardinalityValue> EstimateUnionGroups(LogicalOperator &input, vector<idx_t> groups,
                                                       CardinalityValue maximum, RelationStatsExtractor &extractor) {
 	static constexpr idx_t MAX_VISITED_OPERATORS = 1024;
-	vector<pair<reference<LogicalOperator>, vector<idx_t>>> pending;
-	pending.emplace_back(input, std::move(groups));
+	struct PendingUnionGroups {
+		reference<LogicalOperator> op;
+		vector<idx_t> groups;
+	};
+	vector<PendingUnionGroups> pending;
+	pending.push_back({input, std::move(groups)});
 	idx_t visited = 0;
 	CardinalityValue result(0);
 	bool found_union = false;
@@ -569,10 +573,10 @@ static optional<CardinalityValue> EstimateUnionGroups(LogicalOperator &input, ve
 		}
 		auto entry = std::move(pending.back());
 		pending.pop_back();
-		auto &op = entry.first.get();
+		auto &op = entry.op.get();
 		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION && op.children.size() == 1 &&
-		    TryMapProjectionGroups(op, entry.second)) {
-			pending.emplace_back(*op.children[0], std::move(entry.second));
+		    TryMapProjectionGroups(op, entry.groups)) {
+			pending.push_back({*op.children[0], std::move(entry.groups)});
 			continue;
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
@@ -581,14 +585,14 @@ static optional<CardinalityValue> EstimateUnionGroups(LogicalOperator &input, ve
 			if (!definition || definition->GetColumnBindings().size() != ref.chunk_types.size()) {
 				return {};
 			}
-			pending.emplace_back(*definition, std::move(entry.second));
+			pending.push_back({*definition, std::move(entry.groups)});
 			continue;
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			if (op.children.size() != 2) {
 				return {};
 			}
-			pending.emplace_back(*op.children[1], std::move(entry.second));
+			pending.push_back({*op.children[1], std::move(entry.groups)});
 			continue;
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_UNION) {
@@ -597,7 +601,7 @@ static optional<CardinalityValue> EstimateUnionGroups(LogicalOperator &input, ve
 				if (child->GetColumnBindings().size() != op.Cast<LogicalSetOperation>().column_count) {
 					return {};
 				}
-				pending.emplace_back(*child, entry.second);
+				pending.push_back({*child, entry.groups});
 			}
 			continue;
 		}
@@ -610,7 +614,7 @@ static optional<CardinalityValue> EstimateUnionGroups(LogicalOperator &input, ve
 		}
 		auto cardinality = stats->cardinality;
 		auto estimate = MinValue(cardinality, CardinalityValue(1));
-		for (auto index : entry.second) {
+		for (auto index : entry.groups) {
 			if (index >= stats->columns.size()) {
 				return {};
 			}

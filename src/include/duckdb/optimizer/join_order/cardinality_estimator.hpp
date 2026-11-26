@@ -22,6 +22,8 @@ struct CardinalityEstimatorState;
 struct FilterInfoWithTotalDomains;
 struct LogicalJoinStats;
 
+enum class InnerEqualityView { STATISTICAL, DIRECT_VALUE };
+
 class CardinalityEstimator {
 public:
 	CardinalityEstimator(JoinRelationSetManager &set_manager, const JoinPredicateModel &predicate_model);
@@ -46,12 +48,12 @@ private:
 	                                                 optional_ptr<JoinRelationSet> region);
 	SemiAntiJoinCardinalityEstimate EstimateMembership(const LogicalJoinStats &boundary, JoinRelationSet &left,
 	                                                   JoinRelationSet &right, vector<SemiAntiJoinDomain> &domains);
+
 	void InitEquivalentRelations();
 	void UpdateTotalDomains(RelationIndex relation, const RelationStats &stats, const join_column_sources_t &sources);
 	bool IsFilterApplicable(const FilterInfo &filter, JoinRelationSet &set) const;
 	CardinalityValue GetNumerator(JoinRelationSet &set);
-	vector<pair<ColumnBinding, ColumnBinding>> GetInnerEqualities(JoinRelationSet &set,
-	                                                              bool direct_values = false) const;
+	vector<pair<ColumnBinding, ColumnBinding>> GetInnerEqualities(JoinRelationSet &set, InnerEqualityView view) const;
 	bool PreservesSupport(JoinRelationSet &set, idx_t relation);
 	CardinalityValue GetInnerSelectivity(JoinRelationSet &set);
 	CardinalityValue GetJoinSelectivity(JoinRelationSet &set, JoinRelationSet &left, JoinRelationSet &right);

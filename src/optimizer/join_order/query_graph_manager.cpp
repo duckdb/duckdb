@@ -51,7 +51,7 @@ void QueryGraphManager::BuildPredicateModel() {
 			continue;
 		}
 
-		equality_groups.AddEquality(predicate.GetEqualityBinding(true), predicate.GetEqualityBinding(false));
+		equality_groups.AddEquality(predicate.GetLeftEqualityBinding(), predicate.GetRightEqualityBinding());
 	}
 
 	// Then assign stable final ids to every equality edge using the final roots.
@@ -62,7 +62,7 @@ void QueryGraphManager::BuildPredicateModel() {
 		if (!predicate.CanBuildEqualityClosure()) {
 			continue;
 		}
-		auto root = equality_groups.GetGroup(predicate.GetEqualityBinding(true));
+		auto root = equality_groups.GetGroup(predicate.GetLeftEqualityBinding());
 		auto entry = root_to_equivalence_id.find(root);
 		if (entry == root_to_equivalence_id.end()) {
 			entry = root_to_equivalence_id.insert(make_pair(root, root_to_equivalence_id.size())).first;
@@ -78,8 +78,8 @@ void QueryGraphManager::BuildPredicateModel() {
 		equality_class.index = equality_class_index;
 		for (auto predicate_ref : equality_class_predicates[equality_class_index]) {
 			auto &predicate = predicate_ref.get();
-			auto &left_binding = predicate.GetEqualityBinding(true);
-			auto &right_binding = predicate.GetEqualityBinding(false);
+			auto &left_binding = predicate.GetLeftEqualityBinding();
+			auto &right_binding = predicate.GetRightEqualityBinding();
 			auto left_relation = JoinOrderUtil::GetBindingRelation(left_binding);
 			auto right_relation = JoinOrderUtil::GetBindingRelation(right_binding);
 			equality_class.columns.insert(left_binding);

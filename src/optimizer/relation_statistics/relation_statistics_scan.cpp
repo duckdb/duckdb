@@ -26,7 +26,7 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
-#include <map>
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -303,21 +303,22 @@ public:
 		if (alternatives.empty()) {
 			return {stats.cardinality, true};
 		}
-		std::map<idx_t, ColumnValueSelection> numeric_selections;
+		map<idx_t, ColumnValueSelection> numeric_selections;
 		double fallback_fraction = 1;
 		bool proven_empty = false;
-		std::map<idx_t, shared_ptr<const ColumnValueRestriction>> restrictions;
-		std::map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> inherited;
+		map<idx_t, shared_ptr<const ColumnValueRestriction>> restrictions;
+		map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> inherited;
 		for (idx_t c = 0; c < inputs[0].columns.size(); c++) {
 			inherited[value_aliases[c]].push_back(inputs[0].columns[c].value_restriction);
 		}
 		for (auto &entry : alternatives) {
 			auto &selection = entry.second;
 			auto &column = inputs[0].columns[entry.first];
-			selection.proven.push_back(ColumnValueRestriction::Combine(inherited.at(entry.first), true));
-			auto prior = ColumnValueRestriction::Combine(selection.proven, true);
-			auto predicate = ColumnValueRestriction::Combine(selection.predicates, true);
-			auto combined = ColumnValueRestriction::Combine({prior, predicate}, true);
+			selection.proven.push_back(
+			    ColumnValueRestriction::Combine(inherited.at(entry.first), RestrictionCombination::CONJUNCTION));
+			auto prior = ColumnValueRestriction::Combine(selection.proven, RestrictionCombination::CONJUNCTION);
+			auto predicate = ColumnValueRestriction::Combine(selection.predicates, RestrictionCombination::CONJUNCTION);
+			auto combined = ColumnValueRestriction::Combine({prior, predicate}, RestrictionCombination::CONJUNCTION);
 			restrictions[entry.first] = combined;
 			bool consume = true;
 			if (combined && !combined->excluded && combined->values.empty()) {
@@ -468,7 +469,9 @@ private:
 			}
 			if (result) {
 				result->restriction =
-				    ColumnValueRestriction::Combine(predicates, (type == ExpressionType::CONJUNCTION_AND) != negated);
+				    ColumnValueRestriction::Combine(predicates, (type == ExpressionType::CONJUNCTION_AND) != negated
+				                                                    ? RestrictionCombination::CONJUNCTION
+				                                                    : RestrictionCombination::DISJUNCTION);
 			}
 			return result;
 		}
@@ -537,7 +540,7 @@ private:
 	vector<RelationStats> inputs;
 	unique_ptr<EqualityCardinalityModel> model;
 	vector<idx_t> value_aliases;
-	std::map<idx_t, Selection> alternatives;
+	map<idx_t, Selection> alternatives;
 	unordered_set<const Expression *> selected;
 };
 

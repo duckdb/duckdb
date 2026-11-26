@@ -17,6 +17,7 @@ public:
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
 	                        const QueryGraphEdges &query_graph);
 
+public:
 	bool SolveJoinOrder();
 	void InitLeafPlans();
 	const JoinOrderPlanMap &GetPlans() const;
@@ -31,6 +32,7 @@ private:
 	CostModel &cost_model;
 	const QueryGraphEdges &query_graph;
 	JoinOrderCandidateEvaluator candidate_evaluator;
+
 	//! Result storage also provides the initial leaves and outlives reconstruction.
 	JoinOrderPlanMap plans;
 };

@@ -155,12 +155,20 @@ optional_ptr<JoinRelationSet> JoinPredicate::GetSemanticRightSetOptional() const
 	return filter.get().semantic_right_set;
 }
 
-const ColumnBinding &JoinPredicate::GetStatsBinding(bool left) const {
-	return left ? filter.get().left_binding : filter.get().right_binding;
+const ColumnBinding &JoinPredicate::GetLeftStatsBinding() const {
+	return filter.get().left_binding;
 }
 
-const ColumnBinding &JoinPredicate::GetEqualityBinding(bool left) const {
-	return left ? left_equality_binding : right_equality_binding;
+const ColumnBinding &JoinPredicate::GetRightStatsBinding() const {
+	return filter.get().right_binding;
+}
+
+const ColumnBinding &JoinPredicate::GetLeftEqualityBinding() const {
+	return left_equality_binding;
+}
+
+const ColumnBinding &JoinPredicate::GetRightEqualityBinding() const {
+	return right_equality_binding;
 }
 
 bool JoinPredicate::HasValidJoinEndpoints() const {

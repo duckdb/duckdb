@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_order/join_predicate.hpp"
@@ -10,13 +11,12 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 #include <algorithm>
-#include <map>
 
 namespace duckdb {
 
 struct DomainEstimate : JoinDomainEstimate {
 	CardinalityValue GetDistinctCount(const JoinPredicate &predicate) const {
-		auto point = Resolve({predicate.GetStatsBinding(true), predicate.GetStatsBinding(false)});
+		auto point = Resolve({predicate.GetLeftStatsBinding(), predicate.GetRightStatsBinding()});
 		auto scan = UnknownScanBasis();
 		auto comparison = predicate.GetComparisonType();
 		if (!point.has_usable_domain && scan && point.distinct_count > 0 &&
@@ -43,6 +43,7 @@ public:
 };
 
 struct FilterInfoWithTotalDomains {
+public:
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
 	    : predicate(predicate), distinct_count(relation_set_to_stats.domain_estimate.GetDistinctCount(predicate)),
 	      residual(predicate.IsResidualFilter()) {
@@ -61,9 +62,11 @@ public:
 };
 
 struct LogicalJoinStats {
+public:
 	LogicalJoinStats(const JoinOrderOperator &op, JoinRelationSet &scope) : op(op), scope(scope) {
 	}
 
+public:
 	reference<const JoinOrderOperator> op;
 	reference<JoinRelationSet> scope;
 	vector<pair<ColumnBinding, ColumnBinding>> equality_keys;
@@ -86,22 +89,29 @@ struct ResidualFilterStats {
 static CardinalityValue GetResidualOnSelectivity(const Expression &expression);
 
 struct CardinalityEstimatorState {
+public:
 	void InitializeEdgeIndex();
 	bool TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const;
 
+public:
 	vector<RelationsSetToStats> relation_set_stats;
 	vector<FilterInfoWithTotalDomains> edges;
 	//! Each edge is indexed by one of the relations required by its filter.
 	vector<vector<idx_t>> edges_by_relation;
 	vector<idx_t> unscoped_edges;
+
+	//! The owned leaves outlive the equality model that borrows them.
 	vector<RelationStats> leaves;
 	unique_ptr<EqualityCardinalityModel> equalities;
+
 	vector<reference<const JoinOrderOperator>> operators;
 	vector<LogicalJoinStats> boundaries;
+
 	reference_map_t<JoinRelationSet, CardinalityValue> inner_selectivities;
 	reference_map_t<JoinRelationSet, RegionEstimate> cardinalities;
 	//! Only requested columns at semantic boundaries; inner subsets do not acquire full column vectors.
 	reference_map_t<JoinRelationSet, column_binding_map_t<RelationColumnStats>> projected_columns;
+
 	vector<ResidualFilterStats> residual_filters;
 	unordered_set<idx_t> leaf_filters;
 };
@@ -257,11 +267,11 @@ void CardinalityEstimator::InitEquivalentRelations() {
 		D_ASSERT(predicate.HasAnyValidStatsBinding());
 
 		column_binding_set_t domain_group;
-		if (predicate.GetStatsBinding(true).table_index.IsValid()) {
-			domain_group.insert(predicate.GetStatsBinding(true));
+		if (predicate.GetLeftStatsBinding().table_index.IsValid()) {
+			domain_group.insert(predicate.GetLeftStatsBinding());
 		}
-		if (predicate.GetStatsBinding(false).table_index.IsValid()) {
-			domain_group.insert(predicate.GetStatsBinding(false));
+		if (predicate.GetRightStatsBinding().table_index.IsValid()) {
+			domain_group.insert(predicate.GetRightStatsBinding());
 		}
 		D_ASSERT(!domain_group.empty());
 		state->relation_set_stats.emplace_back(domain_group);
@@ -370,9 +380,9 @@ CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
 			return;
 		}
 		if (predicate.IsEquivalencePredicate() && predicate.HasValidEqualityBindings() &&
-		    IsInputColumn(state->leaves, predicate.GetEqualityBinding(true)) &&
-		    IsInputColumn(state->leaves, predicate.GetEqualityBinding(false))) {
-			equalities.emplace_back(predicate.GetEqualityBinding(true), predicate.GetEqualityBinding(false));
+		    IsInputColumn(state->leaves, predicate.GetLeftEqualityBinding()) &&
+		    IsInputColumn(state->leaves, predicate.GetRightEqualityBinding())) {
+			equalities.emplace_back(predicate.GetLeftEqualityBinding(), predicate.GetRightEqualityBinding());
 		} else {
 			// Unsupported expressions and non-equalities retain their explicit comparison fallback.
 			residual = CalculateInnerJoinSelectivity(residual, edge);
@@ -396,19 +406,19 @@ CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
 }
 
 vector<pair<ColumnBinding, ColumnBinding>> CardinalityEstimator::GetInnerEqualities(JoinRelationSet &set,
-                                                                                    bool direct_values) const {
+                                                                                    InnerEqualityView view) const {
 	vector<pair<ColumnBinding, ColumnBinding>> result;
 	for (auto &edge : state->edges) {
 		auto &predicate = edge.GetPredicate();
 		auto &filter = predicate.GetFilter();
 		if (predicate.IsEquivalencePredicate() && predicate.HasValidEqualityBindings() &&
-		    IsInputColumn(state->leaves, predicate.GetEqualityBinding(true)) &&
-		    IsInputColumn(state->leaves, predicate.GetEqualityBinding(false)) && filter.left_set != filter.right_set &&
+		    IsInputColumn(state->leaves, predicate.GetLeftEqualityBinding()) &&
+		    IsInputColumn(state->leaves, predicate.GetRightEqualityBinding()) && filter.left_set != filter.right_set &&
 		    !edge.residual && IsFilterApplicable(filter, set)) {
-			if (direct_values && !predicate.IsDirectValueEquality()) {
+			if (view == InnerEqualityView::DIRECT_VALUE && !predicate.IsDirectValueEquality()) {
 				continue;
 			}
-			result.emplace_back(predicate.GetEqualityBinding(true), predicate.GetEqualityBinding(false));
+			result.emplace_back(predicate.GetLeftEqualityBinding(), predicate.GetRightEqualityBinding());
 		}
 	}
 	return result;
@@ -674,7 +684,7 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSe
 		return result;
 	}
 	auto normalized = state->equalities->Normalize(binding);
-	for (auto &component : state->equalities->Components(GetInnerEqualities(set))) {
+	for (auto &component : state->equalities->Components(GetInnerEqualities(set, InnerEqualityView::STATISTICAL))) {
 		if (std::find(component.bindings.begin(), component.bindings.end(), normalized) == component.bindings.end()) {
 			continue;
 		}
@@ -754,10 +764,11 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 		}
 		result.columns.push_back(*column);
 	}
-	auto equalities = GetInnerEqualities(set);
-	auto value_equalities = GetInnerEqualities(set, true);
+	auto equalities = GetInnerEqualities(set, InnerEqualityView::STATISTICAL);
+	auto value_equalities = GetInnerEqualities(set, InnerEqualityView::DIRECT_VALUE);
 	auto components = state->equalities->Components(equalities);
-	vector<bool> hidden(state->leaves.size(), false), null_extended(state->leaves.size(), false);
+	vector<bool> hidden(state->leaves.size(), false);
+	vector<EqualityProjection> projections(state->leaves.size());
 	for (auto &boundary : state->boundaries) {
 		if (!JoinOrderConflictDetector::IsCompletedBy(boundary.op, set)) {
 			continue;
@@ -773,7 +784,7 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 		for (idx_t i = 0; i < op.right_relations.get().count; i++) {
 			auto r = op.right_relations.get().relations[i].index;
 			if (op.type == JoinOrderOperatorType::LEFT) {
-				null_extended[r] = true;
+				projections[r].null_extended = true;
 			} else {
 				hidden[r] = true;
 			}
@@ -801,13 +812,13 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 		}
 	}
 	auto multiplicity_components = state->equalities->Components(equalities);
-	vector<bool> preserved_keys(state->leaves.size(), false);
-	vector<bool> preserved_support(state->leaves.size(), false);
 	for (auto r : participants) {
-		preserved_keys[r] = !null_extended[r] && !state->leaves[r].unique_keys.empty() &&
-		                    state->equalities->PreservesMultiplicity(r, participants, multiplicity_components);
-		preserved_support[r] =
+		auto &projection = projections[r];
+		projection.preserve_keys = !projection.null_extended && !state->leaves[r].unique_keys.empty() &&
+		                           state->equalities->PreservesMultiplicity(r, participants, multiplicity_components);
+		projection.preserve_identity =
 		    (!state->leaves[r].joint_stats.empty() || state->leaves[r].tuple_identities) && PreservesSupport(set, r);
+		projection.selection = projection.preserve_identity ? EqualitySelection::ALL : EqualitySelection::MATCHED;
 	}
 	// The relational operator owns introduced columns; the leaf model projects only input evidence.
 	vector<RelationColumnStats> introduced;
@@ -823,8 +834,7 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 		}
 		result.columns = std::move(input_columns);
 	}
-	state->equalities->ProjectEvidence(result, components, preserved_keys, preserved_support, null_extended,
-	                                   value_equalities);
+	state->equalities->ProjectEvidence(result, components, projections, value_equalities);
 	result.stats_initialized = true;
 	if (!introduced.empty()) {
 		for (auto &column : introduced) {
@@ -867,9 +877,9 @@ CardinalityValue CardinalityEstimator::GetLeftJoinSelectivity(const JoinOrderOpe
 		accounted_predicates.insert(predicate.GetFilter().filter_index);
 		auto comparison = predicate.GetComparisonType();
 		if ((comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
-		    predicate.HasValidEqualityBindings() && in_inputs(predicate.GetEqualityBinding(true)) &&
-		    in_inputs(predicate.GetEqualityBinding(false))) {
-			equalities.emplace_back(predicate.GetEqualityBinding(true), predicate.GetEqualityBinding(false));
+		    predicate.HasValidEqualityBindings() && in_inputs(predicate.GetLeftEqualityBinding()) &&
+		    in_inputs(predicate.GetRightEqualityBinding())) {
+			equalities.emplace_back(predicate.GetLeftEqualityBinding(), predicate.GetRightEqualityBinding());
 		} else {
 			selectivity = CalculateInnerJoinSelectivity(selectivity, edge);
 		}
@@ -877,7 +887,7 @@ CardinalityValue CardinalityEstimator::GetLeftJoinSelectivity(const JoinOrderOpe
 	vector<idx_t> relations;
 	CardinalityValue input_factor;
 	for (auto input : {&left, &right}) {
-		auto input_equalities = GetInnerEqualities(*input);
+		auto input_equalities = GetInnerEqualities(*input, InnerEqualityView::STATISTICAL);
 		vector<idx_t> input_relations;
 		for (idx_t i = 0; i < input->count; i++) {
 			input_relations.push_back(input->relations[i].index);
@@ -909,7 +919,7 @@ void CardinalityEstimator::Initialize(vector<RelationStats> relations,
 	state->leaves = std::move(relations);
 	// Region-local single-input filters commute to that input. Capture their effect once,
 	// while expressions and column bindings still describe the original input.
-	std::map<idx_t, vector<unique_ptr<Expression>>> leaf_expressions;
+	map<idx_t, vector<unique_ptr<Expression>>> leaf_expressions;
 	for (auto predicate : predicate_model.GetPredicates()) {
 		auto &filter = predicate.get().GetFilter();
 		if (filter.from_logical_filter && filter.set.get().count == 1 && !filter.must_remain_at_root) {
@@ -991,8 +1001,8 @@ void CardinalityEstimator::Initialize(vector<RelationStats> relations,
 				boundary.has_residual = true;
 				continue;
 			}
-			auto left = predicate.GetEqualityBinding(true);
-			auto right = predicate.GetEqualityBinding(false);
+			auto left = predicate.GetLeftEqualityBinding();
+			auto right = predicate.GetRightEqualityBinding();
 			if (ContainsBinding(op->right_relations, left) && ContainsBinding(op->left_relations, right)) {
 				std::swap(left, right);
 			}

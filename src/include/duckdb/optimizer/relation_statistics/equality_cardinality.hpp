@@ -37,10 +37,10 @@ struct EqualityCardinalityEstimate {
 	optional<CardinalityValue> maximum;
 };
 
-enum class EqualitySelection : uint8_t { ALL, MATCHED, UNMATCHED };
+enum class EqualitySelection { ALL, MATCHED, UNMATCHED };
 
 //! Finite selections keep their source population; joins may refine uncertain domains from other inputs.
-enum class EqualityDomainPolicy : uint8_t { JOIN, SOURCE_LOCAL };
+enum class EqualityDomainPolicy { JOIN, SOURCE_LOCAL };
 
 struct EqualityProjection {
 	EqualitySelection selection = EqualitySelection::MATCHED;
@@ -51,15 +51,17 @@ struct EqualityProjection {
 	bool null_extended = false;
 };
 
-//! One immutable input snapshot. Normalization precedes every region estimate; requesting a region adds no proof facts.
+//! Normalize a caller-owned input snapshot once; region estimates do not add proof facts.
 class EqualityCardinalityModel {
 public:
-	//! Capture raw source observations by value after aliases and key/joint populations are finalized.
+	//! The relations must outlive this model; source observations are copied after normalization.
 	explicit EqualityCardinalityModel(vector<RelationStats> &relations, const join_column_sources_t &sources = {});
 	~EqualityCardinalityModel();
 
+public:
 	ColumnBinding Normalize(ColumnBinding binding) const;
 	vector<EqualityComponent> Components(const vector<pair<ColumnBinding, ColumnBinding>> &equalities) const;
+
 	EqualityCardinalityEstimate Estimate(const vector<EqualityComponent> &components, const vector<idx_t> &relations,
 	                                     EqualityDomainPolicy domain_policy = EqualityDomainPolicy::JOIN) const;
 	//! Intersection and denominator count each normalized binding, and each proven identical support, appropriately.
@@ -68,6 +70,7 @@ public:
 	optional<EqualitySupport> JointSupport(idx_t relation, const vector<idx_t> &ordered_columns) const;
 	bool PreservesMultiplicity(idx_t relation, const vector<idx_t> &participants,
 	                           const vector<EqualityComponent> &components) const;
+
 	//! Project source columns and populations once, with separate statistical selection and output proof effects.
 	//! value_equalities contains only validated direct same-type value equalities, before numeric normalization.
 	void Project(RelationStats &output, const vector<EqualityComponent> &components,
@@ -75,15 +78,18 @@ public:
 	             const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities = {}) const;
 	//! Export keys/populations through one binding map. Joins drop inherited support identity unless separately proved.
 	void ProjectEvidence(RelationStats &output, const vector<EqualityComponent> &components,
-	                     const vector<bool> &preserved_keys, const vector<bool> &preserved_support,
-	                     const vector<bool> &null_extended = {},
+	                     const vector<EqualityProjection> &inputs,
 	                     const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities = {}) const;
+
+private:
+	enum class ProjectionScope { EVIDENCE, COLUMNS_AND_EVIDENCE };
 
 private:
 	EqualitySupport IntersectJoint(const vector<EqualitySupport> &joint_points,
 	                               const vector<vector<EqualitySupport>> &coordinates, CardinalityValue &factor) const;
-	vector<EqualitySupport> ResolvePairDomains(const EqualityComponent &component) const;
+	vector<EqualitySupport> ResolveJoinDomains(const EqualityComponent &component) const;
 	vector<EqualityFactor> BuildFactors(const vector<EqualityComponent> &components) const;
+
 	optional<EqualitySelectedSupport> SelectSupport(idx_t relation, const vector<idx_t> &axes,
 	                                                const vector<idx_t> &dependent_columns, EqualitySupport support,
 	                                                const vector<EqualityComponent> &components,
@@ -91,8 +97,10 @@ private:
 	                                                const EqualityProjection &projection) const;
 	void ProjectInternal(RelationStats &output, const vector<EqualityComponent> &components,
 	                     const vector<EqualityProjection> &inputs, const vector<EqualityComponent> &output_equalities,
-	                     bool project_columns,
+	                     ProjectionScope scope,
 	                     const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const;
+
+private:
 	unique_ptr<EqualityCardinalityState> state;
 };
 

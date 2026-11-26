@@ -4,8 +4,8 @@
 #include "duckdb/common/unordered_set.hpp"
 
 #include <algorithm>
-#include <map>
-#include <set>
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/set.hpp"
 #include <tuple>
 
 namespace duckdb {
@@ -69,7 +69,7 @@ struct EqualityCardinalityState {
 support_identities_t EqualityCardinalityState::MergeIdentities(const vector<SupportIdentity> &identities) const {
 	// Retain direct producer coordinates only. Local aliases never publish an equivalence
 	// between producers or coordinates to other references of the same producer.
-	std::map<const SupportOrigin *, std::set<vector<idx_t>>> seen;
+	map<const SupportOrigin *, set<vector<idx_t>>> seen;
 	auto result = make_shared_ptr<vector<SupportIdentity>>();
 	for (auto &identity : identities) {
 		if (seen[identity.origin.get()].insert(identity.coordinates).second) {
@@ -259,8 +259,7 @@ void EqualityCardinalityState::NormalizeEvidence() {
 					optional_idx last;
 					for (auto &axis : axes) {
 						if (!last.IsValid() || last.GetIndex() != axis.first) {
-							oriented.coordinates.push_back(
-							    identity.coordinates[axis.second]);
+							oriented.coordinates.push_back(identity.coordinates[axis.second]);
 							last = optional_idx(axis.first);
 						}
 					}
@@ -362,7 +361,7 @@ void EqualityCardinalityState::NormalizeEvidence() {
 			if (record.relation != r) {
 				continue;
 			}
-			std::map<idx_t, idx_t> axes;
+			map<idx_t, idx_t> axes;
 			for (idx_t i = 0; i < record.columns.size(); i++) {
 				auto column =
 				    Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(record.columns[i]))).column_index.GetIndex();
@@ -377,7 +376,6 @@ void EqualityCardinalityState::NormalizeEvidence() {
 		}
 		stats.tuple_identities = tuples->empty() ? nullptr : tuples;
 	}
-
 }
 
 EqualityCardinalityModel::EqualityCardinalityModel(vector<RelationStats> &relations,
@@ -399,7 +397,7 @@ ColumnBinding EqualityCardinalityModel::Normalize(ColumnBinding binding) const {
 
 vector<EqualityComponent>
 EqualityCardinalityModel::Components(const vector<pair<ColumnBinding, ColumnBinding>> &equalities) const {
-	std::map<idx_t, idx_t> indexes;
+	map<idx_t, idx_t> indexes;
 	EqualityDisjointSets components;
 	auto index = [&](ColumnBinding binding) {
 		auto normalized = state->aliases.Find(state->BindingIndex(binding));
@@ -414,7 +412,7 @@ EqualityCardinalityModel::Components(const vector<pair<ColumnBinding, ColumnBind
 		auto right = index(equality.second);
 		components.Merge(left, right);
 	}
-	std::map<idx_t, vector<ColumnBinding>> groups;
+	map<idx_t, vector<ColumnBinding>> groups;
 	for (auto &entry : indexes) {
 		groups[components.Find(entry.second)].push_back(state->bindings[entry.first]);
 	}
@@ -453,7 +451,7 @@ EqualitySupport EqualityCardinalityModel::Intersect(const vector<EqualitySupport
 		return {1, 1, nullptr};
 	}
 	EqualityDisjointSets groups;
-	std::map<const SupportOrigin *, std::map<vector<idx_t>, idx_t>> identities;
+	map<const SupportOrigin *, map<vector<idx_t>, idx_t>> identities;
 	for (idx_t i = 0; i < supports.size(); i++) {
 		groups.Add();
 		if (!supports[i].identities) {
@@ -466,7 +464,7 @@ EqualitySupport EqualityCardinalityModel::Intersect(const vector<EqualitySupport
 			}
 		}
 	}
-	std::map<idx_t, EqualitySupport> points;
+	map<idx_t, EqualitySupport> points;
 	for (idx_t i = 0; i < supports.size(); i++) {
 		auto entry = points.emplace(groups.Find(i), supports[i]);
 		if (!entry.second) {
@@ -579,7 +577,7 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 struct EqualityFactor {
 	vector<idx_t> components;
 	EqualitySupport support;
-	std::map<idx_t, EqualitySupport> source_joints;
+	map<idx_t, EqualitySupport> source_joints;
 };
 
 static EqualitySupport SupportWithinTuple(EqualitySupport support, const EqualitySupport &tuple) {
@@ -640,7 +638,7 @@ struct EqualityCandidateAxes {
 static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationStats> &relations,
                                                          const vector<EqualityComponent> &components) {
 	// Only complete, one-binding-per-participant components can share a joint bundle.
-	std::map<vector<idx_t>, vector<idx_t>> buckets;
+	map<vector<idx_t>, vector<idx_t>> buckets;
 	for (idx_t i = 0; i < components.size(); i++) {
 		vector<idx_t> participants;
 		for (auto &binding : components[i].bindings) {
@@ -676,12 +674,12 @@ static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationSt
 }
 
 vector<EqualityFactor> EqualityCardinalityModel::BuildFactors(const vector<EqualityComponent> &components) const {
-	std::map<vector<idx_t>, vector<EqualitySupport>> candidates;
+	map<vector<idx_t>, vector<EqualitySupport>> candidates;
 	auto add_candidate = [&](const vector<idx_t> &axes, bool exact) {
 		if (axes.size() < 2) {
 			return;
 		}
-		std::map<idx_t, vector<idx_t>> columns;
+		map<idx_t, vector<idx_t>> columns;
 		for (auto axis : axes) {
 			for (auto &binding : components[axis].bindings) {
 				columns[binding.table_index.index].push_back(binding.column_index.GetIndex());
@@ -778,7 +776,7 @@ vector<EqualityFactor> EqualityCardinalityModel::BuildFactors(const vector<Equal
 	return factors;
 }
 
-vector<EqualitySupport> EqualityCardinalityModel::ResolvePairDomains(const EqualityComponent &component) const {
+vector<EqualitySupport> EqualityCardinalityModel::ResolveJoinDomains(const EqualityComponent &component) const {
 	JoinDomainEstimate domain;
 	for (auto binding : component.bindings) {
 		auto &column = state->relations[binding.table_index.index].columns[binding.column_index.GetIndex()];
@@ -829,7 +827,7 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 	auto factors = BuildFactors(components);
 	auto resolve_domains = [&](const EqualityComponent &component) {
 		if (domain_policy == EqualityDomainPolicy::JOIN) {
-			return ResolvePairDomains(component);
+			return ResolveJoinDomains(component);
 		}
 		vector<EqualitySupport> points;
 		for (auto binding : component.bindings) {
@@ -843,7 +841,7 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 	for (idx_t r = 0; r < state->relations.size(); r++) {
 		blocks.Add();
 	}
-	std::map<idx_t, CardinalityValue> priors;
+	map<idx_t, CardinalityValue> priors;
 	for (auto &factor : factors) {
 		if (factor.components.size() > 1) {
 			vector<EqualitySupport> joints;
@@ -888,16 +886,21 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 	// Unknown coordinates share one assumed latent tuple per connected relation block. This is a cost prior,
 	// not joint NDV or coverage evidence. Only fixed-prior wholly unknown closure is monotone; related informed
 	// peers can change imputation/classification when components merge. Informed factors never connect blocks.
-	std::map<idx_t, pair<CardinalityValue, CardinalityValue>> products;
+	struct UnknownBlockProduct {
+		CardinalityValue minimum_domain;
+		CardinalityValue domain_product;
+	};
+	map<idx_t, UnknownBlockProduct> products;
 	for (auto &entry : priors) {
-		auto block = products.emplace(blocks.Find(entry.first), make_pair(entry.second, CardinalityValue(1)));
-		block.first->second.first = MinValue(block.first->second.first, entry.second);
-		block.first->second.second *= entry.second;
+		auto block =
+		    products.emplace(blocks.Find(entry.first), UnknownBlockProduct {entry.second, CardinalityValue(1)});
+		block.first->second.minimum_domain = MinValue(block.first->second.minimum_domain, entry.second);
+		block.first->second.domain_product *= entry.second;
 	}
 	for (auto &entry : products) {
-		result.selectivity *= entry.second.first / entry.second.second;
+		result.selectivity *= entry.second.minimum_domain / entry.second.domain_product;
 	}
-	std::map<idx_t, vector<idx_t>> covered;
+	map<idx_t, vector<idx_t>> covered;
 	for (auto &component : components) {
 		if (component.bindings.front().table_index != component.bindings.back().table_index) {
 			for (auto &binding : component.bindings) {
@@ -1004,24 +1007,17 @@ CardinalityValue RelationStatisticsHelper::EstimateEqualitySelectionSupport(Card
 }
 
 void EqualityCardinalityModel::ProjectEvidence(
-    RelationStats &output, const vector<EqualityComponent> &components, const vector<bool> &preserved_keys,
-    const vector<bool> &preserved_support, const vector<bool> &null_extended,
+    RelationStats &output, const vector<EqualityComponent> &components, const vector<EqualityProjection> &projections,
     const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
-	vector<EqualityProjection> projections(state->relations.size());
-	for (idx_t r = 0; r < projections.size(); r++) {
-		projections[r].selection = preserved_support[r] ? EqualitySelection::ALL : EqualitySelection::MATCHED;
-		projections[r].preserve_keys = preserved_keys[r];
-		projections[r].preserve_identity = preserved_support[r];
-		projections[r].null_extended = !null_extended.empty() && null_extended[r];
-	}
-	ProjectInternal(output, components, projections, components, false, value_equalities);
+	ProjectInternal(output, components, projections, components, ProjectionScope::EVIDENCE, value_equalities);
 }
 
 void EqualityCardinalityModel::Project(RelationStats &output, const vector<EqualityComponent> &components,
                                        const vector<EqualityProjection> &projections,
                                        const vector<EqualityComponent> &output_equalities,
                                        const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
-	ProjectInternal(output, components, projections, output_equalities, true, value_equalities);
+	ProjectInternal(output, components, projections, output_equalities, ProjectionScope::COLUMNS_AND_EVIDENCE,
+	                value_equalities);
 }
 
 optional<EqualitySelectedSupport> EqualityCardinalityModel::SelectSupport(idx_t relation, const vector<idx_t> &columns,
@@ -1164,7 +1160,7 @@ optional<EqualitySelectedSupport> EqualityCardinalityModel::SelectSupport(idx_t 
 
 void EqualityCardinalityModel::ProjectInternal(
     RelationStats &output, const vector<EqualityComponent> &components, const vector<EqualityProjection> &projections,
-    const vector<EqualityComponent> &output_equalities, bool project_columns,
+    const vector<EqualityComponent> &output_equalities, ProjectionScope scope,
     const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
 	D_ASSERT(projections.size() == state->relations.size());
 	if (output.columns.empty()) {
@@ -1187,7 +1183,7 @@ void EqualityCardinalityModel::ProjectInternal(
 	output.equivalent_columns.clear();
 	output.value_equivalent_columns.clear();
 	output.joint_stats.clear();
-	std::map<idx_t, vector<idx_t>> outputs;
+	map<idx_t, vector<idx_t>> outputs;
 	for (idx_t i = 0; i < output.columns.size(); i++) {
 		outputs[aliases.Find(state->BindingIndex(output.columns[i].binding))].push_back(i);
 	}
@@ -1205,8 +1201,8 @@ void EqualityCardinalityModel::ProjectInternal(
 	for (auto &pair : value_equalities) {
 		value_aliases.Merge(state->BindingIndex(pair.first), state->BindingIndex(pair.second));
 	}
-	std::map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
-	std::map<idx_t, vector<idx_t>> value_outputs;
+	map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
+	map<idx_t, vector<idx_t>> value_outputs;
 	for (auto binding : state->bindings) {
 		restrictions[value_aliases.Find(state->BindingIndex(binding))].push_back(
 		    state->relations[binding.table_index.index].columns[binding.column_index.GetIndex()].value_restriction);
@@ -1214,13 +1210,13 @@ void EqualityCardinalityModel::ProjectInternal(
 	for (idx_t c = 0; c < output.columns.size(); c++) {
 		value_outputs[value_aliases.Find(state->BindingIndex(output.columns[c].binding))].push_back(c);
 	}
-	if (project_columns) {
+	if (scope == ProjectionScope::COLUMNS_AND_EVIDENCE) {
 		struct SelectedColumn {
 			EqualitySupport support;
 			bool nullable;
 			bool population_conditioned;
 		};
-		std::map<idx_t, SelectedColumn> selected_columns;
+		map<idx_t, SelectedColumn> selected_columns;
 		for (auto binding : state->bindings) {
 			auto root = aliases.Find(state->BindingIndex(binding));
 			if (!outputs.count(root) || Normalize(binding) != binding) {
@@ -1275,7 +1271,8 @@ void EqualityCardinalityModel::ProjectInternal(
 	}
 	// Numeric canonical-column copies above do not change the actual value coordinate.
 	for (auto &entry : value_outputs) {
-		auto restriction = ColumnValueRestriction::Combine(restrictions.at(entry.first), true);
+		auto restriction =
+		    ColumnValueRestriction::Combine(restrictions.at(entry.first), RestrictionCombination::CONJUNCTION);
 		for (auto c : entry.second) {
 			output.columns[c].value_restriction = restriction;
 		}
@@ -1302,7 +1299,7 @@ void EqualityCardinalityModel::ProjectInternal(
 	auto tuples = make_shared_ptr<vector<RelationTupleIdentity>>();
 	auto project_identity = [&](idx_t relation, const vector<idx_t> &axes,
 	                            const SupportIdentity &identity) -> RelationTupleIdentity {
-		std::map<idx_t, idx_t> coordinates;
+		map<idx_t, idx_t> coordinates;
 		for (idx_t i = 0; i < axes.size(); i++) {
 			auto found = outputs.find(aliases.Find(state->offsets[relation] + axes[i]));
 			if (found != outputs.end()) {
@@ -1421,7 +1418,7 @@ void RelationStatisticsHelper::ApplyFiniteSelection(RelationStats &stats,
 	}
 	finite.AddUniqueKey(key);
 	vector<RelationStats> inputs {stats, finite};
-	std::set<vector<idx_t>> recorded;
+	set<vector<idx_t>> recorded;
 	for (auto &candidate : FindJointCandidates(inputs, components)) {
 		if (candidate.axes.size() < 2 || !recorded.insert(candidate.axes).second) {
 			continue;

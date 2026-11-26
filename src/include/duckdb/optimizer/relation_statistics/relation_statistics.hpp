@@ -20,12 +20,14 @@
 namespace duckdb {
 
 //! DERIVED describes a computed population, not the confidence of an original source observation.
-enum class DistinctCountSource : uint8_t { CARDINALITY, MIN_MAX, HLL, EXACT, DERIVED };
+enum class DistinctCountSource { CARDINALITY, MIN_MAX, HLL, EXACT, DERIVED };
 
 struct DistinctCount {
 public:
 	DistinctCount(CardinalityValue distinct_count, DistinctCountSource source);
 	DistinctCount(CardinalityValue distinct_count, DistinctCountSource source, bool has_usable_domain);
+
+public:
 	static DistinctCountSource CombineSources(DistinctCountSource left, DistinctCountSource right);
 	//! Reconcile alternatives for the same population, keeping an actual usable point and its evidence together.
 	static DistinctCount ReconcilePopulation(const DistinctCount &left, const DistinctCount &right);
@@ -63,15 +65,20 @@ struct RelationJointStats {
 	vector<idx_t> dependent_columns;
 };
 
+enum class RestrictionCombination { CONJUNCTION, DISJUNCTION };
+
 //! A predicate satisfied by every current non-NULL value, not a claim that every allowed value occurs.
 struct ColumnValueRestriction {
+public:
 	ColumnValueRestriction(value_set_t values, bool excluded);
 
+public:
 	static shared_ptr<const ColumnValueRestriction> Create(value_set_t values, bool excluded);
 	//! A null pointer is unrestricted. Compose locally and publish one immutable result, reusing unchanged operands.
 	static shared_ptr<const ColumnValueRestriction>
-	Combine(const vector<shared_ptr<const ColumnValueRestriction>> &inputs, bool conjunction);
+	Combine(const vector<shared_ptr<const ColumnValueRestriction>> &inputs, RestrictionCombination operation);
 
+public:
 	value_set_t values;
 	bool excluded;
 };
@@ -96,6 +103,8 @@ public:
 	RelationColumnStats(ColumnBinding binding, DistinctCount total_domain, DistinctCount current_domain,
 	                    Identifier name,
 	                    SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence = SemiAntiJoinDomainEvidence());
+
+public:
 	optional<CardinalityValue> GetSupportedSemiAntiDomainSize() const;
 	optional_idx PopulationBound() const;
 	void TightenPopulationBound(idx_t bound);
@@ -144,8 +153,8 @@ public:
 	void CopyValueRestrictions(const RelationStats &source, const vector<optional_idx> &source_columns);
 	void AddUniqueKey(vector<idx_t> key);
 	bool HasUniqueKey(const vector<idx_t> &columns) const;
-	//! Called only for a closed materialized producer; subsequent references share its actual support.
-	void EstablishSupportIdentity();
+	//! Record or reuse the producer identity shared by materialized references and their value domains.
+	void EnsureMaterializedProducerIdentity();
 
 public:
 	vector<RelationColumnStats> columns;

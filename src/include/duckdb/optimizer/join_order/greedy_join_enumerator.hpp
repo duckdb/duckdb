@@ -15,6 +15,7 @@ class GreedyJoinEnumerator {
 public:
 	GreedyJoinEnumerator(QueryGraphManager &graph, JoinOrderCandidateEvaluator &evaluator);
 
+public:
 	//! The driver initializes the input plan and selects the working memo before invoking greedy search.
 	//! Return true if all relations were merged into a complete plan, or false if greedy cannot complete the next
 	//! merge.
@@ -27,6 +28,7 @@ private:
 		JoinPlanCost cost;
 	};
 
+private:
 	idx_t AddGroup(JoinRelationSet &set);
 	vector<idx_t> GetConnectedGroups(idx_t group) const;
 	optional_ptr<DPJoinNode> EmitOrientation(JoinOrderPlanMap &plans, idx_t left, idx_t right);
@@ -35,6 +37,7 @@ private:
 	bool TryCrossProduct(JoinOrderPlanMap &plans, idx_t &left, idx_t &right);
 	void MergeGroups(JoinOrderPlanMap &plans, idx_t left, idx_t right);
 
+private:
 	QueryGraphManager &query_graph_manager;
 	JoinOrderCandidateEvaluator &evaluator;
 

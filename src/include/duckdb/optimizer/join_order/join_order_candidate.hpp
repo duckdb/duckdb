@@ -23,6 +23,7 @@ class JoinOrderCandidateEvaluator {
 public:
 	JoinOrderCandidateEvaluator(QueryGraphManager &graph, CostModel &cost_model, const QueryGraphEdges &edges);
 
+public:
 	bool PreferPlan(const DPJoinNode &candidate, const JoinOrderPlanMap &candidate_plans, const DPJoinNode &incumbent,
 	                const JoinOrderPlanMap &incumbent_plans) const;
 	//! Conservative bound for either orientation; inputs and incumbent must be fully costed.
@@ -56,6 +57,7 @@ private:
 	QueryGraphManager &query_graph_manager;
 	CostModel &cost_model;
 	const QueryGraphEdges &query_graph;
+
 	double recursive_frontier_estimate = 0;
 	reference_map_t<JoinRelationSet, reference_map_t<JoinRelationSet, vector<reference<NeighborInfo>>>>
 	    connection_cache;

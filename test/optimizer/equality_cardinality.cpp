@@ -201,7 +201,7 @@ TEST_CASE("Factor-local peer selection preserves original population evidence", 
 		REQUIRE_FALSE(model.ColumnSupport(EqualityBinding(0, 0)).has_usable_domain);
 	}
 	// Identical identity is not an observation of how many values that support contains.
-	inputs[0].EstablishSupportIdentity();
+	inputs[0].EnsureMaterializedProducerIdentity();
 	inputs[1] = inputs[0];
 	inputs.resize(2);
 	REQUIRE(EqualityRows(inputs, EqualityChain(2, 1), EqualityScanSources(inputs)) == Approx(500));
@@ -356,7 +356,7 @@ TEST_CASE("Conditioned unknown points remain unknown through aliases and row ret
 		}
 		input.equivalent_columns = {{0, 1}};
 		RelationStatisticsHelper::ApplyCardinality(input, 10);
-		input.EstablishSupportIdentity();
+		input.EnsureMaterializedProducerIdentity();
 		vector<RelationStats> inputs {input};
 		EqualityCardinalityModel model(inputs);
 		for (auto &column : inputs[0].columns) {
@@ -658,7 +658,7 @@ TEST_CASE("Tuple support identity preserves coordinate orientation without scala
           "[optimizer][equality_cardinality]") {
 	auto original = EqualityInput(8, {8, 8});
 	EqualityPopulation(original, {0, 1}, 64, 8);
-	original.EstablishSupportIdentity();
+	original.EnsureMaterializedProducerIdentity();
 	auto copy = original;
 	auto aligned = EqualityChain(2, 2);
 	REQUIRE(EqualityRows({original, copy}, aligned) == Approx(8));
@@ -708,7 +708,7 @@ TEST_CASE("Tuple identity does not propagate through an omitted producer bridge"
 TEST_CASE("Complete keys bound the multiplicity of a whole equality region", "[optimizer][equality_cardinality]") {
 	auto original = EqualityInput(10, {12, 12}, {10, 10});
 	EqualityPopulation(original, {0, 1}, 144, 10);
-	original.EstablishSupportIdentity();
+	original.EnsureMaterializedProducerIdentity();
 	vector<RelationStats> inputs(3, original);
 	for (idx_t r = 0; r < inputs.size(); r++) {
 		auto rows = double(10 + r);
@@ -798,7 +798,7 @@ TEST_CASE("Equality factors retain positive estimates below double range",
 TEST_CASE("Projection separates fanout from retained tuple populations", "[optimizer][equality_cardinality]") {
 	auto source = EqualityInput(8, {8});
 	EqualityPopulation(source, {0}, 8, 8);
-	source.EstablishSupportIdentity();
+	source.EnsureMaterializedProducerIdentity();
 	auto many = EqualityInput(16, {8});
 	vector<RelationStats> inputs {source, many};
 	EqualityCardinalityModel model(inputs);
@@ -806,7 +806,7 @@ TEST_CASE("Projection separates fanout from retained tuple populations", "[optim
 	REQUIRE_FALSE(model.PreservesMultiplicity(0, {0, 1}, components));
 	auto output = EqualityInput(16, {8});
 	output.columns[0].binding = EqualityBinding(1, 0);
-	model.ProjectEvidence(output, components, {false, false}, {false, false});
+	model.ProjectEvidence(output, components, {{}, {}});
 	REQUIRE(output.unique_keys.empty());
 	REQUIRE(output.joint_stats.size() == 1);
 	REQUIRE(output.joint_stats[0].columns == vector<idx_t> {0});
@@ -821,7 +821,7 @@ TEST_CASE("Projection separates fanout from retained tuple populations", "[optim
 	REQUIRE(lookup.PreservesMultiplicity(0, {0, 1}, lookup_components));
 	auto unique_output = EqualityInput(8, {8});
 	unique_output.columns[0].binding = EqualityBinding(1, 0);
-	lookup.ProjectEvidence(unique_output, lookup_components, {true, false}, {false, false});
+	lookup.ProjectEvidence(unique_output, lookup_components, {{EqualitySelection::MATCHED, {}, true}, {}});
 	REQUIRE(unique_output.HasUniqueKey({0}));
 }
 
@@ -835,7 +835,7 @@ TEST_CASE("Joint projection exports matched support independently of matching fa
 	auto estimate = model.Estimate(components, {0, 1});
 	REQUIRE((512 * 512 * estimate.selectivity).GetDouble() == Approx(1024));
 	auto output = EqualityInput(1024, {16, 16});
-	model.ProjectEvidence(output, components, {false, false}, {false, false});
+	model.ProjectEvidence(output, components, {{}, {}});
 	REQUIRE(output.unique_keys.empty());
 	REQUIRE(output.joint_stats.size() == 2);
 	for (auto &joint : output.joint_stats) {
@@ -859,7 +859,7 @@ TEST_CASE("Joint projection distinguishes key constraints from payload sampling"
 		EqualityCardinalityModel model(inputs);
 		auto components = model.Components({{EqualityBinding(0, key_constraint ? 0 : 2), EqualityBinding(1, 0)}});
 		auto output = EqualityInput(8, {key_constraint ? 1.0 : 2.0, 2});
-		model.ProjectEvidence(output, components, {false, false}, {false, false});
+		model.ProjectEvidence(output, components, {{}, {}});
 		REQUIRE(output.joint_stats.size() == 1);
 		auto &joint = output.joint_stats[0];
 		// Restricting a key axis keeps two whole tuples. Independent row sampling keeps 3 of 4 duplicated tuples.
@@ -879,7 +879,7 @@ TEST_CASE("Joint projection declines crossing conditional tuple distributions", 
 	auto components = model.Components(
 	    {{EqualityBinding(0, 1), EqualityBinding(1, 1)}, {EqualityBinding(0, 2), EqualityBinding(1, 2)}});
 	auto output = EqualityInput(8, {4, 4, 4});
-	model.ProjectEvidence(output, components, {false, false}, {false, false});
+	model.ProjectEvidence(output, components, {{}, {}});
 	REQUIRE(output.joint_stats.size() == 2);
 	for (auto &joint : output.joint_stats) {
 		REQUIRE(joint.columns == vector<idx_t> {1, 2});
@@ -895,7 +895,7 @@ TEST_CASE("Projected single-key populations follow the common equality populatio
 	EqualityCardinalityModel model(inputs);
 	auto components = model.Components(EqualityChain(2, 1));
 	auto output = EqualityInput(64, {32});
-	model.ProjectEvidence(output, components, {false, false}, {false, false});
+	model.ProjectEvidence(output, components, {{}, {}});
 	vector<RelationStats> normalized {output};
 	EqualityCardinalityModel next(normalized);
 	REQUIRE(normalized[0].columns[0].total_domain.distinct_count == 32);
@@ -914,7 +914,7 @@ TEST_CASE("Fanout retains source dependencies without determining introduced pay
 	EqualityCardinalityModel model(inputs);
 	auto output = EqualityInput(128, {64, 4, 2});
 	output.columns[2].binding = EqualityBinding(1, 0);
-	model.ProjectEvidence(output, {}, {false, false}, {false, false});
+	model.ProjectEvidence(output, {}, {{}, {}});
 	REQUIRE(output.unique_keys.empty());
 	REQUIRE(output.joint_stats.size() == 1);
 	REQUIRE(output.joint_stats[0].dependent_columns == vector<idx_t> {0, 1});
@@ -958,7 +958,7 @@ TEST_CASE("Fanout retains source dependencies without determining introduced pay
 	EqualityCardinalityModel repeated(repeated_inputs);
 	auto repeated_output = EqualityInput(256, {64, 4, 2, 2});
 	repeated_output.columns[3].binding = EqualityBinding(1, 0);
-	repeated.ProjectEvidence(repeated_output, {}, {false, false}, {false, false});
+	repeated.ProjectEvidence(repeated_output, {}, {{}, {}});
 	vector<RelationStats> repeated_stats {repeated_output};
 	EqualityCardinalityModel normalized(repeated_stats);
 	REQUIRE(normalized.JointSupport(0, {0, 1}));
@@ -967,7 +967,7 @@ TEST_CASE("Fanout retains source dependencies without determining introduced pay
 	REQUIRE_FALSE(normalized.JointSupport(0, {0, 3}));
 
 	auto nullable_output = EqualityInput(128, {64, 4});
-	model.ProjectEvidence(nullable_output, {}, {false, false}, {false, false}, {true, false});
+	model.ProjectEvidence(nullable_output, {}, {{EqualitySelection::MATCHED, {}, false, false, true}, {}});
 	vector<RelationStats> nullable_stats {nullable_output};
 	EqualityCardinalityModel nullable(nullable_stats);
 	REQUIRE_FALSE(nullable.JointSupport(0, {0, 1}));
@@ -979,7 +979,7 @@ TEST_CASE("Dependent payload constraints remove whole source keys after fanout",
 	vector<RelationStats> inputs {source, EqualityInput(2, {2})};
 	EqualityCardinalityModel fanout(inputs);
 	auto duplicated = EqualityInput(128, {8, 8, 4});
-	fanout.ProjectEvidence(duplicated, {}, {false, false}, {false, false});
+	fanout.ProjectEvidence(duplicated, {}, {{}, {}});
 	for (bool complete_bundle : {false, true}) {
 		auto lookup = complete_bundle ? EqualityInput(32, {8, 8, 4}) : EqualityInput(2, {4}, {2});
 		if (complete_bundle) {
@@ -991,7 +991,7 @@ TEST_CASE("Dependent payload constraints remove whole source keys after fanout",
 		                                                   : vector<pair<ColumnBinding, ColumnBinding>> {
 		                                                         {EqualityBinding(0, 2), EqualityBinding(1, 0)}});
 		auto output = EqualityInput(64, {8, 8, 4}, {8, 8, complete_bundle ? 4.0 : 2.0});
-		model.ProjectEvidence(output, components, {false, false}, {false, false});
+		model.ProjectEvidence(output, components, {{}, {}});
 		vector<RelationStats> downstream {output};
 		EqualityCardinalityModel next(downstream);
 		auto support = next.JointSupport(0, {0, 1, 2});
@@ -1078,7 +1078,7 @@ TEST_CASE("Empty equality projections clear column evidence", "[optimizer][equal
 
 TEST_CASE("Local producer aliases do not rewrite an untouched reference", "[optimizer][equality_cardinality]") {
 	auto producer = EqualityInput(100, {10, 10});
-	producer.EstablishSupportIdentity();
+	producer.EnsureMaterializedProducerIdentity();
 	auto filtered = producer;
 	filtered.equivalent_columns = {{0, 1}};
 	filtered.cardinality = 10;

@@ -231,9 +231,11 @@ static void MergeEquivalentSources(LogicalOperator &op, join_column_sources_t &i
 
 join_column_sources_t JoinOrderSourceStats::Resolve(LogicalOperator &root) const {
 	struct Frame {
+	public:
 		explicit Frame(LogicalOperator &op) : op(op) {
 		}
 
+	public:
 		reference<LogicalOperator> op;
 		idx_t next_child = 0;
 		join_column_sources_t inputs;

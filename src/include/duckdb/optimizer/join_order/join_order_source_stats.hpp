@@ -27,9 +27,11 @@ struct JoinColumnSource {
 };
 
 struct JoinColumnSources {
+public:
 	explicit JoinColumnSources(JoinColumnSource direct) : direct(direct) {
 	}
 
+public:
 	JoinColumnSource direct;
 	vector<JoinColumnSource> equivalents;
 };
@@ -47,6 +49,8 @@ public:
 
 private:
 	void AddSource(const JoinColumnSource &source);
+
+private:
 	optional<DistinctCount> estimate;
 	column_binding_map_t<DistinctCount> local_fallbacks;
 	column_binding_set_t sources;
@@ -74,6 +78,7 @@ private:
 		column_binding_map_t<DistinctCount> source_domains;
 	};
 
+private:
 	unordered_map<TableIndex, ScanStats> scans;
 	unordered_map<TableIndex, join_column_sources_t> projections;
 };

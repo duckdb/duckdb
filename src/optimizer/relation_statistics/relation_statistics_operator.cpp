@@ -7,7 +7,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
-#include <map>
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -29,12 +29,15 @@ static optional<RelationStats> ProjectChildStats(LogicalOperator &op,
 	result.max_cardinality = maximum;
 	result.stats_initialized = true;
 	result.table_name = Identifier(op.GetName());
-	column_binding_map_t<pair<reference<const RelationColumnStats>, bool>> child_columns;
+	struct ProjectedChildColumn {
+		reference<const RelationColumnStats> source;
+		bool can_have_null;
+	};
+	column_binding_map_t<ProjectedChildColumn> child_columns;
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto extended = !null_extended.empty() && null_extended[i];
 		for (auto &column : children[i].get().columns) {
-			child_columns.emplace(column.binding, make_pair(reference<const RelationColumnStats>(column),
-			                                                column.can_have_null || extended));
+			child_columns.emplace(column.binding, ProjectedChildColumn {column, column.can_have_null || extended});
 		}
 	}
 	for (auto &binding : op.GetColumnBindings()) {
@@ -42,9 +45,9 @@ static optional<RelationStats> ProjectChildStats(LogicalOperator &op,
 		if (entry == child_columns.end()) {
 			return {};
 		}
-		auto &source = entry->second.first.get();
+		auto &source = entry->second.source.get();
 		result.columns.emplace_back(binding, source.total_domain, source.current_domain, source.name);
-		result.columns.back().can_have_null = entry->second.second;
+		result.columns.back().can_have_null = entry->second.can_have_null;
 	}
 	for (auto &child : children) {
 		CopyBoundValueRestrictions(result, child);
@@ -186,8 +189,8 @@ void RelationStatisticsHelper::ApplySemiAntiJoinStats(LogicalComparisonJoin &joi
 	}
 	ApplyCardinality(result, estimate.cardinality);
 	if (join.join_type == JoinType::SEMI || join.join_type == JoinType::RIGHT_SEMI) {
-		std::map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
-		std::map<idx_t, vector<idx_t>> witnessed_aliases;
+		map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
+		map<idx_t, vector<idx_t>> witnessed_aliases;
 		auto rhs_aliases = rhs.GetValueAliases();
 		for (auto &condition : join.conditions) {
 			if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
@@ -212,7 +215,8 @@ void RelationStatisticsHelper::ApplySemiAntiJoinStats(LogicalComparisonJoin &joi
 		for (auto &entry : restrictions) {
 			auto &column = result.columns[entry.first];
 			entry.second.push_back(column.value_restriction);
-			column.value_restriction = ColumnValueRestriction::Combine(entry.second, true);
+			column.value_restriction =
+			    ColumnValueRestriction::Combine(entry.second, RestrictionCombination::CONJUNCTION);
 		}
 		for (auto &entry : witnessed_aliases) {
 			auto &group = entry.second;
@@ -461,8 +465,9 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 		}
 		total_domain.distinct_count = MaxValue(total_domain.distinct_count, current_domain.distinct_count);
 		result.columns.emplace_back(bindings[column_idx], total_domain, current_domain, first_column.name);
-		result.columns.back().value_restriction =
-		    ColumnValueRestriction::Combine(restrictions, setop.type != LogicalOperatorType::LOGICAL_UNION);
+		result.columns.back().value_restriction = ColumnValueRestriction::Combine(
+		    restrictions, setop.type != LogicalOperatorType::LOGICAL_UNION ? RestrictionCombination::CONJUNCTION
+		                                                                   : RestrictionCombination::DISJUNCTION);
 		if (population_bound.IsValid()) {
 			result.columns.back().TightenPopulationBound(population_bound.GetIndex());
 		}

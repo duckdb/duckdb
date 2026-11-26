@@ -35,7 +35,7 @@ class LogicalWindow;
 class RelationStatsExtractor;
 class NodeStatistics;
 
-enum class EqualitySelection : uint8_t;
+enum class EqualitySelection;
 
 struct SemiAntiJoinDomain {
 	CardinalityValue total_domain;
@@ -66,9 +66,6 @@ public:
 	static void CaptureUniqueKeys(LogicalOperator &op, RelationStats &stats, ClientContext &context,
 	                              optional<CardinalityValue> source_population = {});
 
-	static constexpr double DEFAULT_SELECTIVITY = 0.2;
-
-public:
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, idx_t source_cardinality);
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context, const NodeStatistics &source_stats,
@@ -157,6 +154,9 @@ public:
 private:
 	static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalGet &get, ClientContext &context,
 	                                                      const ColumnIndex &column_id);
+
+public:
+	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 };
 
 } // namespace duckdb

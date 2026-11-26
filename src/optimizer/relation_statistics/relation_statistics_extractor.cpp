@@ -171,7 +171,7 @@ optional<RelationStats> RelationStatsExtractor::ExtractCTERef(LogicalCTERef &cte
 	if (!definition_stats) {
 		return {};
 	}
-	cache.at(*definition).EstablishSupportIdentity();
+	cache.at(*definition).EnsureMaterializedProducerIdentity();
 	return RelationStatisticsHelper::RebindOutputStats(*definition_stats, cte_ref);
 }
 

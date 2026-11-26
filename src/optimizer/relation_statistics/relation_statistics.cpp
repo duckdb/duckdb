@@ -19,7 +19,9 @@ shared_ptr<const ColumnValueRestriction> ColumnValueRestriction::Create(value_se
 }
 
 shared_ptr<const ColumnValueRestriction>
-ColumnValueRestriction::Combine(const vector<shared_ptr<const ColumnValueRestriction>> &inputs, bool conjunction) {
+ColumnValueRestriction::Combine(const vector<shared_ptr<const ColumnValueRestriction>> &inputs,
+                                RestrictionCombination operation) {
+	const bool conjunction = operation == RestrictionCombination::CONJUNCTION;
 	bool excluded = conjunction;
 	for (auto &input : inputs) {
 		if (!input) {
@@ -87,7 +89,7 @@ void RelationColumnStats::TightenPopulationBound(idx_t bound) {
 	population_bound = optional_idx(population_bound.IsValid() ? MinValue(population_bound.GetIndex(), bound) : bound);
 }
 
-void RelationStats::EstablishSupportIdentity() {
+void RelationStats::EnsureMaterializedProducerIdentity() {
 	if (columns.empty()) {
 		return;
 	}
@@ -338,7 +340,8 @@ void RelationStats::CopyValueRestrictions(const RelationStats &source, const vec
 		}
 	}
 	for (auto &entry : value_outputs) {
-		auto restriction = ColumnValueRestriction::Combine(restrictions.at(entry.first), true);
+		auto restriction =
+		    ColumnValueRestriction::Combine(restrictions.at(entry.first), RestrictionCombination::CONJUNCTION);
 		for (auto c : entry.second) {
 			columns[c].value_restriction = restriction;
 		}
@@ -359,9 +362,13 @@ void RelationStats::CopyEvidence(const RelationStats &source, const vector<optio
 	auto root = [&](idx_t column) {
 		return parents[column];
 	};
+	struct PopulationDomains {
+		DistinctCount total;
+		DistinctCount current;
+	};
 	struct ProjectedColumnEvidence {
 		vector<idx_t> outputs;
-		optional<pair<DistinctCount, DistinctCount>> domains;
+		optional<PopulationDomains> domains;
 		bool can_have_null = true;
 		optional_idx population_bound;
 		shared_ptr<vector<SupportIdentity>> identities;
@@ -386,10 +393,10 @@ void RelationStats::CopyEvidence(const RelationStats &source, const vector<optio
 			evidence.population_bound = bound;
 		}
 		if (!evidence.domains) {
-			evidence.domains = make_pair(column.total_domain, column.current_domain);
+			evidence.domains = PopulationDomains {column.total_domain, column.current_domain};
 		} else {
-			auto &total = evidence.domains->first;
-			auto &current = evidence.domains->second;
+			auto &total = evidence.domains->total;
+			auto &current = evidence.domains->current;
 			total = DistinctCount::ReconcilePopulation(total, column.total_domain);
 			current = DistinctCount::ReconcilePopulation(current, column.current_domain);
 		}
@@ -418,8 +425,8 @@ void RelationStats::CopyEvidence(const RelationStats &source, const vector<optio
 		for (auto output : evidence.outputs) {
 			auto &domains = *evidence.domains;
 			columns[output].can_have_null = evidence.can_have_null;
-			columns[output].total_domain = domains.first;
-			columns[output].current_domain = domains.second;
+			columns[output].total_domain = domains.total;
+			columns[output].current_domain = domains.current;
 			columns[output].support_identities = evidence.identities;
 			if (evidence.population_bound.IsValid()) {
 				columns[output].TightenPopulationBound(evidence.population_bound.GetIndex());

@@ -135,7 +135,7 @@ TEST_CASE("MARK boundaries preserve the left population and publish their marker
 		left_stats.columns[0].current_domain.distinct_count = 0.25;
 		left_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
 		left_stats.AddUniqueKey({0});
-		left_stats.EstablishSupportIdentity();
+		left_stats.EnsureMaterializedProducerIdentity();
 		auto right_stats = CreateStats({right_binding}, {rhs_rows}, rhs_rows);
 		JoinPredicateModel predicates;
 		CardinalityEstimator estimator(sets, predicates);
@@ -833,8 +833,6 @@ TEST_CASE("Join refinement preserves derived populations and refines missing NDV
 }
 
 TEST_CASE("Derived population scope survives alias reconciliation", "[optimizer][relation_statistics]") {
-	REQUIRE(EnumUtil::FromString<DistinctCountSource>("DERIVED") == DistinctCountSource::DERIVED);
-	REQUIRE(EnumUtil::ToString(DistinctCountSource::DERIVED) == "DERIVED");
 	auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
 	auto b = ColumnBinding(TableIndex(0), ProjectionIndex(1));
 	for (bool reverse : {false, true}) {
@@ -2196,7 +2194,7 @@ TEST_CASE("Windows preserve keys and closed tuple support", "[optimizer][relatio
 	stats.joint_stats.push_back(
 	    {{0}, DistinctCount(16, DistinctCountSource::EXACT), DistinctCount(8, DistinctCountSource::EXACT), nullptr});
 	stats.columns[0].total_domain.distinct_count = 16;
-	stats.EstablishSupportIdentity();
+	stats.EnsureMaterializedProducerIdentity();
 	LogicalWindow window(TableIndex(30), optional_idx());
 	window.children.push_back(std::move(child));
 	auto result = RelationStatisticsHelper::ExtractWindowStats(window, stats);
@@ -2229,7 +2227,7 @@ TEST_CASE("DISTINCT and grouping consume retained joint support after fanout", "
 	}
 	stats.joint_stats.push_back(
 	    {{0, 1}, DistinctCount(16, DistinctCountSource::EXACT), DistinctCount(4, DistinctCountSource::EXACT), nullptr});
-	stats.EstablishSupportIdentity();
+	stats.EnsureMaterializedProducerIdentity();
 	vector<unique_ptr<Expression>> targets;
 	for (auto &binding : bindings) {
 		targets.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, binding));
@@ -2278,7 +2276,7 @@ TEST_CASE("Filter equalities retain a key through an equal projected column", "[
 		auto bindings = child->GetColumnBindings();
 		auto stats = CreateStats(bindings, {8, 8}, 8);
 		stats.AddUniqueKey({0});
-		stats.EstablishSupportIdentity();
+		stats.EnsureMaterializedProducerIdentity();
 		LogicalFilter filter(CreateJoinComparison(bindings[0], bindings[1], type));
 		filter.projection_map = {ProjectionIndex(1)};
 		filter.children.push_back(std::move(child));
@@ -4922,8 +4920,12 @@ TEST_CASE("Current value restrictions compose exactly and reuse unchanged sets",
 				CAPTURE(conjunction, left_excluded, right_excluded);
 				auto left = ColumnValueRestriction::Create(first->values, left_excluded);
 				auto right = ColumnValueRestriction::Create(second->values, right_excluded);
-				auto result = ColumnValueRestriction::Combine({left, right}, conjunction);
-				auto reverse = ColumnValueRestriction::Combine({right, left}, conjunction);
+				auto result =
+				    ColumnValueRestriction::Combine({left, right}, conjunction ? RestrictionCombination::CONJUNCTION
+				                                                               : RestrictionCombination::DISJUNCTION);
+				auto reverse =
+				    ColumnValueRestriction::Combine({right, left}, conjunction ? RestrictionCombination::CONJUNCTION
+				                                                               : RestrictionCombination::DISJUNCTION);
 				REQUIRE(result);
 				REQUIRE(reverse);
 				CHECK(result->excluded == reverse->excluded);
@@ -4938,14 +4940,14 @@ TEST_CASE("Current value restrictions compose exactly and reuse unchanged sets",
 			}
 		}
 	}
-	CHECK(ColumnValueRestriction::Combine({first, first}, true) == first);
-	CHECK(ColumnValueRestriction::Combine({first, nullptr}, true) == first);
-	CHECK_FALSE(ColumnValueRestriction::Combine({first, nullptr}, false));
+	CHECK(ColumnValueRestriction::Combine({first, first}, RestrictionCombination::CONJUNCTION) == first);
+	CHECK(ColumnValueRestriction::Combine({first, nullptr}, RestrictionCombination::CONJUNCTION) == first);
+	CHECK_FALSE(ColumnValueRestriction::Combine({first, nullptr}, RestrictionCombination::DISJUNCTION));
 	auto disjoint = ColumnValueRestriction::Create({Value::INTEGER(1)}, true);
-	CHECK(ColumnValueRestriction::Combine({first, disjoint}, true) == first);
+	CHECK(ColumnValueRestriction::Combine({first, disjoint}, RestrictionCombination::CONJUNCTION) == first);
 	auto broad = ColumnValueRestriction::Create({Value::INTEGER(42)}, true);
 	auto narrow = ColumnValueRestriction::Create({Value::INTEGER(42), Value::INTEGER(84)}, true);
-	CHECK(ColumnValueRestriction::Combine({broad, narrow}, true) == narrow);
+	CHECK(ColumnValueRestriction::Combine({broad, narrow}, RestrictionCombination::CONJUNCTION) == narrow);
 
 	// Literal history has no contributor/owned-scan limit: the query owns all of these literals already.
 	for (auto count : {idx_t(1024), idx_t(1025)}) {
@@ -4954,11 +4956,11 @@ TEST_CASE("Current value restrictions compose exactly and reuse unchanged sets",
 			values.insert(Value::BIGINT(i));
 		}
 		auto history = ColumnValueRestriction::Create(std::move(values), true);
-		auto repeated = ColumnValueRestriction::Combine({history, history}, true);
+		auto repeated = ColumnValueRestriction::Combine({history, history}, RestrictionCombination::CONJUNCTION);
 		CHECK(repeated == history);
 		CHECK(repeated->values.size() == count);
 		auto finite = ColumnValueRestriction::Create({Value::BIGINT(count), Value::BIGINT(count + 1)}, false);
-		CHECK(ColumnValueRestriction::Combine({history, finite}, true) == finite);
+		CHECK(ColumnValueRestriction::Combine({history, finite}, RestrictionCombination::CONJUNCTION) == finite);
 	}
 }
 
@@ -5339,11 +5341,13 @@ TEST_CASE("Set operations combine current restrictions independently of populati
 	auto a = ColumnValueRestriction::Create(std::move(values), false);
 	auto b = ColumnValueRestriction::Create({Value::INTEGER(1024)}, false);
 	auto c = ColumnValueRestriction::Create({Value::INTEGER(0)}, true);
-	auto ab = ColumnValueRestriction::Combine({a, b}, false);
+	auto ab = ColumnValueRestriction::Combine({a, b}, RestrictionCombination::DISJUNCTION);
 	REQUIRE(ab);
 	CHECK(ab->values.size() == 1025);
-	CHECK_FALSE(ColumnValueRestriction::Combine({ab, c}, false));
-	CHECK_FALSE(ColumnValueRestriction::Combine({a, ColumnValueRestriction::Combine({b, c}, false)}, false));
+	CHECK_FALSE(ColumnValueRestriction::Combine({ab, c}, RestrictionCombination::DISJUNCTION));
+	CHECK_FALSE(ColumnValueRestriction::Combine(
+	    {a, ColumnValueRestriction::Combine({b, c}, RestrictionCombination::DISJUNCTION)},
+	    RestrictionCombination::DISJUNCTION));
 }
 
 TEST_CASE("Only value-preserving expressions transport a current literal envelope",

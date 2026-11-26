@@ -15,15 +15,17 @@ namespace duckdb {
 class RelationManager;
 
 struct JoinPlanCost {
-	double work;
-	double memory_excess;
-
+public:
 	bool operator<(const JoinPlanCost &other) const {
 		return memory_excess != other.memory_excess ? memory_excess < other.memory_excess : work < other.work;
 	}
 	bool operator==(const JoinPlanCost &other) const {
 		return memory_excess == other.memory_excess && work == other.work;
 	}
+
+public:
+	double work;
+	double memory_excess;
 };
 
 class CostModel {
@@ -46,6 +48,7 @@ private:
 
 private:
 	CardinalityEstimator &cardinality_estimator;
+
 	optional_ptr<RelationManager> recursive_relations;
 	reference_map_t<JoinRelationSet, double> row_widths;
 	double memory_budget = 0;

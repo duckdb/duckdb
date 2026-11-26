@@ -19,13 +19,15 @@
 
 namespace duckdb {
 
-enum class JoinOrderOperatorType : uint8_t { INNER, LEFT, SEMI, ANTI, MARK, CROSS_PRODUCT };
+enum class JoinOrderOperatorType { INNER, LEFT, SEMI, ANTI, MARK, CROSS_PRODUCT };
 
 struct JoinOrderConflictRule {
+public:
 	JoinOrderConflictRule(JoinRelationSet &trigger_p, JoinRelationSet &requirement_p)
 	    : trigger(trigger_p), requirement(requirement_p) {
 	}
 
+public:
 	reference<JoinRelationSet> trigger;
 	reference<JoinRelationSet> requirement;
 };
@@ -36,6 +38,7 @@ struct JoinOrderConflictRule {
 //! syntactic eligibility is expanded into a total eligibility set, while conditional dependencies remain conflict
 //! rules evaluated when the operator is considered for a candidate partition.
 struct JoinOrderOperator {
+public:
 	JoinOrderOperator(idx_t index_p, JoinOrderOperatorType type_p, JoinRelationSet &left_relations_p,
 	                  JoinRelationSet &right_relations_p, JoinRelationSet &syntactic_set_p,
 	                  vector<JoinCondition> conditions_p)
@@ -44,11 +47,14 @@ struct JoinOrderOperator {
 	      right_total_set(syntactic_set_p), conditions(std::move(conditions_p)) {
 	}
 
+public:
 	idx_t index;
 	JoinOrderOperatorType type;
+
 	//! Tables below the operator's original left and right inputs.
 	reference<JoinRelationSet> left_relations;
 	reference<JoinRelationSet> right_relations;
+
 	//! SES, TES, and their orientation-specific partitions.
 	reference<JoinRelationSet> syntactic_set;
 	reference<JoinRelationSet> total_set;
@@ -58,16 +64,19 @@ struct JoinOrderOperator {
 	//! Operators originally below the left and right inputs, used while constructing CD-C rules.
 	vector<reference<JoinOrderOperator>> left_operators;
 	vector<reference<JoinOrderOperator>> right_operators;
+
 	//! Complete semantic conditions owned by this operator occurrence.
 	vector<JoinCondition> conditions;
 	TableIndex mark_index;
 	vector<LogicalType> mark_types;
+
 	//! Predicate copies used only for cardinality estimation and query-graph connectivity.
 	vector<idx_t> costing_predicate_indices;
 	//! Normalized LEFT ON equalities, including same-side keys that cannot be query-graph edges.
 	vector<pair<ColumnBinding, ColumnBinding>> costing_equalities;
 	//! LEFT ON residuals outside the column-equality model.
 	vector<reference<const Expression>> residual_predicates;
+
 	//! Whether this occurrence must apply its complete conditions together.
 	//! Independent predicates must satisfy each filtering dependency or lie outside its subtree.
 	bool must_apply_as_operator = false;

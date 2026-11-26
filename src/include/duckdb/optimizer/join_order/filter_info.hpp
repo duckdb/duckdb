@@ -34,10 +34,12 @@ public:
 	reference<JoinRelationSet> set;
 	idx_t filter_index;
 	JoinType join_type;
+
 	optional_ptr<JoinRelationSet> left_set;
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+
 	bool from_residual_predicate = false;
 	//! Whether this predicate originated from a LogicalFilter rather than a join condition.
 	bool from_logical_filter = false;
@@ -46,6 +48,7 @@ public:
 	//! Filters carrying a barrier must not be pushed below any join in the reordered plan - they are only
 	//! placed once the entire join tree has been built.
 	bool must_remain_at_root = false;
+
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
 	//! Used by cardinality estimation to skip redundant transitive conditions.

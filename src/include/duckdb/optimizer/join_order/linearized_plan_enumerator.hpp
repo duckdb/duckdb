@@ -16,6 +16,8 @@ class IntervalJoinEnumerator {
 public:
 	IntervalJoinEnumerator(QueryGraphManager &graph, JoinOrderCandidateEvaluator &evaluator,
 	                       const JoinOrderPlanMap &inputs);
+
+public:
 	bool Solve(const vector<RelationIndex> &order);
 	const JoinOrderPlanMap &GetPlans() const;
 
@@ -29,6 +31,8 @@ private:
 class LinearizedPlanEnumerator {
 public:
 	LinearizedPlanEnumerator(QueryGraphManager &graph, CostModel &cost_model, JoinOrderCandidateEvaluator &evaluator);
+
+public:
 	bool SolveApproximately(JoinOrderPlanMap &plans);
 
 private:
@@ -38,6 +42,7 @@ private:
 	void OfferPlan(JoinRelationSet &root, unique_ptr<CapturedJoinOrderPlan> candidate,
 	               unique_ptr<CapturedJoinOrderPlan> &incumbent);
 
+private:
 	QueryGraphManager &query_graph_manager;
 	CostModel &cost_model;
 	JoinOrderCandidateEvaluator &evaluator;

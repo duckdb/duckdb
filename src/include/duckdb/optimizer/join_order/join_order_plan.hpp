@@ -15,6 +15,9 @@ JoinOrderPlanMap CopyJoinOrderLeafPlans(const JoinOrderPlanMap &source);
 
 //! A complete closure for one explicit root, re-costed after capturing all its children.
 class CapturedJoinOrderPlan {
+private:
+	CapturedJoinOrderPlan(JoinRelationSet &root, JoinOrderPlanMap plans);
+
 public:
 	static unique_ptr<CapturedJoinOrderPlan> Capture(const JoinOrderPlanMap &source, JoinRelationSet &root,
 	                                                 CostModel &cost_model);
@@ -25,8 +28,6 @@ public:
 	JoinOrderPlanMap TakePlans();
 
 private:
-	CapturedJoinOrderPlan(JoinRelationSet &root, JoinOrderPlanMap plans);
-
 	JoinRelationSet &root;
 	JoinOrderPlanMap plans;
 };

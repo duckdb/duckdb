@@ -45,6 +45,7 @@ public:
 	JoinPredicateClass GetPredicateClass() const;
 	JoinType GetJoinType() const;
 	ExpressionType GetComparisonType() const;
+
 	JoinRelationSet &GetSet() const;
 	JoinRelationSet &GetLeftSet() const;
 	JoinRelationSet &GetRightSet() const;
@@ -52,8 +53,11 @@ public:
 	optional_ptr<JoinRelationSet> GetRightSetOptional() const;
 	optional_ptr<JoinRelationSet> GetSemanticLeftSetOptional() const;
 	optional_ptr<JoinRelationSet> GetSemanticRightSetOptional() const;
-	const ColumnBinding &GetStatsBinding(bool left) const;
-	const ColumnBinding &GetEqualityBinding(bool left) const;
+	const ColumnBinding &GetLeftStatsBinding() const;
+	const ColumnBinding &GetRightStatsBinding() const;
+	const ColumnBinding &GetLeftEqualityBinding() const;
+	const ColumnBinding &GetRightEqualityBinding() const;
+
 	bool HasValidJoinEndpoints() const;
 	bool HasDisjointJoinEndpoints() const;
 	bool HasAnyValidStatsBinding() const;
@@ -63,6 +67,7 @@ public:
 	bool IsResidualFilter() const;
 	bool IsEquivalencePredicate() const;
 	bool IsDirectValueEquality() const;
+
 	void SetEqualityClassIndex(optional_idx equality_class_index);
 	optional_idx GetEqualityClassIndex() const;
 
@@ -72,6 +77,7 @@ private:
 	JoinPredicateClass predicate_class;
 	ExpressionType comparison_type;
 	bool direct_value_equality;
+
 	ColumnBinding left_equality_binding;
 	ColumnBinding right_equality_binding;
 	optional_idx equality_class_index;
@@ -127,10 +133,12 @@ public:
 
 private:
 	vector<unique_ptr<JoinPredicate>> predicates;
+	//! Views retain registration order and borrow the owned predicates above.
 	vector<reference<JoinPredicate>> all_predicates;
 	vector<reference<JoinPredicate>> equality_join_predicates;
 	vector<reference<JoinPredicate>> selectivity_predicates;
 	vector<reference<JoinPredicate>> graph_predicates;
+
 	vector<JoinEqualityClass> equality_classes;
 };
 
