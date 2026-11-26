@@ -433,6 +433,42 @@ static void ResetLinearizedInputStats(RelationStats &stats) {
 	stats = std::move(result);
 }
 
+TEST_CASE("Linearized selectivity ties survive fractional input populations", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT 1 k"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection, "SELECT * FROM a JOIN b USING(k) JOIN c USING(k)");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	auto stats = graph.relation_manager.GetRelationStats();
+	vector<CardinalityValue> rows {135086, 7248868.8, 2967144};
+	REQUIRE(stats.size() == rows.size());
+	for (idx_t i = 0; i < stats.size(); i++) {
+		ResetLinearizedInputStats(stats[i]);
+		stats[i].cardinality = rows[i];
+		for (auto &column : stats[i].columns) {
+			column.total_domain = DistinctCount(2248305, DistinctCountSource::HLL);
+			column.current_domain =
+			    DistinctCount(MinValue(CardinalityValue(2248305), rows[i]), DistinctCountSource::HLL);
+		}
+	}
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.candidate_evaluator.InitLeafPlans(enumerator.plans, stats);
+	JoinOrderLinearizer linearizer(graph, estimator);
+	REQUIRE(linearizer.BuildTree());
+	// Equal pair selectivities form the same ranking tree. Subtracting the three logs
+	// perturbed their ties and incorrectly forced the larger input ahead of the smaller one.
+	vector<RelationIndex> expected {RelationIndex(0), RelationIndex(2), RelationIndex(1)};
+	REQUIRE(linearizer.GetOrder(RelationIndex(0)).relations == expected);
+	connection.Rollback();
+}
+
 TEST_CASE("IKKBZ chooses the cheapest rooted order rather than the smallest input", "[optimizer][join_order]") {
 	DuckDB db;
 	Connection connection(db);
