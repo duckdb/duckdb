@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "tpch_extension.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -17,9 +16,12 @@ TEST_CASE("Test TPC-H SF0.01 using streaming api", "[tpch][.]") {
 	}
 
 	REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=" + to_string(sf) + ")"));
+	auto answers = con.Query("SELECT answer FROM tpch_answers() WHERE scale_factor = 0.01 ORDER BY query_nr");
+	REQUIRE_NO_FAIL(*answers);
+	REQUIRE(answers->Collection().Count() == 22);
 
 	for (idx_t tpch_num = 1; tpch_num <= 22; tpch_num++) {
-		auto stream = OpenStream(con, "pragma tpch(" + to_string(tpch_num) + ");");
+		auto stream = OpenStream(con, "pragma tpch(" + to_string(tpch_num) + ", sf=0.01);");
 
 		duckdb::ColumnDataCollection collection(duckdb::Allocator::DefaultAllocator(), stream->GetTypes());
 
@@ -32,7 +34,7 @@ TEST_CASE("Test TPC-H SF0.01 using streaming api", "[tpch][.]") {
 			}
 		}
 
-		COMPARE_CSV_COLLECTION(collection, TpchExtension::GetAnswer(sf, tpch_num), true);
+		COMPARE_CSV_COLLECTION(collection, answers->Collection().GetValue(0, tpch_num - 1).ToString(), true);
 	}
 }
 

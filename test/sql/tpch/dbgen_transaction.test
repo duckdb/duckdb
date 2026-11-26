@@ -1,0 +1,103 @@
+# name: test/sql/tpch/dbgen_transaction.test
+# description: dbgen runs in the transaction of the calling statement, and generates the same rows at any thread count
+# group: [tpch]
+
+require tpch
+
+# a rollback undoes the generated tables
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CALL dbgen(sf=0.01)
+
+query I
+SELECT count(*) FROM lineitem
+----
+60175
+
+statement ok
+ROLLBACK
+
+statement error
+SELECT count(*) FROM lineitem
+----
+<REGEX>:.*Catalog Error.*lineitem.*does not exist.*
+
+# the generated rows are in the same order regardless of the thread count
+statement ok
+SET threads=1
+
+statement ok
+CALL dbgen(sf=0.01)
+
+statement ok
+SET threads=4
+
+statement ok
+CALL dbgen(sf=0.01, suffix='_parallel')
+
+query I
+SELECT count(*) FROM lineitem POSITIONAL JOIN lineitem_parallel p
+WHERE (lineitem.l_orderkey, lineitem.l_linenumber, lineitem.l_comment) <> (p.l_orderkey, p.l_linenumber, p.l_comment)
+----
+0
+
+query I
+SELECT count(*) FROM orders POSITIONAL JOIN orders_parallel p WHERE orders.o_orderkey <> p.o_orderkey
+----
+0
+
+query I
+SELECT count(*) FROM partsupp POSITIONAL JOIN partsupp_parallel p
+WHERE (partsupp.ps_partkey, partsupp.ps_suppkey) <> (p.ps_partkey, p.ps_suppkey)
+----
+0
+
+# a temporary table of the same name does not capture the generated rows
+statement ok
+CREATE TEMPORARY TABLE region_temp(r_regionkey INTEGER, r_name VARCHAR, r_comment VARCHAR)
+
+statement ok
+CREATE TEMPORARY TABLE nation_temp AS SELECT 42 AS i
+
+statement ok
+CALL dbgen(sf=0.01, suffix='_temp')
+
+query I
+SELECT count(*) FROM memory.main.region_temp
+----
+5
+
+query I
+SELECT count(*) FROM temp.main.region_temp
+----
+0
+
+query I
+SELECT * FROM temp.main.nation_temp
+----
+42
+
+# children and step generate the parts of the tables, which add up to the whole
+statement ok
+CALL dbgen(sf=0.01, suffix='_part', children=3, step=0)
+
+statement ok
+CALL dbgen(sf=0.01, suffix='_part', children=3, step=1)
+
+statement ok
+CALL dbgen(sf=0.01, suffix='_part', children=3, step=2)
+
+query I
+SELECT count(*) FROM (SELECT * FROM lineitem EXCEPT ALL SELECT * FROM lineitem_part)
+----
+0
+
+query I
+SELECT count(*) FROM lineitem_part
+----
+60175
+
+statement ok
+RESET threads

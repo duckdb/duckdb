@@ -10,7 +10,6 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "test_helpers.hpp"
-#include "tpch_extension.hpp"
 
 #include <fstream>
 

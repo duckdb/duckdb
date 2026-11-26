@@ -21,7 +21,7 @@
 
 #include "dbgen/config.h"
 
-#include "duckdb/common/assert.hpp"
+#include <cassert>
 
 #include <limits>
 
@@ -75,7 +75,7 @@ static const TableStreams &table_streams(int t, DBGenContext *ctx) {
 		}
 		return result;
 	}();
-	D_ASSERT(t >= 0 && t < TABLE_COUNT);
+	assert(t >= 0 && t < TABLE_COUNT);
 	return streams[t];
 }
 

@@ -19,11 +19,13 @@
 #define DECLARER
 #endif /* TEST */
 
+#include "duckdb_cpp.hpp"
+
 #include "dbgen/config.h"
 
 #include <stdlib.h>
 #ifndef _WIN32
- /* Change for Windows NT */
+/* Change for Windows NT */
 #include <unistd.h>
 #endif /* _WIN32 */
 #include <ctype.h>
@@ -66,16 +68,13 @@
 #include "dbgen/dsstypes.h"
 #include "dbgen/text_pool_checkpoints.h"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/helper.hpp"
-#include "duckdb/storage/storage_info.hpp"
-
+#include <algorithm>
 #include <atomic>
+#include <cassert>
+#include <string>
 #include <thread>
 
-using duckdb::idx_t;
-using duckdb::InternalException;
-using duckdb::MinValue;
+using duckdb::cxx::idx_t;
 
 /*
  * txt_vp() --
@@ -257,11 +256,11 @@ static char *gen_text(char *dest, seed_t *seed, distribution *s) {
 	return dest + ind + 1;
 }
 
-#define NOUN_MAX_WEIGHT 340
-#define ADJECTIVES_MAX_WEIGHT 289
-#define ADVERBS_MAX_WEIGHT 262
-#define AUXILLARIES_MAX_WEIGHT 18
-#define VERBS_MAX_WEIGHT 174
+#define NOUN_MAX_WEIGHT         340
+#define ADJECTIVES_MAX_WEIGHT   289
+#define ADVERBS_MAX_WEIGHT      262
+#define AUXILLARIES_MAX_WEIGHT  18
+#define VERBS_MAX_WEIGHT        174
 #define PREPOSITIONS_MAX_WEIGHT 456
 
 static char *noun_index[NOUN_MAX_WEIGHT + 1];
@@ -412,8 +411,7 @@ static char *gen_sentence(char *dest, seed_t *seed) {
  */
 static_assert(TEXT_POOL_SIZE == ((long)TEXT_POOL_CHUNK_COUNT << TEXT_POOL_CHUNK_SHIFT),
               "text pool checkpoints do not match TEXT_POOL_SIZE");
-static_assert((idx_t(1) << TEXT_POOL_CHUNK_SHIFT) == DEFAULT_BLOCK_ALLOC_SIZE,
-              "a text pool chunk is sized like a memory block");
+static_assert((idx_t(1) << TEXT_POOL_CHUNK_SHIFT) == 256 * 1024, "a text pool chunk is sized like a memory block");
 
 enum class TextPoolChunkState : uint8_t { EMPTY = 0, GENERATING = 1, READY = 2 };
 
@@ -440,10 +438,10 @@ static void gen_text_pool_chunk(idx_t chunk) {
 		sentence_start = pos;
 		sentence_seed = seed.value;
 		auto length = idx_t(gen_sentence(sentence, &seed) - sentence);
-		D_ASSERT(length <= TEXT_POOL_MAX_SENTENCE_LEN);
+		assert(length <= TEXT_POOL_MAX_SENTENCE_LEN);
 		// copy the part of the sentence that falls inside this chunk
 		idx_t copy_begin = pos < chunk_start ? chunk_start - pos : 0;
-		idx_t copy_end = MinValue<idx_t>(length, chunk_end - pos);
+		idx_t copy_end = std::min<idx_t>(length, chunk_end - pos);
 		if (copy_begin < copy_end) {
 			memcpy(text_pool + (pos + copy_begin), sentence + copy_begin, copy_end - copy_begin);
 		}
@@ -455,7 +453,8 @@ static void gen_text_pool_chunk(idx_t chunk) {
 		sentence_seed = seed.value;
 	}
 	if (end_checkpoint.offset != sentence_start || (DSS_HUGE)end_checkpoint.seed != sentence_seed) {
-		throw InternalException("TPC-H text pool checkpoint %llu does not match the generated text", chunk + 1);
+		throw duckdb::cxx::InvalidInputException("TPC-H text pool checkpoint " + std::to_string(chunk + 1) +
+		                                         " does not match the generated text");
 	}
 }
 
@@ -488,10 +487,11 @@ static void ensure_text_pool_chunk(idx_t chunk) {
  */
 void init_text_pool(long bSize, DBGenContext *ctx) {
 	if (bSize != TEXT_POOL_SIZE) {
-		throw InternalException("TPC-H text pool must be %ld bytes", (long)TEXT_POOL_SIZE);
+		throw duckdb::cxx::InvalidInputException("TPC-H text pool must be " + std::to_string((long)TEXT_POOL_SIZE) +
+		                                         " bytes");
 	}
 	if ((DSS_HUGE)TEXT_POOL_CHECKPOINTS[0].seed != ctx->Seed[5].value || TEXT_POOL_CHECKPOINTS[0].offset != 0) {
-		throw InternalException("TPC-H text pool checkpoints do not match the text seed");
+		throw duckdb::cxx::InvalidInputException("TPC-H text pool checkpoints do not match the text seed");
 	}
 	gen_index(noun_index, &nouns);
 	gen_index(adjectives_index, &adjectives);
@@ -500,7 +500,7 @@ void init_text_pool(long bSize, DBGenContext *ctx) {
 	gen_index(verbs_index, &verbs);
 	gen_index(prepositions_index, &prepositions);
 
-	D_ASSERT(!text_pool);
+	assert(!text_pool);
 	text_pool = (char *)malloc(TEXT_POOL_SIZE);
 	if (!text_pool) {
 		throw std::bad_alloc();
@@ -525,7 +525,7 @@ int dbg_text_source(int min, int max, seed_t *seed, const char **source) {
 	DSS_HUGE hgLength = 0, hgOffset;
 	RANDOM(hgOffset, 0, txtBufferSize - max, seed);
 	RANDOM(hgLength, min, max, seed);
-	D_ASSERT(hgLength > 0 && hgLength < (1 << TEXT_POOL_CHUNK_SHIFT));
+	assert(hgLength > 0 && hgLength < (1 << TEXT_POOL_CHUNK_SHIFT));
 	auto first_chunk = idx_t(hgOffset) >> TEXT_POOL_CHUNK_SHIFT;
 	auto last_chunk = idx_t(hgOffset + hgLength - 1) >> TEXT_POOL_CHUNK_SHIFT;
 	ensure_text_pool_chunk(first_chunk);

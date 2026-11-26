@@ -22,8 +22,14 @@ SELECT count(*) FROM (SELECT * FROM tpch_queries(1) INTERSECT ALL SELECT * FROM 
 ----
 22
 
-# Static expected answers.
+# Static expected answers. A call without parameters keeps its identity in the bind data only, which the
+# optimizer does not compare, so the two scans are not shared.
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM tpch_answers() INTERSECT ALL SELECT * FROM tpch_answers();
 ----
-logical_opt	<REGEX>:.*__common_subplan_.*
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM tpch_answers() INTERSECT ALL SELECT * FROM tpch_answers());
+----
+66
