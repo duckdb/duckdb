@@ -5,6 +5,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -2075,12 +2076,22 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p)
-	    : row_group(std::move(row_group_p)), is_exact(is_exact_p) {
+	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p,
+	                                 optional<TransactionData> transaction_p)
+	    : row_group(std::move(row_group_p)), transaction(transaction_p), is_exact(is_exact_p) {
 	}
 
 	shared_ptr<RowGroup> row_group;
+	//! Set when the visible rows were not counted up front
+	optional<TransactionData> transaction;
 	const bool is_exact;
+
+	optional_idx GetVisibleRowCount() override {
+		if (!transaction) {
+			return optional_idx();
+		}
+		return row_group->GetVisibleRowCount(*transaction);
+	}
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		return row_group->GetStatistics(storage_index);
@@ -2095,7 +2106,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction,
+                                                bool approximate_count) {
 	auto &row_group_ref = row_group.GetNode();
 
 	PartitionStatistics result;
@@ -2103,8 +2115,16 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	if (row_group_ref.HasUnloadedDeletes()) {
 		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(
+		    row_group.ReferenceNode(), /*is_exact_p=*/false, optional<TransactionData>());
+		return result;
+	}
+	if (approximate_count) {
+		// an upper bound: the visible rows are counted only for the partitions the caller asks about
+		result.count = row_group_ref.count;
+		result.count_type = CountType::COUNT_APPROXIMATE;
 		result.partition_row_group =
-		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false, transaction);
 		return result;
 	}
 
@@ -2118,7 +2138,8 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	}
 	result.count_type = has_uncommitted_changes ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
 	const bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
+	result.partition_row_group =
+	    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact, optional<TransactionData>());
 
 	return result;
 }

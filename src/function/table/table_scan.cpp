@@ -1235,7 +1235,7 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &storage = duck_table.GetStorage();
-	return storage.GetPartitionStats(context);
+	return storage.GetPartitionStats(context, input.approximate_count);
 }
 
 optional_ptr<TableCatalogEntry> TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {

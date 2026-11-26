@@ -291,9 +291,9 @@ idx_t DataTable::GetRowGroupSize() const {
 	return row_groups->GetRowGroupSize();
 }
 
-vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context) {
+vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context, bool approximate_count) {
 	auto &transaction = DuckTransaction::Get(context, db);
-	auto result = row_groups->GetPartitionStats(transaction);
+	auto result = row_groups->GetPartitionStats(transaction, approximate_count);
 	auto &local_storage = LocalStorage::Get(context, db);
 	auto local_partitions = local_storage.GetPartitionStats(*this, transaction);
 	result.insert(result.end(), local_partitions.begin(), local_partitions.end());

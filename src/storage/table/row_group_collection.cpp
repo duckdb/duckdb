@@ -2287,11 +2287,12 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionData transaction) const {
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionData transaction,
+                                                                  bool approximate_count) const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		result.push_back(RowGroup::GetPartitionStats(entry, transaction));
+		result.push_back(RowGroup::GetPartitionStats(entry, transaction, approximate_count));
 	}
 	return result;
 }

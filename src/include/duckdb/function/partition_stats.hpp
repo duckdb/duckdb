@@ -32,6 +32,10 @@ struct PartitionRowGroup {
 	virtual bool MinMaxIsExact(const StorageIndex &storage_index) = 0;
 	//! Whether this row group has data that has not been durably checkpointed/flushed yet.
 	virtual bool HasPendingWrites() = 0;
+	//! The rows of this row group that the transaction sees, if they can be counted on demand
+	virtual optional_idx GetVisibleRowCount() {
+		return optional_idx();
+	}
 };
 
 struct PartitionStatistics {

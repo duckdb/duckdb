@@ -772,7 +772,7 @@ vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table, Tr
 		return vector<PartitionStatistics>();
 	}
 	auto flush_key = storage->flush_lock.GetSharedLock();
-	return storage->GetCollection().GetPartitionStats(transaction);
+	return storage->GetCollection().GetPartitionStats(transaction, false);
 }
 
 void LocalStorage::DropTable(DataTable &table) {
