@@ -103,7 +103,7 @@ TEST_CASE("read_blob leaves last_modified NULL when the file system has no modif
 	Connection con(db);
 
 	auto directory = TestJoinPath(LocalTestDirectoryPath(), "no_modification_time");
-	LocalFileSystem local;
+	auto &local = TestLocalFileSystem();
 	local.CreateDirectory(directory);
 	auto handle = local.OpenFile(local.JoinPath(directory, "a.txt"),
 	                             FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
