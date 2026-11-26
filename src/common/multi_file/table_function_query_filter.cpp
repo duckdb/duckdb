@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-static const char *FILTER_QUERY_OPTION = "filter_query";
+static constexpr const char *FILTER_QUERY_OPTION = "filter_query";
 
 bool TableFunctionQueryFilter::HasFilterQuery(const OpenFileInfo &file) {
 	if (!file.extended_info) {
