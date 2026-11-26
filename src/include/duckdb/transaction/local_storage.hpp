@@ -89,6 +89,8 @@ public:
 
 	//! Whether or not the storage was dropped
 	atomic<bool> is_dropped {false};
+	//! Whether an ALTER of a connection sharing the transaction replaced the storage by the one of the new table
+	atomic<bool> replaced_by_alter {false};
 
 	//! Serializes the appends and merges into the primary collection
 	StorageLock append_lock;
@@ -169,6 +171,8 @@ public:
 private:
 	mutable mutex table_storage_lock;
 	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> table_storage;
+	//! The old versions of the tables whose storage was replaced by an ALTER
+	reference_set_t<const DataTable> altered_tables;
 };
 
 //! The LocalStorage class holds appends that have not been committed yet

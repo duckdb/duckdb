@@ -85,7 +85,7 @@ void TransactionContext::Commit() {
 	}
 	if (!commit_result) {
 		// a participant rolled back: the transaction cannot be committed
-		RollbackTransaction(std::move(transaction), nullptr);
+		RollbackTransaction(transaction, nullptr);
 		throw TransactionException("Failed to commit: a connection sharing the transaction rolled it back");
 	}
 	auto error = transaction->Commit(context);
@@ -135,10 +135,11 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 		}
 		return;
 	}
-	RollbackTransaction(std::move(transaction), error);
+	RollbackTransaction(transaction, error);
 }
 
-void TransactionContext::RollbackTransaction(shared_ptr<MetaTransaction> transaction, optional_ptr<ErrorData> error) {
+void TransactionContext::RollbackTransaction(const shared_ptr<MetaTransaction> &transaction,
+                                             optional_ptr<ErrorData> error) {
 	ErrorData rollback_error;
 	try {
 		transaction->Rollback(context);
@@ -204,7 +205,7 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 	auto_commit = false;
 	previous->MarkFinished();
 	try {
-		RollbackTransaction(std::move(previous), nullptr);
+		RollbackTransaction(previous, nullptr);
 	} catch (std::exception &) {
 		// the discarded transaction is empty, a failure to end it must not undo the join
 	}

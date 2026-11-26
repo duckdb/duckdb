@@ -1,6 +1,6 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ string TransactionInfo::ToString() const {
 		result += "ROLLBACK";
 		break;
 	case TransactionType::JOIN_TRANSACTION:
-		return "JOIN TRANSACTION " + KeywordHelper::WriteQuoted(share_id, '\'') + ";";
+		return "JOIN TRANSACTION " + SQLString(share_id) + ";";
 	default: {
 		throw InternalException("ToString for TransactionStatement with type: %s not implemented",
 		                        EnumUtil::ToString(type));

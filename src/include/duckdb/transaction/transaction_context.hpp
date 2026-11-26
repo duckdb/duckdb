@@ -95,7 +95,7 @@ private:
 	bool LeaveTransaction(MetaTransaction &transaction, bool commit, bool &commit_result);
 	void SetCurrentTransaction(shared_ptr<MetaTransaction> transaction);
 	shared_ptr<MetaTransaction> TakeCurrentTransaction();
-	void RollbackTransaction(shared_ptr<MetaTransaction> transaction, optional_ptr<ErrorData> error);
+	void RollbackTransaction(const shared_ptr<MetaTransaction> &transaction, optional_ptr<ErrorData> error);
 
 	TransactionContext(const TransactionContext &) = delete;
 };

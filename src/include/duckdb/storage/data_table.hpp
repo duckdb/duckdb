@@ -221,14 +221,6 @@ public:
 		this->version = DataTableVersion::DROPPED;
 	}
 
-	void SetAsAltered() {
-		this->version = DataTableVersion::ALTERED;
-	}
-
-	bool IsAltered() const {
-		return this->version == DataTableVersion::ALTERED;
-	}
-
 	bool IsMainTable() const {
 		return this->version == DataTableVersion::MAIN_TABLE;
 	}

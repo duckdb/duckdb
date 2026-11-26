@@ -319,7 +319,7 @@ void LocalTableStorage::ResetOptimisticCollection(const PhysicalIndex collection
 
 unique_ptr<StorageLockKey> LocalTableStorage::LockShared() {
 	auto key = flush_lock.GetSharedLock();
-	if (table_ref.get().IsAltered()) {
+	if (replaced_by_alter) {
 		throw TransactionException("The table was altered concurrently by a connection sharing the transaction");
 	}
 	return key;
@@ -327,7 +327,7 @@ unique_ptr<StorageLockKey> LocalTableStorage::LockShared() {
 
 unique_ptr<StorageLockKey> LocalTableStorage::LockAppend() {
 	auto key = append_lock.GetExclusiveLock();
-	if (table_ref.get().IsAltered()) {
+	if (replaced_by_alter) {
 		throw TransactionException("The table was altered concurrently by a connection sharing the transaction");
 	}
 	return key;
@@ -375,7 +375,7 @@ shared_ptr<LocalTableStorage> LocalTableManager::GetOrCreateStorage(Context &con
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
-		if (table.IsAltered()) {
+		if (altered_tables.find(table) != altered_tables.end()) {
 			throw TransactionException("The table was altered concurrently by a connection sharing the transaction");
 		}
 		auto new_storage = make_shared_ptr<LocalTableStorage>(context, table);
@@ -403,7 +403,11 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 
 void LocalTableManager::ReplaceEntry(DataTable &old_table, DataTable &new_table, shared_ptr<LocalTableStorage> entry) {
 	lock_guard<mutex> l(table_storage_lock);
-	table_storage.erase(old_table);
+	auto old_entry = table_storage.find(old_table);
+	D_ASSERT(old_entry != table_storage.end());
+	old_entry->second->replaced_by_alter = true;
+	table_storage.erase(old_entry);
+	altered_tables.insert(old_table);
 	D_ASSERT(table_storage.find(new_table) == table_storage.end());
 	table_storage[new_table] = std::move(entry);
 }
@@ -874,8 +878,7 @@ shared_ptr<LocalTableStorage> LocalStorage::BeginAlter(DataTable &old_dt, LocalS
 }
 
 void LocalStorage::FinishAlter(DataTable &old_dt, DataTable &new_dt, shared_ptr<LocalTableStorage> new_storage) {
-	// statements that wait for the locks of the old storage see that its table was altered
-	old_dt.SetAsAltered();
+	// statements that wait for the locks of the old storage see that it was replaced
 	table_manager.ReplaceEntry(old_dt, new_dt, std::move(new_storage));
 }
 
