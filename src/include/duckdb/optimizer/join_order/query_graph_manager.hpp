@@ -83,12 +83,14 @@ private:
 	void BuildLeftJoinPredicates();
 	void BuildInnerCompanionSets();
 	void ClearExtractedExpressions();
+	vector<reference<FilterInfo>> GetPendingFilters(JoinRelationSet &root) const;
 	idx_t FindGraphComponent(RelationIndex relation);
 	idx_t GetGraphComponent(RelationIndex relation) const;
 	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
-	                                   const vector<RelationStats> &relation_stats);
+	                                   const vector<RelationStats> &relation_stats,
+	                                   const vector<reference<FilterInfo>> &pending_filters);
 
 public:
 	ClientContext &context;
