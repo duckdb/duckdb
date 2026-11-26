@@ -113,7 +113,6 @@ private:
 
 struct RelationPairEqualitySummary {
 	void AddEquality(idx_t equality_class_index, ColumnBinding first_binding, ColumnBinding second_binding);
-	bool ContainsClass(idx_t equality_class_index) const;
 	bool HasDirectCompositeEquality() const;
 
 	vector<idx_t> direct_equality_class_indices;
@@ -127,7 +126,6 @@ public:
 	JoinPredicate &RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
 	                                 ColumnBinding left_equality_binding, ColumnBinding right_equality_binding);
 	void AddEqualityClass(JoinEqualityClass equality_class);
-	void RegisterImpliedEquality(FilterInfo &filter, idx_t equality_class_index);
 	void AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index, ColumnBinding first_binding,
 	                                ColumnBinding second_binding);
 	optional_ptr<const RelationPairEqualitySummary> GetDirectEqualityPair(JoinRelationSet &pair) const;

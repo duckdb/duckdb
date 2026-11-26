@@ -236,16 +236,12 @@ idx_t JoinEqualityGroups::GetGroup(const ColumnBinding &binding) {
 
 void RelationPairEqualitySummary::AddEquality(idx_t equality_class_index, ColumnBinding first_binding,
                                               ColumnBinding second_binding) {
-	if (!ContainsClass(equality_class_index)) {
+	if (std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(), equality_class_index) ==
+	    direct_equality_class_indices.end()) {
 		direct_equality_class_indices.push_back(equality_class_index);
 	}
 	first_relation_bindings.insert(first_binding);
 	second_relation_bindings.insert(second_binding);
-}
-
-bool RelationPairEqualitySummary::ContainsClass(idx_t equality_class_index) const {
-	return std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(),
-	                 equality_class_index) != direct_equality_class_indices.end();
 }
 
 bool RelationPairEqualitySummary::HasDirectCompositeEquality() const {
@@ -286,19 +282,6 @@ void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 		equality_join_predicates.push_back(edge.predicate);
 	}
 	equality_classes.push_back(std::move(equality_class));
-}
-
-void JoinPredicateModel::RegisterImpliedEquality(FilterInfo &filter, idx_t equality_class_index) {
-	auto &predicate =
-	    RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, filter.left_binding, filter.right_binding);
-	D_ASSERT(predicate.CanBuildEqualityClosure());
-	// Price the key in its original class; the direct-pair summaries describe the input predicates.
-	predicate.SetEqualityClassIndex(equality_class_index);
-	auto &group = equality_classes[equality_class_index];
-	group.edges.emplace_back(predicate, JoinOrderUtil::GetBindingRelation(filter.left_binding),
-	                         JoinOrderUtil::GetBindingRelation(filter.right_binding), filter.left_binding,
-	                         filter.right_binding);
-	equality_join_predicates.push_back(predicate);
 }
 
 void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,

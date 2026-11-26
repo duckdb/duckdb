@@ -4,7 +4,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -331,124 +330,6 @@ void QueryGraphManager::PreparePredicateModel(LogicalOperator &op) {
 	BindFilterEndpoints();
 	// Build the predicate model after BindFilterEndpoints so that left_binding/right_binding are populated.
 	BuildPredicateModel();
-	AddImpliedJoinKeys();
-}
-
-static bool IsSelectiveEqualityBinding(const RelationManager &relations, const ColumnBinding &binding) {
-	if (!binding.table_index.IsValid()) {
-		return false;
-	}
-	auto &stats = relations.GetRelation(JoinOrderUtil::GetBindingRelation(binding)).stats;
-	auto index = binding.column_index.GetIndex();
-	if (stats.unique_key.size() == 1 && stats.unique_key[0] == index) {
-		return true;
-	}
-	if (!stats.stats_initialized || index >= stats.columns.size()) {
-		return false;
-	}
-	auto &domain = stats.columns[index].current_domain;
-	if (domain.source == DistinctCountSource::HLL) {
-		return static_cast<double>(domain.distinct_count) * (1 + HyperLogLog::GetErrorRate()) >=
-		       static_cast<double>(stats.cardinality);
-	}
-	return domain.source == DistinctCountSource::EXACT && domain.distinct_count >= stats.cardinality;
-}
-
-vector<reference<const JoinPredicate>> QueryGraphManager::GetImpliedJoinKeyTargets() const {
-	if (predicate_model.GetSelectivityPredicates().empty() || predicate_model.GetEqualityClasses().empty()) {
-		return {};
-	}
-	for (auto &op : join_operators) {
-		if (op->type != JoinOrderOperatorType::INNER && op->type != JoinOrderOperatorType::CROSS_PRODUCT) {
-			return {};
-		}
-	}
-	for (auto &filter : filters_and_bindings) {
-		if (filter->must_remain_filter || filter->must_remain_at_root) {
-			return {};
-		}
-	}
-	// A selective equality already limits matches on this pair, including when it is a different predicate.
-	reference_set_t<JoinRelationSet> covered_pairs;
-	for (auto &entry : predicate_model.GetGraphPredicates()) {
-		auto &predicate = entry.get();
-		if (predicate.GetSet().count == 2 && predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL &&
-		    (IsSelectiveEqualityBinding(relation_manager, predicate.GetEqualityBinding(true)) ||
-		     IsSelectiveEqualityBinding(relation_manager, predicate.GetEqualityBinding(false)))) {
-			covered_pairs.insert(predicate.GetSet());
-		}
-	}
-	vector<reference<const JoinPredicate>> candidates;
-	for (auto &entry : predicate_model.GetSelectivityPredicates()) {
-		auto &predicate = entry.get();
-		if (predicate.GetPredicateClass() == JoinPredicateClass::INNER_EQUALITY &&
-		    predicate.GetComparisonType() == ExpressionType::COMPARE_EQUAL && predicate.GetSet().count == 2 &&
-		    predicate.GetLeftSet().count == 1 && predicate.GetRightSet().count == 1 &&
-		    covered_pairs.insert(predicate.GetSet()).second) {
-			candidates.push_back(predicate);
-		}
-	}
-	return candidates;
-}
-
-static unordered_map<RelationIndex, reference<const Expression>>
-GetStrictEqualityColumns(const JoinEqualityClass &group) {
-	unordered_map<RelationIndex, reference<const Expression>> columns;
-	for (auto &edge : group.edges) {
-		auto &predicate = edge.predicate.get();
-		if (predicate.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
-			return {};
-		}
-		auto &comparison = predicate.GetFilter().filter->Cast<BoundFunctionExpression>();
-		auto &left = BoundComparisonExpression::Left(comparison);
-		auto &right = BoundComparisonExpression::Right(comparison);
-		if (left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsIntegral() ||
-		    left.GetReturnType() != right.GetReturnType()) {
-			return {};
-		}
-		columns.emplace(edge.left_relation, left);
-		columns.emplace(edge.right_relation, right);
-	}
-	return columns;
-}
-
-void QueryGraphManager::AddImpliedJoinKeys() {
-	auto candidates = GetImpliedJoinKeyTargets();
-	if (candidates.empty()) {
-		return;
-	}
-	for (auto &group : predicate_model.GetEqualityClasses()) {
-		if (group.relations.size() < 3) {
-			continue;
-		}
-		// A costing class may also contain casts or null-safe equalities.
-		auto columns = GetStrictEqualityColumns(group);
-		if (columns.empty()) {
-			continue;
-		}
-		for (auto &entry : candidates) {
-			auto &target = entry.get();
-			auto left = columns.find(target.GetLeftSet().relations[0]);
-			auto right = columns.find(target.GetRightSet().relations[0]);
-			if (left == columns.end() || right == columns.end()) {
-				continue;
-			}
-			auto direct = predicate_model.GetDirectEqualityPair(target.GetSet());
-			if (direct && direct->ContainsClass(group.index)) {
-				continue;
-			}
-			auto key = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, left->second.get().Copy(),
-			                                             right->second.get().Copy());
-			auto filter = make_uniq<FilterInfo>(std::move(key), target.GetSet(), filters_and_bindings.size());
-			filter->SetLeftSet(target.GetLeftSet());
-			filter->SetRightSet(target.GetRightSet());
-			GetEquivalenceBinding(left->second.get(), filter->left_binding);
-			GetEquivalenceBinding(right->second.get(), filter->right_binding);
-			predicate_model.RegisterImpliedEquality(*filter, group.index);
-			filters_and_bindings.push_back(std::move(filter));
-		}
-	}
 }
 
 optional<RelationStats> QueryGraphManager::CombineRelationStats(const vector<ColumnBinding> &bindings,

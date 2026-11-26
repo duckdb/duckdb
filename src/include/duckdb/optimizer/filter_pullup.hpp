@@ -19,7 +19,7 @@ class ClientContext;
 class FilterPullup {
 public:
 	//! The context is needed for the collations an EXCEPT / INTERSECT compares its columns with
-	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = false)
+	explicit FilterPullup(optional_ptr<ClientContext> context = nullptr, bool pullup = false, bool add_column = true)
 	    : context(context), can_pullup(pullup), can_add_column(add_column) {
 	}
 
@@ -33,7 +33,7 @@ private:
 	// only pull up filters when there is a fork
 	bool can_pullup = false;
 
-	// identify case the branch is a set operation (INTERSECT or EXCEPT)
+	// Whether a projection can carry additional columns needed by pulled filters.
 	bool can_add_column = false;
 
 private:

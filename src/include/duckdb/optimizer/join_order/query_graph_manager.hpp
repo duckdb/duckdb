@@ -80,8 +80,6 @@ private:
 
 	//! Build the normalized predicate model after filter endpoints and stats bindings are populated.
 	void BuildPredicateModel();
-	vector<reference<const JoinPredicate>> GetImpliedJoinKeyTargets() const;
-	void AddImpliedJoinKeys();
 	void BuildLeftJoinPredicates();
 	void BuildInnerCompanionSets();
 	void ClearExtractedExpressions();
