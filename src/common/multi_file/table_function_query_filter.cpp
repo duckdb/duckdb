@@ -1,9 +1,9 @@
 #include "duckdb/common/multi_file/table_function_query_filter.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -12,6 +12,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_result_stream.hpp"
+
+#include <bitset>
 
 namespace duckdb {
 
@@ -43,54 +45,49 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 	}
 	QueryResultStream<> stream(std::move(submitted));
 	auto &types = stream.GetTypes();
-	bool is_bitmap = types.size() == 1 && types[0].id() == LogicalTypeId::BIT;
-	has_ranges = types.size() == 2 && types[0].id() == LogicalTypeId::BIGINT && types[1].id() == LogicalTypeId::BIGINT;
-	if (!is_bitmap && !has_ranges) {
-		throw InvalidInputException("The filter query of file %s must return a BIT, or two BIGINT columns "
-		                            "(row_start, row_end)",
+	if (types.size() != 3 || types[0].id() != LogicalTypeId::BIGINT || types[1].id() != LogicalTypeId::BIGINT ||
+	    types[2].id() != LogicalTypeId::BIT) {
+		throw InvalidInputException("The filter query of file %s must return (row_start BIGINT, row_end BIGINT, bits "
+		                            "BIT)",
 		                            path);
 	}
 	while (auto chunk = stream.Fetch()) {
 		if (chunk->size() == 0) {
 			break;
 		}
-		if (has_ranges) {
-			AddRanges(*chunk);
-			continue;
-		}
-		for (auto entry : chunk->data[0].ValidValues<string_t>()) {
-			auto bits = entry.GetValue();
-			AddBitmap(bits.GetData(), bits.GetSize(), path);
-		}
+		AddRows(*chunk, path);
 	}
 	if (stream.HasError()) {
 		stream.GetErrorObject().Throw(StringUtil::Format("Failed to read the filter query of file %s: ", path));
 	}
-	if (has_ranges) {
-		FinalizeRanges();
-	}
+	Finalize();
 }
 
-void TableFunctionQueryFilter::AddBitmap(const char *data, idx_t size, const string &path) {
-	if (scan_bits.empty()) {
-		scan_bits.assign(data, size);
-		bit_count = (size - 1) * 8 - static_cast<uint8_t>(data[0]);
-		return;
-	}
-	if (size != scan_bits.size() || data[0] != scan_bits[0]) {
-		throw InvalidInputException("The filter query of file %s returns bitmaps of different sizes", path);
-	}
-	for (idx_t i = 1; i < size; i++) {
-		scan_bits[i] = static_cast<char>(scan_bits[i] | data[i]);
-	}
+static uint8_t ReverseBits(uint8_t value) {
+	value = static_cast<uint8_t>(((value & 0xF0) >> 4) | ((value & 0x0F) << 4));
+	value = static_cast<uint8_t>(((value & 0xCC) >> 2) | ((value & 0x33) << 2));
+	value = static_cast<uint8_t>(((value & 0xAA) >> 1) | ((value & 0x55) << 1));
+	return value;
 }
 
-void TableFunctionQueryFilter::AddRanges(DataChunk &chunk) {
+void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
 	auto starts = chunk.data[0].Values<int64_t>();
 	auto ends = chunk.data[1].Values<int64_t>();
+	auto bitmaps = chunk.data[2].Values<string_t>();
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto row_start = starts[i];
 		auto row_end = ends[i];
+		auto bitmap = bitmaps[i];
+		if (bitmap.IsValid()) {
+			if (row_start.IsValid() && row_start.GetValue() < 0) {
+				throw InvalidInputException("The filter query of file %s returns a bitmap that starts before the file",
+				                            path);
+			}
+			auto bits = bitmap.GetValue();
+			AddWindow(row_start.IsValid() ? NumericCast<idx_t>(row_start.GetValue()) : 0, bits.GetData(),
+			          bits.GetSize());
+			continue;
+		}
 		idx_t range_start = 0;
 		idx_t range_end = NumericLimits<idx_t>::Maximum();
 		if (row_start.IsValid() && row_start.GetValue() > 0) {
@@ -108,85 +105,126 @@ void TableFunctionQueryFilter::AddRanges(DataChunk &chunk) {
 	}
 }
 
-void TableFunctionQueryFilter::FinalizeRanges() {
-	sort(scan_ranges.begin(), scan_ranges.end());
-	vector<pair<idx_t, idx_t>> merged;
-	for (auto &range : scan_ranges) {
-		if (!merged.empty() && range.first <= merged.back().second) {
-			merged.back().second = MaxValue<idx_t>(merged.back().second, range.second);
+void TableFunctionQueryFilter::AddWindowBits(idx_t row_start, uint64_t bits, idx_t bit_count) {
+	auto word_index = row_start / 64;
+	auto shift = row_start % 64;
+	auto add_to_word = [&](idx_t index, uint64_t word_bits) {
+		if (!scan_words.empty() && scan_words.back().index == index) {
+			scan_words.back().bits |= word_bits;
+		} else {
+			scan_words.push_back(ScanWord {index, word_bits});
+		}
+	};
+	add_to_word(word_index, bits << shift);
+	if (shift + bit_count > 64) {
+		add_to_word(word_index + 1, bits >> (64 - shift));
+	}
+}
+
+void TableFunctionQueryFilter::AddWindow(idx_t window_start, const char *data, idx_t size) {
+	if (size < 2) {
+		return;
+	}
+	auto bytes = reinterpret_cast<const uint8_t *>(data);
+	// the first byte is the number of padding bits - the most significant bits of the first byte that follows
+	auto padding = idx_t(bytes[0]);
+	for (idx_t byte_idx = 0; byte_idx + 1 < size; byte_idx++) {
+		auto value = bytes[1 + byte_idx];
+		if (byte_idx == 0) {
+			value = static_cast<uint8_t>(value & (0xFF >> padding));
+		}
+		if (value == 0) {
 			continue;
 		}
-		merged.push_back(range);
+		// the bit of the highest significance is the first row of the byte
+		uint64_t bits = ReverseBits(value);
+		if (byte_idx == 0) {
+			AddWindowBits(window_start, bits >> padding, 8 - padding);
+		} else {
+			AddWindowBits(window_start + byte_idx * 8 - padding, bits, 8);
+		}
 	}
-	scan_ranges = std::move(merged);
 }
 
-bool TableFunctionQueryFilter::RowIsScanned(idx_t row_idx) const {
-	auto data = reinterpret_cast<const uint8_t *>(scan_bits.data());
-	auto pos = row_idx + data[0];
-	return (data[1 + pos / 8] >> (7 - pos % 8)) & 1;
+void TableFunctionQueryFilter::Finalize() {
+	sort(scan_ranges.begin(), scan_ranges.end());
+	vector<pair<idx_t, idx_t>> merged_ranges;
+	for (auto &range : scan_ranges) {
+		if (!merged_ranges.empty() && range.first <= merged_ranges.back().second) {
+			merged_ranges.back().second = MaxValue<idx_t>(merged_ranges.back().second, range.second);
+			continue;
+		}
+		merged_ranges.push_back(range);
+	}
+	scan_ranges = std::move(merged_ranges);
+
+	sort(scan_words.begin(), scan_words.end(),
+	     [](const ScanWord &lhs, const ScanWord &rhs) { return lhs.index < rhs.index; });
+	vector<ScanWord> merged_words;
+	for (auto &word : scan_words) {
+		if (!merged_words.empty() && merged_words.back().index == word.index) {
+			merged_words.back().bits |= word.bits;
+		} else if (word.bits != 0) {
+			merged_words.push_back(word);
+		}
+	}
+	scan_words = std::move(merged_words);
 }
 
-bool TableFunctionQueryFilter::RowsAreScanned(idx_t row_start, idx_t count) const {
-	if (row_start + count > bit_count) {
-		return false;
-	}
-	auto data = reinterpret_cast<const uint8_t *>(scan_bits.data());
-	auto pos = row_start + data[0];
-	auto end = pos + count;
-	auto bit_is_set = [&](idx_t bit_pos) {
-		return (data[1 + bit_pos / 8] >> (7 - bit_pos % 8)) & 1;
-	};
-	for (; pos < end && pos % 8 != 0; pos++) {
-		if (!bit_is_set(pos)) {
-			return false;
-		}
-	}
-	for (; pos + 8 <= end; pos += 8) {
-		if (data[1 + pos / 8] != 0xFF) {
-			return false;
-		}
-	}
-	for (; pos < end; pos++) {
-		if (!bit_is_set(pos)) {
-			return false;
-		}
-	}
-	return true;
+//! The bits [begin, end) of a word, where begin < end <= 64
+static uint64_t BitRange(idx_t begin, idx_t end) {
+	auto upper = end == 64 ? ~uint64_t(0) : ((uint64_t(1) << end) - 1);
+	return upper & ~((uint64_t(1) << begin) - 1);
 }
 
 idx_t TableFunctionQueryFilter::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 	auto start = NumericCast<idx_t>(start_row_index);
 	auto end = start + count;
-	if (has_ranges) {
-		// the first range that ends after the start of these rows
-		auto range = std::upper_bound(scan_ranges.begin(), scan_ranges.end(), start,
-		                              [](idx_t row, const pair<idx_t, idx_t> &r) { return row < r.second; });
-		if (range == scan_ranges.end() || range->first >= end) {
-			return 0;
-		}
-		if (range->first <= start && range->second >= end) {
-			return count;
-		}
-		result_sel.Initialize(STANDARD_VECTOR_SIZE);
-		idx_t result_count = 0;
-		for (; range != scan_ranges.end() && range->first < end; ++range) {
-			auto range_start = MaxValue<idx_t>(range->first, start);
-			auto range_end = MinValue<idx_t>(range->second, end);
-			for (idx_t row = range_start; row < range_end; row++) {
-				result_sel.set_index(result_count++, row - start);
-			}
-		}
-		return result_count;
-	}
-	if (RowsAreScanned(start, count)) {
+	auto range = std::upper_bound(scan_ranges.begin(), scan_ranges.end(), start,
+	                              [](idx_t row, const pair<idx_t, idx_t> &r) { return row < r.second; });
+	if (range != scan_ranges.end() && range->first <= start && range->second >= end) {
+		// one range scans all of the rows
 		return count;
+	}
+	// the rows that are scanned, as a bitmap of the rows of this vector
+	static constexpr idx_t MAX_WORDS = STANDARD_VECTOR_SIZE / 64 + 2;
+	uint64_t scanned[MAX_WORDS] = {};
+	auto first_word = start / 64;
+	auto last_word = (end - 1) / 64;
+	D_ASSERT(last_word - first_word < MAX_WORDS);
+	auto base = first_word * 64;
+	for (; range != scan_ranges.end() && range->first < end; ++range) {
+		auto range_start = MaxValue<idx_t>(range->first, start) - base;
+		auto range_end = MinValue<idx_t>(range->second, end) - base;
+		for (auto word = range_start / 64; word <= (range_end - 1) / 64; word++) {
+			scanned[word] |= BitRange(MaxValue<idx_t>(range_start, word * 64) - word * 64,
+			                          MinValue<idx_t>(range_end, (word + 1) * 64) - word * 64);
+		}
+	}
+	auto scan_word = std::lower_bound(scan_words.begin(), scan_words.end(), first_word,
+	                                  [](const ScanWord &word, idx_t index) { return word.index < index; });
+	for (; scan_word != scan_words.end() && scan_word->index <= last_word; ++scan_word) {
+		scanned[scan_word->index - first_word] |= scan_word->bits;
+	}
+	// only the rows of this vector
+	idx_t scan_count = 0;
+	for (auto word = first_word; word <= last_word; word++) {
+		auto &bits = scanned[word - first_word];
+		bits &=
+		    BitRange(MaxValue<idx_t>(start, word * 64) - word * 64, MinValue<idx_t>(end, (word + 1) * 64) - word * 64);
+		scan_count += std::bitset<64>(bits).count();
+	}
+	if (scan_count == count || scan_count == 0) {
+		return scan_count;
 	}
 	result_sel.Initialize(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
-	for (idx_t i = 0; i < count && start + i < bit_count; i++) {
-		if (RowIsScanned(start + i)) {
-			result_sel.set_index(result_count++, i);
+	for (auto word = first_word; word <= last_word; word++) {
+		auto bits = scanned[word - first_word];
+		while (bits) {
+			auto bit = CountZeros<uint64_t>::Trailing(bits);
+			result_sel.set_index(result_count++, word * 64 + bit - start);
+			bits &= bits - 1;
 		}
 	}
 	return result_count;
