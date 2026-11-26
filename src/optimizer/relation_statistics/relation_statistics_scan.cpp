@@ -190,8 +190,8 @@ private:
 	bool has_bounds = false;
 };
 
-template <class CALLBACK>
-static void VisitFilterConjuncts(const Expression &expression, CALLBACK &&callback) {
+template <class FUNC>
+static void VisitFilterConjuncts(const Expression &expression, FUNC &&callback) {
 	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		for (auto &child : expression.Cast<BoundConjunctionExpression>().GetChildren()) {
 			VisitFilterConjuncts(*child, callback);
