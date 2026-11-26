@@ -142,6 +142,14 @@ static unique_ptr<LogicalOperator> &GetPathTarget(const vector<PathStep> &path) 
 	return last_step.op.get().children[last_step.child_index];
 }
 
+static unique_ptr<LogicalOperator> &GetPathOperator(unique_ptr<LogicalOperator> &root, const vector<PathStep> &path,
+                                                    idx_t index) {
+	D_ASSERT(index < path.size());
+	auto &op = index == 0 ? root : path[index - 1].op.get().children[path[index - 1].child_index];
+	D_ASSERT(RefersToSameObject(*op, path[index].op.get()));
+	return op;
+}
+
 static void CopyStatistics(column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                            const ColumnBinding &source, const ColumnBinding &target) {
 	auto entry = statistics_map.find(source);
@@ -479,20 +487,6 @@ struct ProjectionRewrite {
 	vector<ColumnBinding> old_bindings;
 	vector<ColumnBinding> new_bindings;
 };
-
-static optional_ptr<unique_ptr<LogicalOperator>> FindOperator(unique_ptr<LogicalOperator> &op,
-                                                              const LogicalOperator &target) {
-	if (op.get() == &target) {
-		return op;
-	}
-	for (auto &child : op->children) {
-		auto result = FindOperator(child, target);
-		if (result) {
-			return result;
-		}
-	}
-	return nullptr;
-}
 
 static void RemapParentProjectionMap(LogicalOperator &parent, idx_t child_index,
                                      const vector<ColumnBinding> &old_bindings,
@@ -1158,12 +1152,9 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 
 	for (idx_t path_idx = group.path.size(); path_idx > 0; path_idx--) {
 		auto &step = group.path[path_idx - 1];
-		auto step_ptr = FindOperator(upper_projection.children[0], step.op.get());
-		if (!step_ptr) {
-			throw InternalException("Projection placement lost a path operator");
-		}
-		ColumnBindingRewrite::ApplyToChild(*step_ptr, step.child_index,
-		                                   std::move(old_path_child_bindings[path_idx - 1]), replacements);
+		auto &step_op = GetPathOperator(upper_projection.children[0], group.path, path_idx - 1);
+		ColumnBindingRewrite::ApplyToChild(step_op, step.child_index, std::move(old_path_child_bindings[path_idx - 1]),
+		                                   replacements);
 		if (step.op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			auto &projection = step.op.get().Cast<LogicalProjection>();
 			for (idx_t i = 0; i < computed_bindings.size(); i++) {
