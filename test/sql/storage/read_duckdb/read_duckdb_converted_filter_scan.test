@@ -1,0 +1,334 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_converted_filter_scan.test
+# description: Filters on converted read_duckdb columns over blocked scans, deleted rows, indexes, empty tables and virtual columns
+# group: [read_duckdb]
+
+# the reference: the same rows in a table of this database, with the types the scans below convert to
+statement ok
+CREATE TABLE ref AS
+SELECT i::BIGINT id, CASE WHEN i % 97 = 0 THEN NULL ELSE i % 1000 END::BIGINT x, (i * 3)::INTEGER y, 'v' || (i % 50) d
+FROM range(300000) r(i)
+
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_big.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT id, x::INTEGER x, y::BIGINT y, d FROM ref
+
+statement ok
+DETACH rd
+
+# x is stored as INTEGER and read as BIGINT, y is stored as BIGINT and read as INTEGER
+statement ok
+CREATE MACRO conv(file) AS TABLE FROM read_duckdb(file, schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL},
+	'x': {name: 'x', type: 'BIGINT', default_value: NULL},
+	'y': {name: 'y', type: 'INTEGER', default_value: NULL},
+	'd': {name: 'd', type: 'VARCHAR', default_value: NULL}
+})
+
+statement ok
+CREATE VIEW big AS FROM conv('{TEST_DIR}/rd_conv_big.db')
+
+query IIII
+SELECT typeof(id), typeof(x), typeof(y), count(*) FROM big GROUP BY ALL
+----
+BIGINT	BIGINT	INTEGER	300000
+
+# the scan blocks on its I/O and is resumed
+foreach strategy plain blocking
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x), sum(y)) FROM big WHERE x = 5) =
+       (SELECT (count(*), sum(id), sum(x), sum(y)) FROM ref WHERE x = 5)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x), sum(y)) FROM big WHERE x > 990 AND y < 500000) =
+       (SELECT (count(*), sum(id), sum(x), sum(y)) FROM ref WHERE x > 990 AND y < 500000)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(y)) FROM big WHERE x IS NULL) =
+       (SELECT (count(*), sum(id), sum(y)) FROM ref WHERE x IS NULL)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x)) FROM big WHERE y = 600) =
+       (SELECT (count(*), sum(id), sum(x)) FROM ref WHERE y = 600)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x)) FROM big WHERE y > 890000 AND d = 'v7') =
+       (SELECT (count(*), sum(id), sum(x)) FROM ref WHERE y > 890000 AND d = 'v7')
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id)) FROM big WHERE x IN (1, 2, 3) AND id BETWEEN 200000 AND 200100) =
+       (SELECT (count(*), sum(id)) FROM ref WHERE x IN (1, 2, 3) AND id BETWEEN 200000 AND 200100)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id)) FROM big WHERE x = 5 AND x = 6) = (0, NULL)
+----
+true
+
+query III
+SELECT id, x, y FROM big ORDER BY y DESC LIMIT 3
+----
+299999	999	899997
+299998	998	899994
+299997	997	899991
+
+query III
+SELECT id, x, y FROM big WHERE id > 1000 ORDER BY x DESC NULLS LAST, id LIMIT 3
+----
+1999	999	5997
+2999	999	8997
+3999	999	11997
+
+query II
+SELECT count(*), sum(big.id) FROM big JOIN (VALUES (5), (105), (3)) v(k) ON x = k
+----
+891	133440561
+
+statement ok
+SET async_threads = 4
+
+statement ok
+SET storage_block_prefetch = 'debug_force_always'
+
+statement ok
+SET read_ahead_depth = 0
+
+statement ok
+SET debug_physical_table_scan_execution_strategy = 'DEFAULT'
+
+endloop
+
+statement ok
+RESET async_threads
+
+statement ok
+RESET storage_block_prefetch
+
+statement ok
+RESET read_ahead_depth
+
+statement ok
+RESET debug_physical_table_scan_execution_strategy
+
+# prepared statements
+statement ok
+PREPARE by_x AS SELECT count(*), sum(id) FROM big WHERE x = ? AND id < 5000
+
+query II
+EXECUTE by_x(5)
+----
+5	10025
+
+query II
+EXECUTE by_x(999)
+----
+5	14995
+
+query II
+EXECUTE by_x(NULL)
+----
+0	NULL
+
+query II
+EXECUTE by_x(5)
+----
+5	10025
+
+# deleted rows
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_del.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT id, x::INTEGER x, y::BIGINT y, d FROM ref
+
+statement ok
+CHECKPOINT rd
+
+statement ok
+DELETE FROM rd.t WHERE id % 4 = 1 OR id BETWEEN 130000 AND 140000
+
+statement ok
+DETACH rd
+
+statement ok
+CREATE VIEW ref_del AS FROM ref WHERE NOT (id % 4 = 1 OR id BETWEEN 130000 AND 140000)
+
+statement ok
+CREATE VIEW del AS FROM conv('{TEST_DIR}/rd_conv_del.db')
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x), sum(y)) FROM del WHERE x = 5) =
+       (SELECT (count(*), sum(id), sum(x), sum(y)) FROM ref_del WHERE x = 5)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(x)) FROM del WHERE y BETWEEN 380000 AND 430000) =
+       (SELECT (count(*), sum(id), sum(x)) FROM ref_del WHERE y BETWEEN 380000 AND 430000)
+----
+true
+
+query I
+SELECT (SELECT (count(*), sum(id)) FROM del WHERE x > 990 AND id > 100000) =
+       (SELECT (count(*), sum(id)) FROM ref_del WHERE x > 990 AND id > 100000)
+----
+true
+
+# the row id of a row that passes a filter on a converted column
+query II
+SELECT count(*), count(*) FILTER (rowid = id) FROM read_duckdb('{TEST_DIR}/rd_conv_del.db', schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL},
+	'x': {name: 'x', type: 'BIGINT', default_value: NULL}
+}) WHERE x = 7
+----
+286	286
+
+# an index on the stored column
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_idx.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT id, x::INTEGER x, y::BIGINT y, d FROM ref
+
+statement ok
+ALTER TABLE rd.t ADD PRIMARY KEY (id)
+
+statement ok
+CREATE INDEX ix ON rd.t(x)
+
+statement ok
+CREATE INDEX iy ON rd.t(y)
+
+statement ok
+DETACH rd
+
+statement ok
+CREATE VIEW idx AS FROM conv('{TEST_DIR}/rd_conv_idx.db')
+
+query I
+SELECT (SELECT (count(*), sum(id), sum(y)) FROM idx WHERE x = 5) =
+       (SELECT (count(*), sum(id), sum(y)) FROM ref WHERE x = 5)
+----
+true
+
+query III
+SELECT id, x, y FROM idx WHERE y = 600
+----
+200	200	600
+
+query III
+SELECT id, x, y FROM idx WHERE id = 77777 AND x = 777
+----
+77777	777	233331
+
+query I
+SELECT count(*) FROM idx WHERE id = 77777 AND x = 778
+----
+0
+
+query I
+SELECT (SELECT (count(*), sum(id)) FROM idx WHERE x IN (5, 7) AND y > 600000) =
+       (SELECT (count(*), sum(id)) FROM ref WHERE x IN (5, 7) AND y > 600000)
+----
+true
+
+# an empty table
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_empty.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT id, x::INTEGER x, y::BIGINT y, d FROM ref LIMIT 0
+
+statement ok
+DETACH rd
+
+query II
+SELECT count(*), sum(x) FROM conv('{TEST_DIR}/rd_conv_empty.db') WHERE x = 5
+----
+0	NULL
+
+query II
+SELECT count(*), sum(x) FROM conv('{TEST_DIR}/rd_conv_empty.db') WHERE x IS NULL AND y = 3
+----
+0	NULL
+
+query III
+SELECT id, x, y FROM conv('{TEST_DIR}/rd_conv_empty.db') ORDER BY x LIMIT 3
+----
+
+# hive partitions and file names beside a converted column: k=1 stores x as INTEGER, k=2 as BIGINT, which the scan
+# reads as the INTEGER of the first file
+# the partitioned COPY creates the directories
+statement ok
+COPY (SELECT range k, 0 v FROM range(1, 3)) TO '{TEST_DIR}/rd_conv_hive' (FORMAT csv, PARTITION_BY (k))
+
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_hive/k=1/t.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT i::INTEGER x, i id FROM range(1000) r(i)
+
+statement ok
+DETACH rd
+
+statement ok
+ATTACH '{TEST_DIR}/rd_conv_hive/k=2/t.db' AS rd
+
+statement ok
+CREATE TABLE rd.t AS SELECT (i + 1000)::BIGINT x, i + 1000 id FROM range(1000) r(i)
+
+statement ok
+DETACH rd
+
+statement ok
+CREATE VIEW hive AS FROM read_duckdb('{TEST_DIR}/rd_conv_hive/*/t.db', hive_partitioning = true, filename = true)
+
+query IIII
+SELECT x, id, k, filename LIKE '%k=1%' FROM hive WHERE x IN (5, 1005) ORDER BY x
+----
+5	5	1	true
+1005	1005	2	false
+
+query III
+SELECT x, id, k FROM hive WHERE k = 1 AND x = 5
+----
+5	5	1
+
+query I
+SELECT count(*) FROM hive WHERE k = 2 AND x = 5
+----
+0
+
+query II
+SELECT count(*), sum(x) FROM hive WHERE k = 2 AND x > 1990
+----
+9	17955
+
+query II
+SELECT count(*), sum(x) FROM hive WHERE filename LIKE '%k=1%' AND x > 990
+----
+9	8955
+
+query II
+SELECT count(*), sum(x) FROM hive WHERE x > 990 AND x < 1010
+----
+19	19000
+
+query III
+SELECT x, k, filename LIKE '%k=2%' FROM hive ORDER BY x DESC LIMIT 2
+----
+1999	2	true
+1998	2	true

@@ -114,7 +114,8 @@
         "test/sql/copy/parquet/parquet_nan_setting.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test",
         "test/sql/optimizer/test_rowid_vector_pruning.test",
-        "test/sql/optimizer/test_rowid_vector_pruning_prefetch.test"
+        "test/sql/optimizer/test_rowid_vector_pruning_prefetch.test",
+        "test/sql/storage/read_duckdb/read_duckdb_schema_filter_pushdown.test"
       ]
     },
     {
