@@ -202,10 +202,13 @@ Cannot change custom_user_agent setting while database is running
 # unset local-only settings report a LOCAL scope
 query II
 SELECT name, scope FROM duckdb_settings()
-WHERE name IN ('profiling_coverage', 'profiling_output', 'progress_bar_time') ORDER BY name
+WHERE name IN ('max_streaming_buffer_size', 'profiling_coverage', 'profiling_output',
+               'profiling_renderer_settings', 'progress_bar_time') ORDER BY name
 ----
+max_streaming_buffer_size	LOCAL
 profiling_coverage	LOCAL
 profiling_output	LOCAL
+profiling_renderer_settings	LOCAL
 progress_bar_time	LOCAL
 
 # local-only settings reject a global assignment with the generic-settings error
@@ -218,3 +221,146 @@ statement error
 SET GLOBAL profiling_output='out.txt'
 ----
 Invalid Input Error: Setting "profiling_output" cannot be set as a global variable - it can only be set per session
+
+# map setting: keys are lower-cased, values are stored as strings, sorted by key
+query I
+SELECT current_setting('profiling_renderer_settings')
+----
+{}
+
+statement ok
+SET profiling_renderer_settings = MAP {'B': '1', 'a': 'true'}
+
+query I
+SELECT current_setting('profiling_renderer_settings')
+----
+{a=true, b=1}
+
+statement error
+SET profiling_renderer_settings = MAP {'a': NULL}
+----
+cannot be NULL
+
+statement error
+SET profiling_renderer_settings = 'a'
+----
+can't be cast to the destination type MAP
+
+statement ok
+RESET profiling_renderer_settings
+
+query I
+SELECT current_setting('profiling_renderer_settings')
+----
+{}
+
+# computed defaults come from a default function while the setting is not set, also after RESET
+query I
+SELECT current_setting('threads') > 0 AND current_setting('async_threads') >= 0
+----
+true
+
+statement ok
+SET threads=3
+
+statement ok
+SET async_threads=0
+
+query II
+SELECT current_setting('threads'), current_setting('async_threads')
+----
+3	0
+
+statement error
+SET threads=0
+----
+Must have at least 1 thread
+
+statement error
+SET async_threads=-1
+----
+Cannot have negative async_threads
+
+statement ok
+RESET threads
+
+statement ok
+RESET async_threads
+
+query I
+SELECT current_setting('threads') > 0 AND current_setting('async_threads') >= 0
+----
+true
+
+# memory limits are restored to the system default
+statement ok
+SET max_memory='1GB'
+
+query I
+SELECT current_setting('max_memory')
+----
+953.6 MiB
+
+statement ok
+RESET max_memory
+
+query I
+SELECT current_setting('max_memory') <> '953.6 MiB'
+----
+true
+
+statement error
+SET max_memory='not a memory limit'
+----
+Memory must have a number
+
+# storage_compatibility_version is validated and reset to its default
+# (its value before the SET depends on the test config, e.g. v1_storage starts at v1.5.2)
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
+query I
+SELECT current_setting('storage_compatibility_version')
+----
+v1.2.0
+
+statement error
+SET storage_compatibility_version='v0.0.1'
+----
+not a known DuckDB version
+
+statement ok
+RESET storage_compatibility_version
+
+query I
+SELECT current_setting('storage_compatibility_version')
+----
+latest
+
+# max_streaming_buffer_size is validated
+statement error
+SET max_streaming_buffer_size='abc'
+----
+Memory must have a number
+
+statement error
+SET max_streaming_buffer_size=NULL
+----
+cannot be NULL
+
+# http_proxy
+statement ok
+SET http_proxy='proxy.example.com:8080'
+
+query I
+SELECT current_setting('http_proxy')
+----
+proxy.example.com:8080
+
+statement ok
+RESET http_proxy
+
+query I
+SELECT current_setting('http_proxy') <> 'proxy.example.com:8080'
+----
+true

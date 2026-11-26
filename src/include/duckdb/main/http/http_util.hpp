@@ -71,6 +71,9 @@ struct HTTPParams {
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
 	DUCKDB_API idx_t GetTransportReuseDomain() const;
+	//! Require server certificate verification for the requests made with these parameters, whatever the settings and
+	//! secrets they were initialized from said. The provider recaptures its connection-reuse domain from the new values
+	DUCKDB_API void RequireServerCertificateVerification();
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -132,7 +135,7 @@ struct HTTPClientInitializationOptions {
 
 struct HTTPHeaders {
 	using header_values_t = vector<string>;
-	using header_map_t = case_insensitive_map_t<string>;
+	using header_map_t = multimap<string, string, CaseInsensitiveStringCompare>;
 
 public:
 	HTTPHeaders() = default;
@@ -140,14 +143,21 @@ public:
 	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
 	DUCKDB_API ~HTTPHeaders();
 
-	void Insert(string key, string value);
+	//! Insert only if the name is absent.
+	void InsertIfAbsent(string key, string value);
+	[[deprecated("Use InsertIfAbsent instead")]] void Insert(string key, string value);
 	//! Append another field line without combining its value.
 	void Append(string key, string value);
+	//! Replace all field lines with this name.
+	void Set(string key, string value);
+	//! Remove all field lines with this name.
+	void RemoveAll(const string &key);
 	bool HasHeader(const string &key) const;
 	//! Return the first field value.
 	string GetHeaderValue(const string &key) const;
 	header_values_t GetHeaderValues(const string &key) const;
 
+	//! Iteration visits every field line, in insertion order for each name.
 	header_map_t::iterator begin() { // NOLINT: match stl API
 		return headers.begin();
 	}
@@ -166,14 +176,9 @@ public:
 	header_map_t::const_iterator cend() const { // NOLINT: match stl API
 		return headers.end();
 	}
-	header_map_t::mapped_type &operator[](const header_map_t::key_type &key) {
-		return headers[key];
-	}
 
 private:
 	header_map_t headers;
-	//! HTTP responses can contain multiple field lines with the same name (i.e., Cache-Control).
-	case_insensitive_map_t<header_values_t> repeated_headers;
 };
 
 struct HTTPResponse {
@@ -247,7 +252,7 @@ struct BaseRequest {
 	static HTTPHeaders MergeHeaders(const HTTPHeaders &headers, HTTPParams &params) {
 		HTTPHeaders result = headers;
 		for (const auto &header : params.extra_headers) {
-			result.Insert(header.first, header.second);
+			result.InsertIfAbsent(header.first, header.second);
 		}
 		return result;
 	}

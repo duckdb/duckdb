@@ -255,6 +255,9 @@ struct AggregateStateField {
 	//! aggregate's empty-group finalize (e.g. count -> 0) instead of short-circuiting to NULL on a NULL state.
 	bool list_empty_as_empty = false;
 
+	//! Whether the described native field consists entirely of fixed-size values.
+	bool IsFixedSize(const LogicalType &type) const;
+
 	//! The alignment of this field when placed as a struct member, mirroring the C++ struct layout rules.
 	//! For OPTIONAL_VALUE the alignment is that of the wrapped value - the trailing is_set bool does not affect it.
 	idx_t GetAlignment() const {

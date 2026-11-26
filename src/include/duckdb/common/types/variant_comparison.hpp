@@ -31,6 +31,7 @@ enum class VariantComparisonType : uint8_t {
 	TIME_TZ,      // TIME WITH TIME ZONE
 	INTERVAL,
 	GEOMETRY,
+	GEOGRAPHY,
 	BITSTRING,
 	ARRAY,
 	OBJECT,
@@ -65,7 +66,7 @@ struct VariantNumberKey {
 	//! The significant decimal digits ('0'..'9'), used when they fit inline
 	char inline_digits[INLINE_DIGITS];
 	//! The significant decimal digits, used instead of inline_digits when they do not fit (only BIGNUM
-	//! can produce magnitudes that large)
+	//! and decimals wider than 38 digits can produce magnitudes that large)
 	string digits;
 
 	//! Set the significant digits from the given span
@@ -99,16 +100,16 @@ struct VariantNumberKey {
 	}
 };
 
-VariantComparisonType GetVariantComparisonType(VariantLogicalType type);
+VariantComparisonType GetVariantComparisonType(LogicalTypeId type);
 //! Compute the canonical logical value in the REAL rank, this is not directly byte comparable.
-double VariantGetRealValue(VariantLogicalType type_id, const VariantNode &node);
+double VariantGetRealValue(LogicalTypeId type_id, const VariantNode &node);
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
-VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNode &node);
+VariantNumberKey VariantGetNumberKey(LogicalTypeId type_id, const VariantNode &node);
 //! Compute the nanoseconds since the epoch for any TIMESTAMP rank value
-hugeint_t VariantGetTimestampValue(VariantLogicalType type_id, const VariantNode &node);
+hugeint_t VariantGetTimestampValue(LogicalTypeId type_id, const VariantNode &node);
 //! Compute the nanoseconds since the epoch (UTC) for any TIMESTAMP_TZ rank value
-hugeint_t VariantGetTimestampTZValue(VariantLogicalType type_id, const VariantNode &node);
+hugeint_t VariantGetTimestampTZValue(LogicalTypeId type_id, const VariantNode &node);
 //! Compute the nanoseconds since midnight for any TIME rank value
-int64_t VariantGetTimeValue(VariantLogicalType type_id, const VariantNode &node);
+int64_t VariantGetTimeValue(LogicalTypeId type_id, const VariantNode &node);
 
 } // namespace duckdb

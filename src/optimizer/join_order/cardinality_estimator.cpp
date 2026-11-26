@@ -14,7 +14,7 @@ public:
 	DomainEstimate();
 
 public:
-	idx_t GetDistinctCount(const JoinPredicate &predicate) const;
+	double GetDistinctCount(const JoinPredicate &predicate) const;
 	bool HasReliableDistinctCount() const;
 	idx_t GetReliableDistinctCount() const;
 	void Update(ColumnBinding binding, const DistinctCount &distinct_count,
@@ -35,7 +35,7 @@ private:
 DomainEstimate::DomainEstimate() {
 }
 
-idx_t DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
+double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 	auto domain = estimate;
 	for (bool left : {true, false}) {
 		auto entry = local_fallbacks.find(predicate.GetStatsBinding(left));
@@ -44,11 +44,20 @@ idx_t DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 		}
 	}
 	if (!domain) {
-		return NumericLimits<idx_t>::Maximum();
+		return static_cast<double>(NumericLimits<idx_t>::Maximum());
 	}
 	auto result = domain->distinct_count;
+	auto comparison = predicate.GetComparisonType();
+	if (domain->source == DistinctCountSource::CARDINALITY && estimate && result > 0 &&
+	    predicate.GetJoinType() == JoinType::INNER &&
+	    (comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+		// Discount scan-backed domains before applying predicate-local bounds.
+		return MinValue<double>(static_cast<double>(result),
+		                        MaxValue(1.0, static_cast<double>(estimate->distinct_count) *
+		                                          RelationStatisticsHelper::DEFAULT_SELECTIVITY));
+	}
 	if (!HasReliableDistinctCount() || reliable_source_count != 1) {
-		return result;
+		return static_cast<double>(result);
 	}
 	auto key_domain = NumericLimits<idx_t>::Maximum();
 	for (auto candidate : min_max_candidates) {
@@ -56,7 +65,7 @@ idx_t DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 			key_domain = MinValue(key_domain, candidate);
 		}
 	}
-	return key_domain == NumericLimits<idx_t>::Maximum() ? result : key_domain;
+	return static_cast<double>(key_domain == NumericLimits<idx_t>::Maximum() ? result : key_domain);
 }
 
 bool DomainEstimate::HasReliableDistinctCount() const {
@@ -142,7 +151,7 @@ public:
 public:
 	reference<JoinPredicate> predicate;
 	reference<const DomainEstimate> domain_estimate;
-	idx_t distinct_count;
+	double distinct_count;
 };
 
 struct SelectivitySubgraph {
@@ -193,9 +202,17 @@ struct LogicalJoinStats {
 };
 
 struct CardinalityEstimatorState {
+	void InitializeEdgeIndex();
+	bool TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const;
+
 	vector<RelationsSetToStats> relation_set_stats;
 	vector<FilterInfoWithTotalDomains> edges;
+	//! Each edge is indexed by one of the relations required by its filter.
+	vector<vector<idx_t>> edges_by_relation;
+	vector<idx_t> unscoped_edges;
 	vector<CardinalityValue> leaf_cardinalities;
+	//! Per relation, the columns that together identify a row (empty if unknown).
+	vector<vector<idx_t>> unique_keys;
 	vector<reference<const JoinOrderOperator>> operators;
 	vector<LogicalJoinStats> boundaries;
 	reference_map_t<JoinRelationSet, CardinalityValue> inner_selectivities;
@@ -212,7 +229,7 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	return static_cast<double>(distinct_count);
+	return distinct_count;
 }
 
 bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
@@ -237,6 +254,45 @@ FilterInfo &FilterInfoWithTotalDomains::GetFilter() const {
 
 JoinPredicate &FilterInfoWithTotalDomains::GetPredicate() const {
 	return predicate.get();
+}
+
+void CardinalityEstimatorState::InitializeEdgeIndex() {
+	edges_by_relation.resize(leaf_cardinalities.size());
+	for (idx_t i = 0; i < edges.size(); i++) {
+		auto &scope = edges[i].GetFilter().set.get();
+		if (scope.Empty()) {
+			unscoped_edges.push_back(i);
+			continue;
+		}
+		auto anchor = scope.relations[0].index;
+		for (idx_t j = 1; j < scope.count; j++) {
+			auto relation = scope.relations[j].index;
+			if (edges_by_relation[relation].size() < edges_by_relation[anchor].size()) {
+				anchor = relation;
+			}
+		}
+		edges_by_relation[anchor].push_back(i);
+	}
+}
+
+bool CardinalityEstimatorState::TryGetCandidateEdges(const JoinRelationSet &set, vector<idx_t> &candidates) const {
+	idx_t count = unscoped_edges.size();
+	for (idx_t i = 0; i < set.count; i++) {
+		count += edges_by_relation[set.relations[i].index].size();
+	}
+	// Collecting and sorting most edges costs more than scanning them in place.
+	if (count >= edges.size() / 2) {
+		return false;
+	}
+	candidates.reserve(count);
+	candidates.insert(candidates.end(), unscoped_edges.begin(), unscoped_edges.end());
+	for (idx_t i = 0; i < set.count; i++) {
+		auto &entries = edges_by_relation[set.relations[i].index];
+		candidates.insert(candidates.end(), entries.begin(), entries.end());
+	}
+	// Each edge occurs once. Restore the estimator's order before applying any selectivity.
+	std::sort(candidates.begin(), candidates.end());
+	return true;
 }
 
 // The filter was made on top of a logical sample or other projection,
@@ -499,6 +555,31 @@ double CardinalityEstimator::GetJoinPairCap(JoinRelationSet &join_pair) {
 	return cap == NumericLimits<double>::Maximum() ? 0 : cap;
 }
 
+double CardinalityEstimator::GetUniqueJoinPairDomain(JoinRelationSet &join_pair) {
+	D_ASSERT(join_pair.count == 2);
+	auto equality_pair = predicate_model.GetDirectEqualityPair(join_pair);
+	if (!equality_pair) {
+		return 0;
+	}
+	double domain = 0;
+	for (idx_t relation_index = 0; relation_index < join_pair.count; relation_index++) {
+		auto relation = join_pair.relations[relation_index];
+		auto &equality_bindings =
+		    relation_index == 0 ? equality_pair->first_relation_bindings : equality_pair->second_relation_bindings;
+		auto &unique_key = state->unique_keys.at(relation.index);
+		bool covered = !unique_key.empty();
+		for (auto column : unique_key) {
+			ColumnBinding binding(TableIndex(relation.index), ProjectionIndex(column));
+			covered = covered && equality_bindings.find(binding) != equality_bindings.end();
+		}
+		if (covered) {
+			// Every row of this relation is a different key combination, so the other side matches at most one row.
+			domain = MaxValue(domain, GetNumerator(set_manager.GetJoinRelation(relation)).GetDouble());
+		}
+	}
+	return domain;
+}
+
 bool CardinalityEstimator::ApplyJoinPairCap(CardinalityValue &target_selectivity, JoinRelationSet &join_pair,
                                             reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
                                             reference_set_t<JoinRelationSet> &capped_join_pairs) {
@@ -511,9 +592,14 @@ bool CardinalityEstimator::ApplyJoinPairCap(CardinalityValue &target_selectivity
 	}
 	auto &stats = it->second;
 	auto cap = GetJoinPairCap(join_pair);
-	// The cap is an FK/PK heuristic. Avoid applying it to broad fact-to-fact joins where the base row count is much
-	// larger than any observed single-column join domain; in that case row count is a poor proxy for composite NDV.
-	if (!stats.CanApplyCap(cap)) {
+	auto unique_domain = GetUniqueJoinPairDomain(join_pair);
+	if (unique_domain > 0) {
+		// The equalities cover a key: its row count is the composite NDV, not a proxy for it.
+		cap = unique_domain;
+	} else if (!stats.CanApplyCap(cap)) {
+		// The cap is an FK/PK heuristic. Avoid applying it to broad fact-to-fact joins where the base row count is
+		// much larger than any observed single-column join domain; in that case row count is a poor proxy for
+		// composite NDV.
 		return false;
 	}
 	auto &first_d = stats.first_distinct_count;
@@ -559,6 +645,9 @@ bool CardinalityEstimator::ApplyCompositeJoinPairCaps(
     CardinalityValue &target_selectivity, JoinRelationSet &scope,
     reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
     reference_set_t<JoinRelationSet> &capped_join_pairs) {
+	if (capped_join_pairs.size() == join_pair_stats.size()) {
+		return false;
+	}
 	bool applied = false;
 	for (auto &entry : join_pair_stats) {
 		auto &join_pair = entry.first.get();
@@ -750,11 +839,21 @@ void CardinalityEstimator::MergeDisconnectedSelectivitySubgraphs(SelectivityStat
 
 CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
 	SelectivityState selectivity_state;
-	for (auto &edge : state->edges) {
+	auto process_edge = [&](FilterInfoWithTotalDomains &edge) {
 		auto &filter = edge.GetFilter();
 		if (edge.GetPredicate().GetJoinType() == JoinType::INNER && filter.left_set != filter.right_set &&
 		    IsFilterApplicable(filter, set) && !IsResidualFilter(filter)) {
 			ProcessSelectivityEdge(edge, set, selectivity_state);
+		}
+	};
+	vector<idx_t> candidates;
+	if (state->TryGetCandidateEdges(set, candidates)) {
+		for (auto index : candidates) {
+			process_edge(state->edges[index]);
+		}
+	} else {
+		for (auto &edge : state->edges) {
+			process_edge(edge);
 		}
 	}
 	MergeDisconnectedSelectivitySubgraphs(selectivity_state);
@@ -830,6 +929,8 @@ CardinalityValue CardinalityEstimator::EstimateCardinality(JoinRelationSet &set)
 		auto right_rows = EstimateCardinality(right);
 		if (op.type == JoinOrderOperatorType::LEFT) {
 			result = MaxValue(left_rows, left_rows * right_rows * boundary->selectivity);
+		} else if (op.type == JoinOrderOperatorType::MARK) {
+			result = left_rows;
 		} else {
 			auto type = op.type == JoinOrderOperatorType::SEMI ? JoinType::SEMI : JoinType::ANTI;
 			result = RelationStatisticsHelper::EstimateSemiAntiJoinFallbackCardinality(
@@ -930,8 +1031,23 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		D_ASSERT(stats.stats_initialized);
 		auto cardinality = CardinalityValue(static_cast<double>(stats.cardinality));
 		state->leaf_cardinalities.push_back(cardinality);
+		state->unique_keys.push_back(stats.unique_key);
 		state->cardinalities.emplace(set_manager.GetJoinRelation(RelationIndex(i)), cardinality);
 		UpdateTotalDomains(RelationIndex(i), stats, sources);
+	}
+	for (auto &op : operators) {
+		if (op->type != JoinOrderOperatorType::MARK) {
+			continue;
+		}
+		D_ASSERT(op->right_relations.get().count == 1);
+		auto rhs = op->right_relations.get().relations[0];
+		// The marker's synthetic slot follows the RHS columns but is produced by the join.
+		auto key = ColumnBinding(TableIndex(rhs.index), ProjectionIndex(relations[rhs.index].columns.size()));
+		for (auto &domain : state->relation_set_stats) {
+			if (domain.equivalent_relations.count(key)) {
+				domain.domain_estimate.Update(key, DistinctCount(3, DistinctCountSource::CARDINALITY), nullptr);
+			}
+		}
 	}
 	RestrictFilterDomains(relations);
 	for (auto &domain : state->relation_set_stats) {
@@ -940,6 +1056,7 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		}
 	}
 	std::stable_sort(state->edges.begin(), state->edges.end(), SortEdges);
+	state->InitializeEdgeIndex();
 	for (auto &op : operators) {
 		D_ASSERT(op->index == state->operators.size());
 		state->operators.push_back(*op);

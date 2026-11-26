@@ -165,7 +165,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
                                        Vector &result, const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
                                        ScanVectorType scan_type) {
 	const bool preserve_positions = scan_type == ScanVectorType::SCAN_FLAT_VECTOR_PRESERVE_POSITIONS;
-	if (preserve_positions && (result.GetType().id() != LogicalTypeId::VARCHAR || sel_count == vector_count)) {
+	if (preserve_positions && sel_count == vector_count) {
 		StringScanPartial(segment, state, vector_count, result, result_offset);
 		return;
 	}
@@ -179,10 +179,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	if (preserve_positions) {
-		const string_t empty_string("");
-		for (idx_t i = 0; i < vector_count; i++) {
-			result_data[result_offset + i] = empty_string;
-		}
+		std::fill_n(result_data + result_offset, vector_count, string_t(""));
 	}
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	auto write_entry = [&](idx_t i, const StringDictionaryEntry &entry) {

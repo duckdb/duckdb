@@ -316,17 +316,6 @@ SELECT * FROM query(getvariable('flummi_sql'));
 500	1	794	198750
 
 statement ok
-SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
-
-statement ok
-SET explain_output='physical_only';
-
-query II
-EXPLAIN SELECT * FROM query(getvariable('flummi_sql'));
-----
-physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
-
-statement ok
 DROP VIEW edges;
 
 statement ok
@@ -462,3 +451,40 @@ SELECT * FROM query(getvariable('flummi_sql'));
 
 statement ok
 RESET max_execution_time;
+
+# The key-join specialization is costed from vector-size-dependent work units.
+require vector_size 2048
+
+statement ok
+CREATE VIEW nodes AS SELECT * FROM key_nodes;
+
+statement ok
+CREATE VIEW edges AS SELECT * FROM key_edges;
+
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_k_core_using_key.sql')
+);
+
+statement ok
+SET threads=4;
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output='physical_only';
+
+statement ok
+SET VARIABLE saved_join_threshold = current_setting('approximate_join_order_threshold');
+
+statement ok
+SET approximate_join_order_threshold=12;
+
+query II
+EXPLAIN SELECT * FROM query(getvariable('flummi_sql'));
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+statement ok
+SET approximate_join_order_threshold=getvariable('saved_join_threshold');

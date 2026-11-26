@@ -315,7 +315,8 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 		}
 		auto result = CreateOrderExpression(std::move(expr), names, sql_types, table_index, ProjectionIndex(index));
 		if (!collation.empty()) {
-			if (sql_types[index].id() != LogicalTypeId::VARCHAR) {
+			if (sql_types[index].id() != LogicalTypeId::VARCHAR || sql_types[index].IsJSONType()) {
+				// a COLLATE expression (bind_collate_expression) rejects the JSON alias of VARCHAR the same way
 				throw BinderException(*result, "COLLATE can only be applied to varchar columns");
 			}
 			result->SetReturnType(LogicalType::VARCHAR_COLLATION(std::move(collation)));
@@ -339,7 +340,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
+	expr = bound_colref.WithReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,

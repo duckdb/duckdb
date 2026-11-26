@@ -262,9 +262,21 @@ jobs:
          arch: arm64
          host_arch: x64
 
+     # The MSVC STL on this image requires Clang 22+, newer than the preinstalled LLVM
+     - name: Install LLVM 22
+       shell: pwsh
+       run: |
+         python scripts/ci/retry.py -- choco upgrade llvm --version=22.1.8 --allow-downgrade -y --no-progress
+         $version = clang-cl --version | Select-Object -First 1
+         Write-Output $version
+         if ($version -notmatch 'clang version 22\.') {
+           throw "Expected clang-cl 22, got: $version"
+         }
+
      - name: Build
        shell: bash
        run: |
+         PATH="$(cygpath -u "$llvmX64"):$PATH"
          clang-cl --version
          python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
 

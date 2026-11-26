@@ -5,6 +5,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 namespace duckdb {
 
@@ -65,8 +66,7 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 }
 
 void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
-	format.owned_sel.Initialize(sel_vector);
-	format.sel = &format.owned_sel;
+	format.sel = &sel_vector;
 
 	auto &child = entry->data;
 	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
@@ -74,7 +74,8 @@ void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		entry->data.Flatten();
 	}
 	format.data = FlatVector::GetData(entry->data);
-	format.validity = FlatVector::Validity(entry->data);
+	const auto &validity = FlatVector::Validity(entry->data);
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
@@ -109,14 +110,14 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 		for (idx_t i = 0; i < count; i++) {
 			new_sel.set_index(i, sel_vector.get_index(offset + i));
 		}
-		return make_uniq<DictionaryBuffer>(new_sel, count, entry);
+		return make_buffer<DictionaryBuffer>(new_sel, count, entry);
 	}
 	if (offset == 0) {
 		// for offset = 0 all we have to do is update the count - so just create a new buffer
-		return make_uniq<DictionaryBuffer>(sel_data, end, entry);
+		return make_buffer<DictionaryBuffer>(sel_data, end, entry);
 	}
 	SelectionVector sliced_sel(sel_vector.data() + offset, count);
-	auto result = make_uniq<DictionaryBuffer>(sliced_sel, count, entry);
+	auto result = make_buffer<DictionaryBuffer>(sliced_sel, count, entry);
 	result->AddAuxiliaryData(make_uniq<SelectionDataHolder>(sel_data));
 	return result;
 }
@@ -195,6 +196,77 @@ const Vector &DictionaryVector::GetCachedHashes(const Vector &input) {
 		entry.cached_hashes = std::move(hashes);
 	});
 	return *entry.cached_hashes;
+}
+
+void DictionaryVector::ApplyValidity(Vector &vector, const ValidityMask &mask) {
+	VerifyDictionary(vector);
+	if (mask.CannotHaveNull()) {
+		return;
+	}
+	const auto count = vector.size();
+	const auto validity = mask.GetData();
+	const auto full_entry_count = count / ValidityMask::BITS_PER_VALUE;
+	const auto tail_count = count % ValidityMask::BITS_PER_VALUE;
+	const auto tail_invalid =
+	    tail_count ? ~validity[full_entry_count] & ValidityMask::EntryWithValidBits(tail_count) : 0;
+	idx_t first_invalid = 0;
+	while (first_invalid < full_entry_count && ValidityMask::AllValid(validity[first_invalid])) {
+		first_invalid++;
+	}
+	if (first_invalid == full_entry_count && !tail_invalid) {
+		return;
+	}
+
+	const auto &child = Child(vector);
+	idx_t null_index = child.size();
+	if (child.GetVectorType() == VectorType::FLAT_VECTOR && child.size() &&
+	    !FlatVector::Validity(child).RowIsValid(child.size() - 1)) {
+		null_index--;
+	} else {
+		UnifiedVectorFormat format;
+		child.ToUnifiedFormat(format);
+		if (!format.validity.CannotHaveNull()) {
+			for (idx_t i = 0; i < child.size(); i++) {
+				if (!format.validity.RowIsValid(format.sel->get_index(i))) {
+					null_index = i;
+					break;
+				}
+			}
+		}
+	}
+
+	{
+		auto &buffer = vector.BufferMutable().Cast<DictionaryBuffer>();
+		auto &selection = buffer.GetSelVector();
+		if (vector.GetBufferRef().use_count() != 1 || !selection.sel_data() || selection.sel_data().use_count() != 1) {
+			SelectionVector owned_selection(count);
+			for (idx_t i = 0; i < count; i++) {
+				owned_selection.set_index(i, selection.get_index(i));
+			}
+			vector.Dictionary(buffer.GetEntryPtr(), owned_selection, count);
+		}
+	}
+	if (null_index == child.size()) {
+		// Copy dictionary entries, leaving the original dictionary and its caches unchanged.
+		auto entry = make_buffer<DictionaryEntry>(Vector(vector.GetType(), child.size() + 1));
+		VectorOperations::Copy(child, entry->data, child.size(), 0, 0);
+		FlatVector::SetSize(entry->data, child.size() + 1);
+		FlatVector::SetNull(entry->data, null_index, true);
+		vector.BufferMutable().Cast<DictionaryBuffer>().SetEntry(std::move(entry));
+	}
+	unsafe_array_ptr<sel_t> target(SelVector(vector).data(), count);
+	const auto null_code = NumericCast<sel_t>(null_index);
+	auto apply_invalid = [&](idx_t entry_idx, validity_t invalid) {
+		const auto start = entry_idx * ValidityMask::BITS_PER_VALUE;
+		while (invalid) {
+			target[start + CountZeros<validity_t>::Trailing(invalid)] = null_code;
+			invalid &= invalid - 1;
+		}
+	};
+	for (idx_t entry_idx = first_invalid; entry_idx < full_entry_count; entry_idx++) {
+		apply_invalid(entry_idx, ~validity[entry_idx]);
+	}
+	apply_invalid(full_entry_count, tail_invalid);
 }
 
 bool DictionaryBuffer::TrySerialize(Serializer &serializer, const LogicalType &type,

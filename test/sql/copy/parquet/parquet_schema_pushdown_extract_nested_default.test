@@ -1,0 +1,99 @@
+# name: test/sql/copy/parquet/parquet_schema_pushdown_extract_nested_default.test
+# description: Pushed extracts preserve nested schema defaults and conversions
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT * FROM (VALUES (1, {'x': 1}), (2, {'x': 2})) t(id, s)) TO '{TEMP_DIR}/extract_nested_default.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, x: 3}})
+
+statement ok
+COPY (SELECT * FROM (VALUES (1, {'x': 1}), (2, NULL)) t(id, s)) TO '{TEMP_DIR}/extract_nested_default_null_parent.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, x: 3}})
+
+query II
+SELECT id, s.a.b FROM read_parquet('{TEMP_DIR}/extract_nested_default.parquet', schema := MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(x INTEGER, a STRUCT(b INTEGER))', default_value: NULL, children: MAP {
+		3: {name: 'x', type: 'INTEGER', default_value: NULL, children: NULL},
+		4: {name: 'a', type: 'STRUCT(b INTEGER)', default_value: NULL, children: MAP {
+			5: {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+}) ORDER BY id
+----
+1	NULL
+2	NULL
+
+query I
+SELECT count(*) FROM read_parquet('{TEMP_DIR}/extract_nested_default.parquet', schema := MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(x INTEGER, a STRUCT(b INTEGER))', default_value: NULL, children: MAP {
+		3: {name: 'x', type: 'INTEGER', default_value: NULL, children: NULL},
+		4: {name: 'a', type: 'STRUCT(b INTEGER)', default_value: NULL, children: MAP {
+			5: {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+}) WHERE s.a.b = 1
+----
+0
+
+# a non-NULL default is NULL where the parent struct is NULL
+statement ok
+CREATE VIEW mapped AS
+SELECT * FROM read_parquet('{TEMP_DIR}/extract_nested_default_null_parent.parquet', schema := MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(x INTEGER, a STRUCT(b INTEGER))', default_value: NULL, children: MAP {
+		3: {name: 'x', type: 'INTEGER', default_value: NULL, children: NULL},
+		4: {name: 'a', type: 'STRUCT(b INTEGER)', default_value: {'b': 7}, children: MAP {
+			5: {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+})
+
+query III
+SELECT id, s.a, s.a.b FROM mapped ORDER BY id
+----
+1	{'b': 7}	7
+2	NULL	NULL
+
+query II
+SELECT id, s.a.b::VARCHAR FROM mapped WHERE s.a.b::VARCHAR = '7'
+----
+1	7
+
+query I
+SELECT id FROM mapped WHERE s.a.b IS NULL
+----
+2
+
+query I
+SELECT id FROM mapped WHERE s.a.b = 7 AND s.x = 1
+----
+1
+
+query I
+SELECT id FROM mapped WHERE id = 2 OR s.a.b::VARCHAR = '7' ORDER BY id
+----
+1
+2
+
+# Explicit child definitions must preserve the intermediate numeric conversion.
+statement ok
+COPY (SELECT * FROM (VALUES (1, {'x': 1.6::DOUBLE}), (2, NULL), (3, {'x': 2.4::DOUBLE})) t(id, s))
+TO '{TEST_DIR}/extract_numeric_cast.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, x: 3}})
+
+statement ok
+CREATE VIEW explicit_children AS
+FROM read_parquet('{TEST_DIR}/extract_numeric_cast.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(x INTEGER)', default_value: NULL, children: MAP {
+		3: {name: 'x', type: 'INTEGER', default_value: NULL}
+	}}
+})
+
+query II
+SELECT id, s.x::VARCHAR FROM explicit_children ORDER BY id
+----
+1	2
+2	NULL
+3	2
+
+query I
+SELECT id FROM explicit_children WHERE s.x::VARCHAR = '2' ORDER BY id
+----
+1
+3

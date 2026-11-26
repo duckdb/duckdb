@@ -111,14 +111,22 @@ struct VariantToVariantSizeAnalyzer {
 	static uint32_t VisitGeometry(const string_t &geom, AnalyzeState &state) {
 		return VisitString(geom, state);
 	}
+	static uint32_t VisitGeography(const string_t &geog, AnalyzeState &state) {
+		return VisitString(geog, state);
+	}
 	static uint32_t VisitBitstring(const string_t &bits, AnalyzeState &state) {
 		return VisitString(bits, state);
 	}
 
 	template <typename T>
-	static uint32_t VisitDecimal(T, uint32_t width, uint32_t scale, AnalyzeState &state) {
+	static uint32_t VisitDecimal(T val, uint32_t width, uint32_t scale, AnalyzeState &state) {
 		uint32_t size = GetVarintSize(width) + GetVarintSize(scale);
-		size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			size += VisitString(val.data, state);
+		} else {
+			size += sizeof(T);
+		}
 		return size;
 	}
 
@@ -136,8 +144,8 @@ struct VariantToVariantSizeAnalyzer {
 		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
-	static uint32_t VisitDefault(VariantLogicalType type_id, const_data_ptr_t, AnalyzeState &) {
-		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
+	static uint32_t VisitDefault(const LogicalType &type, const_data_ptr_t, AnalyzeState &) {
+		throw InternalException("Unrecognized VariantLogicalType: %s", type.ToString());
 	}
 };
 
@@ -214,6 +222,9 @@ struct VariantToVariantDataWriter {
 	static void VisitGeometry(const string_t &geom, WriteState &state) {
 		return VisitString(geom, state);
 	}
+	static void VisitGeography(const string_t &geog, WriteState &state) {
+		return VisitString(geog, state);
+	}
 	static void VisitBitstring(const string_t &bits, WriteState &state) {
 		return VisitString(bits, state);
 	}
@@ -222,8 +233,13 @@ struct VariantToVariantDataWriter {
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, WriteState &state) {
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
-		Store<T>(val, state.GetDestination());
-		state.blob_size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			VisitString(val.data, state);
+		} else {
+			Store<T>(val, state.GetDestination());
+			state.blob_size += sizeof(T);
+		}
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
@@ -241,8 +257,8 @@ struct VariantToVariantDataWriter {
 		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
-	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, WriteState &) {
-		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
+	static void VisitDefault(const LogicalType &type, const_data_ptr_t, WriteState &) {
+		throw InternalException("Unrecognized VariantLogicalType: %s", type.ToString());
 	}
 };
 

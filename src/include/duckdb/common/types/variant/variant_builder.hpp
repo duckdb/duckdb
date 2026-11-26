@@ -35,6 +35,14 @@
 
 namespace duckdb {
 
+//! Grants the variant builder access to the storage-level type of a VariantNode / ParquetVariantNode
+struct VariantNodeStorageAccess {
+	template <class NODE>
+	static VariantLogicalType GetStorageType(const NODE &node) {
+		return node.GetVariantType();
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Building a VARIANT in a single pass
 //===--------------------------------------------------------------------===//
@@ -74,7 +82,10 @@ inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> 
 
 //! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
 inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
-	if (width > DecimalWidth<int64_t>::max) {
+	if (width > DecimalWidth<hugeint_t>::max) {
+		// decimals wider than 38 digits are BIGNUM blobs
+		return PhysicalType::VARCHAR;
+	} else if (width > DecimalWidth<int64_t>::max) {
 		return PhysicalType::INT128;
 	} else if (width > DecimalWidth<int32_t>::max) {
 		return PhysicalType::INT64;
@@ -313,6 +324,13 @@ struct VariantBuilder {
 			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, primitive.GetValueUnsafe<hugeint_t>());
 				break;
+			case PhysicalType::VARCHAR: {
+				// the BIGNUM blob of a decimal wider than 38 digits
+				auto bignum = primitive.GetValueUnsafe<string_t>();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			default:
 				throw InternalException("Unexpected physical type for Decimal value: %s",
 				                        EnumUtil::ToString(type.InternalType()));
@@ -323,6 +341,7 @@ struct VariantBuilder {
 		case LogicalTypeId::BIGNUM:
 		case LogicalTypeId::BIT:
 		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::GEOGRAPHY:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
 				variant_type = VariantLogicalType::BLOB;
@@ -332,6 +351,8 @@ struct VariantBuilder {
 				variant_type = VariantLogicalType::BITSTRING;
 			} else if (type_id == LogicalTypeId::GEOMETRY) {
 				variant_type = VariantLogicalType::GEOMETRY;
+			} else if (type_id == LogicalTypeId::GEOGRAPHY) {
+				variant_type = VariantLogicalType::GEOGRAPHY;
 			} else {
 				variant_type = VariantLogicalType::VARCHAR;
 			}
@@ -346,6 +367,12 @@ struct VariantBuilder {
 		}
 		type_ids.push_back(static_cast<uint8_t>(variant_type));
 		byte_offsets.push_back(byte_offset);
+	}
+
+	//! Emit a primitive value sourced from a VariantNode-like cursor, using the storage type of the cursor
+	template <class NODE>
+	void EmitPrimitiveNode(const NODE &it) {
+		EmitPrimitiveNode(it, VariantNodeStorageAccess::GetStorageType(it));
 	}
 
 	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by
@@ -449,9 +476,15 @@ struct VariantBuilder {
 			case PhysicalType::INT64:
 				VariantBuilderAppendFixed(blob, it.template GetData<int64_t>());
 				break;
-			default:
+			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
 				break;
+			default: {
+				auto bignum = it.GetWideDecimal();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			}
 			break;
 		}
@@ -459,7 +492,8 @@ struct VariantBuilder {
 		case VariantLogicalType::BLOB:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::BITSTRING:
-		case VariantLogicalType::GEOMETRY: {
+		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY: {
 			auto str = it.GetString();
 			VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(str.GetSize()));
 			VariantBuilderAppendBytes(blob, const_data_ptr_cast(str.GetData()), str.GetSize());
@@ -534,7 +568,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 			builder.EmitNull();
 			return;
 		}
-		auto type_id = node.GetTypeId();
+		auto type_id = VariantNodeStorageAccess::GetStorageType(node);
 		switch (type_id) {
 		case VariantLogicalType::OBJECT: {
 			auto children = CollectObjectChildren(node);

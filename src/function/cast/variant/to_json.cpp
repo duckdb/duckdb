@@ -127,6 +127,11 @@ struct JSONConverterBase {
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
 
+	static yyjson_mut_val *VisitGeography(const string_t &str, yyjson_mut_doc *doc) {
+		auto val_str = Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
 	static yyjson_mut_val *VisitBitstring(const string_t &str, yyjson_mut_doc *doc) {
 		auto val_str = Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
@@ -143,6 +148,8 @@ struct JSONConverterBase {
 			val_str = Decimal::ToString(val, width, scale);
 		} else if constexpr (std::is_same_v<T, hugeint_t>) {
 			val_str = Decimal::ToString(val, width, scale);
+		} else if constexpr (std::is_same_v<T, bignum_t>) {
+			val_str = Decimal::ToString(val, width, scale);
 		} else {
 			throw InternalException("Unhandled decimal type");
 		}
@@ -154,8 +161,8 @@ struct JSONConverterBase {
 		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
 	}
 
-	static yyjson_mut_val *VisitDefault(VariantLogicalType type_id, const_data_ptr_t, yyjson_mut_doc *) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	static yyjson_mut_val *VisitDefault(const LogicalType &type, const_data_ptr_t, yyjson_mut_doc *) {
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 

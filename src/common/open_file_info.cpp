@@ -57,7 +57,7 @@ OpenFileInfo OpenFileInfo::FromValue(const Value &input, const Identifier &funct
 }
 
 Value OpenFileInfo::ToValue() const {
-	if (!extended_info || extended_info->options.empty()) {
+	if (!extended_info) {
 		return Value(path);
 	}
 	// the options are kept unordered - sort them, so the same file always becomes the same value

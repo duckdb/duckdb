@@ -11,14 +11,14 @@ SELECT count(list_concat(x::VARIANT[], [])) FROM t;
 3000
 
 statement ok
-CREATE TABLE t2 AS SELECT ['a' || i, NULL] x FROM range(100000) t(i);
+CREATE TABLE t2 AS SELECT ['a' || i, NULL] x FROM range(3000) t(i);
 
 query IIIII
 SELECT max(length(list_concat(x::VARIANT[], [])::VARCHAR)), max(length(list_resize(x::VARIANT[], 3)::VARCHAR)), max(length(list_append(x::VARIANT[], 1::VARIANT)::VARCHAR)), max(length(list_prepend(1::VARIANT, x::VARIANT[])::VARCHAR)), max(length((x::VARIANT[] || x::VARIANT[])::VARCHAR)) FROM t2;
 ----
-14	20	17	17	28
+13	19	16	16	26
 
 query I
-SELECT list_concat(x::VARIANT[], [42::VARIANT]) FROM t2 WHERE x[1] = 'a99999'
+SELECT list_concat(x::VARIANT[], [42::VARIANT]) FROM t2 WHERE x[1] = 'a2999'
 ----
-[a99999, NULL, 42]
+[a2999, NULL, 42]

@@ -17,12 +17,12 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_statement.hpp"
@@ -43,6 +43,7 @@ class RE2;
 
 namespace duckdb {
 class BoundResultModifier;
+struct PreparedExecution;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
@@ -278,6 +279,11 @@ public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
+	//! Resolve the prepared statement and the parameter values of an EXECUTE statement
+	PreparedExecution ResolveExecute(ExecuteStatement &stmt);
+	//! Plan the prepared statement of an EXECUTE from its unbound statement, using the resolved parameter values
+	BoundStatement BindExecute(PreparedExecution &execution);
+
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
 	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
@@ -436,6 +442,12 @@ public:
 	//! Set while binding the key expressions of an index
 	void SetBindingIndexKey(bool binding_index_key);
 	bool IsBindingIndexKey() const;
+	//! The widest DECIMAL the binder constructs: the max_decimal_width setting, or the fixed limit of the keys of an
+	//! index while they are bound
+	DecimalWidthLimit GetDecimalWidthLimit() const;
+	optional_ptr<const DecimalWidthLimit> GetFixedDecimalWidthLimit() const;
+	//! Binds decimals within the limit instead of the setting while it is set, the limit outlives the binding
+	void SetDecimalWidthLimit(optional_ptr<const DecimalWidthLimit> limit);
 	void SetBindingTrySubquery();
 	bool IsBindingTrySubquery() const;
 	const TrySubqueryPlanIndexes &GetTrySubqueryPlanIndexes() const;
@@ -474,6 +486,8 @@ private:
 	bool inside_subquery = false;
 	//! Whether the key expressions of an index are being bound
 	bool binding_index_key = false;
+	//! The fixed limit of the DECIMAL widths this binder constructs, set while the keys of an index are bound
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
 	//! Whether this binder binds a TRY subquery, which lowers TRY onto the bound plan after binding
 	bool binding_try_subquery = false;
 	//! The plan indexes of the TRY subquery's top select node, recorded while planning it
@@ -523,7 +537,6 @@ private:
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
-	BoundStatement Bind(RelationStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
@@ -630,7 +643,6 @@ private:
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
-	BoundStatement Bind(DelimGetRef &ref);
 	BoundStatement Bind(ExpressionListRef &ref);
 	BoundStatement Bind(ColumnDataRef &ref);
 	BoundStatement Bind(PivotRef &expr);

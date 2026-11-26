@@ -12,6 +12,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
+class Context;
 
 //! The BoundCastExpression has been moved to a function expression (the __cast scalar function).
 //! This class exists only as a set of helper methods.
@@ -22,9 +23,6 @@ struct BoundCastExpression {
 	//! Create a bound cast function expression around the given child using the provided bound cast
 	static unique_ptr<Expression> Create(unique_ptr<Expression> child, const LogicalType &target_type,
 	                                     BoundCastInfo bound_cast, bool try_cast = false);
-	//! Create a bound cast function expression that is rebound using only the built-in SQL casts
-	static unique_ptr<Expression> CreateDefault(unique_ptr<Expression> child, const LogicalType &target_type,
-	                                            BoundCastInfo bound_cast, bool try_cast = false);
 
 	//! The expression that is being cast
 	static const Expression &Child(const BoundFunctionExpression &cast_expr);
@@ -37,18 +35,15 @@ struct BoundCastExpression {
 	static bool IsTryCast(const BoundFunctionExpression &cast_expr);
 	//! Whether the expression contains the bind data owned by the built-in cast implementation
 	static bool HasValidBindData(const BoundFunctionExpression &cast_expr);
-	//! Whether or not this cast is bound using only the built-in SQL casts
-	static bool IsDefaultCast(const BoundFunctionExpression &cast_expr);
 	static const BoundCastInfo &GetBoundCast(const BoundFunctionExpression &cast_expr);
 	static BoundCastInfo &GetBoundCastMutable(BoundFunctionExpression &cast_expr);
 	static unique_ptr<BaseStatistics> PropagateStatistics(BoundFunctionExpression &cast_expr,
 	                                                      const BaseStatistics &child_stats,
 	                                                      optional_ptr<ClientContext> context = nullptr);
 
-	//! Cast an expression to the specified SQL type, using only the built-in SQL casts
-	static unique_ptr<Expression> AddDefaultCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
-	                                                   bool try_cast = false);
 	//! Cast an expression to the specified SQL type if required
+	DUCKDB_API static unique_ptr<Expression> AddCastToType(Context &context, unique_ptr<Expression> expr,
+	                                                       const LogicalType &target_type, bool try_cast = false);
 	DUCKDB_API static unique_ptr<Expression> AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
 	                                                       const LogicalType &target_type, bool try_cast = false);
 
@@ -58,8 +53,10 @@ struct BoundCastExpression {
 	//! Returns true if a cast is invertible (i.e. CAST(s -> t -> s) = s for all values of s). This is not true for e.g.
 	//! boolean casts, because that can be e.g. -1 -> TRUE -> 1. This is necessary to prevent some optimizer bugs.
 	static bool CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type);
-	//! Returns true if every value of the integral source type is exactly representable in the floating target type
-	static bool IsLosslessIntegralToFloatingCast(const LogicalType &source_type, const LogicalType &target_type);
+	//! Returns true if the cast is strictly increasing over all values of the numeric source type, e.g. INTEGER ->
+	//! DECIMAL(11,1), DECIMAL(5,2) -> DOUBLE or FLOAT -> DOUBLE. A range comparison of the cast with a constant can
+	//! then be applied to the source values.
+	static bool CastIsOrderPreserving(const LogicalType &source_type, const LogicalType &target_type);
 	//! Returns true if CAST(s -> t -> s) = s for all values of s, possibly without preserving their order (e.g. INTEGER
 	//! -> VARCHAR). An (in)equality comparison of the cast with a constant can then be applied to the source values.
 	static bool CastIsInvertibleForEquality(const LogicalType &source_type, const LogicalType &target_type);

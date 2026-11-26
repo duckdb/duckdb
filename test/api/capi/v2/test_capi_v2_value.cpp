@@ -744,8 +744,8 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	duckdb_v2_hugeint_t scaled {1234, 0};
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &scaled, 4, 2, &narrow, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_hugeint_t read {};
-	uint8_t read_width = 0;
-	uint8_t read_scale = 0;
+	uint32_t read_width = 0;
+	uint32_t read_scale = 0;
 	REQUIRE(duckdb_v2_value_get_decimal(narrow, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(read.lower == 1234);
 	REQUIRE(read.upper == 0);
@@ -771,10 +771,76 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	REQUIRE(out == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
-	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 39, 0, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 4, 5, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 60, 61, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	// A value too wide for the tier the width selects is refused rather than
+	// Widths above 38 are wide decimals whose storage is a BIGNUM blob. The backing integer still builds them, and
+	// value_get_decimal reads them back as long as the backing integer fits in 128 bits.
+	duckdb_v2_hugeint_t wide_backing {123456789012345ull, 0};
+	duckdb_v2_value_handle wide_value = nullptr;
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &wide_backing, 60, 10, &wide_value, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(wide_value) == "12345.6789012345");
+	REQUIRE(duckdb_v2_value_get_decimal(wide_value, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read.lower == 123456789012345ull);
+	REQUIRE(read.upper == 0);
+	REQUIRE(read_width == 60);
+	REQUIRE(read_scale == 10);
+	duckdb_v2_value_destroy(&wide_value);
+
+	// Width and scale are the uint32_t of the engine: a width beyond 255 builds and reads back the same way.
+	duckdb_v2_hugeint_t negative_backing {static_cast<uint64_t>(-123456789012345ll), -1};
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &negative_backing, 1000, 300, &wide_value, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(wide_value) == "-0." + std::string(285, '0') + "123456789012345");
+	REQUIRE(duckdb_v2_value_get_logical_type(wide_value, &t, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(t) == "DECIMAL(1000,300)");
+	duckdb_v2_logical_type_destroy(&t);
+	REQUIRE(duckdb_v2_value_get_decimal(wide_value, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read.lower == static_cast<uint64_t>(-123456789012345ll));
+	REQUIRE(read.upper == -1);
+	REQUIRE(read_width == 1000);
+	REQUIRE(read_scale == 300);
+	duckdb_v2_value_destroy(&wide_value);
+	// the scale is checked against the width beyond 255 too
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 300, 301, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(out == nullptr);
+
+	// Beyond 128 bits value_get_decimal fails; the exact storage comes through value_get_blob + bignum_decode.
+	auto wide_type =
+	    MakeType(fx.factory, "decimal", nullptr, {MakeInt32Value(fx.factory, 60), MakeInt32Value(fx.factory, 1)});
+	auto wide_text = MakeVarcharValue(fx.factory, "12345678901234567890123456789012345678901234567890.5");
+	duckdb_v2_value_handle huge_value = nullptr;
+	REQUIRE(duckdb_v2_value_cast(fx.factory, wide_text, wide_type, &huge_value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(huge_value) == "12345678901234567890123456789012345678901234567890.5");
+	err = nullptr;
+	REQUIRE(duckdb_v2_value_get_decimal(huge_value, &read, &read_width, &read_scale, &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(err != nullptr);
+	// the error names the functions that read the value exactly
+	const char *message = nullptr;
+	idx_t message_length = 0;
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message, &message_length) == DUCKDB_V2_ERROR_NONE);
+	std::string message_text(message, message_length);
+	REQUIRE(message_text.find("DECIMAL(60,1)") != std::string::npos);
+	REQUIRE(message_text.find("duckdb_v2_value_get_blob") != std::string::npos);
+	REQUIRE(message_text.find("duckdb_v2_bignum_decode") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
+	const char *storage = nullptr;
+	idx_t storage_length = 0;
+	REQUIRE(duckdb_v2_value_get_blob(huge_value, &storage, &storage_length, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t magnitude_size = 0;
+	bool is_negative = true;
+	auto decode_rc = duckdb_v2_bignum_decode(reinterpret_cast<const uint8_t *>(storage), storage_length, nullptr, 0,
+	                                         &magnitude_size, &is_negative, nullptr);
+	REQUIRE((decode_rc == DUCKDB_V2_ERROR_NONE || decode_rc == DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE));
+	// 123456789012345678901234567890123456789012345678905 needs 21 bytes
+	REQUIRE(magnitude_size == 21);
+	REQUIRE(!is_negative);
+	duckdb_v2_value_destroy(&huge_value);
+	duckdb_v2_value_destroy(&wide_text);
+	duckdb_v2_logical_type_destroy(&wide_type);
+
+	// A value with more digits than the width is refused rather than
 	// silently truncated.
 	duckdb_v2_hugeint_t huge {0, 1};
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &huge, 4, 2, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -782,6 +848,99 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	// The scope handle is mandatory, as everywhere else.
 	REQUIRE(duckdb_v2_value_create_decimal(nullptr, &one, 4, 2, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_value_create_decimal(nullptr, &one, 4, 2, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
+TEST_CASE("V2: a factory bounds the width of the DECIMALs it creates", "[capi_v2][value][decimal]") {
+	EnvFixture fx;
+	duckdb_v2_factory_handle instance_factory = nullptr;
+	REQUIRE(duckdb_v2_instance_get_factory(fx.instance, &instance_factory, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_hugeint_t one {1, 0};
+
+	auto error_text = [](duckdb_v2_error_info_handle &err) {
+		REQUIRE(err != nullptr);
+		const char *message = nullptr;
+		idx_t message_length = 0;
+		REQUIRE(duckdb_v2_error_info_get_text(err, &message, &message_length) == DUCKDB_V2_ERROR_NONE);
+		std::string result(message, message_length);
+		duckdb_v2_error_info_destroy(&err);
+		return result;
+	};
+	auto create_type = [](duckdb_v2_factory_handle factory, std::string_view text, duckdb_v2_error_info_handle *err) {
+		duckdb_v2_logical_type_handle type = nullptr;
+		auto rc = duckdb_v2_factory_create_type_from_text(factory, text.data(), text.size(), &type, err);
+		REQUIRE((type != nullptr) == (rc == DUCKDB_V2_ERROR_NONE));
+		duckdb_v2_logical_type_destroy(&type);
+		return rc;
+	};
+
+	// The default of max_decimal_width is the bound of both factories: the width at the bound is created, one more
+	// digit is refused, whatever the scale and before anything of that size is built.
+	for (auto factory : {fx.factory, instance_factory}) {
+		duckdb_v2_value_handle value = nullptr;
+		REQUIRE(duckdb_v2_value_create_decimal(factory, &one, 1000000, 10, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_value_destroy(&value);
+		auto out = reinterpret_cast<duckdb_v2_value_handle>(0x1);
+		duckdb_v2_error_info_handle err = nullptr;
+		REQUIRE(duckdb_v2_value_create_decimal(factory, &one, 1000001, 10, &out, &err) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(out == nullptr);
+		REQUIRE(error_text(err).find("DECIMAL width 1000001 exceeds the maximum DECIMAL width of 1000000") !=
+		        std::string::npos);
+		REQUIRE(duckdb_v2_value_create_decimal(factory, &one, 4294967295u, 4294967294u, &out, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
+
+		// the types a factory creates have the same bound, also when the DECIMAL is nested
+		REQUIRE(create_type(factory, "DECIMAL(1000000,10)", nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(create_type(factory, "DECIMAL(1000001,10)", &err) != DUCKDB_V2_ERROR_NONE);
+		REQUIRE(error_text(err).find("1000000") != std::string::npos);
+		REQUIRE(create_type(factory, "STRUCT(a DECIMAL(1000001,10)[])", nullptr) != DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_logical_type_handle type = nullptr;
+		std::vector<duckdb_v2_value_handle> params = {MakeInt32Value(factory, 1000001), MakeInt32Value(factory, 10)};
+		REQUIRE(duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL, nullptr, nullptr,
+		                                              params.data(), params.size(), &type,
+		                                              nullptr) != DUCKDB_V2_ERROR_NONE);
+		REQUIRE(type == nullptr);
+		for (auto &param : params) {
+			duckdb_v2_value_destroy(&param);
+		}
+	}
+
+	// A connection that raises the setting raises the bound of its factory, the instance's factory keeps the default.
+	std::string_view name_str = "max_decimal_width";
+	std::string_view setting_str = "2000000";
+	auto setting = MakeVarcharValue(fx.factory, setting_str);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, name_str.data(), name_str.size(), setting,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&setting);
+	duckdb_v2_value_handle value = nullptr;
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 2000000, 10, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_hugeint_t read {};
+	uint32_t read_width = 0;
+	uint32_t read_scale = 0;
+	REQUIRE(duckdb_v2_value_get_decimal(value, &read, &read_width, &read_scale, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read_width == 2000000);
+	REQUIRE(read_scale == 10);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(create_type(fx.factory, "DECIMAL(2000000,10)", nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 2000001, 10, &value, &err) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(error_text(err).find("SET max_decimal_width") != std::string::npos);
+	REQUIRE(duckdb_v2_value_create_decimal(instance_factory, &one, 1000001, 10, &value, &err) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(error_text(err).find("factory of a connection") != std::string::npos);
+	REQUIRE(create_type(instance_factory, "DECIMAL(1000001,10)", nullptr) != DUCKDB_V2_ERROR_NONE);
+
+	// A lowered setting lowers the bound as well.
+	setting_str = "38";
+	setting = MakeVarcharValue(fx.factory, setting_str);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, name_str.data(), name_str.size(), setting,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&setting);
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 38, 10, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 39, 10, &value, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(create_type(fx.factory, "DECIMAL(39,10)", nullptr) != DUCKDB_V2_ERROR_NONE);
 }
 
 TEST_CASE("V2: UUID takes its internal 128-bit form", "[capi_v2][value][uuid]") {
@@ -1750,6 +1909,52 @@ TEST_CASE("V2: GEOMETRY vector cells read and write as WKB", "[capi_v2][value][c
 	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&blob_type);
 	duckdb_v2_logical_type_destroy(&geom_type);
+}
+
+TEST_CASE("V2 value: variant_to_value returns the value that a VARIANT holds", "[capi_v2][value]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 41::TINYINT::VARIANT, NULL::VARIANT, 1", &result) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	REQUIRE(duckdb_v2_result_fetch_chunk(result, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(chunk != nullptr);
+
+	auto cell = [&](idx_t column) {
+		duckdb_v2_vector_handle vector = nullptr;
+		REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, column, &vector, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_value_handle value = nullptr;
+		REQUIRE(duckdb_v2_vector_get_value(vector, 0, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+		return value;
+	};
+
+	auto variant = cell(0);
+	duckdb_v2_value_handle converted = nullptr;
+	REQUIRE(duckdb_v2_value_variant_to_value(variant, &converted, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(converted != nullptr);
+	int8_t tinyint = 0;
+	REQUIRE(duckdb_v2_value_get_tinyint(converted, &tinyint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(tinyint == 41);
+	duckdb_v2_value_destroy(&converted);
+	duckdb_v2_value_destroy(&variant);
+
+	// A NULL variant gives a NULL value
+	auto null_variant = cell(1);
+	REQUIRE(duckdb_v2_value_variant_to_value(null_variant, &converted, nullptr) == DUCKDB_V2_ERROR_NONE);
+	bool is_null = false;
+	REQUIRE(duckdb_v2_value_is_null(converted, &is_null, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(is_null);
+	duckdb_v2_value_destroy(&converted);
+	duckdb_v2_value_destroy(&null_variant);
+
+	// Only a VARIANT can be converted
+	auto integer = cell(2);
+	REQUIRE(duckdb_v2_value_variant_to_value(integer, &converted, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(converted == nullptr);
+	duckdb_v2_value_destroy(&integer);
+
+	REQUIRE(duckdb_v2_value_variant_to_value(nullptr, &converted, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_data_chunk_destroy(&chunk);
+	duckdb_v2_result_destroy(&result);
 }
 
 } // namespace test_capi_v2

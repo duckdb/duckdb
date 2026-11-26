@@ -22,11 +22,6 @@ class VectorBuffer;
 
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
-	// Out-of-line destructor: prevents GCC IPA-ICF from folding
-	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
-	// corresponding instantiation for TemplatedValidityData, which produces
-	// a spurious -Warray-bounds with g++ >= 14.
-	DUCKDB_API ~SelectionData();
 
 	AllocatedData owned_data;
 };
@@ -104,7 +99,7 @@ public:
 		capacity = capacity_p;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = make_shared_ptr<SelectionData>(count);
+		selection_data = make_buffer<SelectionData>(count);
 		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 		capacity = count;
 	}
@@ -127,6 +122,11 @@ public:
 	inline void set_index(idx_t idx, idx_t loc) { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(idx < capacity);
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
+	}
+	//! Writes loc at position count and advances count only if keep is set, without a branch
+	inline void AppendIf(idx_t &count, idx_t loc, bool keep) {
+		set_index(count, loc);
+		count += keep;
 	}
 	//! Shift entries left by `offset`, i.e. sel[i] = sel[i + offset] for i in [0, count). No-op if offset == 0.
 	void ShiftLeft(const idx_t offset, const idx_t count);

@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -58,8 +59,10 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -1066,8 +1069,9 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
 	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
 	if (stdin_is_interactive && stdout_is_console) {
-		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
-		    duckdb::Value::BOOLEAN(false);
+		auto renderer_settings = duckdb::TreeRenderer::GetRendererSettings(*conn->context);
+		renderer_settings["expand_all"] = duckdb::Value::BOOLEAN(false);
+		duckdb::TreeRenderer::SetRendererSettings(*conn->context, renderer_settings);
 	}
 	if (!stdout_is_console) {
 		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
@@ -1120,7 +1124,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			if (agent_mode_active) {
-				PrintQueryEstimate(zStmtSql, *statement);
+				PrintQueryEstimate(*statement);
 			}
 
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
@@ -2255,8 +2259,8 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
-	duckdb::LocalFileSystem lfs;
-	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	auto canonical_file = lfs.CanonicalizePath(file);
 	if (!active_read_files.insert(canonical_file).second) {
 		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
 		return false;
@@ -3164,14 +3168,9 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
-}
-
 string ShellState::GetDefaultDuckDBRC() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
+	auto &lfs = duckdb::FileSystem::GetLocal(*db->instance);
+	return lfs.JoinPath(lfs.GetHomeDirectory(), ".duckdbrc");
 }
 
 MetadataResult ShellState::FormatSQL(string &sql) {
@@ -3561,6 +3560,7 @@ struct ScanEstimate {
 	idx_t rows;
 };
 
+//! Collect the scans of a plan: the table and table function scans that read data
 static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::LogicalOperator &op,
                                  vector<ScanEstimate> &scans) {
 	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
@@ -3577,7 +3577,28 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 	}
 }
 
-void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
+//! Runs the estimate in a transaction of its own unless the connection already has one, and rolls it back
+struct EstimateTransaction {
+	explicit EstimateTransaction(duckdb::Connection &con) : con(con), started(!con.HasActiveTransaction()) {
+		if (started) {
+			con.BeginTransaction();
+		}
+	}
+	~EstimateTransaction() {
+		if (!started) {
+			return;
+		}
+		try {
+			con.Rollback();
+		} catch (...) { // NOLINT: the statement itself reports what is wrong with the connection
+		}
+	}
+
+	duckdb::Connection &con;
+	bool started;
+};
+
+void ShellState::PrintQueryEstimate(const duckdb::SQLStatement &statement) {
 	switch (statement.type) {
 	case duckdb::StatementType::SELECT_STATEMENT:
 	case duckdb::StatementType::INSERT_STATEMENT:
@@ -3592,9 +3613,21 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 	}
 	try {
 		auto &context = *conn->context;
-		auto plan = context.ExtractPlan(sql);
+		// the plan refers to state of the transaction it was bound in, e.g. a database file that read_duckdb attached
+		// plan, read the estimates and destroy the plan inside one transaction
+		EstimateTransaction transaction(*conn);
+		// planned directly rather than through a query, so neither settings that change EXPLAIN output nor the query
+		// log or the profiler see the estimate
 		vector<ScanEstimate> scans;
-		CollectScanEstimates(context, *plan, scans);
+		idx_t rows_returned = 0;
+		context.RunFunctionInTransaction([&]() {
+			duckdb::Planner planner(context);
+			planner.CreatePlan(statement.Copy());
+			duckdb::Optimizer optimizer(*planner.binder, context);
+			auto plan = optimizer.Optimize(std::move(planner.plan));
+			CollectScanEstimates(context, *plan, scans);
+			rows_returned = plan->EstimateCardinality(context);
+		});
 		if (scans.empty()) {
 			// e.g. a plain CREATE TABLE - not worth a line
 			return;
@@ -3623,7 +3656,7 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 		string line =
 		    StringUtil::Format("estimate: ~%llu rows read (%s)", total_rows, StringUtil::Join(scan_texts, ", "));
 		if (statement.type == duckdb::StatementType::SELECT_STATEMENT) {
-			line += StringUtil::Format(", ~%llu rows returned", plan->EstimateCardinality(context));
+			line += StringUtil::Format(", ~%llu rows returned", rows_returned);
 		}
 		PrintF(PrintOutput::STDERR, "%s\n", line);
 	} catch (std::exception &) {
@@ -3905,7 +3938,7 @@ int RunShell(int argc, const char **argv) {
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
-				zHome = GetHomeDirectory() + "/.duckdb_history";
+				zHome = duckdb::FileSystem::GetLocal(*data.db->instance).GetHomeDirectory() + "/.duckdb_history";
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {

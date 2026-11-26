@@ -10,6 +10,12 @@
         "test/sql/attach/attach_to_external_resource.test",
         "test/sql/attach/external_resource_logging.test"
       ]
+    },
+    {
+      "reason": "histogram(x, bins ORDER BY y) and histogram_exact raise 'List entry offset + length out of range' under verify_vectors on main, with the group_by_top_key optimizer disabled as well: the binned histogram finalize ends with result.Verify() over the whole result vector, but the sorted aggregate finalizes one group per call, so the verify reads the list entries of the groups that are not written yet. Whether it trips depends on what the buffer held before (stale entries of an earlier batch of groups, zeroed memory passes), so it needs more than one vector of groups or a reused buffer: SELECT k % 3000, histogram_exact(1, [1, 2, 3] ORDER BY k) FROM range(10000) t(k) GROUP BY ALL ORDER BY ALL LIMIT 3 fails on every build, the 6,145-row fixture of this test only on some.",
+      "paths": [
+        "test/optimizer/group_by_top_key_throwing_histogram.test"
+      ]
     }
   ]
 }

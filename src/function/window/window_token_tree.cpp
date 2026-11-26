@@ -9,12 +9,12 @@ public:
 	    : WindowMergeSortTreeLocalState(context, token_tree), token_tree(token_tree) {
 	}
 	//! Process sorted leaf data
-	void BuildLeaves() override;
+	void BuildLeaves(Context &context) override;
 
 	WindowTokenTree &token_tree;
 };
 
-void WindowTokenTreeLocalState::BuildLeaves() {
+void WindowTokenTreeLocalState::BuildLeaves(Context &context) {
 	// Find our chunk range
 	auto &collection = *token_tree.sorted;
 	const auto block_begin = (build_task * collection.ChunkCount()) / token_tree.total_tasks;
@@ -28,7 +28,7 @@ void WindowTokenTreeLocalState::BuildLeaves() {
 
 	const auto &scan_cols = token_tree.key_cols;
 	const auto key_count = scan_cols.size();
-	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
+	WindowDeltaScanner(context, *token_tree.key_distinct_from, collection, block_begin, block_end, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Same as previous - token delta is 0

@@ -125,6 +125,9 @@ public:
 
 	// Assign from shared_ptr copy
 	shared_ptr<T, SAFE> &operator=(const shared_ptr<T, SAFE> &other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
 		internal = other.internal;
 		return *this;
 	}
@@ -271,10 +274,13 @@ private:
 	                        V *ptr) noexcept {
 		typedef typename std::remove_cv<U>::type non_const_u_t;
 		if (object && object->__weak_this_.expired()) {
-			// __weak_this__ is the mutable variable returned by 'shared_from_this'
-			// it is initialized here
-			auto non_const = const_cast<non_const_u_t *>(static_cast<const U *>(ptr)); // NOLINT: const cast
-			object->__weak_this_ = shared_ptr<non_const_u_t>(*this, non_const);
+			if constexpr (std::is_convertible<element_type *, non_const_u_t *>::value) {
+				// Initialize the weak owner without a temporary strong reference.
+				object->__weak_this_.internal = internal;
+			} else {
+				auto non_const = const_cast<non_const_u_t *>(static_cast<const U *>(ptr)); // NOLINT: const cast
+				object->__weak_this_ = shared_ptr<non_const_u_t>(*this, non_const);
+			}
 		}
 	}
 

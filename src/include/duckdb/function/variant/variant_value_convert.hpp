@@ -86,6 +86,9 @@ struct ValueConverter {
 	static Value VisitGeometry(const string_t &str) {
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
+	static Value VisitGeography(const string_t &str) {
+		return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
 	static Value VisitBitstring(const string_t &str) {
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
@@ -99,6 +102,8 @@ struct ValueConverter {
 		} else if (std::is_same<T, int64_t>::value) {
 			return Value::DECIMAL(val, width, scale);
 		} else if (std::is_same<T, hugeint_t>::value) {
+			return Value::DECIMAL(val, width, scale);
+		} else if (std::is_same<T, bignum_t>::value) {
 			return Value::DECIMAL(val, width, scale);
 		} else {
 			throw InternalException("Unhandled decimal type");
@@ -131,8 +136,8 @@ struct ValueConverter {
 		return Value::STRUCT(std::move(object_children));
 	}
 
-	static Value VisitDefault(VariantLogicalType type_id, const_data_ptr_t) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	static Value VisitDefault(const LogicalType &type, const_data_ptr_t) {
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 

@@ -13,6 +13,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,7 @@ ClientData::~ClientData() {
 	// This needs to be destroyed first because PreparedStatementData holds a PhysicalPlan,
 	// and the PhysicalPlan holds objects that might rely on the client file opener/file system/buffer manager
 	prepared_statements.clear();
+	temporary_objects->Close(DatabaseCloseAction::SKIP_CHECKPOINT);
 }
 
 ClientData &ClientData::Get(ClientContext &context) {

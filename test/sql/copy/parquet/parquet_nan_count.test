@@ -19,36 +19,36 @@ COPY nan_data TO '{TEST_DIR}/nan_count_plain.parquet' (FORMAT PARQUET, ROW_GROUP
 statement ok
 COPY nan_data TO '{TEST_DIR}/nan_count_bss.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, PARQUET_VERSION V2, DICTIONARY_SIZE_LIMIT 0)
 
-# every encoding writes the exact number of NaN values per row group and no min/max
+# every encoding writes the exact number of NaN values per row group, and a min/max that leaves NaN out
 query IIIIIII
 SELECT row_group_id, path_in_schema, encodings, stats_nan_count, stats_null_count, stats_min_value, stats_max_value
 FROM parquet_metadata('{TEST_DIR}/nan_count_dict.parquet')
 ORDER BY ALL
 ----
-0	d	PLAIN_DICTIONARY	1024	512	NULL	NULL
-0	f	PLAIN_DICTIONARY	1024	512	NULL	NULL
-1	d	PLAIN_DICTIONARY	1024	512	NULL	NULL
-1	f	PLAIN_DICTIONARY	1024	512	NULL	NULL
+0	d	PLAIN_DICTIONARY	1024	512	1.0	1.0
+0	f	PLAIN_DICTIONARY	1024	512	1.0	1.0
+1	d	PLAIN_DICTIONARY	1024	512	1.0	1.0
+1	f	PLAIN_DICTIONARY	1024	512	1.0	1.0
 
 query IIIIIII
 SELECT row_group_id, path_in_schema, encodings, stats_nan_count, stats_null_count, stats_min_value, stats_max_value
 FROM parquet_metadata('{TEST_DIR}/nan_count_plain.parquet')
 ORDER BY ALL
 ----
-0	d	PLAIN	1024	512	NULL	NULL
-0	f	PLAIN	1024	512	NULL	NULL
-1	d	PLAIN	1024	512	NULL	NULL
-1	f	PLAIN	1024	512	NULL	NULL
+0	d	PLAIN	1024	512	1.0	1.0
+0	f	PLAIN	1024	512	1.0	1.0
+1	d	PLAIN	1024	512	1.0	1.0
+1	f	PLAIN	1024	512	1.0	1.0
 
 query IIIIIII
 SELECT row_group_id, path_in_schema, encodings, stats_nan_count, stats_null_count, stats_min_value, stats_max_value
 FROM parquet_metadata('{TEST_DIR}/nan_count_bss.parquet')
 ORDER BY ALL
 ----
-0	d	BYTE_STREAM_SPLIT	1024	512	NULL	NULL
-0	f	BYTE_STREAM_SPLIT	1024	512	NULL	NULL
-1	d	BYTE_STREAM_SPLIT	1024	512	NULL	NULL
-1	f	BYTE_STREAM_SPLIT	1024	512	NULL	NULL
+0	d	BYTE_STREAM_SPLIT	1024	512	1.0	1.0
+0	f	BYTE_STREAM_SPLIT	1024	512	1.0	1.0
+1	d	BYTE_STREAM_SPLIT	1024	512	1.0	1.0
+1	f	BYTE_STREAM_SPLIT	1024	512	1.0	1.0
 
 # the dictionary holds NaN once, but nan_count is the number of NaN values written
 query IIII
@@ -60,7 +60,7 @@ ORDER BY ALL
 d	PLAIN_DICTIONARY	DICTIONARY_PAGE	1024
 f	PLAIN_DICTIONARY	DICTIONARY_PAGE	1024
 
-# nan_count is zero for NaN-free FLOAT/DOUBLE columns (including HUGEINT written as DOUBLE) and absent otherwise
+# nan_count is zero for NaN-free FLOAT/DOUBLE columns and absent otherwise (HUGEINT is written as a DECIMAL)
 statement ok
 COPY (SELECT i::FLOAT f, i::DOUBLE d, i::HUGEINT h, i FROM range(10) t(i)) TO '{TEST_DIR}/nan_count_zero.parquet'
 
@@ -71,7 +71,7 @@ ORDER BY ALL
 ----
 d	DOUBLE	0	0.0	9.0
 f	FLOAT	0	0.0	9.0
-h	DOUBLE	0	NULL	NULL
+h	FIXED_LEN_BYTE_ARRAY	NULL	0	9
 i	INT64	NULL	0	9
 
 # NaN values inside lists are counted, NULL and empty lists are not
@@ -83,7 +83,7 @@ SELECT stats_nan_count, stats_null_count, num_values FROM parquet_metadata('{TES
 ----
 8	8	20
 
-# file with NaN values: no bounds are written, so NaN values survive filters even with can_have_nan=false
+# file with NaN values: the nan_count keeps NaN values outside the bounds, even with can_have_nan=false
 foreach encoding dict plain bss
 
 foreach column f d
@@ -123,7 +123,7 @@ SELECT f, d FROM read_parquet('{DATA_DIR}/parquet-testing/arrow_nan.parquet', ca
 ----
 nan	nan
 
-# mixed files: the NaN-free row group has exact bounds, the NaN row group has none - both options return the same rows
+# mixed files: the NaN-free row group has exact bounds, the all-NaN row group has none - both options return the same rows
 statement ok
 COPY (SELECT i::DOUBLE d FROM range(2048) t(i) UNION ALL SELECT 'nan'::DOUBLE FROM range(2048)) TO '{TEST_DIR}/nan_count_mixed.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
 
@@ -147,32 +147,58 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/nan_count_mixed.parquet', can_have
 
 endloop
 
-# a positive nan_count overrides can_have_nan=false even when the chunk also has finite min/max.
-# nan_count_bounds.parquet: FLOAT f and DOUBLE d with [1, NaN, NULL], min=max=1, null_count=1, nan_count=1.
-# DuckDB does not write bounds for NaN-containing chunks, so this file was written with the bound suppression disabled.
-query IIIIII
-SELECT path_in_schema, stats_min_value, stats_max_value, stats_null_count, stats_nan_count, num_values
-FROM parquet_metadata('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet')
-ORDER BY ALL
-----
-d	1.0	1.0	1	1	3
-f	1.0	1.0	1	1	3
+# a row group with both finite values and NaN has bounds: filters below its min prune it, filters above its max do not
+statement ok
+COPY (SELECT CASE WHEN i < 2048 OR i % 2 = 0 THEN i::DOUBLE ELSE 'nan'::DOUBLE END d FROM range(4096) t(i))
+TO '{TEST_DIR}/nan_count_partial.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
 
-foreach column f d
-
-query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} > 1
+query IIII
+SELECT row_group_id, stats_nan_count, stats_min_value, stats_max_value
+FROM parquet_metadata('{TEST_DIR}/nan_count_partial.parquet') ORDER BY ALL
 ----
-nan
+0	0	0.0	2047.0
+1	1024	2048.0	4094.0
 
-query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} != 1
+foreach option false true
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet', can_have_nan={option}) WHERE d < 10
 ----
-nan
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
 
 query I
-SELECT {column} FROM read_parquet('{DATA_DIR}/parquet-testing/nan_count_bounds.parquet', can_have_nan=false) WHERE {column} <= 1
+SELECT count(*) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet', can_have_nan={option}) WHERE d < 10
 ----
-1.0
+10
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet', can_have_nan={option}) WHERE d > 5000
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query II
+SELECT count(*), min(d) FROM read_parquet('{TEST_DIR}/nan_count_partial.parquet', can_have_nan={option}) WHERE d > 5000
+----
+1024	nan
 
 endloop
+
+# the same holds for a FLOAT/DOUBLE leaf inside a nested column
+statement ok
+COPY (SELECT {'d': CASE WHEN i % 2 = 0 THEN i::DOUBLE ELSE 'nan'::DOUBLE END} s FROM range(10) t(i))
+TO '{TEST_DIR}/nan_count_nested_partial.parquet'
+
+query III
+SELECT stats_nan_count, stats_min_value, stats_max_value FROM parquet_metadata('{TEST_DIR}/nan_count_nested_partial.parquet')
+----
+5	0.0	8.0
+
+query II
+SELECT min(s.d), max(s.d) FROM '{TEST_DIR}/nan_count_nested_partial.parquet'
+----
+0.0	nan
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/nan_count_nested_partial.parquet' WHERE s.d > 8
+----
+5

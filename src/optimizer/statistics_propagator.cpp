@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -61,12 +62,14 @@ void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &
 	}
 }
 
-void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+void StatisticsPropagator::RelaxJoinConditionVerificationStats(Expression &expr) {
 	auto &stats = expr.GetVerificationStats();
 	if (stats) {
 		stats->ResetAdditiveStatistics();
+		// the candidate pairs still hold the NULLs that the comparison rejects
+		stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RelaxJoinConditionVerificationStats(child); });
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
@@ -178,7 +181,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopy
 			column_stats[i] = entry->second.get();
 		}
 	}
-	CopyToPropagateStatsInput input {context, *op.bind_data, column_stats};
+	CopyToPropagateStatsInput input {context, op.bind_data, column_stats};
 	op.function.copy_to_propagate_statistics(input);
 	return stats;
 }

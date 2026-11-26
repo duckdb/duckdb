@@ -155,7 +155,7 @@ StringColumnReader::Utf8ValidationOption
 EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value);
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
+	ParquetScanFilter(ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
 
@@ -516,11 +516,10 @@ private:
 	bool TryAttachPageIndexBuffer(ThriftFileTransport &transport) const;
 	struct BloomFilterReadPlan;
 	BloomFilterReadPlan PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport,
-	                                         ColumnReader &column_reader, const TableFilter &filter, bool nested_filter,
+	                                         ColumnReader &column_reader, const TableFilter &filter,
 	                                         idx_t column_chunk_idx);
 	bool TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
-	                                  ColumnReader &column_reader, const TableFilter &filter, bool nested_filter,
-	                                  idx_t column_chunk_idx);
+	                                  ColumnReader &column_reader, const TableFilter &filter, idx_t column_chunk_idx);
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);

@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_hugeint.test
-# description: Parquet hugeint round trip
+# description: Parquet hugeint round trip, HUGEINT is written as an exact DECIMAL(39,0)
 # group: [writer]
 
 require parquet
@@ -8,7 +8,9 @@ statement ok
 CREATE TABLE hugeints(h HUGEINT)
 
 statement ok
-INSERT INTO hugeints VALUES (-1180591620717411303424), (0), (NULL), (1180591620717411303424)
+INSERT INTO hugeints VALUES (-1180591620717411303424), (0), (NULL), (1180591620717411303424),
+	(170141183460469231731687303715884105727), (-170141183460469231731687303715884105728),
+	(-1), (1), (100000000000000000000000000000000000001), (-100000000000000000000000000000000000001)
 
 statement ok
 COPY hugeints TO '{TEST_DIR}/hugeints.parquet' (FORMAT 'parquet');
@@ -20,9 +22,167 @@ SELECT * FROM '{TEST_DIR}/hugeints.parquet'
 0
 NULL
 1180591620717411303424
+170141183460469231731687303715884105727
+-170141183460469231731687303715884105728
+-1
+1
+100000000000000000000000000000000000001
+-100000000000000000000000000000000000001
+
+# the values are exact, nothing is rounded through a DOUBLE
+query I
+SELECT count(*) FROM (SELECT h::HUGEINT AS h FROM '{TEST_DIR}/hugeints.parquet' EXCEPT ALL SELECT h FROM hugeints)
+----
+0
 
 query I
 SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
-DOUBLE
+DECIMAL(39,0)
 
+# 39 digits hold the full HUGEINT range. The big-endian two's complement value needs 17 bytes, but is extended to 24.
+# DuckDB 1.x reads such a column as a DOUBLE, and only decodes lengths that are a multiple of 8 bytes correctly
+query IIIIII
+SELECT name, type, type_length, converted_type, precision, scale FROM parquet_schema('{TEST_DIR}/hugeints.parquet') WHERE name = 'h'
+----
+h	FIXED_LEN_BYTE_ARRAY	24	DECIMAL	39	0
+
+# min/max statistics are written, and order negative values before positive ones
+query III
+SELECT stats_min_value, stats_max_value, stats_null_count FROM parquet_metadata('{TEST_DIR}/hugeints.parquet')
+----
+-170141183460469231731687303715884105728	170141183460469231731687303715884105727	1
+
+query I
+SELECT h FROM '{TEST_DIR}/hugeints.parquet' WHERE h < -1 ORDER BY h
+----
+-170141183460469231731687303715884105728
+-100000000000000000000000000000000000001
+-1180591620717411303424
+
+query I
+SELECT h FROM '{TEST_DIR}/hugeints.parquet' WHERE h = 170141183460469231731687303715884105727
+----
+170141183460469231731687303715884105727
+
+# the file can be loaded back into a HUGEINT column
+statement ok
+CREATE TABLE hugeints_copy(h HUGEINT)
+
+statement ok
+COPY hugeints_copy FROM '{TEST_DIR}/hugeints.parquet'
+
+query I
+SELECT count(*) FROM (SELECT * FROM hugeints_copy EXCEPT ALL SELECT * FROM hugeints)
+----
+0
+
+# several row groups, where the statistics of every row group prune correctly, also across the sign
+statement ok
+COPY (SELECT (i - 5000)::HUGEINT * 10000000000000000000000000000000000 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/hugeints_row_groups.parquet' (ROW_GROUP_SIZE 2000)
+
+query I
+SELECT count(DISTINCT row_group_id) > 1 FROM parquet_metadata('{TEST_DIR}/hugeints_row_groups.parquet')
+----
+true
+
+query III
+SELECT count(*), min(h), max(h) FROM '{TEST_DIR}/hugeints_row_groups.parquet' WHERE h < -49000000000000000000000000000000000000
+----
+100	-50000000000000000000000000000000000000	-49010000000000000000000000000000000000
+
+query III
+SELECT count(*), min(h), max(h) FROM '{TEST_DIR}/hugeints_row_groups.parquet' WHERE h BETWEEN -10000000000000000000000000000000000 AND 20000000000000000000000000000000000
+----
+4	-10000000000000000000000000000000000	20000000000000000000000000000000000
+
+query I
+SELECT sum(h)::HUGEINT FROM '{TEST_DIR}/hugeints_row_groups.parquet'
+----
+-50000000000000000000000000000000000000
+
+# few distinct values are dictionary encoded
+statement ok
+COPY (SELECT ((i % 5) - 2)::HUGEINT * 50000000000000000000000000000000000000 AS h FROM range(10000) t(i)) TO '{TEST_DIR}/hugeints_dictionary.parquet'
+
+query I
+SELECT DISTINCT encodings FROM parquet_metadata('{TEST_DIR}/hugeints_dictionary.parquet')
+----
+PLAIN_DICTIONARY
+
+# no bloom filter is written, a reader that sees the column as a DOUBLE would probe it with the hash of a DOUBLE
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/hugeints_dictionary.parquet')
+----
+0
+
+query II
+SELECT h, count(*) FROM '{TEST_DIR}/hugeints_dictionary.parquet' GROUP BY h ORDER BY h
+----
+-100000000000000000000000000000000000000	2000
+-50000000000000000000000000000000000000	2000
+0	2000
+50000000000000000000000000000000000000	2000
+100000000000000000000000000000000000000	2000
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/hugeints_dictionary.parquet' WHERE h = -100000000000000000000000000000000000000
+----
+2000
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/hugeints_dictionary.parquet' WHERE h = 150000000000000000000000000000000000000
+----
+0
+
+# nested
+statement ok
+COPY (SELECT [h, NULL, h] AS l, {'a': h, 'b': [h]} AS s FROM hugeints) TO '{TEST_DIR}/hugeints_nested.parquet'
+
+query II
+SELECT typeof(l), typeof(s) FROM '{TEST_DIR}/hugeints_nested.parquet' LIMIT 1
+----
+DECIMAL(39,0)[]	STRUCT(a DECIMAL(39,0), b DECIMAL(39,0)[])
+
+query I
+SELECT count(*) FROM (
+	SELECT l::HUGEINT[] AS l, s::STRUCT(a HUGEINT, b HUGEINT[]) AS s FROM '{TEST_DIR}/hugeints_nested.parquet'
+	EXCEPT ALL
+	SELECT [h, NULL, h] AS l, {'a': h, 'b': [h]} AS s FROM hugeints)
+----
+0
+
+# both Parquet versions, with and without a dictionary
+foreach version V1 V2
+
+foreach dictionary_size_limit 0 100000
+
+statement ok
+COPY (SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE ((i * 7919) % 4096 - 2048)::HUGEINT * 41538374868278621028243970633760768 END AS h FROM range(20000) t(i))
+TO '{TEST_DIR}/hugeints_versions.parquet' (PARQUET_VERSION '{version}', DICTIONARY_SIZE_LIMIT {dictionary_size_limit}, ROW_GROUP_SIZE 8192)
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/hugeints_versions.parquet')
+----
+0
+
+query I
+SELECT count(*) FROM (
+	(SELECT h::HUGEINT FROM '{TEST_DIR}/hugeints_versions.parquet'
+	 EXCEPT ALL
+	 SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE ((i * 7919) % 4096 - 2048)::HUGEINT * 41538374868278621028243970633760768 END FROM range(20000) t(i))
+	UNION ALL
+	(SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE ((i * 7919) % 4096 - 2048)::HUGEINT * 41538374868278621028243970633760768 END FROM range(20000) t(i)
+	 EXCEPT ALL
+	 SELECT h::HUGEINT FROM '{TEST_DIR}/hugeints_versions.parquet'))
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/hugeints_versions.parquet' WHERE h = -85070591730234615865843651857942052864
+----
+4
+
+endloop
+
+endloop

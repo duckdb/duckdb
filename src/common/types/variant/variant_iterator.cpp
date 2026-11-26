@@ -76,78 +76,11 @@ bool ShreddedIsValid(const ShreddedVariantIterator &node, idx_t index) {
 //! except for BOOLEAN (which is BOOL_TRUE or BOOL_FALSE per value) and the layers that are never read
 //! as a scalar value (LIST/ARRAY/STRUCT), which are handled structurally by the iterator.
 VariantLogicalType ResolveShreddedTypeId(const LogicalType &type, bool &resolved) {
-	resolved = true;
-	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
-		return VariantLogicalType::INT8;
-	case LogicalTypeId::SMALLINT:
-		return VariantLogicalType::INT16;
-	case LogicalTypeId::INTEGER:
-		return VariantLogicalType::INT32;
-	case LogicalTypeId::BIGINT:
-		return VariantLogicalType::INT64;
-	case LogicalTypeId::HUGEINT:
-		return VariantLogicalType::INT128;
-	case LogicalTypeId::UTINYINT:
-		return VariantLogicalType::UINT8;
-	case LogicalTypeId::USMALLINT:
-		return VariantLogicalType::UINT16;
-	case LogicalTypeId::UINTEGER:
-		return VariantLogicalType::UINT32;
-	case LogicalTypeId::UBIGINT:
-		return VariantLogicalType::UINT64;
-	case LogicalTypeId::UHUGEINT:
-		return VariantLogicalType::UINT128;
-	case LogicalTypeId::FLOAT:
-		return VariantLogicalType::FLOAT;
-	case LogicalTypeId::DOUBLE:
-		return VariantLogicalType::DOUBLE;
-	case LogicalTypeId::DECIMAL:
-		return VariantLogicalType::DECIMAL;
-	case LogicalTypeId::VARCHAR:
-		return VariantLogicalType::VARCHAR;
-	case LogicalTypeId::BLOB:
-		return VariantLogicalType::BLOB;
-	case LogicalTypeId::UUID:
-		return VariantLogicalType::UUID;
-	case LogicalTypeId::DATE:
-		return VariantLogicalType::DATE;
-	case LogicalTypeId::TIME:
-		return VariantLogicalType::TIME_MICROS;
-	case LogicalTypeId::TIME_NS:
-		return VariantLogicalType::TIME_NANOS;
-	case LogicalTypeId::TIME_TZ:
-		return VariantLogicalType::TIME_MICROS_TZ;
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return VariantLogicalType::TIMESTAMP_SEC;
-	case LogicalTypeId::TIMESTAMP_MS:
-		return VariantLogicalType::TIMESTAMP_MILIS;
-	case LogicalTypeId::TIMESTAMP:
-		return VariantLogicalType::TIMESTAMP_MICROS;
-	case LogicalTypeId::TIMESTAMP_NS:
-		return VariantLogicalType::TIMESTAMP_NANOS;
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return VariantLogicalType::TIMESTAMP_MICROS_TZ;
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return VariantLogicalType::TIMESTAMP_NANOS_TZ;
-	case LogicalTypeId::INTERVAL:
-		return VariantLogicalType::INTERVAL;
-	case LogicalTypeId::BIGNUM:
-		return VariantLogicalType::BIGNUM;
-	case LogicalTypeId::BIT:
-		return VariantLogicalType::BITSTRING;
-	case LogicalTypeId::GEOMETRY:
-		return VariantLogicalType::GEOMETRY;
-	case LogicalTypeId::STRUCT:
-		return VariantLogicalType::OBJECT;
-	case LogicalTypeId::LIST:
-		return VariantLogicalType::ARRAY;
-	case LogicalTypeId::BOOLEAN:
-		// BOOLEAN resolves to BOOL_TRUE / BOOL_FALSE per value
-	default:
-		resolved = false;
-		return VariantLogicalType::VARIANT_NULL;
-	}
+	//! BOOLEAN resolves to BOOL_TRUE / BOOL_FALSE per value
+	auto variant_type = VariantLogicalType::VARIANT_NULL;
+	resolved = type.id() != LogicalTypeId::BOOLEAN && type.id() != LogicalTypeId::SQLNULL &&
+	           TryVariantTypeFromLogicalTypeId(type.id(), variant_type);
+	return resolved ? variant_type : VariantLogicalType::VARIANT_NULL;
 }
 
 } // namespace
@@ -393,7 +326,24 @@ static VariantLogicalType ShreddedTypeId(const ShreddedVariantIterator &content,
 	return content.type_id;
 }
 
-VariantLogicalType VariantNode::GetTypeId() const {
+LogicalTypeId VariantNode::GetTypeId() const {
+	return VariantTypeToLogicalTypeId(GetVariantType());
+}
+
+LogicalType VariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
+bool VariantNode::GetBool() const {
+	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
+}
+
+VariantLogicalType VariantNode::GetVariantType() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
@@ -426,6 +376,18 @@ string_t VariantNode::GetString() const {
 	D_ASSERT(kind == Kind::SHREDDED);
 	auto &content = *shredded_format;
 	return content.unified.GetData<string_t>()[content.unified.sel->get_index(shredded_index)];
+}
+
+string_t VariantNode::GetWideDecimal() const {
+	if (kind == Kind::UNSHREDDED) {
+		auto &blob = state->unshredded.GetBlob(row);
+		auto decimal = DecodeDecimalData(blob, state->unshredded.GetByteOffset(row, value_index));
+		D_ASSERT(decimal.GetPhysicalType() == PhysicalType::VARCHAR);
+		auto data = const_data_ptr_cast(blob.GetData());
+		return DecodeStringData(blob, NumericCast<uint32_t>(decimal.value_ptr - data));
+	}
+	D_ASSERT(kind == Kind::SHREDDED);
+	return GetString();
 }
 
 VariantDecimalData VariantNode::GetDecimal() const {

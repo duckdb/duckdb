@@ -1,0 +1,39 @@
+diff --git a/test/sql/alter/many_schema_versions_low_memory.test_slow b/test/sql/alter/many_schema_versions_low_memory.test_slow
+index a14ed19..79f2208 100644
+--- a/test/sql/alter/many_schema_versions_low_memory.test_slow
++++ b/test/sql/alter/many_schema_versions_low_memory.test_slow
+@@ -2,6 +2,8 @@
+ # description: test that many DDL operations work under a low memory limit with schema cache eviction
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require notmusl
+diff --git a/test/sql/compaction/merge_adjacent_tiered.test_slow b/test/sql/compaction/merge_adjacent_tiered.test_slow
+index 762f0c6..9ec24c5 100644
+--- a/test/sql/compaction/merge_adjacent_tiered.test_slow
++++ b/test/sql/compaction/merge_adjacent_tiered.test_slow
+@@ -2,6 +2,8 @@
+ # description: test tiered/lucene-like compaction using min_file_size, max_file_size and target_file_size
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/insert/insert_wide_table_low_memory.test_slow b/test/sql/insert/insert_wide_table_low_memory.test_slow
+index 157cbd3..f484227 100644
+--- a/test/sql/insert/insert_wide_table_low_memory.test_slow
++++ b/test/sql/insert/insert_wide_table_low_memory.test_slow
+@@ -2,6 +2,8 @@
+ # description: test that many small inserts into a wide table work under low memory limit
+ # group: [insert]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require notmusl

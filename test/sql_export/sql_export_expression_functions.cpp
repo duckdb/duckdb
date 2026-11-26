@@ -685,7 +685,8 @@ TEST_CASE("Function deserialization restores enclosing context after callback ex
 	ExtensionLoader loader(*db.instance, "sql_export_deserialization_context");
 	ScalarFunction function("throwing_deserializer", {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                        ScalarFunction::NopFunction);
-	function.SetSerializeCallback([](Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {});
+	function.SetSerializeCallback(
+	    [](Serializer &, const optional_ptr<const FunctionData>, const BoundScalarFunction &) {});
 	function.SetDeserializeCallback([](Deserializer &deserializer, BoundScalarFunction &) -> unique_ptr<FunctionData> {
 		REQUIRE(deserializer.Get<const LogicalType &>() == LogicalType::INTEGER);
 		auto &children = deserializer.Get<const const_expression_list_t &>();
@@ -712,7 +713,7 @@ TEST_CASE("Function deserialization restores enclosing context after callback ex
 	const const_expression_list_t enclosing_children {*enclosing_child};
 	deserializer.Set<const LogicalType &>(enclosing_type);
 	deserializer.Set<const const_expression_list_t &>(enclosing_children);
-	REQUIRE_THROWS_AS(deserializer.Deserialize<Expression>(), InvalidInputException);
+	REQUIRE_THROWS_WITH(deserializer.Deserialize<Expression>(), Catch::Contains("Synthetic deserialization failure"));
 	REQUIRE(&deserializer.Get<const LogicalType &>() == &enclosing_type);
 	REQUIRE(&deserializer.Get<const const_expression_list_t &>() == &enclosing_children);
 	connection.Rollback();

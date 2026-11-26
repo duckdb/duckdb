@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "vector_buffer_lifetime.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -137,7 +138,7 @@ TEST_CASE("Dictionary hash cache preserves selected and combined hashes after pr
 
 TEST_CASE("Local dictionary owners preserve escaped values identity and hash caches", "[dictionary_hash_cache]") {
 	Vector result(LogicalType::VARCHAR);
-	weak_ptr<DictionaryEntry> original_owner;
+	shared_ptr<bool> original_destroyed;
 	optional_ptr<const Vector> original_hashes;
 	string dictionary_id;
 	const string text = "a dictionary string longer than the inline representation";
@@ -149,7 +150,7 @@ TEST_CASE("Local dictionary owners preserve escaped values identity and hash cac
 			writer.WriteValue(string_t(text));
 			writer.WriteValue(string_t(""));
 		}
-		original_owner = entry;
+		original_destroyed = ObserveVectorBufferDestruction(entry->data);
 		dictionary_id = entry->id;
 		SelectionVector selection(3);
 		selection.set_index(0, 1);
@@ -190,7 +191,7 @@ TEST_CASE("Local dictionary owners preserve escaped values identity and hash cac
 		first_cache.Reset();
 		second_cache.Reset();
 	}
-	REQUIRE_FALSE(original_owner.expired());
+	REQUIRE_FALSE(*original_destroyed);
 	REQUIRE(DictionaryVector::IsGlobalDictionary(result));
 	REQUIRE(DictionaryVector::DictionaryId(result) == dictionary_id);
 	REQUIRE(&DictionaryVector::GetCachedHashes(result) == original_hashes.get());
@@ -199,7 +200,7 @@ TEST_CASE("Local dictionary owners preserve escaped values identity and hash cac
 	REQUIRE(result.GetValue(2) == Value(""));
 	Vector empty(LogicalType::VARCHAR);
 	result.Reference(empty);
-	REQUIRE(original_owner.expired());
+	REQUIRE(*original_destroyed);
 }
 
 TEST_CASE("Resetting a hash join scan releases its dictionary ownership", "[dictionary_hash_cache]") {
@@ -216,17 +217,17 @@ TEST_CASE("Resetting a hash join scan releases its dictionary ownership", "[dict
 	                    nullptr);
 	TupleDataChunkState key_state;
 	JoinHashTable::ScanStructure scan(table, key_state);
-	weak_ptr<DictionaryEntry> original_owner;
+	shared_ptr<bool> original_destroyed;
 	{
 		auto entry = DictionaryVector::CreateReusableGlobalDictionary(LogicalType::INTEGER, 1);
-		original_owner = entry;
+		original_destroyed = ObserveVectorBufferDestruction(entry->data);
 		scan.dictionary_gather_state.GetEntry(0, entry);
 	}
-	REQUIRE_FALSE(original_owner.expired());
+	REQUIRE_FALSE(*original_destroyed);
 	scan.Reset();
-	REQUIRE(original_owner.expired());
+	REQUIRE(*original_destroyed);
 	scan.Reset();
-	REQUIRE(original_owner.expired());
+	REQUIRE(*original_destroyed);
 }
 
 } // namespace duckdb

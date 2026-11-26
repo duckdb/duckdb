@@ -47,7 +47,8 @@
         "test/sql/storage/external_file_cache/external_file_cache_validate.test",
         "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow",
         "test/sql/storage/external_file_cache/external_file_cache_block_size.test",
-        "test/sql/storage/external_file_cache/external_file_cache_metadata_memory.test"
+        "test/sql/storage/external_file_cache/external_file_cache_metadata_memory.test",
+        "test/sql/storage/external_file_cache/external_file_cache_logging.test"
       ]
     },
     {
@@ -55,6 +56,8 @@
       "paths": [
         "test/sql/copy/parquet/bloom_filter_coalesced_memory.test_slow",
         "test/sql/copy/parquet/bloom_filter_coalesced_reads.test",
+        "test/sql/copy/parquet/bloom_filter_nested_stats_decided.test",
+        "test/sql/copy/parquet/bloom_filter_or_reads.test",
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
         "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/logging_deprecated_names.test",
@@ -67,6 +70,7 @@
         "test/sql/cte/recursive_cte_parallel_output_publication.test",
         "test/logging/warnings_as_errors.test",
         "test/logging/offset_order_warning.test",
+        "test/optimizer/group_by_top_key_limit_offset_warning.test",
         "test/sql/types/decimal/decimal_values_warning.test",
         "test/sql/settings/deprecated_settings.test",
         "test/sql/settings/pragma_assignment_deprecated.test",
@@ -88,6 +92,7 @@
         "test/sql/copy/parquet/page_index/page_index_cache.test",
         "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/page_index/page_index_cache_budget.test",
+        "test/sql/copy/parquet/page_index/page_index_expression_filter.test",
         "test/parquet/utf8_validation_page_index.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
@@ -100,14 +105,17 @@
         "test/sql/parallelism/async_task_synchronous_batch.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead.test",
+        "test/sql/storage/prefetch/scan_affinity_execution_order.test",
         "test/sql/storage/prefetch/prefetch_run_size_cap.test",
-        "test/sql/progress/test_verify_progress.test"
+        "test/sql/progress/test_verify_progress.test",
+        "test/parquet/parquet_schema_time_of_day_cast.test"
       ]
     },
     {
       "reason": "disabled_compression_methods doesn't survive database restarts",
       "paths": [
-        "test/sql/settings/setting_validation_and_reset.test"
+        "test/sql/settings/setting_validation_and_reset.test",
+        "test/sql/storage/compression/alp/alp_sampling_ratio.test"
       ]
     },
     {
@@ -185,13 +193,22 @@
         "test/sql/attach/external_resource_null_handle.test",
         "test/sql/attach/external_resource_show_subquery.test",
         "test/sql/attach/external_resource_show_with_type.test",
-        "test/sql/attach/external_resource_external_access.test"
+        "test/sql/attach/external_resource_external_access.test",
+        "test/sql/attach/external_resource_show_types.test",
+        "test/sql/attach/external_resource_type_dotted.test"
       ]
     },
     {
       "reason": "Asserts the in-memory operator log, which does not survive the forced restarts.",
       "paths": [
         "test/sql/cte/materialized/cte_buffered_consumer_cycle_demotion.test"
+      ]
+    },
+    {
+      "reason": "A temporary secret must still be there at the next statement, which a restart in between prevents.",
+      "paths": [
+        "test/sql/extensions/extension_repository_from_host_httpfs.test",
+        "test/sql/extensions/extension_repository_url_httpfs.test"
       ]
     }
   ]

@@ -1,0 +1,107 @@
+# name: test/sql/types/decimal/wide_decimal_rescale.test
+# description: Shared DECIMAL rescaling across fixed and wide storage tiers
+# group: [decimal]
+
+statement ok
+CREATE TABLE t AS SELECT (i % 21 - 10)::DECIMAL(4,0) AS d FROM range(5000) r(i);
+
+query IIII
+SELECT count(*), count(DISTINCT x), count(*) FILTER (x = y), count(*) FILTER (hash(x) = hash(y))
+FROM (SELECT TRY_CAST(d AS DECIMAL(39,38)) x, TRY_CAST(d::VARCHAR AS DECIMAL(39,38)) y FROM t WHERE abs(d) < 10);
+----
+4523	19	4523	4523
+
+query II
+SELECT 1::DECIMAL(4,0)::DECIMAL(39,38), 9::DECIMAL(4,0)::DECIMAL(39,38)
+----
+1.00000000000000000000000000000000000000	9.00000000000000000000000000000000000000
+
+query I
+SELECT TRY_CAST(10::DECIMAL(4,0) AS DECIMAL(39,38))
+----
+NULL
+
+statement error
+SELECT 10::DECIMAL(4,0)::DECIMAL(39,38)
+----
+value is out of range
+
+statement ok
+DROP TABLE t;
+
+# All fixed storage tiers, with mixed overflow, success, zero and NULL rows.
+foreach source DECIMAL(4,0) DECIMAL(9,2) DECIMAL(18,4) DECIMAL(38,2)
+
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE (i % 2001 - 1000)::DECIMAL(18,3) END::{source} d
+FROM range(5003) r(i);
+
+foreach target DECIMAL(39,38) DECIMAL(39,2) DECIMAL(45,8) DECIMAL(76,38) DECIMAL(40,0)
+
+query I
+SELECT count(*) FROM (
+    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t
+) s WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y);
+----
+0
+
+endloop
+
+statement ok
+DROP TABLE t;
+
+endloop
+
+# Fixed-width inputs whose blobs need scratch storage, retained across vectors.
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i % 17 = 0 THEN NULL
+            ELSE (i % 2001 - 1000)::HUGEINT * 99999999999999999999999999999999999::HUGEINT END::DECIMAL(38,0) d
+FROM range(5003) r(i);
+
+foreach target DECIMAL(39,0) DECIMAL(40,2) DECIMAL(76,38) DECIMAL(80,40)
+
+# Sort the wide results so the checks consume them after all input vectors.
+query I
+WITH rescaled AS MATERIALIZED (
+    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t
+    ORDER BY x
+)
+SELECT count(*) FILTER (WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y)) FROM rescaled;
+----
+0
+
+endloop
+
+statement ok
+DROP TABLE t;
+
+# Reducing the scale can carry into the first integer digit that does not fit.
+# Store text so this also runs with storage versions that cannot persist wide decimals.
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
+       repeat('9', 36) || CASE i % 4 WHEN 0 THEN '.9995' WHEN 1 THEN '.9994' ELSE '.0000' END v
+FROM range(4103) r(i);
+
+foreach target DECIMAL(39,3) DECIMAL(39,4) DECIMAL(39,0) DECIMAL(38,2)
+
+query I
+WITH input AS MATERIALIZED (SELECT v::DECIMAL(40,4) d FROM t)
+SELECT count(*) FROM (
+    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM input WHERE d <> 0
+) s WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y);
+----
+0
+
+endloop
+
+query I
+WITH input AS MATERIALIZED (SELECT v::DECIMAL(40,4) d FROM t)
+SELECT count(*) FROM input WHERE TRY_CAST(d AS DECIMAL(39,3)) IS NULL;
+----
+1026
+
+statement ok
+DROP TABLE t;

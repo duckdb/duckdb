@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -88,12 +89,16 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || filter_state.can_throw) {
-		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
-		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
-		// filter already removed - pushing the filter down there must not raise errors that would not occur otherwise
-		if (compression && compression->supports_selective_filtering && !verify_fetch_row && !HasUpdates() &&
+	bool use_specialized_filter =
+	    has_filter && validity_has_filter && scan_entire_vector && !verify_fetch_row && filter_state.can_cache;
+	if (use_specialized_filter && !filter_includes_validity) {
+		lock_guard<mutex> guard(stats_lock);
+		use_specialized_filter = !state.current->GetNode().GetStats().CanHaveNull();
+	}
+	if (!use_specialized_filter) {
+		// Read surviving strings at their original positions, even when the vector spans segments.
+		if (compression && compression->supports_selective_filtering && count < target_count &&
+		    result.GetType().id() == LogicalTypeId::VARCHAR && !verify_fetch_row && !HasUpdates() &&
 		    !validity->HasUpdates()) {
 			validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count,
 			                     ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
@@ -101,12 +106,25 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 			ColumnSegment::FilterSelection(sel, result, filter_state, target_count, count);
 			return;
 		}
-		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		// Avoid constructing dictionary selections when few rows remain or only validity is tested.
+		if (compression && compression->type == CompressionType::COMPRESSION_RLE && !verify_fetch_row &&
+		    result.GetVectorType() == VectorType::FLAT_VECTOR &&
+		    (count <= target_count / 2 || IsDirectNullCheckFilter(filter))) {
+			const auto scan_count = ScanVector(transaction, vector_index, state, result, target_count,
+			                                   ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count,
+			                     ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			FlatVector::SetSize(result, count_t(scan_count));
+			ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, count);
+		} else {
+			// Cached evaluation requires safe predicates and complete value validity.
+			ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		}
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
 	if (!filter_includes_validity) {
-		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+		validity->ScanVector(state.child_states[0], result, target_count, scan_type);
 	} else {
 		validity->Skip(state.child_states[0], target_count);
 	}
@@ -239,9 +257,9 @@ ValidityColumnData &StandardColumnData::GetValidityData() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                              PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -276,8 +294,9 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState>
-StandardColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
+StandardColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
+                                          PartialBlockManager &partial_block_manager) {
+	return make_uniq<StandardColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup &row_group,
@@ -289,9 +308,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup 
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto base_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto base_state = CreateCheckpointState(row_group, context, partial_block_manager);
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_state_p = validity->CreateCheckpointState(row_group, partial_block_manager);
+	auto validity_state_p = validity->CreateCheckpointState(row_group, context, partial_block_manager);
 	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity->type).ToUnique();
 
 	auto &validity_state = *validity_state_p;

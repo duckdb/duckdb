@@ -130,49 +130,30 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 
 namespace {
 
-static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::ANY) {
-		return {};
-	}
+static unordered_set<LogicalTypeId> GetVariantType(const LogicalType &type) {
 	switch (type.id()) {
+	case LogicalTypeId::ANY:
+		return {};
 	case LogicalTypeId::STRUCT:
-		return {VariantLogicalType::OBJECT};
 	case LogicalTypeId::LIST:
-		return {VariantLogicalType::ARRAY};
 	case LogicalTypeId::BOOLEAN:
-		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
 	case LogicalTypeId::TINYINT:
-		return {VariantLogicalType::INT8};
 	case LogicalTypeId::SMALLINT:
-		return {VariantLogicalType::INT16};
 	case LogicalTypeId::INTEGER:
-		return {VariantLogicalType::INT32};
 	case LogicalTypeId::BIGINT:
-		return {VariantLogicalType::INT64};
 	case LogicalTypeId::FLOAT:
-		return {VariantLogicalType::FLOAT};
 	case LogicalTypeId::DOUBLE:
-		return {VariantLogicalType::DOUBLE};
 	case LogicalTypeId::DECIMAL:
-		return {VariantLogicalType::DECIMAL};
 	case LogicalTypeId::DATE:
-		return {VariantLogicalType::DATE};
 	case LogicalTypeId::TIME:
-		return {VariantLogicalType::TIME_MICROS};
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
-		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_NS:
-		return {VariantLogicalType::TIMESTAMP_NANOS};
 	case LogicalTypeId::BLOB:
-		return {VariantLogicalType::BLOB};
 	case LogicalTypeId::VARCHAR:
-		return {VariantLogicalType::VARCHAR};
 	case LogicalTypeId::UUID:
-		return {VariantLogicalType::UUID};
+		return {type.id()};
 	default:
 		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
 	}
@@ -185,12 +166,12 @@ public:
 	}
 
 public:
-	const unordered_set<VariantLogicalType> &GetVariantTypes() override {
+	const unordered_set<LogicalTypeId> &GetVariantTypes() override {
 		return variant_types;
 	}
 
 private:
-	unordered_set<VariantLogicalType> variant_types;
+	unordered_set<LogicalTypeId> variant_types;
 };
 
 struct ParquetVariantShredding : public VariantShredding {
@@ -288,8 +269,9 @@ static idx_t AnalyzePrimitiveValueData(const UnifiedVariantVectorData &variant, 
 		} else if (decimal_data.width <= 38) {
 			total_size += sizeof(uhugeint_t);
 		} else {
-			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
-			                            decimal_data.scale);
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT: the Parquet VARIANT "
+			                            "specification holds decimals of at most 38 digits",
+			                            decimal_data.width, decimal_data.scale);
 		}
 		break;
 	}
@@ -303,6 +285,7 @@ static idx_t AnalyzePrimitiveValueData(const UnifiedVariantVectorData &variant, 
 	case VariantLogicalType::TIMESTAMP_MICROS:
 	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
 		total_size += sizeof(uint64_t);
 		break;
 	case VariantLogicalType::UINT8:
@@ -581,12 +564,17 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_MICROS>(value_data);
 		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
 		break;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_NANOS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
 
 		if (decimal_data.width > 38) {
-			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
-			                            decimal_data.scale);
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT: the Parquet VARIANT "
+			                            "specification holds decimals of at most 38 digits",
+			                            decimal_data.width, decimal_data.scale);
 		} else if (decimal_data.width <= 4) {
 			// DuckDB uses INT16 to store small decimals, but parquet only supports DECIMAL4 at minimum, so here we
 			// promote to INT32.

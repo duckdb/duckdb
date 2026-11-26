@@ -112,6 +112,9 @@ void VariantNormalizer::VisitBignum(const string_t &bignum, VariantNormalizerSta
 void VariantNormalizer::VisitGeometry(const string_t &geom, VariantNormalizerState &state) {
 	return VisitString(geom, state);
 }
+void VariantNormalizer::VisitGeography(const string_t &geog, VariantNormalizerState &state) {
+	return VisitString(geog, state);
+}
 void VariantNormalizer::VisitBitstring(const string_t &bits, VariantNormalizerState &state) {
 	return VisitString(bits, state);
 }
@@ -180,8 +183,8 @@ void VariantNormalizer::VisitObject(const UnifiedVariantVectorData &variant, idx
 	}
 }
 
-void VariantNormalizer::VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state) {
-	throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+void VariantNormalizer::VisitDefault(const LogicalType &type, const_data_ptr_t, VariantNormalizerState &state) {
+	throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 }
 
 void VariantNormalizer::Normalize(const Vector &variant_vec, Vector &result) {

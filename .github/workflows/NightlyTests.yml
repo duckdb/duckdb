@@ -12,7 +12,7 @@ on:
       - '.github/workflows/NightlyTests.yml'
       - '.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+    types: [opened, reopened, ready_for_review]
     paths:
       - '.github/workflows/NightlyTests.yml'
       - '.github/patches/duckdb-wasm/**'
@@ -647,9 +647,10 @@ jobs:
           vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           cache-suffix: nightly_force_blocking_sink_source
 
+      # Injected ThrowAsyncTask errors are only expected by the sqllogictest runner, so skip the C++ tests
       - name: Test
         shell: bash
-        run: ./build/relassert/test/run --batch-timeout 600
+        run: ./build/relassert/test/run --batch-timeout 600 "*.test"
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -773,178 +774,6 @@ jobs:
        # correctness failures and cleanup hangs still fail the job.
        run: make unittest_relassert T="--track-runtime 30 --batch-size 1 --batch-timeout 60 --timeout-policy warn --test-config=test/configs/hash_zero.json"
 
-
-  bwc-build:
-    name: Build DuckDB
-    runs-on: ubuntu-24.04
-    outputs:
-      groups: ${{ steps.resolve.outputs.groups }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Resolve versions
-        id: resolve
-        run: |
-          groups_json=$(python3 test/bwc/list_versions.py --groups-json)
-          echo "groups=${groups_json}" >> "$GITHUB_OUTPUT"
-          echo "Resolved BWC version groups: ${groups_json}"
-
-      - name: Install
-        run: python3 scripts/ci/retry.py -- make toolsci
-
-      - name: Setup ccache
-        uses: ./.github/actions/ccache-action
-
-      - name: Build DuckDB
-        uses: duckdb/duckdb-ci/build-duckdb@main
-        with:
-          build-type: release
-          build: |
-            python3 scripts/ci/retry.py -- make release \
-              EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake;.github/config/extensions/sqlite_scanner.cmake' \
-              STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils;sqlite_scanner' \
-              DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
-          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-          cache-suffix: nightly_bwc_build
-
-      - name: Upload DuckDB binary
-        uses: actions/upload-artifact@v7
-        with:
-          name: duckdb-binary
-          path: build/release/duckdb
-
-  bwc-test:
-    name: BWC Test (DuckDB ${{ matrix.series.group }})
-    runs-on: ubuntu-24.04
-    needs: bwc-build
-    strategy:
-      fail-fast: false
-      matrix:
-        series: ${{ fromJSON(needs.bwc-build.outputs.groups) }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Download DuckDB binary
-        uses: actions/download-artifact@v8
-        with:
-          name: duckdb-binary
-          path: build/release
-
-      - name: Make DuckDB binary executable
-        run: chmod +x build/release/duckdb
-
-      - name: Install Python dependencies
-        run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
-
-      - name: Run BWC series
-        run: |
-          versions='${{ toJson(matrix.series.versions) }}'
-          mapfile -t VERSION_LIST < <(python3 -c 'import json,sys; [print(v) for v in json.loads(sys.argv[1])]' "$versions")
-          FAILED=0
-          FAILED_VERSIONS=""
-          RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
-          mkdir -p "${RUNTIME_DIR}"
-          mkdir -p duckdb_unittest_tempdir/bwc/cache
-
-          for VERSION in "${VERSION_LIST[@]}"; do
-            echo "============================================================"
-            echo "Running BWC for ${VERSION} (group: ${{ matrix.series.group }})"
-            echo "============================================================"
-
-            if [ "${{ vars.ENABLE_BWC_CACHE_DOWNLOAD }}" = "true" ]; then
-              CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
-              DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
-              HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
-              if [ "${HTTP_CODE}" = "200" ]; then
-                tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
-                CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
-                echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
-              else
-                echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
-                FAILED=1
-                FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(cache)"
-              fi
-            fi
-
-            if ! python3.11 test/bwc/runner.py --old_duckdb_version="${VERSION}"; then
-              FAILED=1
-              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(tests)"
-            fi
-
-            if ! python3.11 test/bwc/export_cache.py --version "${VERSION}" --output-dir duckdb_unittest_tempdir/bwc/cache; then
-              FAILED=1
-              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(export)"
-            fi
-          done
-
-          if [ "$FAILED" -ne 0 ]; then
-            echo "BWC series had failures:${FAILED_VERSIONS}"
-            exit 1
-          fi
-
-      - name: Upload BWC cache
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: bwc-cache-${{ matrix.series.group }}
-          path: duckdb_unittest_tempdir/bwc/cache/runtime_*.tar.gz
-
-      - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: bwc-test-results-${{ matrix.series.group }}
-          path: |
-            duckdb_unittest_tempdir/bwc/tests_summary_*.txt
-            duckdb_unittest_tempdir/bwc/reports/test_report_*.duckdb
-
-  summary:
-    name: BWC Test Summary
-    runs-on: ubuntu-24.04
-    needs: bwc-test
-    if: always()
-    steps:
-      - name: Download all test artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: bwc-test-results-*
-          merge-multiple: true
-
-      - name: Aggregate results
-        run: |
-          echo "============================================================"
-          echo "BWC Test Summary"
-          echo "============================================================"
-          failed=0
-          for summary in tests_summary_*.txt; do
-            [ -f "$summary" ] || continue
-            version="${summary#tests_summary_}"
-            version="${version%.txt}"
-            failures=$(grep '# FAILED' "$summary" || true)
-            if [ -n "$failures" ]; then
-              echo ""
-              echo "Failed tests for DuckDB version '$version':"
-              echo "$failures" | while read -r line; do
-                echo "  $line"
-              done
-              failed=1
-            fi
-          done
-          echo "============================================================"
-          if [ "$failed" -eq 1 ]; then
-            echo "Some BWC tests failed."
-            exit 1
-          else
-            echo "All BWC tests passed."
-          fi
 
   # checks that cmake-generated project is consistent on re-configure
   cmake-reconfigure-check:

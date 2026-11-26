@@ -71,7 +71,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline
-			FinishProcessing();
+			FinishProcessing(NumericCast<int32_t>(i + 1));
 		}
 	}
 	InitializeChunk(final_chunk);
@@ -81,6 +81,7 @@ void PipelineExecutor::Reset() {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
 	// Reset execution flags
+	exhausted_source = false;
 	exhausted_pipeline = false;
 	finalized = false;
 	started_flushing = false;
@@ -142,7 +143,7 @@ void PipelineExecutor::Reset() {
 		}
 
 		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
-			FinishProcessing();
+			FinishProcessing(NumericCast<int32_t>(i + 1));
 		}
 	}
 
@@ -333,7 +334,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	ExecutionBudget chunk_budget(max_chunks);
 
 	do {
-		context.client.InterruptCheck();
+		context.client.FastInterruptCheck();
 		switch (pending_batch_advance_state) {
 		case PendingBatchAdvanceState::MINIMUM_UPDATE:
 			if (UpdateMinBatchIndex() == SinkNextBatchType::BLOCKED) {
@@ -539,6 +540,7 @@ bool PipelineExecutor::IsFinishedProcessing() const {
 
 void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
+	exhausted_pipeline = true;
 	in_process_operators = stack<idx_t>();
 
 	pipeline.PreventBlocking();
@@ -632,7 +634,7 @@ PipelineExecuteResult PipelineExecutor::PushInputChunk(DataChunk &input, Executi
 	}
 
 	while (true) {
-		context.client.InterruptCheck();
+		context.client.FastInterruptCheck();
 		auto result = ExecutePushInternal(input, chunk_budget);
 		if (result == OperatorResultType::BLOCKED) {
 			remaining_sink_chunk = true;
@@ -757,7 +759,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	while (true) {
-		context.client.InterruptCheck();
+		context.client.FastInterruptCheck();
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -900,7 +902,7 @@ void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {
-	context.client.InterruptCheck();
+	context.client.FastInterruptCheck();
 	context.thread.profiler.StartOperator(&op);
 }
 

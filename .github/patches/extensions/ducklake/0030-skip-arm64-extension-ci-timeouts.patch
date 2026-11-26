@@ -1,0 +1,598 @@
+diff --git a/test/sql/alter/alter_drops_empty_inlined_tables.test b/test/sql/alter/alter_drops_empty_inlined_tables.test
+index aff0c8b..f7dacd6 100644
+--- a/test/sql/alter/alter_drops_empty_inlined_tables.test
++++ b/test/sql/alter/alter_drops_empty_inlined_tables.test
+@@ -2,6 +2,8 @@
+ # description: An ALTER drops the empty inlined data tables of the table that its new inlined data table supersedes
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/alter/promote_type_all.test b/test/sql/alter/promote_type_all.test
+index 058b18d..2805fc2 100644
+--- a/test/sql/alter/promote_type_all.test
++++ b/test/sql/alter/promote_type_all.test
+@@ -2,6 +2,8 @@
+ # description: test ducklake type promotion rules (widening casts)
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/alter/rename_column_with_case_insensitive_name.test b/test/sql/alter/rename_column_with_case_insensitive_name.test
+index e6381cd..0b643d3 100644
+--- a/test/sql/alter/rename_column_with_case_insensitive_name.test
++++ b/test/sql/alter/rename_column_with_case_insensitive_name.test
+@@ -2,6 +2,8 @@
+ # description: test ducklake column rename with case insensitive name
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/alter/struct_evolution_reorder.test b/test/sql/alter/struct_evolution_reorder.test
+index 251d7b9..8a8b137 100644
+--- a/test/sql/alter/struct_evolution_reorder.test
++++ b/test/sql/alter/struct_evolution_reorder.test
+@@ -2,6 +2,8 @@
+ # description: a type change that lists the fields of a struct in another order keeps the order of the catalog
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/alter/struct_evolution_reuse.test b/test/sql/alter/struct_evolution_reuse.test
+index b532797..e1af3a3 100644
+--- a/test/sql/alter/struct_evolution_reuse.test
++++ b/test/sql/alter/struct_evolution_reuse.test
+@@ -2,6 +2,8 @@
+ # description: test ducklake struct field evolution re-use
+ # group: [alter]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/benchmark/wide_table_insert_commits.test b/test/sql/benchmark/wide_table_insert_commits.test
+index ec28a12..956597d 100644
+--- a/test/sql/benchmark/wide_table_insert_commits.test
++++ b/test/sql/benchmark/wide_table_insert_commits.test
+@@ -2,6 +2,8 @@
+ # description: Wide Parquet commit fixture preserves its schema, commit boundaries and reset invariants
+ # group: [benchmark]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_conflicts.test b/test/sql/catalog/nested_schema/nested_conflicts.test
+index 63d8729..efe850f 100644
+--- a/test/sql/catalog/nested_schema/nested_conflicts.test
++++ b/test/sql/catalog/nested_schema/nested_conflicts.test
+@@ -2,6 +2,8 @@
+ # description: Transaction conflict detection with nested schemas
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_functions.test b/test/sql/catalog/nested_schema/nested_functions.test
+index eb3afbf..eccacdf 100644
+--- a/test/sql/catalog/nested_schema/nested_functions.test
++++ b/test/sql/catalog/nested_schema/nested_functions.test
+@@ -2,6 +2,8 @@
+ # description: DuckLake table functions, built-in macros and options with nested schemas
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_orphan_entries.test b/test/sql/catalog/nested_schema/nested_orphan_entries.test
+index 9f0cc12..95197e1 100644
+--- a/test/sql/catalog/nested_schema/nested_orphan_entries.test
++++ b/test/sql/catalog/nested_schema/nested_orphan_entries.test
+@@ -2,6 +2,8 @@
+ # description: Views, macros, partitions, sorts and child schemas of an orphaned schema are skipped when loading
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_orphan_subtree.test b/test/sql/catalog/nested_schema/nested_orphan_subtree.test
+index 459ce32..ef107c2 100644
+--- a/test/sql/catalog/nested_schema/nested_orphan_subtree.test
++++ b/test/sql/catalog/nested_schema/nested_orphan_subtree.test
+@@ -2,6 +2,8 @@
+ # description: Orphaned or cyclic schema rows do not make the entire lake unloadable
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_scan_serialization.test b/test/sql/catalog/nested_schema/nested_scan_serialization.test
+index 8e4aed1..0eca637 100644
+--- a/test/sql/catalog/nested_schema/nested_scan_serialization.test
++++ b/test/sql/catalog/nested_schema/nested_scan_serialization.test
+@@ -2,6 +2,8 @@
+ # description: DuckLake scans of tables in nested schemas survive plan serialization
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_schema_version_gate.test b/test/sql/catalog/nested_schema/nested_schema_version_gate.test
+index 067ea44..8c5ffff 100644
+--- a/test/sql/catalog/nested_schema/nested_schema_version_gate.test
++++ b/test/sql/catalog/nested_schema/nested_schema_version_gate.test
+@@ -2,6 +2,8 @@
+ # description: Nested schemas require DuckLake 1.1 metadata
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_snapshot_changes.test b/test/sql/catalog/nested_schema/nested_snapshot_changes.test
+index 00b5a53..fd7b873 100644
+--- a/test/sql/catalog/nested_schema/nested_snapshot_changes.test
++++ b/test/sql/catalog/nested_schema/nested_snapshot_changes.test
+@@ -2,6 +2,8 @@
+ # description: Snapshot change tokens carry the full schema path for nested schemas
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/nested_sort_key_search_path.test b/test/sql/catalog/nested_schema/nested_sort_key_search_path.test
+index 3d652a4..811dc6e 100644
+--- a/test/sql/catalog/nested_schema/nested_sort_key_search_path.test
++++ b/test/sql/catalog/nested_schema/nested_sort_key_search_path.test
+@@ -2,6 +2,8 @@
+ # description: The sort key of a table in a nested schema does not resolve in a top level schema of the same name
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/quoted_schema_helpers.test b/test/sql/catalog/nested_schema/quoted_schema_helpers.test
+index f6b5777..89c5017 100644
+--- a/test/sql/catalog/nested_schema/quoted_schema_helpers.test
++++ b/test/sql/catalog/nested_schema/quoted_schema_helpers.test
+@@ -2,6 +2,8 @@
+ # description: Escaped quotes survive schema arguments and metadata reloads
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/catalog/nested_schema/schema_path_v10_compat.test b/test/sql/catalog/nested_schema/schema_path_v10_compat.test
+index 3221e34..14935b1 100644
+--- a/test/sql/catalog/nested_schema/schema_path_v10_compat.test
++++ b/test/sql/catalog/nested_schema/schema_path_v10_compat.test
+@@ -2,6 +2,8 @@
+ # description: On 1.0 lakes a schema argument stays a single literal identifier
+ # group: [nested_schema]
+ 
++mode skip Batch exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/compaction/compaction_file_level_conflicts.test b/test/sql/compaction/compaction_file_level_conflicts.test
+index 4c653be..5f41c6b 100644
+--- a/test/sql/compaction/compaction_file_level_conflicts.test
++++ b/test/sql/compaction/compaction_file_level_conflicts.test
+@@ -2,6 +2,8 @@
+ # description: compactions conflict with concurrent deletes and compactions only when they touch the same files
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/compaction/compaction_schema_version_per_table.test b/test/sql/compaction/compaction_schema_version_per_table.test
+index 99d1cd7..06f76c0 100644
+--- a/test/sql/compaction/compaction_schema_version_per_table.test
++++ b/test/sql/compaction/compaction_schema_version_per_table.test
+@@ -2,6 +2,8 @@
+ # description: Check if our schema changes are tracked per table
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/compaction/merge_adjacent_cross_schema_rewrite.test b/test/sql/compaction/merge_adjacent_cross_schema_rewrite.test
+index 3a1c520..4cd7f00 100644
+--- a/test/sql/compaction/merge_adjacent_cross_schema_rewrite.test
++++ b/test/sql/compaction/merge_adjacent_cross_schema_rewrite.test
+@@ -2,6 +2,8 @@
+ # description: rewriting a file merged across schema versions keeps its newer columns and the time travel of other tables
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/compaction/merge_adjacent_keeps_row_ids.test b/test/sql/compaction/merge_adjacent_keeps_row_ids.test
+index 161a118..b190241 100644
+--- a/test/sql/compaction/merge_adjacent_keeps_row_ids.test
++++ b/test/sql/compaction/merge_adjacent_keeps_row_ids.test
+@@ -2,6 +2,8 @@
+ # description: merge_adjacent_files and CHECKPOINT keep the rowids of sorted rows and of rows written by an UPDATE
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/compaction/mix_large_small_insertions.test b/test/sql/compaction/mix_large_small_insertions.test
+index fbeb484..8fab8b9 100644
+--- a/test/sql/compaction/mix_large_small_insertions.test
++++ b/test/sql/compaction/mix_large_small_insertions.test
+@@ -2,6 +2,8 @@
+ # description: test ducklake mix of small and large insertions
+ # group: [compaction]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/concurrent/concurrent_table_creation.test_slow b/test/sql/concurrent/concurrent_table_creation.test_slow
+index e4c6bbf..1c9784a 100644
+--- a/test/sql/concurrent/concurrent_table_creation.test_slow
++++ b/test/sql/concurrent/concurrent_table_creation.test_slow
+@@ -2,6 +2,8 @@
+ # description: test concurrent creation of catalog entries
+ # group: [concurrent]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require notwindows
+ 
+ require ducklake
+diff --git a/test/sql/create_table_inline_partition_sort/create_table_inline_with_inlining.test b/test/sql/create_table_inline_partition_sort/create_table_inline_with_inlining.test
+index bcd053d..dfa54aa 100644
+--- a/test/sql/create_table_inline_partition_sort/create_table_inline_with_inlining.test
++++ b/test/sql/create_table_inline_partition_sort/create_table_inline_with_inlining.test
+@@ -2,6 +2,8 @@
+ # description: CTAS with inline PARTITIONED BY / SORTED BY interacting with the data-inlining row limit.
+ # group: [create_table_inline_partition_sort]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ #              When a CTAS's row count is below DATA_INLINING_ROW_LIMIT, rows go to the per-table
+ #              ducklake_inlined_data_<id>_<seq> catalog table instead of Parquet. Partition and sort
+ #              metadata must still be recorded; the inline operator coordinates with the about-to-be-created
+diff --git a/test/sql/data_inlining/data_inlining_flush_partition_collation.test b/test/sql/data_inlining/data_inlining_flush_partition_collation.test
+index 92a5378..98193e4 100644
+--- a/test/sql/data_inlining/data_inlining_flush_partition_collation.test
++++ b/test/sql/data_inlining/data_inlining_flush_partition_collation.test
+@@ -2,6 +2,8 @@
+ # description: The flush partition filter ignores the default collation
+ # group: [data_inlining]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/data_inlining/data_inlining_flush_transaction_delete.test b/test/sql/data_inlining/data_inlining_flush_transaction_delete.test
+index 13c4ae4..849afba 100644
+--- a/test/sql/data_inlining/data_inlining_flush_transaction_delete.test
++++ b/test/sql/data_inlining/data_inlining_flush_transaction_delete.test
+@@ -2,6 +2,8 @@
+ # description: Flushing in a transaction that deleted inlined rows tombstones the right rows
+ # group: [data_inlining]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/data_inlining/flush_renamed_table_name.test b/test/sql/data_inlining/flush_renamed_table_name.test
+index 732af5b..5ba8626 100644
+--- a/test/sql/data_inlining/flush_renamed_table_name.test
++++ b/test/sql/data_inlining/flush_renamed_table_name.test
+@@ -2,6 +2,8 @@
+ # description: Flushing the inlined rows of a renamed table reports and sorts by the current table
+ # group: [data_inlining]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/default/set_default_expression.test b/test/sql/default/set_default_expression.test
+index 411785b..e8ffce9 100644
+--- a/test/sql/default/set_default_expression.test
++++ b/test/sql/default/set_default_expression.test
+@@ -2,6 +2,8 @@
+ # description: SET DEFAULT accepts an expression for added and renamed columns and after a table rename
+ # group: [default]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/delete/parquet_deletion_describe.test b/test/sql/delete/parquet_deletion_describe.test
+index 922bdb9..638ec46 100644
+--- a/test/sql/delete/parquet_deletion_describe.test
++++ b/test/sql/delete/parquet_deletion_describe.test
+@@ -2,6 +2,8 @@
+ # description: Validate the on-disk parquet delete-file structure/contents produced by flushing inlined deletions (parquet-format specific; skipped under deletion vectors). Mirrors the parquet reads removed from test/sql/deletion_inlining/*
+ # group: [delete]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/deletion_inlining/test_deletion_inlining_concurrent_retry.test b/test/sql/deletion_inlining/test_deletion_inlining_concurrent_retry.test
+index 1b02e14..3bd5850 100644
+--- a/test/sql/deletion_inlining/test_deletion_inlining_concurrent_retry.test
++++ b/test/sql/deletion_inlining/test_deletion_inlining_concurrent_retry.test
+@@ -2,6 +2,8 @@
+ # description: test that inlined file deletes survive commit retries
+ # group: [deletion_inlining]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require notwindows
+ 
+ require ducklake
+diff --git a/test/sql/general/scan_profiling_empty_build_side.test b/test/sql/general/scan_profiling_empty_build_side.test
+index 49fc172..724c234 100644
+--- a/test/sql/general/scan_profiling_empty_build_side.test
++++ b/test/sql/general/scan_profiling_empty_build_side.test
+@@ -2,6 +2,8 @@
+ # description: Profiler finalize of a DuckLake scan whose pipeline is cut short by an empty join build side
+ # group: [general]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ # Regression test for internal error observed previously.
+ 
+ require ducklake
+diff --git a/test/sql/issues/issue_1054_added_column_stats.test b/test/sql/issues/issue_1054_added_column_stats.test
+index 878cd6e..e7a8604 100644
+--- a/test/sql/issues/issue_1054_added_column_stats.test
++++ b/test/sql/issues/issue_1054_added_column_stats.test
+@@ -2,6 +2,8 @@
+ # description: A column added to a table with statistics gets statistics that cover the older rows (#1054, #625)
+ # group: [issues]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/issues/issue_1248_concurrent_commit_schema_id.test b/test/sql/issues/issue_1248_concurrent_commit_schema_id.test
+index a3c7e46..fe1ce84 100644
+--- a/test/sql/issues/issue_1248_concurrent_commit_schema_id.test
++++ b/test/sql/issues/issue_1248_concurrent_commit_schema_id.test
+@@ -2,6 +2,8 @@
+ # description: https://github.com/duckdb/ducklake/issues/1248 - concurrent transactions must commit their new tables into the right schema
+ # group: [issues]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require notwindows
+ 
+ require ducklake
+diff --git a/test/sql/issues/issue_1376_ordered_insert.test b/test/sql/issues/issue_1376_ordered_insert.test
+index 1c1265f..b5ba242 100644
+--- a/test/sql/issues/issue_1376_ordered_insert.test
++++ b/test/sql/issues/issue_1376_ordered_insert.test
+@@ -2,6 +2,8 @@
+ # description: A sorted table writes files whose key ranges do not overlap (#1376)
+ # group: [issues]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/issues/issue_1475_schema_cache_estimate.test b/test/sql/issues/issue_1475_schema_cache_estimate.test
+index f7cc128..114bc7c 100644
+--- a/test/sql/issues/issue_1475_schema_cache_estimate.test
++++ b/test/sql/issues/issue_1475_schema_cache_estimate.test
+@@ -2,6 +2,8 @@
+ # description: A cached catalog accounts for the memory of its columns, defaults and nested fields (#1475)
+ # group: [issues]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/metadata/sqlite_all_varchar.test b/test/sql/metadata/sqlite_all_varchar.test
+index c4fb708..073a69f 100644
+--- a/test/sql/metadata/sqlite_all_varchar.test
++++ b/test/sql/metadata/sqlite_all_varchar.test
+@@ -2,6 +2,8 @@
+ # description: sqlite_all_varchar applies to the user's SQLite reads but not to the reads of a SQLite catalog
+ # group: [metadata]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/partitioning/bucket_partitioning.test b/test/sql/partitioning/bucket_partitioning.test
+index bec550d..133e0cf 100644
+--- a/test/sql/partitioning/bucket_partitioning.test
++++ b/test/sql/partitioning/bucket_partitioning.test
+@@ -2,6 +2,8 @@
+ # description: Test bucket partitioning
+ # group: [partitioning]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/partitioning/epoch_version_gate.test b/test/sql/partitioning/epoch_version_gate.test
+index 8f959a1..1774b25 100644
+--- a/test/sql/partitioning/epoch_version_gate.test
++++ b/test/sql/partitioning/epoch_version_gate.test
+@@ -2,6 +2,8 @@
+ # description: Epoch partition transforms are rejected on DuckLake 1.0 catalogs
+ # group: [partitioning]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/rewrite_data_files/test_rewrite_after_partition_evolution.test b/test/sql/rewrite_data_files/test_rewrite_after_partition_evolution.test
+index 09611d4..ab395ff 100644
+--- a/test/sql/rewrite_data_files/test_rewrite_after_partition_evolution.test
++++ b/test/sql/rewrite_data_files/test_rewrite_after_partition_evolution.test
+@@ -2,6 +2,8 @@
+ # description: rewriting a file repeatedly after partition evolution remains valid
+ # group: [rewrite_data_files]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/rewrite_data_files/test_rewrite_partitioning.test b/test/sql/rewrite_data_files/test_rewrite_partitioning.test
+index 1bbd0f8..ac4dd89 100644
+--- a/test/sql/rewrite_data_files/test_rewrite_partitioning.test
++++ b/test/sql/rewrite_data_files/test_rewrite_partitioning.test
+@@ -2,6 +2,8 @@
+ # description: Test rewrite_data_files on partitioned tables with delete files created via MERGE
+ # group: [rewrite_data_files]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/settings/parquet_compression_level.test b/test/sql/settings/parquet_compression_level.test
+index 65a9ed3..2aba493 100644
+--- a/test/sql/settings/parquet_compression_level.test
++++ b/test/sql/settings/parquet_compression_level.test
+@@ -2,6 +2,8 @@
+ # description: set_option refuses compression levels that the Parquet writer refuses, and inserts with other codecs work
+ # group: [settings]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/sorted_table/data_inlining_flush_sorted_basic_expression.test b/test/sql/sorted_table/data_inlining_flush_sorted_basic_expression.test
+index f1e973d..717d6d0 100644
+--- a/test/sql/sorted_table/data_inlining_flush_sorted_basic_expression.test
++++ b/test/sql/sorted_table/data_inlining_flush_sorted_basic_expression.test
+@@ -2,6 +2,8 @@
+ # description: test flushing inlined data to disk in order when SET SORTED BY contains an expression
+ # group: [sorted_table]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/sorted_table/data_inlining_flush_sorted_parallel.test_slow b/test/sql/sorted_table/data_inlining_flush_sorted_parallel.test_slow
+index 51bef19..0d10055 100644
+--- a/test/sql/sorted_table/data_inlining_flush_sorted_parallel.test_slow
++++ b/test/sql/sorted_table/data_inlining_flush_sorted_parallel.test_slow
+@@ -2,6 +2,8 @@
+ # description: Flushing many inlined rows of a sorted table with several threads keeps the sort order and the deletes
+ # group: [sorted_table]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/sorted_table/insert_sorted_sort_on_insert_option.test b/test/sql/sorted_table/insert_sorted_sort_on_insert_option.test
+index 3b1366c..36c21f2 100644
+--- a/test/sql/sorted_table/insert_sorted_sort_on_insert_option.test
++++ b/test/sql/sorted_table/insert_sorted_sort_on_insert_option.test
+@@ -2,6 +2,8 @@
+ # description: test the sort_on_insert option to control whether INSERT sorts data
+ # group: [sorted_table]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/sorted_table/merge_adjacent_sorted_old_schema.test b/test/sql/sorted_table/merge_adjacent_sorted_old_schema.test
+index 8824b0b..fc0804f 100644
+--- a/test/sql/sorted_table/merge_adjacent_sorted_old_schema.test
++++ b/test/sql/sorted_table/merge_adjacent_sorted_old_schema.test
+@@ -2,6 +2,8 @@
+ # description: Merging files of an older schema version sorts them by the latest sort key
+ # group: [sorted_table]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/stats/null_first_bounds_concurrent_flush.test b/test/sql/stats/null_first_bounds_concurrent_flush.test
+index 0e6348a..bafe4b3 100644
+--- a/test/sql/stats/null_first_bounds_concurrent_flush.test
++++ b/test/sql/stats/null_first_bounds_concurrent_flush.test
+@@ -2,6 +2,8 @@
+ # description: A flush does not set table bounds from its files when rows were inlined after its snapshot
+ # group: [stats]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
+diff --git a/test/sql/view/view_schema_cache_eviction.test_slow b/test/sql/view/view_schema_cache_eviction.test_slow
+index 0997192..dce94bd 100644
+--- a/test/sql/view/view_schema_cache_eviction.test_slow
++++ b/test/sql/view/view_schema_cache_eviction.test_slow
+@@ -2,6 +2,8 @@
+ # description: test that a view created in a long-running transaction lands in the right schema under memory pressure
+ # group: [view]
+ 
++mode skip Exceeds the 300-second extension CI timeout on Linux ARM64
++
+ require ducklake
+ 
+ require parquet
