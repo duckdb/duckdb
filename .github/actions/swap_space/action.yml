@@ -1,5 +1,5 @@
 name: 'Set Swap Space'
-description: 'Add moar swap'
+description: 'Add an extra swap file next to any existing swap'
 inputs:
   swap-size-gb:
     description: 'Swap space to create, in Gigabytes.'
@@ -8,7 +8,24 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: pierotofy/set-swap-space@v1.0
-      if: runner.os == 'Linux'
-      with:
-        swap-size-gb: ${{ inputs.swap-size-gb }}
+    - if: runner.os == 'Linux'
+      shell: bash
+      env:
+        SWAP_SIZE_GB: ${{ inputs.swap-size-gb }}
+      run: |
+        # Existing swap may be a zram device or absent, so add a new file instead of replacing it.
+        # Extra swap is best-effort: failing to add it must not fail the job.
+        swapon --show || true
+        SWAP_FILE=/swapfile-ci
+        if [ -d /mnt ] && [ "$(df --output=avail -BG /mnt | tail -n 1 | tr -dc '0-9')" -gt $((SWAP_SIZE_GB + 4)) ]; then
+          SWAP_FILE=/mnt/swapfile-ci
+        fi
+        if { sudo fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE" || sudo dd if=/dev/zero of="$SWAP_FILE" bs=1M count=$((SWAP_SIZE_GB * 1024)); } &&
+          sudo chmod 600 "$SWAP_FILE" && sudo mkswap "$SWAP_FILE" && sudo swapon "$SWAP_FILE"; then
+          echo "Added ${SWAP_SIZE_GB}G of swap at $SWAP_FILE"
+        else
+          echo "::warning::Could not add ${SWAP_SIZE_GB}G of swap at $SWAP_FILE"
+          sudo rm -f "$SWAP_FILE" || true
+        fi
+        swapon --show || true
+        free -h

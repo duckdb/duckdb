@@ -647,9 +647,10 @@ jobs:
           vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           cache-suffix: nightly_force_blocking_sink_source
 
+      # Injected ThrowAsyncTask errors are only expected by the sqllogictest runner, so skip the C++ tests
       - name: Test
         shell: bash
-        run: ./build/relassert/test/run --batch-timeout 600
+        run: ./build/relassert/test/run --batch-timeout 600 "*.test"
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
