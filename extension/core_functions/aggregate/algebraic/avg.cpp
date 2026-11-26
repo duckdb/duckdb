@@ -613,7 +613,7 @@ void BignumAvgImportState(AggregateImportInputData &input) {
 			continue;
 		}
 		BignumAggregates::ImportAvgState(state, entry.GetChildValue<0>(), entry.GetChildValue<1>(), input.allocator,
-		                                 "avg");
+		                                 "avg", "value");
 	}
 }
 

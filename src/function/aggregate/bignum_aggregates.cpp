@@ -51,13 +51,14 @@ void BignumAggregates::WriteAvgState(const BignumAvgState &state, VectorWriter<u
 
 void BignumAggregates::ImportAvgState(BignumAvgState &state, const VectorIterator<uint64_t>::ValueEntry &count,
                                       const VectorIterator<string_t>::ValueEntry &value, ArenaAllocator &allocator,
-                                      const char *function_name) {
+                                      const char *function_name, const char *value_field) {
 	if (!count.IsValid() || count.GetValue() == 0) {
 		// an empty state
 		return;
 	}
 	if (!value.IsValid()) {
-		throw InvalidInputException("Invalid %s state - the sum cannot be NULL when the count is not 0", function_name);
+		throw InvalidInputException("Invalid %s state - the %s cannot be NULL when the count is not 0", function_name,
+		                            value_field);
 	}
 	state.count = count.GetValue();
 	state.value = ImportBignum(value.GetValue(), allocator);

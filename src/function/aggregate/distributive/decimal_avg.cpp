@@ -181,7 +181,7 @@ static void WideDecimalAvgImportState(AggregateImportInputData &input) {
 			continue;
 		}
 		BignumAggregates::ImportAvgState(state, entry.GetChildValue<1>(), entry.GetChildValue<0>(), input.allocator,
-		                                 "decimal_average");
+		                                 "decimal_average", "sum");
 	}
 }
 

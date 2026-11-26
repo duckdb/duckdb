@@ -150,7 +150,7 @@ NULL
 statement error
 SELECT finalize(to_aggregate_state({'sum': NULL::BIGNUM, 'count': 2}, 'decimal_average', ['DECIMAL(40,2)']));
 ----
-Invalid decimal_average state
+Invalid decimal_average state - the sum cannot be NULL when the count is not 0
 
 # the counts of imported states do not wrap when the states are combined, in the wide and in the fixed-size tiers
 statement error

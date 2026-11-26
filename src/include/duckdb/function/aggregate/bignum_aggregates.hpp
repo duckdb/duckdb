@@ -34,10 +34,10 @@ struct BignumAggregates {
 	DUCKDB_API static void WriteAvgState(const BignumAvgState &state, VectorWriter<uint64_t> &count_writer,
 	                                     VectorWriter<string_t> &value_writer);
 	//! Fills an initialized average state from its exported count and sum; the sum may only be NULL when the count
-	//! is 0
+	//! is 0. value_field names the sum field of the exported state in error messages
 	DUCKDB_API static void ImportAvgState(BignumAvgState &state, const VectorIterator<uint64_t>::ValueEntry &count,
 	                                      const VectorIterator<string_t>::ValueEntry &value, ArenaAllocator &allocator,
-	                                      const char *function_name);
+	                                      const char *function_name, const char *value_field);
 };
 
 //! Accumulates BIGNUM values into a BignumAvgState; the aggregates derive from it and add their own Finalize
