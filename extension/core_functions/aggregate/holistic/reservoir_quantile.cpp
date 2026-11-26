@@ -1,4 +1,5 @@
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -74,18 +75,18 @@ struct ReservoirQuantileValue {
 //! The unscaled values of DECIMALs wider than 38 digits are BIGNUM blobs, which order like their values: the sample
 //! owns the bytes of its blobs in the aggregate's arena, a result is copied to the result vector
 template <>
-struct ReservoirQuantileValue<string_t> {
-	static string_t Own(const string_t &value, ArenaAllocator &allocator) {
-		if (value.IsInlined()) {
+struct ReservoirQuantileValue<bignum_t> {
+	static bignum_t Own(const bignum_t &value, ArenaAllocator &allocator) {
+		if (value.data.IsInlined()) {
 			return value;
 		}
-		const auto size = value.GetSize();
+		const auto size = value.data.GetSize();
 		auto data = allocator.Allocate(size);
-		memcpy(data, value.GetData(), size);
-		return string_t(const_char_ptr_cast(data), UnsafeNumericCast<uint32_t>(size));
+		memcpy(data, value.data.GetData(), size);
+		return bignum_t(string_t(const_char_ptr_cast(data), UnsafeNumericCast<uint32_t>(size)));
 	}
-	static string_t Result(const string_t &value, Vector &result) {
-		return StringVector::AddStringOrBlob(result, value);
+	static bignum_t Result(const bignum_t &value, Vector &result) {
+		return bignum_t(StringVector::AddStringOrBlob(result, value.data));
 	}
 };
 
@@ -383,7 +384,7 @@ AggregateFunction GetReservoirQuantileListAggregateFunction(const LogicalType &t
 			return GetTypedReservoirQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 		case PhysicalType::VARCHAR:
 			// the bignum_t tier (above 38 digits) samples the BIGNUM blobs of the unscaled values
-			return GetTypedReservoirQuantileListAggregateFunction<string_t, string_t>(type);
+			return GetTypedReservoirQuantileListAggregateFunction<bignum_t, bignum_t>(type);
 		default:
 			throw NotImplementedException("Unimplemented reservoir quantile list aggregate");
 		}
@@ -462,7 +463,7 @@ static void SetDecimalImplementation(BoundAggregateFunction &function, const Log
 		case PhysicalType::VARCHAR:
 			// the bignum_t tier (above 38 digits) samples the BIGNUM blobs of the unscaled values
 			function.ReplaceImplementation(
-			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<string_t>, string_t, string_t,
+			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<bignum_t>, bignum_t, bignum_t,
 			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
 			break;
 		case PhysicalType::DOUBLE:

@@ -171,6 +171,11 @@ string_t QuantileCast::Operation(const string_t &src, Vector &result) {
 	return StringVector::AddStringOrBlob(result, src);
 }
 
+template <>
+bignum_t QuantileCast::Operation(const bignum_t &src, Vector &result) {
+	return bignum_t(StringVector::AddStringOrBlob(result, src.data));
+}
+
 //===--------------------------------------------------------------------===//
 // Quantile Interpolation
 //===--------------------------------------------------------------------===//
@@ -211,7 +216,7 @@ static string ScaleWideDecimalDelta(const bignum_t &delta, const double d, Strin
 //! The bignum_t tier of decimals interpolates like the hugeint tier: the exact delta between the two values is scaled
 //! by the fraction and truncated towards zero - see ScaleWideDecimalDelta for the deltas a DOUBLE does not hold
 template <>
-string_t QuantileInterpolate::Operation(const string_t &lo, const double d, const string_t &hi, Vector &result) {
+bignum_t QuantileInterpolate::Operation(const bignum_t &lo, const double d, const bignum_t &hi, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::DECIMAL);
 	if (d == 0) {
 		return lo;
@@ -219,15 +224,13 @@ string_t QuantileInterpolate::Operation(const string_t &lo, const double d, cons
 	// an intermediate refers to the bytes of the bignum_t it is built from, which therefore outlives it
 	StringHeap heap;
 	BignumArithmeticState state;
-	const bignum_t lo_value(lo);
-	const bignum_t hi_value(hi);
-	const BignumIntermediate start(lo_value);
-	const BignumIntermediate end(hi_value);
+	const BignumIntermediate start(lo);
+	const BignumIntermediate end(hi);
 	const bignum_t delta {BignumIntermediate::Add(heap, end, start, true)};
 	const string offset_blob = ScaleWideDecimalDelta(delta, d, heap, state);
 	const bignum_t offset_value {string_t(offset_blob)};
 	const BignumIntermediate offset(offset_value);
-	return StringVector::AddStringOrBlob(result, BignumIntermediate::Add(heap, start, offset));
+	return bignum_t(StringVector::AddStringOrBlob(result, BignumIntermediate::Add(heap, start, offset)));
 }
 
 //===--------------------------------------------------------------------===//
@@ -611,7 +614,7 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 			return OP::template GetFunction<hugeint_t, hugeint_t>(type, type);
 		case PhysicalType::VARCHAR:
 			// the bignum_t tier (above 38 digits) buffers and interpolates the BIGNUM blobs of the unscaled values
-			return OP::template GetFunction<string_t, string_t>(type, type);
+			return OP::template GetFunction<bignum_t, bignum_t>(type, type);
 		default:
 			throw NotImplementedException("Unimplemented continuous quantile DECIMAL aggregate");
 		}

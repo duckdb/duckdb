@@ -176,6 +176,19 @@ struct QuantileSkipValue<string_t> {
 	}
 };
 
+//! The BIGNUM blobs of the wide decimals point into the cursor page as well
+template <>
+struct QuantileSkipValue<bignum_t> {
+	using type = string;
+
+	static inline type Store(const bignum_t &value) {
+		return value.data.GetString();
+	}
+	static inline bignum_t Load(const type &stored) {
+		return bignum_t(string_t(stored));
+	}
+};
+
 template <typename INPUT_TYPE>
 struct WindowQuantileState {
 	// Windowed Quantile merge sort trees

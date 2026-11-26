@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -165,6 +166,8 @@ template <>
 interval_t QuantileCast::Operation(const dtime_t &src, Vector &result);
 template <>
 string_t QuantileCast::Operation(const string_t &src, Vector &result);
+template <>
+bignum_t QuantileCast::Operation(const bignum_t &src, Vector &result);
 
 //! Linear interpolation between two quantile values; a value without a fixed size is allocated in the result vector
 struct QuantileInterpolate {
@@ -174,9 +177,9 @@ struct QuantileInterpolate {
 	}
 };
 
-//! The only strings that interpolate are the unscaled values of DECIMALs wider than 38 digits (BIGNUM blobs)
+//! The unscaled values of DECIMALs wider than 38 digits (BIGNUM blobs) interpolate exactly
 template <>
-string_t QuantileInterpolate::Operation(const string_t &lo, const double d, const string_t &hi, Vector &result);
+bignum_t QuantileInterpolate::Operation(const bignum_t &lo, const double d, const bignum_t &hi, Vector &result);
 
 // Continuous interpolation
 template <bool DISCRETE>
