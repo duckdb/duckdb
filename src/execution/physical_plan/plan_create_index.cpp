@@ -159,10 +159,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	D_ASSERT(op.children.size() == 1);
-	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-		auto &get = op.children[0]->Cast<LogicalGet>();
-		get.bind_data.write().Cast<TableScanBindData>().index_template = CreateIndexTemplate(context, op, *index_type);
-	}
+	auto &get = op.children[0]->Cast<LogicalGet>();
+	get.bind_data.write().Cast<TableScanBindData>().index_template = CreateIndexTemplate(context, op, *index_type);
 	auto &scan = CreatePlan(*op.children[0]);
 
 	// Index has a plan replacement function

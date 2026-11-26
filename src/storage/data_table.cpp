@@ -173,7 +173,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// indexes are published under the append lock, so none is published until the parent is ALTERED
+	// publishing needs this lock and fails once the parent is ALTERED, so no index appears after this count
 	if (max_index_count.IsValid() && info->indexes.CountBuiltIndexes() > max_index_count.GetIndex()) {
 		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.",
 		                          parent.GetTableName());
@@ -451,9 +451,9 @@ void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
-shared_ptr<IndexEntry> DataTable::AddIndex(ClientContext &context, DuckTransaction &transaction,
-                                           unique_ptr<BoundIndex> index, idx_t index_oid,
-                                           ConstraintCheckMode check_mode) {
+shared_ptr<IndexEntry> DataTable::FinishIndexBuild(ClientContext &context, DuckTransaction &transaction,
+                                                   unique_ptr<BoundIndex> index, idx_t index_oid,
+                                                   ConstraintCheckMode check_mode) {
 	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
 	if (!entry) {
 		// no building entry: publish between commits
