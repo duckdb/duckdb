@@ -62,3 +62,33 @@ SELECT * FROM integers LIMIT 5 OFFSET 500000
 1
 1
 1
+
+statement ok
+SET threads=4
+
+# 40 row groups; only the first row of each of the first 3 row groups matches
+statement ok
+CREATE TABLE events AS SELECT i FROM range(40 * 122880) t(i);
+
+statement ok
+CREATE TABLE chosen AS SELECT md5((i * 122880)::VARCHAR) AS h FROM range(3) t(i);
+
+# a reached parallel STREAMING_LIMIT stops the scan in every thread, also in threads without a match
+query II
+EXPLAIN ANALYZE SELECT i FROM events SEMI JOIN chosen ON md5(i::VARCHAR) = h LIMIT 1;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: [0-9] / 40.*
+
+# a LIMIT expression is evaluated once, not once per thread
+statement ok
+CREATE SEQUENCE seq
+
+query I
+SELECT count(*) FROM (SELECT i FROM events LIMIT (CASE WHEN nextval('seq') = 1 THEN 5 ELSE 0 END));
+----
+5
+
+query I
+SELECT currval('seq')
+----
+1

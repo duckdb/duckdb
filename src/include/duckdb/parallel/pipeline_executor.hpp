@@ -145,6 +145,8 @@ private:
 
 	//! Source operator indicated that there is no more output possible
 	bool exhausted_source = false;
+	//! The last source fetch was blocked. The source expects it to be retried
+	bool source_blocked = false;
 	//! Source or intermediate operator indicated that there is no more output possible
 	bool exhausted_pipeline = false;
 	//! Flushing of intermediate operators has started

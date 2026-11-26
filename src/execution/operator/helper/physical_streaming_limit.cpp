@@ -25,10 +25,14 @@ public:
 
 class StreamingLimitGlobalState : public GlobalOperatorState {
 public:
-	StreamingLimitGlobalState() : current_offset(0) {
+	explicit StreamingLimitGlobalState(const PhysicalStreamingLimit &op) : current_offset(0) {
+		PhysicalLimit::SetInitialLimits(op.limit_val, op.offset_val, limit, offset);
 	}
 
 	std::atomic<idx_t> current_offset;
+	mutex lock;
+	optional_idx limit;
+	optional_idx offset;
 };
 
 void PhysicalStreamingLimit::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
@@ -41,7 +45,7 @@ unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ExecutionCont
 }
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(ClientContext &context) const {
-	return make_uniq<StreamingLimitGlobalState>();
+	return make_uniq<StreamingLimitGlobalState>(*this);
 }
 
 OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -50,8 +54,15 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	auto &state = state_p.Cast<StreamingLimitOperatorState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
-	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
 	idx_t max_element;
+	if (!limit.IsValid() || !offset.IsValid()) {
+		lock_guard<mutex> guard(gstate.lock);
+		PhysicalLimit::ComputeOffset(context, input, gstate.limit, gstate.offset, 0, max_element, limit_val,
+		                             offset_val);
+		limit = gstate.limit;
+		offset = gstate.offset;
+	}
+	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
 	if (!PhysicalLimit::ComputeOffset(context, input, limit, offset, current_offset, max_element, limit_val,
 	                                  offset_val)) {
 		return OperatorResultType::FINISHED;

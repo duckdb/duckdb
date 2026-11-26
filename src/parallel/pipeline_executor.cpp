@@ -380,6 +380,12 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		} else if (!exhausted_pipeline || next_batch_blocked) {
 			SourceFetchResult source_result;
 			if (!next_batch_blocked) {
+				auto finished_operator_idx = pipeline.finished_operator_idx.load(std::memory_order_relaxed);
+				if (finished_operator_idx >= 0 && !source_blocked) {
+					// another thread's operator finished the pipeline
+					FinishProcessing(finished_operator_idx);
+					return FlushAndFinalize(chunk_budget);
+				}
 				// "Regular" path: fetch a chunk from the source and push it through the pipeline
 				source_chunk.Reset();
 				source_result = FetchFromSource(source_chunk);
@@ -390,7 +396,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 					pending_batch_advance_state = PendingBatchAdvanceState::NEXT_BATCH;
 					continue;
 				}
-				if (source_result.result == SourceResultType::BLOCKED) {
+				source_blocked = source_result.result == SourceResultType::BLOCKED;
+				if (source_blocked) {
 					return PipelineExecuteResult::INTERRUPTED;
 				}
 				if (source_result.result == SourceResultType::FINISHED) {
@@ -789,6 +796,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			} else if (result == OperatorResultType::FINISHED) {
 				D_ASSERT(current_chunk.size() == 0);
 				FinishProcessing(NumericCast<int32_t>(current_idx));
+				pipeline.finished_operator_idx.store(finished_processing_idx, std::memory_order_relaxed);
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify(context.client.db);

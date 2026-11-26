@@ -271,6 +271,8 @@ private:
 	shared_ptr<GlobalSourceState> source_state DUCKDB_GUARDED_BY(source_state_lock);
 	//! Lock for resetting or inspecting the global source state pointer
 	annotated_mutex source_state_lock;
+	//! Executor index of the intermediate operator that finished this run of the pipeline, or -1
+	atomic<int32_t> finished_operator_idx;
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
