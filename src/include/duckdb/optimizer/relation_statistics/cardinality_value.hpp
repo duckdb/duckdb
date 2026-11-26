@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -19,6 +20,10 @@ class CardinalityValue {
 public:
 	// Scalar inputs can widen to a scaled point; materializing a point remains explicit.
 	CardinalityValue(double value = 1) : CardinalityValue(Product(value), Product(1)) { // NOLINT
+	}
+
+	template <class T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+	CardinalityValue(T value) : CardinalityValue(static_cast<double>(value)) { // NOLINT
 	}
 
 	bool IsZero() const {
