@@ -64,7 +64,7 @@ public:
 
 	//! Get the buffer manager
 	BufferManager &GetBufferManager();
-	//! Get the query context used to attribute eviction/spill I/O
+	//! Get the context used to attribute eviction/spill I/O
 	Context &GetContext() const {
 		return context;
 	}
@@ -145,7 +145,7 @@ private:
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The buffer manager
 	BufferManager &buffer_manager;
-	//! The query context, used to attribute eviction/spill I/O to the query
+	//! The context, used to attribute eviction/spill I/O to the query
 	Context &context;
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;

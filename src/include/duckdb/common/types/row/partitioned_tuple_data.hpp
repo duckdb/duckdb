@@ -214,7 +214,7 @@ protected:
 	PartitionedTupleDataType type;
 
 	BufferManager &buffer_manager;
-	//! The query context, used to attribute eviction/spill I/O of the partitions to the query
+	//! The context, used to attribute eviction/spill I/O of the partitions to the query
 	Context &context;
 	shared_ptr<ArenaAllocator> stl_allocator;
 

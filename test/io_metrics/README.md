@@ -1,7 +1,7 @@
 # I/O metrics ground-truth test
 
 DuckDB exposes `io.total_bytes_read` / `io.total_bytes_written` profiling metrics.
-They are only correct when a `QueryContext` is threaded down to the `FileHandle`
+They are only correct when a `Context` is threaded down to the `FileHandle`
 read/write calls. Many code paths drop it, so the reported numbers are often
 wrong (under- or over-counted).
 
@@ -53,7 +53,7 @@ path prefixes), optional `prep` (un-instrumented setup), `measure` (instrumented
 statements), and `check` (`read` and/or `write`).
 
 An entry with a `skip` field is a **known-wrong metric** — one of the
-QueryContext-not-passed bugs. The `skip` string explains why it is currently
+Context-not-passed bugs. The `skip` string explains why it is currently
 wrong (it starts with `FIXME:`). These are reported but do not fail the run.
 
 When such a bug is fixed the metric starts matching ground truth, and the
@@ -61,6 +61,6 @@ harness prints `SKIP?<name> now MATCHES ground truth` and counts it as a "stale
 skip" so the entry can be removed from the config. This makes the skip list a
 living to-do list of the metric bugs.
 
-To turn a fix into a passing regression test: fix the QueryContext threading,
+To turn a fix into a passing regression test: fix the Context threading,
 confirm the harness reports the test as a stale skip, then delete its `skip`
 field so it becomes a hard check.

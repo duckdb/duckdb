@@ -1,8 +1,8 @@
-# name: benchmark/micro/logger/enabled/logging_enabled_file_opener.benchmark
-# description: Benchmarking the File Opener Memory logger
+# name: benchmark/micro/logger/enabled/logging_enabled_context.benchmark
+# description: Benchmarking the Context Memory logger
 # group: [enabled]
 
-name FileOpener Memory Logger
+name Context Memory Logger
 group logger
 
 load

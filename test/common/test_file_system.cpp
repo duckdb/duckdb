@@ -374,7 +374,7 @@ TEST_CASE("Extended directory operations report target ownership", "[file_system
 	fs.RemoveFile(file_path);
 }
 
-TEST_CASE("Extended directory operations forward the file opener", "[file_system]") {
+TEST_CASE("Extended directory operations forward the context", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &context = con.context->GetContext();

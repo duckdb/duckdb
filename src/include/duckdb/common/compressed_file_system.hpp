@@ -80,7 +80,7 @@ public:
 	//! Whether the file is opened for reading or for writing
 	bool write = false;
 	StreamData stream_data;
-	//! The query context, used to attribute the (compressed) on-disk I/O of the child handle to the query
+	//! The context, used to attribute the (compressed) on-disk I/O of the child handle to the query
 	optional_ptr<Context> context;
 
 public:

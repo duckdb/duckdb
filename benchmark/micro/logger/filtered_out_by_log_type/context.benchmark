@@ -1,8 +1,8 @@
-# name: benchmark/micro/logger/filtered_out_by_log_type/file_opener.benchmark
-# description: Benchmarking the File Opener logger filtering out disabled log types
+# name: benchmark/micro/logger/filtered_out_by_log_type/context.benchmark
+# description: Benchmarking the Context logger filtering out disabled log types
 # group: [filtered_out_by_log_type]
 
-name FileOpener
+name Context
 group logger
 
 load

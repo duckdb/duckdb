@@ -443,7 +443,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	if (block_manager.Prefetch()) {
 		auto metadata_blocks = metadata_manager.GetBlocks();
 		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
-		// Database load happens before any query is running, so there is no query context to attribute to.
+		// Database load happens before any query is running, so the database-wide context is used.
 		buffer_manager.Prefetch(storage.GetDatabase().GetContext(), metadata_blocks);
 	}
 

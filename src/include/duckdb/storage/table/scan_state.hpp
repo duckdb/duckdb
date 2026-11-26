@@ -101,7 +101,7 @@ struct ColumnScanState {
 	}
 
 	optional_ptr<CollectionScanState> parent;
-	//! The query context for this scan
+	//! The context for this scan
 	optional_ptr<Context> context;
 	//! The column segment that is currently being scanned
 	optional_ptr<SegmentNode<ColumnSegment>> current;
@@ -163,7 +163,7 @@ enum class FetchType {
 
 struct ColumnFetchState {
 	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
-	//! The query context for this fetch
+	//! The context for this fetch
 	optional_ptr<Context> context;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
@@ -295,7 +295,7 @@ struct TableScanAssignment {
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
-	//! The query context for this scan
+	//! The context for this scan
 	optional_ptr<Context> context;
 	//! The vector index within the row_group
 	idx_t vector_index;

@@ -498,8 +498,8 @@ TEST_CASE("HTTP transport manager capacity and provider contracts", "[http_trans
 
 		auto session = manager.CreateSession(*first.instance, "https://example.com/");
 		CHECK(&session.Parameters().http_util == provider.get());
-		auto opener_session = manager.CreateSession(first.instance->GetContext(), info);
-		CHECK(&opener_session.Parameters().http_util == provider.get());
+		auto context_session = manager.CreateSession(first.instance->GetContext(), info);
+		CHECK(&context_session.Parameters().http_util == provider.get());
 	}
 }
 
@@ -1117,7 +1117,7 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	const string extension_url = "http://mock.test/" + extension_filename;
 	auto extension_body = ReadExtensionBinary(build_directory + "/test/extension/" + extension_filename);
 
-	SECTION("client-context and database openers preserve provider capture") {
+	SECTION("client and database contexts preserve provider capture") {
 		auto first = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED, "first");
 		auto second = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED, "second");
 		first->state->response_body = extension_body;
