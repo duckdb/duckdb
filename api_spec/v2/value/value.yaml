@@ -2215,7 +2215,7 @@ functions:
         kind: OUT
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
-  value_unpack_variant:
+  value_get_variant_content:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-25" ]
     description: |
@@ -2225,15 +2225,16 @@ functions:
       per value: this reads it back, with the type that it was stored with. The value is built with the content of
       the variant, so a stored list gives a LIST with its elements, and a stored object a STRUCT with its fields. The
       elements of a list that were stored with different types, which a LIST cannot hold, stay VARIANT values: a LIST
-      of VARIANT. Unpack those with this function in turn. A NULL VARIANT gives a NULL value. A value that is not a
-      VARIANT returns ERROR_INPUT_INVALID. The returned value is caller-owned; destroy it via value_destroy.
+      of VARIANT. Read those with this function in turn. A NULL VARIANT gives a NULL value. A value that is not a
+      VARIANT returns ERROR_INPUT_INVALID. The inverse is value_cast to a VARIANT type, which
+      factory_create_type_from_text gives. The returned value is caller-owned; destroy it via value_destroy.
     role: getter
     belongs_to: value
     parameters:
       value:
         type: value
-        description: The VARIANT value to unpack.
-      out_unpacked:
+        description: The VARIANT value to read.
+      out_content:
         type: value
         indirection: 1
         kind: OUT

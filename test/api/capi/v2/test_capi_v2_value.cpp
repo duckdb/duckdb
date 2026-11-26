@@ -1792,7 +1792,7 @@ TEST_CASE("V2: GEOMETRY vector cells read and write as WKB", "[capi_v2][value][c
 	duckdb_v2_logical_type_destroy(&geom_type);
 }
 
-TEST_CASE("V2 value: unpack_variant returns the value that a VARIANT holds", "[capi_v2][value]") {
+TEST_CASE("V2 value: get_variant_content returns the value that a VARIANT holds", "[capi_v2][value]") {
 	EnvFixture fx;
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT 41::TINYINT::VARIANT, NULL::VARIANT, 1", &result) == DUCKDB_V2_ERROR_NONE);
@@ -1809,31 +1809,31 @@ TEST_CASE("V2 value: unpack_variant returns the value that a VARIANT holds", "[c
 	};
 
 	auto variant = cell(0);
-	duckdb_v2_value_handle unpacked = nullptr;
-	REQUIRE(duckdb_v2_value_unpack_variant(variant, &unpacked, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(unpacked != nullptr);
+	duckdb_v2_value_handle content = nullptr;
+	REQUIRE(duckdb_v2_value_get_variant_content(variant, &content, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(content != nullptr);
 	int8_t tinyint = 0;
-	REQUIRE(duckdb_v2_value_get_tinyint(unpacked, &tinyint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_get_tinyint(content, &tinyint, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(tinyint == 41);
-	duckdb_v2_value_destroy(&unpacked);
+	duckdb_v2_value_destroy(&content);
 	duckdb_v2_value_destroy(&variant);
 
 	// A NULL variant gives a NULL value
 	auto null_variant = cell(1);
-	REQUIRE(duckdb_v2_value_unpack_variant(null_variant, &unpacked, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_get_variant_content(null_variant, &content, nullptr) == DUCKDB_V2_ERROR_NONE);
 	bool is_null = false;
-	REQUIRE(duckdb_v2_value_is_null(unpacked, &is_null, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_is_null(content, &is_null, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(is_null);
-	duckdb_v2_value_destroy(&unpacked);
+	duckdb_v2_value_destroy(&content);
 	duckdb_v2_value_destroy(&null_variant);
 
-	// Only a VARIANT can be unpacked
+	// Only a VARIANT has content to get
 	auto integer = cell(2);
-	REQUIRE(duckdb_v2_value_unpack_variant(integer, &unpacked, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(unpacked == nullptr);
+	REQUIRE(duckdb_v2_value_get_variant_content(integer, &content, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(content == nullptr);
 	duckdb_v2_value_destroy(&integer);
 
-	REQUIRE(duckdb_v2_value_unpack_variant(nullptr, &unpacked, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_get_variant_content(nullptr, &content, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_data_chunk_destroy(&chunk);
 	duckdb_v2_result_destroy(&result);
 }
