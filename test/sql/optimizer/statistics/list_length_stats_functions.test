@@ -1,0 +1,127 @@
+# name: test/sql/optimizer/statistics/list_length_stats_functions.test
+# description: Test that list functions propagate list length statistics
+# group: [statistics]
+
+statement ok
+CREATE TABLE t(l INT[], n INT, m INT);
+
+statement ok
+INSERT INTO t VALUES ([3, 1, 2], 2, 4), ([6, 5, 4], 5, NULL), (NULL, 1, 2);
+
+# sorting keeps the length of the lists
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_sort(l)) s FROM t LIMIT 1)
+----
+3	3
+
+query II
+EXPLAIN SELECT len(list_sort(l)) FROM t
+----
+physical_plan	<REGEX>:.*constant_or_null\(3.*
+
+query I
+SELECT len(list_sort(l)) FROM t
+----
+3
+3
+NULL
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_reverse_sort(l, 'NULLS FIRST')) s FROM t LIMIT 1)
+----
+3	3
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_grade_up(l)) s FROM t LIMIT 1)
+----
+3	3
+
+# distinct elements are at most as many as the elements of the lists
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_distinct(l)) s FROM t LIMIT 1)
+----
+0	3
+
+# resized lists have the requested size
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_resize(l, 5)) s FROM t LIMIT 1)
+----
+5	5
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_resize(l, n, 0)) s FROM t LIMIT 1)
+----
+1	5
+
+query I
+SELECT len(list_resize(l, 5)) FROM t
+----
+5
+5
+NULL
+
+# a NULL size resizes to an empty list
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_resize(l, m)) s FROM t LIMIT 1)
+----
+0	4
+
+# selected lists have one element per index, and at most one per mask entry
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_select(l, [1, 5])) s FROM t LIMIT 1)
+----
+2	2
+
+query I
+SELECT list_select(l, [1, 5]) FROM t
+----
+[3, NULL]
+[6, NULL]
+NULL
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(list_where(l, [true, false, true])) s FROM t LIMIT 1)
+----
+0	3
+
+# casts keep the length of the lists
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(l::BIGINT[]) s FROM t LIMIT 1)
+----
+3	3
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(l::VARCHAR[]) s FROM t LIMIT 1)
+----
+3	3
+
+query II
+SELECT s.child_stats.min, s.child_stats.max FROM (SELECT stats(l::BIGINT[]) s FROM t LIMIT 1)
+----
+1	6
+
+# the concat operator and function add up the lengths of non-NULL lists
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(l || [7]) s FROM t LIMIT 1)
+----
+1	4
+
+query II
+SELECT s.min_list_length, s.max_list_length FROM (SELECT stats(concat(l, l)) s FROM t LIMIT 1)
+----
+0	6
+
+query I
+SELECT l || [7] FROM t
+----
+[3, 1, 2, 7]
+[6, 5, 4, 7]
+NULL
+
+# string concatenation is unaffected
+query I
+SELECT 'a' || n::VARCHAR FROM t
+----
+a2
+a5
+a1

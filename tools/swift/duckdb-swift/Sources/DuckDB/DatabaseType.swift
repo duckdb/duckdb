@@ -112,6 +112,8 @@ public extension DatabaseType {
   static let union = DatabaseType(rawValue: DUCKDB_TYPE_UNION.rawValue)
   /// UUID type castable to `UUID`
   static let uuid = DatabaseType(rawValue: DUCKDB_TYPE_UUID.rawValue)
+  /// Arbitrary-precision integer type, the storage of decimals of more than 38 digits
+  static let bignum = DatabaseType(rawValue: DUCKDB_TYPE_BIGNUM.rawValue)
 }
 
 // MARK: - Internal Types
@@ -155,6 +157,7 @@ extension DatabaseType: CustomStringConvertible {
     case .map: return "\(Self.self).map"
     case .union: return "\(Self.self).union"
     case .uuid: return "\(Self.self).uuid"
+    case .bignum: return "\(Self.self).bignum"
     case .invalid: return "\(Self.self).invalid"
     default: return "\(Self.self).unknown - id: (\(self.rawValue))"
     }

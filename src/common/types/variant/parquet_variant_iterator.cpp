@@ -650,8 +650,13 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 // ParquetObjectIterator
 //===--------------------------------------------------------------------===//
 void ParquetObjectIterator::Finalize() {
-	std::sort(ordered_entries.begin(), ordered_entries.end(),
-	          [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) { return a.key < b.key; });
+	// the fields of a Parquet variant object are stored sorted by key, so this is usually a no-op
+	auto key_less = [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) {
+		return a.key < b.key;
+	};
+	if (!std::is_sorted(ordered_entries.begin(), ordered_entries.end(), key_less)) {
+		std::sort(ordered_entries.begin(), ordered_entries.end(), key_less);
+	}
 	// the keys of a Variant object have to be unique
 	for (idx_t i = 1; i < ordered_entries.size(); i++) {
 		if (ordered_entries[i].key == ordered_entries[i - 1].key) {

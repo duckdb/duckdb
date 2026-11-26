@@ -44,27 +44,30 @@ unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(c
 		return nullptr;
 	}
 	auto plan = make_uniq<AggregateStateSpillPlan>();
-	plan->state_layouts.reserve(aggregates.size());
+	plan->serializers.reserve(aggregates.size());
 	for (auto &aggr : aggregates) {
 		if (aggr.function.HasStateDestructorCallback()) {
 			// the state owns resources beyond the arena
 			return nullptr;
 		}
-		AggregateStateLayout state_layout;
 		if (aggr.function.HasGetStateTypeCallback()) {
-			state_layout = aggr.function.GetStateType(aggr.GetFunctionData());
-		} else if (!ExportAggregateFunction::TryGetCombinedStateLayout(aggr.function, aggr.GetFunctionData(),
-		                                                               state_layout)) {
-			// the aggregate cannot describe its state, and it is not a combine_aggr over states that can: the
-			// states combine_aggr accumulates have the layout of the aggregate that exported them
+			plan->serializers.emplace_back(aggr.function.GetStateType(aggr.GetFunctionData()), aggr.function,
+			                               aggr.GetFunctionData());
+			continue;
+		}
+		// the states combine_aggr accumulates have the layout of the aggregate that exported them
+		auto combined = ExportAggregateFunction::TryGetCombinedStateSerializer(aggr.function, aggr.GetFunctionData());
+		if (!combined) {
+			// the aggregate cannot describe its state, and it is not a combine_aggr over states that can
 			return nullptr;
 		}
-		plan->state_layouts.push_back(std::move(state_layout));
+		plan->serializers.push_back(std::move(*combined));
 	}
 	// only layouts whose states can reference the arena benefit from spilling
 	bool arena_backed = false;
-	for (auto &state_layout : plan->state_layouts) {
-		if (FieldHasArenaReferences(state_layout.type, state_layout.field)) {
+	for (auto &serializer : plan->serializers) {
+		auto &state_layout = serializer.layout;
+		if (state_layout.spill_opaque_arena_memory || FieldHasArenaReferences(state_layout.type, state_layout.field)) {
 			arena_backed = true;
 			break;
 		}
@@ -73,8 +76,8 @@ unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(c
 		return nullptr;
 	}
 	plan->exported_types = layout.GetTypes();
-	for (auto &state_layout : plan->state_layouts) {
-		plan->exported_types.push_back(state_layout.type);
+	for (auto &serializer : plan->serializers) {
+		plan->exported_types.push_back(serializer.layout.type);
 	}
 	return plan;
 }
@@ -83,7 +86,6 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
                                           const AggregateStateSpillPlan &plan, TupleDataCollection &source,
                                           vector<unique_ptr<ColumnDataCollection>> &exported, idx_t exported_radix_bits,
                                           ArenaAllocator &allocator) {
-	auto &state_layouts = plan.state_layouts;
 	auto &exported_types = plan.exported_types;
 	if (source.Count() == 0) {
 		return;
@@ -121,7 +123,8 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 				state_address_data[i] = row_locations[i] + aggr_offset;
 			}
 			auto &result = exported_chunk.data[column_count + aggr_idx];
-			AggregateStateSerialization::SerializeStates(aggr.function, aggr.GetFunctionData(), state_layouts[aggr_idx],
+			auto &serializer = plan.serializers[aggr_idx];
+			AggregateStateSerialization::SerializeStates(serializer.function, serializer.bind_data, serializer.layout,
 			                                             state_addresses, count, result, allocator, 0);
 			aggr_offset += aggr.payload_size;
 		}
@@ -171,7 +174,6 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
                                           const AggregateStateSpillPlan &plan, ColumnDataCollection &exported,
                                           ArenaAllocator &allocator,
                                           const std::function<void(TupleDataCollection &)> &combine) {
-	auto &state_layouts = plan.state_layouts;
 	if (exported.Count() == 0) {
 		return;
 	}
@@ -185,8 +187,8 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
 
 	// scratch buffer holding one vector of deserialized states, packed consecutively
 	idx_t max_state_size = 0;
-	for (auto &state_layout : state_layouts) {
-		max_state_size = MaxValue(max_state_size, state_layout.total_state_size);
+	for (auto &serializer : plan.serializers) {
+		max_state_size = MaxValue(max_state_size, serializer.layout.total_state_size);
 	}
 	auto state_buffer = make_unsafe_uniq_array<data_t>(max_state_size * STANDARD_VECTOR_SIZE);
 	Vector state_addresses(LogicalType::POINTER);
@@ -211,8 +213,8 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
 		idx_t aggr_offset = layout->GetAggrOffset();
 		for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 			auto &aggr = aggregates[aggr_idx];
-			auto &state_layout = state_layouts[aggr_idx];
-			const auto state_size = state_layout.total_state_size;
+			auto &serializer = plan.serializers[aggr_idx];
+			const auto state_size = serializer.layout.total_state_size;
 			D_ASSERT(state_size == aggr.payload_size);
 
 			// initialize scratch states, deserialize into them, then place them in the rows
@@ -221,7 +223,7 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_p
 				state_address_data[i] = state_buffer.get() + i * state_size;
 				aggr.function.GetStateInitCallback()(state_input, &state_address_data[i], 1);
 			}
-			AggregateStateSerialization::DeserializeStates(aggr.function, state_layout,
+			AggregateStateSerialization::DeserializeStates(serializer.function, serializer.bind_data, serializer.layout,
 			                                               exported_chunk.data[column_count + aggr_idx], count,
 			                                               state_buffer.get(), allocator, StateMemoryOwnership::OWNED);
 			for (idx_t i = 0; i < count; i++) {

@@ -58,10 +58,11 @@ physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "576320"[\s
 
 # a conjunction across two columns that the statistics of the table cannot refute (d = 7 lives in rows
 # 700,000..799,999, and every row group that holds it has i < 900,000): every row group is skipped (actual 0)
+# The zero upper bound is a proof and must not acquire a positive costing floor.
 query II
 EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM t WHERE d = 7 AND i > 900000;
 ----
-physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "1"[\s\S]*
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "0"[\s\S]*
 
 # two ranges, on the sorted column and on the permuted one: the first leaves five row groups, the second skips
 # none of them (actual 250,044)
@@ -166,7 +167,7 @@ DELETE FROM t WHERE i >= 4300800;
 query II
 EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM t WHERE i >= 4300800;
 ----
-physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "1"[\s\S]*
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "0"[\s\S]*
 
 query I
 SELECT count(*) FROM t WHERE i >= 4300800;
@@ -217,7 +218,7 @@ COMMIT;
 query II con1
 EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM t WHERE i >= 4300800;
 ----
-physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "(1|699200)"[\s\S]*
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "(0|699200)"[\s\S]*
 
 query I con1
 SELECT count(*) FROM t WHERE i >= 4300800;

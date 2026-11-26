@@ -20,6 +20,16 @@ CREATE TABLE reuse_fact(k INTEGER, v INTEGER, w INTEGER)
 statement ok
 INSERT INTO reuse_fact VALUES (1, 10, 1), (1, 20, 2), (2, 5, 3), (3, 40, 4), (3, 50, 5), (4, NULL, 6)
 
+# Collect all distinct values so the expected join order is independent of vector-size sampling.
+statement ok
+ANALYZE reuse_owner
+
+statement ok
+ANALYZE reuse_dim
+
+statement ok
+ANALYZE reuse_fact
+
 statement ok
 SET explain_output = 'physical_only'
 

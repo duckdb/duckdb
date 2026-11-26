@@ -193,9 +193,8 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 		duckdb::OpenFileInfo info(duckdb::string(Convert(file_path, file_path_length)));
 		info.extended_info = opts.extended_info;
 
-		// No opener is passed: FileSystem::GetFileSystem hands back the context's own OpenerFileSystem, which
-		// pushes the opener itself -- which is how a remote file system reaches settings and secrets. Supplying one
-		// here is rejected outright ("the opener is pushed automatically").
+		// FileSystem::GetFileSystem hands back the context's own bound FileSystem, which pushes the opener itself --
+		// which is how a remote file system reaches settings and secrets.
 		auto handle = slot.fs.OpenFile(info, opts.flags);
 		if (!handle) {
 			throw duckdb::IOException("Failed to open file: %s", info.path);

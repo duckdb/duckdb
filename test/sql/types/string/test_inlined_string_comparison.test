@@ -1,0 +1,131 @@
+# name: test/sql/types/string/test_inlined_string_comparison.test
+# description: Test comparisons of short (inlined) strings against constants and against each other
+# group: [string]
+
+# ids follow the byte order of the strings
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES
+	(1, ''), (2, 'a'), (3, 'a' || chr(0)), (4, 'ab'), (5, 'abc'), (6, 'abcd'), (7, 'abcd' || chr(0)), (8, 'abcde'),
+	(9, 'abcdefgh'), (10, 'abcdefghijk'), (11, 'abcdefghijkl'), (12, 'abcdefghijkl' || chr(0)),
+	(13, 'abcdefghijklm'), (14, 'abcdefghijkm'), (15, 'abcdefgi'), (16, 'abce'), (17, 'b'), (NULL, NULL)
+) t(id, s)
+
+query I
+SELECT count(*) FROM strings a, strings b
+WHERE (a.s = b.s) IS DISTINCT FROM (a.id = b.id)
+   OR (a.s > b.s) IS DISTINCT FROM (a.id > b.id)
+   OR (a.s <= b.s) IS DISTINCT FROM (a.id <= b.id)
+----
+0
+
+# compares against a constant through table filters, filter expressions and projections
+statement ok
+CREATE MACRO compare_constant(c) AS TABLE
+SELECT (SELECT count(*) FROM strings WHERE s = c), (SELECT count(*) FROM strings WHERE s <> c),
+	(SELECT count(*) FROM strings WHERE s > c), count(*) FILTER (s = c), count(*) FILTER (c <> s),
+	count(*) FILTER (s < c), sum((s = c)::INT)
+FROM strings
+
+query IIIIIII
+FROM compare_constant('')
+----
+1	16	16	1	16	0	1
+
+query IIIIIII
+FROM compare_constant('a' || chr(0))
+----
+1	16	14	1	16	2	1
+
+query IIIIIII
+FROM compare_constant('abcd' || chr(0))
+----
+1	16	10	1	16	6	1
+
+query IIIIIII
+FROM compare_constant('abcdefghijkl')
+----
+1	16	6	1	16	10	1
+
+query IIIIIII
+FROM compare_constant('abcdefghijklm')
+----
+1	16	4	1	16	12	1
+
+query IIIIIII
+FROM compare_constant('abcc')
+----
+0	17	12	0	17	5	0
+
+query IIIIIII
+FROM compare_constant('abcdefghijkz')
+----
+0	17	3	0	17	14	0
+
+# larger inputs, with and without NULLs
+statement ok
+CREATE TABLE big AS SELECT s FROM strings, range(1000) WHERE s IS NOT NULL
+
+statement ok
+CREATE TABLE big_nulls AS SELECT s FROM strings, range(1000)
+
+foreach tbl big big_nulls
+
+query IIII
+SELECT (SELECT count(*) FROM {tbl} WHERE s = 'abcd'), (SELECT count(*) FROM {tbl} WHERE s <> 'abcdefghijkl'),
+	count(*) FILTER (s = 'abcdefghijkl'), sum((s = 'abcd')::INT)
+FROM {tbl}
+----
+1000	16000	1000	1000
+
+endloop
+
+# blobs, including bytes that sort above ASCII
+statement ok
+CREATE TABLE blobs AS SELECT * FROM (VALUES
+	(1, ''::BLOB), (2, '\x00'::BLOB), (3, '\x00\x00'::BLOB), (4, 'a'::BLOB), (5, 'a\x00'::BLOB), (6, '\xFF'::BLOB),
+	(7, '\xFF\xFF\xFF\xFF\xFF'::BLOB), (8, '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'::BLOB)
+) t(id, b)
+
+query I
+SELECT count(*) FROM blobs a, blobs b WHERE (a.b = b.b) <> (a.id = b.id) OR (a.b > b.b) <> (a.id > b.id)
+----
+0
+
+# Exercise batch dispatch with mixed lengths, NULLs and column-to-column comparisons.
+statement ok
+CREATE TABLE ordering_pairs AS
+SELECT a.id AS ai, b.id AS bi, a.s AS a, b.s AS b
+FROM strings a, strings b, range(17) r(i)
+ORDER BY hash(a.id, b.id, i)
+
+query I
+SELECT count(*) FROM ordering_pairs
+WHERE (a > b) IS DISTINCT FROM (ai > bi)
+   OR (a >= b) IS DISTINCT FROM (ai >= bi)
+   OR (a < b) IS DISTINCT FROM (ai < bi)
+   OR (a <= b) IS DISTINCT FROM (ai <= bi)
+----
+0
+
+foreach op > >= < <=
+
+query I
+SELECT (SELECT count(*) FROM ordering_pairs WHERE a {op} b)
+     - (SELECT count(*) FROM ordering_pairs WHERE ai {op} bi)
+----
+0
+
+query I
+SELECT (SELECT count(*) FROM ordering_pairs WHERE a {op} 'abcdefghijkl' AND bi % 2 = 0)
+     - (SELECT count(*) FROM ordering_pairs WHERE ai {op} 11 AND bi % 2 = 0)
+----
+0
+
+endloop
+
+query III
+SELECT (SELECT count(*) FROM blobs WHERE b = '\x00'::BLOB), (SELECT count(*) FROM blobs WHERE b > '\xFF'::BLOB),
+	count(*) FILTER (b <> 'a\x00'::BLOB)
+FROM blobs
+----
+1	2	7

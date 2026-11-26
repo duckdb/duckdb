@@ -36,7 +36,7 @@ GROUP BY ALL ORDER BY ALL
 ----
 b	0
 d	0
-h	1
+h	0
 l, list, element	0
 n	1
 s	1

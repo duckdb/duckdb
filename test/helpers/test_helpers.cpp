@@ -1,5 +1,6 @@
 // #define CATCH_CONFIG_RUNNER
 #include "test_reporter.hpp"
+#include "bound_file_system.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -156,7 +157,8 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 }
 
 FileSystem &TestLocalFileSystem() {
-	static LocalFileSystem fs;
+	static LocalFileSystem local_fs;
+	static BoundFileSystem fs(local_fs, nullptr);
 	return fs;
 }
 

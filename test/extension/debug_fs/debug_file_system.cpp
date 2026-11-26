@@ -321,6 +321,14 @@ vector<OpenFileInfo> DebugFileSystem::Glob(const string &path, FileOpener *opene
 	return result;
 }
 
+string DebugFileSystem::GetHomeDirectory() {
+	return inner_fs->GetHomeDirectory();
+}
+
+string DebugFileSystem::ExpandPath(const string &path) {
+	return inner_fs->ExpandPath(path);
+}
+
 unique_ptr<MemoryMappedFile> DebugFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                             const MMapOptions &options,
                                                             optional_ptr<FileOpener> opener) {

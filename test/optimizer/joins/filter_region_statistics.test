@@ -1,0 +1,95 @@
+# name: test/optimizer/joins/filter_region_statistics.test
+# group: [joins]
+
+# Filters retain their execution scope when join regions are optimized independently.
+
+statement ok
+SET disabled_optimizers='filter_pushdown,statistics_propagation,join_filter_pushdown'
+
+statement ok
+CREATE TABLE filter_region_a AS SELECT i::INTEGER AS i FROM range(10) t(i)
+
+statement ok
+CREATE TABLE filter_region_b AS SELECT i::INTEGER AS i FROM range(10) t(i)
+
+statement ok
+CREATE TABLE filter_region_c AS SELECT i::INTEGER AS i FROM range(2) t(i)
+
+statement ok
+ANALYZE
+
+# A filter inside the left input must survive reconstruction of the outer join.
+query I
+SELECT count(*) FROM
+  (SELECT a.i AS x, b.i AS y FROM filter_region_a a, filter_region_b b
+   WHERE a.i > b.i AND a.i < 4) ab,
+  filter_region_c c
+----
+12
+
+# The same region can occur on the right, with repeated projected bindings.
+query III
+SELECT count(*), sum(ab.x), sum(ab.copy_x) FROM filter_region_c c,
+  (SELECT a.i AS x, a.i AS copy_x, b.i AS y FROM filter_region_a a, filter_region_b b
+   WHERE a.i > b.i AND a.i < 4) ab
+----
+12	28	28
+
+# ON and WHERE retain their different treatment of NULL-extended rows.
+query I
+SELECT count(*) FROM
+  (SELECT a.i AS x, b.i AS y FROM filter_region_a a
+   LEFT JOIN filter_region_b b ON a.i = b.i AND b.i < 5
+   WHERE b.i IS NULL) ab,
+  filter_region_c c
+----
+10
+
+# An equal ON predicate does not replace the preserved-side WHERE filter.
+query I
+SELECT count(*) FROM filter_region_a a
+LEFT JOIN filter_region_b b ON a.i = b.i AND a.i < 5
+WHERE a.i < 5
+----
+5
+
+# ANTI carries residual ON predicates too; they must not consume an equal WHERE.
+query I
+SELECT count(*) FROM filter_region_a a
+ANTI JOIN filter_region_b b ON a.i = b.i AND a.i < 5
+WHERE a.i < 5
+----
+0
+
+# An independently optimized membership RHS retains its filter exactly once.
+query I
+SELECT count(*) FROM filter_region_a a
+SEMI JOIN (SELECT b.i FROM filter_region_b b WHERE b.i < 5) b USING (i)
+----
+5
+
+query I
+SELECT count(*) FROM filter_region_a a
+ANTI JOIN (SELECT b.i FROM filter_region_b b WHERE b.i < 5) b USING (i)
+----
+5
+
+query I
+SELECT count(*) FROM
+  (SELECT a.i AS x, b.i AS y FROM filter_region_a a, filter_region_b b
+   WHERE false) ab,
+  filter_region_c c
+----
+0
+
+# Grouping consumes the filtered region's output.
+query II
+SELECT x, count(*) FROM
+  (SELECT a.i AS x, b.i AS y FROM filter_region_a a, filter_region_b b
+   WHERE a.i > b.i AND a.i < 4) ab,
+  filter_region_c c
+GROUP BY x ORDER BY x
+----
+1	2
+2	4
+3	6
