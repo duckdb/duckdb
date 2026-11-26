@@ -177,3 +177,36 @@ statement error
 SELECT encode('a', e) FROM (VALUES ('latin-1')) t(e)
 ----
 the encoding must be a constant
+
+# non-ASCII characters at every offset relative to the ASCII fast path word boundaries
+query I
+SELECT count(*) FROM range(0, 25) t(n), range(0, 25) t2(m)
+WHERE decode(unhex(repeat('61', n) || 'E9' || repeat('62', m)), 'latin-1') <> repeat('a', n) || 'é' || repeat('b', m)
+----
+0
+
+query I
+SELECT count(*) FROM range(0, 25) t(n), range(0, 25) t2(m)
+WHERE decode(unhex(repeat('6100', n) || 'E900' || repeat('6200', m)), 'utf-16') <> repeat('a', n) || 'é' || repeat('b', m)
+----
+0
+
+query I
+SELECT count(*) FROM range(0, 25) t(n), range(0, 25) t2(m)
+WHERE decode(unhex(repeat('6100', n) || '3DD800DE' || repeat('6200', m)), 'utf-16') <> repeat('a', n) || '😀' || repeat('b', m)
+----
+0
+
+# a latin-1 control character (0x80-0x9F) anywhere in the input is rejected
+query I
+SELECT count(*) FROM range(0, 25) t(n)
+WHERE try(decode(unhex(repeat('61', n) || '9F'), 'latin-1')) IS NOT NULL
+----
+0
+
+# the streaming overload leaves a trailing incomplete character unconsumed at every offset
+query I
+SELECT count(*) FROM range(0, 25) t(n)
+WHERE system.encodings."utf-16"(unhex(repeat('6100', n) || '3DD8'), false) <> {'decoded': repeat('a', n), 'consumed': 2 * n}
+----
+0
