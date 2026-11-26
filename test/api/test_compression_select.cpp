@@ -131,7 +131,7 @@ TEST_CASE("Retained RLE dictionaries survive selection reuse and scan destructio
 		} else {
 			segment->GetStatsMutable().SetHasNoNull();
 		}
-		ColumnScanState state(nullptr);
+		ColumnScanState state(nullptr, db.instance->GetContext());
 		segment->InitializeScan(state);
 		segment->Scan(state, 28, first, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
 		REQUIRE(first.GetVectorType() == VectorType::DICTIONARY_VECTOR);
@@ -200,7 +200,7 @@ static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &
 		// A zero-length legacy run is unused even when statistics exclude row NULLs.
 		auto segment = MakeRLEPlaceholderSegment<T>(db, compression, type, run_length);
 		if (run_length == 37) {
-			ColumnScanState scan(nullptr);
+			ColumnScanState scan(nullptr, db.instance->GetContext());
 			segment->InitializeScan(scan);
 			Vector result(type, 128);
 			segment->Scan(scan, 128, result, 0, ScanVectorType::SCAN_ENTIRE_VECTOR);
@@ -222,7 +222,7 @@ static void CheckRLEPlaceholder(DuckDB &db, Connection &con, const LogicalType &
 		auto filter_state = TableFilterState::Initialize(*con.context, filter);
 		REQUIRE(filter_state->can_cache);
 		REQUIRE_FALSE(filter_state->Cast<ExpressionFilterState>().fast_executor);
-		ColumnScanState state(nullptr);
+		ColumnScanState state(nullptr, *con.context);
 		segment->InitializeScan(state);
 		const auto count = 20 * run_length;
 		Vector result(type, count);

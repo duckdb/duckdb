@@ -1207,9 +1207,9 @@ TEST_CASE("CachingFileSystemWrapper handles report the seekability of the wrappe
 	TestFileGuard test_file("test_caching_seekable.txt", "content");
 
 	auto run_case = [&](BaseFileSystem &fs, bool expect_seekable) {
-		BoundFileSystem bound_fs(fs, nullptr);
+		BoundFileSystem bound_fs(fs, db_instance.GetContext());
 		auto wrapper = make_shared_ptr<CachingFileSystemWrapper>(bound_fs, db_instance, CachingMode::ALWAYS_CACHE);
-		auto handle = wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ, nullptr);
+		auto handle = wrapper->OpenFile(db_instance.GetContext(), test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
 		REQUIRE(handle->CanSeek() == expect_seekable);
 	};
 
