@@ -115,30 +115,30 @@ void DsDeleteCountGlobal(void *ptr) {
 	delete static_cast<DsCountGlobal *>(ptr);
 }
 
-void DsCountInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+void DsCountInitGlobalCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
                          duckdb_v2_error_info_handle *err) {
 	void *user_data = nullptr;
-	if (duckdb_v2_table_function_init_global_get_user_data(info, &user_data, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_init_global_get_user_data(info, &user_data, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto state = new DsCountGlobal();
 	state->user_data_seen = user_data ? *static_cast<int64_t *>(user_data) : -1;
 	duckdb_v2_opaque global = {state, DsDeleteCountGlobal, nullptr};
-	duckdb_v2_table_function_init_global_set_global_state(info, &global, err);
+	duckdb_v2_data_source_init_global_set_global_state(info, &global, err);
 }
 
 // Produces the columns the chunk holds. With projection pushdown the vectors stand for the requested columns, whose
 // declared index the callback looks up; without it they are all the declared columns.
-void DsCountExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+void DsCountExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
                    duckdb_v2_error_info_handle *err) {
 	void *bind_ptr = nullptr;
 	void *global_ptr = nullptr;
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	idx_t column_count = 0;
-	if (duckdb_v2_table_function_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_column_count(info, &column_count, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_column_count(info, &column_count, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto &bind = *static_cast<DsCountBind *>(bind_ptr);
@@ -154,7 +154,7 @@ void DsCountExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_con
 		idx_t declared = 0;
 		duckdb_v2_vector_handle vec = nullptr;
 		void *raw = nullptr;
-		if (duckdb_v2_table_function_exec_get_column_index(info, c, &declared, err) != DUCKDB_V2_ERROR_NONE ||
+		if (duckdb_v2_data_source_exec_get_column_index(info, c, &declared, err) != DUCKDB_V2_ERROR_NONE ||
 		    duckdb_v2_data_chunk_get_vector(chunk, c, &vec, err) != DUCKDB_V2_ERROR_NONE ||
 		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
@@ -178,10 +178,10 @@ struct DsProbe {
 };
 DsProbe ds_probe;
 
-void DsProbingExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+void DsProbingExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
                      duckdb_v2_error_info_handle *err) {
 	idx_t column_count = 0;
-	if (duckdb_v2_table_function_exec_get_column_count(info, &column_count, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_exec_get_column_count(info, &column_count, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	ds_probe.exec_calls++;

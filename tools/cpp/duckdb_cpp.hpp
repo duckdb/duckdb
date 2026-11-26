@@ -5478,7 +5478,7 @@ public:
 		}
 
 		/// Reports an operator metric of the scan by its profiler name, e.g. "operator.row_groups_scanned" or
-		/// "operator.total_row_groups_to_scan". See `duckdb_v2_table_function_metrics_set` for the accepted names.
+		/// "operator.total_row_groups_to_scan". See `duckdb_v2_data_source_metrics_set` for the accepted names.
 		/// @param name The name of the metric.
 		/// @param value The value since the metrics were last collected ("operator.total_row_groups_to_scan": in all).
 		/// @throws InvalidInputException When the name is not a metric a table function can report.

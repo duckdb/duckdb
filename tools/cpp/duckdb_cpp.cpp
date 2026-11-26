@@ -4516,11 +4516,11 @@ auto TableFunction::SetInitGlobalCallback(InitGlobalCallback callback) & -> Tabl
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4543,11 +4543,11 @@ auto TableFunction::SetInitLocalCallback(InitLocalCallback callback) & -> TableF
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_init_local_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_init_local_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4570,11 +4570,11 @@ auto TableFunction::SetExecCallback(ExecCallback callback) & -> TableFunction & 
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_exec_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4597,11 +4597,11 @@ auto TableFunction::SetProgressCallback(ProgressCallback callback) & -> TableFun
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_progress_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_progress_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_progress_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_progress_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4649,11 +4649,11 @@ auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_partition_data_info_handle info,
-	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	static auto trampoline = [](duckdb_v2_data_source_partition_data_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_partition_data_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input = detail::HandleFactory::Make<PartitionDataInput>(static_cast<void *>(info),
@@ -4701,11 +4701,11 @@ auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> Tabl
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_claim_batch_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_claim_batch_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_claim_batch_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4807,11 +4807,11 @@ auto TableFunction::SetMetricsCallback(MetricsCallback callback) & -> TableFunct
 		return *this;
 	}
 
-	static auto trampoline = [](duckdb_v2_table_function_metrics_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_data_source_metrics_info_handle info, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_metrics_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_data_source_metrics_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
 			auto input =
@@ -4897,28 +4897,28 @@ auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> 
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_table_function_init_global_set_global_state,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_global_state,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &opaque);
 }
 
 void *TableFunction::InitGlobalInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_bind_data,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::InitGlobalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_user_data,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::InitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
-	CheckedAPICall(duckdb_v2_table_function_init_global_set_max_threads,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), max_threads);
+	CheckedAPICall(duckdb_v2_data_source_init_global_set_max_threads,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), max_threads);
 }
 
 auto TableFunction::InitGlobalInput::GetContext() -> Context & {
@@ -4927,42 +4927,42 @@ auto TableFunction::InitGlobalInput::GetContext() -> Context & {
 
 auto TableFunction::InitGlobalInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_count,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_column_count,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::InitGlobalInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_global_get_column_index,
-	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_init_global_get_column_index,
+	               static_cast<duckdb_v2_data_source_init_global_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void TableFunction::InitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
-	CheckedAPICall(duckdb_v2_table_function_init_local_set_local_state,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &opaque);
+	CheckedAPICall(duckdb_v2_data_source_init_local_set_local_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &opaque);
 }
 
 void *TableFunction::InitLocalInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_bind_data,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_bind_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::InitLocalInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_global_state,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_global_state,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::InitLocalInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_user_data,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_user_data,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
@@ -4973,51 +4973,51 @@ auto TableFunction::InitLocalInput::GetContext() -> Context & {
 
 auto TableFunction::InitLocalInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_count,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_column_count,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::InitLocalInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_init_local_get_column_index,
-	               static_cast<duckdb_v2_table_function_init_local_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_init_local_get_column_index,
+	               static_cast<duckdb_v2_data_source_init_local_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void *TableFunction::ExecInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_bind_data,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_bind_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
+	               &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ExecInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_global_state,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_global_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::ExecInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_local_state,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_local_state,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::ExecInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_user_data,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_user_data, static_cast<duckdb_v2_data_source_exec_info_handle>(args),
+	               &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ExecInput::GetOutputChunk() const -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_output_chunk,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &chunk);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_output_chunk,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &chunk);
 	// Borrowed: the engine owns the chunk and reuses it across invocations.
 	return detail::HandleFactory::Make<DataChunk>(chunk, false);
 }
@@ -5028,50 +5028,50 @@ auto TableFunction::ExecInput::GetContext() -> Context & {
 
 auto TableFunction::ExecInput::GetColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_column_count,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_column_count,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::ExecInput::GetColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_exec_get_column_index,
-	               static_cast<duckdb_v2_table_function_exec_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_exec_get_column_index,
+	               static_cast<duckdb_v2_data_source_exec_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 void *TableFunction::ProgressInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_bind_data,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_bind_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ProgressInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_global_state,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::ProgressInput::TryGetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_global_state,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_global_state,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &global_state);
 	return global_state;
 }
 
 void *TableFunction::ProgressInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_progress_get_user_data,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_progress_get_user_data,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ProgressInput::SetProgress(double progress) -> void {
-	CheckedAPICall(duckdb_v2_table_function_progress_set_progress,
-	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), progress);
+	CheckedAPICall(duckdb_v2_data_source_progress_set_progress,
+	               static_cast<duckdb_v2_data_source_progress_info_handle>(args), progress);
 }
 
 auto TableFunction::ProgressInput::GetContext() -> Context & {
@@ -5080,29 +5080,29 @@ auto TableFunction::ProgressInput::GetContext() -> Context & {
 
 void *TableFunction::MetricsInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_metrics_get_bind_data,
-	               static_cast<duckdb_v2_table_function_metrics_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_bind_data,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::MetricsInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_metrics_get_global_state,
-	               static_cast<duckdb_v2_table_function_metrics_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_global_state,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &global_state);
 	return global_state;
 }
 
 void *TableFunction::MetricsInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_metrics_get_user_data,
-	               static_cast<duckdb_v2_table_function_metrics_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_metrics_get_user_data,
+	               static_cast<duckdb_v2_data_source_metrics_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::MetricsInput::SetMetric(std::string_view name, uint64_t value) -> void {
-	CheckedAPICall(duckdb_v2_table_function_metrics_set,
-	               static_cast<duckdb_v2_table_function_metrics_info_handle>(args), name.data(), name.size(), value);
+	CheckedAPICall(duckdb_v2_data_source_metrics_set, static_cast<duckdb_v2_data_source_metrics_info_handle>(args),
+	               name.data(), name.size(), value);
 }
 
 auto TableFunction::MetricsInput::GetContext() -> Context & {
@@ -5163,69 +5163,69 @@ auto TableFunction::FilterPushdownInput::GetContext() -> Context & {
 
 void *TableFunction::PartitionDataInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_bind_data,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_bind_data,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::PartitionDataInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_global_state,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_global_state,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::PartitionDataInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_local_state,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_local_state,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::PartitionDataInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_user_data,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::PartitionDataInput::RequiresBatchIndex() const -> bool {
 	bool required = false;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_batch_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_requires_batch_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &required);
 	return required;
 }
 
 auto TableFunction::PartitionDataInput::RequiresPartitionColumns() const -> bool {
 	bool required = false;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_partition_columns,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_requires_partition_columns,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &required);
 	return required;
 }
 
 auto TableFunction::PartitionDataInput::GetPartitionColumnCount() const -> idx_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_count,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &count);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_partition_column_count,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), &count);
 	return count;
 }
 
 auto TableFunction::PartitionDataInput::GetPartitionColumnIndex(idx_t index) const -> idx_t {
 	idx_t column_index = 0;
-	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, &column_index);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_get_partition_column_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), index, &column_index);
 	return column_index;
 }
 
 auto TableFunction::PartitionDataInput::SetBatchIndex(idx_t batch_index) -> void {
-	CheckedAPICall(duckdb_v2_table_function_partition_data_set_batch_index,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), batch_index);
+	CheckedAPICall(duckdb_v2_data_source_partition_data_set_batch_index,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), batch_index);
 }
 
 auto TableFunction::PartitionDataInput::SetPartitionValue(idx_t index, const Value &value) -> void {
-	CheckedAPICall(duckdb_v2_table_function_partition_data_set_partition_value,
-	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, value.handle());
+	CheckedAPICall(duckdb_v2_data_source_partition_data_set_partition_value,
+	               static_cast<duckdb_v2_data_source_partition_data_info_handle>(args), index, value.handle());
 }
 
 auto TableFunction::PartitionDataInput::GetContext() -> Context & {
@@ -5286,36 +5286,36 @@ auto TableFunction::PartitioningInput::GetContext() -> Context & {
 
 void *TableFunction::ClaimBatchInput::GetBindDataInternal() const {
 	void *bind_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_bind_data,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &bind_data);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_bind_data,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &bind_data);
 	return RequireTableBindData(bind_data);
 }
 
 void *TableFunction::ClaimBatchInput::GetGlobalStateInternal() const {
 	void *global_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_global_state,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &global_state);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_global_state,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &global_state);
 	return RequireGlobalState(global_state);
 }
 
 void *TableFunction::ClaimBatchInput::GetLocalStateInternal() const {
 	void *local_state = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_local_state,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &local_state);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_local_state,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &local_state);
 	return RequireLocalState(local_state);
 }
 
 void *TableFunction::ClaimBatchInput::GetUserDataInternal() const {
 	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &user_data);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_get_user_data,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), &user_data);
 	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
 	return RequireTableUserData(function.user_data);
 }
 
 auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
-	CheckedAPICall(duckdb_v2_table_function_claim_batch_set_claimed,
-	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
+	CheckedAPICall(duckdb_v2_data_source_claim_batch_set_claimed,
+	               static_cast<duckdb_v2_data_source_claim_batch_info_handle>(args), claimed);
 }
 
 void *TableFunction::GetBindInfoInput::GetBindDataInternal() const {

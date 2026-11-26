@@ -365,18 +365,18 @@ void StatsPairBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_functi
 	duckdb_v2_logical_type_destroy(&integer);
 }
 
-void StatsPairInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+void StatsPairInitGlobalCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
                            duckdb_v2_error_info_handle *err) {
 	duckdb_v2_opaque state = {new StatsPairGlobal(), DeleteStatsPairGlobal, nullptr};
-	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+	duckdb_v2_data_source_init_global_set_global_state(info, &state, err);
 }
 
-void StatsPairExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+void StatsPairExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
                      duckdb_v2_error_info_handle *err) {
 	void *global_ptr = nullptr;
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto &global = *static_cast<StatsPairGlobal *>(global_ptr);
@@ -959,21 +959,21 @@ void MinMaxBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_
 	duckdb_v2_logical_type_destroy(&pair);
 }
 
-void MinMaxInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+void MinMaxInitGlobalCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
                         duckdb_v2_error_info_handle *err) {
 	duckdb_v2_opaque state = {new MinMaxGlobal(), DeleteMinMaxGlobal, nullptr};
-	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+	duckdb_v2_data_source_init_global_set_global_state(info, &state, err);
 }
 
-void MinMaxExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+void MinMaxExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
                   duckdb_v2_error_info_handle *err) {
 	void *global_ptr = nullptr;
 	void *user_data = nullptr;
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	duckdb_v2_factory_handle factory = nullptr;
-	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_user_data(info, &user_data, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	if (duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_user_data(info, &user_data, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
 	    duckdb_v2_context_get_factory(context, &factory, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -1328,12 +1328,12 @@ void ShreddedBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_functio
 }
 
 // Produces no rows: only the statistics matter.
-void ShreddedExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+void ShreddedExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
                     duckdb_v2_error_info_handle *err) {
 	g_shredded.exec_calls++;
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	duckdb_v2_vector_handle vec = nullptr;
-	if (duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) == DUCKDB_V2_ERROR_NONE &&
+	if (duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) == DUCKDB_V2_ERROR_NONE &&
 	    duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) == DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_vector_set_size(vec, 0, err);
 	}

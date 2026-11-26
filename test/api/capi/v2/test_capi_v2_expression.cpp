@@ -334,18 +334,18 @@ void ProbeBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_b
 	}
 }
 
-void ProbeInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+void ProbeInitGlobalCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
                        duckdb_v2_error_info_handle *err) {
 	duckdb_v2_opaque state = {new ProbeGlobal {}, DeleteProbeGlobal, nullptr};
-	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+	duckdb_v2_data_source_init_global_set_global_state(info, &state, err);
 }
 
-void ProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+void ProbeExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
                  duckdb_v2_error_info_handle *err) {
 	void *global_ptr = nullptr;
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto &global = *static_cast<ProbeGlobal *>(global_ptr);

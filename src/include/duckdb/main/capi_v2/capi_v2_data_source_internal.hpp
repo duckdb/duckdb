@@ -20,13 +20,13 @@ namespace duckdb::capiv2 {
 //! that scans with it.
 class CV2DataSourceInfo {
 public:
-	duckdb_v2_table_function_init_global_callback_fn init_global_cb = nullptr;
-	duckdb_v2_table_function_init_local_callback_fn init_local_cb = nullptr;
-	duckdb_v2_table_function_exec_callback_fn exec_cb = nullptr;
-	duckdb_v2_table_function_progress_callback_fn progress_cb = nullptr;
-	duckdb_v2_table_function_partition_data_callback_fn partition_data_cb = nullptr;
-	duckdb_v2_table_function_claim_batch_callback_fn claim_batch_cb = nullptr;
-	duckdb_v2_table_function_metrics_callback_fn metrics_cb = nullptr;
+	duckdb_v2_data_source_init_global_callback_fn init_global_cb = nullptr;
+	duckdb_v2_data_source_init_local_callback_fn init_local_cb = nullptr;
+	duckdb_v2_data_source_exec_callback_fn exec_cb = nullptr;
+	duckdb_v2_data_source_progress_callback_fn progress_cb = nullptr;
+	duckdb_v2_data_source_partition_data_callback_fn partition_data_cb = nullptr;
+	duckdb_v2_data_source_claim_batch_callback_fn claim_batch_cb = nullptr;
+	duckdb_v2_data_source_metrics_callback_fn metrics_cb = nullptr;
 	//! What the callbacks of the data source receive as their user data
 	shared_ptr<CV2UserData> user_data;
 	//! The name of the function the data source scans for, which error messages refer to

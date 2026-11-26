@@ -281,22 +281,22 @@ void ArrowRangeBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_table_
 	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
 }
 
-void ArrowRangeInitCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+void ArrowRangeInitCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
                       duckdb_v2_error_info_handle *err) {
 	duckdb_v2_opaque state = {new ArrowRangeGlobal(), ArrowRangeDestroyGlobal, nullptr};
-	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+	duckdb_v2_data_source_init_global_set_global_state(info, &state, err);
 }
 
-void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
+void ArrowRangeExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle context,
                       duckdb_v2_error_info_handle *err) {
 	duckdb_v2_factory_handle factory = nullptr;
 	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	void *raw_bind = nullptr;
 	void *raw_global = nullptr;
 	duckdb_v2_data_chunk_handle output = nullptr;
-	if (duckdb_v2_table_function_exec_get_bind_data(info, &raw_bind, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_global_state(info, &raw_global, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &output, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_data_source_exec_get_bind_data(info, &raw_bind, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_global_state(info, &raw_global, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &output, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto &bind = *static_cast<ArrowRangeBind *>(raw_bind);

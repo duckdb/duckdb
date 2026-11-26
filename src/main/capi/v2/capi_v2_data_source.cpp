@@ -123,11 +123,11 @@ public:
 	idx_t out_max_threads = 1;
 };
 
-static auto Convert(duckdb_v2_table_function_init_global_info_handle info) -> CV2TableInitGlobalInfo * {
+static auto Convert(duckdb_v2_data_source_init_global_info_handle info) -> CV2TableInitGlobalInfo * {
 	return reinterpret_cast<CV2TableInitGlobalInfo *>(info);
 }
-static auto Convert(CV2TableInitGlobalInfo *info) -> duckdb_v2_table_function_init_global_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_init_global_info_handle>(info);
+static auto Convert(CV2TableInitGlobalInfo *info) -> duckdb_v2_data_source_init_global_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_init_global_info_handle>(info);
 }
 
 class CV2TableInitLocalInfo {
@@ -140,11 +140,11 @@ public:
 	duckdb_v2_opaque out_local_state = {};
 };
 
-static auto Convert(duckdb_v2_table_function_init_local_info_handle info) -> CV2TableInitLocalInfo * {
+static auto Convert(duckdb_v2_data_source_init_local_info_handle info) -> CV2TableInitLocalInfo * {
 	return reinterpret_cast<CV2TableInitLocalInfo *>(info);
 }
-static auto Convert(CV2TableInitLocalInfo *info) -> duckdb_v2_table_function_init_local_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_init_local_info_handle>(info);
+static auto Convert(CV2TableInitLocalInfo *info) -> duckdb_v2_data_source_init_local_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_init_local_info_handle>(info);
 }
 
 class CV2TableExecInfo {
@@ -158,11 +158,11 @@ public:
 	DataChunk *output = nullptr;
 };
 
-static auto Convert(duckdb_v2_table_function_exec_info_handle info) -> CV2TableExecInfo * {
+static auto Convert(duckdb_v2_data_source_exec_info_handle info) -> CV2TableExecInfo * {
 	return reinterpret_cast<CV2TableExecInfo *>(info);
 }
-static auto Convert(CV2TableExecInfo *info) -> duckdb_v2_table_function_exec_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_exec_info_handle>(info);
+static auto Convert(CV2TableExecInfo *info) -> duckdb_v2_data_source_exec_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_exec_info_handle>(info);
 }
 
 class CV2TableProgressInfo {
@@ -174,11 +174,11 @@ public:
 	double out_progress = 0.0;
 };
 
-static auto Convert(duckdb_v2_table_function_progress_info_handle info) -> CV2TableProgressInfo * {
+static auto Convert(duckdb_v2_data_source_progress_info_handle info) -> CV2TableProgressInfo * {
 	return reinterpret_cast<CV2TableProgressInfo *>(info);
 }
-static auto Convert(CV2TableProgressInfo *info) -> duckdb_v2_table_function_progress_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_progress_info_handle>(info);
+static auto Convert(CV2TableProgressInfo *info) -> duckdb_v2_data_source_progress_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_progress_info_handle>(info);
 }
 
 class CV2TableMetricsInfo {
@@ -220,11 +220,11 @@ static void CV2TableAddMetric(CV2TableMetricsInfo &info, const char *name, idx_t
 	info.out_metrics.emplace_back(std::move(metric_name), value);
 }
 
-static auto Convert(duckdb_v2_table_function_metrics_info_handle info) -> CV2TableMetricsInfo * {
+static auto Convert(duckdb_v2_data_source_metrics_info_handle info) -> CV2TableMetricsInfo * {
 	return reinterpret_cast<CV2TableMetricsInfo *>(info);
 }
-static auto Convert(CV2TableMetricsInfo *info) -> duckdb_v2_table_function_metrics_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_metrics_info_handle>(info);
+static auto Convert(CV2TableMetricsInfo *info) -> duckdb_v2_data_source_metrics_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_metrics_info_handle>(info);
 }
 
 class CV2TableClaimBatchInfo {
@@ -237,11 +237,11 @@ public:
 	bool out_claimed = false;
 };
 
-static auto Convert(duckdb_v2_table_function_claim_batch_info_handle info) -> CV2TableClaimBatchInfo * {
+static auto Convert(duckdb_v2_data_source_claim_batch_info_handle info) -> CV2TableClaimBatchInfo * {
 	return reinterpret_cast<CV2TableClaimBatchInfo *>(info);
 }
-static auto Convert(CV2TableClaimBatchInfo *info) -> duckdb_v2_table_function_claim_batch_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_claim_batch_info_handle>(info);
+static auto Convert(CV2TableClaimBatchInfo *info) -> duckdb_v2_data_source_claim_batch_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_claim_batch_info_handle>(info);
 }
 
 class CV2TablePartitionDataInfo {
@@ -259,11 +259,11 @@ public:
 	vector<Value> out_partition_values;
 };
 
-static auto Convert(duckdb_v2_table_function_partition_data_info_handle info) -> CV2TablePartitionDataInfo * {
+static auto Convert(duckdb_v2_data_source_partition_data_info_handle info) -> CV2TablePartitionDataInfo * {
 	return reinterpret_cast<CV2TablePartitionDataInfo *>(info);
 }
-static auto Convert(CV2TablePartitionDataInfo *info) -> duckdb_v2_table_function_partition_data_info_handle {
-	return reinterpret_cast<duckdb_v2_table_function_partition_data_info_handle>(info);
+static auto Convert(CV2TablePartitionDataInfo *info) -> duckdb_v2_data_source_partition_data_info_handle {
+	return reinterpret_cast<duckdb_v2_data_source_partition_data_info_handle>(info);
 }
 
 //! Virtual columns are told apart from declared ones in the column lists of the scan by this plus their value in the
@@ -833,32 +833,32 @@ void CV2DataSourceInfo::ConfigureScan(TableFunction &function) const {
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_get_user_data(duckdb_v2_table_function_init_global_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_get_user_data(duckdb_v2_data_source_init_global_info_handle info, void **data,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_get_bind_data(duckdb_v2_table_function_init_global_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_get_bind_data(duckdb_v2_data_source_init_global_info_handle info, void **data,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_set_global_state(duckdb_v2_table_function_init_global_info_handle info,
-                                                      duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_set_global_state(duckdb_v2_data_source_init_global_info_handle info,
+                                                   duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { Convert(info)->out_global_state = *data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_set_max_threads(duckdb_v2_table_function_init_global_info_handle info,
-                                                     idx_t max_threads, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_set_max_threads(duckdb_v2_data_source_init_global_info_handle info, idx_t max_threads,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() {
 		if (max_threads == 0) {
@@ -869,274 +869,273 @@ duckdb_v2_table_function_init_global_set_max_threads(duckdb_v2_table_function_in
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_get_column_count(duckdb_v2_table_function_init_global_info_handle info,
-                                                      idx_t *count, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_get_column_count(duckdb_v2_data_source_init_global_info_handle info, idx_t *count,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(count);
 	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_scan_columns->size(); });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_global_get_column_index(duckdb_v2_table_function_init_global_info_handle info,
-                                                      idx_t index, idx_t *column_index,
-                                                      duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_global_get_column_index(duckdb_v2_data_source_init_global_info_handle info, idx_t index,
+                                                   idx_t *column_index, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(column_index);
 	return WithErrorHandler(err, [&]() {
 		const auto &columns = *Convert(info)->in_scan_columns;
 		if (index >= columns.size()) {
 			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_init_global_get_column_index");
+			    "Index out of bounds in duckdb_v2_data_source_init_global_get_column_index");
 		}
 		*column_index = columns[index];
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_init_local_get_user_data(duckdb_v2_table_function_init_local_info_handle info,
-                                                                  void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_init_local_get_user_data(duckdb_v2_data_source_init_local_info_handle info,
+                                                               void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_init_local_get_bind_data(duckdb_v2_table_function_init_local_info_handle info,
-                                                                  void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_init_local_get_bind_data(duckdb_v2_data_source_init_local_info_handle info,
+                                                               void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_local_get_global_state(duckdb_v2_table_function_init_local_info_handle info, void **data,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_local_get_global_state(duckdb_v2_data_source_init_local_info_handle info, void **data,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_local_set_local_state(duckdb_v2_table_function_init_local_info_handle info,
-                                                    duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_local_set_local_state(duckdb_v2_data_source_init_local_info_handle info,
+                                                 duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { Convert(info)->out_local_state = *data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_local_get_column_count(duckdb_v2_table_function_init_local_info_handle info, idx_t *count,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_local_get_column_count(duckdb_v2_data_source_init_local_info_handle info, idx_t *count,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(count);
 	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_scan_columns->size(); });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_init_local_get_column_index(duckdb_v2_table_function_init_local_info_handle info, idx_t index,
-                                                     idx_t *column_index, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_init_local_get_column_index(duckdb_v2_data_source_init_local_info_handle info, idx_t index,
+                                                  idx_t *column_index, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(column_index);
 	return WithErrorHandler(err, [&]() {
 		const auto &columns = *Convert(info)->in_scan_columns;
 		if (index >= columns.size()) {
 			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_init_local_get_column_index");
+			    "Index out of bounds in duckdb_v2_data_source_init_local_get_column_index");
 		}
 		*column_index = columns[index];
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_user_data(duckdb_v2_table_function_exec_info_handle info, void **data,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_user_data(duckdb_v2_data_source_exec_info_handle info, void **data,
+                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_bind_data(duckdb_v2_table_function_exec_info_handle info, void **data,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_bind_data(duckdb_v2_data_source_exec_info_handle info, void **data,
+                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_global_state(duckdb_v2_table_function_exec_info_handle info,
-                                                               void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_global_state(duckdb_v2_data_source_exec_info_handle info, void **data,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_local_state(duckdb_v2_table_function_exec_info_handle info,
-                                                              void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_local_state(duckdb_v2_data_source_exec_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_output_chunk(duckdb_v2_table_function_exec_info_handle info,
-                                                               duckdb_v2_data_chunk_handle *chunk,
-                                                               duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_output_chunk(duckdb_v2_data_source_exec_info_handle info,
+                                                            duckdb_v2_data_chunk_handle *chunk,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(chunk);
 	return WithErrorHandler(err, [&]() { *chunk = Convert(Convert(info)->output); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_column_count(duckdb_v2_table_function_exec_info_handle info,
-                                                               idx_t *count, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_count(duckdb_v2_data_source_exec_info_handle info, idx_t *count,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(count);
 	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_scan_columns->size(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_column_index(duckdb_v2_table_function_exec_info_handle info,
-                                                               idx_t index, idx_t *column_index,
-                                                               duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_exec_get_column_index(duckdb_v2_data_source_exec_info_handle info, idx_t index,
+                                                            idx_t *column_index, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(column_index);
 	return WithErrorHandler(err, [&]() {
 		const auto &columns = *Convert(info)->in_scan_columns;
 		if (index >= columns.size()) {
-			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_exec_get_column_index");
+			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_data_source_exec_get_column_index");
 		}
 		*column_index = columns[index];
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_progress_get_user_data(duckdb_v2_table_function_progress_info_handle info,
-                                                                void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_progress_get_user_data(duckdb_v2_data_source_progress_info_handle info,
+                                                             void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_progress_get_bind_data(duckdb_v2_table_function_progress_info_handle info,
-                                                                void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_progress_get_bind_data(duckdb_v2_data_source_progress_info_handle info,
+                                                             void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_progress_get_global_state(duckdb_v2_table_function_progress_info_handle info,
-                                                                   void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_progress_get_global_state(duckdb_v2_data_source_progress_info_handle info,
+                                                                void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_progress_set_progress(duckdb_v2_table_function_progress_info_handle info,
-                                                               double progress, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_progress_set_progress(duckdb_v2_data_source_progress_info_handle info,
+                                                            double progress, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() { Convert(info)->out_progress = progress; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_user_data(duckdb_v2_table_function_metrics_info_handle info,
-                                                               void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_get_user_data(duckdb_v2_data_source_metrics_info_handle info, void **data,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_bind_data(duckdb_v2_table_function_metrics_info_handle info,
-                                                               void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_get_bind_data(duckdb_v2_data_source_metrics_info_handle info, void **data,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_global_state(duckdb_v2_table_function_metrics_info_handle info,
-                                                                  void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_get_global_state(duckdb_v2_data_source_metrics_info_handle info,
+                                                               void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_set(duckdb_v2_table_function_metrics_info_handle info,
-                                                     const char *name, idx_t name_length, uint64_t value,
-                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_metrics_set(duckdb_v2_data_source_metrics_info_handle info, const char *name,
+                                                  idx_t name_length, uint64_t value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() { CV2TableAddMetric(*Convert(info), name, name_length, value); });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_get_user_data(duckdb_v2_table_function_partition_data_info_handle info,
-                                                      void **data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_get_user_data(duckdb_v2_data_source_partition_data_info_handle info, void **data,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_get_bind_data(duckdb_v2_table_function_partition_data_info_handle info,
-                                                      void **data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_get_bind_data(duckdb_v2_data_source_partition_data_info_handle info, void **data,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_get_global_state(duckdb_v2_table_function_partition_data_info_handle info,
-                                                         void **data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_get_global_state(duckdb_v2_data_source_partition_data_info_handle info,
+                                                      void **data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_get_local_state(duckdb_v2_table_function_partition_data_info_handle info,
-                                                        void **data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_get_local_state(duckdb_v2_data_source_partition_data_info_handle info, void **data,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_requires_batch_index(duckdb_v2_table_function_partition_data_info_handle info,
-                                                             bool *required, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_requires_batch_index(duckdb_v2_data_source_partition_data_info_handle info,
+                                                          bool *required, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(required);
 	return WithErrorHandler(err, [&]() { *required = Convert(info)->in_partition_info->RequiresBatchIndex(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_requires_partition_columns(
-    duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_data_source_partition_data_requires_partition_columns(duckdb_v2_data_source_partition_data_info_handle info,
+                                                                bool *required, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(required);
 	return WithErrorHandler(err, [&]() { *required = Convert(info)->in_partition_info->RequiresPartitionColumns(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_count(
-    duckdb_v2_table_function_partition_data_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_data_source_partition_data_get_partition_column_count(duckdb_v2_data_source_partition_data_info_handle info,
+                                                                idx_t *count, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(count);
 	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_partition_columns->size(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_index(
-    duckdb_v2_table_function_partition_data_info_handle info, idx_t index, idx_t *column_index,
-    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_data_source_partition_data_get_partition_column_index(duckdb_v2_data_source_partition_data_info_handle info,
+                                                                idx_t index, idx_t *column_index,
+                                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(column_index);
 	return WithErrorHandler(err, [&]() {
 		const auto &columns = *Convert(info)->in_partition_columns;
 		if (index >= columns.size()) {
 			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_partition_data_get_partition_column_index");
+			    "Index out of bounds in duckdb_v2_data_source_partition_data_get_partition_column_index");
 		}
 		*column_index = columns[index];
 	});
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_set_batch_index(duckdb_v2_table_function_partition_data_info_handle info,
-                                                        idx_t batch_index, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_set_batch_index(duckdb_v2_data_source_partition_data_info_handle info,
+                                                     idx_t batch_index, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() {
 		// ToPipelinePartitionData adds base + 1 and throws an InternalException from BATCH_INCREMENT - 1 on.
 		if (batch_index >= duckdb::PipelineBuildState::BATCH_INCREMENT - 2) {
 			throw duckdb::InvalidInputException(
-			    "duckdb_v2_table_function_partition_data_set_batch_index: batch_index %llu must be less than "
+			    "duckdb_v2_data_source_partition_data_set_batch_index: batch_index %llu must be less than "
 			    "%llu",
 			    batch_index, duckdb::PipelineBuildState::BATCH_INCREMENT - 2);
 		}
@@ -1145,22 +1144,22 @@ duckdb_v2_table_function_partition_data_set_batch_index(duckdb_v2_table_function
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_partition_data_set_partition_value(duckdb_v2_table_function_partition_data_info_handle info,
-                                                            idx_t index, duckdb_v2_value_handle value,
-                                                            duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_partition_data_set_partition_value(duckdb_v2_data_source_partition_data_info_handle info,
+                                                         idx_t index, duckdb_v2_value_handle value,
+                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
 		auto &args = *Convert(info);
 		if (index >= args.out_partition_values.size()) {
 			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_partition_data_set_partition_value");
+			    "Index out of bounds in duckdb_v2_data_source_partition_data_set_partition_value");
 		}
 		const auto &expected_type = (*args.in_column_types)[(*args.in_partition_columns)[index]];
 		const auto &actual = *Convert(value);
 		if (actual.type() != expected_type) {
 			throw duckdb::InvalidInputException(
-			    "duckdb_v2_table_function_partition_data_set_partition_value: expected type %s for the "
+			    "duckdb_v2_data_source_partition_data_set_partition_value: expected type %s for the "
 			    "partitioning column at index %llu, got %s",
 			    expected_type.ToString(), index, actual.type().ToString());
 		}
@@ -1170,39 +1169,39 @@ duckdb_v2_table_function_partition_data_set_partition_value(duckdb_v2_table_func
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_claim_batch_get_user_data(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_claim_batch_get_user_data(duckdb_v2_data_source_claim_batch_info_handle info, void **data,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_claim_batch_get_bind_data(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
-                                                   duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_claim_batch_get_bind_data(duckdb_v2_data_source_claim_batch_info_handle info, void **data,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_claim_batch_get_global_state(duckdb_v2_table_function_claim_batch_info_handle info,
-                                                      void **data, duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_claim_batch_get_global_state(duckdb_v2_data_source_claim_batch_info_handle info, void **data,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_claim_batch_get_local_state(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_data_source_claim_batch_get_local_state(duckdb_v2_data_source_claim_batch_info_handle info, void **data,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(duckdb_v2_table_function_claim_batch_info_handle info,
-                                                                 bool claimed, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_data_source_claim_batch_set_claimed(duckdb_v2_data_source_claim_batch_info_handle info,
+                                                              bool claimed, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() { Convert(info)->out_claimed = claimed; });
 }
@@ -1233,35 +1232,35 @@ DUCKDB_V2_ERROR duckdb_v2_data_source_set_user_data(duckdb_v2_data_source_handle
 
 DUCKDB_V2_ERROR
 duckdb_v2_data_source_set_init_global_callback(duckdb_v2_data_source_handle source,
-                                               duckdb_v2_table_function_init_global_callback_fn callback,
+                                               duckdb_v2_data_source_init_global_callback_fn callback,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.init_global_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_source_set_init_local_callback(duckdb_v2_data_source_handle source,
-                                                              duckdb_v2_table_function_init_local_callback_fn callback,
+                                                              duckdb_v2_data_source_init_local_callback_fn callback,
                                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.init_local_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_source_set_exec_callback(duckdb_v2_data_source_handle source,
-                                                        duckdb_v2_table_function_exec_callback_fn callback,
+                                                        duckdb_v2_data_source_exec_callback_fn callback,
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.exec_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_source_set_progress_callback(duckdb_v2_data_source_handle source,
-                                                            duckdb_v2_table_function_progress_callback_fn callback,
+                                                            duckdb_v2_data_source_progress_callback_fn callback,
                                                             duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.progress_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_source_set_metrics_callback(duckdb_v2_data_source_handle source,
-                                                           duckdb_v2_table_function_metrics_callback_fn callback,
+                                                           duckdb_v2_data_source_metrics_callback_fn callback,
                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.metrics_cb = callback; });
@@ -1269,7 +1268,7 @@ DUCKDB_V2_ERROR duckdb_v2_data_source_set_metrics_callback(duckdb_v2_data_source
 
 DUCKDB_V2_ERROR
 duckdb_v2_data_source_set_partition_data_callback(duckdb_v2_data_source_handle source,
-                                                  duckdb_v2_table_function_partition_data_callback_fn callback,
+                                                  duckdb_v2_data_source_partition_data_callback_fn callback,
                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.partition_data_cb = callback; });
@@ -1277,7 +1276,7 @@ duckdb_v2_data_source_set_partition_data_callback(duckdb_v2_data_source_handle s
 
 DUCKDB_V2_ERROR
 duckdb_v2_data_source_set_claim_batch_callback(duckdb_v2_data_source_handle source,
-                                               duckdb_v2_table_function_claim_batch_callback_fn callback,
+                                               duckdb_v2_data_source_claim_batch_callback_fn callback,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(source);
 	return WithErrorHandler(err, [&]() { Convert(source)->info.claim_batch_cb = callback; });
