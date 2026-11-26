@@ -1,6 +1,7 @@
 #include "duckdb/planner/legacy_case.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -42,13 +43,23 @@ static void RewriteSimpleCases(ParsedExpression &expr) {
 	}
 }
 
-void NormalizeLegacyCase(Catalog &catalog, CreateInfo &info) {
+static bool RequiresLegacyCase(Catalog &catalog, bool temporary) {
 	auto &db = catalog.GetAttached();
-	if (info.temporary || db.IsTemporary() || !db.HasStorageManager()) {
-		return;
+	if (temporary || db.IsTemporary() || !db.HasStorageManager()) {
+		return false;
 	}
 	auto &storage = db.GetStorageManager();
-	if (storage.InMemory() || storage.GetStorageVersion() >= StorageVersion::V2_1_0) {
+	return !storage.InMemory() && storage.GetStorageVersion() < StorageVersion::V2_1_0;
+}
+
+void NormalizeLegacyCase(CatalogEntry &entry, ParsedExpression &expression) {
+	if (RequiresLegacyCase(entry.ParentCatalog(), entry.temporary)) {
+		RewriteSimpleCases(expression);
+	}
+}
+
+void NormalizeLegacyCase(Catalog &catalog, CreateInfo &info) {
+	if (!RequiresLegacyCase(catalog, info.temporary)) {
 		return;
 	}
 

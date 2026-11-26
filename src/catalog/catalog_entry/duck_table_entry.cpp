@@ -24,6 +24,7 @@
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
+#include "duckdb/planner/legacy_case.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
@@ -341,6 +342,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 	case AlterTableType::ALTER_COLUMN_TYPE: {
 		auto &change_type_info = table_info.Cast<ChangeColumnTypeInfo>();
+		// Bind the same USING expression that this ALTER will write to the WAL.
+		NormalizeLegacyCase(*this, *change_type_info.expression);
 		return ChangeColumnType(context, change_type_info, AlterTableType::ALTER_COLUMN_TYPE);
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {

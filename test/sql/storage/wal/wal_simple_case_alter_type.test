@@ -1,0 +1,56 @@
+# name: test/sql/storage/wal/wal_simple_case_alter_type.test
+# description: ALTER TYPE uses the destination's CASE semantics before and after WAL replay
+# group: [wal]
+
+require skip_reload
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+SET wal_autocheckpoint = '1TB'
+
+foreach version,expected v2.0.0,0 v2.1.0,1
+
+statement ok
+ATTACH '{TEST_DIR}/alter_type_{version}.db' AS db (STORAGE_VERSION '{version}')
+
+statement ok
+CREATE TABLE db.t AS SELECT 0::BIGINT AS i
+
+statement ok
+CREATE SEQUENCE db.s
+
+statement ok
+CHECKPOINT db
+
+# A single operand matches one of the three arms. With separate calls, the residues 1, 2, 0 miss every arm.
+statement ok
+ALTER TABLE db.t ALTER i TYPE INTEGER USING
+    CASE nextval('db.s') % 3 WHEN 0 THEN 1 WHEN 1 THEN 1 WHEN 2 THEN 1 ELSE 0 END
+
+query I
+SELECT i = {expected} FROM db.t
+----
+true
+
+statement ok
+DETACH db
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/alter_type_{version}.db.wal')
+----
+1
+
+statement ok
+ATTACH '{TEST_DIR}/alter_type_{version}.db' AS db
+
+query I
+SELECT i = {expected} FROM db.t
+----
+true
+
+statement ok
+DETACH db
+
+endloop
