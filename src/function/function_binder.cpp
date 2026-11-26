@@ -1636,7 +1636,8 @@ FunctionBinder::ResolveAggregateFunction(const FunctionBinding &binding, vector<
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.GetCallbacks().HasBindCallback()) {
-		BindAggregateFunctionInput input(context, bound_function, children, binder, decimal_width_limit);
+		BindAggregateFunctionInput input(context, bound_function, children, binder, decimal_width_limit,
+		                                 arguments_collated);
 		bind_info = bound_function.GetCallbacks().GetBindCallback()(input);
 
 		// we may have lost some arguments in the bind

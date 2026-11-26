@@ -1,0 +1,6 @@
+{
+  "description": "Exercise approximate join enumeration without exact join ordering.",
+  "on_init": "SET approximate_join_order_threshold=0;",
+  "on_new_connection": "SET approximate_join_order_threshold=0;",
+  "skip_compiled": true
+}

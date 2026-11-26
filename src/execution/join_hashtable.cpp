@@ -675,8 +675,9 @@ void JoinHashTable::EncodeDictSurvivingColumn(const DictSurvivingColumn &column,
 	                        static_cast<uint64_t>(build_col_idx));
 }
 
-static bool MarkJoinNullRows(const UnifiedVectorFormat &format, idx_t count,
-                             optional_ptr<bool> rows_with_null = nullptr) {
+static bool MarkJoinNullRows(const Vector &input, idx_t count, optional_ptr<bool> rows_with_null = nullptr) {
+	UnifiedVectorFormat format;
+	input.ToUnifiedFormat(format);
 	if (format.validity.CannotHaveNull()) {
 		return false;
 	}
@@ -696,16 +697,12 @@ static bool MarkJoinNullRows(const UnifiedVectorFormat &format, idx_t count,
 static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_null = nullptr) {
 	bool has_null = false;
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		UnifiedVectorFormat format;
 		if (keys.data[col_idx].GetType().IsNested()) {
 			Vector comparison(LogicalType::BOOLEAN, keys.size());
 			VectorOperations::Equals(keys.data[col_idx], keys.data[col_idx], comparison);
-			comparison.ToUnifiedFormat(format);
+			has_null |= MarkJoinNullRows(comparison, keys.size(), rows_with_null);
 		} else {
-			keys.data[col_idx].ToUnifiedFormat(format);
-		}
-		if (MarkJoinNullRows(format, keys.size(), rows_with_null)) {
-			has_null = true;
+			has_null |= MarkJoinNullRows(keys.data[col_idx], keys.size(), rows_with_null);
 		}
 	}
 	return has_null;
@@ -2778,25 +2775,6 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 		key_count += count;
 	} while (iterator.Next());
 
-	return key_count;
-}
-
-idx_t JoinHashTable::ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const {
-	FlatVector::SetSize(result, count_t(0));
-	// nothing to scan if the build side is empty
-	if (data_collection->ChunkCount() == 0) {
-		return 0;
-	}
-	D_ASSERT(result.GetType() == layout_ptr->GetTypes()[column_index]);
-	JoinHTScanState join_ht_state(*data_collection, 0, data_collection->ChunkCount(), output_columns.size(),
-	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-	auto key_count = FillWithHTOffsets(join_ht_state, addresses);
-	if (key_count == 0) {
-		return 0;
-	}
-	const auto &sel = *FlatVector::IncrementalSelectionVector();
-	data_collection->Gather(addresses, sel, key_count, column_index, result, sel, nullptr);
-	FlatVector::SetSize(result, count_t(key_count));
 	return key_count;
 }
 

@@ -2,7 +2,7 @@
 # description: Concurrent cache toggles must not invalidate file handles used by async Parquet reads
 # group: [external_file_cache]
 
-# simulates filesystem latency, which only a driver that links debug_fs can provide
+# debugfs:// paths simulate filesystem latency, which only a driver that links debug_fs can provide
 require debug_fs
 
 require parquet
@@ -27,7 +27,7 @@ statement ok
 COPY (
     SELECT i
     FROM range(1000000) t(i)
-) TO '{TEST_DIR}/external_file_cache_async_toggle.parquet'
+) TO 'debugfs://{TEST_DIR}/external_file_cache_async_toggle.parquet'
 (FORMAT PARQUET, ROW_GROUP_SIZE 50000)
 
 # Widen the interval between acquiring and using the shared file handle.
@@ -48,7 +48,7 @@ SET enable_external_file_cache={enabled}
 
 query II
 SELECT count(*), sum(i)
-FROM read_parquet('{TEST_DIR}/external_file_cache_async_toggle.parquet', prefetch_strategy='whole_group')
+FROM read_parquet('debugfs://{TEST_DIR}/external_file_cache_async_toggle.parquet', prefetch_strategy='whole_group')
 ----
 1000000	499999500000
 

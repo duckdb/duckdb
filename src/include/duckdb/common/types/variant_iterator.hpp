@@ -135,6 +135,7 @@ private:
 
 class VariantArrayIterator;
 class VariantObjectIterator;
+struct VariantNodeStorageAccess;
 
 //! A lightweight cursor pointing at a single logical VARIANT value.
 class VariantNode {
@@ -158,14 +159,19 @@ public:
 		return kind == Kind::MISSING;
 	}
 
-	//! The logical type of the value the cursor points at
-	VariantLogicalType GetTypeId() const;
+	//! The logical type of the value the cursor points at (see VariantDefaultType for OBJECT/ARRAY values)
+	LogicalType GetType() const;
+	//! The logical type id of the value the cursor points at (SQLNULL for a VARIANT NULL, STRUCT for an OBJECT,
+	//! LIST for an ARRAY)
+	LogicalTypeId GetTypeId() const;
+	//! Returns the payload of a BOOLEAN value
+	bool GetBool() const;
 
 	//! Returns the fixed-width primitive payload loaded as T (e.g. GetData<int32_t>()). For a DECIMAL the
 	//! payload follows the (width, scale) prefix, so T must match the physical type implied by the width.
 	template <class T>
 	T GetData() const {
-		if (GetTypeId() == VariantLogicalType::DECIMAL) {
+		if (GetVariantType() == VariantLogicalType::DECIMAL) {
 			return Load<T>(GetDecimal().value_ptr);
 		}
 		return Load<T>(GetDataPointer());
@@ -192,6 +198,9 @@ public:
 	VariantArrayIterator GetArrayChildren() const;
 
 private:
+	//! The storage-level type of the value the cursor points at
+	VariantLogicalType GetVariantType() const;
+
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
 	//! flattened primitive) at the given index into a concrete cursor
 	static VariantNode ResolveShredded(const VariantIterator &state, const ShreddedVariantIterator &node, idx_t index,
@@ -225,6 +234,7 @@ private:
 	friend class VariantIterator;
 	friend class VariantArrayIterator;
 	friend class VariantObjectIterator;
+	friend struct VariantNodeStorageAccess;
 };
 
 //! Lazily iterates the element values of an ARRAY VariantNode. Random-access: no child cursor is
@@ -336,9 +346,14 @@ public:
 		return ordered_entries;
 	}
 
-private:
+	//! The number of raw entries, including the fields missing in this row
+	idx_t GetRawCount() const {
+		return raw_count;
+	}
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
+
+private:
 	//! The end position in the iteration space
 	idx_t EndPos() const {
 		return order == VariantIterationOrder::LEXICOGRAPHIC ? ordered_entries.size() : raw_count;

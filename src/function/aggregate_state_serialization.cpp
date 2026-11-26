@@ -11,6 +11,32 @@
 
 namespace duckdb {
 
+bool AggregateStateField::IsFixedSize(const LogicalType &type) const {
+	switch (kind) {
+	case AggregateFieldKind::PRIMITIVE:
+		return TypeIsConstantSize(type.InternalType());
+	case AggregateFieldKind::OPTIONAL_VALUE:
+		return children.size() == 1 && children[0].IsFixedSize(type);
+	case AggregateFieldKind::STRUCT: {
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return false;
+		}
+		const auto &types = StructType::GetChildTypes(type);
+		if (types.size() != children.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < types.size(); i++) {
+			if (!children[i].IsFixedSize(types[i].second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 namespace {
 
 template <class OP, class... ARGS>

@@ -155,14 +155,6 @@ static void CheckNonExecutingProfilerCalls(bool check_idle_latency) {
 		REQUIRE(con.GetTableNames("SELECT * FROM t").size() == 1);
 		check_next_query();
 	}
-	SECTION("ExtractPlan fails") {
-		REQUIRE_THROWS(con.ExtractPlan("SELECT * FROM table_that_does_not_exist"));
-		check_next_query();
-	}
-	SECTION("ExtractPlan succeeds") {
-		REQUIRE(con.ExtractPlan("SELECT * FROM t"));
-		check_next_query();
-	}
 	SECTION("a query fails to parse") {
 		REQUIRE_FAIL(con.Query("SELEC 42"));
 		check_next_query();

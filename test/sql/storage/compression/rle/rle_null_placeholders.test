@@ -1,0 +1,70 @@
+# name: test/sql/storage/compression/rle/rle_null_placeholders.test
+# description: NULL-only RLE runs must not expose invalid decimal values to dictionary execution
+# group: [rle]
+
+load {TEST_DIR}/rle_null_placeholders.db
+
+statement ok
+SET force_compression='rle';
+
+statement ok
+CREATE TABLE decimals AS
+SELECT CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(4,0) END d4,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(9,0) END d9,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(18,0) END d18,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(38,0) END d38,
+       CASE WHEN i < 65535 THEN NULL ELSE ((i // 37) % 7)::DECIMAL(9,2) END scaled
+FROM range(131070) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(DISTINCT column_name) FROM pragma_storage_info('decimals') WHERE compression='RLE';
+----
+5
+
+# Unary decimal negation cannot overflow for legal decimal values. It evaluates
+# whole dictionary children, including the unused placeholder of the leading NULL run.
+query IIIII
+SELECT sum(-d4), sum(-d9), sum(-d18), sum(-d38), sum(-scaled) FROM decimals;
+----
+-196581	-196581	-196581	-196581	-196581.00
+
+# Values that share a physical NULL placeholder remain valid in their logical domain.
+statement ok
+CREATE TABLE physical_minima AS
+SELECT CASE WHEN (i // 37) % 2 = 0 THEN -128 ELSE 1 END::TINYINT AS signed_min,
+       CASE WHEN (i // 37) % 2 = 0 THEN 0 ELSE 1 END::UTINYINT AS unsigned_min,
+       CASE WHEN (i // 37) % 2 = 0 THEN 'NaN'::DOUBLE ELSE 1 END AS nan_value
+FROM range(7400) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(DISTINCT column_name) FROM pragma_storage_info('physical_minima') WHERE compression='RLE';
+----
+3
+
+query I
+SELECT current_setting('debug_force_fetch_row')
+       OR current_setting('default_block_size') <> 262144
+       OR current_setting('standard_vector_size') <> 2048
+       OR current_setting('debug_verify_vector') <> 'NONE'
+       OR bool_and(vector_type(signed_min) = 'DICTIONARY_VECTOR'
+                   AND vector_type(unsigned_min) = 'DICTIONARY_VECTOR'
+                   AND vector_type(nan_value) = 'DICTIONARY_VECTOR')
+FROM physical_minima;
+----
+true
+
+query IIIIII
+SELECT count(signed_min), sum(signed_min), count(unsigned_min), sum(unsigned_min),
+       count(nan_value), count(*) FILTER (WHERE isnan(nan_value)) FROM physical_minima;
+----
+7400	-469900	7400	3700	7400	3700

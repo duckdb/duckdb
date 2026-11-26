@@ -80,7 +80,7 @@ public:
 	}
 
 private:
-	bool is_read_only;
+	atomic<bool> is_read_only;
 };
 
 } // namespace duckdb

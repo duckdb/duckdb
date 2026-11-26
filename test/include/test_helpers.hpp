@@ -182,6 +182,8 @@ duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &c
 //! Drain a stream into a retained result, so it can be checked with CHECK_COLUMN
 duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream);
 void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary);
+//! Plan and optimize a single statement, returning the logical plan for inspection
+unique_ptr<LogicalOperator> TestExtractPlan(Connection &con, const string &query);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())

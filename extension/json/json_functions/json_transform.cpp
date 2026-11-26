@@ -1310,6 +1310,8 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	options.delay_error = true;
 
 	auto success = TransformFunctionInternal(source, count, result, alc, options);
+	// strings of the result point into the JSON allocator, which must outlive the cast's local state
+	JSONAllocator::AddBuffer(result, alc);
 	if (!success) {
 		HandleCastError::AssignError(options.error_message, parameters);
 	}

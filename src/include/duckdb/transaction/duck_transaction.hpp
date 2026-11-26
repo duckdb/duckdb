@@ -116,6 +116,9 @@ public:
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
 	}
+	bool IsCheckpointTransaction() const {
+		return is_checkpoint_transaction;
+	}
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
@@ -123,6 +126,8 @@ private:
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
+	//! Guards checkpoint_lock and vacuum_lock (statements of the transaction can run concurrently)
+	mutex lock_keys_lock;
 	//! Lock that prevents checkpoints from starting
 	unique_ptr<StorageLockKey> checkpoint_lock;
 	//! Lock that prevents vacuums from starting
@@ -132,7 +137,7 @@ private:
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
-	bool is_checkpoint_transaction = false;
+	atomic<bool> is_checkpoint_transaction {false};
 };
 
 } // namespace duckdb

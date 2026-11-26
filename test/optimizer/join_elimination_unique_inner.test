@@ -1,0 +1,747 @@
+# name: test/optimizer/join_elimination_unique_inner.test
+# description: Outer joins with an unread inner side that is distinct on the join keys are eliminated
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE f(k INTEGER, k2 INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO f VALUES (1, 1, 10), (1, 1, 11), (2, 1, 12), (2, 2, 13), (3, NULL, 14), (NULL, 1, 15), (NULL, NULL, 16), (4, 4, 17), (5, 1, 18);
+
+statement ok
+CREATE TABLE d(k INTEGER, k2 INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO d VALUES (1, 1, 1), (1, 1, 2), (1, 2, 3), (2, 1, 4), (2, 1, 5), (3, NULL, 6), (3, NULL, 7), (NULL, 1, 8), (NULL, 1, 9), (NULL, NULL, 10), (NULL, NULL, 11), (5, 5, 12);
+
+statement ok
+CREATE TABLE pk(k INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO pk VALUES (1, 1), (2, 2), (3, 3), (5, 5);
+
+statement ok
+CREATE TABLE pk2(k INTEGER, k2 INTEGER, v INTEGER, PRIMARY KEY (k, k2));
+
+statement ok
+INSERT INTO pk2 VALUES (1, 1, 1), (1, 2, 2), (2, 1, 3), (5, 5, 4);
+
+# the inner side is grouped by the join key: every outer row finds at most one match, so the join returns exactly its
+# outer rows, whatever reads them. A filter on the inner side, pushed into the scan or not, only removes inner rows
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v + k > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v + k > 2 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE k > 1 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE k > 1 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 AND k2 IS NOT NULL GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 AND k2 IS NOT NULL GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 100 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 100 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k HAVING max(v) > 4) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k HAVING max(v) > 4) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g RIGHT JOIN f ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g RIGHT JOIN f ON f.k = g.k;
+----
+126	9
+
+# consumers that see every row
+query II
+EXPLAIN SELECT f.k, f.x FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT f.k, f.x FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k ORDER BY ALL;
+----
+1	10
+1	11
+2	12
+2	13
+3	14
+4	17
+5	18
+NULL	15
+NULL	16
+
+query II
+EXPLAIN SELECT f.x, row_number() OVER (ORDER BY f.x) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT f.x, row_number() OVER (ORDER BY f.x) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k ORDER BY ALL;
+----
+10	1
+11	2
+12	3
+13	4
+14	5
+15	6
+16	7
+17	8
+18	9
+
+query II
+EXPLAIN SELECT f.k, list(f.x ORDER BY f.x) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k GROUP BY f.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT f.k, list(f.x ORDER BY f.x) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k GROUP BY f.k ORDER BY ALL;
+----
+1	[10, 11]
+2	[12, 13]
+3	[14]
+4	[17]
+5	[18]
+NULL	[15, 16]
+
+query II
+EXPLAIN SELECT x FROM (SELECT f.x FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k ORDER BY f.x LIMIT 4);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+SELECT x FROM (SELECT f.x FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k ORDER BY f.x LIMIT 4) ORDER BY ALL;
+----
+10
+11
+12
+13
+
+# DISTINCT, a PRIMARY KEY and a composite key with a filter on the inner side
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT DISTINCT k FROM d WHERE v > 2) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT DISTINCT k FROM d WHERE v > 2) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk WHERE v > 1) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk WHERE v > 1) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk2 WHERE v > 1) g ON f.k = g.k AND f.k2 = g.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk2 WHERE v > 1) g ON f.k = g.k AND f.k2 = g.k2;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k AND f.k2 = g.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k AND f.k2 = g.k2;
+----
+126	9
+
+# NULL keys: the inner side has at most one row per key, NULLs included. = never matches it, IS NOT DISTINCT FROM
+# matches exactly one row; a composite key may mix the two
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k IS NOT DISTINCT FROM g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k IS NOT DISTINCT FROM g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+126	9
+
+# further conditions only filter the matches
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND g.m > 4;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND g.m > 4;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND f.x > g.m;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND f.x > g.m;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND g.k = 1;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND g.k = 1;
+----
+126	9
+
+# not distinct on the compared columns: the join repeats outer rows and stays
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY k, k2) g ON f.k = g.k;
+----
+147	11
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT DISTINCT k, k2 FROM d WHERE v > 1) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT DISTINCT k, k2 FROM d WHERE v > 1) g ON f.k = g.k;
+----
+147	11
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk2 WHERE v > 1) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT * FROM pk2 WHERE v > 1) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k > g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k > g.k;
+----
+210	14
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.m;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.m;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k % 2;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k % 2;
+----
+168	13
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY ROLLUP (k)) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY ROLLUP (k)) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY GROUPING SETS ((k), (k, k2))) g ON f.k = g.k AND f.k2 = g.k2;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, max(v) AS m FROM d WHERE v > 1 GROUP BY GROUPING SETS ((k), (k, k2))) g ON f.k = g.k AND f.k2 = g.k2;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT d.k FROM (SELECT DISTINCT k FROM d WHERE v > 2) g JOIN d ON g.k = d.k) h ON f.k = h.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT d.k FROM (SELECT DISTINCT k FROM d WHERE v > 2) g JOIN d ON g.k = d.k) h ON f.k = h.k;
+----
+207	16
+
+# joins that filter or add rows stay
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+78	6
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f FULL JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f FULL JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+126	10
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k WHERE g.k IS NOT NULL;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k WHERE g.k IS NOT NULL;
+----
+78	6
+
+# an inner side that is read stays
+query II
+EXPLAIN SELECT sum(f.x), count(g.m) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(g.m) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+126	6
+
+# a correlated scalar subquery (SINGLE join) that nothing reads, with a filter in the subquery
+query II
+EXPLAIN SELECT x FROM (SELECT f.x, (SELECT max(d.v) FROM d WHERE d.k = f.k AND d.v > 2) AS m FROM f);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+SELECT x FROM (SELECT f.x, (SELECT max(d.v) FROM d WHERE d.k = f.k AND d.v > 2) AS m FROM f) ORDER BY ALL;
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+
+# chains of dead joins
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, min(v) AS m FROM d WHERE v < 9 GROUP BY k2) h ON f.k2 = h.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, min(v) AS m FROM d WHERE v < 9 GROUP BY k2) h ON f.k2 = h.k2;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN ((SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g LEFT JOIN (SELECT * FROM pk WHERE v > 1) p ON g.k = p.k) ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN ((SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g LEFT JOIN (SELECT * FROM pk WHERE v > 1) p ON g.k = p.k) ON f.k = g.k;
+----
+126	9
+
+# a volatile filter on the inner side is evaluated once per inner row: the join stays and the sequence is advanced
+statement ok
+CREATE SEQUENCE seq;
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 AND nextval('seq') > 0 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 AND nextval('seq') > 0 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query I
+SELECT nextval('seq') > 1;
+----
+true
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND random() < 2;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k AND random() < 2;
+----
+126	9
+
+# an aggregate with DISTINCT and other aggregates is planned as two aggregates over a shared materialized input that
+# are joined on the groups. The result is still distinct on the groups, so the join to it is removed with it
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, count(DISTINCT k2) AS c2 FROM d GROUP BY k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, count(DISTINCT k2) AS c2 FROM d GROUP BY k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k, k2) g ON f.k = g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k, k2) g ON f.k = g.k AND f.k2 IS NOT DISTINCT FROM g.k2;
+----
+126	9
+
+query II
+EXPLAIN SELECT f.k, f.x FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT f.k, f.x FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k IS NOT DISTINCT FROM g.k ORDER BY ALL;
+----
+1	10
+1	11
+2	12
+2	13
+3	14
+4	17
+5	18
+NULL	15
+NULL	16
+
+# the columns of the inner side are only read by expressions that nothing reads
+query II
+EXPLAIN SELECT sum(x), count(*) FROM (SELECT f.x, CASE WHEN g.s = 0 THEN 0 ELSE g.c / g.s END AS r, h.c + h.s AS t FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k2) h ON f.k2 = h.k2);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(x), count(*) FROM (SELECT f.x, CASE WHEN g.s = 0 THEN 0 ELSE g.c / g.s END AS r, h.c + h.s AS t FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k2) h ON f.k2 = h.k2);
+----
+126	9
+
+# one of two such sides is read
+query II
+EXPLAIN SELECT sum(x), sum(c), count(*) FROM (SELECT f.x, g.c, h.c + h.s AS t FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k2) h ON f.k2 = h.k2);
+----
+physical_plan	<!REGEX>:.*LEFT.*LEFT.*
+
+query III
+SELECT sum(x), sum(c), count(*) FROM (SELECT f.x, g.c, h.c + h.s AS t FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k) g ON f.k = g.k LEFT JOIN (SELECT k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k2) h ON f.k2 = h.k2);
+----
+126	13	9
+
+# not distinct on the compared columns
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k, k2) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, k2, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY k, k2) g ON f.k = g.k;
+----
+147	11
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k = g.k;
+----
+126	9
+
+# with IS NOT DISTINCT FROM the NULL group and the grand total of the ROLLUP both match an outer NULL key
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+157	11
+
+# the same for a materialized CTE that is defined on the inner side: the output is the output of the query that reads it
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) g ON f.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) g ON f.k = g.k;
+----
+126	9
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN c b ON a.k = b.k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN c b ON a.k = b.k) g ON f.k = g.k;
+----
+165	12
+
+# a volatile filter in the definition of that CTE: the join stays and the sequence is advanced
+statement ok
+CREATE OR REPLACE SEQUENCE seq;
+
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE nextval('seq') > 0) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE nextval('seq') > 0) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) g ON f.k = g.k;
+----
+126	9
+
+query I
+SELECT nextval('seq') > 1;
+----
+true
+
+# a DISTINCT over such a query is redundant
+query II
+EXPLAIN SELECT DISTINCT k FROM (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k);
+----
+physical_plan	<!REGEX>:.*GROUP_BY.*GROUP_BY.*GROUP_BY.*
+
+query I
+SELECT DISTINCT k FROM (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) ORDER BY ALL;
+----
+1
+2
+3
+5
+
+query II
+EXPLAIN SELECT DISTINCT k FROM (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT b.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k, v FROM c GROUP BY k, v) b ON a.k = b.k);
+----
+physical_plan	<REGEX>:.*GROUP_BY.*GROUP_BY.*GROUP_BY.*
+
+query I
+SELECT DISTINCT k FROM (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT b.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k, v FROM c GROUP BY k, v) b ON a.k = b.k) ORDER BY ALL;
+----
+1
+2
+3
+5
+
+# a DISTINCT over an aggregate that was split this way is redundant as well
+query II
+EXPLAIN SELECT DISTINCT k, c, s FROM (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k);
+----
+physical_plan	<!REGEX>:.*GROUP_BY.*GROUP_BY.*GROUP_BY.*GROUP_BY.*
+
+query III
+SELECT DISTINCT k, c, s FROM (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k) ORDER BY ALL;
+----
+1	1	3
+2	2	9
+3	2	13
+5	1	12
+NULL	4	38
+
+# a materialized CTE that is defined above the join and read by the inner side stays a reference: the join stays, and
+# so does the CTE for its other readers
+query II
+EXPLAIN WITH g AS MATERIALIZED (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) SELECT sum(f.x), count(*), (SELECT count(*) FROM g) FROM f LEFT JOIN g ON f.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query III
+WITH g AS MATERIALIZED (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) SELECT sum(f.x), count(*), (SELECT count(*) FROM g) FROM f LEFT JOIN g ON f.k = g.k;
+----
+126	9	5
+
+# keys whose equality is not identity. DOUBLE: 0.0 = -0.0 and NaN = NaN, for the GROUP BY like for the join
+statement ok
+CREATE TABLE fd(k DOUBLE, x INTEGER);
+
+statement ok
+INSERT INTO fd VALUES (0.0, 1), (-0.0, 2), ('NaN', 3), ('NaN', 4), (1.5, 5), (NULL, 6), ('inf', 7);
+
+statement ok
+CREATE TABLE dd(k DOUBLE, v INTEGER);
+
+statement ok
+INSERT INTO dd VALUES (0.0, 1), (-0.0, 2), ('NaN', 3), ('NaN', 4), (1.5, 5), (1.5, 6), (NULL, 7), (NULL, 8), ('inf', 9);
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k = g.k;
+----
+28	7
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k IS NOT DISTINCT FROM g.k;
+----
+28	7
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, v FROM dd WHERE v > 1) g ON fd.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, v FROM dd WHERE v > 1) g ON fd.k = g.k;
+----
+40	10
+
+# a collation: the inner side is grouped by the binary value and joined by the collated one, so 'b' matches 'b' and 'B'
+statement ok
+CREATE TABLE fs(k VARCHAR COLLATE NOCASE, x INTEGER);
+
+statement ok
+INSERT INTO fs VALUES ('a', 1), ('A', 2), ('b', 3), (NULL, 4), ('c', 5);
+
+statement ok
+CREATE TABLE ds(k VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO ds VALUES ('a', 1), ('A', 2), ('B', 3), ('b', 4), (NULL, 5), (NULL, 6);
+
+query II
+EXPLAIN SELECT sum(fs.x), count(*) FROM fs LEFT JOIN (SELECT k, max(v) AS m FROM ds WHERE v > 1 GROUP BY k) g ON fs.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fs.x), count(*) FROM fs LEFT JOIN (SELECT k, max(v) AS m FROM ds WHERE v > 1 GROUP BY k) g ON fs.k = g.k;
+----
+18	6

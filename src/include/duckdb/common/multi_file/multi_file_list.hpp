@@ -196,32 +196,4 @@ protected:
 	optional_ptr<Context> services;
 };
 
-//! MultiFileList that takes a list of globs and resolves all of the globs lazily into files
-class GlobMultiFileList : public LazyMultiFileList {
-public:
-	GlobMultiFileList(ClientContext &context, vector<string> globs, FileGlobInput input);
-	//! Entries that carry explicit open options (i.e. an ExtendedOpenFileInfo) are emitted as-is instead of
-	//! being glob-expanded - they refer to a file the caller already knows the exact identity of
-	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> globs, FileGlobInput input);
-
-	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;
-
-protected:
-	bool ExpandNextPath() const override;
-
-protected:
-	//! The ClientContext for globbing
-	ClientContext &context;
-	//! The list of globs to expand
-	const vector<OpenFileInfo> globs;
-	//! Glob input
-	const FileGlobInput glob_input;
-	//! The current glob to expand
-	mutable idx_t current_glob;
-	//! File lists for the underlying globs
-	mutable vector<unique_ptr<MultiFileList>> file_lists;
-	//! Current scan state
-	mutable MultiFileListScanData scan_state;
-};
-
 } // namespace duckdb

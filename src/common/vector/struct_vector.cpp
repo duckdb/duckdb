@@ -195,7 +195,7 @@ void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
 	format.data = nullptr;
-	format.validity = validity;
+	format.validity.Initialize(validity.GetData(), validity.Capacity());
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

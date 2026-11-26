@@ -133,6 +133,13 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	//	so there is only one peer group, which is the same as having no ORDER BY clause.
 	auto &partition_bys = wexpr.Partitions();
 	auto &order_bys = wexpr.OrderByMutable();
+	//	A RANGE frame with an offset is measured on the ORDER BY value, so it needs the key even then.
+	const auto range_offset = [](WindowBoundary boundary) {
+		return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	};
+	if (range_offset(wexpr.WindowStart()) || range_offset(wexpr.WindowEnd())) {
+		return;
+	}
 	if (!partition_bys.empty() && order_bys.size() == 1) {
 		vector<reference<Expression>> refs;
 		for (auto &arg : partition_bys) {

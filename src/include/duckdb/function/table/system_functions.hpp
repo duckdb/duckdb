@@ -95,6 +95,10 @@ struct DuckDBGrammarExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBGrammarChangesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ActiveGrammarExtensionFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

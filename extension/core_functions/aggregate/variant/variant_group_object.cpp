@@ -177,7 +177,7 @@ void VariantObjClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_dat
 
 AggregateStateLayout VariantObjStateLayout(AggregateLayoutInput &input) {
 	AggregateStateLayout layout;
-	if (input.function.GetReturnType().IsAggregateState()) {
+	if (input.function.ReturnsExportedState()) {
 		layout.type = input.function.GetReturnType();
 	} else {
 		layout.type = LogicalType::LIST(GetInternalBufferType());

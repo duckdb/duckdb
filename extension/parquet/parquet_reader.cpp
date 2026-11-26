@@ -2021,19 +2021,19 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			auto &filter = *filter_entry;
 
 			auto prune_result = CheckRowGroupFilterStatistics(context, state, column_reader, filter);
-			// check the bloom filter if present
-			auto bloom_source = TryGetBloomFilterSource(column_reader);
+			// check the bloom filter if present and the statistics do not already decide the row group
+			auto bloom_source = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE
+			                        ? TryGetBloomFilterSource(column_reader)
+			                        : nullptr;
 			if (bloom_source) {
 				optional_ptr<ColumnReader> bloom_reader = bloom_source;
 				optional_ptr<const TableFilter> bloom_filter = &filter;
 				unique_ptr<TableFilter> leaf_filter;
-				auto check_bloom_filter = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE;
 				if (bloom_source->Type().IsNested()) {
 					if (!TryGetBloomFilterLeaf(*bloom_source, filter, bloom_reader, leaf_filter)) {
 						bloom_reader = nullptr;
 					} else {
 						bloom_filter = leaf_filter.get();
-						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}
 				if (bloom_reader && parquet_options.RepairsInvalidUTF8() &&
@@ -2045,14 +2045,14 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				auto hash_strategy = bloom_reader ? ParquetStatisticsUtils::GetBloomFilterHashStrategy(
 				                                        bloom_reader->Schema(), interval_bloom_filter_version)
 				                                  : nullopt;
-				if (check_bloom_filter && bloom_reader && bloom_filter &&
+				if (bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
 				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy) {
 					auto &bloom_meta_data = group.columns[bloom_reader->ColumnIndex()].meta_data;
 					if (bloom_meta_data.__isset.bloom_filter_offset && bloom_meta_data.bloom_filter_offset > 0 &&
 					    ParquetStatisticsUtils::HasBloomFilterConstants(*bloom_filter, *hash_strategy)) {
 						TryAttachBloomFilterReadHead(context, state, column_reader, filter,
-						                             bloom_source->Type().IsNested(), bloom_reader->ColumnIndex());
+						                             bloom_reader->ColumnIndex());
 					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
@@ -2130,7 +2130,7 @@ struct ParquetReader::BloomFilterReadPlan {
 
 ParquetReader::BloomFilterReadPlan
 ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport &transport, ColumnReader &column_reader,
-                                    const TableFilter &filter, bool nested_filter, idx_t column_chunk_idx) {
+                                    const TableFilter &filter, idx_t column_chunk_idx) {
 	struct BloomFilterRange {
 		idx_t offset;
 		idx_t length;
@@ -2151,8 +2151,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 			continue;
 		}
 		auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
-		if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
-		                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		if (prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			continue;
 		}
 		const auto offset = NumericCast<idx_t>(meta_data.bloom_filter_offset);
@@ -2224,7 +2223,7 @@ ParquetReader::PlanBloomFilterReads(ClientContext &context, ThriftFileTransport 
 
 bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
                                                  ColumnReader &column_reader, const TableFilter &filter,
-                                                 bool nested_filter, idx_t column_chunk_idx) {
+                                                 idx_t column_chunk_idx) {
 	if (!state.prefetch_mode || parquet_options.encryption_config) {
 		return false;
 	}
@@ -2242,8 +2241,7 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 		lock_guard<mutex> guard(bloom_filter_read_heads_lock);
 		auto entry = bloom_filter_read_heads.find(column_chunk_idx);
 		if (entry == bloom_filter_read_heads.end()) {
-			auto plan =
-			    PlanBloomFilterReads(context, transport, column_reader, filter, nested_filter, column_chunk_idx);
+			auto plan = PlanBloomFilterReads(context, transport, column_reader, filter, column_chunk_idx);
 			fetch_heads = std::move(plan.fetch_heads);
 			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(plan.row_group_heads)).first;
 		}
@@ -2389,7 +2387,7 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics) {
 			can_have_nan = ParquetStatisticsUtils::CanHaveNaN(column_chunk.meta_data.statistics, can_have_nan);
 		}
-		ParquetPageIndexUtils::FilterPages(column_reader.Schema(), column_index, filter_column.filter.get(),
+		ParquetPageIndexUtils::FilterPages(context, column_reader.Schema(), column_index, filter_column.filter.get(),
 		                                   parquet_options, can_have_nan, page_may_match[i]);
 		for (auto may_match : page_may_match[i]) {
 			any_page_pruned = any_page_pruned || !may_match;
@@ -2656,18 +2654,42 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 
 		// Special handle generated columns.
-		const auto &column_schema = root_schema->children[primary_index];
-		if (column_schema.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		reference<const ParquetColumnSchema> column_schema = root_schema->children[primary_index];
+		if (column_schema.get().schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 			return true;
+		}
+		// resolve an extracted struct field to the leaf column it reads
+		if (storage_index.IsPushdownExtract()) {
+			reference<const StorageIndex> index = storage_index;
+			while (index.get().HasChildren() && column_schema.get().type.id() == LogicalTypeId::STRUCT) {
+				if (column_schema.get().children.empty()) {
+					// INT96 can be exposed as a struct without physical child columns.
+					return false;
+				}
+				index = index.get().GetChildIndex(0);
+				column_schema = column_schema.get().children[index.get().GetPrimaryIndex()];
+			}
+		}
+		// row_group.columns is indexed by leaf column, so only leaf columns map to a column chunk
+		auto &leaf_schema = column_schema.get();
+		if (leaf_schema.schema_type != ParquetColumnSchemaType::COLUMN || !leaf_schema.children.empty()) {
+			return false;
 		}
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_chunk = row_group.columns[primary_index];
+		const auto &column_chunk = row_group.columns[leaf_schema.column_index];
 
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
 		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
 			const auto &stats = column_chunk.meta_data.statistics;
+			const auto type_id = leaf_schema.type.id();
+			const bool is_floating_point = type_id == LogicalTypeId::FLOAT || type_id == LogicalTypeId::DOUBLE;
+			const bool can_have_nan = parquet_options->can_have_nan && stats.__isset.nan_count == 0;
+			if (is_floating_point && can_have_nan) {
+				// the max is replaced by NaN as an upper bound, as the stored max leaves out NaN values
+				return false;
+			}
 			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
 		return false;

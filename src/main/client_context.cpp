@@ -10,7 +10,6 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -26,7 +25,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
@@ -39,7 +37,6 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -504,36 +501,6 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		ProcessError(error, query);
 		error.Throw();
 	}
-}
-
-unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
-	auto lock = LockContext();
-
-	auto statements = ParseStatementsInternal(*lock, query, false);
-	if (statements.size() != 1) {
-		throw InvalidInputException("ExtractPlan can only prepare a single statement");
-	}
-	statements[0] = ExpandSingleStatementInternal(*lock, std::move(statements[0]),
-	                                              "ExtractPlan can only prepare a single statement");
-
-	unique_ptr<LogicalOperator> plan;
-	RunFunctionInTransactionInternal(*lock, [&]() {
-		Planner planner(*this);
-		planner.CreatePlan(std::move(statements[0]));
-		D_ASSERT(planner.plan);
-
-		plan = std::move(planner.plan);
-
-		Optimizer optimizer(*planner.binder, *this);
-		plan = optimizer.Optimize(std::move(plan));
-
-		LogicalPlanVerifier::Verify(*this, *plan);
-		// the resolver checks the column references against the operator types, which the optimizer leaves stale
-		plan->ResolveOperatorTypes();
-		ColumnBindingResolver resolver;
-		resolver.VisitOperator(*plan);
-	});
-	return plan;
 }
 
 //! Snapshot the metadata that the PreparedStatement handle exposes to the user
