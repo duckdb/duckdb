@@ -1,11 +1,8 @@
 # name: test/optimizer/pushdown/pushdown_constant_row.test
-# description: Filters against a one-row relation of constants are pushed into the other side of the cross product
+# description: Propagate exact constants through relational operators before pushing filters into scans
 # group: [pushdown]
 
 require parquet
-
-statement ok
-PRAGMA explain_output='OPTIMIZED_ONLY';
 
 # keep the statistics propagator from deriving the same filters from the join
 statement ok
@@ -15,22 +12,12 @@ statement ok
 CREATE TABLE t AS SELECT range AS g, (range % 10)::VARCHAR AS h FROM range(100);
 
 # integer constant against a BIGINT column, and a string constant
-query II
-EXPLAIN WITH params AS (SELECT 7 AS a, '7' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a AND t.h = p.b;
-----
-logical_opt	<REGEX>:.*Filters: g = 7, h = '7'.*
-
 query I
 WITH params AS (SELECT 7 AS a, '7' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a AND t.h = p.b;
 ----
 1
 
 # inner join condition, with a constant column that is only projected, and one that is unused
-query II
-EXPLAIN WITH params AS (SELECT 7 AS a, 3 AS unused) SELECT count(*), max(p.a) FROM t JOIN params p ON t.g = p.a;
-----
-logical_opt	<REGEX>:.*Filters: g = 7.*
-
 query II
 WITH params AS (SELECT 7 AS a, 3 AS unused) SELECT count(*), max(p.a) FROM t JOIN params p ON t.g = p.a;
 ----
@@ -57,18 +44,7 @@ WITH params AS (SELECT NULL::INT AS a) SELECT count(*) FROM t CROSS JOIN params 
 ----
 0
 
-# volatile values are not constants
-query II
-EXPLAIN WITH params AS (SELECT random() AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
-----
-logical_opt	<REGEX>:.*Comparison Join.*
-
 # a one-row aggregate is not a constant row
-query II
-EXPLAIN WITH params AS (SELECT max(g) AS a FROM t) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
-----
-logical_opt	<REGEX>:.*Comparison Join.*
-
 query I
 WITH params AS (SELECT max(g) AS a FROM t) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
 ----
@@ -92,18 +68,11 @@ WITH params AS (SELECT 7 AS a) SELECT count(*), count(p.a) FROM t LEFT JOIN para
 # hive partitions are pruned by the substituted constants
 statement ok
 COPY (SELECT range AS v, range % 4 AS part, (range % 3)::VARCHAR AS spart FROM range(120))
-TO '__TEST_DIR__/constant_row_parts' (FORMAT parquet, PARTITION_BY (part, spart));
-
-query II
-EXPLAIN ANALYZE WITH params AS (SELECT 1 AS part, '2' AS spart)
-SELECT count(*) FROM read_parquet('__TEST_DIR__/constant_row_parts/**/*.parquet', hive_partitioning = true,
-hive_types = {'part': INT, 'spart': VARCHAR}) d CROSS JOIN params p WHERE d.part = p.part AND d.spart = p.spart;
-----
-analyzed_plan	<REGEX>:.*Total Files Read: 1.*
+TO '{TEST_DIR}/constant_row_parts' (FORMAT parquet, PARTITION_BY (part, spart));
 
 query I
 WITH params AS (SELECT 1 AS part, '2' AS spart)
-SELECT count(*) FROM read_parquet('__TEST_DIR__/constant_row_parts/**/*.parquet', hive_partitioning = true,
+SELECT count(*) FROM read_parquet('{TEST_DIR}/constant_row_parts/**/*.parquet', hive_partitioning = true,
 hive_types = {'part': INT, 'spart': VARCHAR}) d CROSS JOIN params p WHERE d.part = p.part AND d.spart = p.spart;
 ----
 10
@@ -130,3 +99,112 @@ query I
 WITH params AS (SELECT '7' AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a::BIGINT;
 ----
 1
+
+# A cast of a known parameter is safe once it has been successfully folded.
+query I
+WITH params AS (SELECT '7' AS a) SELECT g FROM t JOIN params p ON t.g = p.a::BIGINT;
+----
+7
+
+# Compute constants through multiple projections, including a cast in the projection.
+query I
+WITH seed AS (SELECT '6' AS a), params AS (SELECT a::BIGINT + 1 AS a FROM seed)
+SELECT g FROM t JOIN params p ON t.g = p.a;
+----
+7
+
+# VALUES exposes the same constant as SELECT.
+query I
+WITH params(a) AS (VALUES ('7')) SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+10
+
+# The constant can reach another scan through a larger join input.
+query I
+WITH params AS (SELECT '7' AS a)
+SELECT count(*) FROM t x CROSS JOIN params p CROSS JOIN t y WHERE y.h = p.a;
+----
+1000
+
+# Constant columns do not imply a one-row relation: keep its multiplicity.
+query I
+WITH params AS (SELECT '7' AS a FROM range(3))
+SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+30
+
+query I
+WITH params AS (SELECT '7' AS a FROM range(0))
+SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+0
+
+# Constants from a nullable join side must not escape above the outer join.
+query III
+SELECT t.g, p.a, p.a IS NULL
+FROM t LEFT JOIN (SELECT 7 AS a) p ON t.g = p.a
+WHERE t.g IN (6, 7) ORDER BY t.g;
+----
+6	NULL	true
+7	7	false
+
+# NULL-safe comparisons preserve their semantics.
+query I
+SELECT count(*) FROM (VALUES (NULL), (7)) t(k), (SELECT NULL::INT AS k) p
+WHERE t.k IS NOT DISTINCT FROM p.k;
+----
+1
+
+# Do not retain constants from an earlier prepared-statement execution.
+statement ok
+PREPARE q_values AS WITH params AS (SELECT ?::BIGINT AS a) SELECT g FROM t, params p WHERE t.g = p.a;
+
+query I
+EXECUTE q_values(7);
+----
+7
+
+query I
+EXECUTE q_values(8);
+----
+8
+
+# A failing fold is not a constant and must not be evaluated on an empty input.
+query I
+SELECT CAST(s AS INTEGER) FROM (SELECT 'bad' AS s FROM range(0));
+----
+
+statement error
+SELECT CAST(s AS INTEGER) FROM (SELECT 'bad' AS s FROM range(1));
+----
+Could not convert string 'bad' to INT32
+
+# Replacing a binding must not move a throwing predicate below its row-removing join.
+query I
+SELECT count(*) FROM (SELECT 7 AS k FROM range(1) WHERE random() > 1 LIMIT 1) p
+CROSS JOIN (VALUES ('bad'), ('also_bad')) t(s)
+WHERE CAST(t.s AS INTEGER) + p.k = 8;
+----
+0
+
+# A lambda is foldable by its owning function, but has no scalar value of its own.
+query I
+SELECT invoke(lambda x: x + 1, i) FROM range(3) t(i);
+----
+1
+2
+3
+
+query I
+SELECT invoke(lambda x: x + p.k, i) FROM range(3) t(i), (SELECT 1 AS k) p;
+----
+1
+2
+3
+
+query I
+SELECT list_transform([i], lambda x: x + p.k) FROM range(3) t(i), (SELECT 1 AS k) p;
+----
+[1]
+[2]
+[3]

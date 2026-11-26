@@ -17,6 +17,8 @@ class ConstantFoldingRule : public Rule {
 public:
 	explicit ConstantFoldingRule(ExpressionRewriter &rewriter);
 
+	static unique_ptr<Expression> TryFold(ClientContext &context, Expression &expr);
+
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;
 };

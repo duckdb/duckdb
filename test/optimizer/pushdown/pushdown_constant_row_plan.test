@@ -1,0 +1,90 @@
+# name: test/optimizer/pushdown/pushdown_constant_row_plan.test
+# description: Verify scan filters and join plans after constant propagation
+# group: [pushdown]
+
+require parquet
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY';
+
+# Keep the statistics propagator from deriving the same filters from the join.
+statement ok
+SET disabled_optimizers TO 'statistics_propagation';
+
+statement ok
+CREATE TABLE t AS SELECT range AS g, (range % 10)::VARCHAR AS h FROM range(100);
+
+statement ok
+COPY (SELECT range AS v, range % 4 AS part, (range % 3)::VARCHAR AS spart FROM range(120))
+TO '{TEST_DIR}/constant_row_parts' (FORMAT parquet, PARTITION_BY (part, spart));
+
+# integer constant against a BIGINT column, and a string constant
+query II
+EXPLAIN WITH params AS (SELECT 7 AS a, '7' AS b) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a AND t.h = p.b;
+----
+logical_opt	<REGEX>:.*Filters: g = 7, h = '7'.*
+
+# inner join condition, with a constant column that is only projected, and one that is unused
+query II
+EXPLAIN WITH params AS (SELECT 7 AS a, 3 AS unused) SELECT count(*), max(p.a) FROM t JOIN params p ON t.g = p.a;
+----
+logical_opt	<REGEX>:.*Filters: g = 7.*
+
+# volatile values are not constants
+query II
+EXPLAIN WITH params AS (SELECT random() AS a) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+logical_opt	<REGEX>:.*Comparison Join.*
+
+# a one-row aggregate is not a constant row
+query II
+EXPLAIN WITH params AS (SELECT max(g) AS a FROM t) SELECT count(*) FROM t CROSS JOIN params p WHERE t.g = p.a;
+----
+logical_opt	<REGEX>:.*Comparison Join.*
+
+query II
+EXPLAIN ANALYZE WITH params AS (SELECT 1 AS part, '2' AS spart)
+SELECT count(*) FROM read_parquet('{TEST_DIR}/constant_row_parts/**/*.parquet', hive_partitioning = true,
+hive_types = {'part': INT, 'spart': VARCHAR}) d CROSS JOIN params p WHERE d.part = p.part AND d.spart = p.spart;
+----
+analyzed_plan	<REGEX>:.*Total Files Read: 1.*
+
+# A cast of a known parameter is safe once it has been successfully folded.
+query II
+EXPLAIN WITH params AS (SELECT '7' AS a) SELECT g FROM t JOIN params p ON t.g = p.a::BIGINT;
+----
+logical_opt	<REGEX>:.*Filters: g = 7.*
+
+# Compute constants through multiple projections, including a cast in the projection.
+query II
+EXPLAIN WITH seed AS (SELECT '6' AS a), params AS (SELECT a::BIGINT + 1 AS a FROM seed)
+SELECT count(*) FROM t JOIN params p ON t.g = p.a;
+----
+logical_opt	<REGEX>:.*Filters: g = 7.*
+
+# VALUES exposes the same constant as SELECT.
+query II
+EXPLAIN WITH params(a) AS (VALUES ('7')) SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+logical_opt	<REGEX>:.*Filters: h = '7'.*
+
+# The constant can reach another scan through a larger join input.
+query II
+EXPLAIN WITH params AS (SELECT '7' AS a)
+SELECT count(*) FROM t x CROSS JOIN params p CROSS JOIN t y WHERE y.h = p.a;
+----
+logical_opt	<REGEX>:.*Filters: h = '7'.*
+
+# Constant columns do not imply a one-row relation: keep its multiplicity.
+query II
+EXPLAIN WITH params AS (SELECT '7' AS a FROM range(3))
+SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+logical_opt	<REGEX>:.*Filters: h = '7'.*
+
+# A filter and limit between projections do not change the values of surviving rows.
+query II
+EXPLAIN WITH params AS (SELECT '7' AS a FROM range(3) WHERE range > 0 LIMIT 1)
+SELECT count(*) FROM t JOIN params p ON t.h = p.a;
+----
+logical_opt	<REGEX>:.*Filters: h = '7'.*

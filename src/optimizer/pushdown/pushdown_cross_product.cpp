@@ -7,8 +7,6 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -57,68 +55,6 @@ static bool HasTransitiveJoinBounds(const vector<unique_ptr<Filter>> &filters) {
 	return false;
 }
 
-//! The top projection of a stack of projections over a dummy scan (e.g. an inlined `WITH p AS (SELECT 1 AS x)`)
-static optional_ptr<LogicalProjection> GetConstantRow(LogicalOperator &op) {
-	reference<LogicalOperator> current(op);
-	while (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION && current.get().children.size() == 1) {
-		current = *current.get().children[0];
-	}
-	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION ||
-	    current.get().type != LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
-		return nullptr;
-	}
-	return &op.Cast<LogicalProjection>();
-}
-
-//! The foldable, non-volatile expression `binding` resolves to through the projections of a constant row
-static optional_ptr<const Expression> ResolveConstant(LogicalProjection &row, ColumnBinding binding) {
-	reference<LogicalProjection> proj(row);
-	while (true) {
-		if (binding.table_index != proj.get().table_index) {
-			return nullptr;
-		}
-		auto &expr = proj.get().GetExpression(binding);
-		if (expr.IsFoldable() && !expr.IsVolatile()) {
-			return &expr;
-		}
-		auto &child = *proj.get().children[0];
-		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    child.type != LogicalOperatorType::LOGICAL_PROJECTION) {
-			return nullptr;
-		}
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		if (colref.Depth() != 0) {
-			return nullptr;
-		}
-		binding = colref.Binding();
-		proj = child.Cast<LogicalProjection>();
-	}
-}
-
-//! Every row of the other side is paired with the one constant row, so its columns can be replaced by their values
-static void ReplaceConstantRowBindings(LogicalProjection &row, Filter &filter) {
-	bool changed = false;
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    filter.filter, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
-		    if (colref.Depth() != 0) {
-			    return;
-		    }
-		    auto constant = ResolveConstant(row, colref.Binding());
-		    if (!constant) {
-			    return;
-		    }
-		    auto copy = constant->Copy();
-		    if (!colref.GetAlias().empty()) {
-			    copy->SetAlias(colref.GetAlias());
-		    }
-		    expr = std::move(copy);
-		    changed = true;
-	    });
-	if (changed) {
-		filter.ExtractBindings();
-	}
-}
-
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->children.size() > 1);
 	FilterPushdown left_pushdown(optimizer, projection_mode);
@@ -145,19 +81,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		// first get the LHS and RHS bindings
 		LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 		LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
-		// substitute the values of a constant one-row side into join filters, so they can be pushed into the other side
-		for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
-			auto row = GetConstantRow(*op->children[child_idx]);
-			if (!row) {
-				continue;
-			}
-			for (auto &f : filters) {
-				if (f->bindings.count(row->table_index) &&
-				    JoinSide::GetJoinSide(f->bindings, left_bindings, right_bindings) == JoinSide::BOTH) {
-					ReplaceConstantRowBindings(*row, *f);
-				}
-			}
-		}
 		// now check the set of filters
 		for (auto &f : filters) {
 			auto side = JoinSide::GetJoinSide(f->bindings, left_bindings, right_bindings);

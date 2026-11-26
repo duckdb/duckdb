@@ -25,20 +25,26 @@ ConstantFoldingRule::ConstantFoldingRule(ExpressionRewriter &rewriter) : Rule(re
 	root = std::move(op);
 }
 
-unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
-                                                  bool &changes_made, bool is_root) {
-	auto &root = bindings[0].get();
-	// the root is a scalar expression that we have to fold
-	D_ASSERT(root.IsFoldable() && root.GetExpressionType() != ExpressionType::VALUE_CONSTANT);
+unique_ptr<Expression> ConstantFoldingRule::TryFold(ClientContext &context, Expression &expr) {
+	ConstantFoldingExpressionMatcher matcher;
+	vector<reference<Expression>> bindings;
+	if (!matcher.Match(expr, bindings)) {
+		return nullptr;
+	}
 
 	// use an ExpressionExecutor to execute the expression
 	Value result_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), root, result_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result_value)) {
 		return nullptr;
 	}
-	D_ASSERT(result_value.type().InternalType() == root.GetReturnType().InternalType());
+	D_ASSERT(result_value.type().InternalType() == expr.GetReturnType().InternalType());
 	// now get the value from the result vector and insert it back into the plan as a constant expression
 	return make_uniq<BoundConstantExpression>(result_value);
+}
+
+unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                  bool &changes_made, bool is_root) {
+	return TryFold(GetContext(), bindings[0].get());
 }
 
 } // namespace duckdb

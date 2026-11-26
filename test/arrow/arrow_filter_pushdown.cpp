@@ -527,7 +527,7 @@ TEST_CASE("Arrow filter pushdown - join filters respect the scan's pushdown type
 		StringColumn col("col", {"abc", "efg"}, false);
 		Batch batch({&x, &col});
 		Scan scan(batch);
-		// the join becomes a filter the producer applies, and this producer ignores it
+		// This producer records accepted filters without applying them.
 		REQUIRE(scan.Rows("SELECT x FROM t JOIN (SELECT 2 AS k) b ON t.x = b.k ORDER BY x") == vector<int32_t> {1, 2});
 		REQUIRE(scan.ReceivedFilters().size() == 1);
 	}
