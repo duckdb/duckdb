@@ -2,7 +2,6 @@
 
 import contextlib
 import io
-import os
 import subprocess
 import sys
 import tempfile
@@ -53,22 +52,19 @@ class MergeExtensionArtifactsTest(unittest.TestCase):
             self.assertEqual((self.repository / relative).read_bytes(), source.read_bytes())
         self.assertEqual(len(list(self.repository.rglob("*.duckdb_extension*"))), 5)
 
-    def test_conflicting_dedicated_builds_fail_before_writing(self):
-        first = self.add_file("core-extensions-linux-amd64", contents=b"first")
-        second = self.add_file("other-extensions-linux-amd64", contents=b"other")
-        os.utime(first, (1000, 1000))
-        os.utime(second, (1000, 1000))
-        with self.assertRaisesRegex(ValueError, "core-extensions-linux-amd64 and other-extensions-linux-amd64"):
-            self.merge()
-        self.assertFalse(self.repository.exists())
+    def test_shared_dependency_builds_use_artifact_order(self):
+        relative = "revision/linux_amd64/waddle.duckdb_extension"
+        # Create directories in reverse order to check that enumeration order does not choose the winner.
+        selected = self.add_file("core-extensions-linux-amd64", relative, b"core build")
+        self.add_file("cloud-extensions-linux-amd64", relative, b"cloud build with a different length")
+        self.merge()
+        self.assertEqual((self.repository / relative).read_bytes(), selected.read_bytes())
 
-    def test_conflicting_release_builds_are_not_hidden_by_dedicated_build(self):
-        self.add_file("release-core-extensions-linux-amd64", contents=b"first")
+    def test_duplicate_release_builds_use_artifact_order(self):
         self.add_file("release-core-extensions-other-build", contents=b"other")
-        self.add_file("core-extensions-linux-amd64", contents=b"dedicated")
-        with self.assertRaisesRegex(ValueError, "Conflicting extension artifact files"):
-            self.merge()
-        self.assertFalse(self.repository.exists())
+        self.add_file("release-core-extensions-linux-amd64", contents=b"first build with a different length")
+        self.merge()
+        self.assertEqual((self.repository / "revision/linux_amd64/icu.duckdb_extension").read_bytes(), b"other")
 
     def test_identical_duplicates_are_allowed(self):
         source = self.add_file("core-extensions-linux-amd64")

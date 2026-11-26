@@ -2,7 +2,6 @@
 """Assemble a repository from separately downloaded extension artifacts."""
 
 import argparse
-import filecmp
 import shutil
 from pathlib import Path
 
@@ -12,6 +11,7 @@ def is_release_core(artifact: Path) -> bool:
 
 
 def merge_extension_artifacts(artifacts_dir: Path, repository_dir: Path) -> None:
+    # Groups can rebuild shared extensions; later names win, with release-core used as a fallback.
     artifacts = sorted(
         artifacts_dir.glob("*-extensions-*"),
         key=lambda artifact: (not is_release_core(artifact), artifact.name),
@@ -26,22 +26,13 @@ def merge_extension_artifacts(artifacts_dir: Path, repository_dir: Path) -> None
             relative = source.relative_to(artifact)
             previous = selected.get(relative)
             if previous is not None:
-                previous_artifact, previous_source = previous
-                if is_release_core(previous_artifact) and not is_release_core(artifact):
-                    print(f"Using {artifact.name}/{relative} instead of {previous_artifact.name}/{relative}")
-                else:
-                    if not filecmp.cmp(previous_source, source, shallow=False):
-                        raise ValueError(
-                            f"Conflicting extension artifact files for {relative}: "
-                            f"{previous_artifact.name} and {artifact.name}"
-                        )
-                    continue
+                previous_artifact, _ = previous
+                print(f"Using {artifact.name}/{relative} instead of {previous_artifact.name}/{relative}")
             selected[relative] = artifact, source
 
     if not selected:
         raise ValueError(f"No extension artifact files found in {artifacts_dir}")
 
-    # Validate all collisions before creating a fresh repository; consumers only run after this step succeeds.
     repository_dir.mkdir(parents=True)
     for relative, (_, source) in sorted(selected.items()):
         destination = repository_dir / relative
