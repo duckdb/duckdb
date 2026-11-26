@@ -26,6 +26,19 @@ enum class StateMemoryOwnership : uint8_t {
 	OWNED
 };
 
+//! The layout of an aggregate's exported states, with the function and bind data that (de)serialize them. The
+//! function and bind data are borrowed, and must outlive the serializer.
+struct AggregateStateSerializer {
+	AggregateStateSerializer(AggregateStateLayout layout_p, const BoundAggregateFunction &function_p,
+	                         optional_ptr<const FunctionData> bind_data_p)
+	    : layout(std::move(layout_p)), function(function_p), bind_data(bind_data_p) {
+	}
+
+	AggregateStateLayout layout;
+	const BoundAggregateFunction &function;
+	optional_ptr<const FunctionData> bind_data;
+};
+
 //! Converts aggregate states to and from their exported logical form, through the aggregate
 //! state export layouts. Used by the aggregate state export functions and by state spilling.
 struct AggregateStateSerialization {

@@ -18,6 +18,7 @@ namespace duckdb {
 class BoundAggregateFunction;
 class BoundFunctionExpression;
 struct AggregateStateLayout;
+struct AggregateStateSerializer;
 struct SortedAggregateStateOrder;
 
 struct ConstantOrNull {
@@ -37,12 +38,10 @@ struct ExportAggregateFunction {
 	static unique_ptr<ParsedExpression> StateToSQL(const LogicalType &type, unique_ptr<ParsedExpression> value);
 	//! The per-key (column, modifiers) of the AGGREGATE_STATE type of an ordered aggregate
 	static void GetSortedStateOrders(const LogicalType &state_type, vector<SortedAggregateStateOrder> &orders);
-	//! The state layout, function and bind data of the aggregate whose states a bound combine_aggr accumulates.
-	//! Returns false for any other function
-	static bool TryGetCombinedStateLayout(const BoundAggregateFunction &function,
-	                                      optional_ptr<const FunctionData> bind_data, AggregateStateLayout &layout,
-	                                      optional_ptr<const BoundAggregateFunction> &combined_function,
-	                                      optional_ptr<const FunctionData> &combined_bind_data);
+	//! The serializer of the aggregate whose states a bound combine_aggr accumulates. Returns nullptr for any other
+	//! function
+	static unique_ptr<AggregateStateSerializer>
+	TryGetCombinedStateSerializer(const BoundAggregateFunction &function, optional_ptr<const FunctionData> bind_data);
 };
 
 } // namespace duckdb

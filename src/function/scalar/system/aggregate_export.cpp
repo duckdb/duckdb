@@ -942,23 +942,19 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
 }
 
-bool ExportAggregateFunction::TryGetCombinedStateLayout(const BoundAggregateFunction &function,
-                                                        optional_ptr<const FunctionData> bind_data,
-                                                        AggregateStateLayout &layout,
-                                                        optional_ptr<const BoundAggregateFunction> &combined_function,
-                                                        optional_ptr<const FunctionData> &combined_bind_data) {
+unique_ptr<AggregateStateSerializer>
+ExportAggregateFunction::TryGetCombinedStateSerializer(const BoundAggregateFunction &function,
+                                                       optional_ptr<const FunctionData> bind_data) {
 	if (!bind_data || function.GetStateCombineCallback() != CombineAggrStateCombine) {
-		return false;
+		return nullptr;
 	}
 	auto &combine_data = bind_data->Cast<ExportAggregateBindData>();
 	auto &aggr = combine_data.aggr;
 	if (!aggr.HasGetStateTypeCallback()) {
-		return false;
+		return nullptr;
 	}
-	layout = aggr.GetStateType(combine_data.bind_data.get());
-	combined_function = aggr;
-	combined_bind_data = combine_data.bind_data.get();
-	return true;
+	return make_uniq<AggregateStateSerializer>(aggr.GetStateType(combine_data.bind_data.get()), aggr,
+	                                           combine_data.bind_data.get());
 }
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {

@@ -10,7 +10,7 @@
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
-#include "duckdb/function/aggregate_state_layout.hpp"
+#include "duckdb/function/aggregate_state_serialization.hpp"
 
 #include <functional>
 
@@ -21,10 +21,8 @@ class ClientContext;
 //! The immutable spill metadata of an aggregate layout: its state export layouts and the types
 //! of the spillable columnar representation (the group columns and hash, then one column per state)
 struct AggregateStateSpillPlan {
-	vector<AggregateStateLayout> state_layouts;
-	//! The function (and its bind data) that serializes each state: for combine_aggr, the aggregate it combines
-	vector<optional_ptr<const BoundAggregateFunction>> serializers;
-	vector<optional_ptr<const FunctionData>> serializer_bind_data;
+	//! Per aggregate: for combine_aggr, the serializer of the aggregate it combines
+	vector<AggregateStateSerializer> serializers;
 	vector<LogicalType> exported_types;
 };
 
