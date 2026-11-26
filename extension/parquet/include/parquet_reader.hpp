@@ -424,9 +424,6 @@ public:
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
-	optional_idx TryGetRowCount(ClientContext &context) const override {
-		return NumRows();
-	}
 
 public:
 	//! Initialize the state for the next rowgroup to read

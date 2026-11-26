@@ -259,7 +259,6 @@ public:
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
-	optional_idx TryGetRowCount(ClientContext &context) const override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;

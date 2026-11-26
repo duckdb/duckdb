@@ -96,10 +96,6 @@ public:
 	//! Get statistics for a virtual column the reader produces (e.g. the row number of every row within the file)
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetVirtualColumnStatistics(ClientContext &context,
 	                                                                         column_t virtual_column_id);
-	//! The exact number of rows in the file, if the reader knows it without scanning the file
-	virtual optional_idx TryGetRowCount(ClientContext &context) const {
-		return optional_idx();
-	}
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 	//! Called after opening when the scan is driven by read-ahead, lets the reader pre-open scan resources

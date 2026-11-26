@@ -70,22 +70,6 @@ string TableFunctionFileReader::GetReaderType() const {
 	return settings.reader_type;
 }
 
-optional_idx TableFunctionFileReader::TryGetRowCount(ClientContext &context) const {
-	if (!function.get_partition_stats || !bind_data) {
-		return optional_idx();
-	}
-	BoundTableFunction bound_function(function);
-	GetPartitionStatsInput input(bound_function, bind_data.get());
-	idx_t row_count = 0;
-	for (auto &partition : function.get_partition_stats(context, input)) {
-		if (partition.count_type != CountType::COUNT_EXACT) {
-			return optional_idx();
-		}
-		row_count += partition.count;
-	}
-	return row_count;
-}
-
 bool TableFunctionFileReader::UseCastMap() const {
 	// when the function can produce columns as a different type than it bound them, the conversion is pushed into
 	// the function instead of being applied to its output

@@ -370,7 +370,7 @@ public:
 		    reader_data, bind_data, global_columns, global_column_ids, table_filters, context, global_state);
 		if (result == ReaderInitializeType::INITIALIZED && !reader.deletion_filter) {
 			// the file list can describe the rows of a file to scan with its options
-			reader.deletion_filter = TableFunctionQueryFilter::TryCreate(context, reader);
+			reader.deletion_filter = TableFunctionQueryFilter::TryCreate(context, reader.file);
 		}
 		return result;
 	}
