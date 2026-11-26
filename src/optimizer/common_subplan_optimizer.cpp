@@ -632,6 +632,9 @@ public:
 	}
 
 	bool Equals(const PlanSignature &other) const {
+		if (RefersToSameObject(*this, other)) {
+			return true;
+		}
 		if (this->GetSignature() != other.GetSignature()) {
 			return false;
 		}
@@ -652,13 +655,13 @@ private:
 	                          const vector<reference<const PlanSignature>> &children) {
 		auto result = Hash(stream.GetData() + offset, length);
 		for (auto &child : children) {
-			result = CombineHash(result, child.get().HashSignature());
+			result = Hash(CombineHash(result, child.get().HashSignature()));
 		}
 		return result;
 	}
 
 	String GetSignature() const {
-		return String(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
+		return String::Reference(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
 	}
 
 	static bool OperatorIsSupported(LogicalOperator &op) {
