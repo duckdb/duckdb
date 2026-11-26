@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -534,6 +535,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	}
 	// A NUMERIC holds as many digits as a wide decimal, so its values do not necessarily fit in a FLOAT
 	if (source_type.id() == LogicalTypeId::NUMERIC && target_type.id() == LogicalTypeId::FLOAT) {
+		return true;
+	}
+	// A DECIMAL wider than NUMERIC holds carries values of more digits than NUMERIC takes
+	if (target_type.id() == LogicalTypeId::NUMERIC && source_type.id() == LogicalTypeId::DECIMAL &&
+	    DecimalType::GetWidth(source_type) > NumericType::MAX_WIDTH) {
 		return true;
 	}
 	// Floating point values that are not finite (NaN, inf) cannot be represented as a BIGNUM

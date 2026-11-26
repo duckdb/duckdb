@@ -155,3 +155,38 @@ SELECT n + 1, n::DECIMAL(10,3) FROM t ORDER BY n;
 
 statement ok
 RESET debug_verification_mode;
+
+# a DECIMAL wider than NUMERIC holds casts value by value: a value within 255 digits is a NUMERIC value, a wider one
+# fails like the same text
+query III
+SELECT TRY_CAST('1'::DECIMAL(1000, 0) AS NUMERIC), TRY_CAST(repeat('9', 255)::DECIMAL(300, 0) AS NUMERIC) = repeat('9', 255)::NUMERIC, typeof(TRY_CAST('1'::DECIMAL(1000, 0) AS NUMERIC));
+----
+1	true	NUMERIC
+
+query II
+SELECT TRY_CAST(repeat('9', 256) AS NUMERIC) IS NULL, TRY_CAST(repeat('9', 256)::DECIMAL(256, 0) AS NUMERIC) IS NULL;
+----
+true	true
+
+statement error
+SELECT repeat('9', 256)::DECIMAL(256, 0)::NUMERIC;
+----
+<REGEX>:.*NUMERIC value needs 256 digits, more than the maximum of 255.*
+
+query I
+SELECT ('-' || repeat('9', 250) || '.12345')::DECIMAL(300, 5)::NUMERIC = ('-' || repeat('9', 250) || '.12345')::NUMERIC;
+----
+true
+
+query I
+SELECT TRY_CAST(d AS NUMERIC) IS NULL FROM (SELECT v::DECIMAL(300, 2) AS d FROM (VALUES ('1.5'), (NULL), (repeat('9', 253) || '.99'), (repeat('9', 254) || '.99')) t(v));
+----
+false
+true
+false
+true
+
+statement error
+SELECT d::NUMERIC FROM (SELECT v::DECIMAL(300, 2) AS d FROM (VALUES ('1.5'), (repeat('9', 254) || '.99')) t(v));
+----
+<REGEX>:.*NUMERIC value needs 256 digits, more than the maximum of 255.*

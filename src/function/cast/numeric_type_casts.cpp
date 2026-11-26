@@ -109,6 +109,14 @@ static bool CastTextToNumeric(Vector &source, Vector &result, idx_t count, CastP
 	return success;
 }
 
+//! A DECIMAL wider than NUMERIC holds casts value by value through its decimal text: a value within the width of
+//! NUMERIC is a NUMERIC value, a wider one fails like the same text
+static bool CastOversizedDecimalToNumeric(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	Vector text(LogicalType::VARCHAR, count);
+	VectorOperations::DefaultCast(source, text, count, true);
+	return CastTextToNumeric(text, result, count, parameters);
+}
+
 //! Floating point values take their shortest round-trip decimal text (NaN and infinities are not exact numbers)
 static bool CastFloatingToNumeric(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	Vector text(LogicalType::VARCHAR, count);
@@ -131,6 +139,9 @@ static bool CastVariantToNumeric(Vector &source, Vector &result, idx_t count, Ca
 BoundCastInfo DefaultCasts::ToNumericCastSwitch(BindCastInput &input, const LogicalType &source,
                                                 const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::NUMERIC);
+	if (source.id() == LogicalTypeId::DECIMAL && DecimalType::GetWidth(source) > NumericType::MAX_WIDTH) {
+		return CastOversizedDecimalToNumeric;
+	}
 	if (NumericType::IsExact(source)) {
 		return CastExactToNumeric;
 	}
