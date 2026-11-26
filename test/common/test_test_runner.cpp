@@ -99,10 +99,12 @@ TEST_CASE("Runner regression nested invocation", "[test_runner]") {
 	if (!RunnerRegressionEnabled()) {
 		return;
 	}
+	auto test_extension = std::getenv("DUCKDB_TEST_RUNNER_EXTENSION");
+	REQUIRE(test_extension);
 	auto config = GetTestConfig();
 	DuckDB database(nullptr, config.get());
 	Connection connection(database);
-	REQUIRE_NO_FAIL(connection.Query("LOAD '" + TestBuildDirectory() + "/extension/test/test.duckdb_extension'"));
+	REQUIRE_NO_FAIL(connection.Query("LOAD " + Value(test_extension).ToSQLString()));
 	auto result = connection.Query("SELECT * FROM run_tests([])");
 	REQUIRE_FAIL(result);
 	REQUIRE_THAT(result->GetError(), Catch::Contains("A test run is already active in this process"));

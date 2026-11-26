@@ -68,6 +68,7 @@ def verify_process_lifecycle(binary, directory):
     """Run in a child process with one core library and two database instances."""
     build = Path(binary).resolve().parent
     os.environ["DUCKDB_TEST_BUILD_DIRECTORY"] = str(build)
+    os.environ["DUCKDB_TEST_RUNNER_EXTENSION"] = str(run_tests.resolve_test_extension_path(build).resolve())
     candidates = [
         build / "src/libduckdb.so",
         build / "src/libduckdb.dylib",
@@ -174,6 +175,8 @@ def verify_process_lifecycle(binary, directory):
 class TestExtensionIntegrationTest(unittest.TestCase):
     def setUp(self):
         self.binary = str(Path(os.environ["DUCKDB_TEST_BINARY"]).resolve())
+        self.test_extension = run_tests.resolve_test_extension_path(Path(self.binary).parent).resolve()
+        self.assertTrue(self.test_extension.is_file(), self.test_extension)
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
@@ -234,9 +237,7 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         write_runner_wrapper(wrapper, [self.test_root], duckdb_name, legacy=True)
         extension_dir = build_dir / "extension" / "test"
         extension_dir.mkdir(parents=True)
-        (extension_dir / "test.duckdb_extension").symlink_to(
-            Path(self.binary).parent / "extension" / "test" / "test.duckdb_extension"
-        )
+        (extension_dir / "test.duckdb_extension").symlink_to(self.test_extension)
         command = [
             sys.executable,
             str(REPO_ROOT / "scripts" / "ci" / "run_tests.py"),
@@ -261,10 +262,7 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         shutil.copy2(self.binary, binary)
         repository = build_dir / "repository" / "version" / "platform"
         repository.mkdir(parents=True)
-        shutil.copy2(
-            Path(self.binary).parent / "extension" / "test" / "test.duckdb_extension",
-            repository / "test.duckdb_extension",
-        )
+        shutil.copy2(self.test_extension, repository / "test.duckdb_extension")
         self.create_test(
             "current_build_directory.test",
             f"query T\nSELECT '{{BUILD_DIRECTORY}}'\n----\n{build_dir.resolve()}\n",
@@ -295,12 +293,14 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         (self.root / "project.txt").write_text("project")
         project_test = self.root / "test" / "project.test"
         sqlite_test = self.root / "third_party" / "sqllogictest" / "test" / "sqlite.test"
+        excluded_test = sqlite_test.parent / "evidence" / "in1.test"
         extension_root = self.root / "extension" / "test" / "sql"
         extension_test = extension_root / "extension.test"
-        for path in [project_test, sqlite_test, extension_test]:
+        for path in [project_test, sqlite_test, excluded_test, extension_test]:
             path.parent.mkdir(parents=True, exist_ok=True)
         project_test.write_text("query I\nSELECT count(*) FROM read_text('project.txt')\n----\n1\n")
         sqlite_test.write_text("query I\nSELECT 42\n----\n42\n")
+        excluded_test.write_text("statement error\nSELECT 42\n")
         (extension_root.parent.parent / "extension.txt").write_text("extension")
         extension_test.write_text("query I\nSELECT count(*) FROM read_text('extension.txt')\n----\n1\n")
 
@@ -312,9 +312,7 @@ class TestExtensionIntegrationTest(unittest.TestCase):
         write_runner_wrapper(wrapper, [extension_root], duckdb_name, test_root_directory=self.root)
         extension_dir = build_dir / "extension" / "test"
         extension_dir.mkdir(parents=True)
-        (extension_dir / "test.duckdb_extension").symlink_to(
-            Path(self.binary).parent / "extension" / "test" / "test.duckdb_extension"
-        )
+        (extension_dir / "test.duckdb_extension").symlink_to(self.test_extension)
         expected_names = {
             path.relative_to(self.root).as_posix() for path in [project_test, sqlite_test, extension_test]
         }
