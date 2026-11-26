@@ -189,7 +189,17 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// BIGNUM deviations are allocated blobs: compute each one once instead of inside every comparison of the
+			// selection, replacing the flattened values (scratch space) by their deviations
+			auto values = flattened.Data();
+			for (idx_t i = 0; i < state.linked_list.total_capacity; i++) {
+				values[i] = accessor(values[i]);
+			}
+			target = interp.template Operation<INPUT_TYPE, T>(values, finalize_data.result);
+		} else {
+			target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
+		}
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
