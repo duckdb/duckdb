@@ -468,6 +468,28 @@ public:
 	static T GetValue(T val) {
 		return val;
 	}
+
+	void ExportSlot(Vector &entries, idx_t entry_idx, idx_t slot, bool nulls_last) const {
+		VAL_TYPE::Assign(entries, entry_idx, heap.GetSlot(slot).value, nulls_last);
+	}
+
+	struct ImportData {
+		ImportData(const Vector &entries, idx_t count, bool nulls_last)
+		    : extra_state(VAL_TYPE::CreateExtraState(count)) {
+			VAL_TYPE::PrepareData(entries, extra_state, format, nulls_last);
+		}
+
+		typename VAL_TYPE::EXTRA_STATE extra_state;
+		UnifiedVectorFormat format;
+	};
+
+	void ImportSlot(ArenaAllocator &allocator, const ImportData &entries, idx_t entry_idx, bool reject_nulls) {
+		const auto idx = entries.format.sel->get_index(entry_idx);
+		if (reject_nulls && !entries.format.validity.RowIsValid(idx)) {
+			throw InvalidInputException("Invalid min/max state - the entries cannot be NULL");
+		}
+		heap.AppendSlot(allocator, VAL_TYPE::Create(entries.format, idx));
+	}
 };
 
 template <class STATE>
@@ -480,7 +502,7 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 
-	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState();
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(count);
 
 	STATE::VAL_TYPE::PrepareData(val_vector, val_extra_state, val_format, true);
 
@@ -528,10 +550,11 @@ void SpecializeMinMaxNFunction(BoundAggregateFunction &function) {
 	function.GetCallbacks().SetStateInitCallback(
 	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
 	function.GetCallbacks().SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
-	function.GetCallbacks().SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
 	function.GetCallbacks().SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
 	function.GetCallbacks().SetStateUpdateCallback(MinMaxNUpdate<STATE>);
+	function.SetExportAggregateStateCallback(MinMaxNOperation::ExportState<STATE>);
+	function.SetImportAggregateStateCallback(MinMaxNOperation::ImportState<STATE>);
 }
 
 template <class COMPARATOR>
@@ -600,9 +623,22 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
+	function.GetArguments()[0] = arguments[0]->GetReturnType();
+	if (arguments[1]->HasParameter()) {
+		// n is constant per execution: bind again once its value is known
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[1]->IsFoldable()) {
+		MinMaxNOperation::BindPerRowN(function);
+	}
 
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return nullptr;
+}
+
+AggregateStateLayout MinMaxNGetStateType(AggregateLayoutInput &input) {
+	// EXPORT_STATE rewrites the return type, so derive the entry type from the (bind-resolved) argument instead
+	return MinMaxNOperation::GetStateType(input, input.function.GetArguments()[0]);
 }
 
 template <class COMPARATOR>
@@ -611,6 +647,8 @@ AggregateFunction GetMinMaxNFunction() {
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("n", LogicalType::BIGINT);
 	fun.SetUnbindCallback(MinMaxUnbind);
+	fun.SetStructStateExport(MinMaxNGetStateType);
+	fun.SetCombineSourceRetention(AggregateCombineSourceRetention::NEVER_RETAINS);
 	fun.SetFallible(); // the update callback rejects NULL and out-of-range n values at runtime
 	return fun;
 }
