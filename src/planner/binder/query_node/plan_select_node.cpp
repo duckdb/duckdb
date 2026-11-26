@@ -1,4 +1,5 @@
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -20,6 +21,29 @@ unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition,
 	auto filter = make_uniq<LogicalFilter>(std::move(condition));
 	filter->AddChild(std::move(root));
 	return std::move(filter);
+}
+
+//! Whether an aggregate runs over NUMERIC values: the NUMERIC aggregates keep their states in a layout that is not
+//! exported, so the verification leaves them as they are
+static bool IsNumericAggregate(const BoundAggregateExpression &aggr) {
+	for (auto &child : aggr.GetChildren()) {
+		if (NumericType::ContainsNumeric(child->GetReturnType())) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! first() over the expression: the aggregate that passes a finalized result through the final aggregate
+static unique_ptr<Expression> BindFirst(ClientContext &context, unique_ptr<Expression> child) {
+	auto &system_catalog = Catalog::GetSystemCatalog(context);
+	auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "first"));
+	vector<pair<Identifier, unique_ptr<Expression>>> first_children;
+	first_children.emplace_back(Identifier(), std::move(child));
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	return function_binder.BindAggregateFunction(first_function, std::move(first_children), error);
 }
 
 bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root) {
@@ -44,11 +68,6 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		auto &res_type = aggr->GetReturnType();
 		if (res_type.IsAggregateState()) {
 			// already an aggregate state export - skip verification
-			return false;
-		}
-		auto &function = aggr->Cast<BoundAggregateExpression>().Function();
-		if (!function.HasStateCombineCallback() || !function.HasGetStateTypeCallback()) {
-			// states without an exportable layout (e.g. the NUMERIC aggregates) cannot be exported
 			return false;
 		}
 		if (aggr->Cast<BoundAggregateExpression>().IsDistinct()) {
@@ -85,6 +104,18 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 	FunctionBinder function_binder(context);
 	for (idx_t aggr_idx = 0; aggr_idx < statement.aggregates.size(); aggr_idx++) {
 		auto &aggr = statement.aggregates[aggr_idx];
+		if (IsNumericAggregate(aggr->Cast<BoundAggregateExpression>())) {
+			// the states of the NUMERIC aggregates have no exportable layout: the aggregate stays as it is and its
+			// result passes through the finalizing projection, the other aggregates are still verified
+			auto aggr_ref = make_uniq<BoundColumnRefExpression>(
+			    aggr->GetReturnType(), ColumnBinding(intermediate_aggregate_index, ProjectionIndex(aggr_idx)));
+			auto result_ref = make_uniq<BoundColumnRefExpression>(
+			    aggr->GetReturnType(),
+			    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
+			final_aggregates.push_back(BindFirst(context, std::move(result_ref)));
+			finalize_expressions.push_back(std::move(aggr_ref));
+			continue;
+		}
 		auto aggr_expr = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(aggr));
 		aggr = ExportAggregateFunction::Bind(std::move(aggr_expr));
 
@@ -104,18 +135,11 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		}
 
 		// create the "first" expression
-		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(
-		    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "first"));
 		auto finalize_ref = make_uniq<BoundColumnRefExpression>(
 		    result->GetReturnType(),
 		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
-
-		vector<pair<Identifier, unique_ptr<Expression>>> first_children;
-		first_children.emplace_back(Identifier(), std::move(finalize_ref));
-		auto first_fun = function_binder.BindAggregateFunction(first_function, std::move(first_children), error);
-
+		final_aggregates.push_back(BindFirst(context, std::move(finalize_ref)));
 		finalize_expressions.push_back(std::move(result));
-		final_aggregates.push_back(std::move(first_fun));
 	}
 
 	// create the initial aggregate that performs the aggregate state export
