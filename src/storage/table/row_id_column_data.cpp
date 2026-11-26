@@ -83,9 +83,9 @@ idx_t RowIdColumnData::Scan(TransactionData transaction, idx_t vector_index, Col
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result,
+void RowIdColumnData::ScanCommittedRange(idx_t offset_in_row_group, idx_t count, Vector &result,
                                          VisibilityBound visibility_bound) {
-	result.Sequence(UnsafeNumericCast<int64_t>(row_group_start + offset_in_row_group), 1, count);
+	throw InternalException("ScanCommittedRange is not supported for row id columns");
 }
 
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {

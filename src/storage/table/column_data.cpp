@@ -397,7 +397,7 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
-void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result,
+void ColumnData::ScanCommittedRange(idx_t offset_in_row_group, idx_t s_count, Vector &result,
                                     VisibilityBound visibility_bound) {
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);

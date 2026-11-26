@@ -332,7 +332,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	ColumnData::CheckpointScan(segment, state, count, scan_vector, visibility_bound);
 
 	idx_t offset_in_row_group = state.offset_in_column;
-	validity->ScanCommittedRange(0, offset_in_row_group, count, scan_vector, visibility_bound);
+	validity->ScanCommittedRange(offset_in_row_group, count, scan_vector, visibility_bound);
 }
 
 bool StandardColumnData::IsPersistent() {

@@ -45,8 +45,8 @@ idx_t RowNumberColumnData::Scan(TransactionData transaction, idx_t vector_index,
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowNumberColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
-                                             Vector &result, VisibilityBound visibility_bound) {
+void RowNumberColumnData::ScanCommittedRange(idx_t offset_in_row_group, idx_t count, Vector &result,
+                                             VisibilityBound visibility_bound) {
 	throw InternalException("ScanCommittedRange is not supported for row number columns");
 }
 
