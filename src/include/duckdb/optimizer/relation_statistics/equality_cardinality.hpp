@@ -82,6 +82,7 @@ public:
 	                     const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities = {}) const;
 
 private:
+	struct OutputBindings;
 	enum class ProjectionScope { EVIDENCE, COLUMNS_AND_EVIDENCE };
 
 private:
@@ -95,6 +96,9 @@ private:
 	                                                const vector<EqualityComponent> &components,
 	                                                const vector<EqualityFactor> &factors,
 	                                                const EqualityProjection &projection) const;
+	void ProjectColumnDomains(RelationStats &output, OutputBindings &bindings,
+	                          const vector<EqualityComponent> &components, const vector<EqualityFactor> &factors,
+	                          const vector<EqualityProjection> &projections) const;
 	void ProjectInternal(RelationStats &output, const vector<EqualityComponent> &components,
 	                     const vector<EqualityProjection> &inputs, const vector<EqualityComponent> &output_equalities,
 	                     ProjectionScope scope,

@@ -399,6 +399,7 @@ CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
 		}
 	}
 	vector<idx_t> relations;
+	relations.reserve(set.count);
 	for (idx_t i = 0; i < set.count; i++) {
 		relations.push_back(set.relations[i].index);
 	}
@@ -757,6 +758,7 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 	auto &estimate = state->cardinalities.at(set);
 	result.max_cardinality = estimate.maximum;
 	result.row_retention = estimate.row_retention;
+	result.columns.reserve(bindings.size());
 	for (auto &binding : bindings) {
 		auto column = ProjectColumn(set, binding);
 		if (!column) {
@@ -885,10 +887,12 @@ CardinalityValue CardinalityEstimator::GetLeftJoinSelectivity(const JoinOrderOpe
 		}
 	}
 	vector<idx_t> relations;
+	relations.reserve(left.count + right.count);
 	CardinalityValue input_factor;
 	for (auto input : {&left, &right}) {
 		auto input_equalities = GetInnerEqualities(*input, InnerEqualityView::STATISTICAL);
 		vector<idx_t> input_relations;
+		input_relations.reserve(input->count);
 		for (idx_t i = 0; i < input->count; i++) {
 			input_relations.push_back(input->relations[i].index);
 		}
@@ -974,6 +978,7 @@ void CardinalityEstimator::Initialize(vector<RelationStats> relations,
 		state->cardinalities.emplace(set_manager.GetJoinRelation(RelationIndex(i)),
 		                             RegionEstimate {stats.cardinality, stats.max_cardinality, stats.row_retention});
 	}
+	state->operators.reserve(operators.size());
 	for (auto &op : operators) {
 		D_ASSERT(op->index == state->operators.size());
 		state->operators.push_back(*op);

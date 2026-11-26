@@ -1,382 +1,10 @@
-#include "duckdb/optimizer/relation_statistics/equality_cardinality.hpp"
-#include "duckdb/common/constants.hpp"
+#include "duckdb/optimizer/relation_statistics/equality_cardinality_state.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
-#include "duckdb/common/unordered_set.hpp"
 
 #include <algorithm>
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/set.hpp"
-#include <tuple>
 
 namespace duckdb {
-
-struct EqualityDisjointSets {
-	vector<idx_t> parents;
-
-	idx_t Add() {
-		auto result = parents.size();
-		parents.push_back(result);
-		return result;
-	}
-
-	idx_t Find(idx_t value) {
-		if (parents[value] != value) {
-			parents[value] = Find(parents[value]);
-		}
-		return parents[value];
-	}
-
-	void Merge(idx_t a, idx_t b) {
-		a = Find(a);
-		b = Find(b);
-		if (a != b) {
-			parents[MaxValue(a, b)] = MinValue(a, b);
-		}
-	}
-};
-
-struct EqualityTupleRecord {
-	idx_t relation;
-	vector<idx_t> columns;
-	SupportIdentity identity;
-};
-
-struct EqualityCardinalityState {
-	explicit EqualityCardinalityState(vector<RelationStats> &relations) : relations(relations) {
-	}
-
-	vector<RelationStats> &relations;
-	column_binding_map_t<vector<JoinColumnSources>> sources;
-	vector<idx_t> offsets;
-	vector<ColumnBinding> bindings;
-	EqualityDisjointSets aliases;
-	idx_t BindingIndex(ColumnBinding binding) const {
-		D_ASSERT(binding.table_index.index < relations.size());
-		D_ASSERT(binding.column_index.GetIndex() < relations[binding.table_index.index].columns.size());
-		return offsets[binding.table_index.index] + binding.column_index.GetIndex();
-	}
-
-	ColumnBinding Normalize(ColumnBinding binding) {
-		return bindings[aliases.Find(BindingIndex(binding))];
-	}
-
-	support_identities_t Orient(const support_identities_t &identities, const vector<idx_t> &columns,
-	                            const vector<idx_t> &ordered_columns) const;
-	support_identities_t MergeIdentities(const vector<SupportIdentity> &identities) const;
-	void NormalizeEvidence();
-};
-
-support_identities_t EqualityCardinalityState::MergeIdentities(const vector<SupportIdentity> &identities) const {
-	// Retain direct producer coordinates only. Local aliases never publish an equivalence
-	// between producers or coordinates to other references of the same producer.
-	map<const SupportOrigin *, set<vector<idx_t>>> seen;
-	auto result = make_shared_ptr<vector<SupportIdentity>>();
-	for (auto &identity : identities) {
-		if (seen[identity.origin.get()].insert(identity.coordinates).second) {
-			result->push_back(identity);
-		}
-	}
-	return result->empty() ? nullptr : result;
-}
-
-support_identities_t EqualityCardinalityState::Orient(const support_identities_t &identities,
-                                                      const vector<idx_t> &columns,
-                                                      const vector<idx_t> &ordered_columns) const {
-	if (!identities) {
-		return nullptr;
-	}
-	vector<SupportIdentity> result;
-	for (auto &identity : *identities) {
-		SupportIdentity oriented {identity.origin, {}};
-		for (auto column : ordered_columns) {
-			auto position = std::find(columns.begin(), columns.end(), column);
-			if (position == columns.end()) {
-				break;
-			}
-			oriented.coordinates.push_back(identity.coordinates[position - columns.begin()]);
-		}
-		if (oriented.coordinates.size() == ordered_columns.size()) {
-			result.push_back(std::move(oriented));
-		}
-	}
-	return MergeIdentities(result);
-}
-
-static void AddEqualityTupleRecord(vector<EqualityTupleRecord> &records, idx_t relation, const vector<idx_t> &columns,
-                                   const SupportIdentity &identity) {
-	D_ASSERT(columns.size() == identity.coordinates.size());
-	vector<pair<idx_t, idx_t>> axes;
-	for (idx_t i = 0; i < columns.size(); i++) {
-		axes.emplace_back(columns[i], identity.coordinates[i]);
-	}
-	std::sort(axes.begin(), axes.end());
-	axes.erase(std::unique(axes.begin(), axes.end()), axes.end());
-	EqualityTupleRecord record {relation, {}, {identity.origin, {}}};
-	for (auto &axis : axes) {
-		record.columns.push_back(axis.first);
-		record.identity.coordinates.push_back(axis.second);
-	}
-	auto same = [&](const EqualityTupleRecord &other) {
-		return record.relation == other.relation && record.columns == other.columns &&
-		       record.identity.origin == other.identity.origin &&
-		       record.identity.coordinates == other.identity.coordinates;
-	};
-	if (std::none_of(records.begin(), records.end(), same)) {
-		records.push_back(std::move(record));
-	}
-}
-
-static void AddEqualityTupleRecords(vector<EqualityTupleRecord> &records, idx_t relation, const RelationStats &stats) {
-	for (auto &joint : stats.joint_stats) {
-		if (joint.identities) {
-			for (auto &identity : *joint.identities) {
-				AddEqualityTupleRecord(records, relation, joint.columns, identity);
-			}
-		}
-	}
-	if (stats.tuple_identities) {
-		for (auto &tuple : *stats.tuple_identities) {
-			AddEqualityTupleRecord(records, relation, tuple.columns, tuple.identity);
-		}
-	}
-}
-
-void EqualityCardinalityState::NormalizeEvidence() {
-	vector<EqualityTupleRecord> records;
-	for (idx_t r = 0; r < relations.size(); r++) {
-		auto &stats = relations[r];
-		offsets.push_back(bindings.size());
-		for (idx_t c = 0; c < stats.columns.size(); c++) {
-			bindings.emplace_back(TableIndex(r), ProjectionIndex(c));
-			aliases.Add();
-		}
-		for (auto &group : stats.equivalent_columns) {
-			for (auto column : group) {
-				aliases.Merge(offsets[r] + group[0], offsets[r] + column);
-			}
-		}
-		AddEqualityTupleRecords(records, r, stats);
-	}
-	// Roots are the smallest binding in each class. Descending insertion keeps members in binding order.
-	vector<idx_t> next_alias(bindings.size(), DConstants::INVALID_INDEX);
-	for (idx_t i = bindings.size(); i > 0; i--) {
-		auto column = i - 1;
-		auto root = aliases.Find(column);
-		D_ASSERT(bindings[root].table_index == bindings[column].table_index);
-		if (root != column) {
-			next_alias[column] = next_alias[root];
-			next_alias[root] = column;
-		}
-	}
-	for (idx_t r = 0; r < relations.size(); r++) {
-		auto &stats = relations[r];
-		stats.equivalent_columns.clear();
-		for (idx_t root = offsets[r]; root < offsets[r] + stats.columns.size(); root++) {
-			if (aliases.Find(root) != root) {
-				continue;
-			}
-			if (next_alias[root] != DConstants::INVALID_INDEX) {
-				vector<idx_t> columns;
-				for (auto index = root; index != DConstants::INVALID_INDEX; index = next_alias[index]) {
-					columns.push_back(index - offsets[r]);
-				}
-				stats.equivalent_columns.push_back(std::move(columns));
-			}
-			vector<SupportIdentity> identities;
-			auto total = stats.columns[root - offsets[r]].total_domain;
-			auto current = stats.columns[root - offsets[r]].current_domain;
-			optional_idx population_bound;
-			bool can_have_null = true;
-			for (auto index = root; index != DConstants::INVALID_INDEX; index = next_alias[index]) {
-				auto c = index - offsets[r];
-				auto &column = stats.columns[c];
-				can_have_null &= column.can_have_null;
-				total = DistinctCount::ReconcilePopulation(total, column.total_domain);
-				current = DistinctCount::ReconcilePopulation(current, column.current_domain);
-				auto population = column.PopulationBound();
-				if (population.IsValid()) {
-					population_bound = population_bound.IsValid()
-					                       ? MinValue(population_bound.GetIndex(), population.GetIndex())
-					                       : population;
-				}
-				if (column.support_identities) {
-					for (auto &identity : *column.support_identities) {
-						identities.push_back(identity);
-					}
-				}
-				// A tuple proof supplies scalar projections. It cannot be reconstructed in the opposite direction.
-				for (auto &record : records) {
-					if (record.relation != r) {
-						continue;
-					}
-					for (idx_t i = 0; i < record.columns.size(); i++) {
-						if (aliases.Find(offsets[r] + record.columns[i]) == root) {
-							identities.push_back(
-							    SupportIdentity {record.identity.origin, {record.identity.coordinates[i]}});
-						}
-					}
-				}
-			}
-			auto shared = MergeIdentities(identities);
-			for (auto index = root; index != DConstants::INVALID_INDEX; index = next_alias[index]) {
-				auto c = index - offsets[r];
-				stats.columns[c].total_domain = total;
-				stats.columns[c].current_domain = current;
-				stats.columns[c].current_domain.distinct_count =
-				    MinValue(MinValue(current.distinct_count, total.distinct_count), stats.cardinality);
-				stats.columns[c].support_identities = shared;
-				stats.columns[c].can_have_null = can_have_null;
-				if (population_bound.IsValid()) {
-					stats.columns[c].TightenPopulationBound(population_bound.GetIndex());
-				}
-			}
-		}
-	}
-	for (idx_t r = 0; r < relations.size(); r++) {
-		auto &stats = relations[r];
-		for (auto &key : stats.unique_keys) {
-			for (auto &column : key) {
-				column = Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(column))).column_index.GetIndex();
-			}
-			std::sort(key.begin(), key.end());
-			key.erase(std::unique(key.begin(), key.end()), key.end());
-		}
-		std::sort(stats.unique_keys.begin(), stats.unique_keys.end());
-		stats.unique_keys.erase(std::unique(stats.unique_keys.begin(), stats.unique_keys.end()),
-		                        stats.unique_keys.end());
-		vector<RelationJointStats> normalized;
-		for (auto &joint : stats.joint_stats) {
-			vector<pair<idx_t, idx_t>> axes;
-			for (idx_t i = 0; i < joint.columns.size(); i++) {
-				auto binding = Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(joint.columns[i])));
-				axes.emplace_back(binding.column_index.GetIndex(), i);
-			}
-			std::sort(axes.begin(), axes.end());
-			auto ids = make_shared_ptr<vector<SupportIdentity>>();
-			if (joint.identities) {
-				for (auto &identity : *joint.identities) {
-					SupportIdentity oriented {identity.origin, {}};
-					optional_idx last;
-					for (auto &axis : axes) {
-						if (!last.IsValid() || last.GetIndex() != axis.first) {
-							oriented.coordinates.push_back(identity.coordinates[axis.second]);
-							last = optional_idx(axis.first);
-						}
-					}
-					ids->push_back(std::move(oriented));
-				}
-			}
-			joint.columns.clear();
-			for (auto &axis : axes) {
-				if (joint.columns.empty() || joint.columns.back() != axis.first) {
-					joint.columns.push_back(axis.first);
-				}
-			}
-			joint.identities = ids->empty() ? nullptr : ids;
-			auto old = std::find_if(normalized.begin(), normalized.end(),
-			                        [&](const RelationJointStats &entry) { return entry.columns == joint.columns; });
-			for (auto &column : joint.dependent_columns) {
-				column = Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(column))).column_index.GetIndex();
-			}
-			if (stats.HasUniqueKey(joint.columns)) {
-				for (idx_t c = 0; c < stats.columns.size(); c++) {
-					joint.dependent_columns.push_back(
-					    Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(c))).column_index.GetIndex());
-				}
-			}
-			std::sort(joint.dependent_columns.begin(), joint.dependent_columns.end());
-			joint.dependent_columns.erase(std::unique(joint.dependent_columns.begin(), joint.dependent_columns.end()),
-			                              joint.dependent_columns.end());
-			if (old == normalized.end()) {
-				normalized.push_back(joint);
-			} else {
-				old->total_domain = DistinctCount::ReconcilePopulation(old->total_domain, joint.total_domain);
-				old->current_domain = DistinctCount::ReconcilePopulation(old->current_domain, joint.current_domain);
-				if (old->identities) {
-					ids->insert(ids->end(), old->identities->begin(), old->identities->end());
-				}
-				old->identities = ids->empty() ? nullptr : ids;
-				old->dependent_columns.insert(old->dependent_columns.end(), joint.dependent_columns.begin(),
-				                              joint.dependent_columns.end());
-				std::sort(old->dependent_columns.begin(), old->dependent_columns.end());
-				old->dependent_columns.erase(std::unique(old->dependent_columns.begin(), old->dependent_columns.end()),
-				                             old->dependent_columns.end());
-			}
-		}
-		stats.joint_stats = std::move(normalized);
-		for (idx_t root = offsets[r]; root < offsets[r] + stats.columns.size(); root++) {
-			if (aliases.Find(root) != root) {
-				continue;
-			}
-			auto column = root - offsets[r];
-			auto &scalar = stats.columns[column];
-			auto population =
-			    std::find_if(stats.joint_stats.begin(), stats.joint_stats.end(), [&](const RelationJointStats &joint) {
-				    return joint.columns.size() == 1 && joint.columns[0] == column;
-			    });
-			bool unique = stats.HasUniqueKey({column});
-			if (!unique && population == stats.joint_stats.end()) {
-				continue;
-			}
-			auto total = scalar.total_domain;
-			auto current = scalar.current_domain;
-			if (population != stats.joint_stats.end()) {
-				// Retained singleton populations take precedence over scalar approximations at equal
-				// usability. An unknown singleton cannot replace an actual usable scalar alternative.
-				total = total.has_usable_domain == population->total_domain.has_usable_domain
-				            ? population->total_domain
-				            : DistinctCount::ReconcilePopulation(total, population->total_domain);
-				current = current.has_usable_domain == population->current_domain.has_usable_domain
-				              ? population->current_domain
-				              : DistinctCount::ReconcilePopulation(current, population->current_domain);
-				total.source = DistinctCount::CombineSources(scalar.total_domain.source, total.source);
-			}
-			// A current unique key has one distinct tuple per estimated row. Its original population is
-			// independent of that current row count and survives filtering and loss/restoration of uniqueness.
-			current.distinct_count =
-			    unique ? stats.cardinality
-			           : MinValue(current.distinct_count, MinValue(total.distinct_count, stats.cardinality));
-			total.distinct_count = MaxValue(total.distinct_count, current.distinct_count);
-			if (unique) {
-				total.has_usable_domain = true;
-				current.has_usable_domain = true;
-			}
-			if (unique &&
-			    (total.source == DistinctCountSource::CARDINALITY || total.source == DistinctCountSource::MIN_MAX)) {
-				// A captured key population is no longer a missing-NDV row-count fallback.
-				total.source = DistinctCountSource::DERIVED;
-			}
-			for (auto index = root; index != DConstants::INVALID_INDEX; index = next_alias[index]) {
-				auto alias = index - offsets[r];
-				stats.columns[alias].total_domain = total;
-				stats.columns[alias].current_domain = current;
-			}
-			if (population != stats.joint_stats.end()) {
-				population->total_domain = total;
-				population->current_domain = current;
-			}
-		}
-		auto tuples = make_shared_ptr<vector<RelationTupleIdentity>>();
-		for (auto &record : records) {
-			if (record.relation != r) {
-				continue;
-			}
-			map<idx_t, idx_t> axes;
-			for (idx_t i = 0; i < record.columns.size(); i++) {
-				auto column =
-				    Normalize(ColumnBinding(TableIndex(r), ProjectionIndex(record.columns[i]))).column_index.GetIndex();
-				axes.emplace(column, record.identity.coordinates[i]);
-			}
-			RelationTupleIdentity tuple {{}, {record.identity.origin, {}}};
-			for (auto &axis : axes) {
-				tuple.columns.push_back(axis.first);
-				tuple.identity.coordinates.push_back(axis.second);
-			}
-			tuples->push_back(std::move(tuple));
-		}
-		stats.tuple_identities = tuples->empty() ? nullptr : tuples;
-	}
-}
 
 EqualityCardinalityModel::EqualityCardinalityModel(vector<RelationStats> &relations,
                                                    const join_column_sources_t &sources)
@@ -417,6 +45,7 @@ EqualityCardinalityModel::Components(const vector<pair<ColumnBinding, ColumnBind
 		groups[components.Find(entry.second)].push_back(state->bindings[entry.first]);
 	}
 	vector<EqualityComponent> result;
+	result.reserve(groups.size());
 	for (auto &group : groups) {
 		result.push_back({std::move(group.second)});
 	}
@@ -433,7 +62,7 @@ EqualitySupport EqualityCardinalityModel::ColumnSupport(ColumnBinding binding) c
 	        column.total_domain.has_usable_domain};
 }
 
-static void ReconcileSupport(EqualitySupport &point, const EqualitySupport &other) {
+void ReconcileEqualitySupport(EqualitySupport &point, const EqualitySupport &other) {
 	if (point.has_usable_domain != other.has_usable_domain) {
 		if (other.has_usable_domain) {
 			point = other;
@@ -451,6 +80,7 @@ EqualitySupport EqualityCardinalityModel::Intersect(const vector<EqualitySupport
 		return {1, 1, nullptr};
 	}
 	EqualityDisjointSets groups;
+	groups.parents.reserve(supports.size());
 	map<const SupportOrigin *, map<vector<idx_t>, idx_t>> identities;
 	for (idx_t i = 0; i < supports.size(); i++) {
 		groups.Add();
@@ -468,7 +98,7 @@ EqualitySupport EqualityCardinalityModel::Intersect(const vector<EqualitySupport
 	for (idx_t i = 0; i < supports.size(); i++) {
 		auto entry = points.emplace(groups.Find(i), supports[i]);
 		if (!entry.second) {
-			ReconcileSupport(entry.first->second, supports[i]);
+			ReconcileEqualitySupport(entry.first->second, supports[i]);
 		}
 	}
 	auto total = points.begin()->second.total;
@@ -501,7 +131,7 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 	auto &stats = state->relations[relation];
 	auto ordered_axes = ordered_columns;
 	for (auto &column : ordered_axes) {
-		column = Normalize(ColumnBinding(TableIndex(relation), ProjectionIndex(column))).column_index.GetIndex();
+		column = state->NormalizeColumn(relation, column);
 	}
 	auto axes = ordered_axes;
 	std::sort(axes.begin(), axes.end());
@@ -511,7 +141,7 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 		for (auto &tuple : *stats.tuple_identities) {
 			auto source = make_shared_ptr<vector<SupportIdentity>>();
 			source->push_back(tuple.identity);
-			auto oriented = state->Orient(source, tuple.columns, ordered_axes);
+			auto oriented = state->OrientIdentities(source, tuple.columns, ordered_axes);
 			if (oriented) {
 				identities.insert(identities.end(), oriented->begin(), oriented->end());
 			}
@@ -519,7 +149,7 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 	}
 	for (auto &joint : stats.joint_stats) {
 		if (joint.columns == axes) {
-			auto oriented = state->Orient(joint.identities, joint.columns, ordered_axes);
+			auto oriented = state->OrientIdentities(joint.identities, joint.columns, ordered_axes);
 			if (oriented) {
 				identities.insert(identities.end(), oriented->begin(), oriented->end());
 			}
@@ -527,7 +157,8 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 			    joint.total_domain.distinct_count,
 			    MinValue(MinValue(joint.current_domain.distinct_count, joint.total_domain.distinct_count),
 			             stats.cardinality),
-			    state->MergeIdentities(identities), joint.total_domain.has_usable_domain || stats.HasUniqueKey(axes)};
+			    state->DeduplicateIdentities(identities),
+			    joint.total_domain.has_usable_domain || stats.HasUniqueKey(axes)};
 		}
 	}
 	optional<DistinctCount> total, current;
@@ -550,7 +181,7 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 				continue;
 			}
 			population = joint.total_domain;
-			auto oriented = state->Orient(joint.identities, joint.columns, ordered_axes);
+			auto oriented = state->OrientIdentities(joint.identities, joint.columns, ordered_axes);
 			if (oriented) {
 				identities.insert(identities.end(), oriented->begin(), oriented->end());
 			}
@@ -570,17 +201,11 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 	}
 	D_ASSERT(current);
 	auto count = MinValue(current->distinct_count, stats.cardinality);
-	return EqualitySupport {MaxValue(total->distinct_count, count), count, state->MergeIdentities(identities),
+	return EqualitySupport {MaxValue(total->distinct_count, count), count, state->DeduplicateIdentities(identities),
 	                        total->has_usable_domain};
 }
 
-struct EqualityFactor {
-	vector<idx_t> components;
-	EqualitySupport support;
-	map<idx_t, EqualitySupport> source_joints;
-};
-
-static EqualitySupport SupportWithinTuple(EqualitySupport support, const EqualitySupport &tuple) {
+EqualitySupport SupportWithinTuple(EqualitySupport support, const EqualitySupport &tuple) {
 	support.total = MinValue(support.total, tuple.total);
 	support.current = MinValue(MinValue(support.current, tuple.current), support.total);
 	return support;
@@ -592,7 +217,9 @@ EqualitySupport EqualityCardinalityModel::IntersectJoint(const vector<EqualitySu
 	auto support = Intersect(joint_points, factor);
 	auto total = support.total;
 	auto current = support.current;
-	for (auto points : coordinates) {
+	vector<EqualitySupport> points;
+	for (auto &coordinate_points : coordinates) {
+		points = coordinate_points;
 		D_ASSERT(points.size() == joint_points.size());
 		if (!std::all_of(points.begin(), points.end(),
 		                 [](const EqualitySupport &point) { return point.has_usable_domain; })) {
@@ -630,9 +257,11 @@ EqualitySupport EqualityCardinalityModel::IntersectJoint(const vector<EqualitySu
 	return support;
 }
 
+enum class JointSupportRequirement { STORED_AXES, ALLOW_DERIVED };
+
 struct EqualityCandidateAxes {
 	vector<idx_t> axes;
-	bool exact;
+	JointSupportRequirement requirement;
 };
 
 static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationStats> &relations,
@@ -650,12 +279,14 @@ static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationSt
 	}
 	vector<EqualityCandidateAxes> candidates;
 	for (auto &bucket : buckets) {
-		candidates.push_back({bucket.second, false});
+		candidates.push_back({bucket.second, JointSupportRequirement::ALLOW_DERIVED});
 		// Retained determinant and dependency axes supply bounded additional candidates. Never enumerate subsets.
 		for (auto relation : bucket.first) {
 			for (auto &joint : relations[relation].joint_stats) {
-				for (bool exact : {true, false}) {
-					auto &columns = exact ? joint.columns : joint.dependent_columns;
+				for (auto requirement :
+				     {JointSupportRequirement::STORED_AXES, JointSupportRequirement::ALLOW_DERIVED}) {
+					auto &columns =
+					    requirement == JointSupportRequirement::STORED_AXES ? joint.columns : joint.dependent_columns;
 					vector<idx_t> axes;
 					for (auto axis : bucket.second) {
 						for (auto &binding : components[axis].bindings) {
@@ -665,7 +296,7 @@ static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationSt
 							}
 						}
 					}
-					candidates.push_back({std::move(axes), exact});
+					candidates.push_back({std::move(axes), requirement});
 				}
 			}
 		}
@@ -675,7 +306,7 @@ static vector<EqualityCandidateAxes> FindJointCandidates(const vector<RelationSt
 
 vector<EqualityFactor> EqualityCardinalityModel::BuildFactors(const vector<EqualityComponent> &components) const {
 	map<vector<idx_t>, vector<EqualitySupport>> candidates;
-	auto add_candidate = [&](const vector<idx_t> &axes, bool exact) {
+	auto add_candidate = [&](const vector<idx_t> &axes, JointSupportRequirement requirement) {
 		if (axes.size() < 2) {
 			return;
 		}
@@ -690,7 +321,7 @@ vector<EqualityFactor> EqualityCardinalityModel::BuildFactors(const vector<Equal
 			if (entry.second.size() != axes.size()) {
 				return;
 			}
-			if (exact) {
+			if (requirement == JointSupportRequirement::STORED_AXES) {
 				auto sorted = entry.second;
 				std::sort(sorted.begin(), sorted.end());
 				auto &joints = state->relations[entry.first].joint_stats;
@@ -708,7 +339,7 @@ vector<EqualityFactor> EqualityCardinalityModel::BuildFactors(const vector<Equal
 		candidates.emplace(axes, std::move(points));
 	};
 	for (auto &candidate : FindJointCandidates(state->relations, components)) {
-		add_candidate(candidate.axes, candidate.exact);
+		add_candidate(candidate.axes, candidate.requirement);
 	}
 	vector<vector<idx_t>> maximal;
 	for (auto &candidate : candidates) {
@@ -790,6 +421,7 @@ vector<EqualitySupport> EqualityCardinalityModel::ResolveJoinDomains(const Equal
 		}
 	}
 	vector<EqualitySupport> points;
+	points.reserve(component.bindings.size());
 	for (auto binding : component.bindings) {
 		auto &original =
 		    state->relations[binding.table_index.index].columns[binding.column_index.GetIndex()].total_domain;
@@ -838,6 +470,7 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 		return points;
 	};
 	EqualityDisjointSets blocks;
+	blocks.parents.reserve(state->relations.size());
 	for (idx_t r = 0; r < state->relations.size(); r++) {
 		blocks.Add();
 	}
@@ -943,6 +576,7 @@ bool EqualityCardinalityModel::PreservesMultiplicity(idx_t relation, const vecto
 	vector<bool> determined(state->relations.size(), false);
 	determined[relation] = true;
 	vector<bool> known(state->bindings.size(), false);
+	vector<idx_t> columns;
 	bool changed;
 	do {
 		changed = false;
@@ -972,7 +606,7 @@ bool EqualityCardinalityModel::PreservesMultiplicity(idx_t relation, const vecto
 			}
 			auto &input = state->relations[participant];
 			bool singleton = input.max_cardinality.IsValid() && input.max_cardinality.GetIndex() <= 1;
-			vector<idx_t> columns;
+			columns.clear();
 			for (idx_t c = 0; c < input.columns.size(); c++) {
 				if (known[state->aliases.Find(state->offsets[participant] + c)]) {
 					columns.push_back(c);
@@ -990,391 +624,6 @@ bool EqualityCardinalityModel::PreservesMultiplicity(idx_t relation, const vecto
 		}
 	}
 	return true;
-}
-
-CardinalityValue RelationStatisticsHelper::EstimateEqualitySelectionSupport(CardinalityValue current_domain,
-                                                                            CardinalityValue input_rows,
-                                                                            CardinalityValue direct_retention,
-                                                                            CardinalityValue conditional_retention,
-                                                                            EqualitySelection selection) {
-	auto anti = selection == EqualitySelection::UNMATCHED;
-	auto selected_domain = current_domain * direct_retention;
-	auto selected_rows = input_rows * direct_retention;
-	auto retained =
-	    EstimateCurrentDomain(DistinctCount(selected_domain, DistinctCountSource::CARDINALITY), selected_rows,
-	                          selected_rows * (anti ? 1 - conditional_retention : conditional_retention));
-	return anti ? current_domain - selected_domain + retained.distinct_count : retained.distinct_count;
-}
-
-void EqualityCardinalityModel::ProjectEvidence(
-    RelationStats &output, const vector<EqualityComponent> &components, const vector<EqualityProjection> &projections,
-    const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
-	ProjectInternal(output, components, projections, components, ProjectionScope::EVIDENCE, value_equalities);
-}
-
-void EqualityCardinalityModel::Project(RelationStats &output, const vector<EqualityComponent> &components,
-                                       const vector<EqualityProjection> &projections,
-                                       const vector<EqualityComponent> &output_equalities,
-                                       const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
-	ProjectInternal(output, components, projections, output_equalities, ProjectionScope::COLUMNS_AND_EVIDENCE,
-	                value_equalities);
-}
-
-optional<EqualitySelectedSupport> EqualityCardinalityModel::SelectSupport(idx_t relation, const vector<idx_t> &columns,
-                                                                          const vector<idx_t> &dependent_columns,
-                                                                          EqualitySupport support,
-                                                                          const vector<EqualityComponent> &components,
-                                                                          const vector<EqualityFactor> &factors,
-                                                                          const EqualityProjection &projection) const {
-	if (projection.selection == EqualitySelection::ALL) {
-		return EqualitySelectedSupport {std::move(support), false};
-	}
-	auto &input = state->relations[relation];
-	CardinalityValue direct(1), conditional(1);
-	bool has_matching_columns = false, determines_match = true, population_conditioned = false;
-	for (auto &factor : factors) {
-		auto coordinate_support = [&](ColumnBinding binding) {
-			auto point = ColumnSupport(binding);
-			auto joint = factor.source_joints.find(binding.table_index.index);
-			return joint == factor.source_joints.end() ? point : SupportWithinTuple(point, joint->second);
-		};
-		vector<idx_t> axes;
-		CardinalityValue source_total(1), source_current(1);
-		for (auto component : factor.components) {
-			for (auto &binding : components[component].bindings) {
-				if (binding.table_index.index != relation) {
-					continue;
-				}
-				axes.push_back(binding.column_index.GetIndex());
-				auto point = coordinate_support(binding);
-				source_total *= point.total;
-				source_current *= point.current;
-			}
-		}
-		if (axes.empty()) {
-			continue;
-		}
-		has_matching_columns = true;
-		if (factor.components.size() > 1) {
-			auto &point = factor.source_joints.at(relation);
-			source_total = point.total;
-			source_current = point.current;
-		}
-		std::sort(axes.begin(), axes.end());
-		auto retention = source_current.IsZero()
-		                     ? CardinalityValue(0)
-		                     : MinValue(CardinalityValue(1), factor.support.current / source_current);
-		bool contained = std::includes(columns.begin(), columns.end(), axes.begin(), axes.end());
-		bool containing = std::includes(axes.begin(), axes.end(), columns.begin(), columns.end());
-		if (containing && factor.components.size() > 1) {
-			// Only coordinates inside the selected tuple inherit its population ceiling.
-			// An outside determinant can have more values than the dependent tuple it determines.
-			support = SupportWithinTuple(support, factor.source_joints.at(relation));
-		}
-		bool dependent = std::includes(dependent_columns.begin(), dependent_columns.end(), axes.begin(), axes.end());
-		bool overlaps = std::any_of(axes.begin(), axes.end(), [&](idx_t axis) {
-			return std::binary_search(columns.begin(), columns.end(), axis);
-		});
-		determines_match &= contained || dependent;
-		if (contained || dependent) {
-			direct *= retention;
-			if (projection.selection == EqualitySelection::MATCHED && (contained || containing)) {
-				population_conditioned = true;
-				support.total *= source_total.IsZero()
-				                     ? CardinalityValue(0)
-				                     : MinValue(CardinalityValue(1), factor.support.total / source_total);
-				if (columns.size() == 1) {
-					for (auto component : factor.components) {
-						vector<EqualitySupport> points;
-						bool coordinate = false;
-						for (auto &binding : components[component].bindings) {
-							points.push_back(coordinate_support(binding));
-							coordinate |=
-							    binding.table_index.index == relation && binding.column_index.GetIndex() == columns[0];
-						}
-						if (coordinate) {
-							CardinalityValue ignored;
-							support.total = MinValue(support.total, Intersect(points, ignored).total);
-						}
-					}
-				}
-			}
-		} else if (containing) {
-			// A selected joint bundle replaces row factors, not the overlap restrictions of its coordinates.
-			// Condition the remaining bundle selection on those direct restrictions; do not count them twice.
-			CardinalityValue coordinate_retention(1);
-			for (auto component : factor.components) {
-				vector<EqualitySupport> points;
-				optional<EqualitySupport> source;
-				for (auto &binding : components[component].bindings) {
-					auto point = coordinate_support(binding);
-					points.push_back(point);
-					if (binding.table_index.index == relation &&
-					    std::binary_search(columns.begin(), columns.end(), binding.column_index.GetIndex())) {
-						source = point;
-					}
-				}
-				if (!source) {
-					continue;
-				}
-				CardinalityValue ignored;
-				auto overlap = Intersect(points, ignored);
-				coordinate_retention *= source->current.IsZero()
-				                            ? CardinalityValue(0)
-				                            : MinValue(CardinalityValue(1), overlap.current / source->current);
-				if (projection.selection == EqualitySelection::MATCHED) {
-					population_conditioned = true;
-					support.total *= source->total.IsZero()
-					                     ? CardinalityValue(0)
-					                     : MinValue(CardinalityValue(1), overlap.total / source->total);
-				}
-			}
-			direct *= coordinate_retention;
-			conditional *= coordinate_retention.IsZero()
-			                   ? CardinalityValue(0)
-			                   : MinValue(CardinalityValue(1), retention / coordinate_retention);
-		} else if (!overlaps) {
-			conditional *= retention;
-		} else {
-			// Crossing partial tuple constraints need a conditional distribution we do not have.
-			return {};
-		}
-	}
-	if (projection.matched_rows) {
-		auto fraction = input.cardinality.IsZero()
-		                    ? CardinalityValue(0)
-		                    : MinValue(CardinalityValue(1), *projection.matched_rows / input.cardinality);
-		if (has_matching_columns && determines_match) {
-			// All copies of this tuple have the same match status. Reconciled coverage removes entire tuples.
-			direct = fraction;
-			conditional = 1;
-		} else {
-			conditional = direct.IsZero() ? CardinalityValue(0) : MinValue(CardinalityValue(1), fraction / direct);
-		}
-	}
-	support.current = RelationStatisticsHelper::EstimateEqualitySelectionSupport(
-	    support.current, input.cardinality, direct, conditional, projection.selection);
-	support.identities.reset();
-	return EqualitySelectedSupport {std::move(support), population_conditioned};
-}
-
-void EqualityCardinalityModel::ProjectInternal(
-    RelationStats &output, const vector<EqualityComponent> &components, const vector<EqualityProjection> &projections,
-    const vector<EqualityComponent> &output_equalities, ProjectionScope scope,
-    const vector<pair<ColumnBinding, ColumnBinding>> &value_equalities) const {
-	D_ASSERT(projections.size() == state->relations.size());
-	if (output.columns.empty()) {
-		// No column-index evidence survives, but an omitted region can still carry inherited proof facts.
-		output.unique_keys.clear();
-		output.equivalent_columns.clear();
-		output.value_equivalent_columns.clear();
-		output.joint_stats.clear();
-		output.tuple_identities.reset();
-		return;
-	}
-	auto aliases = state->aliases;
-	auto factors = BuildFactors(components);
-	for (auto &component : output_equalities) {
-		for (auto &binding : component.bindings) {
-			aliases.Merge(state->BindingIndex(component.bindings[0]), state->BindingIndex(binding));
-		}
-	}
-	output.unique_keys.clear();
-	output.equivalent_columns.clear();
-	output.value_equivalent_columns.clear();
-	output.joint_stats.clear();
-	map<idx_t, vector<idx_t>> outputs;
-	for (idx_t i = 0; i < output.columns.size(); i++) {
-		outputs[aliases.Find(state->BindingIndex(output.columns[i].binding))].push_back(i);
-	}
-	EqualityDisjointSets value_aliases;
-	for (idx_t i = 0; i < state->bindings.size(); i++) {
-		value_aliases.Add();
-	}
-	for (idx_t r = 0; r < state->relations.size(); r++) {
-		for (auto &group : state->relations[r].value_equivalent_columns) {
-			for (auto c : group) {
-				value_aliases.Merge(state->offsets[r] + group[0], state->offsets[r] + c);
-			}
-		}
-	}
-	for (auto &pair : value_equalities) {
-		value_aliases.Merge(state->BindingIndex(pair.first), state->BindingIndex(pair.second));
-	}
-	map<idx_t, vector<shared_ptr<const ColumnValueRestriction>>> restrictions;
-	map<idx_t, vector<idx_t>> value_outputs;
-	for (auto binding : state->bindings) {
-		restrictions[value_aliases.Find(state->BindingIndex(binding))].push_back(
-		    state->relations[binding.table_index.index].columns[binding.column_index.GetIndex()].value_restriction);
-	}
-	for (idx_t c = 0; c < output.columns.size(); c++) {
-		value_outputs[value_aliases.Find(state->BindingIndex(output.columns[c].binding))].push_back(c);
-	}
-	if (scope == ProjectionScope::COLUMNS_AND_EVIDENCE) {
-		struct SelectedColumn {
-			EqualitySupport support;
-			bool nullable;
-			bool population_conditioned;
-		};
-		map<idx_t, SelectedColumn> selected_columns;
-		for (auto binding : state->bindings) {
-			auto root = aliases.Find(state->BindingIndex(binding));
-			if (!outputs.count(root) || Normalize(binding) != binding) {
-				continue;
-			}
-			auto r = binding.table_index.index;
-			auto c = binding.column_index.GetIndex();
-			auto &source = state->relations[r];
-			auto &projection = projections[r];
-			vector<idx_t> dependent;
-			for (auto &joint : source.joint_stats) {
-				if (joint.columns == vector<idx_t> {c}) {
-					dependent.insert(dependent.end(), joint.dependent_columns.begin(), joint.dependent_columns.end());
-				}
-			}
-			std::sort(dependent.begin(), dependent.end());
-			auto selected = SelectSupport(r, {c}, dependent, ColumnSupport(binding), components, factors, projection);
-			auto support = selected ? selected->support : ColumnSupport(binding);
-			bool conditioned = selected && selected->population_conditioned;
-			bool nullable = source.columns[c].can_have_null || projection.null_extended;
-			auto entry = selected_columns.emplace(root, SelectedColumn {support, nullable, conditioned});
-			if (!entry.second) {
-				// Equal output columns share one support even when only one alias is requested.
-				ReconcileSupport(entry.first->second.support, support);
-				entry.first->second.nullable &= nullable;
-				entry.first->second.population_conditioned |= conditioned;
-			}
-		}
-		for (auto &column : output.columns) {
-			auto binding = column.binding;
-			auto r = binding.table_index.index;
-			column = state->relations[r].columns[Normalize(binding).column_index.GetIndex()];
-			column.binding = binding;
-			auto &selected = selected_columns.at(aliases.Find(state->BindingIndex(binding)));
-			column.total_domain.distinct_count = MaxValue(selected.support.total, selected.support.current);
-			column.total_domain.has_usable_domain = selected.support.has_usable_domain;
-			if (selected.population_conditioned) {
-				column.total_domain.source = DistinctCountSource::DERIVED;
-			}
-			column.current_domain = DistinctCount(MinValue(selected.support.current, output.cardinality),
-			                                      DistinctCountSource::CARDINALITY, selected.support.has_usable_domain);
-			if (!projections[r].preserve_identity) {
-				column.support_identities.reset();
-			}
-			column.can_have_null = selected.nullable;
-		}
-	}
-	for (auto &entry : outputs) {
-		if (entry.second.size() > 1) {
-			output.equivalent_columns.push_back(entry.second);
-		}
-	}
-	// Numeric canonical-column copies above do not change the actual value coordinate.
-	for (auto &entry : value_outputs) {
-		auto restriction =
-		    ColumnValueRestriction::Combine(restrictions.at(entry.first), RestrictionCombination::CONJUNCTION);
-		for (auto c : entry.second) {
-			output.columns[c].value_restriction = restriction;
-		}
-		if (entry.second.size() > 1) {
-			output.value_equivalent_columns.push_back(entry.second);
-		}
-	}
-	auto project = [&](idx_t relation, const vector<idx_t> &axes, bool complete = true) -> optional<vector<idx_t>> {
-		vector<idx_t> result;
-		for (auto column : axes) {
-			auto found = outputs.find(aliases.Find(state->offsets[relation] + column));
-			if (found == outputs.end()) {
-				if (complete) {
-					return {};
-				}
-				continue;
-			}
-			result.push_back(found->second[0]);
-		}
-		std::sort(result.begin(), result.end());
-		result.erase(std::unique(result.begin(), result.end()), result.end());
-		return result;
-	};
-	auto tuples = make_shared_ptr<vector<RelationTupleIdentity>>();
-	auto project_identity = [&](idx_t relation, const vector<idx_t> &axes,
-	                            const SupportIdentity &identity) -> RelationTupleIdentity {
-		map<idx_t, idx_t> coordinates;
-		for (idx_t i = 0; i < axes.size(); i++) {
-			auto found = outputs.find(aliases.Find(state->offsets[relation] + axes[i]));
-			if (found != outputs.end()) {
-				coordinates.emplace(found->second[0], identity.coordinates[i]);
-			}
-		}
-		RelationTupleIdentity result {{}, {identity.origin, {}}};
-		for (auto &entry : coordinates) {
-			result.columns.push_back(entry.first);
-			result.identity.coordinates.push_back(entry.second);
-		}
-		return result;
-	};
-	for (idx_t r = 0; r < state->relations.size(); r++) {
-		auto &input = state->relations[r];
-		auto &projection = projections[r];
-		if (projection.preserve_keys) {
-			for (auto &key : input.unique_keys) {
-				auto projected = project(r, key);
-				if (projected) {
-					output.AddUniqueKey(std::move(*projected));
-				}
-			}
-		}
-		if (projection.preserve_identity && input.tuple_identities) {
-			for (auto &tuple : *input.tuple_identities) {
-				auto projected = project_identity(r, tuple.columns, tuple.identity);
-				if (!projected.columns.empty()) {
-					tuples->push_back(std::move(projected));
-				}
-			}
-		}
-		for (auto &joint : input.joint_stats) {
-			auto projected = project(r, joint.columns);
-			if (!projected || projected->empty()) {
-				continue;
-			}
-			auto selected = SelectSupport(r, joint.columns, joint.dependent_columns,
-			                              {joint.total_domain.distinct_count, joint.current_domain.distinct_count,
-			                               joint.identities, joint.total_domain.has_usable_domain},
-			                              components, factors, projection);
-			if (!selected) {
-				continue;
-			}
-			auto total = selected->support.total;
-			auto current = MinValue(selected->support.current, output.cardinality);
-			if (projected->size() == 1) {
-				current = MinValue(current, output.columns[(*projected)[0]].current_domain.distinct_count);
-				total = MinValue(total, output.columns[(*projected)[0]].total_domain.distinct_count);
-			}
-			support_identities_t identities;
-			if (projection.preserve_identity && joint.identities) {
-				auto projected_identities = make_shared_ptr<vector<SupportIdentity>>();
-				for (auto &identity : *joint.identities) {
-					auto projected_identity = project_identity(r, joint.columns, identity);
-					D_ASSERT(projected_identity.columns == *projected);
-					projected_identities->push_back(std::move(projected_identity.identity));
-				}
-				identities = projected_identities;
-			}
-			output.joint_stats.push_back(
-			    {std::move(*projected),
-			     DistinctCount(MaxValue(total, current),
-			                   selected->population_conditioned ? DistinctCountSource::DERIVED
-			                                                    : joint.total_domain.source,
-			                   selected->support.has_usable_domain),
-			     DistinctCount(current, DistinctCountSource::CARDINALITY, selected->support.has_usable_domain),
-			     identities});
-			if (!projection.null_extended) {
-				auto dependent = project(r, joint.dependent_columns, false);
-				output.joint_stats.back().dependent_columns = std::move(*dependent);
-			}
-		}
-	}
-	output.tuple_identities = tuples->empty() ? nullptr : tuples;
 }
 
 void RelationStatisticsHelper::ApplyFiniteSelection(RelationStats &stats,

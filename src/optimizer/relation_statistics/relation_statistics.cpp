@@ -300,6 +300,7 @@ bool RelationStats::HasUniqueKey(const vector<idx_t> &axes) const {
 
 static vector<idx_t> ColumnAliases(idx_t count, const vector<vector<idx_t>> &groups) {
 	vector<idx_t> parents;
+	parents.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
 		parents.push_back(i);
 	}
@@ -457,6 +458,7 @@ void RelationStats::CopyEvidence(const RelationStats &source, const vector<optio
 		RelationTupleIdentity result;
 		result.identity.origin = identity.origin;
 		vector<pair<idx_t, idx_t>> projected;
+		projected.reserve(axes.size());
 		for (idx_t i = 0; i < axes.size(); i++) {
 			auto entry = outputs.find(root(axes[i]));
 			if (entry != outputs.end()) {
@@ -465,6 +467,8 @@ void RelationStats::CopyEvidence(const RelationStats &source, const vector<optio
 		}
 		std::sort(projected.begin(), projected.end());
 		projected.erase(std::unique(projected.begin(), projected.end()), projected.end());
+		result.columns.reserve(projected.size());
+		result.identity.coordinates.reserve(projected.size());
 		for (auto &entry : projected) {
 			result.columns.push_back(entry.first);
 			result.identity.coordinates.push_back(entry.second);

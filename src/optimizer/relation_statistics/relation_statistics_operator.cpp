@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/pair.hpp"
@@ -7,12 +8,12 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
-#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
 static void CopyBoundValueRestrictions(RelationStats &result, const RelationStats &child) {
 	vector<optional_idx> source_columns;
+	source_columns.reserve(result.columns.size());
 	for (auto &column : result.columns) {
 		source_columns.push_back(child.FindColumn(column.binding));
 	}

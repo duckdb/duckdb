@@ -18,6 +18,32 @@
 
 namespace duckdb {
 
+void FilterEstimate::Combine(const FilterEstimate &other) {
+	cardinality = MinValue(cardinality, other.cardinality);
+	supported &= other.supported;
+	proven_empty |= other.proven_empty;
+}
+
+CardinalityValue RelationStatisticsHelper::FilterFraction(CardinalityValue cardinality, double fraction) {
+	return cardinality * CardinalityValue(MaxValue(0.0, MinValue(fraction, 1.0)));
+}
+
+optional_ptr<const RelationColumnStats>
+RelationStatisticsHelper::FindFilterColumn(const Expression &expr, const RelationColumnStatsLookup &columns,
+                                           const vector<ColumnBinding> &positional_bindings) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &ref = expr.Cast<BoundColumnRefExpression>();
+		return ref.Depth() == 0 ? columns.Find(ref.Binding()) : nullptr;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto index = expr.Cast<BoundReferenceExpression>().Index();
+		if (index < positional_bindings.size()) {
+			return columns.Find(positional_bindings[index]);
+		}
+	}
+	return nullptr;
+}
+
 void RelationStatisticsHelper::CaptureUniqueKeys(LogicalOperator &op, RelationStats &stats, ClientContext &context,
                                                  optional<CardinalityValue> source_population) {
 	Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS, context);

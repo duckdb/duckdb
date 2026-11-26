@@ -69,6 +69,7 @@ static bool CanReuseAlignedStats(const LogicalOperator &op) {
 
 const vector<RelationStats> RelationManager::GetRelationStats() {
 	vector<RelationStats> ret;
+	ret.reserve(relations.size());
 	for (idx_t i = 0; i < relations.size(); i++) {
 		ret.push_back(relations[i]->stats);
 	}

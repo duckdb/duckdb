@@ -60,6 +60,16 @@ struct ColumnValueSelection {
 	bool excluded = false;
 };
 
+struct FilterEstimate {
+public:
+	void Combine(const FilterEstimate &other);
+
+public:
+	CardinalityValue cardinality;
+	bool supported;
+	bool proven_empty = false;
+};
+
 class RelationStatisticsHelper {
 public:
 	//! Capture generic proofs while the plan is stable. Only a statistics source establishes a new population.
@@ -90,6 +100,11 @@ public:
 	                                                    RelationStatsExtractor &extractor);
 	static optional<RelationStats> ExtractDistinctStats(LogicalDistinct &distinct, const RelationStats &child_stats,
 	                                                    ClientContext &context);
+	static CardinalityValue FilterFraction(CardinalityValue cardinality, double fraction);
+	static optional_ptr<const RelationColumnStats> FindFilterColumn(const Expression &expression,
+	                                                                const RelationColumnStatsLookup &columns,
+	                                                                const vector<ColumnBinding> &positional_bindings);
+
 	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats);
 	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats,
 	                                                  const vector<unique_ptr<Expression>> &expressions);
