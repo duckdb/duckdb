@@ -351,6 +351,84 @@ public:
 	}
 };
 
+//! HUGEINT / UHUGEINT are written as DECIMAL(39,0), the narrowest decimal that holds the full range of both, as a
+//! big-endian two's complement FIXED_LEN_BYTE_ARRAY, the same form as a wide decimal of that width
+struct ParquetHugeintDecimalTargetType {
+	//! The decimal width that holds every HUGEINT and UHUGEINT value
+	static constexpr const uint32_t DECIMAL_WIDTH = 39;
+	//! The number of sign extension bytes in front of the 16 bytes of the integer
+	static constexpr const idx_t SIGN_EXTENSION_SIZE = 8;
+	//! The length of the FIXED_LEN_BYTE_ARRAY. 39 digits need 17 bytes, but the length is deliberately not minimal.
+	//! DuckDB 1.x reads a decimal of more than 38 digits as a DOUBLE with a decoder that is only correct when the
+	//! length is a multiple of 8 bytes (it misreads the trailing partial chunk, without an error). The Parquet
+	//! format only requires the length to be large enough for the precision, so the values are sign-extended to 24
+	//! bytes, which those versions read as the (rounded) DOUBLE they got when these types were written as DOUBLE
+	static constexpr const idx_t PARQUET_SIZE = SIGN_EXTENSION_SIZE + 16;
+	data_t bytes[PARQUET_SIZE];
+
+	//! Numeric comparison, where the bytes order like the values once the sign bit is flipped
+	static int Compare(const ParquetHugeintDecimalTargetType &lhs, const ParquetHugeintDecimalTargetType &rhs) {
+		const auto lhs_sign = lhs.bytes[0] ^ 0x80;
+		const auto rhs_sign = rhs.bytes[0] ^ 0x80;
+		if (lhs_sign != rhs_sign) {
+			return lhs_sign < rhs_sign ? -1 : 1;
+		}
+		return memcmp(lhs.bytes + 1, rhs.bytes + 1, PARQUET_SIZE - 1);
+	}
+};
+
+class HugeintDecimalStatisticsState : public ColumnWriterStatistics {
+public:
+	bool has_stats = false;
+	ParquetHugeintDecimalTargetType min;
+	ParquetHugeintDecimalTargetType max;
+
+public:
+	void Update(const ParquetHugeintDecimalTargetType &value) {
+		if (!has_stats || ParquetHugeintDecimalTargetType::Compare(value, min) < 0) {
+			min = value;
+		}
+		if (!has_stats || ParquetHugeintDecimalTargetType::Compare(value, max) > 0) {
+			max = value;
+		}
+		has_stats = true;
+	}
+
+	bool HasStats() override {
+		return has_stats;
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string(char_ptr_cast(min.bytes), ParquetHugeintDecimalTargetType::PARQUET_SIZE) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string(char_ptr_cast(max.bytes), ParquetHugeintDecimalTargetType::PARQUET_SIZE) : string();
+	}
+
+	void Merge(const ColumnWriterStatistics &other_p) override {
+		auto &other = other_p.Cast<HugeintDecimalStatisticsState>();
+		if (!other.has_stats) {
+			return;
+		}
+		Update(other.min);
+		Update(other.max);
+	}
+	int CompareMin(const ColumnWriterStatistics &other_p) const override {
+		auto &other = other_p.Cast<HugeintDecimalStatisticsState>();
+		return ParquetHugeintDecimalTargetType::Compare(min, other.min);
+	}
+	int CompareMax(const ColumnWriterStatistics &other_p) const override {
+		auto &other = other_p.Cast<HugeintDecimalStatisticsState>();
+		return ParquetHugeintDecimalTargetType::Compare(max, other.max);
+	}
+};
+
 class GeoStatisticsState final : public ColumnWriterStatistics {
 public:
 	explicit GeoStatisticsState(GeometryModel geometry_model) : has_stats(false), geometry_model(geometry_model) {

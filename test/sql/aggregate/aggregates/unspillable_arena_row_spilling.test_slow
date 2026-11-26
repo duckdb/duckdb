@@ -5,6 +5,26 @@
 require skip_reload
 
 statement ok
+SET threads=8;
+
+statement ok
+SET memory_limit='400MB';
+
+# Keep useful in-memory growth: abandoning too often duplicates these unspillable heaps.
+query II
+SELECT count(*), sum(v[1])
+FROM (
+    SELECT max(i, 200) AS v
+    FROM range(1000000) t(i)
+    GROUP BY repeat(md5((i % 100000)::VARCHAR), 4)
+);
+----
+100000	94999950000
+
+# The unspillable arenas below leave only a few MB of the memory limit, which smaller vectors use up.
+require vector_size 2048
+
+statement ok
 SET threads=4;
 
 statement ok
@@ -31,20 +51,3 @@ FROM (
 );
 ----
 100000	4999950000
-
-statement ok
-SET threads=8;
-
-statement ok
-SET memory_limit='400MB';
-
-# Keep useful in-memory growth: abandoning too often duplicates these unspillable heaps.
-query II
-SELECT count(*), sum(v[1])
-FROM (
-    SELECT max(i, 200) AS v
-    FROM range(1000000) t(i)
-    GROUP BY repeat(md5((i % 100000)::VARCHAR), 4)
-);
-----
-100000	94999950000

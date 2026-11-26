@@ -25,7 +25,7 @@ struct JoinColumnSource {
 };
 
 struct JoinColumnSources {
-	explicit JoinColumnSources(JoinColumnSource direct) : direct(std::move(direct)) {
+	explicit JoinColumnSources(JoinColumnSource direct) : direct(direct) {
 	}
 
 	JoinColumnSource direct;

@@ -528,7 +528,7 @@ public:
 	static bool VisitBitstring(const string_t &, VariantVarcharSerializer &, bool) {
 		return false;
 	}
-	static bool VisitDefault(VariantLogicalType, const_data_ptr_t, VariantVarcharSerializer &, bool) {
+	static bool VisitDefault(const LogicalType &, const_data_ptr_t, VariantVarcharSerializer &, bool) {
 		return false;
 	}
 

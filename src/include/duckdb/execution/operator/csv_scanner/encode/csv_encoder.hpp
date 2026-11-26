@@ -79,6 +79,8 @@ private:
 	idx_t minimum_input_window = 1;
 	//! The (mark, encoding) pairs that pick the decoder from the start of the file
 	vector<pair<string, string>> byte_order_marks;
+	//! The maximum number of input bytes decoded per call, so the decoded string stays cache resident
+	static constexpr idx_t MAX_DECODE_SLICE = 64 * 1024;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;
@@ -91,7 +93,8 @@ private:
 	shared_ptr<const ScalarFunction> BindDecoder(ClientContext &context, ScalarFunctionCatalogEntry &entry);
 	//! Binds the decoder of the encoding picked by the byte order mark at the start of the file
 	void DetectByteOrder();
-	//! Runs the encoding's scalar function over the input, returns the number of bytes consumed
-	idx_t Decode(const char *input, idx_t input_size, bool is_last, string &decoded);
+	//! Runs the encoding's scalar function over the input, returns the number of bytes consumed.
+	//! The decoded string lives in the result vector.
+	idx_t Decode(const char *input, idx_t input_size, bool is_last, Vector &result, string_t &decoded);
 };
 } // namespace duckdb

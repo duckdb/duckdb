@@ -146,8 +146,12 @@ static bool IsAssociative(const JoinOrderOperator &left, const JoinOrderOperator
 }
 
 static bool IsLeftAssociativeCommutative(const JoinOrderOperator &left, const JoinOrderOperator &right) {
-	(void)left;
-	(void)right;
+	if (left.type == JoinOrderOperatorType::MARK || right.type == JoinOrderOperatorType::MARK) {
+		auto supported = [](JoinOrderOperatorType type) {
+			return AlgebraicType(type) == JoinOrderOperatorType::INNER || type == JoinOrderOperatorType::MARK;
+		};
+		return supported(left.type) && supported(right.type);
+	}
 	// For INNER, LEFT OUTER, ANTI, and SEMI joins every left associative-commutative entry in Table 3 is true.
 	return true;
 }

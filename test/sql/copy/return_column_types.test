@@ -140,7 +140,7 @@ COPY (SELECT 1 AS a, 2 AS a, 3 AS a_1) TO '{TEST_DIR}/return_column_types_dedup.
 ----
 1	[{'name': a, 'type': INTEGER}, {'name': a_1, 'type': INTEGER}, {'name': a_1_1, 'type': INTEGER}]
 
-# Parquet writes HUGEINT and UHUGEINT as DOUBLE, but the columns describe the query
+# Parquet writes HUGEINT and UHUGEINT as DECIMAL(39,0), but the columns describe the query
 query II
 COPY (SELECT 1::HUGEINT AS h, 1::UHUGEINT AS uh) TO '{TEST_DIR}/return_column_types_huge.parquet' (RETURN_COLUMN_TYPES);
 ----
@@ -149,8 +149,8 @@ COPY (SELECT 1::HUGEINT AS h, 1::UHUGEINT AS uh) TO '{TEST_DIR}/return_column_ty
 query II
 SELECT name, type FROM parquet_schema('{TEST_DIR}/return_column_types_huge.parquet') WHERE name IN ('h', 'uh') ORDER BY name;
 ----
-h	DOUBLE
-uh	DOUBLE
+h	FIXED_LEN_BYTE_ARRAY
+uh	FIXED_LEN_BYTE_ARRAY
 
 # With no rows and WRITE_EMPTY_FILE false, no file is written but the columns are still described
 query II

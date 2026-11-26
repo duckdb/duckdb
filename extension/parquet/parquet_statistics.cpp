@@ -165,6 +165,11 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 //! Statistics values that do not fit in the width of the decimal are ignored
 template <class T>
 static Value ParquetDecimalStatsValue(T value, uint32_t width, uint32_t scale) {
+	if (width > Decimal::MAX_WIDTH_INT128) {
+		// a wide decimal (a BIGNUM blob) backed by an integer column, which every integer fits in
+		auto blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(value));
+		return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
+	}
 	const auto max_value = Hugeint::POWERS_OF_TEN[width];
 	const auto hugeint_value = hugeint_t(value);
 	if (hugeint_value >= max_value || hugeint_value <= -max_value) {
@@ -226,10 +231,6 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		return Value::FLOAT(val);
 	}
 	case LogicalTypeId::DOUBLE: {
-		if (schema_ele.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
-			// decimals cast to double
-			return Value::DOUBLE(ParquetDecimalUtils::ReadDecimalValue<double>(stats_data, stats.size(), schema_ele));
-		}
 		if (stats.size() != sizeof(double)) {
 			throw InvalidInputException("Incorrect stats size for type DOUBLE");
 		}
@@ -1041,6 +1042,10 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 		return ParquetIntervalUtils::TryHashNormalized(interval);
 	}
 	case LogicalTypeId::DECIMAL:
+		if (constant.type().InternalType() == PhysicalType::VARCHAR) {
+			// wide decimals (BIGNUM blobs) are not hashed, whichever physical type holds them
+			return nullopt;
+		}
 		if (schema.parquet_type == duckdb_parquet::Type::INT32) {
 			return ValueXH64FixedWidth<int32_t>(constant);
 		} else if (schema.parquet_type == duckdb_parquet::Type::INT64) {
@@ -1223,6 +1228,10 @@ ParquetStatisticsUtils::GetBloomFilterHashStrategy(const ParquetColumnSchema &sc
 		}
 		return nullopt;
 	case LogicalTypeId::DECIMAL:
+		if (schema.type.InternalType() == PhysicalType::VARCHAR) {
+			// wide decimals (BIGNUM blobs) are not probed, also not when an integer column holds them
+			return nullopt;
+		}
 		// We currently only support decimal bloom filters backed by 32-bit or 64-bit integers.
 		if (schema.parquet_type == duckdb_parquet::Type::INT32 || schema.parquet_type == duckdb_parquet::Type::INT64) {
 			return ParquetBloomFilterHashStrategy::STANDARD;

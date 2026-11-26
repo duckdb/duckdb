@@ -107,6 +107,7 @@ public:
 		}
 	}
 	template <class U>
+	// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): steals the owner's control block
 	buffer_ptr(buffer_ptr<U> &&owner, T *ptr_p) noexcept : ptr(ptr_p), control(owner.control) {
 		owner.ptr = nullptr;
 		owner.control = nullptr;
@@ -118,6 +119,9 @@ public:
 	}
 
 	buffer_ptr &operator=(const buffer_ptr &other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
 		return Assign(other);
 	}
 	template <class U, typename std::enable_if<std::is_convertible<U *, T *>::value, int>::type = 0>
@@ -238,9 +242,13 @@ public:
 	}
 
 protected:
+	// Protected like std::enable_shared_from_this, so any class in a hierarchy can derive from it
+	// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 	enable_buffer_from_this() noexcept = default;
+	// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 	enable_buffer_from_this(const enable_buffer_from_this &) noexcept {
 	}
+	// NOLINTNEXTLINE(bugprone-unhandled-self-assignment): assignment keeps the owner, so it is a no-op
 	enable_buffer_from_this &operator=(const enable_buffer_from_this &) noexcept {
 		// Assignment changes the payload, not its owner.
 		return *this;

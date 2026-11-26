@@ -3,6 +3,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -430,6 +431,12 @@ public:
 	}
 
 private:
+	template <class T, class OP>
+	static constexpr bool UseSelectionBatch() {
+		return UseBooleanSelectionBatch<T>() || std::is_same_v<OP, InlinedStringEquals> ||
+		       std::is_same_v<OP, InlinedStringNotEquals>;
+	}
+
 	template <class T, class OP, bool CAN_HAVE_NULL>
 	idx_t TemplatedSelect(const UnifiedVectorFormat &vdata, T predicate, const SelectionVector &sel,
 	                      idx_t approved_tuple_count) {
@@ -437,7 +444,7 @@ private:
 		auto &mask = vdata.validity;
 		idx_t result_count = 0;
 		idx_t i = 0;
-		if constexpr (UseBooleanSelectionBatch<T>() && !CAN_HAVE_NULL) {
+		if constexpr (UseSelectionBatch<T, OP>() && !CAN_HAVE_NULL) {
 			if (!sel.IsSet() && !vdata.sel->IsSet()) {
 				array_ptr<sel_t> output(result_sel.data(), result_sel.Capacity());
 				for (; i + 64 <= approved_tuple_count; i += 64) {
@@ -470,21 +477,43 @@ private:
 		return TemplatedSelect<T, OP, true>(vdata, predicate, sel, approved_tuple_count);
 	}
 
+	template <class T, class OP>
+	idx_t SelectEquality(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			if (constant.GetValueUnsafe<string_t>().IsInlined()) {
+				using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
+				return SelectOperation<string_t, INLINED_OP>(vdata, sel, approved_tuple_count);
+			}
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
+	template <class T, class OP>
+	idx_t SelectOrdering(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			auto mode =
+			    StringComparison::SelectMode(vdata, constant.GetValueUnsafe<string_t>(), sel, approved_tuple_count);
+			return StringComparison::Dispatch<OP>(
+			    mode, [&](auto op) { return SelectOperation<T, decltype(op)>(vdata, sel, approved_tuple_count); });
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
 	template <class T>
 	idx_t SelectTyped(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
-			return SelectOperation<T, Equals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, Equals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_NOTEQUAL:
-			return SelectOperation<T, NotEquals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, NotEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHAN:
-			return SelectOperation<T, GreaterThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SelectOperation<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHAN:
-			return SelectOperation<T, LessThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SelectOperation<T, LessThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThanEquals>(vdata, sel, approved_tuple_count);
 		default:
 			InternalException::Throw("Unsupported comparison type for comparison filter executor");
 		}

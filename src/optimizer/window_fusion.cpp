@@ -47,10 +47,10 @@ bool CanRank(const BoundWindowExpression &wexpr, LogicalOperator &op) {
 		return false;
 	}
 
-	//	Natural orders can always rank
+	//	If there is no sorting, then the ranks are degenerate and not unique.
 	auto &order_bys = wexpr.OrderBy();
 	if (order_bys.empty()) {
-		return true;
+		return false;
 	}
 
 	//	For the other rankers to apply, we must have a UCC in play

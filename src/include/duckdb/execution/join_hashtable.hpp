@@ -300,6 +300,13 @@ public:
 		Vector hashes;
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
+		//! Rows that probe another entry, and rows that found their entry in the current round
+		SelectionVector rows_to_probe_sel;
+		SelectionVector rows_found_sel;
+		//! Loaded ht entry and probe flags per dense row
+		unsafe_unique_array<ht_entry_t> dense_entries;
+		Vector is_match_v;
+		Vector needs_next_v;
 		//! Executes the hash table's hash expression over the probe keys
 		unique_ptr<ExpressionExecutor> hash_executor;
 		unique_ptr<DataChunk> spill_hashes;
@@ -710,6 +717,10 @@ public:
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
 	//! Minimum capacity of the pointer table
 	static constexpr idx_t MINIMUM_CAPACITY = 16384;
+	//! Pointer tables above this capacity prefetch the entries the probe reads
+	static constexpr idx_t PREFETCH_MIN_CAPACITY = idx_t(1) << 20;
+	//! Vectors of at most this many rows probe row by row with branches; longer vectors probe branch-free
+	static constexpr idx_t BRANCHING_PROBE_MAX_COUNT = 32;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 

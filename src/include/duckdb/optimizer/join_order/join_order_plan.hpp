@@ -21,6 +21,7 @@ public:
 	JoinRelationSet &GetRoot() const;
 	const DPJoinNode &GetRootNode() const;
 	const JoinOrderPlanMap &GetPlans() const;
+	vector<RelationIndex> GetLeafOrder() const;
 	JoinOrderPlanMap TakePlans();
 
 private:

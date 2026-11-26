@@ -190,6 +190,8 @@ public:
 	bool can_ignore_nulls = true;
 	//! Does the function rank rows within the partition?
 	bool is_ranking = false;
+	//! Does the function read the ORDER BY values, so that a redundant key must be kept?
+	bool requires_ordering = false;
 };
 
 class BaseWindowFunction {
@@ -228,6 +230,7 @@ public: // Properties
 	bool CanExclude() const { return properties.can_exclude; }
 	bool CanIgnoreNulls() const { return properties.can_ignore_nulls; }
 	bool IsRanking() const { return properties.is_ranking; }
+	bool RequiresOrdering() const { return properties.requires_ordering; }
 
 	void SetCanDistinct(bool value) { properties.can_distinct = value; }
 	void SetCanFilter(bool value) { properties.can_filter = value; }
@@ -235,6 +238,7 @@ public: // Properties
 	void SetCanExclude(bool value) { properties.can_exclude = value; }
 	void SetCanIgnoreNulls(bool value) { properties.can_ignore_nulls = value; }
 	void SetIsRanking(bool value) { properties.is_ranking = value; }
+	void SetRequiresOrdering(bool value) { properties.requires_ordering = value; }
 
 public: // Callbacks
 

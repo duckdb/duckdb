@@ -78,3 +78,17 @@ query I
 SELECT hex(encode(value)) FROM read_csv('{TEST_DIR}/utf16_be_zwnbsp.csv', encoding = 'utf-16')
 ----
 EFBBBF78
+
+# Big-endian code units with a zero low byte must not be mistaken for ASCII
+statement ok
+COPY (SELECT from_hex('feff0100010001000100000a006101000062006300640065000a')) TO '{TEST_DIR}/utf16_be_non_ascii.csv' (FORMAT BLOB)
+
+foreach encoding utf-16 utf-16be
+
+query I
+SELECT column0 FROM read_csv('{TEST_DIR}/utf16_be_non_ascii.csv', encoding = '{encoding}', header = false, all_varchar = true)
+----
+ĀĀĀĀ
+aĀbcde
+
+endloop

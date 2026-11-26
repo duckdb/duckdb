@@ -34,6 +34,9 @@ public:
 	//! Opens a file with the file system that handles the path, and applies compression and pipes on top of it
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
 	                                           optional_ptr<FileOpener> opener);
+	//! Applies compression and pipes on top of a handle that was opened uncompressed
+	DUCKDB_API unique_ptr<FileHandle> WrapOpenedFile(unique_ptr<FileHandle> handle, const OpenFileInfo &file,
+	                                                 const FileOpenFlags &flags, optional_ptr<FileOpener> opener);
 	//! The file system that handles a path: a registered sub-system, or the default file system. Throws if it is
 	//! disabled. Loads the extension that provides the file system if there is one.
 	DUCKDB_API FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> opener);

@@ -119,31 +119,31 @@ void CSVEncoder::Reset() {
 	encoded_bytes_read = 0;
 }
 
-idx_t CSVEncoder::Decode(const char *input, idx_t input_size, bool is_last, string &decoded) {
+idx_t CSVEncoder::Decode(const char *input, idx_t input_size, bool is_last, Vector &result, string_t &decoded) {
 	decode_input.Reset();
 	decode_input.SetChildCardinality(1);
 	FlatVector::GetDataMutable<string_t>(decode_input.data[0])[0] =
 	    string_t(input, UnsafeNumericCast<uint32_t>(input_size));
 	FlatVector::GetDataMutable<bool>(decode_input.data[1])[0] = is_last;
-	Vector result(EncodingFunction::StreamResultType(), 1);
 	decode_executor->ExecuteExpression(decode_input, result);
 	auto values = result.Values<VectorStructType<string_t, int64_t>>();
 	auto entry = values[0];
-	auto decoded_value = entry.GetChildValue<0>().GetValue();
-	decoded.assign(decoded_value.GetData(), decoded_value.GetSize());
+	decoded = entry.GetChildValue<0>().GetValue();
 	return UnsafeNumericCast<idx_t>(entry.GetChildValue<1>().GetValue());
 }
 
 idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t output_size) {
-	string decoded;
 	while (encoded_buffer.HasDataToRead() && output_pos < output_size) {
 		const idx_t available = encoded_buffer.GetSize() - encoded_buffer.cur_pos;
 		// Decode as much input as there is room in the output, extended until it holds a complete character
-		idx_t slice = MinValue<idx_t>(MaxValue<idx_t>(output_size - output_pos, minimum_input_window), available);
+		const idx_t room = MinValue<idx_t>(output_size - output_pos, MAX_DECODE_SLICE);
+		idx_t slice = MinValue<idx_t>(MaxValue<idx_t>(room, minimum_input_window), available);
 		idx_t consumed = 0;
+		Vector result(EncodingFunction::StreamResultType(), 1);
+		string_t decoded;
 		while (true) {
 			const bool is_last = encoded_buffer.last_buffer && slice == available;
-			consumed = Decode(encoded_buffer.Ptr() + encoded_buffer.cur_pos, slice, is_last, decoded);
+			consumed = Decode(encoded_buffer.Ptr() + encoded_buffer.cur_pos, slice, is_last, result, decoded);
 			if (consumed != 0 || slice == available) {
 				break;
 			}
@@ -154,11 +154,11 @@ idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t outp
 			break;
 		}
 		encoded_buffer.cur_pos += consumed;
-		const idx_t to_copy = MinValue<idx_t>(decoded.size(), output_size - output_pos);
-		memcpy(output_buffer + output_pos, decoded.data(), to_copy); // NOLINT(bugprone-not-null-terminated-result)
+		const idx_t to_copy = MinValue<idx_t>(decoded.GetSize(), output_size - output_pos);
+		memcpy(output_buffer + output_pos, decoded.GetData(), to_copy); // NOLINT(bugprone-not-null-terminated-result)
 		output_pos += to_copy;
-		if (to_copy < decoded.size()) {
-			pending_decoded.assign(decoded, to_copy, string::npos);
+		if (to_copy < decoded.GetSize()) {
+			pending_decoded.assign(decoded.GetData() + to_copy, decoded.GetSize() - to_copy);
 			pending_pos = 0;
 		}
 	}

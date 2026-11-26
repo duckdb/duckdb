@@ -512,11 +512,13 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<dtime_tz_t, int64_t, ParquetTimeTZOperator>>(writer, std::move(schema),
 		                                                                                   path_in_schema);
 	case LogicalTypeId::HUGEINT:
-		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(writer, std::move(schema),
-		                                                                                  path_in_schema);
+		return make_uniq<
+		    StandardColumnWriter<hugeint_t, ParquetHugeintDecimalTargetType, ParquetHugeintDecimalOperator>>(
+		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::UHUGEINT:
-		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(writer, std::move(schema),
-		                                                                                    path_in_schema);
+		return make_uniq<
+		    StandardColumnWriter<uhugeint_t, ParquetHugeintDecimalTargetType, ParquetHugeintDecimalOperator>>(
+		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		if (parquet_write_timestamp_as_int96) {
@@ -629,6 +631,11 @@ hash_t Hash(ParquetIntervalTargetType val) {
 template <>
 hash_t Hash(ParquetUUIDTargetType val) {
 	return Hash(const_char_ptr_cast(val.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+}
+
+template <>
+hash_t Hash(ParquetHugeintDecimalTargetType val) {
+	return Hash(const_char_ptr_cast(val.bytes), ParquetHugeintDecimalTargetType::PARQUET_SIZE);
 }
 
 template <>
