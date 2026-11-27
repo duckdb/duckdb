@@ -16,7 +16,6 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/http/http_util.hpp"
 
-
 namespace duckdb {
 class DatabaseInstance;
 
