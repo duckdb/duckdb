@@ -78,5 +78,40 @@ SELECT count(*) FROM c WHERE x NOT IN (union_value(str := NULL::VARCHAR));
 ----
 0
 
+# A repeated predicate still rejects the rows NULL-extended by a LEFT join.
+statement ok
+SET disabled_optimizers = 'cte_filter_pusher,statistics_propagation';
+
+statement ok
+CREATE TABLE finite_outer_left(id INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO finite_outer_left SELECT range FROM range(3000);
+
+statement ok
+CREATE TABLE finite_outer_right(id INTEGER PRIMARY KEY, k INTEGER NOT NULL);
+
+statement ok
+INSERT INTO finite_outer_right
+SELECT range, CASE range % 3 WHEN 0 THEN 0 WHEN 1 THEN 42 ELSE 84 END FROM range(3000);
+
+query II
+EXPLAIN WITH p AS MATERIALIZED (
+    SELECT a.id, b.k FROM finite_outer_left a
+    LEFT JOIN (SELECT * FROM finite_outer_right WHERE k NOT IN (42, 84)) b USING (id)
+)
+SELECT count(*) FROM p WHERE k NOT IN (84, 42);
+----
+physical_plan	<REGEX>:(?s).*FILTER.*~2,400 rows.*CTE_SCAN.*
+
+query I
+WITH p AS MATERIALIZED (
+    SELECT a.id, b.k FROM finite_outer_left a
+    LEFT JOIN (SELECT * FROM finite_outer_right WHERE k NOT IN (42, 84)) b USING (id)
+)
+SELECT count(*) FROM p WHERE k NOT IN (84, 42);
+----
+1000
+
 statement ok
 RESET disabled_optimizers;

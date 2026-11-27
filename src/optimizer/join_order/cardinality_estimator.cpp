@@ -638,6 +638,9 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelat
 		join_rows = MaxValue(left_rows, left_rows * state->cardinalities.at(right).cardinality *
 		                                    GetLeftJoinSelectivity(op, left, right));
 		result->semi_anti_join_domain_evidence.Invalidate();
+		if (!on_left) {
+			result->can_have_null = true;
+		}
 	} else if (op.type == JoinOrderOperatorType::MARK) {
 		join_rows = left_rows;
 	} else {
