@@ -399,8 +399,21 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
-	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
+	// settings applied before startup are not validated by ExtensionDirectoriesSetting::OnSet
+	auto extension_directories = config.GetExtensionDirectories();
+	auto validated_directories = ExtensionHelper::ValidateExtensionDirectories(
+	    fs, extension_directories, Settings::Get<ExtensionDirectorySetting>(config));
+	if (validated_directories != extension_directories) {
+		vector<Value> values;
+		for (auto &directory : validated_directories) {
+			values.emplace_back(directory);
+		}
+		Settings::Set<ExtensionDirectoriesSetting>(config, SetScope::GLOBAL,
+		                                           Value::LIST(LogicalType::VARCHAR, std::move(values)));
+	}
+
+	// resolve the type of the database we are opening
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
