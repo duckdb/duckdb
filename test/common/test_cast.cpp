@@ -398,3 +398,23 @@ TEST_CASE("Test nanoseconds of strings without fractional seconds", "[cast]") {
 	REQUIRE(Cast::Operation<string_t, timestamp_tz_ns_t>(string_t(ts_str)).value == expected_ns);
 	REQUIRE(Cast::Operation<string_t, timestamp_ns_t>(string_t(frac_str)).value == expected_ns + 123456789);
 }
+
+TEST_CASE("TimestampNsFromEpochMillis and TimestampNsFromEpochMicros convert units", "[cast][timestamp]") {
+	REQUIRE(Timestamp::TimestampNsFromEpochMillis(0).value == 0);
+	REQUIRE(Timestamp::TimestampNsFromEpochMillis(1).value == Interval::NANOS_PER_MSEC);
+	REQUIRE(Timestamp::TimestampNsFromEpochMillis(-2).value == -2 * Interval::NANOS_PER_MSEC);
+	REQUIRE(Timestamp::TimestampNsFromEpochMillis(1700000000123LL).value == 1700000000123000000LL);
+
+	REQUIRE(Timestamp::TimestampNsFromEpochMicros(0).value == 0);
+	REQUIRE(Timestamp::TimestampNsFromEpochMicros(1).value == Interval::NANOS_PER_MICRO);
+	REQUIRE(Timestamp::TimestampNsFromEpochMicros(-2).value == -2 * Interval::NANOS_PER_MICRO);
+	REQUIRE(Timestamp::TimestampNsFromEpochMicros(1700000000123456LL).value == 1700000000123456000LL);
+
+	const int64_t overflow_ms = NumericLimits<int64_t>::Maximum() / Interval::NANOS_PER_MSEC + 1;
+	REQUIRE_THROWS_WITH(Timestamp::TimestampNsFromEpochMillis(overflow_ms),
+	                    Catch::Contains("Could not convert Timestamp(MS) to Timestamp(NS)"));
+
+	const int64_t overflow_us = NumericLimits<int64_t>::Maximum() / Interval::NANOS_PER_MICRO + 1;
+	REQUIRE_THROWS_WITH(Timestamp::TimestampNsFromEpochMicros(overflow_us),
+	                    Catch::Contains("Could not convert Timestamp(US) to Timestamp(NS)"));
+}

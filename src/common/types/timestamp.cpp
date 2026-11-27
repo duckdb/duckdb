@@ -482,8 +482,8 @@ timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
 timestamp_ns_t Timestamp::TimestampNsFromEpochMillis(int64_t millis) {
 	D_ASSERT(timestamp_ms_t(millis).IsFinite());
 	timestamp_ns_t result;
-	if (!TryMultiplyOperator::Operation(millis, Interval::NANOS_PER_MICRO, result.value)) {
-		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+	if (!TryMultiplyOperator::Operation(millis, Interval::NANOS_PER_MSEC, result.value)) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(NS)");
 	}
 	return result;
 }
@@ -491,8 +491,8 @@ timestamp_ns_t Timestamp::TimestampNsFromEpochMillis(int64_t millis) {
 timestamp_ns_t Timestamp::TimestampNsFromEpochMicros(int64_t micros) {
 	D_ASSERT(timestamp_t(micros).IsFinite());
 	timestamp_ns_t result;
-	if (!TryMultiplyOperator::Operation(micros, Interval::NANOS_PER_MSEC, result.value)) {
-		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(NS)");
+	if (!TryMultiplyOperator::Operation(micros, Interval::NANOS_PER_MICRO, result.value)) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
 	return result;
 }
