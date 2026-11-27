@@ -10,6 +10,7 @@ add_library_unity(
   common_subplan_nonserializable.cpp
   dynamic_filter_groups.cpp
   expression_type_serialization.cpp
+  filter_combiner.cpp
   filter_pushdown_alias.cpp
   function_invocation_serialization.cpp
   join_filter_optimizer_hooks.cpp

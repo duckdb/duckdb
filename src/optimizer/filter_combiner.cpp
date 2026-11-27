@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -159,7 +160,25 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 	}
 }
 
+static void RemoveDuplicateFilters(vector<unique_ptr<Expression>> &filters) {
+	expression_set_t seen;
+	idx_t count = 0;
+	for (idx_t i = 0; i < filters.size(); i++) {
+		auto &filter = filters[i];
+		if (!filter->IsVolatile() && !filter->CanThrow() && !ExpressionBarrier::Contains(*filter) &&
+		    !seen.insert(*filter).second) {
+			continue;
+		}
+		if (count != i) {
+			filters[count] = std::move(filter);
+		}
+		count++;
+	}
+	filters.resize(count);
+}
+
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	RemoveDuplicateFilters(remaining_filters);
 	// first loop over the remaining filters
 	for (auto &filter : remaining_filters) {
 		callback(std::move(filter));
@@ -1157,6 +1176,8 @@ void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, con
 
 TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
                                                         vector<FilterPushdownResult> &pushdown_results) {
+	// Deduplicate before assigning positional pushdown results to the remaining filters.
+	RemoveDuplicateFilters(remaining_filters);
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
