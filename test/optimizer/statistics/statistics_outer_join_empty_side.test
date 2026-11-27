@@ -1,0 +1,45 @@
+# name: test/optimizer/statistics/statistics_outer_join_empty_side.test
+# description: An outer join with an empty side keeps the rows of its preserved side in the aggregate bounds
+# group: [statistics]
+
+statement ok
+CREATE TABLE l(k INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO l VALUES (1, 1), (1, 0);
+
+statement ok
+CREATE TABLE r(k INTEGER, tag VARCHAR);
+
+statement ok
+INSERT INTO r VALUES (1, 'a');
+
+query I
+SELECT CASE WHEN sum(l.x) >= 1 THEN 1 ELSE 0 END FROM l LEFT JOIN r ON r.k = l.k AND r.tag = 'b';
+----
+1
+
+query I
+SELECT CASE WHEN sum(l.x) >= 1 THEN 1 ELSE 0 END FROM r RIGHT JOIN l ON r.k = l.k AND r.tag = 'b';
+----
+1
+
+query I
+SELECT CASE WHEN sum(l.x) >= 1 THEN 1 ELSE 0 END FROM l FULL OUTER JOIN r ON r.k = l.k AND r.tag = 'b';
+----
+1
+
+query II
+SELECT l.k, CASE WHEN sum(l.x) >= 1 THEN 1 ELSE 0 END FROM l LEFT JOIN r ON r.k = l.k AND r.tag = 'b' GROUP BY l.k;
+----
+1	1
+
+query I
+SELECT sum(l.x) FROM l LEFT JOIN r ON r.k = l.k AND r.tag = 'b';
+----
+1
+
+query I
+SELECT count(*) FROM l LEFT JOIN r ON r.k = l.k AND r.tag = 'b';
+----
+2

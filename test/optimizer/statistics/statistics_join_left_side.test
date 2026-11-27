@@ -1,0 +1,55 @@
+# name: test/optimizer/statistics/statistics_join_left_side.test
+# description: A join bounds its output with the statistics of its own children, also when its right side is filtered to nothing
+# group: [statistics]
+
+statement ok
+CREATE TABLE l(k INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO l VALUES (1, 1), (1, 0), (1, 0);
+
+statement ok
+CREATE TABLE r(k INTEGER, tag VARCHAR);
+
+statement ok
+INSERT INTO r VALUES (1, 'a');
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM (SELECT l.k, l.x FROM l LEFT JOIN r ON r.k = l.k AND r.tag IN ('b', 'c'));
+----
+1
+
+query I
+SELECT CASE WHEN sum(s) >= 1 THEN 1 ELSE 0 END FROM (SELECT l.k, sum(l.x) AS s FROM l LEFT JOIN r ON r.k = l.k AND r.tag IN ('b', 'c') GROUP BY l.k, r.tag);
+----
+1
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM l LEFT JOIN r ON abs(r.k - l.k) < 1 AND r.tag IN ('b', 'c');
+----
+1
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM r RIGHT JOIN l ON r.k = l.k AND r.tag IN ('b', 'c');
+----
+1
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM l FULL OUTER JOIN r ON r.k = l.k AND r.tag IN ('b', 'c');
+----
+1
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM l ASOF LEFT JOIN (SELECT k AS rk, tag FROM r WHERE tag IN ('b', 'c')) ON l.k >= rk;
+----
+1
+
+query I
+SELECT CASE WHEN sum(x) >= 1 THEN 1 ELSE 0 END FROM l POSITIONAL JOIN (SELECT k AS rk FROM r WHERE tag IN ('b', 'c'));
+----
+1
+
+query I
+SELECT count(*) FROM l LEFT JOIN r ON r.k = l.k AND r.tag IN ('b', 'c');
+----
+3
