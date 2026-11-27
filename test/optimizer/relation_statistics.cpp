@@ -28,6 +28,7 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/relation_statistics/equality_cardinality.hpp"
+#include "duckdb/optimizer/table_column_origin.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -2812,6 +2813,51 @@ static unique_ptr<LogicalOperator> PlanStatisticsQuery(Connection &connection, c
 	planner.CreatePlan(std::move(parser.statements[0]));
 	planner.plan->ResolveOperatorTypes();
 	return std::move(planner.plan);
+}
+
+TEST_CASE("Complete column origins reject restricted native scans", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE origin_population(k INTEGER, payload INTEGER)"));
+	connection.BeginTransaction();
+	auto plan = PlanStatisticsQuery(connection, "SELECT k, payload FROM origin_population");
+	auto &scan = plan->children[0]->Cast<LogicalGet>();
+	REQUIRE(GetTableColumnOrigin(scan, 0));
+	SECTION("A scan output position can differ from its physical column index") {
+		scan.projection_ids = {ProjectionIndex(1), ProjectionIndex(0)};
+		auto origin = GetTableColumnOrigin(scan, 0);
+		REQUIRE(origin);
+		CHECK(origin->column == ColumnIndex(1));
+	}
+	SECTION("Multi-column filters restrict the population") {
+		auto expression = BoundComparisonExpression::Create(
+		    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+		    make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 1));
+		scan.table_filters.PushMultiColumnFilter(make_uniq<ExpressionFilter>(
+		    std::move(expression), vector<ProjectionIndex> {ProjectionIndex(0), ProjectionIndex(1)}));
+		CHECK_FALSE(GetTableColumnOrigin(scan, 0));
+	}
+	SECTION("Dynamic filters can be populated after optimization") {
+		scan.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
+		REQUIRE_FALSE(scan.dynamic_filters->HasFilters());
+		CHECK_FALSE(GetTableColumnOrigin(scan, 0));
+	}
+	SECTION("Row-group ordering alone preserves the population") {
+		scan.row_group_order_options =
+		    make_uniq<RowGroupOrderOptions>(StorageIndex(0), OrderByStatistics::MIN, OrderType::ASCENDING,
+		                                    OrderByNullType::NULLS_FIRST, OrderByColumnType::NUMERIC);
+		CHECK(GetTableColumnOrigin(scan, 0));
+	}
+	SECTION("Row-group limits and offsets restrict the population") {
+		for (idx_t restriction = 0; restriction < 3; restriction++) {
+			scan.row_group_order_options = make_uniq<RowGroupOrderOptions>(
+			    StorageIndex(0), OrderByStatistics::MIN, OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
+			    OrderByColumnType::NUMERIC, restriction == 0 ? optional_idx(1) : optional_idx(),
+			    restriction == 1 ? 1 : 0, restriction == 2 ? 1 : 0);
+			CHECK_FALSE(GetTableColumnOrigin(scan, 0));
+		}
+	}
+	connection.Rollback();
 }
 
 TEST_CASE("Recursive fixpoint statistics do not inherit recursive term proofs", "[optimizer][relation_statistics]") {

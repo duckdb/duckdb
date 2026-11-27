@@ -1,7 +1,25 @@
 #include "duckdb/optimizer/relation_statistics/equality_cardinality_state.hpp"
 #include "duckdb/common/set.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
+
+static bool HasOverlappingJointEvidence(const RelationStats &stats, const vector<idx_t> &columns) {
+	auto overlaps = [&](const vector<idx_t> &axes) {
+		idx_t count = 0;
+		for (auto column : columns) {
+			count += std::find(axes.begin(), axes.end(), column) != axes.end();
+		}
+		return count > 1;
+	};
+	for (auto &joint : stats.joint_stats) {
+		if (joint.total_domain.has_usable_domain && overlaps(joint.columns)) {
+			return true;
+		}
+	}
+	return std::any_of(stats.unique_keys.begin(), stats.unique_keys.end(), overlaps);
+}
 
 optional<CardinalityValue>
 EqualityCardinalityModel::OriginalProducerPopulation(const vector<ColumnBinding> &columns) const {
@@ -77,6 +95,8 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 		}
 		vector<idx_t> axes;
 		vector<ColumnBinding> left_columns, right_columns;
+		vector<idx_t> left_indexes, right_indexes;
+		vector<vector<EqualitySupport>> pair_domains;
 		CardinalityValue denominator(1), largest(0), independent(1), strongest(1);
 		idx_t l = 0, r = 0;
 		while (l < left.size() && r < right.size()) {
@@ -99,26 +119,48 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 			independent *= factor;
 			strongest = MinValue(strongest, factor);
 			axes.push_back(axis);
+			pair_domains.push_back({lhs, rhs});
 			left_columns.push_back(components[axis].bindings[left[l++].point]);
 			right_columns.push_back(components[axis].bindings[right[r++].point]);
+			left_indexes.push_back(left_columns.back().column_index.GetIndex());
+			right_indexes.push_back(right_columns.back().column_index.GetIndex());
 		}
 		if (axes.size() < 2 || independent.IsZero()) {
 			continue;
 		}
-		auto lhs_population = OriginalProducerPopulation(left_columns);
-		auto rhs_population = OriginalProducerPopulation(right_columns);
-		if (!lhs_population || !rhs_population) {
-			continue;
-		}
-		auto population = MinValue(*lhs_population, *rhs_population);
-		// Legacy key-like guard: broad fact-to-fact joins keep independent coordinate factors.
-		if (population.IsZero() || largest > population || population > CardinalityValue(8) * largest) {
-			continue;
+		auto lhs_joint = JointSupport(pair.first, left_indexes);
+		auto rhs_joint = JointSupport(pair.second, right_indexes);
+		CardinalityValue multiplier;
+		if (lhs_joint && rhs_joint && lhs_joint->has_usable_domain && rhs_joint->has_usable_domain) {
+			// An attached dimension must not replace an available pair tuple with a row-count guess.
+			CardinalityValue joint_factor;
+			IntersectJoint({*lhs_joint, *rhs_joint}, pair_domains, joint_factor);
+			multiplier = joint_factor / independent;
+		} else {
+			if ((lhs_joint && lhs_joint->has_usable_domain) || (rhs_joint && rhs_joint->has_usable_domain) ||
+			    HasOverlappingJointEvidence(state->relations[pair.first], left_indexes) ||
+			    HasOverlappingJointEvidence(state->relations[pair.second], right_indexes)) {
+				// Partial tuple evidence needs its existing factor owner; do not guess over it.
+				continue;
+			}
+			auto lhs_population = OriginalProducerPopulation(left_columns);
+			auto rhs_population = OriginalProducerPopulation(right_columns);
+			if (!lhs_population || !rhs_population) {
+				continue;
+			}
+			auto population = MinValue(*lhs_population, *rhs_population);
+			// Legacy key-like guard: broad fact-to-fact joins keep independent coordinate factors.
+			if (population.IsZero() || largest > population || population > CardinalityValue(8) * largest) {
+				continue;
+			}
+			multiplier = MinValue(denominator / MinValue(denominator, population), strongest / independent);
+			if (multiplier <= CardinalityValue(1)) {
+				continue;
+			}
 		}
 		// Correct only the pair's independent denominator. Existing filter retention and the
 		// scalar contributions of other participants remain in the original estimate.
-		auto multiplier = MinValue(denominator / MinValue(denominator, population), strongest / independent);
-		if (multiplier <= CardinalityValue(1)) {
+		if (multiplier == CardinalityValue(1)) {
 			continue;
 		}
 		for (auto axis : axes) {
@@ -136,7 +178,7 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 			correction *= adjustment.multiplier;
 		}
 	}
-	// This is a cost prior, not joint NDV, uniqueness or membership-coverage evidence.
+	// Numeric correction publishes no joint NDV, uniqueness or membership-coverage evidence.
 	return correction;
 }
 

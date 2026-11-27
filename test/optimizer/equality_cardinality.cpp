@@ -32,7 +32,7 @@ static double EqualityRows(vector<RelationStats> inputs, const vector<pair<Colum
 		relations.push_back(r);
 		rows *= inputs[r].cardinality;
 	}
-	auto estimate = model.Estimate(model.Components(edges), relations);
+	auto estimate = model.EstimateJoin(edges, relations);
 	rows *= estimate.selectivity;
 	return (estimate.maximum ? MinValue(rows, *estimate.maximum) : rows).GetDouble();
 }
@@ -90,33 +90,21 @@ TEST_CASE("Composite join cost priors retain producer populations and equality c
 			source.domain = inputs[r].columns[c].total_domain;
 		}
 	}
-	auto joined_rows = [](vector<RelationStats> relations, const join_column_sources_t &observations,
-	                      const vector<pair<ColumnBinding, ColumnBinding>> &equalities) {
-		EqualityCardinalityModel model(relations, observations);
-		vector<idx_t> indexes;
-		CardinalityValue numerator(1);
-		for (idx_t r = 0; r < relations.size(); r++) {
-			indexes.push_back(r);
-			numerator *= relations[r].cardinality;
-		}
-		auto estimate = model.EstimateJoin(equalities, indexes);
-		return (numerator * estimate.selectivity).GetDouble();
-	};
-	REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+	REQUIRE(EqualityRows(inputs, edges, sources) == Approx(100000));
 	SECTION("Duplicate predicates cannot charge the prior twice") {
 		edges.push_back(edges[0]);
 		std::reverse(edges.begin(), edges.end());
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(100000));
 	}
 	SECTION("Filters retain their selectivity instead of shrinking the tuple population") {
 		inputs[1].cardinality = 1000;
 		inputs[1].CapCurrentDomainsToCardinality();
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(10000));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(10000));
 	}
 	SECTION("Missing or mixed producer origins retain independent factors") {
-		REQUIRE(joined_rows(inputs, {}, edges) == Approx(500));
+		REQUIRE(EqualityRows(inputs, edges) == Approx(500));
 		sources.at(EqualityBinding(1, 1)).direct.binding.table_index = TableIndex(200);
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(500));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(500));
 	}
 	SECTION("A second coordinate can close through a dimension") {
 		inputs.push_back(EqualityInput(1000, {1000}));
@@ -125,7 +113,7 @@ TEST_CASE("Composite join cost priors retain producer populations and equality c
 		         {EqualityBinding(1, 0), EqualityBinding(2, 0)},
 		         {EqualityBinding(0, 1), EqualityBinding(3, 0)},
 		         {EqualityBinding(1, 1), EqualityBinding(3, 0)}};
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(100000));
 	}
 	SECTION("Competing pairs remain independent") {
 		inputs.push_back(EqualityInput(10000, {1000, 2000}));
@@ -135,20 +123,32 @@ TEST_CASE("Composite join cost priors retain producer populations and equality c
 			    binding, JoinColumnSources({EqualityBinding(102, c), 10000, 10000, inputs[2].columns[c].total_domain}));
 			edges.emplace_back(EqualityBinding(1, c), binding);
 		}
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(2.5));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(2.5));
 	}
 	SECTION("Complete joint evidence has priority") {
 		for (auto &input : inputs) {
 			EqualityPopulation(input, {0, 1}, 5000, 5000, false);
 		}
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(200000));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(200000));
+		inputs.push_back(EqualityInput(1000, {1000}));
+		edges.emplace_back(EqualityBinding(0, 0), EqualityBinding(2, 0));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(200000));
+		// Marginal restrictions still limit compatible tuples when a dimension prevents a full bundle.
+		inputs[1].columns[0].total_domain = DistinctCount(100, DistinctCountSource::EXACT);
+		inputs[1].columns[0].current_domain = inputs[1].columns[0].total_domain;
+		sources.at(EqualityBinding(1, 0)).direct.domain = inputs[1].columns[0].total_domain;
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(20000));
+	}
+	SECTION("Partial joint evidence cannot be replaced with a guessed tuple") {
+		EqualityPopulation(inputs[0], {0, 1}, 5000, 5000, false);
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(500));
 	}
 	SECTION("Broad fact-to-fact joins retain independent factors") {
 		for (auto &entry : sources) {
 			entry.second.direct.source_cardinality = 100000;
 		}
 		inputs[1].cardinality = 100000;
-		REQUIRE(joined_rows(inputs, sources, edges) == Approx(5000));
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(5000));
 	}
 }
 

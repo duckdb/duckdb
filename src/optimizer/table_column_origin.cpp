@@ -11,6 +11,14 @@
 
 namespace duckdb {
 
+static bool HasPopulationRestriction(const LogicalGet &get) {
+	auto &order = get.row_group_order_options;
+	return get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters ||
+	       get.extra_info.sample_options || !get.extra_info.file_filters.empty() ||
+	       get.extra_info.file_filter_expressions || get.has_pushed_projection || get.at_clause ||
+	       (order && (order->row_limit.IsValid() || order->row_group_offset || order->leading_null_group_offset));
+}
+
 optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
 	return AggregateRewriteHelper::GetDirectReferenceIndex(expression, input);
 }
@@ -94,10 +102,7 @@ optional<TableColumnOrigin> GetTableColumnOrigin(LogicalOperator &root, idx_t ou
 		if (!table || !get.children.empty() || get.GetColumnIds().empty() || !get.scan_partition_indices.empty()) {
 			return nullopt;
 		}
-		if (!allow_filtered &&
-		    (get.table_filters.HasFilters() || (get.dynamic_filters && get.dynamic_filters->HasFilters()) ||
-		     get.extra_info.sample_options || !get.extra_info.file_filters.empty() ||
-		     get.extra_info.file_filter_expressions || get.has_pushed_projection || get.at_clause)) {
+		if (!allow_filtered && HasPopulationRestriction(get)) {
 			return nullopt;
 		}
 		// Output positions can be remapped by projection_ids; the binding identifies the scanned column.

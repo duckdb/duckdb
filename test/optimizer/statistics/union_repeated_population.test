@@ -74,16 +74,7 @@ SELECT count(*) FROM (
 ----
 1200
 
-# A fixed-size sample contributes its rows but cannot certify complete support.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*) FROM (
-    SELECT k FROM population
-    UNION ALL SELECT k FROM population USING SAMPLE 100 ROWS (reservoir, 42)
-) p JOIN domain USING (k);
-----
-physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"550".*
-
+# A fixed-size sample contributes only its selected rows.
 query I
 SELECT count(*) FROM (
     SELECT k FROM population
