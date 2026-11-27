@@ -54,3 +54,28 @@ statement error
 SELECT to_timestamp(1284352323::DOUBLE * 100000000);
 ----
 Conversion Error: Epoch seconds out of range for TIMESTAMP WITH TIME ZONE
+
+# epoch_ms on the non-microsecond timestamp and time types
+query IIII
+SELECT epoch_ms(TIMESTAMP_S '2026-11-16 13:00:00'),
+	epoch_ms(TIMESTAMP_MS '2026-11-16 13:00:00.123'),
+	epoch_ms(TIMESTAMP_NS '2026-11-16 13:00:00.123456789'),
+	epoch_ms(TIME_NS '01:02:03.456789');
+----
+1794834000000	1794834000123	1794834000123	3723456
+
+# TIMESTAMP_NS rounds to milliseconds as TIMESTAMP does
+query IIII
+SELECT epoch_ms(TIMESTAMP_NS '1969-12-31 23:59:59.9995'),
+	epoch_ms(TIMESTAMP_NS '1969-12-31 23:59:59.9996'),
+	epoch_ms(TIMESTAMP '1969-12-31 23:59:59.9995'),
+	epoch_ms(TIMESTAMP '1969-12-31 23:59:59.9996');
+----
+-1	0	-1	0
+
+query II
+SELECT epoch_ms(ts), epoch_ms(NULL::TIMESTAMP_NS)
+FROM (VALUES (TIMESTAMP_MS '2026-11-16 13:00:00.123'), (TIMESTAMP_MS 'infinity')) t(ts);
+----
+1794834000123	NULL
+NULL	NULL
