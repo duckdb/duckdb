@@ -1127,3 +1127,47 @@ TEST_CASE("Test extension_directories is validated at startup", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain), Value(repo_a), Value(repo_b)})}));
 	}
 }
+
+TEST_CASE("Test extension_directories is not validated when external access is disabled", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain = TestCreatePath("ede_plain");
+	auto repo_a = TestCreatePath("ede_repo_a");
+	auto repo_b = TestCreatePath("ede_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+	auto directories = Value::LIST({Value(plain), Value(repo_a), Value(repo_b)});
+
+	// at startup
+	DBConfig config;
+	config.SetOptionByName("extension_directories", directories);
+	config.SetOptionByName("enable_external_access", false);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {directories}));
+
+	// and on SET
+	REQUIRE_NO_FAIL(con.Query("SET extension_directories = ['" + repo_b + "', '" + plain + "', '" + repo_a + "']"));
+	result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(repo_b), Value(plain), Value(repo_a)})}));
+}
+
+TEST_CASE("Test extension_directories is not validated when the local file system is disabled", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain = TestCreatePath("edf_plain");
+	auto repo_a = TestCreatePath("edf_repo_a");
+	auto repo_b = TestCreatePath("edf_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET disabled_filesystems = 'LocalFileSystem'"));
+	REQUIRE_NO_FAIL(con.Query("SET extension_directories = ['" + plain + "', '" + repo_a + "', '" + repo_b + "']"));
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain), Value(repo_a), Value(repo_b)})}));
+}

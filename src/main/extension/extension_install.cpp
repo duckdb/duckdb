@@ -137,16 +137,24 @@ string ExtensionHelper::ResolveExtensionDirectory(FileSystem &fs, const string &
 	return result;
 }
 
-vector<string> ExtensionHelper::ValidateExtensionDirectories(FileSystem &fs, const vector<string> &directories,
-                                                             const string &legacy_directory) {
-	if (!legacy_directory.empty()) {
+vector<string> ExtensionHelper::ValidateExtensionDirectories(DatabaseInstance &db, const vector<string> &directories) {
+	if (!Settings::Get<ExtensionDirectorySetting>(db).empty()) {
 		// extension_directory is the default directory, the others are not checked
 		return directories;
 	}
+	auto &fs = FileSystem::GetFileSystem(db);
+	auto &vfs = VirtualFileSystem::Get(db);
 	vector<idx_t> repository_indexes;
 	for (idx_t i = 0; i < directories.size(); i++) {
-		auto resolved = ResolveExtensionDirectory(fs, directories[i]);
-		if (fs.DirectoryExists(fs.JoinPath(resolved, "repositories"))) {
+		// a directory that cannot be accessed cannot be installed to or loaded from either
+		if (vfs.IsDisabledForPath(directories[i])) {
+			continue;
+		}
+		auto repositories = fs.JoinPath(ResolveExtensionDirectory(fs, directories[i]), "repositories");
+		if (!db.config.CanAccessFile(repositories, FileType::FILE_TYPE_DIR)) {
+			continue;
+		}
+		if (fs.DirectoryExists(repositories)) {
 			repository_indexes.push_back(i);
 		}
 	}

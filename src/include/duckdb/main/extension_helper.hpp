@@ -190,8 +190,7 @@ public:
 	static string ResolveExtensionDirectory(FileSystem &fs, const string &directory);
 	//! Unless extension_directory is set, validates that at most one extension directory has a repositories
 	//! subdirectory. Returns the directories with the one that has a repositories subdirectory moved to the front.
-	static vector<string> ValidateExtensionDirectories(FileSystem &fs, const vector<string> &directories,
-	                                                   const string &legacy_directory);
+	static vector<string> ValidateExtensionDirectories(DatabaseInstance &db, const vector<string> &directories);
 
 	// Get all extension directory paths, including those in the 'repositories' subdirectory
 	static vector<InstalledExtensionDirectory> GetInstalledExtensionDirectories(ClientContext &context);

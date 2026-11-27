@@ -923,8 +923,7 @@ void ExtensionDirectoriesSetting::OnSet(SettingCallbackInfo &info, Value &input)
 	for (auto &directory : ListValue::GetChildren(input)) {
 		directories.push_back(StringValue::Get(directory));
 	}
-	auto validated = ExtensionHelper::ValidateExtensionDirectories(
-	    FileSystem::GetFileSystem(*info.db), directories, Settings::Get<ExtensionDirectorySetting>(info.config));
+	auto validated = ExtensionHelper::ValidateExtensionDirectories(*info.db, directories);
 	if (validated == directories) {
 		return;
 	}

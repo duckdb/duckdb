@@ -402,8 +402,7 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	auto &fs = FileSystem::GetFileSystem(*this);
 	// settings applied before startup are not validated by ExtensionDirectoriesSetting::OnSet
 	auto extension_directories = config.GetExtensionDirectories();
-	auto validated_directories = ExtensionHelper::ValidateExtensionDirectories(
-	    fs, extension_directories, Settings::Get<ExtensionDirectorySetting>(config));
+	auto validated_directories = ExtensionHelper::ValidateExtensionDirectories(*this, extension_directories);
 	if (validated_directories != extension_directories) {
 		vector<Value> values;
 		for (auto &directory : validated_directories) {
