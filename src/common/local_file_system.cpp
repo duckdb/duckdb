@@ -1827,7 +1827,7 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 }
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, const string &home_directory) {
-	auto path = ExpandPathWithHome(path_p, home_directory);
+	auto path = FileSystem::ExpandPathWithHome(path_p, home_directory);
 	auto parsed = Path::FromString(path);
 	if (parsed.IsAbsolute()) {
 		// already absolute - nothing to do
