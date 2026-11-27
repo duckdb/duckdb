@@ -857,6 +857,19 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 		}
+		if (children.size() > 2 && ExpressionFilter::IsSimpleFilterColumnRef(*children[0])) {
+			bool has_null = false;
+			for (idx_t i = 1; i < children.size(); i++) {
+				if (children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				}
+				has_null |= children[i]->Cast<BoundConstantExpression>().GetValue().IsNull();
+			}
+			if (has_null) {
+				// A match is false and a non-match is NULL after NOT; neither passes a filter.
+				return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+			}
+		}
 	}
 	auto bool_ref = CheckBoolRefStatistics(child, input_stats, true);
 	if (bool_ref != FilterPropagateResult::NO_PRUNING_POSSIBLE) {

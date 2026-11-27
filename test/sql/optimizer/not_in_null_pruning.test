@@ -1,0 +1,85 @@
+# name: test/sql/optimizer/not_in_null_pruning.test
+# description: A constant NOT IN list containing NULL cannot pass a filter
+# group: [optimizer]
+
+statement ok
+CREATE TABLE not_in_null AS
+SELECT i::INTEGER AS k FROM range(100) t(i) UNION ALL SELECT NULL;
+
+statement ok
+ANALYZE not_in_null;
+
+query I
+SELECT count(*) FROM not_in_null WHERE k NOT IN (42, 84, NULL, 23, 57);
+----
+0
+
+query II
+EXPLAIN SELECT * FROM not_in_null WHERE k NOT IN (42, 84, NULL, 23, 57);
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# The location of NULL and duplicate constants do not change the proof.
+query II
+EXPLAIN SELECT * FROM not_in_null WHERE k NOT IN (NULL, 42, 42);
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT * FROM not_in_null WHERE NOT (k IN (42, 84, NULL));
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# Inclusion still admits matching values; exclusion without NULL admits non-matches.
+query I
+SELECT k FROM not_in_null WHERE k IN (42, 84, NULL) ORDER BY k;
+----
+42
+84
+
+query I
+SELECT count(*) FROM not_in_null WHERE k NOT IN (42, 84);
+----
+98
+
+# Filter pruning must not replace a projected NULL with false.
+query II
+SELECT k, k NOT IN (42, 84, NULL, 23, 57) FROM not_in_null
+WHERE k IS NULL OR k IN (1, 42, 84) ORDER BY k NULLS FIRST;
+----
+NULL	NULL
+1	NULL
+42	false
+84	false
+
+query II
+EXPLAIN SELECT k NOT IN (42, 84, NULL, 23, 57) FROM not_in_null;
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*
+
+query I
+SELECT k FROM not_in_null WHERE k NOT IN (42, 84, NULL) OR k = 1;
+----
+1
+
+# Equality ANTI joins keep non-matches, including a NULL probe value.
+query I
+SELECT count(*) FROM not_in_null ANTI JOIN (VALUES (42), (84), (NULL)) rhs(k) USING (k);
+----
+99
+
+statement ok
+CREATE TABLE not_in_null_strings AS SELECT * FROM (VALUES ('a'), ('b'), ('z'), (NULL)) t(s);
+
+query II
+EXPLAIN SELECT * FROM not_in_null_strings WHERE s NOT IN ('a', 'z', NULL);
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query TT
+SELECT s, s NOT IN ('a', 'z', NULL) FROM not_in_null_strings ORDER BY s NULLS FIRST;
+----
+NULL	NULL
+a	false
+b	NULL
+z	false
