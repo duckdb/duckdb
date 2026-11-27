@@ -1037,14 +1037,44 @@ CardinalityValue CardinalityEstimator::EstimateCardinalityForCost(JoinRelationSe
 	return rows.GetCardinalityForCost();
 }
 
-optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelationSet &set, ColumnBinding binding,
-                                                                       optional_ptr<const LogicalJoinStats> boundary,
-                                                                       optional_ptr<JoinRelationSet> region) {
+//! One projection scope owns both boundary resolution and equality-domain reuse for its relation set.
+class CardinalityEstimator::ColumnProjection {
+public:
+	ColumnProjection(CardinalityEstimator &estimator, JoinRelationSet &set) : estimator(estimator), set(set) {
+	}
+
+	optional<RelationColumnStats> ProjectColumn(ColumnBinding binding);
+	optional<RelationStats> ProjectStats(const vector<ColumnBinding> &bindings);
+
+private:
+	void ResolveBoundary();
+	optional<RelationColumnStats> ProjectInputColumn(ColumnBinding binding);
+	void ApplyEqualityClass(const JoinEqualityClass &component, DistinctCount &domain);
+
+private:
+	CardinalityEstimator &estimator;
+	JoinRelationSet &set;
+	bool boundary_resolved = false;
+	optional_ptr<const LogicalJoinStats> boundary;
+	optional_ptr<JoinRelationSet> region;
+	bool reuse_domains = false;
+	//! An empty entry means the class is incomplete in this set. Entries never escape this projection.
+	reference_map_t<const JoinEqualityClass, vector<CardinalityValue>> equality_domains;
+};
+
+void CardinalityEstimator::ColumnProjection::ResolveBoundary() {
+	if (!boundary_resolved) {
+		boundary = estimator.FindBoundary(set, region);
+		boundary_resolved = true;
+	}
+}
+
+optional<RelationColumnStats> CardinalityEstimator::ColumnProjection::ProjectInputColumn(ColumnBinding binding) {
 	if (!boundary) {
-		if (binding.table_index.index >= state->leaves.size()) {
+		if (binding.table_index.index >= estimator.state->leaves.size()) {
 			return {};
 		}
-		auto &columns = state->leaves[binding.table_index.index].columns;
+		auto &columns = estimator.state->leaves[binding.table_index.index].columns;
 		if (binding.column_index.GetIndex() >= columns.size()) {
 			return {};
 		}
@@ -1055,21 +1085,21 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelat
 		return result;
 	}
 	if (region->count < set.count) {
-		auto &input = ContainsBinding(*region, binding) ? *region : set_manager.Difference(set, *region);
-		auto result = ProjectColumn(input, binding);
+		auto &input = ContainsBinding(*region, binding) ? *region : estimator.set_manager.Difference(set, *region);
+		auto result = estimator.ProjectColumn(input, binding);
 		if (result) {
 			result->semi_anti_join_domain_evidence.Invalidate();
 		}
 		return result;
 	}
 	auto &op = boundary->op.get();
-	auto &left = set_manager.Intersection(set, op.left_relations);
-	auto &right = set_manager.Intersection(set, op.right_relations);
+	auto &left = estimator.set_manager.Intersection(set, op.left_relations);
+	auto &right = estimator.set_manager.Intersection(set, op.right_relations);
 	bool on_left = ContainsBinding(left, binding);
 	if (!on_left && op.type == JoinOrderOperatorType::MARK) {
 		auto rhs = op.right_relations.get().relations[0];
 		if (binding.table_index.index == rhs.index &&
-		    binding.column_index.GetIndex() == state->leaves[rhs.index].columns.size()) {
+		    binding.column_index.GetIndex() == estimator.state->leaves[rhs.index].columns.size()) {
 			return RelationColumnStats(binding, DistinctCount(3, DistinctCountSource::CARDINALITY), Identifier("mark"));
 		}
 		return {};
@@ -1077,20 +1107,21 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelat
 	if (!on_left && op.type != JoinOrderOperatorType::LEFT) {
 		return {};
 	}
-	auto result = ProjectColumn(on_left ? left : right, binding);
+	auto result = estimator.ProjectColumn(on_left ? left : right, binding);
 	if (!result) {
 		return {};
 	}
-	auto left_rows = state->cardinalities.at(left).cardinality;
+	auto left_rows = estimator.state->cardinalities.at(left).cardinality;
 	CardinalityValue join_rows;
 	if (op.type == JoinOrderOperatorType::LEFT) {
-		join_rows = MaxValue(left_rows, left_rows * state->cardinalities.at(right).cardinality * boundary->selectivity);
+		join_rows = MaxValue(left_rows,
+		                     left_rows * estimator.state->cardinalities.at(right).cardinality * boundary->selectivity);
 		result->semi_anti_join_domain_evidence.Invalidate();
 	} else if (op.type == JoinOrderOperatorType::MARK) {
 		join_rows = left_rows;
 	} else {
 		vector<SemiAntiJoinDomain> domains;
-		auto estimate = EstimateMembership(*boundary, left, right, domains);
+		auto estimate = estimator.EstimateMembership(*boundary, left, right, domains);
 		join_rows = estimate.cardinality;
 		result->current_domain =
 		    RelationStatisticsHelper::EstimateCurrentDomain(result->current_domain, left_rows, join_rows);
@@ -1103,75 +1134,98 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelat
 			}
 		}
 	}
-	auto post_selectivity = GetJoinSelectivity(set, left, right);
+	auto post_selectivity = estimator.GetJoinSelectivity(set, left, right);
 	result->current_domain = RelationStatisticsHelper::EstimateCurrentDomain(result->current_domain, join_rows,
 	                                                                         join_rows * post_selectivity);
 	return result;
 }
 
-optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSet &set, ColumnBinding binding) {
-	if (!ContainsBinding(set, binding)) {
-		return {};
-	}
-	auto rows = EstimateCardinality(set);
-	auto cached = state->projected_columns.find(set);
-	if (cached != state->projected_columns.end()) {
-		auto column = cached->second.find(binding);
-		if (column != cached->second.end()) {
-			return column->second;
+void CardinalityEstimator::ColumnProjection::ApplyEqualityClass(const JoinEqualityClass &component,
+                                                                DistinctCount &domain) {
+	auto current = domain.distinct_count;
+	auto cached = reuse_domains ? equality_domains.find(component) : equality_domains.end();
+	if (cached != equality_domains.end()) {
+		if (cached->second.empty()) {
+			return;
 		}
-	}
-	optional_ptr<JoinRelationSet> region;
-	auto boundary = FindBoundary(set, region);
-	auto result = ProjectInputColumn(set, binding, boundary, region);
-	if (!result) {
-		return {};
-	}
-	for (auto &component : predicate_model.GetEqualityClasses()) {
-		if (!component.columns.count(binding)) {
-			continue;
+		// Preserve the original seed and member order; rounded cardinality comparisons cannot be reassociated.
+		for (auto &input : cached->second) {
+			current = MinValue(current, input);
 		}
-		auto current = result->current_domain.distinct_count;
+	} else {
 		bool complete = true;
+		vector<CardinalityValue> domains;
 		for (auto &other : component.columns) {
 			if (!ContainsBinding(set, other)) {
 				complete = false;
 				break;
 			}
-			auto input = ProjectInputColumn(set, other, boundary, region);
+			auto input = ProjectInputColumn(other);
 			if (!input) {
 				complete = false;
 				break;
 			}
 			current = MinValue(current, input->current_domain.distinct_count);
+			if (reuse_domains) {
+				domains.push_back(input->current_domain.distinct_count);
+			}
 		}
 		for (auto &edge : component.edges) {
-			if (!complete || !IsFilterApplicable(edge.predicate.get().GetFilter(), set)) {
+			if (!complete || !estimator.IsFilterApplicable(edge.predicate.get().GetFilter(), set)) {
 				complete = false;
 				break;
 			}
 		}
-		if (complete) {
-			result->current_domain = DistinctCount(current, DistinctCountSource::CARDINALITY);
+		if (reuse_domains) {
+			equality_domains.emplace(component, complete ? std::move(domains) : vector<CardinalityValue>());
+		}
+		if (!complete) {
+			return;
+		}
+	}
+	domain = DistinctCount(current, DistinctCountSource::CARDINALITY);
+}
+
+optional<RelationColumnStats> CardinalityEstimator::ColumnProjection::ProjectColumn(ColumnBinding binding) {
+	if (!ContainsBinding(set, binding)) {
+		return {};
+	}
+	auto rows = estimator.EstimateCardinality(set);
+	auto cached = estimator.state->projected_columns.find(set);
+	if (cached != estimator.state->projected_columns.end()) {
+		auto column = cached->second.find(binding);
+		if (column != cached->second.end()) {
+			return column->second;
+		}
+	}
+	ResolveBoundary();
+	auto result = ProjectInputColumn(binding);
+	if (!result) {
+		return {};
+	}
+	for (auto &component : estimator.predicate_model.GetEqualityClasses()) {
+		if (component.columns.count(binding)) {
+			ApplyEqualityClass(component, result->current_domain);
 		}
 	}
 	result->current_domain.distinct_count =
 	    MinValue(MinValue(result->current_domain.distinct_count, result->total_domain.distinct_count), rows);
 	if (boundary) {
-		state->projected_columns[set].emplace(binding, *result);
+		estimator.state->projected_columns[set].emplace(binding, *result);
 	}
 	return result;
 }
 
-optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
-                                                           const vector<ColumnBinding> &bindings) {
+optional<RelationStats> CardinalityEstimator::ColumnProjection::ProjectStats(const vector<ColumnBinding> &bindings) {
 	RelationStats result;
-	result.cardinality = EstimateCardinality(set);
-	auto &estimate = state->cardinalities.at(set);
+	result.cardinality = estimator.EstimateCardinality(set);
+	auto &estimate = estimator.state->cardinalities.at(set);
 	result.max_cardinality = estimate.maximum;
 	result.row_retention = estimate.row_retention;
+	// Scalar requests keep the direct, allocation-free reduction.
+	reuse_domains = bindings.size() > 1;
 	for (auto &binding : bindings) {
-		auto column = ProjectColumn(set, binding);
+		auto column = ProjectColumn(binding);
 		if (!column) {
 			return {};
 		}
@@ -1180,6 +1234,15 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 	result.stats_initialized = true;
 	result.Verify(bindings);
 	return result;
+}
+
+optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSet &set, ColumnBinding binding) {
+	return ColumnProjection(*this, set).ProjectColumn(binding);
+}
+
+optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
+                                                           const vector<ColumnBinding> &bindings) {
+	return ColumnProjection(*this, set).ProjectStats(bindings);
 }
 
 static CardinalityValue GetResidualOnSelectivity(const Expression &expression) {

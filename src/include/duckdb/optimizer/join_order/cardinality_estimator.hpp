@@ -42,11 +42,10 @@ public:
 	optional<RelationStats> ProjectStats(JoinRelationSet &set, const vector<ColumnBinding> &bindings);
 
 private:
+	class ColumnProjection;
+
 	optional_ptr<const LogicalJoinStats> FindBoundary(JoinRelationSet &set, optional_ptr<JoinRelationSet> &region);
 	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding);
-	optional<RelationColumnStats> ProjectInputColumn(JoinRelationSet &set, ColumnBinding binding,
-	                                                 optional_ptr<const LogicalJoinStats> boundary,
-	                                                 optional_ptr<JoinRelationSet> region);
 	SemiAntiJoinCardinalityEstimate EstimateMembership(const LogicalJoinStats &boundary, JoinRelationSet &left,
 	                                                   JoinRelationSet &right, vector<SemiAntiJoinDomain> &domains);
 	void InitEquivalentRelations();
