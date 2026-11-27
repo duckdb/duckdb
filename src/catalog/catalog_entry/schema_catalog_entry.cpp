@@ -6,6 +6,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/original/std/sstream.hpp"
 
@@ -74,6 +75,17 @@ vector<Identifier> SchemaCatalogEntry::GetSchemaPath() const {
 
 QualifiedName SchemaCatalogEntry::GetQualifiedName(const Identifier &entry_name) const {
 	return QualifiedName::FromCatalogSchema(catalog.GetName(), GetSchemaPath(), entry_name);
+}
+
+void SchemaCatalogEntry::DropForeignKeyReferences(CatalogTransaction transaction,
+                                                  const vector<unique_ptr<AlterForeignKeyInfo>> &fk_infos) {
+	for (auto &fk_info : fk_infos) {
+		// the referenced table can be dropped by the cascade of the dropped table
+		if (!GetEntry(transaction, CatalogType::TABLE_ENTRY, fk_info->GetQualifiedName().Name())) {
+			continue;
+		}
+		Alter(transaction, *fk_info);
+	}
 }
 
 string SchemaCatalogEntry::GetSchemaName() const {

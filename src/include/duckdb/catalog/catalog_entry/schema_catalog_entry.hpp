@@ -23,6 +23,7 @@ class SequenceCatalogEntry;
 enum class OnCreateConflict : uint8_t;
 
 struct AlterTableInfo;
+struct AlterForeignKeyInfo;
 struct CreateIndexInfo;
 struct CreateFunctionInfo;
 struct CreateCoordinateSystemInfo;
@@ -141,6 +142,9 @@ public:
 
 	//! Alters a catalog entry
 	virtual void Alter(CatalogTransaction transaction, AlterInfo &info) = 0;
+	//! Removes the foreign keys of a dropped table from the referenced tables that were not dropped along with it
+	void DropForeignKeyReferences(CatalogTransaction transaction,
+	                              const vector<unique_ptr<AlterForeignKeyInfo>> &fk_infos);
 
 	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 

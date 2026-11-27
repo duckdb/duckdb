@@ -169,15 +169,7 @@ bool DuckSchemaEntry::DropEntryInternal(CatalogTransaction transaction, CatalogE
 		return false;
 	}
 
-	// remove the foreign key constraint in main key table if main key table's name is valid
-	auto &tables = GetCatalogSet(CatalogType::TABLE_ENTRY);
-	for (auto &fk_info : fk_arrays) {
-		// the referenced table can be dropped by the cascade of the dropped table
-		if (!tables.GetEntry(transaction, fk_info->GetQualifiedName().Name())) {
-			continue;
-		}
-		Alter(transaction, *fk_info);
-	}
+	DropForeignKeyReferences(transaction, fk_arrays);
 	return true;
 }
 
