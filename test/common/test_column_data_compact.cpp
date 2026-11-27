@@ -1597,7 +1597,7 @@ TEST_CASE("Shared list storage accounting drops a removed longest reference", "[
 		SharedChildVector::SetView(ListVector::GetChildMutable(list), storage, length);
 		ListVector::SetListSize(list, length);
 		FlatVector::GetDataMutable<list_entry_t>(list)[0] = list_entry_t {0, length};
-		chunk.SetCardinality(1);
+		chunk.SetChildCardinality(1);
 		AppendChunk(collection, chunk);
 		REQUIRE(ColumnDataCollectionSegment::IsSharedListChild(FirstListChildEntry(collection)));
 	};
@@ -1776,10 +1776,10 @@ public:
 			extra_values.push_back(Value::BIGINT(extra));
 		}
 		input.data[1].Reference(Value::LIST(LogicalType::BIGINT, std::move(extra_values)), count_t(1));
-		input.SetCardinality(1);
+		input.SetChildCardinality(1);
 		result.Initialize(Allocator::DefaultAllocator(), {type});
 		executor->ExecuteExpression(input, result.data[0]);
-		result.SetCardinality(1);
+		result.SetChildCardinality(1);
 	}
 
 private:
