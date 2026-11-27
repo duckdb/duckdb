@@ -220,7 +220,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	idx_t has_range = 0;
 	bool has_equality = op.HasEquality(has_range);
 	bool can_merge = has_range > 0;
-	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
+	// the recursive member of a recursive CTE is executed repeatedly, which the IE join does not support
+	bool can_iejoin = has_range >= 2 && planning_recursive_cte_depth == 0;
 	switch (op.join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

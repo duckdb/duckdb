@@ -1,0 +1,63 @@
+# name: benchmark/micro/join/iejoin_correlated_subquery.benchmark
+# description: Range join whose filters are correlated subqueries, which are planned as materialized CTEs (from a DuckLake catalog migration)
+# group: [join]
+
+# Borrows a real query from the DuckLake v1.0 to v1.1 catalog migration that was slow
+# on a real user with an astounding number of inlined data tables. In production using
+# IEJoin instead of Piecewise Merge Join drops the query from minutes to less than
+# a second.
+
+name IEJoin Correlated Subquery
+group micro
+subgroup join
+
+# every 50th snapshot is expired; schema_versions holds the first schema version of every table, and the schema
+# version of an inlined table except for about 1% of them
+load
+CREATE TABLE snapshots AS
+SELECT snapshot_id, sum(bump) OVER (ORDER BY snapshot_id) AS schema_version
+FROM (
+	SELECT i AS snapshot_id,
+		CASE WHEN (i * 7919) % 10 < 4 THEN 1 + ((i * 104729) % 3 = 0)::INTEGER ELSE 0 END AS bump
+	FROM range(1, 100001) t(i)
+)
+WHERE (snapshot_id * 31337) % 50 <> 0;
+CREATE TABLE inlined_tables AS
+SELECT DISTINCT ((i * 7919) % 4000)::BIGINT AS table_id,
+	(1 + (i * 104729) % (SELECT max(schema_version) FROM snapshots))::BIGINT AS schema_version
+FROM range(40000) t(i);
+CREATE TABLE schema_versions AS
+WITH versions AS (
+	SELECT table_id, min(schema_version) AS schema_version FROM inlined_tables GROUP BY ALL
+	UNION
+	SELECT table_id, schema_version FROM inlined_tables WHERE ((table_id * 31 + schema_version) * 7919) % 100 <> 0
+), first_snapshots AS (
+	SELECT schema_version, min(snapshot_id) AS snapshot_id FROM snapshots GROUP BY ALL
+)
+SELECT versions.table_id, versions.schema_version, first_snapshots.snapshot_id AS begin_snapshot
+FROM versions ASOF JOIN first_snapshots ON versions.schema_version <= first_snapshots.schema_version;
+
+run
+SELECT count(*) FROM (
+	SELECT DISTINCT commits.snapshot_id, inlined.schema_version, inlined.table_id
+	FROM (
+		SELECT snapshot_id, schema_version,
+			LAG(snapshot_id) OVER (ORDER BY snapshot_id) AS previous_snapshot_id,
+			LAG(schema_version) OVER (ORDER BY snapshot_id) AS previous_schema_version
+		FROM snapshots
+	) commits
+	JOIN inlined_tables inlined
+		ON inlined.schema_version > commits.previous_schema_version AND inlined.schema_version <= commits.schema_version
+	WHERE commits.previous_snapshot_id = commits.snapshot_id - 1
+	AND commits.previous_schema_version < commits.schema_version
+	AND NOT EXISTS (
+		SELECT 1 FROM schema_versions sv
+		WHERE sv.table_id = inlined.table_id AND sv.schema_version = inlined.schema_version
+	) AND (
+		SELECT count(*) FROM schema_versions sv
+		WHERE sv.table_id = inlined.table_id AND sv.begin_snapshot <= commits.snapshot_id
+	) > 1
+)
+
+result I
+326
