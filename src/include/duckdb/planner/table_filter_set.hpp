@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/enums/filter_result.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
@@ -20,6 +21,9 @@ class TableFilterSet {
 public:
 	void PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
 	void PushMultiColumnFilter(unique_ptr<TableFilter> filter);
+	//! Normalize a completed batch of already-admitted scan filters, preserving their expression forms.
+	//! On contradiction, return UNSATISFIABLE without modifying the offending column's filter.
+	FilterResult Finalize();
 	bool HasFilters() const;
 	idx_t FilterCount() const;
 	bool HasMultiColumnFilters() const;

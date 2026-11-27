@@ -4,6 +4,7 @@ add_library_unity(
   bloom_filter.cpp
   conjunction_filter.cpp
   constant_filter.cpp
+  constant_filter_combiner.cpp
   dynamic_filter.cpp
   expression_filter.cpp
   in_filter.cpp

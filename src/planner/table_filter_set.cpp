@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
@@ -24,27 +25,6 @@
 
 namespace duckdb {
 
-static bool ContainsInternalTableFilterFunction(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
-			return true;
-		}
-		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
-		if (optional_child && ContainsInternalTableFilterFunction(*optional_child)) {
-			return true;
-		}
-	}
-	bool found = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (found) {
-			return;
-		}
-		found = ContainsInternalTableFilterFunction(child);
-	});
-	return found;
-}
-
 static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expression &expr);
 
 static ExpressionType FlipComparisonType(ExpressionType type) {
@@ -59,20 +39,6 @@ static ExpressionType FlipComparisonType(ExpressionType type) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	default:
 		return type;
-	}
-}
-
-static bool IsSupportedConstantComparison(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return true;
-	default:
-		return false;
 	}
 }
 
@@ -131,7 +97,7 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundF
 			return nullptr;
 		}
 	}
-	if (!IsSupportedConstantComparison(comparison_type)) {
+	if (!ConstantFilterCombiner::IsSupportedComparison(comparison_type)) {
 		return nullptr;
 	}
 	return WrapStructFilterPath(make_uniq<LegacyConstantFilter>(comparison_type, constant), struct_path);
@@ -257,7 +223,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}
-	if (ContainsInternalTableFilterFunction(expr)) {
+	if (ExpressionFilter::ContainsInternalTableFilterFunction(expr)) {
 		return nullptr;
 	}
 	auto normalized_expr = expr.Copy();
@@ -565,6 +531,8 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	if (!result->HasFilters() && !result->HasMultiColumnFilters()) {
 		return nullptr;
 	}
+	// Work only on this execution's copy. Contradictions can safely retain their original scan predicates.
+	result->Finalize();
 	return result;
 }
 

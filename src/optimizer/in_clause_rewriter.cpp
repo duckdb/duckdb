@@ -18,7 +18,7 @@ bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
 	    (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	     expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN)) {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		if (op.GetChildren().size() >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+		if (op.GetChildren().size() >= IN_CLAUSE_REWRITE_THRESHOLD) {
 			bool all_foldable = true;
 			for (idx_t child_idx = 1; child_idx < op.GetChildren().size(); child_idx++) {
 				if (!op.GetChildren()[child_idx]->IsFoldable()) {

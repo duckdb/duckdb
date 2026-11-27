@@ -154,20 +154,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	const bool requires_partial_pushdown = !get.children.empty() && get.function.supports_pushdown_type;
 	// WITH ORDINALITY numbers the rows the function emits, so pushing a filter into the function would renumber the
 	// surviving rows rather than report their original positions
-	if (get.table_filters.HasFilters() || !get.function.filter_pushdown || requires_partial_pushdown ||
-	    assigns_ordinality) {
+	if (!get.function.filter_pushdown || requires_partial_pushdown || assigns_ordinality) {
 		// these filters cannot be pushed into the scan: push a LogicalFilter on top
 		restore_barrier_filters();
 		return FinishPushdown(std::move(op));
 	}
+	const bool has_incoming_filters = !filters.empty();
 	if (PushFilters() == FilterResult::UNSATISFIABLE) {
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 
 	auto &column_ids = get.GetColumnIds();
+	const bool has_existing_filters = get.table_filters.HasFilters();
 	//! We generate the table filters that will be executed during the table scan
 	vector<FilterPushdownResult> pushdown_results;
-	get.table_filters = combiner.GenerateTableScanFilters(column_ids, pushdown_results);
+	combiner.GenerateTableScanFilters(get.table_filters, column_ids, pushdown_results);
 
 	GenerateFilters();
 
@@ -194,8 +195,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
 			continue;
 		}
-		// Allow pushing down filters that can throw only if there is a single expression
-		if (expr.CanThrow() && filters.size() > 1) {
+		// An existing scan filter may guard a throwing expression that arrived in this later pass.
+		if (expr.CanThrow() && (filters.size() > 1 || has_existing_filters)) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);
@@ -208,6 +209,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	PushdownBarrierFilters(get, barrier_filters);
 	restore_barrier_filters();
+
+	if (has_existing_filters && has_incoming_filters && get.table_filters.Finalize() == FilterResult::UNSATISFIABLE) {
+		return make_uniq<LogicalEmptyResult>(std::move(op));
+	}
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

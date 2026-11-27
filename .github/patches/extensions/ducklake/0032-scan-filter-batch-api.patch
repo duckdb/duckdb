@@ -1,0 +1,26 @@
+diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
+index 400f9b0..04d32e0 100644
+--- a/src/storage/ducklake_multi_file_list.cpp
++++ b/src/storage/ducklake_multi_file_list.cpp
+@@ -286,7 +286,9 @@ unique_ptr<DuckLakeFilterNode> DuckLakeMultiFileList::CombineFilterNode(ClientCo
+ 		return make_uniq<DuckLakeFilterNode>(DuckLakeFilterNodeType::MATCH_NONE);
+ 	}
+ 	vector<FilterPushdownResult> pushdown_results;
+-	auto table_filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
++	TableFilterSet table_filter_set;
++	combiner.GenerateTableScanFilters(table_filter_set, info.column_indexes, pushdown_results);
++	table_filter_set.Finalize();
+ 	if (combiner.HasFilters() || !table_filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}
+@@ -387,7 +389,9 @@ unique_ptr<MultiFileList> DuckLakeMultiFileList::ComplexFilterPushdown(ClientCon
+ 		combiner.AddFilter(filter->Copy());
+ 	}
+ 	vector<FilterPushdownResult> pushdown_results;
+-	auto table_filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
++	TableFilterSet table_filter_set;
++	combiner.GenerateTableScanFilters(table_filter_set, info.column_indexes, pushdown_results);
++	table_filter_set.Finalize();
+ 
+ 	auto pushdown_info = filter_info ? filter_info->Copy() : make_uniq<FilterPushdownInfo>();
+ 

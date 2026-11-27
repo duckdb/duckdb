@@ -131,6 +131,7 @@
     {
       "reason": "Creates VARIANT columns, which this config's v1.4.0 storage version does not support",
       "paths": [
+        "test/optimizer/filter_pushdown/existing_scan_filters.test",
         "test/sql/unnest/unnest_constant_reference_types.test"
       ]
     }

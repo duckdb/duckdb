@@ -57,6 +57,11 @@ public:
 	                                                                    const LogicalType &column_type,
 	                                                                    SelectivityOptionalFilterType type);
 	static bool IsSimpleFilterColumnRef(const Expression &expr);
+	//! Whether a literal IN can use the native single-column scan executor.
+	static bool IsNativeInFilter(const Expression &expr);
+	//! Whether a native IN is small enough to evaluate using the shared IN-list cutoff.
+	static bool IsSmallNativeInFilter(const Expression &expr);
+	static bool SupportsConstantFilterPushdown(const LogicalType &type);
 	//! Flips comparison_type for a constant on the left
 	static optional_ptr<const BoundConstantExpression>
 	TryGetColumnConstantComparison(const BoundFunctionExpression &comparison, ExpressionType &comparison_type);
@@ -77,8 +82,12 @@ public:
 	                                                             array_ptr<const BaseStatistics> input_stats);
 	//! Check if an expression tree contains an internal function with the given name
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
+	//! Check the full expression tree, including optional bind data, for any internal table-filter function
+	static bool ContainsInternalTableFilterFunction(const Expression &expr);
 	//! Check if an expression tree is entirely optional filter semantics
 	static bool IsOptionalExpression(const Expression &expr);
+	//! Whether all conjuncts are pruning-only hints with no row-filtering work.
+	static bool IsPruningOnlyExpression(const Expression &expr);
 	//! Check if the root of an expression tree is an optional filter wrapper
 	static bool IsRootOptionalExpression(const Expression &expr);
 	//! Child of a root optional filter wrapper
