@@ -77,3 +77,12 @@ statement error
 SELECT write_log('hello', scope := 'thread');
 ----
 Invalid Input Error: write_log: 'scope' argument unknown: 'thread'
+
+# file_opener is still accepted as the former name of the context scope
+statement ok
+SELECT write_log('former context scope name', level := 'info', scope := 'file_opener', log_type := 'former_type');
+
+query IIII
+SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where message = 'former context scope name'
+----
+CONNECTION	former_type	INFO	former context scope name

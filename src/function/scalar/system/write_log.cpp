@@ -133,7 +133,8 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		} else if (info.scope == "database") {
 			WriteLogValues<const DatabaseInstance>(*info.context->db, info.level, input_data, idata.sel, args.size(),
 			                                       info.type);
-		} else if (info.scope == "context") {
+		} else if (info.scope == "context" || info.scope == "file_opener") {
+			// file_opener is the former name of the context scope
 			WriteLogValues<const Context>(info.context->GetContext(), info.level, input_data, idata.sel, args.size(),
 			                              info.type);
 		} else {

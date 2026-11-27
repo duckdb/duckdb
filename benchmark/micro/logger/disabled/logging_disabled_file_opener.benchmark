@@ -1,0 +1,10 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
+# description: Benchmarking the File Opener logger (has an extra step of indirection so will be a little slower)
+# group: [disabled]
+
+name FileOpener NopLogger
+group logger
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger
+run
+SELECT write_log('hello world', scope := 'file_opener') from range(0,50000000);
