@@ -21,13 +21,7 @@ bool DatabasePathInfo::IsAttachedIn(DatabaseManager &manager, const Identifier &
 }
 
 void DatabasePathInfo::Attach(DatabaseManager &manager, const Identifier &alias) {
-	auto &aliases = attached_databases[manager];
-	auto entry = aliases.find(alias);
-	if (entry == aliases.end()) {
-		aliases.emplace(alias, 1);
-	} else {
-		entry->second++;
-	}
+	attached_databases[manager][alias]++;
 }
 
 void DatabasePathInfo::Detach(DatabaseManager &manager, const Identifier &alias) {
@@ -40,13 +34,11 @@ void DatabasePathInfo::Detach(DatabaseManager &manager, const Identifier &alias)
 	if (alias_entry == aliases.end()) {
 		return;
 	}
-	if (alias_entry->second <= 1) {
+	if (--alias_entry->second == 0) {
 		aliases.erase(alias_entry);
-		if (aliases.empty()) {
-			attached_databases.erase(manager_entry);
-		}
-	} else {
-		alias_entry->second--;
+	}
+	if (aliases.empty()) {
+		attached_databases.erase(manager_entry);
 	}
 }
 
