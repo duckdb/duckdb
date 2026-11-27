@@ -46,6 +46,7 @@ COMMON_JOBS = [
 
 PULL_REQUEST_ONLY_JOBS = [
     "regression",
+    "check-patches",
 ]
 
 PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
@@ -61,6 +62,7 @@ MERGE_GROUP_JOBS = [
     "linux-relassert",
     "linux-release",
     "tidy-check",
+    "check-patches",
 ]
 
 RELEASE_JOBS = [

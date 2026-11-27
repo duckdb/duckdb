@@ -71,7 +71,8 @@ jobs:
       image_version: ${{ steps.config.outputs.image_version }}
       linux_release_matrix: ${{ steps.config.outputs.linux_release_matrix }}
       linux_musl_matrix: ${{ steps.config.outputs.linux_musl_matrix }}
-      extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      extensions_changed: ${{ steps.changed.outputs.extensions_any_modified }}
+      changed_extension_files: ${{ steps.changed.outputs.extensions_all_modified_files }}
       extension_opt_in_archs: ${{ steps.config.outputs.extension_opt_in_archs }}
       extension_groups: ${{ steps.config.outputs.extension_groups }}
       extension_entries: ${{ steps.config.outputs.extension_entries }}
@@ -152,8 +153,10 @@ jobs:
         id: changed
         uses: tj-actions/changed-files@v47
         with:
+          base_sha: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           separator: "\n"
           safe_output: false
+          output_renamed_files_as_deleted_and_added: true
           write_output_files: true
           output_dir: .github/outputs
           files_yaml: |
@@ -422,6 +425,34 @@ jobs:
         name: clang-tidy-log
         path: clang-tidy.log
         if-no-files-found: ignore
+
+ check-patches:
+    name: Check patches
+    if: >-
+      ${{
+        (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+        contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-patches') &&
+        needs.prepare.outputs.extensions_changed == 'true'
+      }}
+    needs: prepare
+    runs-on: ${{ needs.prepare.outputs.runner_linux_slim }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 1
+          ref: ${{ needs.prepare.outputs.duckdb_commit }}
+
+      - name: Check extension patches
+        shell: bash
+        env:
+          CHANGED_EXTENSION_FILES: ${{ needs.prepare.outputs.changed_extension_files }}
+        run: |
+          printf '%s\n' "$CHANGED_EXTENSION_FILES" > "$RUNNER_TEMP/changed-extension-files.txt"
+          python3 scripts/ci/check_extension_patches.py \
+            --changed-files "$RUNNER_TEMP/changed-extension-files.txt"
 
  extensions-build:
     name: Build extensions
@@ -1376,6 +1407,7 @@ jobs:
       - linux-relassert-tests
       - regression
       - tidy-check
+      - check-patches
       - extensions-build
       - extensions-deploy
       - wasm-eh
