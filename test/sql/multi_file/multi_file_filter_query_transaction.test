@@ -147,7 +147,31 @@ SELECT count(*) FROM scan_without_del()
 ----
 9
 
-# the filter query resolves names with the search path of the scanning connection
+# the filter query resolves names with the search path of the scanning connection, also an unqualified schema
+statement ok
+CREATE SCHEMA filter_query_s
+
+statement ok
+CREATE TABLE filter_query_s.lim AS SELECT 4::BIGINT AS n
+
+statement ok
+USE filter_query_s
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, (SELECT n FROM lim) AS row_end, NULL::BIT AS bits'}])
+----
+4
+
+statement ok
+SET search_path = 'filter_query_s'
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, (SELECT n FROM lim) AS row_end, NULL::BIT AS bits'}])
+----
+4
+
 statement ok
 ATTACH ':memory:' AS filter_query_other
 

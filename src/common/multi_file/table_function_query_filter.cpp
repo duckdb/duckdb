@@ -74,11 +74,9 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 	// caller, and that joins the transaction of the caller so that it sees what the caller sees
 	auto connection = Connection::CreateInternal(context);
 	auto &inner = *connection.context;
-	// resolve names as the caller does (USE, SET schema, SET search_path)
+	// resolve names as the caller does (USE, SET schema, SET search_path), unqualified entries included
 	auto &caller_paths = ClientData::Get(context).catalog_search_path->GetSetPaths();
-	if (!caller_paths.empty()) {
-		ClientData::Get(inner).catalog_search_path->Set(caller_paths, CatalogSetPathType::SET_DIRECTLY);
-	}
+	ClientData::Get(inner).catalog_search_path = make_uniq<CatalogSearchPath>(inner, caller_paths);
 	ErrorData error;
 	try {
 		auto statements = connection.ExtractStatements(query);
