@@ -1,0 +1,68 @@
+# name: test/sql/copy/parquet/batched_write/batch_copy_union_partial_row_groups.test
+# description: An order-preserving COPY with FILE_SIZE_BYTES of a UNION ALL ends the partial row group of a branch when the next branch starts with a full one
+# group: [batched_write]
+
+require parquet
+
+statement ok
+SET threads=4;
+
+loop i 0 3
+
+statement ok
+COPY (SELECT {i} * 256000 + j AS k FROM range(256000) t(j)) TO '{TEST_DIR}/union_partial_{i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 102400);
+
+endloop
+
+# every branch reads row groups of 102400, 102400 and 51200 rows: the last one is not merged with the first row group
+# of the next branch, which would shift all following rows
+statement ok
+COPY (
+	FROM '{TEST_DIR}/union_partial_0.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_partial_1.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_partial_2.parquet'
+) TO '{TEST_DIR}/union_partial' (FORMAT parquet, PRESERVE_ORDER, FILE_SIZE_BYTES '1GB', ROW_GROUP_SIZE 102400);
+
+query I
+SELECT list(row_group_num_rows ORDER BY row_group_id) FROM parquet_metadata('{TEST_DIR}/union_partial/*.parquet');
+----
+[102400, 102400, 51200, 102400, 102400, 51200, 102400, 102400, 51200]
+
+query II
+SELECT count(*), bool_and(k = file_row_number) FROM read_parquet('{TEST_DIR}/union_partial/*.parquet', file_row_number = true);
+----
+768000	true
+
+# without FILE_SIZE_BYTES the rows keep their order too
+statement ok
+COPY (
+	FROM '{TEST_DIR}/union_partial_0.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_partial_1.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_partial_2.parquet'
+) TO '{TEST_DIR}/union_partial_single.parquet' (FORMAT parquet, PRESERVE_ORDER, ROW_GROUP_SIZE 102400);
+
+query II
+SELECT count(*), bool_and(k = file_row_number) FROM read_parquet('{TEST_DIR}/union_partial_single.parquet', file_row_number = true);
+----
+768000	true
+
+# branches smaller than a row group are still merged
+loop i 0 4
+
+statement ok
+COPY (SELECT {i} AS k) TO '{TEST_DIR}/union_small_{i}.parquet' (FORMAT parquet);
+
+endloop
+
+statement ok
+COPY (
+	FROM '{TEST_DIR}/union_small_0.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_small_1.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_small_2.parquet' UNION ALL
+	FROM '{TEST_DIR}/union_small_3.parquet'
+) TO '{TEST_DIR}/union_small' (FORMAT parquet, PRESERVE_ORDER, FILE_SIZE_BYTES '1GB');
+
+query II
+SELECT count(*), list(row_group_num_rows) FROM parquet_metadata('{TEST_DIR}/union_small/*.parquet');
+----
+1	[4]

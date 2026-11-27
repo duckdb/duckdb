@@ -5036,7 +5036,15 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	idx_t offset = 0;
 	while (offset < chunk.size()) {
 		if (!lstate.batch) {
-			lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
+			if (!parallel && !per_thread_output) {
+				// a sequential copy sinks its pipelines (e.g. the children of a UNION ALL) one after another:
+				// continue the leftover of the previous pipeline, so that its rows are written before this one's
+				annotated_lock_guard<annotated_mutex> guard(gstate.last_batch_lock);
+				lstate.batch = std::move(gstate.last_batch);
+			}
+			if (!lstate.batch) {
+				lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
+			}
 			lstate.batch->InitializeAppend(lstate.batch_append_state);
 		}
 		auto &slice = lstate.batch_slicer->Slice(chunk, offset, *lstate.batch);

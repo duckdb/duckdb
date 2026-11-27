@@ -1,0 +1,39 @@
+# name: test/sql/copy/parquet/batched_write/batch_copy_union_flushes_each_branch.test_slow
+# description: An order-preserving COPY with FILE_SIZE_BYTES of a UNION ALL flushes the batches of a finished branch while the next one runs
+# group: [batched_write]
+
+require parquet
+
+statement ok
+COPY (SELECT i AS k, md5(i::VARCHAR) || md5((i + 1)::VARCHAR) || md5((i + 2)::VARCHAR) AS s FROM range(4000000) t(i))
+TO '{TEST_DIR}/union_branches_source.parquet' (FORMAT parquet);
+
+statement ok
+SET threads=4;
+
+# the whole source does not fit in memory and cannot spill, one branch does
+statement ok
+SET memory_limit='420MB';
+
+statement ok
+SET temp_directory='';
+
+statement ok
+CREATE VIEW src AS FROM '{TEST_DIR}/union_branches_source.parquet';
+
+statement ok
+COPY (
+	(SELECT * FROM src WHERE k < 500000) UNION ALL
+	(SELECT * FROM src WHERE k >= 500000 AND k < 1000000) UNION ALL
+	(SELECT * FROM src WHERE k >= 1000000 AND k < 1500000) UNION ALL
+	(SELECT * FROM src WHERE k >= 1500000 AND k < 2000000) UNION ALL
+	(SELECT * FROM src WHERE k >= 2000000 AND k < 2500000) UNION ALL
+	(SELECT * FROM src WHERE k >= 2500000 AND k < 3000000) UNION ALL
+	(SELECT * FROM src WHERE k >= 3000000 AND k < 3500000) UNION ALL
+	(SELECT * FROM src WHERE k >= 3500000)
+) TO '{TEST_DIR}/union_branches' (FORMAT parquet, PRESERVE_ORDER, FILE_SIZE_BYTES '10GB');
+
+query II
+SELECT count(*), bool_and(k = file_row_number) FROM read_parquet('{TEST_DIR}/union_branches/*.parquet', file_row_number = true);
+----
+4000000	true
