@@ -118,7 +118,12 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info)->Cast<DuckTableEntry>();
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info);
+		if (!created_table) {
+			// a connection that shares the transaction created the table after the statement was bound
+			throw TransactionException("Catalog write-write conflict on create with %s", info->Base().GetTableName());
+		}
+		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());

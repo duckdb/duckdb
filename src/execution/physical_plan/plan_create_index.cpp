@@ -133,7 +133,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	D_ASSERT(op.children.size() == 1);
-	auto &scan = CreatePlan(*op.children[0]);
+	auto &scan = CreatePlanRecursive(*op.children[0]);
 
 	// Index has a plan replacement function
 	if (index_type->create_plan) {

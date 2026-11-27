@@ -1,0 +1,23 @@
+# name: test/optimizer/statistics/recursive_seed_scope.test
+# description: Seed value facts do not constrain later recursive iterations
+# group: [statistics]
+
+query I
+WITH RECURSIVE t(k) AS (
+    VALUES (1)
+    UNION ALL
+    SELECT k + 1 FROM t WHERE k < 3
+)
+SELECT sum(k) FROM t;
+----
+6
+
+query I
+WITH RECURSIVE t(k) AS (
+    VALUES (1)
+    UNION ALL
+    SELECT t.k + 1 FROM t JOIN (VALUES (1), (2)) d(k) USING (k)
+)
+SELECT sum(k) FROM t;
+----
+6

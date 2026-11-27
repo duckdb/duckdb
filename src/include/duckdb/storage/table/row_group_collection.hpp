@@ -256,6 +256,11 @@ public:
 	}
 
 private:
+	optional_idx NextParallelScanAtomic(ClientContext &context, ParallelCollectionScanState &state,
+	                                    CollectionScanState &scan_state, bool initialize_columns);
+	optional_idx NextParallelScanLocked(ClientContext &context, ParallelCollectionScanState &state,
+	                                    CollectionScanState &scan_state, bool initialize_columns);
+
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;
 

@@ -265,7 +265,8 @@ void JoinFilterPushdownInfo::DeferRuntimeFilter(DeferredRuntimeFilterType type, 
                                                 const JoinFilterPushdownFilter &info,
                                                 const JoinFilterPushdownColumn &column, ProjectionIndex filter_col_idx,
                                                 idx_t key_idx, JoinFilterGlobalState &gstate) const {
-	gstate.deferred_runtime_filters.push_back({type, &op, info.dynamic_filters, column, filter_col_idx, key_idx});
+	gstate.deferred_runtime_filters.push_back(
+	    {type, &op, info.dynamic_filters, column.Copy(), filter_col_idx, key_idx});
 }
 
 bool JoinFilterPushdownInfo::TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,

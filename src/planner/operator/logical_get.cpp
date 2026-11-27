@@ -309,18 +309,24 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 }
 
 idx_t LogicalGet::EstimateSourceCardinality(ClientContext &context) {
+	return EstimateSourceStatistics(context).estimated_cardinality;
+}
+
+NodeStatistics LogicalGet::EstimateSourceStatistics(ClientContext &context) {
+	NodeStatistics result;
 	// planning a LogicalGet consumes its bind data - the callbacks that require it must not be called,
 	// while callbacks that accept a null bind data (e.g. the range functions) return no estimate anyway
 	if (function.cardinality && bind_data) {
 		auto node_stats = function.cardinality(context, bind_data.get());
-		if (node_stats && node_stats->has_estimated_cardinality) {
-			return node_stats->estimated_cardinality;
+		if (node_stats) {
+			result = *node_stats;
 		}
 	}
-	if (!children.empty()) {
-		return children[0]->EstimateCardinality(context);
+	if (!result.has_estimated_cardinality) {
+		result.has_estimated_cardinality = true;
+		result.estimated_cardinality = children.empty() ? 1 : children[0]->EstimateCardinality(context);
 	}
-	return 1;
+	return result;
 }
 
 void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {

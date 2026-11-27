@@ -96,6 +96,7 @@ static const DefaultExtension internal_extensions[] = {
     {"unity_catalog", "Adds support for connecting to Unity Catalog"},
     {"glue", "Adds support for the AWS Glue Data Catalog"},
     {"legacy_parser", "Adds the SQL parser DuckDB used up to 1.5"},
+    {"test", "Runs SQL logic tests and compiled test bundles"},
     {nullptr, nullptr}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {

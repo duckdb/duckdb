@@ -1,0 +1,148 @@
+# name: test/sql/aggregate/aggregates/test_sum_interval.test
+# description: Test SUM on INTERVAL
+# group: [aggregates]
+
+query I
+SELECT sum(INTERVAL 1 DAY) FROM range(3)
+----
+3 days
+
+# months, days and micros are summed separately
+query I
+SELECT sum(i) FROM (VALUES (INTERVAL '1 month 20 days 13 hours'), (INTERVAL '2 months 20 days 13 hours'), (NULL)) t(i)
+----
+3 months 40 days 26:00:00
+
+query I
+SELECT sum(NULL::INTERVAL)
+----
+NULL
+
+# NULLs are skipped, a group of only NULLs sums to NULL
+query II rowsort
+SELECT g, sum(i) FROM (VALUES (1, INTERVAL 1 DAY), (1, NULL), (1, INTERVAL 2 DAY), (2, NULL), (2, NULL)) t(g, i) GROUP BY g
+----
+1	3 days
+2	NULL
+
+statement error
+SELECT sum(i) FROM (VALUES (INTERVAL '2147483647 days'), (INTERVAL '1 day')) t(i)
+----
+Overflow in SUM of INTERVAL
+
+query I
+SELECT sum(i) FROM (SELECT INTERVAL '1 day' i WHERE false)
+----
+NULL
+
+query I
+SELECT sum(i)::VARCHAR FROM (VALUES (INTERVAL '1 month 30 days 24 hours'), (INTERVAL '-1 month -30 days -24 hours')) t(i)
+----
+00:00:00
+
+# Segment-tree nodes can exceed the result range even when every requested frame fits
+query T
+SELECT sum(INTERVAL '1000000000 days') OVER (ORDER BY r ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
+FROM range(3) t(r)
+----
+1000000000 days
+2000000000 days
+2000000000 days
+
+# Reusing a window state must not normalize its components during finalization
+query T
+SELECT sum(i) OVER (ORDER BY r ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)::VARCHAR
+FROM (VALUES (0, INTERVAL '1 month 30 days 24 hours'), (1, INTERVAL '1 month 30 days 24 hours'), (2, NULL)) t(r, i)
+----
+1 month 30 days 24:00:00
+2 months 60 days 48:00:00
+1 month 30 days 24:00:00
+
+foreach unit months days
+
+# Exact positive and negative limits
+query II
+SELECT sum(i)::VARCHAR = INTERVAL '2147483647 {unit}'::VARCHAR,
+       sum(j)::VARCHAR = INTERVAL '-2147483648 {unit}'::VARCHAR
+FROM (VALUES (INTERVAL '2147483646 {unit}', INTERVAL '-2147483647 {unit}'),
+             (INTERVAL '1 {unit}', INTERVAL '-1 {unit}')) t(i, j)
+----
+true	true
+
+statement error
+SELECT sum(i) FROM (VALUES (INTERVAL '2147483647 {unit}'), (INTERVAL '1 {unit}')) t(i)
+----
+Overflow in SUM of INTERVAL
+
+statement error
+SELECT sum(i) FROM (VALUES (INTERVAL '-2147483648 {unit}'), (INTERVAL '-1 {unit}')) t(i)
+----
+Overflow in SUM of INTERVAL
+
+# Ordered, non-constant updates exceed the result range and then cancel
+query II
+SELECT sum(i ORDER BY r)::VARCHAR = INTERVAL '2147483647 {unit}'::VARCHAR,
+       sum(j ORDER BY r)::VARCHAR = INTERVAL '-2147483648 {unit}'::VARCHAR
+FROM (VALUES (0, INTERVAL '2147483647 {unit}', INTERVAL '-2147483648 {unit}'),
+             (1, INTERVAL '1 {unit}', INTERVAL '-1 {unit}'),
+             (2, INTERVAL '-1 {unit}', INTERVAL '1 {unit}')) t(r, i, j)
+----
+true	true
+
+endloop
+
+query II
+SELECT sum(i)::VARCHAR = INTERVAL '9223372036854775807 microseconds'::VARCHAR,
+       sum(j)::VARCHAR = to_microseconds('-9223372036854775808'::BIGINT)::VARCHAR
+FROM (VALUES (INTERVAL '9223372036854775806 microseconds', INTERVAL '-9223372036854775807 microseconds'),
+             (INTERVAL '1 microsecond', INTERVAL '-1 microsecond')) t(i, j)
+----
+true	true
+
+statement error
+SELECT sum(i) FROM (VALUES (INTERVAL '9223372036854775807 microseconds'), (INTERVAL '1 microsecond')) t(i)
+----
+Overflow in SUM of INTERVAL
+
+statement error
+SELECT sum(i) FROM (VALUES (to_microseconds('-9223372036854775808'::BIGINT)), (INTERVAL '-1 microsecond')) t(i)
+----
+Overflow in SUM of INTERVAL
+
+query II
+SELECT sum(i ORDER BY r)::VARCHAR = INTERVAL '9223372036854775807 microseconds'::VARCHAR,
+       sum(j ORDER BY r)::VARCHAR = to_microseconds('-9223372036854775808'::BIGINT)::VARCHAR
+FROM (VALUES (0, INTERVAL '9223372036854775807 microseconds', to_microseconds('-9223372036854775808'::BIGINT)),
+             (1, INTERVAL '1 microsecond', INTERVAL '-1 microsecond'),
+             (2, INTERVAL '-1 microsecond', INTERVAL '1 microsecond')) t(r, i, j)
+----
+true	true
+
+# Constant updates can build a wide state before the opposite constant cancels it
+query T
+SELECT sum(i)::VARCHAR FROM (
+    SELECT INTERVAL '2000000000 months 2000000000 days 9000000000000000000 microseconds' i FROM range(3)
+    UNION ALL
+    SELECT INTERVAL '-2000000000 months -2000000000 days -9000000000000000000 microseconds' FROM range(3)
+)
+----
+00:00:00
+
+# Parallel grouped aggregation combines partial states and preserves the calendar components
+statement ok
+SET threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE parallel_intervals AS
+SELECT r % 4 g, INTERVAL '1 month 30 days 24 hours' i FROM range(10000) t(r)
+
+query IT rowsort
+SELECT g, sum(i)::VARCHAR FROM parallel_intervals GROUP BY g
+----
+0	208 years 4 months 75000 days 60000:00:00
+1	208 years 4 months 75000 days 60000:00:00
+2	208 years 4 months 75000 days 60000:00:00
+3	208 years 4 months 75000 days 60000:00:00

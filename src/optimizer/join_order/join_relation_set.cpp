@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/hash.hpp"
 
 #include <algorithm>
@@ -26,8 +25,9 @@ JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, i
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ",
-	                           [](const RelationIndex &relation) { return to_string(relation.index); });
+	result += StringUtil::Join(relations, count, ", ", [](const RelationIndex &relation) {
+		return StringUtil::Format("%llu", relation.index);
+	});
 	result += "]";
 	return result;
 }

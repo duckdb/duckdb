@@ -36,54 +36,91 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
-  clang-tidy:
-    name: Clang-Tidy (${{ matrix.shard }}/4)
+  msvc-only-debug:
+    name: Windows MSVC-only Debug
     needs: check-draft
-    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
+    runs-on: windows-2022
+    timeout-minutes: 60
     env:
-      CC: gcc
-      CXX: g++
-      GEN: ninja
-
+      CC: cl
+      CXX: cl
+      CMAKE_GENERATOR: Visual Studio 17 2022
+      CMAKE_GENERATOR_PLATFORM: x64
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install
-        timeout-minutes: 10
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-          python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy-20
-
-      - name: Clang-Tidy
-        shell: bash
-        run: |
-          log_file=clang-tidy-shard-${{ matrix.shard }}.log
-          if make tidy-check \
-              TIDY_BINARY=clang-tidy-20 \
-              TIDY_SHARD_COUNT=4 \
-              TIDY_SHARD_INDEX=$((${{ matrix.shard }} - 1)) \
-              >"${log_file}" 2>&1; then
-            tidy_status=0
-          else
-            tidy_status=$?
-          fi
-          python3 scripts/ci/summarize_clang_tidy.py "${log_file}" --command-exit-code "${tidy_status}"
-          exit "${tidy_status}"
-
-      - name: Upload clang-tidy log
-        if: failure()
-        uses: actions/upload-artifact@v7
+      - uses: actions/setup-python@v6
         with:
-          name: clang-tidy-log-${{ matrix.shard }}
-          path: clang-tidy-shard-${{ matrix.shard }}.log
-          if-no-files-found: error
+          python-version: '3.12'
+
+      - uses: ./.github/actions/setup-msvc-env
+
+      - name: Remove LLVM tools
+        shell: pwsh
+        run: |
+          $llvmDirectories = @("$env:ProgramFiles\LLVM", "${env:ProgramFiles(x86)}\LLVM")
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          & $vswhere -all -products '*' -property installationPath | ForEach-Object {
+            $llvmDirectories += Join-Path $_ 'VC\Tools\Llvm'
+          }
+          foreach ($directory in $llvmDirectories) {
+            if (Test-Path $directory) {
+              Remove-Item $directory -Recurse -Force
+            }
+          }
+          $env:Path = ($env:Path -split ';' | Where-Object {
+            $_ -and $_ -notmatch '(?i)[\\/]LLVM(?:[\\/]|$)'
+          }) -join ';'
+          "PATH=$env:Path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          foreach ($tool in @('cl.exe', 'link.exe', 'lib.exe')) {
+            if (!(Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue)) {
+              throw "Required MSVC tool is missing: $tool"
+            }
+          }
+          foreach ($tool in @('clang-cl.exe', 'llvm-ar.exe', 'llvm-objcopy.exe')) {
+            if (Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue) {
+              throw "LLVM tool is still available: $tool"
+            }
+          }
+
+      - name: Configure without LLVM
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory build | Out-Null
+          Set-Location build
+          cmake ..
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $compiler = Get-ChildItem CMakeFiles -Recurse -Filter CMakeCXXCompiler.cmake |
+            Get-Content -Raw
+          if ($compiler -notmatch 'set\(CMAKE_CXX_COMPILER_ID "MSVC"\)') {
+            throw 'The build must use the MSVC compiler'
+          }
+          $cache = Get-Content CMakeCache.txt -Raw
+          foreach ($tool in @('LLVM_AR_EXECUTABLE', 'LLVM_OBJCOPY_EXECUTABLE')) {
+            if ($cache -notmatch "(?m)^${tool}:FILEPATH=${tool}-NOTFOUND\r?$") {
+              throw "CMake unexpectedly discovered an LLVM tool: $tool"
+            }
+          }
+          if (Get-ChildItem . -Recurse -Filter duckdb_static_no_exports.vcxproj) {
+            throw 'The filtered archive must not be built without LLVM'
+          }
+
+      - name: Build Debug
+        working-directory: build
+        shell: pwsh
+        run: cmake --build . --config Debug --parallel
+
+      - name: Test Debug CLI
+        shell: pwsh
+        run: |
+          $result = & .\build\Debug\duckdb.exe -csv -noheader -c "SELECT 42; SELECT mode(x) FROM (VALUES ('a'), ('a'), ('b')) t(x);"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (($result -join "`n") -ne "42`na") {
+            throw "Unexpected Debug CLI result: $result"
+          }
 
   codeql-analyze:
     name: Analyze (${{ matrix.language }})

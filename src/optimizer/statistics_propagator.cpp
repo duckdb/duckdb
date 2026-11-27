@@ -41,6 +41,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpressionStatistics(
 
 void StatisticsPropagator::ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node) {
 	node = make_uniq<LogicalEmptyResult>(std::move(node));
+	// A parent may retain this replacement as an already propagated child.
+	node->ResolveOperatorTypesFromChildren();
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperator &node,
@@ -135,6 +137,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
+	// Children have been propagated; only this operator's output types need refreshing.
+	node_ptr->ResolveOperatorTypesFromChildren();
 	if (mode == StatisticsPropagationMode::FULL &&
 	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
@@ -147,7 +151,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr) {
-	return PropagateStatistics(*node_ptr, node_ptr);
+	auto result = PropagateStatistics(*node_ptr, node_ptr);
+	if (propagation_path.empty() && Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
+		// Check our bottom-up invariant before the ordinary plan verifier can repair stale types.
+		node_ptr->VerifyOperatorTypes();
+	}
+	return result;
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopyToFile &op,

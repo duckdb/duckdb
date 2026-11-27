@@ -286,10 +286,16 @@ private:
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
+
+private:
 	//! The lock for the updates
 	mutable mutex update_lock;
-	//! The updates for this column segment
+	//! Created only by UpdateInternal; never reset during this column's lifetime.
 	unique_ptr<UpdateSegment> updates;
+	//! False permits skipping update_lock. Set before construction, even if construction throws; never cleared.
+	atomic<bool> updates_may_exist {false};
+
+protected:
 	//! The lock for the stats
 	mutable mutex stats_lock;
 	//! Total transient allocation size

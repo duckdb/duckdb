@@ -1,0 +1,94 @@
+# name: test/sql/copy/csv/test_utf16_bom.test
+# description: The utf-16 encoding picks the byte order from the byte order mark
+# group: [csv]
+
+statement ok
+COPY (SELECT from_hex('feff00760061006c00750065000a006100620063006400650066006700680069006a006b006c006dd83dde00000a00780079007a00e9000a')) TO '{TEST_DIR}/utf16_be_bom.csv' (FORMAT BLOB)
+
+statement ok
+COPY (SELECT from_hex('fffe760061006c00750065000a006100620063006400650066006700680069006a006b006c006d003dd800de0a00780079007a00e9000a00')) TO '{TEST_DIR}/utf16_le_bom.csv' (FORMAT BLOB)
+
+statement ok
+COPY (SELECT from_hex('00760061006c00750065000a006100620063006400650066006700680069006a006b006c006dd83dde00000a00780079007a00e9000a')) TO '{TEST_DIR}/utf16_be.csv' (FORMAT BLOB)
+
+loop bs 23 40
+
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_be_bom.csv', encoding = 'utf-16', buffer_size = {bs})
+----
+abcdefghijklm😀
+xyzé
+
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_le_bom.csv', encoding = 'utf-16', buffer_size = {bs})
+----
+abcdefghijklm😀
+xyzé
+
+endloop
+
+# each file picks its own byte order
+query II
+SELECT parse_filename(filename), value
+FROM read_csv(['{TEST_DIR}/utf16_be_bom.csv', '{TEST_DIR}/utf16_le_bom.csv'], encoding = 'utf-16', filename = true)
+ORDER BY ALL
+----
+utf16_be_bom.csv	abcdefghijklm😀
+utf16_be_bom.csv	xyzé
+utf16_le_bom.csv	abcdefghijklm😀
+utf16_le_bom.csv	xyzé
+
+# the explicit byte order encodings
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_be.csv', encoding = 'utf-16be')
+----
+abcdefghijklm😀
+xyzé
+
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_le_bom.csv', encoding = 'utf-16le')
+----
+abcdefghijklm😀
+xyzé
+
+# compressed files are read again from the start after sniffing, which detects the byte order again
+statement ok
+COPY (SELECT from_hex('feff00760061006c00750065000a006100620063006400650066006700680069006a006b006c006dd83dde00000a00780079007a00e9000a')) TO '{TEST_DIR}/utf16_be_bom.csv.gz' (FORMAT BLOB, COMPRESSION gzip)
+
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_be_bom.csv.gz', encoding = 'utf-16')
+----
+abcdefghijklm😀
+xyzé
+
+# without a byte order mark utf-16 is little-endian
+statement ok
+COPY (SELECT from_hex('760061006c00750065000a00780079007a00e9000a00')) TO '{TEST_DIR}/utf16_le.csv' (FORMAT BLOB)
+
+query I
+SELECT value FROM read_csv('{TEST_DIR}/utf16_le.csv', encoding = 'utf-16')
+----
+xyzé
+
+# a zero width no-break space after the start of the file is kept
+statement ok
+COPY (SELECT from_hex('feff00760061006c00750065000afeff0078000a')) TO '{TEST_DIR}/utf16_be_zwnbsp.csv' (FORMAT BLOB)
+
+query I
+SELECT hex(encode(value)) FROM read_csv('{TEST_DIR}/utf16_be_zwnbsp.csv', encoding = 'utf-16')
+----
+EFBBBF78
+
+# Big-endian code units with a zero low byte must not be mistaken for ASCII
+statement ok
+COPY (SELECT from_hex('feff0100010001000100000a006101000062006300640065000a')) TO '{TEST_DIR}/utf16_be_non_ascii.csv' (FORMAT BLOB)
+
+foreach encoding utf-16 utf-16be
+
+query I
+SELECT column0 FROM read_csv('{TEST_DIR}/utf16_be_non_ascii.csv', encoding = '{encoding}', header = false, all_varchar = true)
+----
+ĀĀĀĀ
+aĀbcde
+
+endloop

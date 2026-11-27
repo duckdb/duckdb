@@ -154,15 +154,15 @@ template class weak_ptr<Pipeline>;
 } // namespace duckdb
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
-	template std::VECTOR_DEFINITION::size_type std::VECTOR_DEFINITION::size() const;                                   \
+	template std::VECTOR_DEFINITION::size_type std::VECTOR_DEFINITION::size() const noexcept;                          \
 	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::operator[](                               \
-	    std::VECTOR_DEFINITION::size_type n) const;                                                                    \
+	    std::VECTOR_DEFINITION::size_type n) const noexcept;                                                           \
 	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::operator[](                                     \
-	    std::VECTOR_DEFINITION::size_type n);                                                                          \
-	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::back() const;                             \
-	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::back();                                         \
-	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const;                            \
-	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front();
+	    std::VECTOR_DEFINITION::size_type n) noexcept;                                                                 \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::back() const noexcept;                    \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::back() noexcept;                                \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const noexcept;                   \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front() noexcept;
 
 INSTANTIATE_VECTOR(vector<ColumnDefinition>)
 INSTANTIATE_VECTOR(vector<JoinCondition>)

@@ -116,10 +116,10 @@ static idx_t MaxDynamicFilterTargetCardinality(LogicalOperator &op, const Expres
 		return 0;
 	}
 
-	vector<JoinFilterPushdownColumn> columns {std::move(column)};
+	vector<JoinFilterPushdownColumn> columns;
+	columns.push_back(std::move(column));
 	vector<PushdownFilterTarget> targets;
-	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(op, std::move(columns), targets,
-	                                                      EqualityPropagation::ENABLED);
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(op, columns, targets, EqualityPropagation::ENABLED);
 
 	// Dynamic filters are applied at the scan target found here. Estimate the work that the
 	// filter can avoid at that point, even if later filters reduce the cardinality at the join.

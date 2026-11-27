@@ -24,6 +24,68 @@ remain available in the full suite (`build/release/test/run '*'`). When moving a
 a smaller fast case that exercises the same behavior where practical. Preserve the original scale
 in the slow case when it is needed to reproduce a bug or exercise a storage or execution boundary.
 
+## Tests with an installed CLI
+
+For versions and platforms where the test extension is published, an installed DuckDB CLI can run SQL logic test
+files without compiling DuckDB:
+
+```sql
+INSTALL test;
+LOAD test;
+SELECT * FROM scan_tests(['*'], test_roots = ['path/to/extension/test/sql']);
+SELECT * FROM run_tests(
+    ['sql:path/to/extension/test/sql/example.test'],
+    test_roots = ['path/to/extension/test/sql']);
+```
+
+`run_tests` writes individual results to a state database and returns its path. For parallel execution, summaries,
+and retries, use `scripts/ci/run_tests.py` from a matching DuckDB checkout. Find the installed binary with:
+
+```sql
+SELECT install_path FROM duckdb_extensions() WHERE extension_name = 'test';
+```
+
+Then run from the directory containing the test data:
+
+```bash
+python3 /path/to/duckdb/scripts/ci/run_tests.py /path/to/duckdb-cli \
+    --test-extension /path/to/installed/test.duckdb_extension \
+    --test-root path/to/extension/test/sql \
+    --test-flags="--autoloading available --skip-compiled"
+```
+
+SQL tests require their test files and data. C++ tests also require their compiled test bundles.
+
+Extension CI downloads `duckdb-test-<platform-suffix>.tar.gz`, which contains the matching CLI and test extension.
+The runner script comes from the DuckDB checkout. Standalone CI builds from source when a matching bundle or
+the required linking libraries are unavailable.
+
+## Runner compatibility
+
+`build/*/test/unittest` remains a wrapper around the Python runner and CLI. It accepts the test
+configuration flags supported by `TestConfiguration`, including `--force-storage`, `--force-reload`,
+`--temp-dir-root`, `--require`, `--keep-home`, and `--emit-on-skip`. Flags and `--test-flags` are applied
+in command-line order. `-f FILE`, `--input-file FILE`, and `--test-list FILE` may be repeated.
+`--test-dir PATH` sets the working directory, including the base for relative test lists and config files.
+
+The wrapper does not support Catch reporter/output options, interactive stdin tests, or launching the
+old native unittest process under LLDB. Use normal test files and the runner's failure reports.
+The stdin and native unittest LLDB workflows remain deferred.
+
+With `BUILD_SHELL=OFF`, CMake still builds the test extension and enabled C++ test bundles, but omits
+local `run` and `unittest` wrappers. Use a matching external CLI with explicit artifact paths:
+
+```bash
+python3 scripts/ci/run_tests.py /path/to/duckdb-cli \
+    --test-extension build/release/extension/test/test.duckdb_extension \
+    --test-bundle-root build/release/test/extension \
+    --test-root test
+```
+
+Discovery and execution can use different test flags in one process. Each call restores configuration,
+working directory, and home directory when it finishes. Overlapping or nested calls remain rejected.
+Failure reproductions preserve the CLI, extension paths, test roots, flags, and working directory.
+
 ## Test Contract
 
 Within SQL tests, the test runner (unittest) guarantees that these environment variables will be set. Many can be overridden when needed.

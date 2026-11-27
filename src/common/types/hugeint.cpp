@@ -92,37 +92,10 @@ hugeint_t Hugeint::Abs(hugeint_t n) {
 
 hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
 	D_ASSERT(lhs.upper >= 0);
-	// DivMod code adapted from:
-	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
-
-	// initialize the result and remainder to 0
-	hugeint_t div_result;
-	div_result.lower = 0;
-	div_result.upper = 0;
-	remainder = 0;
-
-	uint8_t highest_bit_set = HugeintHighestBit(lhs);
-	// now iterate over the amount of bits that are set in the LHS
-	for (uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current result and remainder by 1
-		div_result = HugeintLeftShift(div_result, 1);
-		remainder <<= 1;
-		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (HugeintIsBitSet(lhs, x - 1)) {
-			// increment the remainder
-			remainder++;
-		}
-		if (remainder >= rhs) {
-			// the remainder has passed the division multiplier: add one to the divide result
-			remainder -= rhs;
-			div_result.lower++;
-			if (div_result.lower == 0) {
-				// overflow
-				div_result.upper++;
-			}
-		}
-	}
-	return div_result;
+	D_ASSERT(rhs != 0);
+	const auto result = Uint128DivMod(static_cast<uint64_t>(lhs.upper), lhs.lower, 0, rhs);
+	remainder = result.remainder_lower;
+	return hugeint_t(static_cast<int64_t>(result.quotient_upper), result.quotient_lower);
 }
 
 string Hugeint::ToString(hugeint_t input) {

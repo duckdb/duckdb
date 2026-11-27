@@ -352,6 +352,74 @@ struct UhugeintSumOperation
 	}
 };
 
+struct IntervalSumState {
+	static constexpr const char *STATE_NAMES[] = {"months", "days", "micros"};
+	using STATE_TYPE = OptionalStateType<StructStateType<hugeint_t, hugeint_t, hugeint_t>>;
+
+	hugeint_t months;
+	hugeint_t days;
+	hugeint_t micros;
+	bool is_set;
+
+	void Add(hugeint_t input_months, hugeint_t input_days, hugeint_t input_micros) {
+		months = Hugeint::Add(months, input_months);
+		days = Hugeint::Add(days, input_days);
+		micros = Hugeint::Add(micros, input_micros);
+		is_set = true;
+	}
+
+	void AddRepeated(hugeint_t input_months, hugeint_t input_days, hugeint_t input_micros, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		const auto multiplier = Hugeint::Convert(count);
+		Add(Hugeint::Multiply(input_months, multiplier), Hugeint::Multiply(input_days, multiplier),
+		    Hugeint::Multiply(input_micros, multiplier));
+	}
+};
+
+//! Keep intermediate totals wide and preserve the independent calendar components
+struct IntervalSumOperation {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		state.Add(Hugeint::Convert(input.months), Hugeint::Convert(input.days), Hugeint::Convert(input.micros));
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
+		state.AddRepeated(Hugeint::Convert(input.months), Hugeint::Convert(input.days), Hugeint::Convert(input.micros),
+		                  count);
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.is_set) {
+			target.Add(source.months, source.days, source.micros);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		if (source.is_set) {
+			target.AddRepeated(source.months, source.days, source.micros, count);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else if (!Hugeint::TryCast(state.months, target.months) || !Hugeint::TryCast(state.days, target.days) ||
+		           !Hugeint::TryCast(state.micros, target.micros)) {
+			throw OutOfRangeException("Overflow in SUM of INTERVAL: the result does not fit in INTERVAL");
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
 //! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
 template <class OP>
 struct DecimalSumOperation : public OP {
@@ -782,20 +850,19 @@ AggregateStateLayout BignumSumStateLayout(AggregateLayoutInput &input) {
 void BignumSumExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                           idx_t offset) {
 	auto states = state_vector.Values<BignumState *>();
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto writer = FlatVector::Writer<string_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		if (!state.is_set) {
-			result_validity.SetInvalid(offset + i);
+			writer.WriteNull();
 			continue;
 		}
 		if (state.is_wide) {
-			result_data[offset + i] = BignumAggregates::WriteBignum(state.wide, result);
+			BignumAggregates::WriteBignum(state.wide, writer);
 		} else {
 			char blob[2 * BignumLimb::BYTES + Bignum::BIGNUM_HEADER_SIZE];
 			const auto size = BignumOperation::EncodeSmall(state.small, blob);
-			result_data[offset + i] = StringVector::AddStringOrBlob(result, blob, size);
+			writer.WriteValue(string_t(blob, UnsafeNumericCast<uint32_t>(size)));
 		}
 	}
 }
@@ -865,6 +932,13 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
+	auto sum_interval =
+	    AggregateFunction::UnaryAggregate<IntervalSumState, interval_t, interval_t, IntervalSumOperation>(
+	        LogicalType::INTERVAL, LogicalType::INTERVAL);
+	sum_interval.GetSignature().GetParameter(0).SetName("arg");
+	sum_interval.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	sum_interval.SetFallible();
+	sum.AddFunction(sum_interval);
 	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM);
 	sum_bignum.GetSignature().GetParameter(0).SetName("arg");

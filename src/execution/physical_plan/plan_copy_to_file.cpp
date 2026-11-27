@@ -6,7 +6,7 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 	auto &fs = FileSystem::GetFileSystem(context);
 	op.file_path = fs.ExpandPath(op.file_path);
 	return CreatePlan(op, plan);

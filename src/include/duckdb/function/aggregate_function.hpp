@@ -170,14 +170,15 @@ enum class AggregateRewritePolicy : uint8_t {
 //! dest_buffer (state i at offset i * layout.total_state_size).
 struct AggregateImportInputData {
 	AggregateImportInputData(const AggregateStateLayout &layout, const Vector &input_vec, data_ptr_t dest_buffer,
-	                         ArenaAllocator &allocator)
-	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator) {
+	                         ArenaAllocator &allocator, optional_ptr<const FunctionData> bind_data)
+	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator), bind_data(bind_data) {
 	}
 
 	const AggregateStateLayout &layout;
 	const Vector &input_vec;
 	data_ptr_t dest_buffer;
 	ArenaAllocator &allocator;
+	optional_ptr<const FunctionData> bind_data;
 };
 
 //! The counterpart of export_aggregate_state, for states a static field layout cannot describe (e.g. a hash map).
@@ -365,6 +366,9 @@ public:
 	//! Whether combining can leave the target referencing the source's memory
 	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
 
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	bool can_stream = true;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -418,6 +422,10 @@ public: // Properties
 	//! Whether combining can leave the target referencing the source's memory
 	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
 	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
+
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	auto CanStream() const -> bool { return properties.can_stream; }
+	auto SetCanStream(bool value) -> void { properties.can_stream = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }

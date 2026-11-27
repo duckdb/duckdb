@@ -1,0 +1,128 @@
+# name: test/sql/transactions/join_transaction_concurrent_ddl.test_slow
+# description: Connections of one shared transaction create, alter and drop objects at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE base AS SELECT i FROM range(1000) t(i);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+statement ok
+CREATE SCHEMA s{threadid}
+
+loop r 0 5
+
+statement ok
+CREATE TABLE s{threadid}.t{r}(a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO s{threadid}.t{r} SELECT i, 'x' || i FROM base
+
+statement ok
+CREATE VIEW s{threadid}.v{r} AS SELECT a, b FROM s{threadid}.t{r} WHERE a % 2 = 0
+
+statement ok
+CREATE SEQUENCE s{threadid}.seq{r}
+
+statement ok
+CREATE TEMPORARY TABLE tmp_{threadid}_{r} AS SELECT i FROM base
+
+statement ok
+ALTER TABLE s{threadid}.t{r} ADD COLUMN c INTEGER DEFAULT 5
+
+query I
+SELECT sum(c) FROM s{threadid}.t{r}
+----
+5000
+
+query I
+SELECT count(*) FROM s{threadid}.v{r}
+----
+500
+
+query I
+SELECT nextval('s{threadid}.seq{r}') + nextval('s{threadid}.seq{r}')
+----
+3
+
+# catalog scans see the objects of the other connections
+statement ok
+SELECT count(*) FROM duckdb_tables()
+
+statement ok
+SELECT count(*) FROM duckdb_views()
+
+statement ok
+SELECT count(*) FROM information_schema.tables
+
+statement ok
+SELECT count(*) FROM duckdb_sequences()
+
+statement ok
+ALTER TABLE s{threadid}.t{r} RENAME TO t{r}_renamed
+
+statement ok
+DROP VIEW s{threadid}.v{r}
+
+endloop
+
+statement ok
+DROP TABLE s{threadid}.t0_renamed
+
+statement ok
+DROP SEQUENCE s{threadid}.seq0
+
+statement ok
+COMMIT
+
+endloop
+
+# the objects of all the connections exist
+query I
+SELECT count(*) FROM duckdb_tables() WHERE schema_name LIKE 's_' AND table_name LIKE 't%_renamed'
+----
+32
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE temporary AND table_name LIKE 'tmp_%'
+----
+40
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE schema_name LIKE 's_'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE schema_name LIKE 's_'
+----
+32
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE schema_name LIKE 's_' AND table_name LIKE 't%_renamed'
+----
+32
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE temporary AND table_name LIKE 'tmp_%'
+----
+40
+
+query I
+SELECT sum(c) FROM s3.t2_renamed
+----
+5000

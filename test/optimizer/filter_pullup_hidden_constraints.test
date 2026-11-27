@@ -1,0 +1,176 @@
+# name: test/optimizer/filter_pullup_hidden_constraints.test
+# description: Derive visible constraints through hidden equality keys without widening projections
+# group: [optimizer]
+
+statement ok
+CREATE TABLE source_keys AS
+SELECT i::INTEGER AS k, i::INTEGER AS hidden, i::INTEGER AS z FROM range(200) t(i);
+
+statement ok
+CREATE TABLE target_keys AS SELECT (i % 200)::INTEGER AS k FROM range(20000) t(i);
+
+# The hidden key constrains an existing output of an ordinary equality join.
+query I
+SELECT count(*)
+FROM (SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)) p
+JOIN target_keys t ON p.k = t.k;
+----
+300
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)) p
+JOIN target_keys t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*k IN \(2, 80, 150\).*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k FROM source_keys WHERE k = hidden AND hidden <> 7) p
+JOIN target_keys t ON p.k = t.k;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*k != 7.*
+
+# Hidden-key constraints compose through grouping and common UNION branches.
+query I
+SELECT count(*)
+FROM (
+	SELECT k FROM (
+		SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)
+	) a GROUP BY k
+	UNION ALL
+	SELECT k FROM (
+		SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)
+	) b GROUP BY k
+) p JOIN target_keys t USING (k);
+----
+600
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT k FROM (
+		SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)
+	) a GROUP BY k
+	UNION ALL
+	SELECT k FROM (
+		SELECT k FROM source_keys WHERE k = hidden AND hidden IN (2, 80, 150)
+	) b GROUP BY k
+) p JOIN target_keys t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*k IN \(2, 80, 150\).*
+
+# An outer predicate can use the visible equality implied by the hidden bridge.
+query I
+SELECT count(*)
+FROM (
+	SELECT a.k, c.z
+	FROM source_keys a
+	JOIN source_keys b ON a.k = b.hidden
+	JOIN source_keys c ON b.hidden = c.z
+) p
+JOIN target_keys t ON p.k = t.k
+WHERE p.z <> 7;
+----
+19900
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT a.k, c.z
+	FROM source_keys a
+	JOIN source_keys b ON a.k = b.hidden
+	JOIN source_keys c ON b.hidden = c.z
+) p
+JOIN target_keys t ON p.k = t.k
+WHERE p.z <> 7;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*k != 7.*
+
+# Reordered and repeated outputs retain their original bindings.
+query III rowsort
+SELECT p.z, p.again, p.k
+FROM (
+	SELECT z, k AS again, k FROM (
+		SELECT k, z FROM source_keys WHERE k = hidden AND hidden = z AND hidden IN (2, 80, 150)
+	) q
+) p
+JOIN (VALUES (2), (80), (150)) t(k) ON p.k = t.k;
+----
+150	150	150
+2	2	2
+80	80	80
+
+# Equality does not make the representations of floating-point keys interchangeable.
+statement ok
+CREATE TABLE float_keys(x DOUBLE, hidden DOUBLE);
+
+statement ok
+INSERT INTO float_keys VALUES ('-0', '0'), (NULL, NULL);
+
+query I
+SELECT count(*)
+FROM (
+	SELECT x FROM float_keys WHERE x = hidden AND hidden::VARCHAR = '0.0'
+) p
+JOIN (VALUES ('-0'::DOUBLE)) t(x) USING (x);
+----
+1
+
+# Selecting a Boolean equality must not hide the relation between computed keys.
+statement ok
+CREATE TABLE string_keys AS SELECT repeat('x', i::INTEGER) s FROM range(1, 5) t(i);
+
+statement ok
+CREATE TABLE bridge_keys AS SELECT i::BIGINT hidden FROM range(1, 5) t(i);
+
+statement ok
+CREATE TABLE bigint_targets AS SELECT (i % 10)::BIGINT k FROM range(1000) t(i);
+
+query I
+SELECT sum(CASE WHEN p.eq THEN 1 ELSE 0 END)
+FROM (
+	SELECT length(a.s) AS k, length(c.s) AS z, length(a.s) = length(c.s) AS eq
+	FROM string_keys a
+	JOIN bridge_keys b ON length(a.s) = b.hidden
+	JOIN string_keys c ON b.hidden = length(c.s)
+) p JOIN bigint_targets t ON p.k = t.k
+WHERE p.z <> 2;
+----
+300
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(CASE WHEN p.eq THEN 1 ELSE 0 END)
+FROM (
+	SELECT length(a.s) AS k, length(c.s) AS z, length(a.s) = length(c.s) AS eq
+	FROM string_keys a
+	JOIN bridge_keys b ON length(a.s) = b.hidden
+	JOIN string_keys c ON b.hidden = length(c.s)
+) p JOIN bigint_targets t ON p.k = t.k
+WHERE p.z <> 2;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*bigint_targets"[^}]*"Filters": [^}]*k != 2.*
+
+# A Boolean-only projection keeps its output shape when its operands are hidden.
+statement ok
+CREATE TABLE boolean_source(a VARCHAR, b VARCHAR, hidden INTEGER);
+
+statement ok
+INSERT INTO boolean_source VALUES ('a', 'b', 1), ('aa', 'bbb', 1), ('cc', 'dd', 0);
+
+statement ok
+CREATE TABLE boolean_target AS SELECT i % 2 = 0 AS eq FROM range(100) t(i);
+
+query I
+SELECT count(*)
+FROM (
+	SELECT length(a) = length(b) AS eq
+	FROM boolean_source WHERE length(a) = length(b) AND hidden = 1
+) p JOIN boolean_target t USING (eq);
+----
+50

@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -213,6 +214,18 @@ def commit_patch(repo_dir, patch_name):
     )
 
 
+def patch_executable():
+    if sys.platform == 'win32':
+        git = shutil.which('git')
+        if git:
+            # Prefer Git's GNU patch over older Windows tools such as Strawberry Perl's patch.
+            for directory in Path(git).resolve().parents:
+                executable = directory / 'usr' / 'bin' / 'patch.exe'
+                if executable.is_file():
+                    return str(executable)
+    return 'patch'
+
+
 def apply_patches_as_commits(ext_dir, patch_dir, patches, submodules):
     """
     Apply each patch file and create commits whose message is the patch filename
@@ -227,7 +240,7 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches, submodules):
         # checked-out submodule (e.g. database-connector/...); everything is staged explicitly below.
         # --no-backup-if-mismatch: a fuzzy apply otherwise leaves <file>.orig behind, which the
         # `git add -A` below would commit into the extension.
-        run_cmd(['patch', '-p1', '--forward', '--no-backup-if-mismatch', '-i', str(patch_file)], cwd=ext_dir)
+        run_cmd([patch_executable(), '-p1', '--forward', '--no-backup-if-mismatch', '-i', str(patch_file)], cwd=ext_dir)
         # A superproject cannot stage file changes made inside a submodule. Commit those first so
         # the parent patch commit can record the resulting gitlink and remain clean on later syncs.
         for submodule in submodules:

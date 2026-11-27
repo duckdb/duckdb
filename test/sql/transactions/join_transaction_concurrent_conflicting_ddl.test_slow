@@ -1,0 +1,137 @@
+# name: test/sql/transactions/join_transaction_concurrent_conflicting_ddl.test_slow
+# description: Connections of one shared transaction run DDL on the tables that other connections read and write
+# group: [transactions]
+
+# The statements conflict with each other: any of them may fail. The transaction must stay consistent and
+# nothing may crash or race.
+
+statement ok
+CREATE TABLE tbl(i INTEGER, j INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO tbl SELECT i, i, 'x' || i FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE tbl2(i INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+# let every connection join before a failing statement can abort the shared transaction
+sleep 2 second
+
+loop r 0 15
+
+statement maybe
+INSERT INTO tbl SELECT range, range, 'y' FROM range(100)
+----
+<REGEX>:.*
+
+statement maybe
+SELECT count(*), sum(i) FROM tbl
+----
+<REGEX>:.*
+
+statement maybe
+UPDATE tbl SET j = j + 1 WHERE i % 8 = {threadid}
+----
+<REGEX>:.*
+
+statement maybe
+DELETE FROM tbl WHERE i = {threadid} * 100 + {r}
+----
+<REGEX>:.*
+
+statement maybe
+ALTER TABLE tbl ADD COLUMN c{threadid}_{r} INTEGER DEFAULT 1
+----
+<REGEX>:.*
+
+statement maybe
+ALTER TABLE tbl DROP COLUMN c{threadid}_{r}
+----
+<REGEX>:.*
+
+statement maybe
+ALTER TABLE tbl2 ADD COLUMN k{threadid}_{r} INTEGER
+----
+<REGEX>:.*
+
+statement maybe
+INSERT INTO tbl2 SELECT range FROM range(100)
+----
+<REGEX>:.*
+
+statement maybe
+CREATE INDEX idx{threadid}_{r} ON tbl2(i)
+----
+<REGEX>:.*
+
+statement maybe
+DROP INDEX idx{threadid}_{r}
+----
+<REGEX>:.*
+
+statement maybe
+CREATE OR REPLACE TABLE tbl2(i INTEGER)
+----
+<REGEX>:.*
+
+statement maybe
+DELETE FROM tbl2
+----
+<REGEX>:.*
+
+statement maybe
+SELECT count(*) FROM tbl2
+----
+<REGEX>:.*
+
+statement maybe
+DROP TABLE IF EXISTS tbl3_{threadid}
+----
+<REGEX>:.*
+
+statement maybe
+CREATE TABLE tbl3_{threadid} AS SELECT * FROM tbl
+----
+<REGEX>:.*
+
+statement maybe
+INSERT INTO tbl3_{threadid} SELECT * FROM tbl
+----
+<REGEX>:.*
+
+endloop
+
+statement maybe
+COMMIT
+----
+<REGEX>:.*
+
+endloop
+
+statement maybe
+COMMIT
+----
+<REGEX>:.*
+
+# whatever happened to the transaction, the table is usable and in a consistent state
+statement ok
+SELECT count(*), sum(i) FROM tbl
+
+statement ok
+SELECT count(*) FROM tbl2
+
+statement ok
+INSERT INTO tbl2 VALUES (1)
