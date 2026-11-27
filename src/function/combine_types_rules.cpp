@@ -414,7 +414,8 @@ static bool UnequalMatchesStringLiteral(const LogicalType &left, const LogicalTy
 
 // Rules are matched in order, so the first matching rule wins
 const vector<CombineTypesRule> &DefaultCombineTypesRules() {
-	static const vector<CombineTypesRule> rules = {
+	// never destroyed - queries can still run on other threads during static destruction
+	static const auto *rules = new vector<CombineTypesRule> {
 	    {MatchesNoAlias, CombineNoAliasTypes},
 	    {UnequalMatchesVariant, CombineVariant},
 	    {UnequalMatchesNullOrUnknown, CombineNullOrUnknown},
@@ -433,7 +434,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {EqualMatchesStruct, CombineStructTypes},
 	    {EqualMatchesUnion, CombineEqualUnion},
 	};
-	return rules;
+	return *rules;
 }
 
 } // namespace duckdb

@@ -107,7 +107,8 @@ set(TEST_API_OBJECTS
     test_constant_vector_reference.cpp
     test_group_commit_bound.cpp
     test_deferred_checkpoint_publication.cpp
-    test_data_table_scan_without_row_groups.cpp)
+    test_data_table_scan_without_row_groups.cpp
+    test_result_format_exit.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)
