@@ -1,0 +1,40 @@
+# name: test/optimizer/statistics/constant_or_null_row_group_pruning.test
+# description: Row group pruning of constant_or_null depends on the constant value
+# group: [statistics]
+
+statement ok
+ATTACH '{TEST_DIR}/constant_or_null_pruning.duckdb' AS rg (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE rg;
+
+# RG 1 is all NULL; RGs 2 and 3 contain values 2048 through 6143.
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i < 2048 THEN NULL ELSE i END AS value FROM range(6144) t(i);
+
+# keep constant_or_null as a scan filter instead of folding it away
+statement ok
+SET disabled_optimizers='statistics_propagation,expression_rewriter';
+
+# constant_or_null(false, ...) is never true, so every row group can be skipped
+query I
+SELECT count(*) FROM t WHERE constant_or_null(false, value);
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT value FROM t WHERE constant_or_null(false, value);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+# constant_or_null(true, ...) is true wherever the argument is not NULL, so only the all-NULL row group is skipped
+query I
+SELECT count(*) FROM t WHERE constant_or_null(true, value);
+----
+4096
+
+query II
+EXPLAIN ANALYZE SELECT value FROM t WHERE constant_or_null(true, value);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
