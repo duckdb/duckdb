@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,23 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
+static unique_ptr<BaseStatistics> ConstantOrNullPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &info = input.bind_data->Cast<ConstantOrNullBindData>();
+	auto &child_stats = input.child_stats;
+	bool can_have_null = false;
+	for (idx_t i = 1; i < child_stats.size(); i++) {
+		if (!child_stats[i].CanHaveNoNull()) {
+			return BaseStatistics::FromConstant(Value(input.expr.GetReturnType())).ToUnique();
+		}
+		can_have_null = can_have_null || child_stats[i].CanHaveNull();
+	}
+	auto result = BaseStatistics::FromConstant(info.value);
+	if (can_have_null) {
+		result.SetHasNull();
+	}
+	return result.ToUnique();
+}
+
 //! Resolves the type of the leading constant before binding, so that a call folded on a typed NULL keeps it
 void ConstantOrNullResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	D_ASSERT(input.GetArgumentCount() >= 2);
@@ -97,6 +115,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	fun.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	fun.SetResolveTypesCallback(ConstantOrNullResolveTypes);
 	fun.SetBindCallback(ConstantOrNullBind);
+	fun.SetStatisticsCallback(ConstantOrNullPropagateStats);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	return fun;
 }
