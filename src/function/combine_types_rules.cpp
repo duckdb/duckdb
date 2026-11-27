@@ -386,6 +386,40 @@ static bool UnequalMatchesStringLiteral(const LogicalType &left, const LogicalTy
 	return left.id() == LogicalTypeId::STRING_LITERAL || right.id() == LogicalTypeId::STRING_LITERAL;
 }
 
+//! A MAP whose values are all NULL (e.g. an empty JSON object) can take over the field types of a STRUCT
+static bool UnequalMatchesMapOfNullsAndStruct(const LogicalType &left, const LogicalType &right) {
+	if (left.id() == right.id()) {
+		// rule only applies to unequal types
+		return false;
+	}
+	auto &map = left.id() == LogicalTypeId::MAP ? left : right;
+	auto &struct_type = left.id() == LogicalTypeId::MAP ? right : left;
+	if (map.id() != LogicalTypeId::MAP || struct_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	auto &map_children = StructType::GetChildTypes(ListType::GetChildType(map));
+	if (map_children.size() != 2 || map_children[0].second.id() != LogicalTypeId::VARCHAR) {
+		return false;
+	}
+	return map_children[1].second.id() == LogicalTypeId::SQLNULL;
+}
+
+static bool CombineMapOfNullsAndStruct(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                       const LogicalType &right, LogicalType &result) {
+	auto &struct_type = left.id() == LogicalTypeId::MAP ? right : left;
+	// the values of the MAP are unknown, so we merge the types of all fields into the MAP value type
+	LogicalType value_type = LogicalType::SQLNULL;
+	for (auto &child : StructType::GetChildTypes(struct_type)) {
+		LogicalType new_value_type;
+		if (!logical_type_resolver.Operation(value_type, child.second, new_value_type)) {
+			return false;
+		}
+		value_type = std::move(new_value_type);
+	}
+	result = LogicalType::MAP(LogicalType::VARCHAR, value_type);
+	return true;
+}
+
 // Rules are matched in order, so the first matching rule wins
 const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	static const vector<CombineTypesRule> rules = {
@@ -394,6 +428,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {UnequalMatchesNullOrUnknown, CombineNullOrUnknown},
 	    {UnequalMatchesEnum, CombineEnum},
 	    {UnequalMatchesStruct, CombineStructTypes},
+	    {UnequalMatchesMapOfNullsAndStruct, CombineMapOfNullsAndStruct},
 	    {UnequalMatchesStringLiteral, CombineStringLiteral},
 	    {EqualMatchesStringLiteral, CombineEqualStringLiteral},
 	    {EqualMatchesIntegerLiteral, CombineEqualIntegerLiteral},

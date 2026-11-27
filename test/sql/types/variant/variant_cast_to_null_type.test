@@ -1,0 +1,77 @@
+# name: test/sql/types/variant/variant_cast_to_null_type.test
+# description: Casting VARIANT to the NULL type
+# group: [variant]
+
+# a single NULL primitive
+query I
+SELECT CAST(CAST(NULL::"NULL" AS VARIANT) AS "NULL")
+----
+NULL
+
+query I
+SELECT CAST(v AS "NULL") FROM (VALUES (CAST(NULL::"NULL" AS VARIANT)), (CAST(NULL::"NULL" AS VARIANT))) t(v)
+----
+NULL
+NULL
+
+# a non-NULL variant value has no NULL-type representation, matching a direct cast
+statement error
+SELECT CAST(42 AS "NULL")
+----
+Conversion Error: Unimplemented type for cast (INTEGER -> "NULL")
+
+statement error
+SELECT CAST(CAST(42 AS VARIANT) AS "NULL")
+----
+Conversion Error: Unimplemented type for cast (VARIANT -> "NULL")
+
+query I
+SELECT TRY_CAST(CAST(42 AS VARIANT) AS "NULL")
+----
+NULL
+
+# containers of the NULL type round-trip
+query I
+SELECT CAST(CAST([NULL::"NULL", NULL::"NULL"] AS VARIANT) AS "NULL"[])
+----
+[NULL, NULL]
+
+query I
+SELECT CAST(CAST([NULL::"NULL", NULL::"NULL"] AS VARIANT) AS "NULL"[2])
+----
+[NULL, NULL]
+
+query I
+SELECT CAST(CAST(MAP()::MAP(VARCHAR, "NULL") AS VARIANT) AS MAP(VARCHAR, "NULL"))
+----
+{}
+
+# NULL-type children reached through a nested path
+query I
+SELECT CAST(CAST({'m': MAP()::MAP(VARCHAR, "NULL"), 'n': NULL::"NULL"} AS VARIANT) AS
+            STRUCT("m" MAP(VARCHAR, "NULL"), "n" "NULL"))
+----
+{'m': {}, 'n': NULL}
+
+query I
+SELECT CAST(CAST({'m': MAP(['k'], [NULL::"NULL"]), 'n': NULL::"NULL"} AS VARIANT) AS
+            STRUCT("m" MAP(VARCHAR, "NULL"), "n" "NULL"))
+----
+{'m': {k=NULL}, 'n': NULL}
+
+query I
+SELECT CAST(CAST({'l': [NULL::"NULL"], 's': {'a': NULL::"NULL"}} AS VARIANT) AS
+            STRUCT("l" "NULL"[], "s" STRUCT("a" "NULL")))
+----
+{'l': [NULL], 's': {'a': NULL}}
+
+# a non-NULL value cannot be read into a NULL-type child
+statement error
+SELECT CAST(CAST([1, 2] AS VARIANT) AS "NULL"[])
+----
+Conversion Error: Can't convert from VARIANT(INT32) to '"NULL"[]'
+
+query I
+SELECT TRY_CAST(CAST([1, 2] AS VARIANT) AS "NULL"[])
+----
+NULL

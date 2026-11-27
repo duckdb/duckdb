@@ -44,3 +44,15 @@ SELECT * FROM read_json_auto('{DATA_DIR}/json/array_of_empty_arrays.json', forma
 []
 []
 []
+
+# empty arrays give no information on the element type - they are inferred as the NULL type
+query I
+SELECT DISTINCT typeof(json) FROM read_json_auto('{DATA_DIR}/json/array_of_empty_arrays.json', format='array')
+----
+"NULL"[]
+
+# the values themselves are still empty lists, not NULL
+query I
+SELECT COUNT(*) FROM read_json_auto('{DATA_DIR}/json/array_of_empty_arrays.json', format='array') WHERE json IS NULL
+----
+0

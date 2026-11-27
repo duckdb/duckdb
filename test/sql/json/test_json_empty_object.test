@@ -19,11 +19,31 @@ Binder Error: Empty object in JSON structure
 statement ok
 copy (select '{"a": {}}') to '{TEST_DIR}/my.json' (FORMAT CSV, quote '', header 0)
 
-# auto-detection should not give back an empty struct
+# auto-detection should not give back an empty struct, but a MAP whose value type is unknown
 query T
 select typeof(a) from '{TEST_DIR}/my.json'
 ----
-MAP(VARCHAR, JSON)
+MAP(VARCHAR, "NULL")
+
+# the empty object itself is preserved
+query I
+select a from '{TEST_DIR}/my.json'
+----
+{}
+
+statement ok
+copy (select '{"o": {}, "l": []}') to '{TEST_DIR}/containers.json' (FORMAT CSV, quote '', header 0)
+
+query II
+select typeof(o), typeof(l) from '{TEST_DIR}/containers.json'
+----
+MAP(VARCHAR, "NULL")	"NULL"[]
+
+# without map inference there is no empty STRUCT, so the empty object degrades to "NULL"
+query II
+select typeof(o), typeof(l) from read_json('{TEST_DIR}/containers.json', map_inference_threshold=-1)
+----
+"NULL"	"NULL"[]
 
 # can't force it to have an empty struct
 statement error
@@ -42,8 +62,8 @@ CREATE OR REPLACE TABLE tbl AS SELECT * FROM read_ndjson_auto('{TEST_DIR}/data.n
 query II
 select typeof(c1), typeof(c2) from tbl;
 ----
-VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
-VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
+VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, "NULL"))
+VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, "NULL"))
 
 require parquet
 

@@ -304,7 +304,7 @@ MAP(VARCHAR, VARCHAR)
 query T
 select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_incompatible.jsonl', map_inference_threshold=10)
 ----
-STRUCT(s1 STRUCT("1" "NULL"), s2 STRUCT("1" MAP(VARCHAR, JSON)), s3 STRUCT("1" VARCHAR), s4 STRUCT("1" BIGINT[]), s5 STRUCT("1" BIGINT), s6 STRUCT("1" VARCHAR), s7 STRUCT("1" BIGINT[]), s8 STRUCT("1" BIGINT), s9 STRUCT("1" VARCHAR), s10 STRUCT("1" BIGINT[]))
+STRUCT(s1 STRUCT("1" "NULL"), s2 STRUCT("1" MAP(VARCHAR, "NULL")), s3 STRUCT("1" VARCHAR), s4 STRUCT("1" BIGINT[]), s5 STRUCT("1" BIGINT), s6 STRUCT("1" VARCHAR), s7 STRUCT("1" BIGINT[]), s8 STRUCT("1" BIGINT), s9 STRUCT("1" VARCHAR), s10 STRUCT("1" BIGINT[]))
 
 # Can't set map_inference_threshold to a negative value (except -1)
 statement error
