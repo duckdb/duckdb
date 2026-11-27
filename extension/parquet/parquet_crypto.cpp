@@ -480,24 +480,18 @@ int8_t ParquetCrypto::GetModuleHeader(const ColumnChunk &chunk, uint16_t page_or
 		// always return data page header if ordinal > 0
 		return DATA_PAGE_HEADER;
 	}
-	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
+	// There is at maximum 1 dictionary or index page header per column chunk.
+	// Bloom filters are not interleaved with the pages: they are read separately via bloom_filter_offset.
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
 		return DICTIONARY_PAGE_HEADER;
 	} else if (chunk.meta_data.__isset.index_page_offset) {
 		return OFFSET_INDEX;
-	} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-		return ParquetCrypto::BLOOM_FILTER_HEADER;
 	}
 
 	return DATA_PAGE_HEADER;
 }
 
-int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal) {
-	if (chunk.meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
-		// return bitset if it is the first page ordinal
-		return ParquetCrypto::BLOOM_FILTER_BITSET;
-	}
-
+int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type) {
 	switch (page_type) {
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2:
@@ -529,8 +523,6 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 		if (chunk.meta_data.__isset.dictionary_page_offset) {
 			page_ordinal -= 1;
 		} else if (chunk.meta_data.__isset.index_page_offset) {
-			page_ordinal -= 1;
-		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
 			page_ordinal -= 1;
 		}
 		return CheckedPageOrdinal(page_ordinal);

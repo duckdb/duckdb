@@ -55,6 +55,7 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "parquet_column_schema.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_types.h"
 #include "thrift/protocol/TProtocol.h"
@@ -1287,13 +1288,22 @@ bool ParquetStatisticsUtils::HasBloomFilterConstants(const TableFilter &filter,
 	return HasFilterConstants(filter, hash_strategy);
 }
 
-bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filter,
-                                                 const duckdb_parquet::ColumnMetaData &column_meta_data,
-                                                 TProtocol &file_proto, Allocator &allocator,
-                                                 const ParquetColumnSchema &schema,
-                                                 ParquetBloomFilterHashStrategy hash_strategy) {
+bool ParquetStatisticsUtils::BloomFilterExcludes(
+    const TableFilter &duckdb_filter, const duckdb_parquet::ColumnMetaData &column_meta_data, TProtocol &file_proto,
+    Allocator &allocator, const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy,
+    const ParquetReader &reader, int16_t row_group_ordinal, idx_t column_ordinal) {
 	if (!HasFilterConstants(duckdb_filter, hash_strategy) || !column_meta_data.__isset.bloom_filter_offset ||
 	    column_meta_data.bloom_filter_offset <= 0) {
+		return false;
+	}
+	optional_ptr<const duckdb_parquet::FileCryptoMetaData> file_crypto_metadata;
+	if (reader.metadata) {
+		file_crypto_metadata = reader.metadata->crypto_metadata.get();
+	}
+	const bool encrypted = file_crypto_metadata != nullptr;
+	if (encrypted && (!reader.parquet_options.encryption_config || !reader.encryption_util ||
+	                  !file_crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1)) {
+		// the bloom filter modules cannot be decrypted
 		return false;
 	}
 
@@ -1323,8 +1333,15 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;
-	// TODO the bloom filter could be encrypted, too, so need to double check that this is NOT the case
-	filter_header.read(&file_proto);
+	CryptoMetaData bloom_crypto_metadata(allocator);
+	if (encrypted) {
+		bloom_crypto_metadata.Initialize(file_crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique,
+		                                 row_group_ordinal, NumericCast<int16_t>(column_ordinal),
+		                                 ParquetCrypto::BLOOM_FILTER_HEADER);
+		reader.ReadEncrypted(filter_header, file_proto, bloom_crypto_metadata);
+	} else {
+		filter_header.read(&file_proto);
+	}
 	if (!filter_header.algorithm.__isset.BLOCK || !filter_header.compression.__isset.UNCOMPRESSED ||
 	    !filter_header.hash.__isset.XXHASH) {
 		return false;
@@ -1337,20 +1354,30 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	if (bloom_filter_data_size % sizeof(ParquetBloomBlock) != 0) {
 		return false;
 	}
-	if (bloom_filter_data_start < bloom_filter_start || bloom_filter_data_size > transport.GetSize() ||
-	    bloom_filter_data_start > transport.GetSize() - bloom_filter_data_size) {
+	// an encrypted bitset module is framed by its length, nonce and tag on disk
+	const idx_t bloom_filter_on_disk_size = encrypted ? bloom_filter_data_size + ParquetCrypto::LENGTH_BYTES +
+	                                                        ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES
+	                                                  : bloom_filter_data_size;
+	if (bloom_filter_data_start < bloom_filter_start || bloom_filter_on_disk_size > transport.GetSize() ||
+	    bloom_filter_data_start > transport.GetSize() - bloom_filter_on_disk_size) {
 		return false;
 	}
 	if (bloom_filter_length > 0) {
 		auto bloom_filter_header_size = bloom_filter_data_start - bloom_filter_start;
 		if (bloom_filter_header_size > bloom_filter_length ||
-		    bloom_filter_data_size != bloom_filter_length - bloom_filter_header_size) {
+		    bloom_filter_on_disk_size != bloom_filter_length - bloom_filter_header_size) {
 			return false;
 		}
 	}
 
 	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
-	transport.read(new_buffer->GetCurrentLoc(), UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
+	if (encrypted) {
+		bloom_crypto_metadata.SetModule(ParquetCrypto::BLOOM_FILTER_BITSET);
+		reader.ReadDataEncrypted(file_proto, new_buffer->GetCurrentLoc(),
+		                         UnsafeNumericCast<uint32_t>(bloom_filter_data_size), bloom_crypto_metadata);
+	} else {
+		transport.read(new_buffer->GetCurrentLoc(), UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
+	}
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter, schema, hash_strategy);
 }
