@@ -939,40 +939,99 @@ static VectorMetaData &ListChildEntry(ColumnDataCollection &collection, idx_t co
 	return segment.GetVectorData(segment.GetChildIndex(list_vdata.child_index));
 }
 
-TEST_CASE("ColumnDataCollection appends selected rows after a large list child", "[column_data_selection_append]") {
+TEST_CASE("ColumnDataCollection selection appends with large list children", "[column_data_selection_append]") {
 	if (STANDARD_VECTOR_SIZE < 1024) {
 		return;
 	}
 	DuckDB db(":memory:");
 	Connection con(db);
 	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
-	// lists of 3 integers: the first half of a chunk holds more elements than a vector, so Append(state, chunk) into
-	// an empty chain stores them as one LARGE_FLAT entry; the selected rows then go into the same chunk after it
-	auto result = con.Query("SELECT [i, i + 1, i * 2] AS l, i::VARCHAR AS s FROM range(" +
+	// lists of 3 integers, some NULL and some with NULL elements, and lists of strings, which keep the chain
+	auto result = con.Query("SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE [i, NULLIF(i % 5, 0), i * 2] END AS l, "
+	                        "[i::VARCHAR, 'x', 'y'] AS s FROM range(" +
 	                        to_string(STANDARD_VECTOR_SIZE) + ") t(i)");
 	REQUIRE_NO_FAIL(*result);
 	auto chunk = result->Fetch();
 	REQUIRE(chunk);
 	const idx_t size = chunk->size();
-	const idx_t head = size / 2;
-	REQUIRE(head * 3 > STANDARD_VECTOR_SIZE);
 	auto order = SelectionInputOrder(size);
-	DataChunk first_half;
-	first_half.InitializeEmpty(chunk->GetTypes());
-	first_half.Slice(*chunk, *FlatVector::IncrementalSelectionVector(), head);
-	CheckedCollections single(buffer_manager, chunk->GetTypes(), 1);
-	single.AppendChunk(0, first_half);
-	REQUIRE(ListChildEntry(*single.collections[0], 0).representation == ColumnDataRepresentation::LARGE_FLAT);
-	single.Append(0, *chunk, order, 0, size - head);
-	REQUIRE(single.collections[0]->ChunkCount() == 1);
-	REQUIRE(ListChildEntry(*single.collections[0], 0).next_data.IsValid());
-	single.Check();
-	CheckedCollections batch(buffer_manager, chunk->GetTypes(), 2);
-	for (idx_t c = 0; c < 2; c++) {
-		batch.AppendChunk(c, first_half);
+
+	SECTION("after a large list child") {
+		// the first half of the chunk holds more elements than a vector, so Append(state, chunk) into an empty chain
+		// stores them as one LARGE_FLAT entry; the selected rows then go into the same chunk after it
+		const idx_t head = size / 2;
+		DataChunk first_half;
+		first_half.InitializeEmpty(chunk->GetTypes());
+		first_half.Slice(*chunk, *FlatVector::IncrementalSelectionVector(), head);
+		CheckedCollections single(buffer_manager, chunk->GetTypes(), 1);
+		single.AppendChunk(0, first_half);
+		REQUIRE(ListChildEntry(*single.collections[0], 0).representation == ColumnDataRepresentation::LARGE_FLAT);
+		single.Append(0, *chunk, order, 0, size - head);
+		REQUIRE(single.collections[0]->ChunkCount() == 1);
+		REQUIRE(ListChildEntry(*single.collections[0], 0).next_data.IsValid());
+		single.Check();
+		CheckedCollections batch(buffer_manager, chunk->GetTypes(), 2);
+		for (idx_t c = 0; c < 2; c++) {
+			batch.AppendChunk(c, first_half);
+		}
+		SplitBatch(batch, *chunk, order, size - head, {(size - head) / 2});
+		batch.Check();
 	}
-	SplitBatch(batch, *chunk, order, size - head, {(size - head) / 2});
-	batch.Check();
+	SECTION("stored as one entry") {
+		idx_t valid = 0;
+		for (idx_t i = 0; i < size; i++) {
+			valid += order.get_index(i) % 7 != 0;
+		}
+		// one collection through Append(state, chunk, sel, count), two through AppendBatch
+		CheckedCollections single(buffer_manager, chunk->GetTypes(), 1);
+		single.Append(0, *chunk, order, 0, size);
+		auto &large = ListChildEntry(*single.collections[0], 0);
+		REQUIRE(large.representation == ColumnDataRepresentation::LARGE_FLAT);
+		REQUIRE(!large.next_data.IsValid());
+		REQUIRE(large.count == 3 * valid);
+		REQUIRE(ListChildEntry(*single.collections[0], 1).representation != ColumnDataRepresentation::LARGE_FLAT);
+		single.Check();
+		CheckedCollections batch(buffer_manager, chunk->GetTypes(), 2);
+		SplitBatch(batch, *chunk, order, size, {size / 2});
+		for (idx_t c = 0; c < 2; c++) {
+			REQUIRE(ListChildEntry(*batch.collections[c], 0).representation == ColumnDataRepresentation::LARGE_FLAT);
+		}
+		batch.Check();
+		// in-memory collections keep the chain
+		ColumnDataCollection in_memory(Allocator::DefaultAllocator(), chunk->GetTypes());
+		ColumnDataAppendState in_memory_state;
+		in_memory.InitializeAppend(in_memory_state);
+		in_memory.Append(in_memory_state, *chunk, order, size);
+		REQUIRE(ListChildEntry(in_memory, 0).representation != ColumnDataRepresentation::LARGE_FLAT);
+	}
+	SECTION("a list all rows share") {
+		// stored once, as one entry when it is longer than a vector: at an offset of the child vector, with NULL
+		// elements
+		const idx_t skipped = 100, length = 3 * STANDARD_VECTOR_SIZE / 2;
+		DataChunk shared;
+		shared.Initialize(Allocator::DefaultAllocator(), {LogicalType::LIST(LogicalType::INTEGER)});
+		auto &list = shared.data[0];
+		ListVector::Reserve(list, skipped + length);
+		auto &child = ListVector::GetChildMutable(list);
+		auto child_data = FlatVector::GetDataMutable<int32_t>(child);
+		for (idx_t i = 0; i < skipped + length; i++) {
+			child_data[i] = NumericCast<int32_t>(i);
+			if (i % 11 == 0) {
+				FlatVector::SetNull(child, i, true);
+			}
+		}
+		ListVector::SetListSize(list, skipped + length);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(list);
+		for (idx_t i = 0; i < size; i++) {
+			list_entries[i] = list_entry_t(skipped, length);
+		}
+		shared.SetChildCardinality(size);
+		CheckedCollections out(buffer_manager, shared.GetTypes(), 1);
+		out.Append(0, shared, order, 0, 16);
+		REQUIRE(ListChildEntry(*out.collections[0], 0).representation == ColumnDataRepresentation::LARGE_FLAT);
+		REQUIRE(ListChildEntry(*out.collections[0], 0).count == length);
+		out.Check();
+	}
 }
 
 } // namespace duckdb

@@ -889,31 +889,33 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 //! Block capacities are 32-bit
 static constexpr idx_t MAXIMUM_LARGE_LIST_CHILD_SIZE = NumericLimits<uint32_t>::Maximum();
 
-//! Store a list child longer than a vector, appended into an empty child chain of a buffer-managed collection, as a
-//! single LARGE_FLAT entry, so scans read it without copying. Returns false if the child must be appended as a chain of
-//! vector-sized entries
-static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
-                                    const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count) {
-	auto &segment = meta_data.segment;
-	if (segment.allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+//! Whether 'length' list elements of 'child_type' appended into the list's child chain are stored as a single
+//! LARGE_FLAT entry, so scans read them without copying: a chain that is still empty, of a buffer-managed collection,
+//! longer than a vector, of a constant-size type
+static bool StoresLargeListChild(ColumnDataMetaData &meta_data, const LogicalType &child_type, idx_t length) {
+	if (meta_data.segment.allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory blocks round their capacity up to a power of two, a child-sized block could double its footprint
 		return false;
 	}
-	const auto length = info.child_list_info.length;
 	if (meta_data.GetVectorMetaData().child_index.IsValid() || length <= STANDARD_VECTOR_SIZE) {
 		return false;
 	}
-	auto &child_type = child_vector.GetType();
 	const auto internal_type = child_type.InternalType();
 	if (!TypeIsConstantSize(internal_type)) {
 		return false;
 	}
 	const auto type_size = GetTypeIdSize(internal_type);
-	if (ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) >
-	    MAXIMUM_LARGE_LIST_CHILD_SIZE) {
-		return false;
-	}
+	return ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) <=
+	       MAXIMUM_LARGE_LIST_CHILD_SIZE;
+}
 
+//! Stores the elements at positions [source_offset, source_offset + length) of 'sel' over 'child_vector' as the list's
+//! LARGE_FLAT child entry (StoresLargeListChild)
+static void AppendLargeListChild(ColumnDataMetaData &meta_data, Vector &child_vector, const SelectionVector &sel,
+                                 idx_t source_offset, idx_t length) {
+	auto &segment = meta_data.segment;
+	auto &child_type = child_vector.GetType();
+	const auto type_size = GetTypeIdSize(child_type.InternalType());
 	auto &chunk_state = meta_data.state.current_chunk_state;
 	auto child_index = segment.AllocateLargeVector(type_size, length, meta_data.chunk_data, &chunk_state);
 	meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
@@ -921,21 +923,31 @@ static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &sourc
 	auto base_ptr = segment.allocator->GetDataPointer(chunk_state, child_vdata.block_id, child_vdata.offset);
 
 	Vector target(child_type, base_ptr, length);
-	if (info.needs_slicing) {
-		SelectionVector sel(length);
-		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
-		VectorOperations::Copy(child_vector, target, sel, length, 0, 0, length);
-	} else {
-		const auto child_offset = info.child_list_info.offset;
-		VectorOperations::Copy(child_vector, target, *FlatVector::IncrementalSelectionVector(), child_offset + length,
-		                       child_offset, 0, length);
-	}
+	VectorOperations::Copy(child_vector, target, sel, source_offset + length, source_offset, 0, length);
 	auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, type_size, length);
 	auto &target_validity = FlatVector::Validity(target);
 	if (target_validity.CanHaveNull()) {
 		memcpy(validity_data, target_validity.GetData(), ValidityMask::ValidityMaskSize(length));
 	} else {
 		ValidityMask(validity_data, length).SetAllValid(length);
+	}
+}
+
+//! Stores the consecutive list children of rows [offset, offset + copy_count) as a LARGE_FLAT entry where
+//! StoresLargeListChild allows it. Returns false if they must be appended as a chain of vector-sized entries
+static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
+                                    const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count) {
+	const auto length = info.child_list_info.length;
+	if (!StoresLargeListChild(meta_data, child_vector.GetType(), length)) {
+		return false;
+	}
+	if (info.needs_slicing) {
+		SelectionVector sel(length);
+		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+		AppendLargeListChild(meta_data, child_vector, sel, 0, length);
+	} else {
+		AppendLargeListChild(meta_data, child_vector, *FlatVector::IncrementalSelectionVector(),
+		                     info.child_list_info.offset, length);
 	}
 	return true;
 }
@@ -948,6 +960,30 @@ static VectorDataIndex ListChildChain(ColumnDataMetaData &meta_data, const Logic
 		meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
 	}
 	return segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+}
+
+//! Copies the list entries of rows [offset, offset + copy_count), their elements following the 'list_size' the child
+//! chain held before: one shared entry when 'is_constant'
+static void CopyListEntries(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                            idx_t offset, idx_t copy_count, idx_t list_size, bool is_constant) {
+	meta_data.child_list_size = list_size;
+	if (is_constant) {
+		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	} else {
+		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	}
+}
+
+//! Calls 'f' with the list entry of each valid row at positions [offset, offset + count) of 'source_data'
+template <class F>
+static void ForEachSelectedList(const UnifiedVectorFormat &source_data, const list_entry_t *entries, idx_t offset,
+                                idx_t count, F &&f) {
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = source_data.sel->get_index(offset + i);
+		if (source_data.validity.RowIsValid(idx)) {
+			f(entries[idx]);
+		}
+	}
 }
 
 template <>
@@ -970,53 +1006,52 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 
 	if (source_data.sel->IsSet()) {
-		auto &child_function = meta_data.copy_function.child_functions[0];
-		auto child_index = ListChildChain(meta_data, child_type);
-		UnifiedVectorFormat child_vector_data;
-		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
 		idx_t element_count = 0;
 		// whether every selected list is the same entry, as in a flattened constant: its elements are stored once
 		optional_ptr<const list_entry_t> first;
 		bool all_same = true;
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto idx = source_data.sel->get_index(offset + i);
-			if (!source_data.validity.RowIsValid(idx)) {
-				continue;
-			}
-			element_count += entries[idx].length;
+		ForEachSelectedList(source_data, entries, offset, copy_count, [&](const list_entry_t &entry) {
+			element_count += entry.length;
 			if (!first) {
-				first = &entries[idx];
-			} else if (entries[idx].offset != first->offset || entries[idx].length != first->length) {
+				first = &entry;
+			} else if (entry.offset != first->offset || entry.length != first->length) {
 				all_same = false;
 			}
-		}
-		if (first && all_same) {
+		});
+		const bool is_constant = first && all_same;
+		const idx_t length = is_constant ? first->length : element_count;
+		const bool large = StoresLargeListChild(meta_data, child_type, length);
+		// a LARGE_FLAT copy reads the child vector's rows, the copy functions the rows of its data
+		UnifiedVectorFormat child_vector_data;
+		if (large) {
+			child_vector_data.sel = FlatVector::IncrementalSelectionVector();
+		} else {
 			child_vector.ToUnifiedFormat(child_vector_data);
-			child_function.function(child_meta_data, child_vector_data, child_vector, first->offset, first->length);
-			meta_data.child_list_size = current_list_size;
-			TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
-			return;
 		}
-		// the elements of the selected lists, in order
-		if (element_count > 0) {
-			child_vector.ToUnifiedFormat(child_vector_data);
-			auto &element_sel = ChildSelection(meta_data, element_count);
+		const idx_t child_offset = is_constant ? first->offset : 0;
+		if (!is_constant && length > 0) {
+			// the elements of the selected lists, in order
+			auto &element_sel = ChildSelection(meta_data, length);
 			idx_t element = 0;
-			for (idx_t i = 0; i < copy_count; i++) {
-				auto idx = source_data.sel->get_index(offset + i);
-				if (!source_data.validity.RowIsValid(idx)) {
-					continue;
+			ForEachSelectedList(source_data, entries, offset, copy_count, [&](const list_entry_t &entry) {
+				for (idx_t j = 0; j < entry.length; j++) {
+					element_sel.set_index(element++, child_vector_data.sel->get_index(entry.offset + j));
 				}
-				for (idx_t j = 0; j < entries[idx].length; j++) {
-					element_sel.set_index(element++, child_vector_data.sel->get_index(entries[idx].offset + j));
-				}
-			}
+			});
 			child_vector_data.sel = &element_sel;
-			child_function.function(child_meta_data, child_vector_data, child_vector, 0, element_count);
 		}
-		meta_data.child_list_size = current_list_size;
-		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+		if (large) {
+			AppendLargeListChild(meta_data, child_vector, *child_vector_data.sel, child_offset, length);
+		} else {
+			// the chain is allocated even for no elements, as a scan of the list reads its child chain
+			auto &child_function = meta_data.copy_function.child_functions[0];
+			ColumnDataMetaData child_meta_data(child_function, meta_data, ListChildChain(meta_data, child_type));
+			if (length > 0) {
+				child_function.function(child_meta_data, child_vector_data, child_vector, child_offset, length);
+			}
+		}
+		CopyListEntries(meta_data, source_data, source, offset, copy_count, current_list_size, is_constant);
 		return;
 	}
 	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
@@ -1047,12 +1082,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 
 	// now copy the list entries
-	meta_data.child_list_size = current_list_size;
-	if (info.is_constant) {
-		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
-	} else {
-		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
-	}
+	CopyListEntries(meta_data, source_data, source, offset, copy_count, current_list_size, info.is_constant);
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
