@@ -4809,6 +4809,15 @@ static const TransformChildPlan FRAME_CHILDREN_RegisterExternalResourceStmt[] = 
                                                                                   {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_RegisterExternalResourceStmt = {
     FRAME_CHILDREN_RegisterExternalResourceStmt, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_RegisterExternalResourcesStmt[] = {{PEGRuleId::TableRef,
+                                                                                   TransformChildKind::REQUIRED,
+                                                                                   4,
+                                                                                   0,
+                                                                                   false,
+                                                                                   {0, TRANSFORM_PATH_END, 0},
+                                                                                   {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_RegisterExternalResourcesStmt = {
+    FRAME_CHILDREN_RegisterExternalResourcesStmt, 1, 1, false, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_DestroyExternalResourceStmt[] = {{PEGRuleId::ColId,
                                                                                  TransformChildKind::REQUIRED,
                                                                                  2,
@@ -8832,6 +8841,9 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
      &PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline, &FRAME_PLAN_CreateExternalResourceStmt},
     {"RegisterExternalResourceStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline, &FRAME_PLAN_RegisterExternalResourceStmt},
+    {"RegisterExternalResourcesStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizeRegisterExternalResourcesStmtTrampoline,
+     &FRAME_PLAN_RegisterExternalResourcesStmt},
     {"DestroyExternalResourceStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline, &FRAME_PLAN_DestroyExternalResourceStmt},
     {"ExternalResourceType", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
@@ -16753,6 +16765,14 @@ PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline(PEGTransfo
 	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(2);
 	auto result =
 	    TransformRegisterExternalResourceStmt(transformer, external_resource_type, attach_alias, std::move(expression));
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeRegisterExternalResourcesStmtTrampoline(PEGTransformer &transformer,
+                                                                       GeneratedTransformProcess &process) {
+	auto table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
+	auto result = TransformRegisterExternalResourcesStmt(transformer, std::move(table_ref));
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 

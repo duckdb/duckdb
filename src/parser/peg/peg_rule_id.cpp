@@ -808,6 +808,7 @@ static const char *const PEG_RULE_NAMES[] = {
     "ExternalResourceStatement",
     "CreateExternalResourceStmt",
     "RegisterExternalResourceStmt",
+    "RegisterExternalResourcesStmt",
     "DestroyExternalResourceStmt",
     "ExternalResourceKeyword",
     "ExternalResourceType",
