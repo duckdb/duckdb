@@ -10,6 +10,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -219,6 +220,15 @@ private:
 	idx_t location;
 };
 
+//! Runs the tasks for the reading query if there is one, so that its task hooks fire on whichever thread picks them up
+unique_ptr<TaskExecutor> CreateReadExecutor(TaskScheduler &scheduler, const QueryContext &query_context) {
+	auto context = query_context.GetContext();
+	if (context) {
+		return make_uniq<TaskExecutor>(*context, TaskSchedulerType::ASYNC);
+	}
+	return make_uniq<TaskExecutor>(scheduler, TaskSchedulerType::ASYNC);
+}
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -238,7 +248,7 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                           optional_ptr<FileOpener> opener) {
-	return OpenFile(QueryContext(), path, flags, opener);
+	return OpenFile(QueryContext(Context::TryGetClientContext(FileOpener::TryGetContext(opener))), path, flags, opener);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
@@ -490,13 +500,13 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
 	auto &scheduler = TaskScheduler::GetScheduler(db);
-	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
+	auto executor = CreateReadExecutor(scheduler, context);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(
-		    *this, executor, context, external_file_cache.GetBufferManager(), blocks[idx], pins[idx]));
+		executor->ScheduleTask(make_uniq<FetchBlockTask>(
+		    *this, *executor, context, external_file_cache.GetBufferManager(), blocks[idx], pins[idx]));
 	}
-	executor.WorkOnTasks();
+	executor->WorkOnTasks();
 
 	// Build the handle group.
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
@@ -537,12 +547,13 @@ void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t lo
 		return;
 	}
 	// split like cached reads, so the requests are the same whether or not the cache is enabled
-	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
+	auto executor = CreateReadExecutor(scheduler, context);
 	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
-		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,
-		                                               MinValue(max_block_size, nr_bytes - offset), location + offset));
+		executor->ScheduleTask(make_uniq<ReadRangeTask>(*this, *executor, context, buffer + offset,
+		                                                MinValue(max_block_size, nr_bytes - offset),
+		                                                location + offset));
 	}
-	executor.WorkOnTasks();
+	executor->WorkOnTasks();
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
