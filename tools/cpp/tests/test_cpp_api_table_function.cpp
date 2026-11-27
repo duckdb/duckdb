@@ -54,6 +54,9 @@ std::vector<std::string> CollectStrings(QueryResult result) {
 
 struct RangeBind {
 	int64_t count = 0;
+	bool operator==(const RangeBind &other) const {
+		return count == other.count;
+	}
 };
 struct RangeGlobal {
 	int64_t position = 0;
@@ -1146,4 +1149,35 @@ TEST_CASE("Stable C++API: table function overloads keep their descriptions", "[c
 	REQUIRE(chunk.GetVector(0).GetValue(0).ToText() == "Counts to n.");
 	REQUIRE(chunk.GetVector(1).GetValue(0).ToText() == "FROM cpp_documented_range(3)");
 	REQUIRE(chunk.GetVector(0).GetValue(1).ToText() == "Counts to n, as text.");
+}
+
+TEST_CASE("Stable C++API: table function stability lets identical scans be shared", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	conn.Execute("SET explain_output='optimized_only'").Drain();
+	// keep the INTERSECT ALL a join of the two scans, rather than an aggregate over their union
+	conn.Execute("SET disabled_optimizers='set_operation_aggregate'").Drain();
+
+	auto register_range = [&](const std::string &name, bool within_query) {
+		auto function = TableFunction::Create(conn.GetFactory());
+		function.SetName(name);
+		function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
+		function.SetBindCallback(RangeBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(RangeExec);
+		if (within_query) {
+			function.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
+		}
+		conn.Register(function);
+	};
+	register_range("cpp_volatile_range", false);
+	register_range("cpp_stable_range", true);
+
+	// The default (VOLATILE) scan is not repeatable, so its two calls are not shared.
+	REQUIRE(!ExplainContains(conn,
+	                         "SELECT * FROM cpp_volatile_range(3) INTERSECT ALL SELECT * FROM cpp_volatile_range(3)",
+	                         "__common_subplan_"));
+	REQUIRE(ExplainContains(conn, "SELECT * FROM cpp_stable_range(3) INTERSECT ALL SELECT * FROM cpp_stable_range(3)",
+	                        "__common_subplan_"));
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM (SELECT * FROM cpp_stable_range(3) INTERSECT ALL "
+	                                    "SELECT * FROM cpp_stable_range(3))")) == std::vector<int64_t> {3});
 }

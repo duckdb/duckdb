@@ -326,6 +326,34 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  table_function_set_property:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-27" ]
+    description: |
+      Sets a property on the table function.
+
+      Only `FUNCTION_PROPERTY_STABILITY` is supported for table functions; any other key, a key that is not
+      valid for table functions, or a value that does not belong to `key` results in an error. A table function
+      defaults to `FUNCTION_PROPERTY_STABILITY_VOLATILE`. Declaring
+      `FUNCTION_PROPERTY_STABILITY_CONSISTENT_WITHIN_QUERY` promises that repeated executions with the same bound
+      data and input rows return equivalent rows within one query and have no observable side effects, which allows
+      the optimizer to share identical scans.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the property of.
+      key:
+        type: FUNCTION_PROPERTY_KEY
+        description: The property to set.
+      value:
+        type: FUNCTION_PROPERTY_VALUE
+        description: The value to set for the property. Must belong to `key`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   table_function_set_user_data:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-01" ]

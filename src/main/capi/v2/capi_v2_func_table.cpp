@@ -909,6 +909,14 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handl
 	    err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name, name_length)); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_property(duckdb_v2_table_function_handle function,
+                                                      DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                                      DUCKDB_V2_FUNCTION_PROPERTY_VALUE value,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { SetTableFunctionProperty(Convert(function)->stability, key, value); });
+}
+
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_docs(duckdb_v2_table_function_handle function,
                                                   duckdb_v2_function_docs_handle *docs,
                                                   duckdb_v2_error_info_handle *err) {

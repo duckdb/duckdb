@@ -296,4 +296,57 @@ TEST_CASE("Test running SQL in a bind callback through an inheriting connection"
 		auto result = con.Query("SELECT * FROM sql_in_bind('SELECT * FROM sql_in_bind(''SELECT SUM(i) FROM tbl'')')");
 		REQUIRE(CHECK_COLUMN(result, 0, {"3"}));
 	}
+	SECTION("names resolve through the search path of the source") {
+		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA s"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE s.only_in_s(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO s.only_in_s VALUES (10), (20)"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE s.tbl(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO s.tbl VALUES (100)"));
+		REQUIRE_FAIL(con.Query("SELECT * FROM sql_in_bind('SELECT SUM(i) FROM only_in_s')"));
+		REQUIRE_NO_FAIL(con.Query("SET schema = 's'"));
+		auto result = con.Query("SELECT * FROM sql_in_bind('SELECT SUM(i) FROM only_in_s')");
+		REQUIRE(CHECK_COLUMN(result, 0, {"30"}));
+		result = con.Query("SELECT * FROM sql_in_bind('SELECT SUM(i) FROM tbl')");
+		REQUIRE(CHECK_COLUMN(result, 0, {"100"}));
+		result = con.Query("SELECT * FROM sql_in_bind('SELECT current_schema()')");
+		REQUIRE(CHECK_COLUMN(result, 0, {"s"}));
+		// a connection that did not set the schema still resolves through its own search path
+		RequireValue(other, "SELECT SUM(i) FROM tbl", 3);
+		REQUIRE_NO_FAIL(con.Query("RESET schema"));
+		result = con.Query("SELECT * FROM sql_in_bind('SELECT SUM(i) FROM tbl')");
+		REQUIRE(CHECK_COLUMN(result, 0, {"3"}));
+	}
+}
+
+TEST_CASE("Test that an inheriting connection starts with the search path of its source", "[api][transaction]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	RegisterFunctions(con);
+	REQUIRE_NO_FAIL(con.Query("ATTACH ':memory:' AS other_db"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA other_db.s"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE other_db.s.tbl AS SELECT 42 AS i"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 1 AS i"));
+
+	auto result = con.Query("SELECT * FROM sql_in_bind('SELECT current_database() || ''.'' || current_schema()')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"memory.main"}));
+
+	REQUIRE_NO_FAIL(con.Query("USE other_db.s"));
+	result = con.Query("SELECT * FROM sql_in_bind('SELECT current_database() || ''.'' || current_schema()')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"other_db.s"}));
+	result = con.Query("SELECT * FROM sql_in_bind('SELECT i FROM tbl')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"42"}));
+	// unqualified names created by the inheriting connection land in the default schema of the source
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM sql_in_bind('CREATE TABLE created AS SELECT 7 AS i')"));
+	RequireValue(con, "SELECT i::BIGINT FROM other_db.s.created", 7);
+
+	// changing the search path of the inheriting connection leaves the source alone
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM sql_in_bind('USE memory')"));
+	result = con.Query("SELECT current_database() || '.' || current_schema()");
+	REQUIRE(CHECK_COLUMN(result, 0, {"other_db.s"}));
+
+	REQUIRE_NO_FAIL(con.Query("SET search_path = 'memory.main'"));
+	result = con.Query("SELECT * FROM sql_in_bind('SELECT current_setting(''search_path'')')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"memory.main"}));
+	result = con.Query("SELECT * FROM sql_in_bind('SELECT i FROM tbl')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
 }

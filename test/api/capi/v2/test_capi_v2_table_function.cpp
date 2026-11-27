@@ -2377,4 +2377,51 @@ TEST_CASE("V2 table: to string arguments", "[capi_v2][table_function]") {
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
+TEST_CASE("V2 table: stability property", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+
+	auto register_with = [&](std::string_view name, bool set_within_query) {
+		auto function = MakeTable(fx.conn, name);
+		TableSigParam(SigOf(function), "n", bigint);
+		REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_data_source_set_init_global_callback(TestSourceOf(function), RangeInitGlobalCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_data_source_set_exec_callback(TestSourceOf(function), RangeExecCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		if (set_within_query) {
+			REQUIRE(duckdb_v2_table_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+			                                              DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT_WITHIN_QUERY,
+			                                              nullptr) == DUCKDB_V2_ERROR_NONE);
+		}
+		REQUIRE(TestRegisterTable(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+		TestDestroyTable(&function);
+	};
+	register_with("stab_default", false);
+	register_with("stab_within_query", true);
+
+	// Both scans work; the optimizer effect of the stability is covered by the C++ API test.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM (SELECT * FROM stab_default(3) INTERSECT ALL SELECT * FROM "
+	                          "stab_default(3))") == 3);
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM (SELECT * FROM stab_within_query(3) INTERSECT ALL SELECT * FROM "
+	                          "stab_within_query(3))") == 3);
+
+	// Invalid combinations are rejected.
+	auto function = MakeTable(fx.conn, "stab_errors");
+	REQUIRE(duckdb_v2_table_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                              DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL,
+	                                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING,
+	                                              DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL,
+	                                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
+	                                              DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO,
+	                                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_set_property(nullptr, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                              DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE,
+	                                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	TestDestroyTable(&function);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
 } // namespace test_capi_v2
