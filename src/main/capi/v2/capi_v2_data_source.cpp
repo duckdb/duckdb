@@ -27,7 +27,7 @@ public:
 		return max_threads;
 	}
 
-	CV2UserData handle;
+	shared_ptr<CV2UserData> handle = make_shared_ptr<CV2UserData>();
 	idx_t max_threads = 1;
 
 	// The declared column each vector of the output chunk stands for, kept here so the exec callback can ask.
@@ -36,7 +36,8 @@ public:
 
 class CV2DataSourceLocalState final : public LocalTableFunctionState {
 public:
-	CV2UserData handle;
+	//! Shared with the tasks the exec callback adds, whose data may refer to it
+	shared_ptr<CV2UserData> handle = make_shared_ptr<CV2UserData>();
 	//! Whether the caller claims the batches of this thread (see TableFunction::claim_batch)
 	bool claimed_externally = false;
 	//! Whether this thread has claimed a batch it has not exhausted yet
@@ -159,16 +160,21 @@ public:
 	void *in_local_state = nullptr;
 	const vector<column_t> *in_scan_columns = nullptr;
 
+	//! The states the data of an added task may refer to, kept alive by the task
+	vector<shared_ptr<CV2UserData>> task_states;
+
 	DataChunk *output = nullptr;
 	DUCKDB_V2_DATA_SOURCE_RESULT out_result = DUCKDB_V2_DATA_SOURCE_RESULT_IMPLICIT;
 	vector<unique_ptr<AsyncTask>> out_tasks;
 };
 
-//! A task the exec callback added: the scan is blocked until it has run
+//! A task the exec callback added: the scan is blocked until it has run. The task may outlive the scan, so it keeps the
+//! states its data may refer to alive until its data is destroyed.
 class CV2DataSourceTask final : public AsyncTask {
 public:
-	CV2DataSourceTask(duckdb_v2_data_source_task_callback_fn task_cb, CV2UserData data)
-	    : task_cb(task_cb), data(std::move(data)) {
+	CV2DataSourceTask(duckdb_v2_data_source_task_callback_fn task_cb, CV2UserData data,
+	                  vector<shared_ptr<CV2UserData>> states)
+	    : task_cb(task_cb), states(std::move(states)), data(std::move(data)) {
 	}
 
 	void Execute() override {
@@ -182,6 +188,8 @@ public:
 
 private:
 	duckdb_v2_data_source_task_callback_fn task_cb;
+	//! Declared before the data, so that the data is destroyed first
+	vector<shared_ptr<CV2UserData>> states;
 	CV2UserData data;
 };
 
@@ -457,7 +465,7 @@ auto CV2DataSourceInitGlobal(ClientContext &context, TableFunctionInitInput &inp
 	info.init_global_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (args.out_global_state.ptr) {
-		result->handle =
+		*result->handle =
 		    CV2UserData(args.out_global_state.ptr, args.out_global_state.destroy, args.out_global_state.equals);
 	}
 	result->max_threads = args.out_max_threads;
@@ -554,7 +562,7 @@ auto CV2DataSourceInitLocal(ExecutionContext &context, TableFunctionInitInput &i
 	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
 	args.in_scan_columns = &scan_columns;
 	if (global_state) {
-		args.in_global_state = global_state->Cast<CV2DataSourceGlobalState>().handle.GetData();
+		args.in_global_state = global_state->Cast<CV2DataSourceGlobalState>().handle->GetData();
 	}
 
 	CV2ErrorInfo err = {};
@@ -563,7 +571,7 @@ auto CV2DataSourceInitLocal(ExecutionContext &context, TableFunctionInitInput &i
 	info.init_local_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (args.out_local_state.ptr) {
-		result->handle =
+		*result->handle =
 		    CV2UserData(args.out_local_state.ptr, args.out_local_state.destroy, args.out_local_state.equals);
 	}
 
@@ -585,9 +593,9 @@ static auto CV2TableClaimNextBatch(ClientContext &context, TableFunctionInput &i
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
 	if (input.global_state) {
-		args.in_global_state = input.global_state->Cast<CV2DataSourceGlobalState>().handle.GetData();
+		args.in_global_state = input.global_state->Cast<CV2DataSourceGlobalState>().handle->GetData();
 	}
-	args.in_local_state = local_state.handle.GetData();
+	args.in_local_state = local_state.handle->GetData();
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -676,7 +684,6 @@ auto CV2DataSourceExec(ClientContext &context, TableFunctionInput &input, DataCh
 		local_state.result = DUCKDB_V2_DATA_SOURCE_RESULT_IMPLICIT;
 		local_state.tasks.clear();
 		CV2DataSourceExecClaimed(context, input, output);
-		CheckDeclaredResult(local_state, output.size());
 		switch (local_state.result) {
 		case DUCKDB_V2_DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT:
 			input.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
@@ -752,11 +759,18 @@ static auto CV2TableExecBatchOnce(ClientContext &context, TableFunctionInput &in
 	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
 	if (input.global_state) {
 		auto &global_state = input.global_state->Cast<CV2DataSourceGlobalState>();
-		args.in_global_state = global_state.handle.GetData();
+		args.in_global_state = global_state.handle->GetData();
 		args.in_scan_columns = &global_state.scan_columns;
 	}
 	auto &local_state = input.local_state->Cast<CV2DataSourceLocalState>();
-	args.in_local_state = local_state.handle.GetData();
+	args.in_local_state = local_state.handle->GetData();
+	args.task_states.push_back(local_state.handle);
+	if (input.global_state) {
+		args.task_states.push_back(input.global_state->Cast<CV2DataSourceGlobalState>().handle);
+	}
+	if (bind_data.handle) {
+		args.task_states.push_back(bind_data.handle);
+	}
 	reference<DataChunk> target(output);
 	if (output.ColumnCount() == 0) {
 		// the scan requests no columns (e.g. for count(*)), only rows - the function writes them into its first column
@@ -784,6 +798,7 @@ static auto CV2TableExecBatchOnce(ClientContext &context, TableFunctionInput &in
 	// only the first vector and write the rest through direct buffer writes, so take the first vector's size as the
 	// batch's row count and propagate it to the others. A table function always has at least one result column.
 	auto row_count = target.get().data[0].size();
+	CheckDeclaredResult(local_state, row_count);
 	if (output.ColumnCount() == 0) {
 		output.SetCardinalityUnsafe(row_count);
 		return;
@@ -801,7 +816,7 @@ static auto CV2DataSourceProgress(ClientContext &context, const FunctionData *bi
 	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
 	if (global_state) {
 		// The callback runs concurrently with the scan, so the state it reads is the shared one, unsynchronized.
-		args.in_global_state = global_state->Cast<CV2DataSourceGlobalState>().handle.GetData();
+		args.in_global_state = global_state->Cast<CV2DataSourceGlobalState>().handle->GetData();
 	}
 
 	CV2ErrorInfo err = {};
@@ -829,7 +844,7 @@ static auto CV2DataSourceGetMetrics(TableFunctionGetMetricsInput &input) -> void
 	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
 	if (input.global_state) {
 		// The callback can run while the scan does, so the state it reads is the shared one, unsynchronized.
-		args.in_global_state = input.global_state->Cast<CV2DataSourceGlobalState>().handle.GetData();
+		args.in_global_state = input.global_state->Cast<CV2DataSourceGlobalState>().handle->GetData();
 	}
 
 	CV2ErrorInfo err = {};
@@ -877,8 +892,8 @@ static auto CV2DataSourceGetPartitionData(ClientContext &context, TableFunctionG
 	CV2TablePartitionDataInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
-	args.in_global_state = global_state.handle.GetData();
-	args.in_local_state = local_state.handle.GetData();
+	args.in_global_state = global_state.handle->GetData();
+	args.in_local_state = local_state.handle->GetData();
 	args.in_partition_info = &input.partition_info;
 	// The planner resolves these to scan positions, unlike get_partition_info's, which it resolves to declared
 	// columns; the callback is promised declared columns in both.
@@ -1108,7 +1123,8 @@ DUCKDB_V2_ERROR duckdb_v2_data_source_exec_add_task(duckdb_v2_data_source_exec_i
 	DUCKDB_CHECK_ARG(task);
 	return WithErrorHandler(err, [&]() {
 		auto &exec_info = *Convert(info);
-		exec_info.out_tasks.push_back(duckdb::make_uniq<CV2DataSourceTask>(task, std::move(task_data)));
+		exec_info.out_tasks.push_back(
+		    duckdb::make_uniq<CV2DataSourceTask>(task, std::move(task_data), exec_info.task_states));
 		exec_info.out_result = DUCKDB_V2_DATA_SOURCE_RESULT_BLOCKED;
 	});
 }

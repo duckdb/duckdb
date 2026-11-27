@@ -487,8 +487,17 @@ struct DsTaskProbe {
 DsTaskProbe ds_task_probe;
 
 // What the exec callback of ds_misuse does: one way of declaring a result that does not fit the batch
-enum class DsMisuse { HAVE_MORE_OUTPUT_EMPTY, FINISHED_WITH_ROWS, BLOCKED_WITHOUT_TASK, TASK_NOT_BLOCKED, TASK_FAILS };
+enum class DsMisuse {
+	HAVE_MORE_OUTPUT_EMPTY,
+	FINISHED_WITH_ROWS,
+	BLOCKED_WITHOUT_TASK,
+	TASK_NOT_BLOCKED,
+	TASK_THEN_IMPLICIT,
+	TASK_FAILS
+};
 std::atomic<DsMisuse> ds_misuse {DsMisuse::HAVE_MORE_OUTPUT_EMPTY};
+// How many tasks ds_tasks adds each time it blocks its scan
+std::atomic<int> ds_tasks_per_block {1};
 
 struct DsTaskGlobal {
 	int64_t position = 0;
@@ -542,13 +551,17 @@ void DsTaskExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context
 	// every second invocation blocks, so a task runs before every row
 	if (!global.task_ran) {
 		global.task_ran = true;
-		duckdb_v2_opaque opaque = {new std::atomic<bool>(false), DsDeleteTaskData, nullptr};
-		duckdb_v2_data_source_exec_add_task(info, DsSetFlagTask, &opaque, err);
+		for (int i = 0; i < ds_tasks_per_block; i++) {
+			duckdb_v2_opaque opaque = {new std::atomic<bool>(false), DsDeleteTaskData, nullptr};
+			if (duckdb_v2_data_source_exec_add_task(info, DsSetFlagTask, &opaque, err) != DUCKDB_V2_ERROR_NONE) {
+				return;
+			}
+		}
 		return;
 	}
 	global.task_ran = false;
 	// the scan went on only after the task of the last invocation ran
-	if (ds_task_probe.tasks_run.load() - global.tasks_before != global.position + 1) {
+	if (ds_task_probe.tasks_run.load() - global.tasks_before != (global.position + 1) * ds_tasks_per_block) {
 		SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "the scan went on before its task ran");
 		return;
 	}
@@ -596,9 +609,115 @@ void DsMisuseExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_conte
 		add_task(DsSetFlagTask);
 		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, err);
 		break;
+	case DsMisuse::TASK_THEN_IMPLICIT:
+		add_task(DsSetFlagTask);
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_IMPLICIT, err);
+		break;
 	case DsMisuse::TASK_FAILS:
 		add_task(DsFailingTask);
 		break;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ds_claimed(n): claims two batches. Its first invocation declares more output without producing rows, the next
+// produces a row, and the last declares the scan finished.
+// ---------------------------------------------------------------------------
+
+void DsClaimTwiceCb(duckdb_v2_data_source_claim_batch_info_handle info, duckdb_v2_context_handle,
+                    duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_data_source_claim_batch_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<DsTaskGlobal *>(global_ptr);
+	duckdb_v2_data_source_claim_batch_set_claimed(info, global.position++ < 2, err);
+}
+
+void DsClaimedExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	duckdb_v2_vector_handle vec = nullptr;
+	if (duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<DsTaskGlobal *>(global_ptr);
+	if (global.position == 1) {
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT, err);
+		return;
+	}
+	if (global.task_ran) {
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, err);
+		return;
+	}
+	global.task_ran = true;
+	void *raw = nullptr;
+	duckdb_v2_vector_get_data_mutable(vec, &raw, err);
+	static_cast<int64_t *>(raw)[0] = 7;
+	duckdb_v2_vector_set_size(vec, 1, err);
+}
+
+// ---------------------------------------------------------------------------
+// ds_endless(n): blocks its scan on two tasks every invocation, so its scan never ends. The data of each task refers
+// to the local state of its scan.
+// ---------------------------------------------------------------------------
+
+struct DsEndlessProbe {
+	std::atomic<int> live_task_data {0};
+	// Local states destroyed while the data of a task referring to them was still alive
+	std::atomic<int> outlived_states {0};
+};
+DsEndlessProbe ds_endless_probe;
+
+struct DsEndlessLocal {
+	std::atomic<int> live_task_data {0};
+};
+
+struct DsEndlessTaskData {
+	DsEndlessLocal *local;
+};
+
+void DsDeleteEndlessLocal(void *ptr) {
+	auto local = static_cast<DsEndlessLocal *>(ptr);
+	if (local->live_task_data != 0) {
+		ds_endless_probe.outlived_states++;
+	}
+	delete local;
+}
+
+void DsEndlessInitLocalCb(duckdb_v2_data_source_init_local_info_handle info, duckdb_v2_context_handle,
+                          duckdb_v2_error_info_handle *err) {
+	duckdb_v2_opaque local = {new DsEndlessLocal(), DsDeleteEndlessLocal, nullptr};
+	duckdb_v2_data_source_init_local_set_local_state(info, &local, err);
+}
+
+void DsDeleteEndlessTaskData(void *ptr) {
+	auto data = static_cast<DsEndlessTaskData *>(ptr);
+	data->local->live_task_data--;
+	ds_endless_probe.live_task_data--;
+	delete data;
+}
+
+void DsEndlessTask(void *, duckdb_v2_error_info_handle *) {
+}
+
+void DsEndlessExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	void *local_ptr = nullptr;
+	if (duckdb_v2_data_source_exec_get_local_state(info, &local_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto local = static_cast<DsEndlessLocal *>(local_ptr);
+	for (int i = 0; i < 2; i++) {
+		local->live_task_data++;
+		ds_endless_probe.live_task_data++;
+		duckdb_v2_opaque opaque = {new DsEndlessTaskData {local}, DsDeleteEndlessTaskData, nullptr};
+		if (duckdb_v2_data_source_exec_add_task(info, DsEndlessTask, &opaque, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
 	}
 }
 
@@ -685,6 +804,79 @@ TEST_CASE("V2 data source: a result that does not fit the batch fails the query"
 		ExecSQL(fx.conn, std::string("SET debug_physical_table_scan_execution_strategy=") + strategy);
 		ds_misuse = DsMisuse::TASK_FAILS;
 		REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("the task failed"));
+	}
+}
+
+TEST_CASE("V2 data source: several tasks block one invocation", "[capi_v2][data_source]") {
+	EnvFixture fx;
+	DsRegisterExecSource(fx, "ds_tasks", DsTaskExecCb);
+	ds_tasks_per_block = 3;
+	for (auto strategy : {"DEFAULT", "SYNCHRONOUS"}) {
+		INFO(strategy);
+		ExecSQL(fx.conn, std::string("SET debug_physical_table_scan_execution_strategy=") + strategy);
+		ds_task_probe.tasks_run = 0;
+		ds_task_probe.task_data_destroyed = 0;
+		REQUIRE(DsQueryI64(fx.conn, "SELECT count(*) FROM ds_tasks(4)") == 4);
+		REQUIRE(ds_task_probe.tasks_run == 12);
+		REQUIRE(ds_task_probe.task_data_destroyed == 12);
+	}
+	ds_tasks_per_block = 1;
+}
+
+TEST_CASE("V2 data source: each invocation's result is checked against its own batch", "[capi_v2][data_source]") {
+	EnvFixture fx;
+	auto source = DsMakeSource(fx.factory);
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(source, DsTaskInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_claim_batch_callback(source, DsClaimTwiceCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(source, DsClaimedExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DsRegisterWithSource(fx, "ds_claimed", DsCountBindCb<1, 1>, source);
+	REQUIRE(duckdb_v2_data_source_destroy(&source) == DUCKDB_V2_ERROR_NONE);
+	DsRegisterExecSource(fx, "ds_misuse", DsMisuseExecCb);
+	ExecSQL(fx.conn, "SET threads=1");
+
+	// the empty batch declaring more output fails, though the next batch produces a row
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_claimed(1)"), Catch::Contains("has more output"));
+	// a task added by an invocation that then declares no result is not dropped
+	ds_misuse = DsMisuse::TASK_THEN_IMPLICIT;
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("not blocked"));
+}
+
+TEST_CASE("V2 data source: tasks of an abandoned scan do not outlive its states", "[capi_v2][data_source]") {
+	EnvFixture fx;
+	auto source = DsMakeSource(fx.factory);
+	REQUIRE(duckdb_v2_data_source_set_init_local_callback(source, DsEndlessInitLocalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(source, DsEndlessExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DsRegisterWithSource(fx, "ds_endless", DsCountBindCb<1, 1>, source);
+	REQUIRE(duckdb_v2_data_source_destroy(&source) == DUCKDB_V2_ERROR_NONE);
+
+	for (auto threads : {1, 4}) {
+		for (bool interrupt : {false, true}) {
+			INFO("threads " << threads << ", interrupt " << interrupt);
+			ExecSQL(fx.conn, "SET threads=" + std::to_string(threads));
+			ds_endless_probe.outlived_states = 0;
+			duckdb_v2_result_handle result = nullptr;
+			REQUIRE(Query(fx.conn, "SELECT * FROM ds_endless(1)", &result, nullptr) == DUCKDB_V2_ERROR_NONE);
+			for (int i = 0; i < 4; i++) {
+				duckdb_v2_data_chunk_handle chunk = nullptr;
+				DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+				REQUIRE(duckdb_v2_result_step(result, &chunk, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
+				REQUIRE(chunk == nullptr);
+			}
+			if (interrupt) {
+				REQUIRE(duckdb_v2_connection_interrupt(fx.conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+				DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+				while (status != DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
+					duckdb_v2_data_chunk_handle chunk = nullptr;
+					REQUIRE(duckdb_v2_result_step(result, &chunk, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
+					duckdb_v2_data_chunk_destroy(&chunk);
+				}
+			}
+			duckdb_v2_result_destroy(&result);
+			REQUIRE(ds_endless_probe.outlived_states == 0);
+			REQUIRE(ds_endless_probe.live_task_data == 0);
+		}
 	}
 }
 
