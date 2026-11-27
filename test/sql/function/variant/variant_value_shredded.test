@@ -54,6 +54,18 @@ SELECT variant_typeof(variant_value(v, 'a')) FROM objects WHERE id = 1;
 ----
 INT32
 
+# from 8 keys on the paths are looked up by key, in shredded and unshredded fields
+
+query I
+SELECT variant_value(v, ['z', 'b', 'missing', 'a', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'a', 'z']) FROM objects ORDER BY id;
+----
+[9, this is a long string, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 9]
+[NULL, NULL, NULL, 10, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10, NULL]
+[NULL, NULL, NULL, 20, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 20, NULL]
+[40, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 40]
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
+NULL
+
 query I
 SELECT variant_value(v, 'c') FROM objects ORDER BY id;
 ----

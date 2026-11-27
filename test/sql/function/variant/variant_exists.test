@@ -123,6 +123,15 @@ select variant_exists(j, ['a', 'b']) from (values ({'a': 1}::VARIANT), (NULL::VA
 [true, false]
 NULL
 
+# from 8 keys on the paths are looked up by key: a VARIANT null exists, a missing key does not
+
+query I
+select variant_exists(j, ['g', 'missing', 'a', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'g', '']) from (values ({'a': 1, 'g': NULL}::VARIANT), ([1]::VARIANT), (NULL::VARIANT)) t(j);
+----
+[true, false, true, false, false, false, false, false, false, false, false, false, true, true]
+[false, false, false, false, false, false, false, false, false, false, false, false, false, true]
+NULL
+
 # NULL path returns NULL
 
 query I

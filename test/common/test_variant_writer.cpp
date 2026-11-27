@@ -3,6 +3,7 @@
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_writer.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
 using namespace duckdb;
@@ -392,5 +393,96 @@ TEST_CASE("VectorWriter<VectorVariantType> writes nested VARIANT children", "[va
 				RequireList(input, inner[i], lists[i]);
 			}
 		}
+	}
+}
+
+TEST_CASE("VectorWriter<VectorVariantType> shares its state between the writers of a vector",
+          "[variant][variant_writer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	VariantSource source(con);
+	auto &input = source.Variants();
+	const auto count = source.Count();
+	const VectorIterator<VectorVariantType> variants(input);
+	// row 5 is an object with a key that does not fit in an inlined string_t
+	const idx_t object_row = 5;
+	const idx_t list_count = 50;
+	const idx_t list_length = 20;
+
+	// each list creates a new VARIANT writer, and a dynamic list creates a new one whenever it grows
+	Vector result(LogicalType::LIST(LogicalType::STRUCT({{"v", LogicalType::VARIANT()}})), list_count);
+	{
+		auto writer = FlatVector::Writer<VectorListType<VectorStructType<VectorVariantType>>>(result, list_count);
+		for (idx_t list_idx = 0; list_idx < list_count; list_idx++) {
+			auto list_writer = writer.WriteDynamicList();
+			for (idx_t element_idx = 0; element_idx < list_length; element_idx++) {
+				const auto row = element_idx % 2 ? object_row : (list_idx + element_idx) % count;
+				list_writer.WriteElement().WriteValue(
+				    [&](VectorWriter<VectorVariantType> &variant_writer) { WriteRow(variants, row, variant_writer); });
+			}
+		}
+	}
+	result.Verify();
+	idx_t object_count = 0;
+	for (idx_t list_idx = 0; list_idx < list_count; list_idx++) {
+		auto value = result.GetValue(list_idx);
+		auto &elements = ListValue::GetChildren(value);
+		REQUIRE(elements.size() == list_length);
+		for (idx_t element_idx = 0; element_idx < list_length; element_idx++) {
+			const auto row = element_idx % 2 ? object_row : (list_idx + element_idx) % count;
+			RequireSameValue(input.GetValue(row), StructValue::GetChildren(elements[element_idx])[0]);
+			object_count += row == object_row;
+		}
+	}
+
+	// every distinct key is copied into the keys vector once
+	auto &variant = StructVector::GetEntries(ListVector::GetChildMutable(result))[0];
+	auto &keys_entry = ListVector::GetChildMutable(VariantVector::GetKeys(variant));
+	const auto keys_data = FlatVector::GetData<string_t>(keys_entry);
+	const string_t long_key("a key that does not fit in an inlined string_t");
+	optional_ptr<const char> long_key_data;
+	idx_t long_key_count = 0;
+	for (idx_t i = 0; i < ListVector::GetListSize(VariantVector::GetKeys(variant)); i++) {
+		if (keys_data[i] != long_key) {
+			continue;
+		}
+		if (!long_key_data) {
+			long_key_data = keys_data[i].GetData();
+		}
+		REQUIRE(keys_data[i].GetData() == long_key_data.get());
+		long_key_count++;
+	}
+	REQUIRE(long_key_count == object_count);
+}
+
+TEST_CASE("VectorWriter<VectorVariantType> keeps the rows written before an exception", "[variant][variant_writer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	VariantSource source(con);
+	auto &input = source.Variants();
+	const auto count = source.Count();
+	const VectorIterator<VectorVariantType> variants(input);
+	const idx_t split = 3;
+
+	Vector result(LogicalType::VARIANT(), count);
+	try {
+		auto writer = FlatVector::Writer<VectorVariantType>(result, count);
+		for (idx_t row = 0; row < count; row++) {
+			if (row == split) {
+				throw std::runtime_error("stop writing");
+			}
+			WriteRow(variants, row, writer);
+		}
+	} catch (std::runtime_error &) {
+	}
+	{
+		auto writer = FlatVector::Writer<VectorVariantType>(result, count - split, split);
+		for (idx_t row = split; row < count; row++) {
+			WriteRow(variants, row, writer);
+		}
+	}
+	result.Verify();
+	for (idx_t row = 0; row < count; row++) {
+		RequireSameValue(input.GetValue(row), result.GetValue(row));
 	}
 }

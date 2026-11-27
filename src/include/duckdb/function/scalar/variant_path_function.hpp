@@ -51,7 +51,7 @@ struct VariantPathFunction {
 		const auto &path_type_id = input.data[1].GetType().id();
 
 		if (path_type_id == LogicalTypeId::LIST) {
-			ExecuteMany<RESULT_TYPE>(variant_vec, info.paths, result, count, write_fn);
+			ExecuteMany<RESULT_TYPE>(variant_vec, info, result, count, write_fn);
 			return;
 		}
 		D_ASSERT(path_type_id == LogicalTypeId::VARCHAR || path_type_id == LogicalTypeId::BIGINT);
@@ -80,10 +80,10 @@ private:
 
 	//! Executes a list of paths and writes LIST<RESULT_TYPE> per input row.
 	template <class RESULT_TYPE, class WRITE_FUNCTION>
-	static void ExecuteMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths, Vector &result,
-	                        const idx_t count, const WRITE_FUNCTION &write_fn) {
+	static void ExecuteMany(const Vector &input, const VariantPathBindData &info, Vector &result, const idx_t count,
+	                        const WRITE_FUNCTION &write_fn) {
 		const VectorIterator<VectorVariantType> variants(input);
-		const auto keys = GetSingleKeys(paths);
+		const auto &paths = info.paths;
 
 		result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 		auto result_writer = FlatVector::Writer<VectorListType<RESULT_TYPE>>(result, count);
@@ -96,7 +96,7 @@ private:
 				continue;
 			}
 
-			ResolvePaths(variants[row_idx], paths, keys, selected);
+			ResolvePaths(variants[row_idx], info, selected);
 
 			idx_t path_idx = 0;
 			for (auto &path_writer : result_writer.WriteList(paths.size())) {
@@ -106,11 +106,9 @@ private:
 		}
 	}
 
-	//! Returns the key of each path that is a single key lookup, and an empty optional for the other paths
-	static vector<optional<string_t>> GetSingleKeys(const vector<vector<VariantPathComponent>> &paths);
 	//! Resolves every path for 'root' into 'selected', the single key paths in one pass over the children of the object
-	static void ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
-	                         const vector<optional<string_t>> &keys, vector<optional<VariantNode>> &selected);
+	static void ResolvePaths(const VariantNode &root, const VariantPathBindData &info,
+	                         vector<optional<VariantNode>> &selected);
 
 	//! Returns the element at a 0-based index of an ARRAY, negative indexes count from the end. Returns nullopt if the
 	//! node is not an ARRAY or the index is out of range.

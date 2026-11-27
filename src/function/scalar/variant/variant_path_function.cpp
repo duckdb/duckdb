@@ -1,5 +1,4 @@
 #include "duckdb/function/scalar/variant_path_function.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -23,23 +22,12 @@ optional<VariantNode> VariantPathFunction::ResolveIndex(const VariantNode &node,
 	return elements[length - 1 - from_end];
 }
 
-vector<optional<string_t>> VariantPathFunction::GetSingleKeys(const vector<vector<VariantPathComponent>> &paths) {
-	vector<optional<string_t>> keys(paths.size());
-	for (idx_t path_idx = 0; path_idx < paths.size(); path_idx++) {
-		const auto &path = paths[path_idx];
-		if (path.size() == 1 && path[0].lookup_mode == VariantChildLookupMode::BY_KEY) {
-			keys[path_idx] = string_t(path[0].key.c_str(), NumericCast<uint32_t>(path[0].key.size()));
-		}
-	}
-	return keys;
-}
-
-void VariantPathFunction::ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
-                                       const vector<optional<string_t>> &keys,
+void VariantPathFunction::ResolvePaths(const VariantNode &root, const VariantPathBindData &info,
                                        vector<optional<VariantNode>> &selected) {
 	//! Copied into locals so the matching loop keeps them in registers
+	const auto &paths = info.paths;
 	const auto path_count = paths.size();
-	const auto key_data = keys.data();
+	const auto key_data = info.single_keys.data();
 	const auto selected_data = selected.data();
 
 	idx_t pending = 0;
@@ -52,6 +40,25 @@ void VariantPathFunction::ResolvePaths(const VariantNode &root, const vector<vec
 		}
 	}
 	if (pending == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != LogicalTypeId::STRUCT) {
+		return;
+	}
+	if (info.key_index) {
+		//! the first child with a key is selected for all the paths with that key
+		const auto &key_index = *info.key_index;
+		const auto positions = key_index.GetPositions();
+		for (const auto &entry : root.GetObjectChildren()) {
+			const auto match = key_index.Find(entry.key);
+			if (match.length == 0 || selected_data[positions[match.offset]]) {
+				continue;
+			}
+			for (idx_t i = 0; i < match.length; i++) {
+				selected_data[positions[match.offset + i]] = entry.value;
+			}
+			pending -= match.length;
+			if (pending == 0) {
+				break;
+			}
+		}
 		return;
 	}
 	for (const auto &entry : root.GetObjectChildren()) {

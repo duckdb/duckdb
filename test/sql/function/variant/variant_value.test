@@ -150,6 +150,17 @@ SELECT variant_value(v, ['a', 'a', 'b']) FROM variants WHERE id = 1;
 ----
 [42, 42, duck]
 
+# from 8 keys on the paths are looked up by key, with the same results for duplicate, missing and empty paths
+
+query I
+SELECT variant_value(v, ['h', 'missing', 'a', 'g', 'b', 'a', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10', '', 'c', 'h']) FROM variants ORDER BY id;
+----
+[2020-01-01, NULL, 42, NULL, duck, 42, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.14, 2020-01-01]
+[NULL, NULL, 1.5, NULL, NULL, 1.5, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, not an object, NULL, NULL]
+NULL
+
 query I
 SELECT [variant_typeof(x) for x in variant_value(v, ['h', 'b', 'a'])] FROM variants WHERE id = 1;
 ----

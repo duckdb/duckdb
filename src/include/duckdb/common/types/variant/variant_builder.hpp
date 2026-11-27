@@ -73,13 +73,6 @@ inline void VariantBuilderAppendBytes(string &blob, const_data_ptr_t data, idx_t
 	blob.append(const_char_ptr_cast(data), size);
 }
 
-inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, ArenaAllocator &keys_arena,
-                                               const string_t &key) {
-	auto unsorted_idx = dictionary.size();
-	//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
-	return dictionary.emplace(std::make_pair(key, unsorted_idx), keys_arena).first->second;
-}
-
 //! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
 inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
 	if (width > DecimalWidth<hugeint_t>::max) {
@@ -115,6 +108,8 @@ struct VariantBuilder {
 	OrderedOwningStringMap<uint32_t> &dictionary;
 	//! the result's keys arena, the dictionary's keys are allocated in
 	ArenaAllocator &keys_arena;
+	//! if set, receives the key of every new dictionary entry, at the index of the entry
+	optional_ptr<vector<string_t>> dictionary_keys;
 
 	static constexpr idx_t INIT_NESTING_DEPTH = 8;
 
@@ -122,6 +117,16 @@ struct VariantBuilder {
 	idx_t row_values = 0;
 	idx_t row_children = 0;
 	idx_t row_keys = 0;
+
+	//! Returns the (unsorted) dictionary index of 'key', adding it to the dictionary if it is new
+	uint32_t GetOrCreateKeyIndex(const string_t &key) {
+		//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
+		auto entry = dictionary.emplace(std::make_pair(key, static_cast<uint32_t>(dictionary.size())), keys_arena);
+		if (entry.second && dictionary_keys) {
+			dictionary_keys->push_back(entry.first->first);
+		}
+		return entry.first->second;
+	}
 
 	void BeginRow() {
 		row_values = type_ids.size();
@@ -168,7 +173,7 @@ struct VariantBuilder {
 		for (idx_t i = 0; i < n; i++) {
 			child_value_ids[block + i] = LocalValue();
 			child_key_ids[block + i] = LocalKey();
-			key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key_fn(i)));
+			key_slots.push_back(GetOrCreateKeyIndex(key_fn(i)));
 			emit_fn(i);
 		}
 	}
@@ -522,7 +527,7 @@ struct VariantBuilder {
 	void AssignObjectChild(idx_t block, idx_t i, string_t key) {
 		child_value_ids[block + i] = LocalValue();
 		child_key_ids[block + i] = LocalKey();
-		key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key));
+		key_slots.push_back(GetOrCreateKeyIndex(key));
 	}
 
 	void AssignArrayChild(idx_t block, idx_t i) {
