@@ -9,6 +9,10 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/shared_child_vector.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "test_helpers.hpp"
@@ -1744,6 +1748,164 @@ TEST_CASE("Combined collections account shared list storage once", "[column_data
 	REQUIRE(combined.Count() == 4);
 	REQUIRE(combined.AllocationSize() == separate_allocation - 3 * payload);
 	REQUIRE(combined.SizeInBytes() == separate_size - 3 * payload);
+}
+
+//! Evaluates list_concat over two LIST(BIGINT) columns, as a projection does
+class ListConcatEvaluator {
+public:
+	explicit ListConcatEvaluator(Connection &con, bool begin_transaction = true) : context(*con.context) {
+		if (begin_transaction) {
+			con.BeginTransaction();
+		}
+		const auto type = LogicalType::LIST(LogicalType::BIGINT);
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundReferenceExpression>(type, 0U));
+		children.push_back(make_uniq<BoundReferenceExpression>(type, 1U));
+		expression = FunctionBinder(context).BindScalarFunction(DEFAULT_SCHEMA, "list_concat", std::move(children));
+		executor = make_uniq<ExpressionExecutor>(context, *expression);
+	}
+
+	//! Concatenate the single list in 'prefix' with 'extras' into 'result' (a one-row chunk)
+	void Evaluate(DataChunk &prefix, const vector<int64_t> &extras, DataChunk &result) {
+		const auto type = LogicalType::LIST(LogicalType::BIGINT);
+		DataChunk input;
+		input.Initialize(Allocator::DefaultAllocator(), {type, type});
+		input.data[0].Reference(prefix.data[0]);
+		vector<Value> extra_values;
+		for (auto extra : extras) {
+			extra_values.push_back(Value::BIGINT(extra));
+		}
+		input.data[1].Reference(Value::LIST(LogicalType::BIGINT, std::move(extra_values)), count_t(1));
+		input.SetCardinality(1);
+		result.Initialize(Allocator::DefaultAllocator(), {type});
+		executor->ExecuteExpression(input, result.data[0]);
+		result.SetCardinality(1);
+	}
+
+private:
+	ClientContext &context;
+	unique_ptr<Expression> expression;
+	unique_ptr<ExpressionExecutor> executor;
+};
+
+// Operators never write into a list_concat result after a sink referenced its storage, so the write paths are only
+// reachable from C++.
+TEST_CASE("Writes to a sunk list_concat result never reach the storage", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	Connection con(db);
+	// list_concat references storage of the buffer manager its context uses
+	auto &buffer_manager = con.context->GetContext().GetBufferManager();
+	ListConcatEvaluator concat(con);
+	auto source = MakeLargeListCollection(buffer_manager, 1, 1, 3000);
+	DataChunk view;
+	ColumnDataScanState view_scan;
+	ScanFirstChunk(*source, view_scan, view);
+
+	for (idx_t write = 0; write < 2; write++) {
+		DataChunk result;
+		concat.Evaluate(view, {7}, result);
+		auto &result_child = ListVector::GetChildMutable(result.data[0]);
+		REQUIRE(result_child.GetBufferRef()->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
+		ColumnDataCollection sink(buffer_manager, source->Types());
+		sink.EnableSharedListChildren();
+		AppendChunk(sink, result);
+		const auto sunk = ReadFirstCopied(sink);
+		REQUIRE(ListValue::GetChildren(sunk).size() == 3001);
+		REQUIRE(ListValue::GetChildren(sunk)[3000] == Value::BIGINT(7));
+		if (write == 0) {
+			result_child.SetValue(0, Value::BIGINT(99));
+		} else {
+			Vector slice(result_child, 1, 11);
+			FlatVector::GetDataMutable<int64_t>(slice)[0] = 99;
+		}
+		REQUIRE(ReadFirstCopied(sink) == sunk);
+	}
+}
+
+// Vector allocation sizes are only observable from C++.
+TEST_CASE("A list_concat result reports the storage it created", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DuckDB db(":memory:");
+	Connection con(db);
+	// list_concat references storage of the buffer manager its context uses
+	auto &buffer_manager = con.context->GetContext().GetBufferManager();
+	ListConcatEvaluator concat(con);
+	const idx_t length = 3000;
+	auto source = MakeLargeListCollection(buffer_manager, 1, 1, length);
+	DataChunk view;
+	ColumnDataScanState view_scan;
+	ScanFirstChunk(*source, view_scan, view);
+	const auto payload = length * sizeof(int64_t);
+	// the scan view borrows collection storage
+	REQUIRE(ListVector::GetChild(view.data[0]).GetAllocationSize() < payload);
+
+	// the collection storage is exactly full, so the concat copies into storage its result creates and accounts
+	auto grown = make_uniq<DataChunk>();
+	concat.Evaluate(view, {7}, *grown);
+	REQUIRE(ListVector::GetChild(grown->data[0]).GetAllocationSize() >= payload);
+
+	// extending the grown result claims room in that storage, the extension borrows it. A separate evaluator, so no
+	// intermediate state keeps the grown result alive once it is destroyed
+	DataChunk extended;
+	{
+		ListConcatEvaluator extend(con, false);
+		extend.Evaluate(*grown, {8}, extended);
+	}
+	auto &extended_child = ListVector::GetChild(extended.data[0]);
+	REQUIRE(FlatVector::GetData(extended_child) == FlatVector::GetData(ListVector::GetChild(grown->data[0])));
+	REQUIRE(extended_child.GetAllocationSize() < payload);
+	// like a slice of a StandardVectorBuffer, the extension keeps borrowing once the creator is gone
+	grown.reset();
+	REQUIRE(extended_child.GetAllocationSize() < payload);
+	REQUIRE(ListValue::GetChildren(extended.GetValue(0, 0)).size() == length + 2);
+}
+
+// SQL keeps at most a few list_concat-created storages alive at once (older versions are released as the recursion
+// advances, other collections copy the lists), so only C++ can hold more of them than the memory limit allows.
+TEST_CASE("Storage created by list_concat spills", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		return;
+	}
+	DBConfig config;
+	config.SetOptionByName("memory_limit", Value("64MB"));
+	config.SetOptionByName("temp_directory", Value(TestCreatePath("concat_list_spill")));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	// list_concat references storage of the buffer manager its context uses
+	auto &buffer_manager = con.context->GetContext().GetBufferManager();
+	ListConcatEvaluator concat(con);
+	// each concat creates 16 MiB of storage (the next power of two above 1M + 1 BIGINT entries), 16 exceed the limit
+	const idx_t length = 1024 * 1024;
+	const idx_t rounds = 16;
+	// one collection per storage, so reading one back pins only its own storage
+	vector<unique_ptr<ColumnDataCollection>> sinks;
+	for (idx_t c = 0; c < rounds; c++) {
+		auto source = MakeLargeListCollection(buffer_manager, 1, 1, length);
+		DataChunk view;
+		ColumnDataScanState view_scan;
+		ScanFirstChunk(*source, view_scan, view);
+		DataChunk result;
+		concat.Evaluate(view, {-int64_t(c)}, result);
+		sinks.push_back(make_uniq<ColumnDataCollection>(buffer_manager, source->Types()));
+		sinks.back()->EnableSharedListChildren();
+		AppendChunk(*sinks.back(), result);
+	}
+	for (idx_t c = 0; c < rounds; c++) {
+		DataChunk chunk;
+		ColumnDataScanState scan_state;
+		ScanFirstChunk(*sinks[c], scan_state, chunk);
+		auto entries = FlatVector::GetData<list_entry_t>(chunk.data[0]);
+		REQUIRE(entries[0].length == length + 1);
+		auto child = FlatVector::GetData<int64_t>(ListVector::GetChild(chunk.data[0]));
+		REQUIRE(child[entries[0].offset] == 1);
+		REQUIRE(child[entries[0].offset + length - 1] == int64_t(length));
+		REQUIRE(child[entries[0].offset + length] == -int64_t(c));
+	}
 }
 
 } // namespace duckdb

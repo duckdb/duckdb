@@ -1,0 +1,27 @@
+# name: test/sql/cte/recursive_cte_list_child_over_4g.test_slow
+# description: A list child of more than 2^32 entries grown by list_concat is stored as a chain of vector entries
+# group: [cte]
+
+require 64bit
+
+# the final list holds 6 GiB of TINYINT, the working tables and concat results about 22 GiB at peak
+require ram 40GB
+
+statement ok
+SET threads=8;
+
+statement ok
+SET max_execution_time=600000;
+
+# values are checked up to entry 2^32, the last entry a 32-bit offset reaches: entries beyond it read wrong values on
+# main as well (acc[4294967297] returns 0 instead of 96, acc[-1] 3 instead of 99), independent of this storage
+query IIIIII
+WITH RECURSIVE r(i, acc) AS (
+	SELECT 0::BIGINT, list_transform(range(3000), lambda x: (x % 100)::TINYINT)
+	UNION ALL
+	SELECT i + 1, acc || acc FROM r WHERE i < 21
+)
+SELECT i, len(acc), acc[1], acc[3000], acc[3145728001], acc[4294967296] FROM r ORDER BY i DESC LIMIT 2;
+----
+21	6291456000	0	99	0	95
+20	3145728000	0	99	NULL	NULL

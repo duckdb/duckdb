@@ -1,0 +1,107 @@
+# name: test/sql/cte/recursive_cte_list_payload_shapes.test
+# description: Large list payloads of recursive CTEs in shapes around the shared list children, results equal to main
+# group: [cte]
+
+# bound a regression that stops a recursion from making progress
+statement ok
+SET max_execution_time=60000;
+
+statement ok
+SET threads=4;
+
+# several rows per chunk grown in parallel
+query IIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, k, range(k, k + 3000)::BIGINT[] FROM range(8) t(k)
+	UNION ALL
+	SELECT i + 1, k, list_append(acc, i) FROM r WHERE i < 20
+)
+SELECT count(*), sum(len(acc)), sum(list_sum(acc)), sum(acc[-1]) FROM r;
+----
+168	505680	757522640	25540
+
+# USING KEY recursion does not share, lists go through its aggregate state
+query IIIII
+WITH RECURSIVE r(k, i, acc) USING KEY (k) AS (
+	SELECT 1, 0, range(3000)::BIGINT[]
+	UNION
+	SELECT k, i + 1, list_append(acc, i) FROM r WHERE i < 30
+)
+SELECT k, i, len(acc), list_sum(acc), acc[-1] FROM r;
+----
+1	30	3030	4498935	29
+
+# a materialized CTE consuming the recursive output copies the lists
+query IIII
+WITH m AS MATERIALIZED (
+	WITH RECURSIVE r(i, acc) AS (
+		SELECT 0, range(3000)::BIGINT[]
+		UNION ALL
+		SELECT i + 1, list_append(acc, i) FROM r WHERE i < 30
+	)
+	SELECT * FROM r
+)
+SELECT count(*), sum(len(acc)), sum(list_sum(acc)), max(acc[-1]) FROM m;
+----
+31	93465	139457995	2999
+
+# a nested list payload, the grandchild is the large list
+query IIIII
+WITH RECURSIVE r(i, acc) AS (
+	SELECT 0, [range(3000)::INT[], range(5)::INT[]]
+	UNION ALL
+	SELECT i + 1, [list_append(acc[1], i::INT), acc[2]] FROM r WHERE i < 20
+)
+SELECT count(*), sum(len(acc[1])), sum(list_sum(acc[1])), sum(list_sum(acc[2])), max(acc[1][-1]) FROM r;
+----
+21	63210	94469830	210	2999
+
+# a list inside a struct
+query IIII
+WITH RECURSIVE r(i, s) AS (
+	SELECT 0, {'a': range(3000)::INT[]}
+	UNION ALL
+	SELECT i + 1, {'a': list_append(s.a, i::INT)} FROM r WHERE i < 20
+)
+SELECT count(*), sum(len(s.a)), sum(list_sum(s.a)), max(s.a[-1]) FROM r;
+----
+21	63210	94469830	2999
+
+statement ok
+SET threads=1;
+
+# lists of 2047, 3000, 1000 and 3000 entries appended one by one into the same chunk: a large child after a partially
+# filled entry goes to the chain, after a full one it may be shared
+query IIIIII
+WITH RECURSIVE r(i, k, acc) AS (
+	SELECT 0, 0, range(10)::BIGINT[]
+	UNION ALL
+	(SELECT 1, 1, range(2047)::BIGINT[] FROM r WHERE i = 0
+	 UNION ALL
+	 SELECT 1, 2, range(3000)::BIGINT[] FROM r WHERE i = 0
+	 UNION ALL
+	 SELECT 1, 3, range(1000)::BIGINT[] FROM r WHERE i = 0
+	 UNION ALL
+	 SELECT 1, 4, range(3000)::BIGINT[] FROM r WHERE i = 0
+	 UNION ALL
+	 SELECT i + 1, k, list_append(acc, k * 10) FROM r WHERE i BETWEEN 1 AND 3)
+)
+SELECT i, k, len(acc), acc[1], acc[-1], list_sum(acc) FROM r ORDER BY i, k;
+----
+0	0	10	0	9	45
+1	1	2047	0	2046	2094081
+1	2	3000	0	2999	4498500
+1	3	1000	0	999	499500
+1	4	3000	0	2999	4498500
+2	1	2048	0	10	2094091
+2	2	3001	0	20	4498520
+2	3	1001	0	30	499530
+2	4	3001	0	40	4498540
+3	1	2049	0	10	2094101
+3	2	3002	0	20	4498540
+3	3	1002	0	30	499560
+3	4	3002	0	40	4498580
+4	1	2050	0	10	2094111
+4	2	3003	0	20	4498560
+4	3	1003	0	30	499590
+4	4	3003	0	40	4498620
