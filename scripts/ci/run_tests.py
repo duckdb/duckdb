@@ -1930,6 +1930,7 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
             os.fspath(coverage_css_file),
             "--quiet",
             "--hierarchical",
+            "--no-sort",
             "--no-function-coverage",
             "--filter",
             "region,brace",
