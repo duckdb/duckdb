@@ -264,6 +264,143 @@ function(capi_entrypoint_symbol NAME ABI_TYPE CAPI_VERSION OUT_VAR)
     endif()
 endfunction()
 
+function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTENSION_VERSION CAPI_VERSION PARAMETERS)
+    set(TARGET_NAME ${NAME}_loadable_extension)
+    set(PREBUILT_EXTENSION FALSE)
+    if(TARGET ${NAME}_extension)
+        get_property(PREBUILT_EXTENSION TARGET ${NAME}_extension PROPERTY DUCKDB_PREBUILT_EXTENSION)
+    endif()
+    if (LOCAL_EXTENSION_REPO AND NOT PREBUILT_EXTENSION)
+        add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
+    endif()
+    # all parameters after output_directory
+    set(FILES "${ARGV}")
+    # remove name, abi_type, output_directory, extension_version, capi_version, parameters
+    list(REMOVE_AT FILES 0 1 2 3 4 5)
+
+    # parse parameters
+    string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
+
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+    if(EMSCRIPTEN)
+        add_library(${TARGET_NAME} STATIC ${FILES})
+    else()
+        add_library(${TARGET_NAME} SHARED ${FILES})
+    endif()
+    # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
+    set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
+    set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
+    set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+    if(${IGNORE_WARNINGS} GREATER -1)
+        disable_target_warnings(${TARGET_NAME})
+    endif()
+    # loadable extension binaries can be built two ways:
+    # 1. EXTENSION_STATIC_BUILD=1
+    #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
+    #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the loadable
+    #    extension binaries
+    # 2. EXTENSION_STATIC_BUILD=0
+    #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
+    #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
+    #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
+    if(WASM_LOADABLE_EXTENSIONS)
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
+    elseif(${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
+        # TODO strip all symbols except the capi init
+    elseif (EXTENSION_STATIC_BUILD)
+        if (WIN32)
+            target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+        elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+            if (APPLE)
+                set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+                # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+                set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+            elseif (ZOS)
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+            else()
+                # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+                set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+                if(DUCKDB_LOADABLE_FROM_ARCHIVE)
+                    # The entry point comes from an archive too, so --exclude-libs,ALL would hide it; export it alone
+                    # through a version script instead.
+                    set(EXPORTS_MAP "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_loadable_exports.map")
+                    file(WRITE "${EXPORTS_MAP}" "{ global: ${NAME}_duckdb_cpp_init; local: *; };\n")
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections)
+                    target_link_options(${TARGET_NAME} PRIVATE "SHELL:-Wl,--version-script=\"${EXPORTS_MAP}\"")
+                    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_DEPENDS "${EXPORTS_MAP}")
+                else()
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                endif()
+            endif()
+        else()
+            message(FATAL_ERROR "EXTENSION static build is only intended for Linux and Windows on MVSC")
+        endif()
+    else()
+        if (WIN32)
+            target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+        elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+            if (APPLE)
+                set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+            endif()
+        endif()
+    endif()
+    if(MSVC)
+        target_compile_options(${TARGET_NAME} PRIVATE /UDUCKDB_BUILD_LIBRARY)
+    else()
+        target_compile_options(${TARGET_NAME} PRIVATE -UDUCKDB_BUILD_LIBRARY)
+    endif()
+    set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
+            ".duckdb_extension")
+
+    if(MSVC)
+        set_target_properties(
+                ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+                "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+        set_target_properties(
+                ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
+                "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+    endif()
+
+    if(EMSCRIPTEN)
+        # Compile the library into the actual wasm file
+        string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+        set(TO_BE_LINKED ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} )
+        separate_arguments(TO_BE_LINKED)
+        if (${ABI_TYPE} STREQUAL "CPP")
+            set(EXPORTED_FUNCTIONS "_${NAME}_duckdb_cpp_init")
+        else()
+            capi_entrypoint_symbol(${NAME} ${ABI_TYPE} "${CAPI_VERSION}" CAPI_ENTRYPOINT)
+            set(EXPORTED_FUNCTIONS "_${CAPI_ENTRYPOINT}")
+        endif()
+        add_custom_command(
+                TARGET ${TARGET_NAME}
+                POST_BUILD
+                COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS}" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
+        )
+    endif()
+
+    if (${ABI_TYPE} STREQUAL "CPP")
+        set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
+        set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+        set(FOOTER_VERSION_VALUE ${CAPI_VERSION})
+    endif()
+
+    add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND
+            ${CMAKE_COMMAND} -DABI_TYPE=${ABI_TYPE} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}>${EXTENSION_POSTFIX} -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DVERSION_FIELD="${FOOTER_VERSION_VALUE}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
+    )
+    add_dependencies(${TARGET_NAME} duckdb_platform)
+    if (NOT ${EXTENSION_CONFIG_BUILD} AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY AND NOT PREBUILT_EXTENSION)
+        add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
+    endif()
+endfunction()
+
 function(build_loadable_extension NAME PARAMETERS)
     # all parameters after name
     set(FILES "${ARGV}")
