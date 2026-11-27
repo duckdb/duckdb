@@ -1,0 +1,107 @@
+# name: test/optimizer/filter_pullup_hidden_expressions.test
+# description: Derive constraints on expressions of hidden equality keys without adding columns
+# group: [optimizer]
+
+statement ok
+CREATE TABLE source_keys AS
+SELECT i::INTEGER AS k, i::INTEGER AS hidden FROM range(256) t(i);
+
+statement ok
+CREATE TABLE target_keys AS SELECT (i % 256)::INTEGER AS k FROM range(25600) t(i);
+
+# The expression's hidden input is equal to the projected key.
+query I
+SELECT count(*)
+FROM (SELECT k FROM source_keys WHERE k = hidden AND bit_count(hidden) = 1) p
+JOIN target_keys t USING (k);
+----
+800
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (SELECT k FROM source_keys WHERE k = hidden AND bit_count(hidden) = 1) p
+JOIN target_keys t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Repeated hidden references are substituted together, and output bindings stay unchanged.
+query III rowsort
+SELECT p.again, p.k, t.k
+FROM (
+	SELECT k AS again, k FROM source_keys
+	WHERE k = hidden AND (bit_count(hidden) = 1 OR bit_count(hidden) = 0)
+) p JOIN (VALUES (0), (1), (2), (3), (4), (NULL)) t(k) ON p.k = t.k;
+----
+0	0	0
+1	1	1
+2	2	2
+4	4	4
+
+statement ok
+CREATE TABLE string_keys(k VARCHAR, hidden VARCHAR);
+
+statement ok
+INSERT INTO string_keys VALUES ('a', 'a'), ('bb', 'bb'), ('bb', 'bb'), ('ccc', 'x'), (NULL, NULL);
+
+query T rowsort
+SELECT p.k
+FROM (SELECT k FROM string_keys WHERE k = hidden AND length(hidden) = 2) p
+JOIN (VALUES ('a'), ('bb'), ('bb'), ('ccc'), (NULL)) t(k) USING (k);
+----
+bb
+bb
+bb
+bb
+
+# Prefer a visible column even when a computed member enters the equality class first.
+statement ok
+CREATE TABLE mixed_keys AS
+SELECT repeat('x', i::INTEGER) AS s, i AS k, i AS hidden FROM range(1, 17) t(i);
+
+statement ok
+CREATE TABLE mixed_targets AS SELECT i % 32 AS k FROM range(3200) t(i);
+
+query I
+SELECT count(*)
+FROM (
+	SELECT s, k FROM mixed_keys
+	WHERE hidden = length(s) AND hidden = k AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+500
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT s, k FROM mixed_keys
+	WHERE hidden = length(s) AND hidden = k AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Reordering the equalities must not affect inference through the visible column.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT s, k FROM mixed_keys
+	WHERE hidden = k AND hidden = length(s) AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Equal floating-point keys need not have identical representations.
+statement ok
+CREATE TABLE float_keys(k DOUBLE, hidden DOUBLE);
+
+statement ok
+INSERT INTO float_keys VALUES ('0', '-0'), ('-0', '0'), (NULL, NULL);
+
+query I
+SELECT count(*)
+FROM (SELECT k FROM float_keys WHERE k = hidden AND hidden::VARCHAR = '-0.0') p
+JOIN (VALUES ('0'::DOUBLE), ('-0'::DOUBLE)) t(k) USING (k);
+----
+2

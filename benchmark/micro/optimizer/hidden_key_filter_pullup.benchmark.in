@@ -1,0 +1,28 @@
+name ${BENCHMARK_NAME}
+group micro
+subgroup optimizer
+storage persistent
+
+load
+CREATE TABLE dimensions AS
+SELECT i AS id, lower(raw_key) AS k, raw_key, lower(raw_key) AS hidden
+FROM (
+    SELECT i, lpad(i::VARCHAR, 8, '0') ||
+           repeat('aB', CASE WHEN i % 1024 = 0 THEN 72 ELSE 8 + (i % 16) * 4 END) AS raw_key
+    FROM range(32768) t(i)
+);
+CREATE TABLE facts AS
+SELECT i AS id, d.k
+FROM range(4194304) t(i)
+JOIN dimensions d ON d.id = (i * 8191) % 32768
+ORDER BY i;
+CHECKPOINT;
+
+run
+SELECT count(*) AS n, sum(f.id) AS checksum
+FROM (SELECT ${PROJECTED_KEY} FROM dimensions
+      WHERE ${INPUT_KEY} = hidden AND length(hidden) ${PREDICATE}) p
+JOIN facts f USING (k);
+
+result II
+${EXPECTED_COUNT}	${EXPECTED_SUM}

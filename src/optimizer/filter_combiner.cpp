@@ -292,18 +292,31 @@ void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vec
 	}
 	unordered_map<idx_t, reference<const Expression>> representatives;
 	for (auto &entry : groups) {
+		optional_ptr<const Expression> representative;
 		for (auto &member : entry.second) {
 			if (!can_project(member)) {
 				continue;
 			}
-			auto representative = representatives.find(entry.first);
-			if (representative == representatives.end()) {
-				representatives.emplace(entry.first, member.get());
-			} else {
-				// A star connects the visible members without generating pairs involving hidden keys.
-				callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
-				                                           representative->second.get().Copy(), member.get().Copy()));
+			if (!representative) {
+				representative = member.get();
 			}
+			// Prefer a column so substituting hidden inputs does not grow expressions.
+			if (member.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				representative = member.get();
+				break;
+			}
+		}
+		if (!representative) {
+			continue;
+		}
+		representatives.emplace(entry.first, *representative);
+		for (auto &member : entry.second) {
+			if (representative->Equals(member) || !can_project(member)) {
+				continue;
+			}
+			// A star connects the visible members without generating pairs involving hidden keys.
+			callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, representative->Copy(),
+			                                           member.get().Copy()));
 		}
 	}
 	for (auto &filter : filters) {
@@ -311,13 +324,42 @@ void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vec
 		if (!key || !IsKeyConstraint(*filter, {*key})) {
 			continue;
 		}
-		auto entry = group_ids.find(*key);
+		auto source = key;
+		auto entry = group_ids.find(*source);
+		if (entry == group_ids.end() && !can_project(*key)) {
+			optional_ptr<const BoundColumnRefExpression> hidden;
+			bool multiple_hidden = false;
+			auto find_hidden = [&](const BoundColumnRefExpression &col) {
+				if (can_project(col)) {
+					return;
+				}
+				if (hidden && !hidden->Equals(col)) {
+					multiple_hidden = true;
+				}
+				hidden = col;
+			};
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*key, find_hidden);
+			// Substitute one hidden input without forming combinations of independent keys.
+			if (!hidden || multiple_hidden || !hidden->GetReturnType().EqualValuesAreIdentical()) {
+				continue;
+			}
+			source = *hidden;
+			entry = group_ids.find(*source);
+		}
 		if (entry == group_ids.end()) {
 			continue;
 		}
 		auto representative = representatives.find(entry->second);
-		if (representative != representatives.end() && !key->Equals(representative->second)) {
-			callback(ExpressionIterator::ReplaceExpression(*filter, *key, representative->second));
+		if (representative != representatives.end() && !source->Equals(representative->second)) {
+			// Repeated substitutions must not grow computed expression trees through nested projections.
+			if (source != key &&
+			    representative->second.get().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto projected = ExpressionIterator::ReplaceExpression(*filter, *source, representative->second);
+			if (can_project(*GetConstraintKey(*projected))) {
+				callback(std::move(projected));
+			}
 		}
 	}
 }
