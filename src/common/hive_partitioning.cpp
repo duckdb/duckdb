@@ -565,11 +565,9 @@ void HivePartitionedColumnData::AddNewPartition(HivePartitionKey key, idx_t part
 
 	if (state.partition_append_states.size() <= partition_id) {
 		state.partition_append_states.resize(partition_id + 1);
-		state.partition_buffers.resize(partition_id + 1);
 		partitions.resize(partition_id + 1);
 	}
 	state.partition_append_states[partition_id] = make_uniq<ColumnDataAppendState>();
-	state.partition_buffers[partition_id] = CreatePartitionBuffer();
 	partitions[partition_id] = CreatePartitionCollection(0);
 	partitions[partition_id]->InitializeAppend(*state.partition_append_states[partition_id]);
 }

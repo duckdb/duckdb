@@ -21,6 +21,8 @@ class ColumnDataAllocator;
 class ColumnDataCollection;
 class ColumnDataCollectionSegment;
 class ColumnDataRowCollection;
+struct ColumnDataSelectionTarget;
+struct ColumnDataChildSelections;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
@@ -94,6 +96,14 @@ public:
 	DUCKDB_API void InitializeAppend(ColumnDataAppendState &state);
 	//! Append a DataChunk to this ColumnDataCollection using the specified append state
 	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &new_chunk);
+	//! Append the `count` rows of `input` that `sel` lists, in that order.  Reads the collection's leading columns of
+	//! `input`, which may have more.
+	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &input, const SelectionVector &sel, idx_t count);
+	//! Append the rows of `input` that `sel` lists to several collections of the same types, each target the rows at
+	//! its positions of `sel`.  Prepares `input` once for all targets.  Reads the collections' leading columns of
+	//! `input`, which may have more.
+	DUCKDB_API static void AppendBatch(DataChunk &input, const SelectionVector &sel, idx_t sel_count,
+	                                   const vector<ColumnDataSelectionTarget> &targets);
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
@@ -208,6 +218,13 @@ private:
 	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
+	//! Builds the formats of the first `column_count` columns of `input`, reading their rows through `sel`
+	static void PrepareSelectedFormats(DataChunk &input, idx_t column_count, const SelectionVector &sel,
+	                                   idx_t sel_count, vector<UnifiedVectorFormat> &formats);
+	//! Appends `count` rows of `input` through `formats`, from position `offset`.  With `keep_compact`, a constant or
+	//! dictionary input may stay compact, as Append(state, chunk) keeps it.
+	void AppendRows(ColumnDataAppendState &state, const vector<UnifiedVectorFormat> &formats, DataChunk &input,
+	                idx_t offset, idx_t count, bool keep_compact, ColumnDataChildSelections &child_selections);
 
 private:
 	//! The Column Data Allocator
@@ -224,6 +241,15 @@ private:
 	bool finished_append;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
+};
+
+//! One collection's share of ColumnDataCollection::AppendBatch
+struct ColumnDataSelectionTarget {
+	ColumnDataCollection &collection;
+	ColumnDataAppendState &state;
+	//! The positions [begin, end) of the selection that this collection receives
+	idx_t begin;
+	idx_t end;
 };
 
 //! Walks the chunks of a ColumnDataCollection in storage order: exposes the position, the row count and the

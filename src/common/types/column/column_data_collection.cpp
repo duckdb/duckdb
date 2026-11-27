@@ -39,7 +39,7 @@ struct ColumnDataMetaData {
 	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataMetaData &parent,
 	                   VectorDataIndex vector_data_index)
 	    : copy_function(copy_function), segment(parent.segment), state(parent.state), chunk_data(parent.chunk_data),
-	      vector_data_index(vector_data_index) {
+	      vector_data_index(vector_data_index), child_selections(parent.child_selections), depth(parent.depth + 1) {
 	}
 
 	ColumnDataCopyFunction &copy_function;
@@ -47,12 +47,53 @@ struct ColumnDataMetaData {
 	ColumnDataAppendState &state;
 	ChunkMetaData &chunk_data;
 	VectorDataIndex vector_data_index;
+	//! Where the copies of nested columns build their children's selections
+	optional_ptr<ColumnDataChildSelections> child_selections;
+	//! The nesting depth of the column, 0 for a top-level column
+	idx_t depth = 0;
 	idx_t child_list_size = DConstants::INVALID_INDEX;
 
 	VectorMetaData &GetVectorMetaData() {
 		return segment.GetVectorData(vector_data_index);
 	}
 };
+
+//! Selections and validity masks over the children of nested columns, one per nesting depth, reused by the appends
+//! of one call
+struct ColumnDataChildSelections {
+	vector<unique_ptr<SelectionVector>> by_depth;
+	vector<unique_ptr<ValidityMask>> masks_by_depth;
+};
+
+//! A selection of at least `count` entries over the children of the column that `meta_data` copies.  There is one
+//! per nesting depth, so a child's copy does not overwrite the selection its parent reads through.
+static SelectionVector &ChildSelection(ColumnDataMetaData &meta_data, idx_t count) {
+	D_ASSERT(meta_data.child_selections);
+	auto &selections = meta_data.child_selections->by_depth;
+	while (selections.size() <= meta_data.depth) {
+		selections.push_back(make_uniq<SelectionVector>());
+	}
+	auto &sel = *selections[meta_data.depth];
+	if (sel.Capacity() < count) {
+		sel.Initialize(NextPowerOfTwo(count));
+	}
+	return sel;
+}
+
+//! An all-valid mask of at least `capacity` rows for the children of the column that `meta_data` copies, one per
+//! nesting depth.  The caller sets valid again every row it sets invalid.
+static ValidityMask &ChildValidity(ColumnDataMetaData &meta_data, idx_t capacity) {
+	D_ASSERT(meta_data.child_selections);
+	auto &masks = meta_data.child_selections->masks_by_depth;
+	while (masks.size() <= meta_data.depth) {
+		masks.push_back(make_uniq<ValidityMask>());
+	}
+	auto &mask = *masks[meta_data.depth];
+	if (!mask.IsMaskSet() || mask.Capacity() < capacity) {
+		mask.Initialize(capacity);
+	}
+	return mask;
+}
 
 //! Explicitly initialized without types
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
@@ -848,31 +889,33 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 //! Block capacities are 32-bit
 static constexpr idx_t MAXIMUM_LARGE_LIST_CHILD_SIZE = NumericLimits<uint32_t>::Maximum();
 
-//! Store a list child longer than a vector, appended into an empty child chain of a buffer-managed collection, as a
-//! single LARGE_FLAT entry, so scans read it without copying. Returns false if the child must be appended as a chain of
-//! vector-sized entries
-static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
-                                    const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count) {
-	auto &segment = meta_data.segment;
-	if (segment.allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+//! Whether 'length' list elements of 'child_type' appended into the list's child chain are stored as a single
+//! LARGE_FLAT entry, so scans read them without copying: a chain that is still empty, of a buffer-managed collection,
+//! longer than a vector, of a constant-size type
+static bool StoresLargeListChild(ColumnDataMetaData &meta_data, const LogicalType &child_type, idx_t length) {
+	if (meta_data.segment.allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory blocks round their capacity up to a power of two, a child-sized block could double its footprint
 		return false;
 	}
-	const auto length = info.child_list_info.length;
 	if (meta_data.GetVectorMetaData().child_index.IsValid() || length <= STANDARD_VECTOR_SIZE) {
 		return false;
 	}
-	auto &child_type = child_vector.GetType();
 	const auto internal_type = child_type.InternalType();
 	if (!TypeIsConstantSize(internal_type)) {
 		return false;
 	}
 	const auto type_size = GetTypeIdSize(internal_type);
-	if (ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) >
-	    MAXIMUM_LARGE_LIST_CHILD_SIZE) {
-		return false;
-	}
+	return ColumnDataCollectionSegment::GetDataSize(type_size, length) + ValidityMask::ValidityMaskSize(length) <=
+	       MAXIMUM_LARGE_LIST_CHILD_SIZE;
+}
 
+//! Stores the elements at positions [source_offset, source_offset + length) of 'sel' over 'child_vector' as the list's
+//! LARGE_FLAT child entry (StoresLargeListChild)
+static void AppendLargeListChild(ColumnDataMetaData &meta_data, Vector &child_vector, const SelectionVector &sel,
+                                 idx_t source_offset, idx_t length) {
+	auto &segment = meta_data.segment;
+	auto &child_type = child_vector.GetType();
+	const auto type_size = GetTypeIdSize(child_type.InternalType());
 	auto &chunk_state = meta_data.state.current_chunk_state;
 	auto child_index = segment.AllocateLargeVector(type_size, length, meta_data.chunk_data, &chunk_state);
 	meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
@@ -880,15 +923,7 @@ static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &sourc
 	auto base_ptr = segment.allocator->GetDataPointer(chunk_state, child_vdata.block_id, child_vdata.offset);
 
 	Vector target(child_type, base_ptr, length);
-	if (info.needs_slicing) {
-		SelectionVector sel(length);
-		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
-		VectorOperations::Copy(child_vector, target, sel, length, 0, 0, length);
-	} else {
-		const auto child_offset = info.child_list_info.offset;
-		VectorOperations::Copy(child_vector, target, *FlatVector::IncrementalSelectionVector(), child_offset + length,
-		                       child_offset, 0, length);
-	}
+	VectorOperations::Copy(child_vector, target, sel, source_offset + length, source_offset, 0, length);
 	auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, type_size, length);
 	auto &target_validity = FlatVector::Validity(target);
 	if (target_validity.CanHaveNull()) {
@@ -896,7 +931,59 @@ static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &sourc
 	} else {
 		ValidityMask(validity_data, length).SetAllValid(length);
 	}
+}
+
+//! Stores the consecutive list children of rows [offset, offset + copy_count) as a LARGE_FLAT entry where
+//! StoresLargeListChild allows it. Returns false if they must be appended as a chain of vector-sized entries
+static bool TryAppendLargeListChild(ColumnDataMetaData &meta_data, Vector &source, Vector &child_vector,
+                                    const ConsecutiveChildListInfo &info, idx_t offset, idx_t copy_count) {
+	const auto length = info.child_list_info.length;
+	if (!StoresLargeListChild(meta_data, child_vector.GetType(), length)) {
+		return false;
+	}
+	if (info.needs_slicing) {
+		SelectionVector sel(length);
+		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+		AppendLargeListChild(meta_data, child_vector, sel, 0, length);
+	} else {
+		AppendLargeListChild(meta_data, child_vector, *FlatVector::IncrementalSelectionVector(),
+		                     info.child_list_info.offset, length);
+	}
 	return true;
+}
+
+//! The first entry of the chain a list column's elements are appended to, allocated when there is none yet
+static VectorDataIndex ListChildChain(ColumnDataMetaData &meta_data, const LogicalType &child_type) {
+	auto &segment = meta_data.segment;
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		meta_data.GetVectorMetaData().child_index = segment.AddChildIndex(child_index);
+	}
+	return segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+}
+
+//! Copies the list entries of rows [offset, offset + copy_count), their elements following the 'list_size' the child
+//! chain held before: one shared entry when 'is_constant'
+static void CopyListEntries(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                            idx_t offset, idx_t copy_count, idx_t list_size, bool is_constant) {
+	meta_data.child_list_size = list_size;
+	if (is_constant) {
+		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	} else {
+		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	}
+}
+
+//! Calls 'f' with the list entry of each valid row at positions [offset, offset + count) of 'source_data'
+template <class F>
+static void ForEachSelectedList(const UnifiedVectorFormat &source_data, const list_entry_t *entries, idx_t offset,
+                                idx_t count, F &&f) {
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = source_data.sel->get_index(offset + i);
+		if (source_data.validity.RowIsValid(idx)) {
+			f(entries[idx]);
+		}
+	}
 }
 
 template <>
@@ -906,7 +993,6 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 
 	auto &child_vector = ListVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
-	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
 
 	// figure out the current list size by traversing the set of child entries
 	idx_t current_list_size = 0;
@@ -919,13 +1005,59 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 		}
 	}
 
-	if (!TryAppendLargeListChild(meta_data, source, child_vector, info, offset, copy_count)) {
-		if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
-			auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
-			meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+	if (source_data.sel->IsSet()) {
+		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
+		idx_t element_count = 0;
+		// whether every selected list is the same entry, as in a flattened constant: its elements are stored once
+		optional_ptr<const list_entry_t> first;
+		bool all_same = true;
+		ForEachSelectedList(source_data, entries, offset, copy_count, [&](const list_entry_t &entry) {
+			element_count += entry.length;
+			if (!first) {
+				first = &entry;
+			} else if (entry.offset != first->offset || entry.length != first->length) {
+				all_same = false;
+			}
+		});
+		const bool is_constant = first && all_same;
+		const idx_t length = is_constant ? first->length : element_count;
+		const bool large = StoresLargeListChild(meta_data, child_type, length);
+		// a LARGE_FLAT copy reads the child vector's rows, the copy functions the rows of its data
+		UnifiedVectorFormat child_vector_data;
+		if (large) {
+			child_vector_data.sel = FlatVector::IncrementalSelectionVector();
+		} else {
+			child_vector.ToUnifiedFormat(child_vector_data);
 		}
+		const idx_t child_offset = is_constant ? first->offset : 0;
+		if (!is_constant && length > 0) {
+			// the elements of the selected lists, in order
+			auto &element_sel = ChildSelection(meta_data, length);
+			idx_t element = 0;
+			ForEachSelectedList(source_data, entries, offset, copy_count, [&](const list_entry_t &entry) {
+				for (idx_t j = 0; j < entry.length; j++) {
+					element_sel.set_index(element++, child_vector_data.sel->get_index(entry.offset + j));
+				}
+			});
+			child_vector_data.sel = &element_sel;
+		}
+		if (large) {
+			AppendLargeListChild(meta_data, child_vector, *child_vector_data.sel, child_offset, length);
+		} else {
+			// the chain is allocated even for no elements, as a scan of the list reads its child chain
+			auto &child_function = meta_data.copy_function.child_functions[0];
+			ColumnDataMetaData child_meta_data(child_function, meta_data, ListChildChain(meta_data, child_type));
+			if (length > 0) {
+				child_function.function(child_meta_data, child_vector_data, child_vector, child_offset, length);
+			}
+		}
+		CopyListEntries(meta_data, source_data, source, offset, copy_count, current_list_size, is_constant);
+		return;
+	}
+	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
+	if (!TryAppendLargeListChild(meta_data, source, child_vector, info, offset, copy_count)) {
 		auto &child_function = meta_data.copy_function.child_functions[0];
-		auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+		auto child_index = ListChildChain(meta_data, child_type);
 
 		// set the child vector
 		UnifiedVectorFormat child_vector_data;
@@ -950,12 +1082,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 
 	// now copy the list entries
-	meta_data.child_list_size = current_list_size;
-	if (info.is_constant) {
-		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
-	} else {
-		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
-	}
+	CopyListEntries(meta_data, source_data, source, offset, copy_count, current_list_size, info.is_constant);
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
@@ -976,9 +1103,89 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx].ToUnifiedFormat(child_data);
-
-		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
+		idx_t child_offset = offset;
+		if (source_data.sel->IsSet() && !child_data.sel->IsSet()) {
+			// a field's row is the struct's row at the same index
+			child_data.sel = source_data.sel;
+		} else if (source_data.sel->IsSet()) {
+			// the copied rows' positions in the field; the fields are copied one after another
+			auto &field_sel = ChildSelection(meta_data, copy_count);
+			for (idx_t i = 0; i < copy_count; i++) {
+				field_sel.set_index(i, child_data.sel->get_index(source_data.sel->get_index(offset + i)));
+			}
+			child_data.sel = &field_sel;
+			child_offset = 0;
+		}
+		child_function.function(child_meta_data, child_data, child_vectors[child_idx], child_offset, copy_count);
 	}
+}
+
+// Whether a NULL array row's elements must be NULL in their own vectors, not only in the array's child validity: a
+// struct's fields must be NULL under a NULL struct, and a list copy writes the elements of every list it sees.
+static bool ElementsNeedOwnNulls(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		return true;
+	case PhysicalType::ARRAY:
+		return ElementsNeedOwnNulls(ArrayType::GetChildType(type));
+	default:
+		return false;
+	}
+}
+
+// Copies the elements of rows [offset, offset + copy_count) of an array, some of them NULL, as NULL under the NULL
+// rows.  The input is not changed.
+static void CopyArrayElementsUnderNullRows(ColumnDataMetaData &meta_data, ColumnDataMetaData &child_meta_data,
+                                           ColumnDataCopyFunction &child_function,
+                                           const UnifiedVectorFormat &source_data, Vector &child_vector,
+                                           idx_t array_size, idx_t offset, idx_t copy_count) {
+	const idx_t child_count = copy_count * array_size;
+	if (!ElementsNeedOwnNulls(child_vector.GetType())) {
+		// the elements' validity, NULL under the NULL rows, in a mask of their own
+		UnifiedVectorFormat child_data;
+		child_vector.ToUnifiedFormat(child_data);
+		auto &element_sel = ChildSelection(meta_data, child_count);
+		auto &validity = ChildValidity(meta_data, child_data.validity.Capacity());
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			const bool row_valid = source_data.validity.RowIsValid(source_idx);
+			for (idx_t j = 0; j < array_size; j++) {
+				auto idx = child_data.sel->get_index(source_idx * array_size + j);
+				element_sel.set_index(i * array_size + j, idx);
+				if (!row_valid || !child_data.validity.RowIsValid(idx)) {
+					validity.SetInvalid(idx);
+				}
+			}
+		}
+		child_data.sel = &element_sel;
+		child_data.validity = validity;
+		child_function.function(child_meta_data, child_data, child_vector, 0, child_count);
+		for (idx_t i = 0; i < child_count; i++) {
+			validity.SetValid(element_sel.get_index(i));
+		}
+		return;
+	}
+	SelectionVector element_sel(child_count);
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_data.sel->get_index(offset + i);
+		for (idx_t j = 0; j < array_size; j++) {
+			element_sel.set_index(i * array_size + j, source_idx * array_size + j);
+		}
+	}
+	// FlatVector::SetNull makes a nested element NULL in its own vectors too, in a copy of the elements
+	Vector elements(child_vector.GetType(), child_count);
+	VectorOperations::Copy(child_vector, elements, element_sel, child_count, 0, 0);
+	for (idx_t i = 0; i < copy_count; i++) {
+		if (!source_data.validity.RowIsValid(source_data.sel->get_index(offset + i))) {
+			for (idx_t j = 0; j < array_size; j++) {
+				FlatVector::SetNull(elements, i * array_size + j, true);
+			}
+		}
+	}
+	UnifiedVectorFormat elements_data;
+	elements.ToUnifiedFormat(elements_data);
+	child_function.function(child_meta_data, elements_data, elements, 0, child_count);
 }
 
 void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
@@ -999,41 +1206,45 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
-
-	auto current_child_index = child_index;
-	while (current_child_index.IsValid()) {
-		auto &child_vdata = segment.GetVectorData(current_child_index);
-		current_child_index = child_vdata.next_data;
-	}
-
-	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_vector.ToUnifiedFormat(child_vector_data);
 
-	// Broadcast and sync the validity of the array vector to the child vector
-	// This requires creating a copy of the validity mask: we cannot modify the input validity
-	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
-	if (source_data.validity.IsMaskSet()) {
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto source_idx = source_data.sel->get_index(offset + i);
-			if (!source_data.validity.RowIsValid(source_idx)) {
-				for (idx_t j = 0; j < array_size; j++) {
-					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
-				}
-			}
+	bool any_null = false;
+	if (source_data.validity.CanHaveNull()) {
+		for (idx_t i = 0; i < copy_count && !any_null; i++) {
+			any_null = !source_data.validity.RowIsValid(source_data.sel->get_index(offset + i));
 		}
 	}
-
-	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	// If the array is constant, we need to copy the child vector n times
-	if (is_constant) {
+	if (any_null) {
+		CopyArrayElementsUnderNullRows(meta_data, child_meta_data, child_function, source_data, child_vector,
+		                               array_size, offset, copy_count);
+		return;
+	}
+	UnifiedVectorFormat child_vector_data;
+	child_vector.ToUnifiedFormat(child_vector_data);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// a constant array: copy its child once per row
 		for (idx_t i = 0; i < copy_count; i++) {
 			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
 		}
-	} else {
-		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-		                        copy_count * array_size);
+		return;
 	}
+	if (source_data.sel->IsSet()) {
+		// the elements of the selected rows, through the child's own selection
+		const idx_t child_count = copy_count * array_size;
+		auto &element_sel = ChildSelection(meta_data, child_count);
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			for (idx_t j = 0; j < array_size; j++) {
+				element_sel.set_index(i * array_size + j,
+				                      child_vector_data.sel->get_index(source_idx * array_size + j));
+			}
+		}
+		child_vector_data.sel = &element_sel;
+		child_function.function(child_meta_data, child_vector_data, child_vector, 0, child_count);
+		return;
+	}
+	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+	                        copy_count * array_size);
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -1426,6 +1637,16 @@ static void MaterializeDictionaryEntry(ColumnDataMetaData &meta_data, const Logi
 	vdata.dictionary_slot = DConstants::INVALID_INDEX;
 }
 
+//! Writes a constant or dictionary entry out as flat rows, so that rows can be copied after it
+static void MaterializeCompactEntry(ColumnDataMetaData &meta_data, const LogicalType &type) {
+	auto representation = meta_data.GetVectorMetaData().representation;
+	if (representation == ColumnDataRepresentation::CONSTANT) {
+		MaterializeConstantEntry(meta_data, type);
+	} else if (representation == ColumnDataRepresentation::DICTIONARY) {
+		MaterializeDictionaryEntry(meta_data, type);
+	}
+}
+
 static bool TryAppendCompactVector(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
                                    Vector &source, idx_t offset, idx_t copy_count) {
 	if (meta_data.segment.allocator->IsManagedResultSet()) {
@@ -1435,17 +1656,9 @@ static bool TryAppendCompactVector(ColumnDataMetaData &meta_data, const UnifiedV
 	auto &vdata = meta_data.GetVectorMetaData();
 	switch (vdata.representation) {
 	case ColumnDataRepresentation::CONSTANT:
-		if (TryExtendConstantEntry(meta_data, source_data, source, offset, copy_count)) {
-			return true;
-		}
-		MaterializeConstantEntry(meta_data, source.GetType());
-		return false;
+		return TryExtendConstantEntry(meta_data, source_data, source, offset, copy_count);
 	case ColumnDataRepresentation::DICTIONARY:
-		if (TryExtendDictionaryEntry(meta_data, source_data, source, offset, copy_count)) {
-			return true;
-		}
-		MaterializeDictionaryEntry(meta_data, source.GetType());
-		return false;
+		return TryExtendDictionaryEntry(meta_data, source_data, source, offset, copy_count);
 	default:
 		break;
 	}
@@ -1473,35 +1686,32 @@ static bool IsComplexType(const LogicalType &type) {
 	};
 }
 
-void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
+void ColumnDataCollection::AppendRows(ColumnDataAppendState &state, const vector<UnifiedVectorFormat> &formats,
+                                      DataChunk &input, idx_t input_offset, idx_t append_count, bool keep_compact,
+                                      ColumnDataChildSelections &child_selections) {
 	D_ASSERT(!finished_append);
-	{
-		auto input_types = input.GetTypes();
-		D_ASSERT(types == input_types);
-	}
-
-	auto &segment = *segments.back();
+#ifdef D_ASSERT_IS_ENABLED
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
-		if (IsComplexType(input.data[vector_idx].GetType())) {
-			input.data[vector_idx].Flatten();
-		}
-		input.data[vector_idx].ToUnifiedFormat(state.vector_data[vector_idx]);
+		D_ASSERT(input.data[vector_idx].GetType() == types[vector_idx]);
 	}
-
-	idx_t remaining = input.size();
+#endif
+	auto &segment = *segments.back();
+	idx_t remaining = append_count;
 	while (remaining > 0) {
 		auto &chunk_data = segment.chunk_data.back();
 		idx_t append_amount = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE - chunk_data.count);
 		if (append_amount > 0) {
-			idx_t offset = input.size() - remaining;
+			const idx_t offset = input_offset + append_count - remaining;
 			for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
 				ColumnDataMetaData meta_data(copy_functions[vector_idx], segment, state, chunk_data,
 				                             chunk_data.vector_data[vector_idx]);
+				meta_data.child_selections = &child_selections;
 				const auto allocated_before = segment.total_allocated;
-				if (!TryAppendCompactVector(meta_data, state.vector_data[vector_idx], input.data[vector_idx], offset,
-				                            append_amount)) {
-					copy_functions[vector_idx].function(meta_data, state.vector_data[vector_idx],
-					                                    input.data[vector_idx], offset, append_amount);
+				if (!keep_compact || !TryAppendCompactVector(meta_data, formats[vector_idx], input.data[vector_idx],
+				                                             offset, append_amount)) {
+					MaterializeCompactEntry(meta_data, types[vector_idx]);
+					copy_functions[vector_idx].function(meta_data, formats[vector_idx], input.data[vector_idx], offset,
+					                                    append_amount);
 				}
 				chunk_data.allocation_sizes[vector_idx] += segment.total_allocated - allocated_before;
 			}
@@ -1509,14 +1719,80 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 		}
 		remaining -= append_amount;
 		if (remaining > 0) {
-			// more to do
-			// allocate a new chunk
 			segment.AllocateNewChunk();
 			segment.InitializeChunkState(segment.chunk_data.size() - 1, state.current_chunk_state);
 		}
 	}
-	segment.count += input.size();
-	count += input.size();
+	segment.count += append_count;
+	count += append_count;
+}
+
+void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
+#ifdef D_ASSERT_IS_ENABLED
+	D_ASSERT(types == input.GetTypes());
+#endif
+	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
+		if (IsComplexType(input.data[vector_idx].GetType())) {
+			input.data[vector_idx].Flatten();
+		}
+		input.data[vector_idx].ToUnifiedFormat(state.vector_data[vector_idx]);
+	}
+	ColumnDataChildSelections child_selections;
+	AppendRows(state, state.vector_data, input, 0, input.size(), true, child_selections);
+}
+
+void ColumnDataCollection::PrepareSelectedFormats(DataChunk &input, idx_t column_count, const SelectionVector &sel,
+                                                  idx_t sel_count, vector<UnifiedVectorFormat> &formats) {
+	D_ASSERT(input.ColumnCount() >= column_count);
+	D_ASSERT(sel_count <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(formats.size() >= column_count);
+	// each column's format reads its rows through `sel`
+	for (idx_t vector_idx = 0; vector_idx < column_count; vector_idx++) {
+		auto &vector = input.data[vector_idx];
+		if (IsComplexType(vector.GetType())) {
+			vector.Flatten();
+		}
+		auto &format = formats[vector_idx];
+		vector.ToUnifiedFormat(format);
+		if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			continue;
+		}
+		if (!format.sel->IsSet()) {
+			format.sel = &sel;
+			continue;
+		}
+		format.owned_sel.Initialize(format.sel->Slice(sel, sel_count));
+		format.sel = &format.owned_sel;
+	}
+}
+
+void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input, const SelectionVector &sel,
+                                  idx_t append_count) {
+	PrepareSelectedFormats(input, types.size(), sel, append_count, state.vector_data);
+	ColumnDataChildSelections child_selections;
+	AppendRows(state, state.vector_data, input, 0, append_count, false, child_selections);
+}
+
+void ColumnDataCollection::AppendBatch(DataChunk &input, const SelectionVector &sel, idx_t sel_count,
+                                       const vector<ColumnDataSelectionTarget> &targets) {
+	if (targets.empty()) {
+		return;
+	}
+	const idx_t column_count = targets[0].collection.ColumnCount();
+	// the formats are built once for all targets, which read different positions of `sel`
+	vector<UnifiedVectorFormat> formats(column_count);
+	PrepareSelectedFormats(input, column_count, sel, sel_count, formats);
+	// the targets are appended one after another, so they share the selections over nested columns' children
+	ColumnDataChildSelections child_selections;
+	for (auto &target : targets) {
+		D_ASSERT(target.collection.ColumnCount() == column_count);
+		D_ASSERT(target.begin <= target.end && target.end <= sel_count);
+		if (target.begin == target.end) {
+			continue;
+		}
+		target.collection.AppendRows(target.state, formats, input, target.begin, target.end - target.begin, false,
+		                             child_selections);
+	}
 }
 
 void ColumnDataCollection::Append(DataChunk &input) {

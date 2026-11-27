@@ -79,30 +79,10 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Radix Partitioning interface implementation
 	//===--------------------------------------------------------------------===//
-	idx_t BufferSize() const override {
-		switch (radix_bits) {
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-			return GetBufferSize(1 << 1);
-		case 5:
-			return GetBufferSize(1 << 2);
-		case 6:
-			return GetBufferSize(1 << 3);
-		default:
-			return GetBufferSize(1 << 4);
-		}
-	}
-
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 	idx_t MaxPartitionIndex() const override {
 		return RadixPartitioning::NumberOfPartitions(radix_bits) - 1;
-	}
-
-	static constexpr idx_t GetBufferSize(idx_t div) {
-		return STANDARD_VECTOR_SIZE / div == 0 ? 1 : STANDARD_VECTOR_SIZE / div;
 	}
 
 private:
