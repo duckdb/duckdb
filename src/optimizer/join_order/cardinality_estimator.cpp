@@ -658,9 +658,7 @@ bool CardinalityEstimator::ApplyCompositeJoinPairCaps(
 		if (!JoinRelationSet::IsSubset(scope, join_pair)) {
 			continue;
 		}
-		if (!predicate_model.HasDirectCompositeEquality(join_pair)) {
-			continue;
-		}
+		D_ASSERT(predicate_model.HasDirectCompositeEquality(join_pair));
 		applied = ApplyJoinPairCap(target_selectivity, join_pair, join_pair_stats, capped_join_pairs) || applied;
 	}
 	return applied;
@@ -697,13 +695,14 @@ static bool CanIncrementExistingJoin(SelectivityEdgeKind kind) {
 	return kind == SelectivityEdgeKind::INNER_EQUIVALENCE;
 }
 
-static void RegisterEqualityJoinPair(FilterInfoWithTotalDomains &edge, JoinRelationSetManager &set_manager,
-                                     reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats) {
+static void RegisterCompositeJoinPair(FilterInfoWithTotalDomains &edge, JoinRelationSetManager &set_manager,
+                                      const JoinPredicateModel &predicate_model,
+                                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats) {
 	if (!edge.IsInnerEquality()) {
 		return;
 	}
 	auto join_pair = GetEqualityJoinPair(edge, set_manager);
-	if (!join_pair) {
+	if (!join_pair || !predicate_model.HasDirectCompositeEquality(*join_pair)) {
 		return;
 	}
 	join_pair_stats[*join_pair].RegisterDistinctCount(edge.GetDistinctCount());
@@ -747,7 +746,7 @@ void CardinalityEstimator::ProcessSelectivityEdge(FilterInfoWithTotalDomains &ed
 	if (equality_class_index.IsValid()) {
 		state.applied_equivalence_groups.insert(equality_class_index.GetIndex());
 	}
-	RegisterEqualityJoinPair(edge, set_manager, state.join_pair_stats);
+	RegisterCompositeJoinPair(edge, set_manager, predicate_model, state.join_pair_stats);
 
 	auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
 	auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
