@@ -66,15 +66,19 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		union_pipelines.push_back(union_pipeline);
 	}
 	// continue with the current pipeline
-	children[0].get().BuildPipelines(current, meta_pipeline);
-	bool can_saturate_threads =
-	    ContainsSink(children[0].get()) && children[0].get().CanSaturateThreads(current.GetClientContext());
+	D_ASSERT(!children.empty());
+	auto child_it = children.begin();
+	PhysicalOperator &first_child = *child_it;
+	first_child.BuildPipelines(current, meta_pipeline);
+	bool can_saturate_threads = ContainsSink(first_child) && first_child.CanSaturateThreads(current.GetClientContext());
 	for (idx_t i = 1; i < children.size(); i++) {
+		PhysicalOperator &previous_child = *child_it;
+		++child_it;
+		PhysicalOperator &child = *child_it;
 		auto &union_pipeline = union_pipelines[children.size() - i - 1].get();
 		vector<shared_ptr<Pipeline>> dependencies;
 		optional_ptr<MetaPipeline> last_child_ptr;
-		if (ContainsSink(children[i - 1].get()) &&
-		    children[i - 1].get().CanSaturateThreads(current.GetClientContext())) {
+		if (ContainsSink(previous_child) && previous_child.CanSaturateThreads(current.GetClientContext())) {
 			can_saturate_threads = true;
 		}
 		if (order_matters || can_saturate_threads) {
@@ -98,7 +102,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		// Assign proper batch index to the union pipeline
 		meta_pipeline.AssignNextBatchIndex(union_pipeline);
 		// build the union pipeline
-		children[i].get().BuildPipelines(union_pipeline, meta_pipeline);
+		child.BuildPipelines(union_pipeline, meta_pipeline);
 
 		if (last_child_ptr) {
 			// Explicitly ordered unions also order their children's sink pipelines.
