@@ -1198,7 +1198,7 @@ static bool TryCastConstant(Context &context, Value &constant, const MultiFileIn
 		return false;
 	}
 	auto roundtrip = cast->TryCastAs(context, constant.type());
-	if (!roundtrip || *roundtrip != constant) {
+	if (!roundtrip || !Value::NotDistinctFrom(*roundtrip, constant)) {
 		return false;
 	}
 	constant = std::move(*cast);
