@@ -1023,3 +1023,61 @@ TEST_CASE("Test appender on a view keeps the open transaction", "[appender]") {
 	auto result = con.Query("SELECT k FROM u ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 }
+
+TEST_CASE("Basic DirectAppender tests", "[appender][direct]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("Append via DirectAppender::AppendRow") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals(i TINYINT, j SMALLINT, k BIGINT, l VARCHAR, m DECIMAL)"));
+		{
+			DirectAppender appender(con, "vals");
+			for (idx_t i = 0; i < 500; i++) {
+				appender.AppendRow(int8_t(1), int16_t(2), int64_t(3), "hello", 4.5);
+			}
+			appender.Close();
+		}
+
+		result = con.Query("SELECT l, SUM(k) FROM vals GROUP BY l");
+		REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1500}));
+	}
+
+	SECTION("Append via DirectAppender::AppendDataChunk") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE chunk_test(a INTEGER, b VARCHAR)"));
+		{
+			DirectAppender appender(con, "chunk_test");
+			DataChunk chunk;
+			chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::INTEGER, LogicalType::VARCHAR});
+			chunk.data[0].Append(Value::INTEGER(42));
+			chunk.data[1].Append(Value("world"));
+			chunk.SetChildCardinality(1);
+			appender.AppendDataChunk(chunk);
+			appender.Close();
+		}
+
+		result = con.Query("SELECT a, b FROM chunk_test");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"world"}));
+	}
+
+	SECTION("Generated column handling") {
+		REQUIRE_NO_FAIL(con.Query(R"(
+			CREATE TABLE gen_first (
+				b VARCHAR GENERATED ALWAYS AS (a),
+				a VARCHAR
+			)
+		)"));
+		{
+			DirectAppender appender(con, "gen_first");
+			appender.BeginRow();
+			appender.Append("hello");
+			appender.EndRow();
+			appender.Close();
+		}
+		result = con.Query("SELECT * FROM gen_first");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value("hello")}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value("hello")}));
+	}
+}
