@@ -1,3 +1,4 @@
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "core_functions/scalar/array_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -37,7 +38,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	for (idx_t i = 0; i < num_rows; i++) {
 		for (idx_t j = 0; j < num_columns; j++) {
-			auto val = args.GetValue(j, i).DefaultCastAs(child_type);
+			auto val = args.GetValue(j, i).CastAs(state.GetContext(), child_type);
 			child.SetValue((i * num_columns) + j, val);
 		}
 	}
@@ -45,7 +46,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	result.Verify();
 }
 
-unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
+void ArrayValueResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -56,7 +57,8 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 	// construct return type
 	LogicalType child_type = arguments[0]->GetReturnType();
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->GetReturnType());
+		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->GetReturnType(),
+		                                         input.GetDecimalWidthLimit());
 	}
 
 	if (arguments.size() > ArrayType::MAX_ARRAY_SIZE) {
@@ -72,7 +74,6 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 	}
 
 	bound_function.SetReturnType(LogicalType::ARRAY(child_type, arguments.size()));
-	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -91,9 +92,13 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, ArrayValueStats);
+	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, VariableReturnBindData::Bind,
+	                   ArrayValueStats);
+	fun.SetResolveTypesCallback(ArrayValueResolveTypes);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// casting the arguments to the common child type can fail, e.g. for arrays of different sizes
+	fun.SetFallible();
 	return fun;
 }
 

@@ -1,0 +1,13 @@
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index f3022c6..7c54695 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -185,7 +185,7 @@ static void SetupFilterPushdown(LogicalSpatialJoin &join) {
+ 	vector<JoinFilterPushdownColumn> columns;
+ 	JoinFilterPushdownColumn column;
+ 	column.probe_column_index = probe_binding;
+-	columns.push_back(column);
++	columns.push_back(std::move(column));
+ 
+ 	vector<PushdownFilterTarget> targets;
+ 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*join.children[0], std::move(columns), targets);

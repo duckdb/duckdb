@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -14,9 +15,9 @@ struct SetSelectionVectorSelect {
 	using CHILD_TYPE = int64_t;
 
 	static void SetSelectionVector(SelectionVector &selection_vector, ValidityMask &validity_mask,
-	                               const ValidityMask &input_validity, const VectorIterator<int64_t> &child_data,
-	                               idx_t child_idx, idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
-	                               idx_t target_length) {
+	                               const VectorValidityIterator &input_validity,
+	                               const VectorIterator<int64_t> &child_data, idx_t child_idx, idx_t &target_offset,
+	                               idx_t selection_offset, idx_t input_offset, idx_t target_length) {
 		auto child_entry = child_data[selection_offset + child_idx];
 		int64_t sel_idx = -1;
 		if (child_entry.IsValid()) {
@@ -29,7 +30,7 @@ struct SetSelectionVectorSelect {
 		if (sel_idx >= 0 && sel_idx < UnsafeNumericCast<int64_t>(target_length)) {
 			auto sel_idx_unsigned = UnsafeNumericCast<idx_t>(sel_idx);
 			selection_vector.set_index(target_offset, input_offset + sel_idx_unsigned);
-			if (!input_validity.RowIsValid(input_offset + sel_idx_unsigned)) {
+			if (!input_validity.IsValid(input_offset + sel_idx_unsigned)) {
 				validity_mask.SetInvalid(target_offset);
 			}
 		} else {
@@ -49,7 +50,7 @@ struct SetSelectionVectorWhere {
 	using CHILD_TYPE = bool;
 
 	static void SetSelectionVector(SelectionVector &selection_vector, ValidityMask &validity_mask,
-	                               const ValidityMask &input_validity, const VectorIterator<bool> &child_data,
+	                               const VectorValidityIterator &input_validity, const VectorIterator<bool> &child_data,
 	                               idx_t child_idx, idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
 		auto child_val = child_data[selection_offset + child_idx];
@@ -65,7 +66,7 @@ struct SetSelectionVectorWhere {
 		}
 
 		selection_vector.set_index(target_offset, input_offset + child_idx);
-		if (!input_validity.RowIsValid(input_offset + child_idx)) {
+		if (!input_validity.IsValid(input_offset + child_idx)) {
 			validity_mask.SetInvalid(target_offset);
 		}
 
@@ -97,7 +98,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	auto &selection_entry = ListVector::GetChild(selection_list);
 	auto input_lists_data = list.Values<list_entry_t>();
 	auto &input_entry = ListVector::GetChild(list);
-	auto &input_validity = FlatVector::Validity(input_entry);
+	auto input_validity = input_entry.Validity();
 	auto selection_entry_data = selection_entry.Values<typename OP::CHILD_TYPE>();
 
 	idx_t result_length = 0;
@@ -155,12 +156,42 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	}
 	ListVector::SetListSize(result, offset);
 
-	if (result_length > 0) {
+	if (ListVector::GetListSize(list) == 0) {
+		// an empty input child has nothing to slice: every selected entry is NULL
+		for (idx_t i = 0; i < offset; i++) {
+			FlatVector::SetNull(result_entry, i, true);
+		}
+	} else if (result_length > 0) {
 		result_entry.Slice(input_entry, result_selection_vec, offset);
 		result_entry.Flatten();
 
 		FlatVector::SetValidity(result_entry, entry_validity_mask);
 	}
+}
+
+//! A selected list has an element for each index (list_select) or for each true mask entry (list_where)
+template <bool SELECT_EVERY_ENTRY>
+unique_ptr<BaseStatistics> ListSelectStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &value_stats = input.child_stats[0];
+	auto &selection_stats = input.child_stats[1];
+	auto &return_type = input.expr.GetReturnType();
+	if (value_stats.GetStatsType() != StatisticsType::LIST_STATS ||
+	    selection_stats.GetStatsType() != StatisticsType::LIST_STATS || value_stats.GetType() != return_type) {
+		return nullptr;
+	}
+	auto result = ListStats::CreateUnknown(return_type);
+	result.CopyValidity(value_stats);
+	if (selection_stats.CanHaveNull()) {
+		result.SetHasNull();
+	}
+	// entries that are out of range are NULL
+	auto child_stats = ListStats::GetChildStats(value_stats).Copy();
+	child_stats.SetHasNull();
+	ListStats::SetChildStats(result, child_stats.ToUnique());
+	auto max_length = ListStats::MaxListLength(selection_stats);
+	auto min_length = SELECT_EVERY_ENTRY ? ListStats::MinListLength(selection_stats) : optional_idx(0);
+	ListStats::SetLengthBounds(result, min_length, max_length);
+	return result.ToUnique();
 }
 
 } // namespace
@@ -173,6 +204,7 @@ ScalarFunction ListWhereFun::GetFunction() {
 	    .AddParameter("mask_list", LogicalType::LIST(LogicalType::BOOLEAN));
 	// throws if the selection list contains NULL values
 	fun.SetFallible();
+	fun.SetStatisticsCallback(ListSelectStats<false>);
 	return fun;
 }
 
@@ -184,6 +216,7 @@ ScalarFunction ListSelectFun::GetFunction() {
 	    .AddParameter("index_list", LogicalType::LIST(LogicalType::BIGINT));
 	// throws if the selection list contains NULL values
 	fun.SetFallible();
+	fun.SetStatisticsCallback(ListSelectStats<true>);
 	return fun;
 }
 

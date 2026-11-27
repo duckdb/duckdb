@@ -67,14 +67,19 @@ static bool ContainsLimit(const LogicalOperator &op) {
 	return false;
 }
 
-bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
+bool CTEInlining::IsAggregateOrWindow(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return true;
 	default:
-		break;
+		return false;
+	}
+}
+
+bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
+	if (IsAggregateOrWindow(op)) {
+		return true;
 	}
 	if (op.children.size() != 1) {
 		return false;

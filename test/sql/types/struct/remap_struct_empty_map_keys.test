@@ -1,0 +1,14 @@
+# name: test/sql/types/struct/remap_struct_empty_map_keys.test
+# description: Map keys that become equal empty structs are not checked by remap_struct
+# group: [struct]
+
+# map keys that differ in the source become equal empty structs. remap_struct does not check the keys it
+# builds, here as for any other mapping of a key (map_keys, a MAP value with duplicate keys cannot be printed)
+query II
+SELECT map_keys(r), map_values(r)
+FROM (
+	SELECT remap_struct(m, MAP {{}: 0}, {key: ('key', {}), value: 'value'}, NULL) AS r
+	FROM (SELECT MAP {{a: i}: 10, {a: i + 1}: 20} AS m FROM range(1) t(i))
+);
+----
+[{}, {}]	[10, 20]

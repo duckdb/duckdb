@@ -38,8 +38,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		planning_recursive_cte_depth++;
 		auto &right = CreatePlan(*op.children[1]);
 		planning_recursive_cte_depth--;
-		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
-		                                       op.estimated_cardinality);
+		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types,
+		                                       op.union_all ? RecursiveCTEMode::UNION_ALL : RecursiveCTEMode::UNION,
+		                                       left, right, op.estimated_cardinality);
 		auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 		cast_cte.ref_recurring = op.ref_recurring;
 		cast_cte.recurring_table = recurring_table;
@@ -53,6 +54,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	vector<idx_t> distinct_idx, payload_idx;
 	vector<unique_ptr<Expression>> payload_aggregates;
 	vector<unique_ptr<Expression>> payload_comparisons;
+	vector<unique_ptr<Expression>> payload_distinct_from;
 
 	// create a group for each target, these are the columns that should be grouped
 	unordered_map<idx_t, idx_t> group_by_references;
@@ -114,6 +116,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	if (!has_key_normalizers) {
 		key_normalizers.clear();
 	}
+	for (idx_t i = 0; i < payload_types.size(); i++) {
+		payload_distinct_from.push_back(
+		    BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM, payload_types[i],
+		                                               i, payload_types[i], payload_types.size() + i));
+	}
 	if (!op.union_all) {
 		for (idx_t i = 0; i < payload_types.size(); i++) {
 			unique_ptr<Expression> previous = make_uniq<BoundReferenceExpression>(payload_types[i], i);
@@ -151,12 +158,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	planning_recursive_cte_depth++;
 	auto &right = CreatePlan(*op.children[1]);
 	planning_recursive_cte_depth--;
-	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
-	                                       op.estimated_cardinality);
+	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types,
+	                                       op.union_all ? RecursiveCTEMode::KEY_UNION_ALL : RecursiveCTEMode::KEY_UNION,
+	                                       left, right, op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
-	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
 	cast_cte.payload_comparisons = std::move(payload_comparisons);
+	cast_cte.payload_distinct_from = std::move(payload_distinct_from);
 	cast_cte.key_normalizers = std::move(key_normalizers);
 	cast_cte.key_representative_indices = std::move(key_representative_indices);
 	cast_cte.distinct_idx = distinct_idx;
@@ -166,6 +174,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.payload_types = payload_types;
 	cast_cte.aggregate_types = std::move(aggregate_types);
 	cast_cte.internal_types = op.internal_types;
+	cast_cte.keyed = RecursiveCTEKeyedProperties::Derive(cast_cte);
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;

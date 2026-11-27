@@ -8,6 +8,7 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -26,6 +27,7 @@ struct ListSortBindData : public FunctionData {
 	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up,
 	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p,
 	                 unique_ptr<Expression> sort_key_p = nullptr, optional<string> default_collation_p = {});
+	ListSortBindData(const ListSortBindData &other);
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -39,12 +41,13 @@ struct ListSortBindData : public FunctionData {
 	ClientContext &context;
 	unique_ptr<Expression> sort_key;
 	optional<string> default_collation;
-	unique_ptr<Sort> sort;
+	//! Shared by the copies, building it again needs a catalog lookup in a transaction of the context
+	shared_ptr<Sort> sort;
 
 public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
 	                      const BoundScalarFunction &);
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
@@ -78,13 +81,23 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(sort_key_p));
+	if (is_grade_up) {
+		// break ties on the original position, so equal elements are graded in a deterministic order
+		auto position_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::UINTEGER, 2U);
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(position_expr));
+	}
 	sort =
-	    unique_ptr<Sort>(new Sort(context, orders, {LogicalType::USMALLINT, child_type, LogicalType::UINTEGER}, {2}));
+	    shared_ptr<Sort>(new Sort(context, orders, {LogicalType::USMALLINT, child_type, LogicalType::UINTEGER}, {2}));
+}
+
+ListSortBindData::ListSortBindData(const ListSortBindData &other)
+    : FunctionData(other), order_type(other.order_type), null_order(other.null_order), return_type(other.return_type),
+      child_type(other.child_type), is_grade_up(other.is_grade_up), types(other.types), context(other.context),
+      sort_key(other.sort_key->Copy()), default_collation(other.default_collation), sort(other.sort) {
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
-	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context,
-	                                   sort_key->Copy(), default_collation);
+	return make_uniq<ListSortBindData>(*this);
 }
 
 bool ListSortBindData::Equals(const FunctionData &other_p) const {
@@ -94,7 +107,7 @@ bool ListSortBindData::Equals(const FunctionData &other_p) const {
 	       Expression::Equals(sort_key, other.sort_key) && default_collation == other.default_collation;
 }
 
-void ListSortBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void ListSortBindData::Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                  const BoundScalarFunction &) {
 	auto &data = bind_data->Cast<ListSortBindData>();
 	serializer.WriteProperty(100, "order_type", data.order_type);
@@ -125,7 +138,7 @@ ListSortBindData::~ListSortBindData() {
 // create the key_chunk and the payload_chunk and sink them into the local_sort_state
 static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input,
                           Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
-                          vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
+                          const vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
                           Vector &lists_indices) {
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);
@@ -274,12 +287,11 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			// construct the selection vector with the new order from the result vectors
 			auto row_count = result_chunk.size();
-			Vector result_vector(Vector::Ref(result_chunk.data[0]));
-
-			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
+			auto result_values = result_chunk.data[0].Values<uint32_t>();
 			for (idx_t i = 0; i < row_count; i++) {
-				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
-				D_ASSERT(result_data[i] < lists_size);
+				auto sorted_idx = result_values[i].GetValue();
+				sel_sorted.set_index(sel_sorted_idx, sorted_idx);
+				D_ASSERT(sorted_idx < lists_size);
 				sel_sorted_idx++;
 			}
 		}
@@ -307,17 +319,11 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
-	LogicalType child_type;
-	if (arguments[0]->GetReturnType() == LogicalTypeId::UNKNOWN) {
-		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
-		bound_function.SetReturnType(LogicalType::SQLNULL);
-		child_type = bound_function.GetReturnType();
-		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type,
-		                                   context);
-	}
-
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	child_type = ListType::GetChildType(arguments[0]->GetReturnType());
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::LIST) {
+		throw BinderException("list_sort can only operate on LISTs");
+	}
+	auto child_type = ListType::GetChildType(arguments[0]->GetReturnType());
 
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	bound_function.SetReturnType(arguments[0]->GetReturnType());
@@ -352,6 +358,9 @@ static unique_ptr<FunctionData> ListGradeUpBind(BindScalarFunctionInput &input) 
 	null_order = config.ResolveNullOrder(context, order, null_order);
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::LIST) {
+		throw BinderException("list_grade_up can only operate on LISTs");
+	}
 
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	bound_function.SetReturnType(LogicalType::LIST(LogicalTypeId::BIGINT));
@@ -446,6 +455,37 @@ static unique_ptr<ParsedExpression> ListSortUnbind(FunctionUnbindInput &input) {
 	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "cast_to_type"), std::move(result));
 }
 
+static void ListSortResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	auto list_type = input.GetArgumentType(0);
+	if (list_type.id() == LogicalTypeId::ARRAY) {
+		list_type = LogicalType::LIST(ArrayType::GetChildType(list_type));
+	}
+	if (list_type.id() == LogicalTypeId::LIST) {
+		input.GetBoundFunction().SetReturnType(list_type);
+	}
+}
+
+//! Sorting keeps the elements, so the result has the statistics of the list
+static unique_ptr<BaseStatistics> ListSortStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS || list_stats.GetType() != input.expr.GetReturnType()) {
+		return nullptr;
+	}
+	return list_stats.Copy().ToUnique();
+}
+
+//! The result holds one index per element of the list
+static unique_ptr<BaseStatistics> ListGradeUpStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	auto result = ListStats::CreateUnknown(input.expr.GetReturnType());
+	result.CopyValidity(list_stats);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(list_stats));
+	return result.ToUnique();
+}
+
 static void SetListSortSerialization(ScalarFunction &function) {
 	function.SetUnbindCallback(ListSortUnbind);
 	function.SetSerializeCallback(ListSortBindData::Serialize);
@@ -470,8 +510,14 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 	    .AddParameter("sort_order", LogicalType::VARCHAR)
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort);
+	sort.SetResolveTypesCallback(ListSortResolveTypes);
+	sort.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_order);
+	sort_order.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_order.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_orders);
+	sort_orders.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_orders.SetStatisticsCallback(ListSortStats);
 
 	ScalarFunctionSet list_sort;
 	list_sort.AddFunction(sort);
@@ -482,24 +528,27 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 
 ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort({}, LogicalType::LIST(LogicalType::BIGINT), ListSortFunction, ListGradeUpBind);
 	sort.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 
 	// two parameters: list, order
-	ScalarFunction sort_order({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort_order({}, LogicalType::LIST(LogicalType::BIGINT), ListSortFunction, ListGradeUpBind);
 	sort_order.GetSignature()
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("sort_order", LogicalType::VARCHAR);
 
 	// three parameters: list, order, null order
-	ScalarFunction sort_orders({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort_orders({}, LogicalType::LIST(LogicalType::BIGINT), ListSortFunction, ListGradeUpBind);
 	sort_orders.GetSignature()
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("sort_order", LogicalType::VARCHAR)
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort);
+	sort.SetStatisticsCallback(ListGradeUpStats);
 	SetListSortSerialization(sort_order);
+	sort_order.SetStatisticsCallback(ListGradeUpStats);
 	SetListSortSerialization(sort_orders);
+	sort_orders.SetStatisticsCallback(ListGradeUpStats);
 
 	ScalarFunctionSet list_grade_up;
 	list_grade_up.AddFunction(sort);
@@ -520,7 +569,11 @@ ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
 	    .AddParameter("null_order", LogicalType::VARCHAR);
 	SetListSortSerialization(sort_reverse);
+	sort_reverse.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_reverse.SetStatisticsCallback(ListSortStats);
 	SetListSortSerialization(sort_reverse_null_order);
+	sort_reverse_null_order.SetResolveTypesCallback(ListSortResolveTypes);
+	sort_reverse_null_order.SetStatisticsCallback(ListSortStats);
 
 	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);

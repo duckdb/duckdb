@@ -1,3 +1,6 @@
+import contextlib
+import io
+import itertools
 import math
 import os
 import re
@@ -7,8 +10,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
+from scripts import plan_cost_runner
+from scripts.plan_cost_runner import PlanCost, op_inspect
 from scripts.regression.benchmark import (
     BENCHMARK_DATA_DIRECTORY,
     BenchmarkRunner,
@@ -18,6 +23,157 @@ from scripts.regression.benchmark import (
     find_extension_directory,
 )
 from scripts.regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
+
+
+class TestPlanCostComparison(unittest.TestCase):
+    def test_membership_rewrite_preserves_input_work(self):
+        def cost(join_type, rows):
+            return op_inspect(
+                {
+                    'type': 'HASH_JOIN',
+                    'intermediate_rows': rows,
+                    'extra_info': {'Join Type': join_type},
+                    'children': [
+                        {'type': 'TABLE_SCAN', 'intermediate_rows': 100, 'children': []},
+                        {'type': 'TABLE_SCAN', 'intermediate_rows': 10, 'children': []},
+                    ],
+                }
+            )
+
+        old = cost('MARK', 100)
+        self.assertEqual((old.total, old.build_side, old.probe_side), (100, 10, 100))
+        for join_type in ('SEMI', 'ANTI', 'RIGHT_SEMI', 'RIGHT_ANTI'):
+            new = cost(join_type, 5)
+            self.assertEqual((new.total, new.build_side, new.probe_side), (5, 10, 100))
+            self.assertFalse(new > old)
+
+    def test_mixed_work_uses_timing_and_comparisons_agree(self):
+        old = PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
+        for total, build, probe, time, needs_timing, regressed in (
+            (20, 10, 20, 2.0, False, False),
+            (30, 40, 100, 0.9, False, True),
+            (5, 10, 20, 2.0, True, False),
+            (5, 40, 20, 1.1, True, True),
+            (5, 10, 100, 1.1, True, True),
+            (5, 40, 100, 1.02, True, False),
+            (5, 40, 100, 0.9, True, False),
+        ):
+            with self.subTest(total=total, build=build, probe=probe, time=time):
+                new = PlanCost()
+                new.total, new.build_side, new.probe_side, new.time = total, build, probe, time
+                self.assertEqual(old.needs_timing(new), needs_timing)
+                self.assertEqual(new.needs_timing(old), needs_timing)
+                self.assertEqual(new > old, regressed)
+                self.assertEqual(old < new, regressed)
+                self.assertFalse(new > old and old > new)
+
+    def test_run_to_run_variation_is_not_a_difference(self):
+        def cost(total, build, probe):
+            result = PlanCost()
+            result.total, result.build_side, result.probe_side = total, build, probe
+            return result
+
+        def profile(old_probes, new_probes):
+            samples = {
+                'old': itertools.cycle(cost(20, 10, probe) for probe in old_probes),
+                'new': itertools.cycle(cost(20, 10, probe) for probe in new_probes),
+            }
+            with patch.object(
+                plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: next(samples[cli])
+            ):
+                return plan_cost_runner.query_plan_costs('old', 'new', 'db', 'SELECT 1;')
+
+        old, new = profile([100], [100])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [102, 97, 100, 99, 105])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [150, 151, 149, 150, 152])
+        self.assertEqual((old.probe_side, new.probe_side), (101, 150))
+        varying = [1652908, 1626111, 1629118, 1679707, 1626186]
+        old, new = profile(varying, [int(probe * 1.03) for probe in varying])
+        self.assertEqual(old, new)
+
+    def test_small_work_increases_require_timing(self):
+        old = PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 1000, 1000, 1000, 1.0
+        for component in ("total", "build_side", "probe_side"):
+            for increased_work, needs_timing in ((1030, True), (1031, False)):
+                for time, regressed in ((1.02, not needs_timing), (1.03, not needs_timing), (1.04, True)):
+                    with self.subTest(component=component, increased_work=increased_work, time=time):
+                        new = PlanCost()
+                        new.total, new.build_side, new.probe_side, new.time = 1001, 1001, 1000, time
+                        setattr(new, component, increased_work)
+                        self.assertEqual(old.needs_timing(new), needs_timing)
+                        self.assertEqual(new.needs_timing(old), needs_timing)
+                        self.assertEqual(new > old, regressed)
+                        self.assertEqual(old < new, regressed)
+                        self.assertFalse(old > new)
+
+    def test_work_increase_from_zero_is_not_within_tolerance(self):
+        old, new = PlanCost(), PlanCost()
+        new.total, new.build_side, new.probe_side = 1, 1, 1
+        self.assertFalse(old.needs_timing(new))
+        self.assertTrue(new > old)
+
+    def test_variation_tolerance_applies_to_every_cost_component(self):
+        def costs(component, values):
+            result = []
+            for value in values:
+                cost = PlanCost()
+                setattr(cost, component, value)
+                result.append(cost)
+            return result
+
+        for component in ("total", "build_side", "probe_side"):
+            for old_values, new_values, expected in (
+                ([180, 189, 190, 191, 210], [180, 199, 200, 201, 220], True),
+                ([180, 188, 189, 190, 210], [180, 199, 200, 201, 220], False),
+                ([100] * 5, [103] * 5, False),
+            ):
+                with self.subTest(component=component, old_values=old_values, new_values=new_values):
+                    old, new = costs(component, old_values), costs(component, new_values)
+                    self.assertEqual(plan_cost_runner.within_run_variation(old, new), expected)
+                    self.assertEqual(plan_cost_runner.within_run_variation(new, old), expected)
+
+    def test_runner_confirms_hot_regression_for_small_work_increase(self):
+        old, new = PlanCost(), PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 1000, 1000, 1000, 1.0
+        new.total, new.build_side, new.probe_side, new.time = 1010, 1020, 1005, 0.9
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            root = Path(directory)
+            (root / 'queries').mkdir()
+            (root / 'queries/q.sql').write_text('SELECT 1;')
+            database = str(root / 'plan_cost.duckdb')
+            stack.enter_context(patch.object(plan_cost_runner, 'DB_NAME', database))
+            initialize = stack.enter_context(patch.object(plan_cost_runner, 'init_db'))
+            profiles = stack.enter_context(
+                patch.object(
+                    plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: old if cli == 'old' else new
+                )
+            )
+            timings = stack.enter_context(
+                patch.object(
+                    plan_cost_runner,
+                    'query_timings',
+                    side_effect=lambda cli, db, query, runs: [1.0 if cli == 'old' else 1.1] * runs,
+                )
+            )
+            stack.enter_context(patch.object(plan_cost_runner.os, 'remove'))
+            stack.enter_context(patch('sys.argv', ['runner', '--old', 'old', '--new', 'new', '--dir', directory]))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            with self.assertRaises(SystemExit) as result:
+                plan_cost_runner.main()
+            self.assertEqual(result.exception.code, 1)
+            initialize.assert_called_once_with('old', database, directory, [])
+            self.assertEqual(
+                profiles.call_args_list,
+                [call(cli, database, 'SELECT 1;') for cli in ('old', 'new') * plan_cost_runner.PROFILE_RUNS],
+            )
+            self.assertEqual(
+                timings.call_args_list,
+                [call(cli, database, 'SELECT 1;', 5) for cli in ('old', 'new', 'new', 'old') * 4],
+            )
 
 
 class TestBenchmarkRunner(unittest.TestCase):
@@ -95,6 +251,33 @@ class TestBenchmarkRunner(unittest.TestCase):
             self.assertEqual(timings, [1.0])
             self.assertIsNone(error)
             self.assertEqual(run.call_args.kwargs["env"][EXTENSION_DIRECTORY_ENV], str(extension_directory.resolve()))
+
+    def test_base_answers_override_preserves_pr_sources_and_answers(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            source_root = Path(temp_directory) / "duckdb"
+            dsdgen_directory = source_root / "extension/tpcds/dsdgen"
+            pr_answers = dsdgen_directory / "answers/sf10"
+            pr_answers.mkdir(parents=True)
+            (pr_answers / "38.csv").write_text("487", encoding="utf-8")
+            queries = dsdgen_directory / "queries"
+            queries.mkdir()
+            (queries / "38.sql").write_text("SELECT count(*) FROM t;", encoding="utf-8")
+            base_answers = Path(temp_directory) / "base-answers"
+            (base_answers / "sf10").mkdir(parents=True)
+            (base_answers / "sf10/38.csv").write_text("488", encoding="utf-8")
+
+            base_root = Path(temp_directory) / "base"
+            pr_root = Path(temp_directory) / "pr"
+            create_isolated_benchmark_root(source_root, base_root, base_answers)
+            create_isolated_benchmark_root(source_root, pr_root)
+
+            answer_path = "extension/tpcds/dsdgen/answers/sf10/38.csv"
+            self.assertEqual((base_root / answer_path).read_text(encoding="utf-8"), "488")
+            self.assertEqual((pr_root / answer_path).read_text(encoding="utf-8"), "487")
+            self.assertEqual((source_root / answer_path).read_text(encoding="utf-8"), "487")
+            query_path = "extension/tpcds/dsdgen/queries/38.sql"
+            self.assertEqual((base_root / query_path).resolve(), (source_root / query_path).resolve())
+            self.assertEqual((pr_root / query_path).resolve(), (source_root / query_path).resolve())
 
     def test_surfaces_incorrect_result_diagnostic(self):
         completed_process = subprocess.CompletedProcess(
@@ -344,6 +527,25 @@ print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
 print("INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment", file=sys.stderr)
 """
 
+    tpcds_answers_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+root = Path(sys.argv[sys.argv.index("--root-dir") + 1])
+expected = (root / "extension/tpcds/dsdgen/answers/sf10/38.csv").read_text().splitlines()[1]
+actual = "488" if label == "old" else "487"
+print("name\\trun\\ttiming", file=sys.stderr)
+if expected != actual:
+    print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+    print(f"INCORRECT RESULT: expected {expected}, got {actual}", file=sys.stderr)
+else:
+    runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+    for run in range(1, runs + 1):
+        print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
     benchmark_data_runner_source = """#!/usr/bin/env python3
 import os
 import sys
@@ -427,6 +629,7 @@ for run in range(1, runs + 1):
         expected_memory_limit=None,
         expected_benchmark_argument=None,
         step_summary=False,
+        old_tpcds_answer=None,
     ):
         with tempfile.TemporaryDirectory() as temp_directory:
             temp_path = Path(temp_directory)
@@ -476,6 +679,11 @@ for run in range(1, runs + 1):
             ]
             if extra_args:
                 command.extend(extra_args)
+            if old_tpcds_answer is not None:
+                answers = temp_path / "base-answers"
+                (answers / "sf10").mkdir(parents=True)
+                (answers / "sf10/38.csv").write_text(f"count_star()\n{old_tpcds_answer}\n", encoding="utf-8")
+                command.extend(["--old-tpcds-answers", str(answers)])
             process = subprocess.run(
                 command,
                 cwd=self.repository_root,
@@ -488,6 +696,38 @@ for run in range(1, runs + 1):
             order = order_log.read_text(encoding="utf-8").splitlines() if order_log.exists() else []
             summary = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
             return process, order, summary
+
+    def test_tpcds_generator_change_uses_each_revisions_answers(self):
+        for base_answer, returncode in [(None, 1), ("488", 0), ("486", 1)]:
+            with self.subTest(base_answer=base_answer):
+                process, _, _ = self.run_regression_test(
+                    self.tpcds_answers_runner_source,
+                    extra_args=["--samples", "5"],
+                    old_tpcds_answer=base_answer,
+                )
+                self.assertEqual(process.returncode, returncode, process.stdout + process.stderr)
+                if returncode:
+                    self.assertIn("INCORRECT RESULT:", process.stdout)
+
+    def test_tpcds_answer_override_still_rejects_incorrect_pr_results(self):
+        process, _, _ = self.run_regression_test(
+            self.tpcds_answers_runner_source.replace('else "487"', 'else "486"'),
+            extra_args=["--samples", "5"],
+            old_tpcds_answer="488",
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn("INCORRECT RESULT: expected 487, got 486", process.stdout)
+
+    def test_missing_base_tpcds_answers_are_rejected(self):
+        process, _, _ = self.run_regression_test(
+            self.stable_runner_source,
+            extra_args=[
+                "--old-tpcds-answers",
+                str(self.repository_root / "missing-tpcds-answers"),
+            ],
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn("Failed to find base TPC-DS answers directory", process.stdout)
 
     @staticmethod
     def expected_order(total_runs):

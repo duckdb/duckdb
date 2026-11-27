@@ -1,5 +1,7 @@
 #include "catch.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -66,11 +68,11 @@ static idx_t WriteCheckpointMarkers(DuckDB &db, Connection &con, idx_t count) {
 TEST_CASE("Truncate a failed checkpoint marker before making its WAL writable", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 
 	auto database_path = TestCreatePath("failed_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -106,11 +108,11 @@ TEST_CASE("Truncate a failed checkpoint marker before making its WAL writable", 
 TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 
 	auto database_path = TestCreatePath("checkpoint_marker_not_at_end");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -145,10 +147,10 @@ TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[stor
 TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
-	config->options.abort_on_wal_failure = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
+	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
 
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	for (idx_t flush_bytes = 0; flush_bytes <= 1; flush_bytes++) {
 		auto database_path = TestCreatePath("torn_checkpoint_flush_" + to_string(flush_bytes));
 		auto wal_path = database_path + ".wal";
@@ -190,12 +192,12 @@ TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "
 TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
-	config->options.abort_on_wal_failure = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
+	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
 
 	auto database_path = TestCreatePath("torn_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -226,12 +228,12 @@ TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage
 TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint marker", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->options.storage_compatibility = StorageCompatibility::FromString("v1.4.0");
 
 	auto database_path = TestCreatePath("mismatched_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -272,13 +274,13 @@ TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint m
 TEST_CASE("Reject multiple checkpoint markers before changing WAL files", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
-	config->options.checkpoint_on_shutdown = false;
+	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 
 	auto database_path = TestCreatePath("multiple_checkpoint_markers");
 	auto wal_path = database_path + ".wal";
 	auto checkpoint_wal_path = database_path + ".wal.checkpoint";
 	auto recovery_wal_path = database_path + ".wal.recovery";
-	LocalFileSystem fs;
+	auto &fs = TestLocalFileSystem();
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 

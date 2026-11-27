@@ -1,0 +1,69 @@
+# name: test/sql/copy/parquet/parquet_all_nan_row_group.test
+# description: A row group whose non-NULL values are all NaN is pruned by filters that NaN cannot satisfy
+# group: [parquet]
+
+require parquet
+
+# the row group boundaries below assume the default vector size
+require vector_size 2048
+
+# row groups 0 and 1 hold 0 - 4095, row group 2 holds only NaN and NULL values: it has no min/max, only counts
+statement ok
+COPY (SELECT CASE WHEN i < 4096 THEN i::DOUBLE WHEN i % 10 = 0 THEN NULL ELSE 'nan'::DOUBLE END AS d FROM range(6144) t(i))
+TO '{TEST_DIR}/all_nan_row_group.parquet' (ROW_GROUP_SIZE 2048);
+
+query IIIII
+SELECT row_group_id, row_group_num_rows, stats_max_value, stats_null_count, stats_nan_count
+FROM parquet_metadata('{TEST_DIR}/all_nan_row_group.parquet') ORDER BY row_group_id
+----
+0	2048	2047.0	0	0
+1	2048	4095.0	0	0
+2	2048	NULL	205	1843
+
+# NaN cannot satisfy d < 5: only the first row group is read
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d < 5
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d < 5
+----
+5
+
+# NaN compares larger than any other value: only the NaN row group is read
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d > 5000
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d > 5000
+----
+1843
+
+# filters that NaN or NULL satisfies keep the row group
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d = 'nan'::DOUBLE
+----
+1843
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE isnan(d)
+----
+1843
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d >= 4095
+----
+1844
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_nan_row_group.parquet' WHERE d IS NULL
+----
+205
+
+query II
+SELECT min(d), max(d) FROM '{TEST_DIR}/all_nan_row_group.parquet'
+----
+0.0	nan

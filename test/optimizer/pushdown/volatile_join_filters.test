@@ -1,0 +1,101 @@
+# name: test/optimizer/pushdown/volatile_join_filters.test
+# description: Filters retain the evaluation boundary of volatile join conditions
+# group: [pushdown]
+
+statement ok
+SET threads = 1;
+
+# Exercise pushdown independently of pullup and other join-filtering passes.
+statement ok
+SET disabled_optimizers = 'filter_pullup,statistics_propagation,join_filter_pushdown,join_order,build_side_probe_side';
+
+statement ok
+CREATE TABLE lhs(k BIGINT);
+
+statement ok
+INSERT INTO lhs VALUES (1);
+
+statement ok
+CREATE TABLE rhs(k BIGINT);
+
+statement ok
+INSERT INTO rhs VALUES (7), (1);
+
+# A deterministic equality must not filter rows before another condition consumes its sequence.
+statement ok
+CREATE SEQUENCE left_calls;
+
+query I
+SELECT count(r.k)
+FROM lhs l LEFT JOIN rhs r
+  ON l.k = r.k AND l.k + 1 = r.k + nextval('left_calls')
+WHERE l.k IN (1, 3);
+----
+0
+
+query I
+SELECT currval('left_calls');
+----
+2
+
+statement ok
+CREATE SEQUENCE inner_calls;
+
+query I
+SELECT count(*)
+FROM lhs l JOIN rhs r
+  ON l.k = r.k AND l.k + 1 = r.k + nextval('inner_calls')
+WHERE l.k IN (1, 3);
+----
+0
+
+query I
+SELECT currval('inner_calls');
+----
+2
+
+# The same boundary applies to a volatile ASOF inequality.
+statement ok
+CREATE SEQUENCE asof_calls;
+
+query I
+SELECT count(r.k)
+FROM lhs l ASOF LEFT JOIN rhs r
+  ON l.k = r.k AND l.k + 1 >= r.k + nextval('asof_calls')
+WHERE l.k IN (1, 3);
+----
+0
+
+query I
+SELECT currval('asof_calls');
+----
+2
+
+# Left-input filters also stay above an arbitrary volatile join condition.
+statement ok
+CREATE TABLE any_lhs(k BIGINT);
+
+statement ok
+INSERT INTO any_lhs VALUES (7), (1);
+
+statement ok
+CREATE TABLE any_rhs(k BIGINT);
+
+statement ok
+INSERT INTO any_rhs VALUES (1);
+
+statement ok
+CREATE SEQUENCE any_calls;
+
+query I
+SELECT count(r.k)
+FROM any_lhs l LEFT JOIN any_rhs r
+  ON l.k + r.k + nextval('any_calls') = 4
+WHERE l.k IN (1, 3);
+----
+1
+
+query I
+SELECT currval('any_calls');
+----
+2

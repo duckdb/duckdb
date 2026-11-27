@@ -43,6 +43,27 @@ struct ErrorFun {
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+	static bool IsError(const BoundScalarFunction &function);
+};
+
+struct HasErrorFun {
+	static constexpr const char *Name = "has_error";
+	static constexpr const char *Parameters = "expr";
+	static constexpr const char *Description = "Returns true when evaluating the expression raises an error and false otherwise. Errors are captured per row, exactly where try(expr) returns NULL.";
+	static constexpr const char *Example = "has_error(1 // 0)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct TryRethrowFun {
+	static constexpr const char *Name = "__internal_try_rethrow";
+	static constexpr const char *Parameters = "error,value";
+	static constexpr const char *Description = "Raises an error when the flag is set and returns the value otherwise. Created by the TRY subquery lowering to re-raise a captured error at the use site.";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
 };
 
 struct BarrierFun {
@@ -71,6 +92,16 @@ struct InvokeFun {
 	static constexpr const char *Description = "Invokes a lambda function with the given arguments";
 	static constexpr const char *Example = "invoke(x -> x + 1, 5)";
 	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct HashFun {
+	static constexpr const char *Name = "hash";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.";
+	static constexpr const char *Example = "hash('🦆')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };

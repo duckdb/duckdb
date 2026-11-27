@@ -21,9 +21,10 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+                               PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                               JoinType join_type, idx_t estimated_cardinality,
+                               unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
                         estimated_cardinality, std::move(pushdown_info)) {
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
@@ -63,12 +64,14 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
 		join_key_types.push_back(cond.GetLHS().GetReturnType());
 	}
+	tail_predicate = CreateTailPredicate(context, conditions, 2);
 }
 
-PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality)
-    : PhysicalIEJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+                               PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                               JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalIEJoin(physical_plan, context, op, left, right, std::move(cond), join_type, estimated_cardinality,
+                     nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -305,7 +308,9 @@ public:
 	}
 
 	bool TryPrepareNextStage();
-	bool TryNextTask(TaskPtr &task, Task &task_local);
+	//! Finish the current task (if any), advance the stage if that was its last task, and try to get the next task.
+	//! Runs under the lock so that a caller can decide to block on failure without missing an unblock.
+	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	void ExecuteLiTask(ClientContext &client);
 	void ExecutePermutationTask(ClientContext &client);
@@ -416,7 +421,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), true_sel(STANDARD_VECTOR_SIZE), left_executor(client), right_executor(client),
-	      simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr), right_matches(nullptr)
+	      tail_executor(client), simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr),
+	      right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -461,6 +467,8 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
+		tail_executor.AddExpression(*op.tail_predicate);
+		tail_keys.InitializeEmpty(PhysicalRangeJoin::GetTailTypes(op.conditions, 2));
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -483,7 +491,10 @@ public:
 		return !joiner && !left_matches && !right_matches;
 	}
 
-	bool TryAssignTask();
+	//! Release the local state of the current task (if any)
+	void FinishTask();
+	//! Set up the local state for executing a task acquired through IEJoinGlobalSourceState::TryNextTaskLocked
+	void InitializeTask();
 	//! Reports the progress of the current task
 	void UpdateProgress() {
 		if (!task) {
@@ -584,6 +595,9 @@ public:
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
 
+	ExpressionExecutor tail_executor;
+	DataChunk tail_keys;
+
 	DataChunk unprojected;
 
 	//! Simple join subselection
@@ -602,21 +616,24 @@ public:
 
 	//! Simple Joins
 	idx_t anti_lsel = 0;
+
+	//! Whether this task has produced any rows yet.
+	//! A task that has produced rows must not block waiting for other tasks: the sink may be waiting for it.
+	bool produced = false;
 };
 
-bool IEJoinLocalSourceState::TryAssignTask() {
+void IEJoinLocalSourceState::FinishTask() {
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
-	if (task) {
-		task_progress.Finish(gsource.task_progress);
-		++gsource.GetStageNext(task->stage);
-		left_matches = nullptr;
-		right_matches = nullptr;
+	if (!task) {
+		return;
 	}
+	task_progress.Finish(gsource.task_progress);
+	left_matches = nullptr;
+	right_matches = nullptr;
+}
 
-	if (!gsource.TryNextTask(task, task_local)) {
-		return false;
-	}
+void IEJoinLocalSourceState::InitializeTask() {
 	task_progress.Start();
 
 	auto &gsink = gsource.gsink;
@@ -676,8 +693,6 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	case IEJoinSourceStage::DONE:
 		break;
 	}
-
-	return true;
 }
 
 void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt) {
@@ -836,9 +851,8 @@ void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChu
 const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	auto &op = gsource.op;
 	const auto &conditions = op.conditions;
-	auto sel = FlatVector::IncrementalSelectionVector();
 	if (conditions.size() <= 2) {
-		return sel;
+		return FlatVector::IncrementalSelectionVector();
 	}
 
 	// If there are more expressions to compute,
@@ -850,32 +864,26 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	right_executor.SetChunk(rpayload);
 
 	auto result_count = lpayload.size();
-	auto tail_count = result_count;
-	auto match_sel = &true_sel;
 	left_keys.Reset();
 	right_keys.Reset();
-	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
+	for (idx_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 		auto &left = left_keys.data[cmp_idx];
 		left_executor.ExecuteExpression(cmp_idx, left);
+		tail_keys.data[cmp_idx].Reference(left);
 
 		auto &right = right_keys.data[cmp_idx];
 		right_executor.ExecuteExpression(cmp_idx, right);
-
-		if (tail_count < result_count) {
-			left.Slice(*sel, tail_count);
-			right.Slice(*sel, tail_count);
-		}
-		tail_count =
-		    op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel, tail_count, match_sel);
-		sel = match_sel;
+		tail_keys.data[tail_cols + cmp_idx].Reference(right);
 	}
+	tail_keys.CheckCardinality(result_count);
+	const auto tail_count = tail_executor.SelectExpression(tail_keys, true_sel);
 
 	if (tail_count < result_count) {
-		lpayload.Slice(*sel, tail_count);
-		rpayload.Slice(*sel, tail_count);
+		lpayload.Slice(true_sel, tail_count);
+		rpayload.Slice(true_sel, tail_count);
 	}
 
-	return sel;
+	return &true_sel;
 }
 
 void IEJoinLocalSourceState::MergePayloads(DataChunk &chunk) {
@@ -903,7 +911,7 @@ void IEJoinLocalSourceState::SplitPayloads(DataChunk &chunk) {
 		if (col_idx < left_cols) {
 			lpayload.data[col_idx].Reference(chunk.data[col_idx]);
 		} else {
-			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx - left_cols]);
+			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx]);
 		}
 	}
 }
@@ -1198,12 +1206,21 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 
 		//	Apply any arbitrary predicate
 		MergePayloads(chunk);
+		SelectionVector match_sel;
 		if (op.predicate) {
-			sel = ApplyArbitraryPredicate(chunk);
+			//	The predicate selection is relative to the rows that passed the tail conditions,
+			//	so combine the two to index the original join pairs
+			auto tail_sel = sel;
+			auto predicate_sel = ApplyArbitraryPredicate(chunk);
 			result_count = chunk.size();
 			if (!result_count) {
 				continue;
 			}
+			match_sel.Initialize(result_count);
+			for (idx_t i = 0; i < result_count; i++) {
+				match_sel.set_index(i, tail_sel->get_index(predicate_sel->get_index(i)));
+			}
+			sel = &match_sel;
 		}
 
 		//	We need all of the data to compute other predicates,
@@ -1332,19 +1349,20 @@ void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
 	}
 
 	++finished;
+	++GetStageNext(task->stage);
 }
 
-bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
+bool IEJoinGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 	FinishTask(task);
+	task = nullptr;
 
-	if (!HasMoreTasks()) {
-		task = nullptr;
-		return false;
+	//	If that was the last task of the stage, move on and wake up the tasks waiting for the next stage
+	if (TryPrepareNextStage() || stage == IEJoinSourceStage::DONE) {
+		UnblockTasks();
 	}
 
-	if (TryPrepareNextStage()) {
-		UnblockTasks();
+	if (!HasMoreTasks()) {
+		return false;
 	}
 
 	if (TryNextTask(task_local)) {
@@ -1352,8 +1370,6 @@ bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 		++started;
 		return true;
 	}
-
-	task = nullptr;
 
 	return false;
 }
@@ -1462,16 +1478,37 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.stage != IEJoinSourceStage::DONE && result.size() == 0) {
-		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
-			lsource.ExecuteTask(context, result, input.interrupt_state);
-			lsource.UpdateProgress();
-		} else {
-			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
-			if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {
-				gsource.UnblockTasks();
-			} else {
-				return gsource.BlockSource(input.interrupt_state);
+		if (lsource.TaskFinished()) {
+			{
+				// Finish the current task, advance the stage if it was the last one, look for the next task and
+				// decide what to do without one, all under a single acquisition of the lock: the decision to block
+				// has to be made under the same lock as the failed search, or the unblock could slip in between
+				// and no one would ever wake this task up again.
+				annotated_lock_guard<annotated_mutex> guard(gsource.lock);
+				lsource.FinishTask();
+				if (!gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
+					if (gsource.stage == IEJoinSourceStage::DONE) {
+						break;
+					}
+					if (lsource.produced) {
+						// The remaining tasks can only start once the other tasks of this stage have finished.
+						// This task has already handed rows to the sink, which may in turn be waiting for this task
+						// (e.g., a partitioned COPY cannot flush until every producer has combined), so blocking
+						// here could deadlock: let the tasks that are still running finish the join instead.
+						return SourceResultType::FINISHED;
+					}
+					// there are more tasks available, but we can't execute them yet
+					// block the source
+					return gsource.BlockSource(input.interrupt_state);
+				}
 			}
+			// Set up the task outside the lock: it allocates per-task state
+			lsource.InitializeTask();
+		}
+		lsource.ExecuteTask(context, result, input.interrupt_state);
+		lsource.UpdateProgress();
+		if (result.size() != 0) {
+			lsource.produced = true;
 		}
 	}
 	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;

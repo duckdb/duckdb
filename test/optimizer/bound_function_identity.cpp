@@ -187,7 +187,7 @@ TEST_CASE("Optimizer-introduced constant_or_null keeps its definition", "[optimi
 	con.BeginTransaction();
 	auto functions = PlanIdentityFunctions(con, "SELECT i * 0 FROM integers");
 	auto &fun = RequireIdentityFunction(functions, "constant_or_null");
-	// the bind derives the return type from the leading constant
+	// the return type is the type of the leading constant
 	REQUIRE(fun.return_type == LogicalType::INTEGER);
 	REQUIRE(fun.arguments.size() == 2);
 	con.Rollback();
@@ -203,7 +203,7 @@ TEST_CASE("Aggregate rewrites keep the definition of the aggregates they introdu
 	con.BeginTransaction();
 	// avg(x) is rewritten into sum(x) / count(x)
 	{
-		auto functions = PlanIdentityFunctions(con, "SELECT g, avg(i) FROM integers GROUP BY g");
+		auto functions = PlanIdentityFunctions(con, "SELECT avg(i) FROM integers");
 		auto &count = RequireIdentityFunction(functions, "count");
 		REQUIRE(count.is_aggregate);
 		REQUIRE(count.return_type == LogicalType::BIGINT);
@@ -214,7 +214,7 @@ TEST_CASE("Aggregate rewrites keep the definition of the aggregates they introdu
 	}
 	// over a column without NULLs, statistics propagation turns the introduced count into a count_star
 	{
-		auto functions = PlanIdentityFunctions(con, "SELECT g, avg(g) FROM integers GROUP BY g");
+		auto functions = PlanIdentityFunctions(con, "SELECT avg(g) FROM integers");
 		REQUIRE(FindIdentityFunction(functions, "count_star").IsValid());
 	}
 	// ROLLUP is cascaded through exported aggregate states combined by combine_aggr()
@@ -253,6 +253,8 @@ TEST_CASE("Aggregate reuse keeps the definition of combine_aggr()", "[optimizer]
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE reuse_fact(k INTEGER, v INTEGER, w INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query(
 	    "INSERT INTO reuse_fact VALUES (1, 10, 1), (1, 20, 2), (2, 5, 3), (3, 40, 4), (3, 50, 5), (4, NULL, 6)"));
+	// Collect all distinct values so the expected join order is independent of vector-size sampling.
+	REQUIRE_NO_FAIL(con.Query("ANALYZE reuse_owner; ANALYZE reuse_dim; ANALYZE reuse_fact;"));
 
 	con.BeginTransaction();
 	auto functions = PlanIdentityFunctions(con, "SELECT o.k, d.label, sum(f.v) "
@@ -378,7 +380,7 @@ TEST_CASE("Exported recursive payload aggregates resolve qualified schemas",
 	connection.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*connection.context, Identifier("memory"));
 	MetaTransaction::Get(*connection.context)
-	    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	    .ModifyDatabase(*connection.context, catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
 	for (idx_t schema = 0; schema < 3; schema++) {
 		auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
 		    *connection.context, QualifiedName("system", "main", schema == 0 ? "min" : "max"));

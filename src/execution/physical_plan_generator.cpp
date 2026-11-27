@@ -105,6 +105,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 		return CreatePlan(op.Cast<LogicalOrder>());
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		return CreatePlan(op.Cast<LogicalTopN>());
+	case LogicalOperatorType::LOGICAL_TOP_KEY_FILTER:
+		return CreatePlan(op.Cast<LogicalTopKeyFilter>());
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return CreatePlan(op.Cast<LogicalCopyToFile>());
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -151,8 +153,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 		return CreatePlan(op.Cast<LogicalDistinct>());
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return CreatePlan(op.Cast<LogicalPrepare>());
-	case LogicalOperatorType::LOGICAL_EXECUTE:
-		return CreatePlan(op.Cast<LogicalExecute>());
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:

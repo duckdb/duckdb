@@ -1,0 +1,70 @@
+# name: test/sql/timezone/timestamp_to_time_of_day_statistics.test
+# description: Filters on the time of day of a timestamp do not use the bounds of the timestamps in any time zone
+# group: [timezone]
+
+require icu
+
+# UTC midnights around a UTC noon, one of them before 1970
+# temporary, older versions cannot read a TIMESTAMPTZ_NS column in a database
+statement ok
+CREATE TEMPORARY TABLE noon AS
+SELECT ts::TIMESTAMPTZ AS tz, ts::TIMESTAMPTZ_NS AS tzns, ts::TIMESTAMP AS us, ts::TIMESTAMP_NS AS ns
+FROM (VALUES ('1969-12-31 00:00:00+00'), ('2020-01-01 00:00:00+00'), ('2020-01-01 12:00:00+00'), ('2020-01-02 00:00:00+00')) v(ts);
+
+foreach zone UTC America/Los_Angeles Asia/Kolkata Pacific/Chatham America/Santiago
+
+statement ok
+SET TimeZone='{zone}';
+
+# the session time zone moves the time of day of a TIMESTAMPTZ
+query I
+SELECT count(*) FROM noon WHERE tz::TIMETZ = CAST(TIMESTAMPTZ '2020-01-01 12:00:00+00' AS TIMETZ);
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE tz::TIMETZ <> CAST(TIMESTAMPTZ '2020-01-01 12:00:00+00' AS TIMETZ);
+----
+3
+
+# the constants go through the same cast as the column, whatever that cast makes of the session time zone
+query I
+SELECT count(*) FROM noon WHERE tzns::TIMETZ = CAST(TIMESTAMPTZ_NS '2020-01-01 12:00:00+00' AS TIMETZ);
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE tzns::TIMETZ <> CAST(TIMESTAMPTZ_NS '2020-01-01 12:00:00+00' AS TIMETZ);
+----
+3
+
+query I
+SELECT count(*) FROM noon WHERE us::TIMETZ = CAST(TIMESTAMP '2020-01-01 12:00:00' AS TIMETZ);
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE us::TIME = TIME '12:00:00';
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE ns::TIME_NS = TIME_NS '12:00:00';
+----
+1
+
+query I
+SELECT count(*) FROM noon WHERE ns::TIME_NS < TIME_NS '12:00:00';
+----
+3
+
+foreach source,target tz,TIMETZ tzns,TIMETZ us,TIMETZ us,TIME ns,TIME ns,TIME_NS
+
+query II
+SELECT s.min, s.max FROM (SELECT stats({source}::{target}) s FROM noon LIMIT 1);
+----
+NULL	NULL
+
+endloop
+
+endloop

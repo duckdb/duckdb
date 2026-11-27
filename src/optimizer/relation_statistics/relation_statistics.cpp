@@ -2,15 +2,75 @@
 
 namespace duckdb {
 
-DistinctCount::DistinctCount(idx_t distinct_count, DistinctCountSource source)
+DistinctCount::DistinctCount(CardinalityValue distinct_count, DistinctCountSource source)
     : distinct_count(distinct_count), source(source) {
 }
 
-RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount distinct_count, Identifier name)
-    : binding(binding), distinct_count(distinct_count), name(std::move(name)) {
+void SemiAntiJoinDomainEvidence::TightenDomainBound(idx_t bound) {
+	if (!domain_bound.IsValid() || bound < domain_bound.GetIndex()) {
+		domain_bound = optional_idx(bound);
+	}
 }
 
-RelationStats::RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+void SemiAntiJoinDomainEvidence::MarkUnique() {
+	is_unique = true;
+}
+
+void SemiAntiJoinDomainEvidence::Invalidate() {
+	domain_bound = optional_idx();
+	is_unique = false;
+}
+
+optional_idx SemiAntiJoinDomainEvidence::GetDomainBound() const {
+	return domain_bound;
+}
+
+optional<CardinalityValue> SemiAntiJoinDomainEvidence::GetSupportedDomainSize(CardinalityValue current_domain) const {
+	optional<CardinalityValue> result;
+	if (is_unique) {
+		result = current_domain;
+	}
+	if (domain_bound.IsValid()) {
+		auto bound = CardinalityValue(domain_bound.GetIndex());
+		result = result ? MinValue(*result, bound) : bound;
+	}
+	return result;
+}
+
+RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount domain, Identifier name)
+    : RelationColumnStats(binding, domain, domain, std::move(name)) {
+}
+
+RelationColumnStats::RelationColumnStats(ColumnBinding binding, DistinctCount total_domain,
+                                         DistinctCount current_domain, Identifier name,
+                                         SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence)
+    : binding(binding), total_domain(total_domain), current_domain(current_domain),
+      semi_anti_join_domain_evidence(semi_anti_join_domain_evidence), name(std::move(name)) {
+}
+
+optional<CardinalityValue> RelationColumnStats::GetSupportedSemiAntiDomainSize() const {
+	return semi_anti_join_domain_evidence.GetSupportedDomainSize(current_domain.distinct_count);
+}
+
+RelationStats::RelationStats() : cardinality(1), row_retention(1), stats_initialized(false) {
+}
+
+bool RelationStats::IsEmpty() const {
+	return max_cardinality.IsValid() && max_cardinality.GetIndex() == 0;
+}
+
+CardinalityValue RelationStats::GetCardinality() const {
+	return max_cardinality.IsValid() ? MinValue(cardinality, CardinalityValue(max_cardinality.GetIndex()))
+	                                 : cardinality;
+}
+
+CardinalityValue RelationStats::GetCardinalityForCost() const {
+	return IsEmpty() ? CardinalityValue(0) : MaxValue(CardinalityValue(1), GetCardinality());
+}
+
+idx_t RelationStats::GetCardinalityForPlan() const {
+	auto result = GetCardinalityForCost().GetIndex();
+	return max_cardinality.IsValid() ? MinValue(result, max_cardinality.GetIndex()) : result;
 }
 
 optional_idx RelationStats::FindColumn(ColumnBinding binding) const {
@@ -42,8 +102,43 @@ bool RelationStats::MatchesBindings(const vector<ColumnBinding> &bindings) const
 	return true;
 }
 
+void RelationStats::CapCurrentDomainsToCardinality() {
+	cardinality = GetCardinality();
+	for (auto &column : columns) {
+		column.current_domain.distinct_count = MinValue(column.current_domain.distinct_count, cardinality);
+	}
+}
+
+RelationColumnStatsLookup::RelationColumnStatsLookup(const RelationStats &stats) {
+	AddRelation(stats);
+}
+
+void RelationColumnStatsLookup::AddRelation(const RelationStats &stats) {
+	for (auto &column : stats.columns) {
+		columns.emplace(column.binding, column);
+	}
+}
+
+optional_ptr<const RelationColumnStats> RelationColumnStatsLookup::Find(ColumnBinding binding) const {
+	auto entry = columns.find(binding);
+	if (entry == columns.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
 void RelationStats::Verify(const vector<ColumnBinding> &bindings) const {
 	D_ASSERT(!stats_initialized || MatchesBindings(bindings));
+	if (!stats_initialized) {
+		return;
+	}
+	D_ASSERT(cardinality == GetCardinality());
+	D_ASSERT(row_retention >= 0 && row_retention <= 1);
+	for (auto &column : columns) {
+		(void)column;
+		D_ASSERT(column.current_domain.distinct_count <= column.total_domain.distinct_count);
+		D_ASSERT(column.current_domain.distinct_count <= cardinality);
+	}
 }
 
 } // namespace duckdb

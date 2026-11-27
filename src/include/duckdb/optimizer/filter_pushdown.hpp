@@ -15,13 +15,14 @@
 namespace duckdb {
 
 class LogicalGet;
+class LogicalWindow;
 class Optimizer;
 
 class FilterPushdown {
 public:
 	enum class ProjectionMode : uint8_t { ALLOW_COMPUTED_EXPRESSIONS, PRESERVE_COMPUTED_EXPRESSIONS };
 
-	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true,
+	explicit FilterPushdown(Optimizer &optimizer,
 	                        ProjectionMode projection_mode = ProjectionMode::ALLOW_COMPUTED_EXPRESSIONS);
 
 	//! Perform filter pushdown
@@ -29,12 +30,16 @@ public:
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
-	void CheckMarkToSemi(LogicalOperator &op, const unordered_set<TableIndex> &table_bindings);
-
 	//! Whether a filter carrying a barrier may be pushed through this operator - i.e. whether the operator is
 	//! guaranteed not to remove any rows. A barred expression must never be evaluated on rows that an operator below
 	//! it filters out.
 	static bool BarrierCanPassThrough(LogicalOperatorType type);
+	//! Whether the filter compares something that every window expression partitions by with constants, so that it
+	//! keeps or removes whole partitions
+	static bool ComparesWindowPartitions(const LogicalWindow &window, const Expression &filter);
+	//! Whether every window expression is a ranking function without arguments, e.g. row_number(), which neither fails
+	//! nor has side effects, so a filter may change the partitions it runs for
+	static bool OnlyRanksWithoutArguments(const LogicalWindow &window);
 
 	struct Filter {
 		unordered_set<TableIndex> bindings;
@@ -55,14 +60,11 @@ public:
 private:
 	Optimizer &optimizer;
 	FilterCombiner combiner;
-	bool convert_mark_joins;
 	ProjectionMode projection_mode;
 
 	vector<unique_ptr<Filter>> filters;
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
-	//! Push down a distinct operator
-	unique_ptr<LogicalOperator> PushdownDistinct(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalFilter op
 	unique_ptr<LogicalOperator> PushdownFilter(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalCrossProduct op
@@ -122,6 +124,8 @@ private:
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively
 	// pushing down into its children (if any)
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
+	//! Rewrite a child of op with this pushdown, keeping op's projection map of that child on its new layout
+	void RewriteChild(LogicalOperator &op, idx_t child_idx);
 	//! Adds a filter to the set of filters. Returns FilterResult::UNSATISFIABLE if the subtree should be stripped, or
 	//! FilterResult::SUCCESS otherwise
 

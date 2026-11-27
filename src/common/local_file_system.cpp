@@ -1,3 +1,4 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
@@ -64,7 +66,7 @@ namespace duckdb {
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
-		auto normalized_file = ExpandPath(filename, opener);
+		auto normalized_file = FileSystem::ExpandPath(filename, opener);
 		struct stat status;
 		if (stat(normalized_file.c_str(), &status) == 0 && S_ISREG(status.st_mode)) {
 			return true;
@@ -76,7 +78,7 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
-		auto normalized_file = ExpandPath(filename, opener);
+		auto normalized_file = FileSystem::ExpandPath(filename, opener);
 		struct stat status;
 		if (stat(normalized_file.c_str(), &status) == 0 && (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode))) {
 			return true;
@@ -125,9 +127,9 @@ static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
 	return std::wstring(buf.data(), written);
 }
 
-static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const string &path,
+static std::wstring NormalizePathAndConvertToUnicode(BaseFileSystem &fs, const string &path,
                                                      optional_ptr<FileOpener> opener) {
-	string normalized_path = fs.ExpandPath(path, opener);
+	string normalized_path = FileSystem::ExpandPath(path, opener);
 	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
 
 	// We need to get absolute path to check the length. Normalizing it (removing "." and "..",
@@ -208,7 +210,8 @@ static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags, optional_ptr<DatabaseInstance> db)
+	UnixFileHandle(BaseFileSystem &file_system, string path, int fd, FileOpenFlags flags,
+	               optional_ptr<DatabaseInstance> db)
 	    : FileHandle(file_system, std::move(path), std::move(flags)), fd(fd), db(db) {
 	}
 	~UnixFileHandle() override {
@@ -241,7 +244,16 @@ static void CloseFileAndAppendError(int fd, string &extended_error) {
 static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
-	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+#ifdef __APPLE__
+	const auto &modification_time = s.st_mtimespec;
+#else
+	const auto &modification_time = s.st_mtim;
+#endif
+	// with the fraction of a second, so that a file rewritten within the same second gets another version tag
+	const auto modification_seconds = Timestamp::FromEpochSeconds(static_cast<int64_t>(modification_time.tv_sec));
+	file_metadata.last_modification_time =
+	    Timestamp::FromEpochMicroSeconds(AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(
+	        modification_seconds.value, static_cast<int64_t>(modification_time.tv_nsec) / Interval::NANOS_PER_MICRO));
 	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
 	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 
@@ -286,7 +298,7 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 
 // Apply a fcntl advisory lock per flags.Lock(); throws (and closes fd) on failure. Shared
 // by OpenFile and MemoryMapFile.
-static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
+static void TryAcquireFileLock(BaseFileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
 	if (flags.Lock() == FileLockType::NO_LOCK) {
 		return;
 	}
@@ -326,7 +338,7 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
 			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fl.l_pid);
 			if (!process.empty()) {
 				extended_error = "Conflicting lock is held in " + process;
 			}
@@ -368,7 +380,7 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
                                                  optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_p, opener);
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -489,8 +501,10 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 	int fd = unix_handle.fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
+		// macOS rejects a single read above INT_MAX bytes with EINVAL and Linux silently caps it, so read in chunks
+		auto chunk = MinValue<int64_t>(nr_bytes, int64_t(1) << 30);
 		int64_t bytes_read =
-		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
+		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(chunk), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 			                  strerror(errno));
@@ -625,7 +639,7 @@ optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &fil
 	if (path_p.empty()) {
 		return nullopt;
 	}
-	auto path = ExpandPath(path_p, opener);
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	struct stat status;
 	if (stat(path.c_str(), &status) != 0) {
 		auto retained_errno = errno;
@@ -652,7 +666,7 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 	ApplyLocalFileSystemDelay(opener);
 
 	if (!directory.empty()) {
-		auto normalized_dir = ExpandPath(directory, opener);
+		auto normalized_dir = FileSystem::ExpandPath(directory, opener);
 		struct stat status;
 		if (stat(normalized_dir.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
 			return true;
@@ -673,13 +687,13 @@ void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_pt
 bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
                                               optional_ptr<FileOpener> opener) {
 	if (options.mode == CreateDirectoryMode::RECURSIVE) {
-		return FileSystem::CreateDirectoryExtended(directory, options, opener);
+		return BaseFileSystem::CreateDirectoryExtended(directory, options, opener);
 	}
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
 	ApplyLocalFileSystemDelay(opener);
-	auto normalized_dir = ExpandPath(directory, opener);
+	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
 	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
 		return true;
 	}
@@ -741,13 +755,13 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
                                               optional_ptr<FileOpener> opener) {
 	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
-		auto normalized_dir = ExpandPath(directory, opener);
+		auto normalized_dir = FileSystem::ExpandPath(directory, opener);
 		return RemoveDirectoryRecursive(normalized_dir.c_str()) == 0;
 	}
 	if (options.mode != RemoveDirectoryMode::SINGLE) {
 		throw InternalException("Unknown RemoveDirectoryMode");
 	}
-	auto normalized_dir = ExpandPath(directory, opener);
+	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
 	if (rmdir(normalized_dir.c_str()) == 0) {
 		return true;
 	}
@@ -759,7 +773,7 @@ bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const Rem
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto normalized_file = ExpandPath(filename, opener);
+	auto normalized_file = FileSystem::ExpandPath(filename, opener);
 	if (std::remove(normalized_file.c_str()) != 0) {
 		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", filename,
 		                  strerror(errno));
@@ -769,7 +783,7 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
-	auto normalized_dir = ExpandPath(directory, opener);
+	auto normalized_dir = FileSystem::ExpandPath(directory, opener);
 	auto dir = opendir(normalized_dir.c_str());
 	if (!dir) {
 		return false;
@@ -851,8 +865,8 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	auto normalized_source = ExpandPath(source, opener);
-	auto normalized_target = ExpandPath(target, opener);
+	auto normalized_source = FileSystem::ExpandPath(source, opener);
+	auto normalized_target = FileSystem::ExpandPath(target, opener);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source.c_str(), normalized_target.c_str()) != 0) {
 		throw IOException({{"errno", to_string(errno)}}, "Could not rename file \"%s\" to \"%s\": %s", source, target,
@@ -866,11 +880,53 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 
 bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	char resolved[PATH_MAX];
-	if (!realpath(input.c_str(), resolved)) {
-		return false;
+	if (realpath(input.c_str(), resolved)) {
+		input = resolved;
+		return true;
 	}
-	input = resolved;
-	return true;
+	// the path might be a dangling symlink - follow the chain and canonicalize the parent of the final target
+	static constexpr idx_t MAX_SYMLINK_DEPTH = 40;
+	string current = input;
+	for (idx_t depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+		char link_target[PATH_MAX];
+		auto link_length = readlink(current.c_str(), link_target, sizeof(link_target) - 1);
+		if (link_length < 0) {
+			return false;
+		}
+		string target(link_target, NumericCast<idx_t>(link_length));
+		auto sep = current.rfind('/');
+		if (target.empty() || sep == string::npos) {
+			return false;
+		}
+		if (target[0] != '/') {
+			target = current.substr(0, sep + 1) + target;
+		}
+		if (realpath(target.c_str(), resolved)) {
+			input = resolved;
+			return true;
+		}
+		auto target_sep = target.rfind('/');
+		if (target_sep == string::npos) {
+			return false;
+		}
+		struct stat target_stat;
+		if (lstat(target.c_str(), &target_stat) == 0 && S_ISLNK(target_stat.st_mode)) {
+			current = target;
+			continue;
+		}
+		// final target does not exist - canonicalize its parent directory
+		auto parent = target.substr(0, target_sep + 1);
+		if (!realpath(parent.c_str(), resolved)) {
+			return false;
+		}
+		string result = resolved;
+		if (result.empty() || result.back() != '/') {
+			result += '/';
+		}
+		input = result + target.substr(target_sep + 1);
+		return true;
+	}
+	return false;
 }
 
 bool LocalFileSystem::PathStartsWithDrive(const string &path) {
@@ -878,12 +934,12 @@ bool LocalFileSystem::PathStartsWithDrive(const string &path) {
 }
 
 bool LocalFileSystem::IsPathAbsolute(const string &path) {
-	return FileSystem::IsPathAbsolute(path);
+	return BaseFileSystem::IsPathAbsolute(path);
 }
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto parsed = Path::FromString(ExpandPath(path_p, opener));
-	return (parsed.IsAbsolute() ? parsed : Path::FromString(GetWorkingDirectory()).Join(parsed)).ToString();
+	auto parsed = Path::FromString(FileSystem::ExpandPath(path_p, opener));
+	return (parsed.IsAbsolute() ? parsed : Path::FromString(FileSystem::GetWorkingDirectory()).Join(parsed)).ToString();
 }
 
 //===----------------------------------------------------------------------===//
@@ -951,7 +1007,7 @@ void UnixMemoryMappedFile::Close() {
 unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
                                                             const MMapOptions &options,
                                                             optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_info.path, opener);
+	auto path = FileSystem::ExpandPath(path_info.path, opener);
 	flags.Verify();
 
 	bool open_read = flags.OpenForReading();
@@ -1136,7 +1192,7 @@ static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
+	WindowsFileHandle(BaseFileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
 	                  optional_ptr<DatabaseInstance> db)
 	    : FileHandle(file_system, path, flags), position(0), fd(fd), db(db) {
 	}
@@ -1285,7 +1341,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		if (flags.ReturnNullIfNotExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
+		auto last_error = GetLastError();
+		if (flags.ReturnNullIfNotExists() && last_error == ERROR_FILE_NOT_FOUND) {
+			return nullptr;
+		}
+		// Match POSIX EEXIST handling for exclusive creation.
+		if (flags.ReturnNullIfExists() && (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)) {
 			return nullptr;
 		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1462,7 +1523,7 @@ void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_pt
 bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
                                               optional_ptr<FileOpener> opener) {
 	if (options.mode == CreateDirectoryMode::RECURSIVE) {
-		return FileSystem::CreateDirectoryExtended(directory, options, opener);
+		return BaseFileSystem::CreateDirectoryExtended(directory, options, opener);
 	}
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
@@ -1484,7 +1545,7 @@ bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const Cre
 	throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 }
 
-static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_ptr<FileOpener> opener) {
+static void DeleteDirectoryRecursive(BaseFileSystem &fs, string directory, optional_ptr<FileOpener> opener) {
 	fs.ListFiles(
 	    directory,
 	    [&](const string &fname, bool is_directory) {
@@ -1696,7 +1757,9 @@ optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &fil
 	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 	if (raw_handle == INVALID_HANDLE_VALUE) {
 		auto error_code = GetLastError();
-		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
+		// a name that cannot be a local file does not exist, as for ENOENT and ENOTDIR
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND ||
+		    error_code == ERROR_INVALID_NAME || error_code == ERROR_BAD_PATHNAME || error_code == ERROR_DIRECTORY) {
 			return nullopt;
 		}
 		SetLastError(error_code);
@@ -1745,7 +1808,7 @@ bool LocalFileSystem::PathStartsWithDrive(const string &path) {
 }
 
 bool LocalFileSystem::IsPathAbsolute(const string &path) {
-	if (FileSystem::IsPathAbsolute(path)) {
+	if (BaseFileSystem::IsPathAbsolute(path)) {
 		return true;
 	}
 	// check if this is a drive letter (e.g. C:)
@@ -1756,14 +1819,14 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 }
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_p, opener);
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	auto parsed = Path::FromString(path);
 	if (parsed.IsAbsolute()) {
 		// already absolute - nothing to do
 		return parsed.ToString();
 	}
 
-	auto parsed_wd = Path::FromString(GetWorkingDirectory());
+	auto parsed_wd = Path::FromString(FileSystem::GetWorkingDirectory());
 	if (parsed.HasDrive() && parsed_wd.GetDriveChar() != parsed.GetDriveChar()) {
 		// this is relative path "C:", and this is not the drive we are on right now
 		// (referencing D: while in $PWD in C:); In this case, default as if PWD is
@@ -1844,7 +1907,7 @@ void WindowsMemoryMappedFile::Close() {
 unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
                                                             const MMapOptions &options,
                                                             optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_info.path, opener);
+	auto path = FileSystem::ExpandPath(path_info.path, opener);
 	flags.Verify();
 
 	bool open_read = flags.OpenForReading();
@@ -1957,7 +2020,7 @@ void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
 	auto path = handle.GetPath();
 	handle.Close();
 	if (remove_path) {
-		TryRemoveFile(path);
+		TryRemoveFile(path, nullptr);
 	}
 }
 
@@ -2004,7 +2067,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 			// this is a drive only (e.g. C:\)
 			// if we reach this, this is an unknown drive letter
 			// use fallback canonicalize for the remainder
-			return current + FileSystem::CanonicalizePath(remainder);
+			return current + BaseFileSystem::CanonicalizePath(remainder, nullptr);
 		}
 		// move up one directory
 		optional_idx sep_idx;
@@ -2051,7 +2114,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 		}
 	}
 	// failed to canonicalize path - fallback to generic canonicalization
-	return FileSystem::CanonicalizePath(path);
+	return BaseFileSystem::CanonicalizePath(path, nullptr);
 }
 
 string LocalFileSystem::VersionTagFromMetadata(const FileMetadata &stats) {
@@ -2112,7 +2175,21 @@ static bool IsSymbolicLink(const string &path) {
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
                                                            bool absolute_path) {
 	vector<OpenFileInfo> result;
-	if (FileExists(path, opener) || IsPipe(path, opener)) {
+	// a regular file comes with its type, size, modification time and version tag, as from a glob
+	auto add_file = [&](const string &file_path) {
+		OpenFileInfo info(file_path);
+		auto file_metadata = GetStatsIfExists(info, opener);
+		if (file_metadata) {
+			info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+			auto &options = info.extended_info->options;
+			options.emplace("type", Value("file"));
+			FillFileOptions(*file_metadata, options);
+		}
+		result.push_back(std::move(info));
+	};
+	if (FileExists(path, opener)) {
+		add_file(path);
+	} else if (IsPipe(path, opener)) {
 		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
@@ -2121,7 +2198,9 @@ vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, o
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
+				if (FileExists(joined_path, opener)) {
+					add_file(joined_path);
+				} else if (IsPipe(joined_path, opener)) {
 					result.emplace_back(joined_path);
 				}
 			}
@@ -2131,7 +2210,7 @@ vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, o
 }
 
 struct PathSplit {
-	PathSplit(LocalFileSystem &fs, string path_p) : path(std::move(path_p)), has_glob(fs.HasGlob(path)) {
+	PathSplit(LocalFileSystem &fs, string path_p) : path(std::move(path_p)), has_glob(FileSystem::HasGlob(path)) {
 	}
 
 	string path;
@@ -2162,9 +2241,10 @@ struct ExpandDirectory {
 	}
 };
 
-static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files,
+static void CrawlDirectoryLevel(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+                                optional_ptr<vector<OpenFileInfo>> files,
                                 std::priority_queue<ExpandDirectory> &directories, idx_t split_index) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
+	auto callback = [&](OpenFileInfo &info) {
 		info.path = fs.JoinPath(path, info.path);
 		if (IsSymbolicLink(info.path)) {
 			return;
@@ -2175,12 +2255,13 @@ static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr
 		} else if (files) {
 			files->push_back(std::move(info));
 		}
-	});
+	};
+	fs.ListFiles(path, callback, opener);
 }
 
-static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<OpenFileInfo> &result) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
+static void GlobFilesInternal(LocalFileSystem &fs, optional_ptr<FileOpener> opener, const string &path,
+                              const string &glob, bool match_directory, vector<OpenFileInfo> &result) {
+	auto callback = [&](OpenFileInfo &info) {
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
 			return;
@@ -2189,7 +2270,8 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 			info.path = fs.JoinPath(path, info.path);
 			result.push_back(std::move(info));
 		}
-	});
+	};
+	fs.ListFiles(path, callback, opener);
 }
 
 struct LocalGlobResult : public LazyMultiFileList {
@@ -2211,7 +2293,7 @@ private:
 
 LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), fs(fs), path(fs.ExpandPath(path_p, opener)),
+    : LazyMultiFileList(FileOpener::TryGetContext(opener)), fs(fs), path(FileSystem::ExpandPath(path_p, opener)),
       opener(opener) {
 	if (path.empty()) {
 		finished = true;
@@ -2235,12 +2317,12 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 	if (!splits.empty() && splits[0].path == "~") {
 		// starts with home directory
-		auto home_directory = fs.GetHomeDirectory(opener);
+		auto home_directory = FileSystem::GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
-			if (!fs.HasGlob(path)) {
+			if (!FileSystem::HasGlob(path)) {
 				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
 				finished = true;
 				return;
@@ -2248,7 +2330,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 		}
 	}
 	// Check if the path has a glob at all
-	if (!fs.HasGlob(path)) {
+	if (!FileSystem::HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
 		expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
 		finished = true;
@@ -2332,23 +2414,23 @@ bool LocalGlobResult::ExpandNextPath() const {
 			if (is_last_component) {
 				// the crawl is the last component - we are looking for files in this directory
 				// any directories we encounter are added to the expand directories
-				CrawlDirectoryLevel(fs, current_path, expanded_files, expand_directories, split_index);
+				CrawlDirectoryLevel(fs, opener, current_path, expanded_files, expand_directories, split_index);
 			} else {
 				// not the last crawl
 				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
 				expand_directories.emplace(current_path, split_index + 1);
 				// now crawl the contents of this directory - but don't add any files we find
-				CrawlDirectoryLevel(fs, current_path, nullptr, expand_directories, split_index);
+				CrawlDirectoryLevel(fs, opener, current_path, nullptr, expand_directories, split_index);
 			}
 		} else {
 			// glob this directory according to the next component
 			if (is_last_component) {
 				// last component - match files and place them in the result
-				GlobFilesInternal(fs, current_path, next_component, false, expanded_files);
+				GlobFilesInternal(fs, opener, current_path, next_component, false, expanded_files);
 			} else {
 				// not the last component - match directories and add to expansion list
 				vector<OpenFileInfo> child_directories;
-				GlobFilesInternal(fs, current_path, next_component, true, child_directories);
+				GlobFilesInternal(fs, opener, current_path, next_component, true, child_directories);
 				for (auto &file : child_directories) {
 					expand_directories.emplace(std::move(file.path), split_index + 1);
 				}
@@ -2361,10 +2443,6 @@ bool LocalGlobResult::ExpandNextPath() const {
 unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
                                                              optional_ptr<FileOpener> opener) {
 	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
-}
-
-unique_ptr<FileSystem> FileSystem::CreateLocal() {
-	return make_uniq<LocalFileSystem>();
 }
 
 } // namespace duckdb

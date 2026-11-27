@@ -7,6 +7,7 @@ add_library_unity(
   conjunction_simplification.cpp
   constant_folding.cpp
   date_part_simplification.cpp
+  date_part_to_func.cpp
   date_trunc_simplification.cpp
   distinct_aggregate_optimizer.cpp
   distributivity.cpp
@@ -23,6 +24,8 @@ add_library_unity(
   move_constants.cpp
   not_comparison_simplification.cpp
   not_conjunction_simplification.cpp
+  not_constant_or_null_simplification.cpp
+  or_range_merge.cpp
   ordered_aggregate_optimizer.cpp
   predicate_factoring.cpp
   regex_optimizations.cpp

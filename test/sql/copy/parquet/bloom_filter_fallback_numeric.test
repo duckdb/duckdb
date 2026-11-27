@@ -1,0 +1,68 @@
+# name: test/sql/copy/parquet/bloom_filter_fallback_numeric.test
+# description: Typed numeric hashing and membership preservation for folded fallback filters
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE numbers AS SELECT
+ n::TINYINT AS "TINYINT", n::SMALLINT AS "SMALLINT", n::INTEGER AS "INTEGER",
+ n::BIGINT AS "BIGINT", n::UTINYINT AS "UTINYINT", n::USMALLINT AS "USMALLINT",
+ n::UINTEGER AS "UINTEGER", n::UBIGINT AS "UBIGINT", n::HUGEINT AS "HUGEINT",
+ n::UHUGEINT AS "UHUGEINT", n::FLOAT AS "FLOAT", n::DOUBLE AS "DOUBLE",
+ n::DECIMAL(4,1) AS "DECIMAL(4,1)", n::DECIMAL(18,2) AS "DECIMAL(18,2)"
+FROM (SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE (i % 50) * 2 END AS n FROM range(4096) t(i))
+
+foreach version V1 V2
+
+statement ok
+COPY numbers TO '{TEST_DIR}/numeric-fallback.parquet'
+(FORMAT PARQUET, PARQUET_VERSION '{version}', ROW_GROUP_SIZE 2048,
+ DICTIONARY_SIZE_LIMIT 0)
+
+query II
+SELECT count(bloom_filter_length), bool_and(bloom_filter_length < 512)
+FROM parquet_metadata('{TEST_DIR}/numeric-fallback.parquet')
+----
+24	true
+
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT FLOAT DOUBLE DECIMAL(4,1) DECIMAL(18,2)
+
+query I
+SELECT bool_and(NOT bloom_filter_excludes) FROM (
+ SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 0::{type})
+ UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 24::{type})
+ UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 98::{type})
+)
+----
+true
+
+query III
+SELECT
+ (SELECT count(*) FROM '{TEST_DIR}/numeric-fallback.parquet' WHERE "{type}"=0::{type}),
+ (SELECT count(*) FROM '{TEST_DIR}/numeric-fallback.parquet' WHERE "{type}"=24::{type}),
+ (SELECT count(*) FROM '{TEST_DIR}/numeric-fallback.parquet' WHERE "{type}"=98::{type})
+----
+77	77	77
+
+query I
+SELECT bool_or(bloom_filter_excludes) FROM (
+ SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 1::{type})
+ UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 25::{type})
+ UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numeric-fallback.parquet', '{type}', 97::{type})
+)
+----
+true
+
+endloop
+
+query I
+SELECT count(*) FROM (
+ (SELECT * FROM numbers EXCEPT ALL SELECT * FROM '{TEST_DIR}/numeric-fallback.parquet')
+ UNION ALL
+ (SELECT * FROM '{TEST_DIR}/numeric-fallback.parquet' EXCEPT ALL SELECT * FROM numbers)
+)
+----
+0
+
+endloop

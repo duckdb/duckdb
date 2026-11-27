@@ -5,6 +5,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -101,22 +103,28 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		auto scale = DecimalType::GetScale(type);
 		CastParameters parameters;
 		auto &result = FlatVector::GetDataMutable<DST>(col)[chunk.size()];
-		TryCastToDecimal::Operation<SRC, DST>(input, result, parameters, width, scale);
+		VectorDecimalCast::Operation<TryCastToDecimal, SRC, DST>(input, result, col, parameters, width, scale);
 		return;
 	}
 	case AppenderType::PHYSICAL: {
-		AppendValueInternal<SRC, DST>(col, input);
+		if constexpr (std::is_same<DST, bignum_t>::value) {
+			// the bignum_t tier has no physical representation among the appended types
+			throw InternalException("Physical appends are not supported for DECIMAL types wider than %d digits",
+			                        Decimal::MAX_WIDTH_INT128);
+		} else {
+			AppendValueInternal<SRC, DST>(col, input);
+		}
 		return;
 	}
 	default:
-		throw InternalException("Type not implemented for AppenderType");
+		InternalException::Throw("Type not implemented for AppenderType");
 	}
 }
 
 template <class T>
 void BaseAppender::AppendValueInternal(T input) {
 	if (column >= GetActiveTypes().size()) {
-		throw InvalidInputException("Too many appends for chunk!");
+		InvalidInputException::Throw("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
 	switch (col.GetType().id()) {
@@ -173,8 +181,11 @@ void BaseAppender::AppendValueInternal(T input) {
 		case PhysicalType::INT128:
 			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
+		case PhysicalType::VARCHAR:
+			AppendDecimalValueInternal<T, bignum_t>(col, input);
+			break;
 		default:
-			throw InternalException("Internal type not recognized for Decimal");
+			InternalException::Throw("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:
@@ -309,14 +320,14 @@ void BaseAppender::Append(interval_t value) {
 template <>
 void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	if (column >= chunk.ColumnCount()) {
-		throw InvalidInputException("Too many appends for chunk!");
+		InvalidInputException::Throw("Too many appends for chunk!");
 	}
 	AppendValue(value);
 }
 
 void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t col, idx_t row) {
 	if (col >= target.ColumnCount()) {
-		throw InvalidInputException("Too many appends for chunk!");
+		InvalidInputException::Throw("Too many appends for chunk!");
 	}
 	if (value.type() == target.GetTypes()[col]) {
 		target.data[col].SetValue(row, value);
@@ -335,7 +346,7 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 template <>
 void BaseAppender::Append(std::nullptr_t value) {
 	if (column >= chunk.ColumnCount()) {
-		throw InvalidInputException("Too many appends for chunk!");
+		InvalidInputException::Throw("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
 	FlatVector::SetNull(col, chunk.size(), true);
@@ -368,7 +379,8 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// We try to cast the chunk.
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
-	cast_chunk.Initialize(allocator, appender_types);
+	// Chunks converted from Arrow can hold more than STANDARD_VECTOR_SIZE rows
+	cast_chunk.Initialize(allocator, appender_types, MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
 	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -651,7 +663,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
-		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
+		    "AppendDefault is not supported for column %s: not a foldable default expressions.", name);
 	}
 	return it->second;
 }

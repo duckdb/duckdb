@@ -1,0 +1,36 @@
+# name: test/sql/window/window_boundary_reuse.test
+# description: Reused window prefix and sort keys preserve peers across blocks
+# group: [window]
+
+statement ok
+CREATE TABLE window_inputs AS
+SELECT p, k, v FROM range(7) a(p), range(181) b(k), range(23) c(v)
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads}
+
+query I
+SELECT count(*) FROM (
+    SELECT *, row_number() OVER (PARTITION BY p ORDER BY k, v) r,
+           rank() OVER (PARTITION BY p ORDER BY k) rk,
+           dense_rank() OVER (PARTITION BY p ORDER BY k) dr
+    FROM window_inputs
+) WHERE r <> k * 23 + v + 1 OR rk <> k * 23 + 1 OR dr <> k + 1
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT *, rank() OVER (PARTITION BY p ORDER BY k DESC NULLS FIRST) r,
+           rank() OVER (PARTITION BY p ORDER BY create_sort_key(k, 'DESC NULLS FIRST')) s
+    FROM (SELECT p, CASE WHEN k % 17 = 0 THEN NULL ELSE k END k FROM window_inputs)
+) WHERE r <> s
+----
+0
+
+endloop
+
+statement ok
+DROP TABLE window_inputs

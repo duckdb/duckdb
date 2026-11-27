@@ -89,7 +89,7 @@ struct StringAggFunction {
 	}
 
 	static inline void PerformOperation(StringAggState &state, ArenaAllocator &allocator, string_t str,
-	                                    optional_ptr<FunctionData> data_p) {
+	                                    optional_ptr<const FunctionData> data_p) {
 		auto &data = data_p->Cast<StringAggBindData>();
 		PerformOperation(state, allocator, str.GetData(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
@@ -142,7 +142,7 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 	return make_uniq<StringAggBindData>(std::move(separator_string));
 }
 
-void StringAggSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+void StringAggSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
                         const BoundAggregateFunction &function) {
 	auto bind_data = bind_data_p->Cast<StringAggBindData>();
 	serializer.WriteProperty(100, "separator", bind_data.sep);
@@ -184,6 +184,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg_param.SetStructStateExport(StringAggStateType);
+	string_agg_param.SetFallible(); // the update callback throws when the result exceeds the maximum string size
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.GetSignature().AddParameter("arg", LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);

@@ -2,6 +2,10 @@
 # description: Test subqueries with CTEs
 # group: [scalar]
 
+# results below depend on scan order; small row groups (e.g. STANDARD_VECTOR_SIZE=2) would otherwise scan in parallel
+statement ok
+SET threads=1
+
 query I
 SELECT 1+(WITH cte AS (SELECT 1) SELECT * FROM cte)
 ----
@@ -116,7 +120,7 @@ SELECT CASE WHEN c>(WITH cte AS (SELECT sum(c)/count(*) FROM t1) SELECT * FROM c
 require no_alternative_verify
 
 # correlated subqueries
-query IR
+query IR rowsort
 SELECT a, (WITH cte AS (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) SELECT * FROM cte) FROM test
 ----
 11	22.000000

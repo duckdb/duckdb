@@ -2,7 +2,6 @@
 #include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/coordinate_system_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
@@ -27,7 +26,6 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
@@ -79,7 +77,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
-      sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
+      sequences(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
       coordinate_systems(
           catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultCoordinateSystemGenerator>(catalog, *this) : nullptr) {
 }
@@ -144,8 +142,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
-			OnDropEntry(transaction, *old_entry);
-			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
+			(void)DropEntryInternal(transaction, *old_entry, entry_name, false, entry->internal);
 		}
 	}
 	// now try to add the entry
@@ -155,11 +152,35 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 			auto existing_entry = set.GetEntry(transaction, entry_name);
 			auto existing_type = existing_entry ? existing_entry->type : entry_type;
 			throw CatalogException::EntryAlreadyExists(existing_type, entry_name);
-		} else {
-			return nullptr;
 		}
+		if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+			// the entry was created after it was dropped: by a concurrent statement of this transaction
+			throw TransactionException("Catalog write-write conflict on create or replace of %s", entry_name);
+		}
+		return nullptr;
 	}
 	return result;
+}
+
+bool DuckSchemaEntry::DropEntryInternal(CatalogTransaction transaction, CatalogEntry &entry, const Identifier &name,
+                                        bool cascade, bool allow_drop_internal) {
+	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+	if (entry.type == CatalogType::TABLE_ENTRY) {
+		// if there is a foreign key constraint, get that information
+		FindForeignKeyInformation(entry.Cast<TableCatalogEntry>(), AlterForeignKeyType::AFT_DELETE, fk_arrays);
+	}
+
+	OnDropEntry(transaction, entry);
+	auto &set = GetCatalogSet(entry.type);
+	if (!set.DropEntry(transaction, name, cascade, allow_drop_internal)) {
+		return false;
+	}
+
+	// remove the foreign key constraint in main key table if main key table's name is valid
+	for (auto &fk_info : fk_arrays) {
+		Alter(transaction, *fk_info);
+	}
+	return true;
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
@@ -261,22 +282,9 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
-	// currently, we can not alter PK/FK/UNIQUE constraints
-	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
-	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
-		throw CatalogException("An index with the name " + info.GetIndexName() + " already exists!");
-	}
-
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, table);
 	auto dependencies = index->dependencies;
 	return AddEntryInternal(transaction, std::move(index), info.on_conflict, dependencies);
-}
-
-optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
-	auto collation = make_uniq<CollateCatalogEntry>(catalog, *this, info);
-	collation->internal = info.internal;
-	return AddEntry(transaction, std::move(collation), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCoordinateSystem(CatalogTransaction transaction,
@@ -334,8 +342,13 @@ void DuckSchemaEntry::Scan(CatalogTransaction transaction, CatalogType type,
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
+	Scan(type, VisibilityBound::AllCommitted(), callback);
+}
+
+void DuckSchemaEntry::Scan(CatalogType type, VisibilityBound bound,
+                           const std::function<void(CatalogEntry &)> &callback) {
 	auto &set = GetCatalogSet(type);
-	set.Scan(callback);
+	set.Scan(bound, callback);
 }
 
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
@@ -348,8 +361,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	auto transaction = GetCatalogTransaction(context);
 	auto existing_entry = set.GetEntry(transaction, info.GetQualifiedName().Name());
 	if (!existing_entry) {
-		throw InternalException("Failed to drop entry \"%s\" - entry could not be found",
-		                        info.GetQualifiedName().Name());
+		throw InternalException("Failed to drop entry %s - entry could not be found", info.GetQualifiedName().Name());
 	}
 	if (existing_entry->type != info.type) {
 		throw CatalogException("Existing object %s is of type %s, trying to drop type %s",
@@ -357,22 +369,9 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		                       CatalogTypeToString(info.type));
 	}
 
-	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
-		// if there is a foreign key constraint, get that information
-		auto &table_entry = existing_entry->Cast<TableCatalogEntry>();
-		FindForeignKeyInformation(table_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
-	}
-
-	OnDropEntry(transaction, *existing_entry);
-	if (!set.DropEntry(transaction, info.GetQualifiedName().Name(), info.cascade, info.allow_drop_internal)) {
+	if (!DropEntryInternal(transaction, *existing_entry, info.GetQualifiedName().Name(), info.cascade,
+	                       info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
-	}
-
-	// remove the foreign key constraint in main key table if main key table's name is valid
-	for (idx_t i = 0; i < fk_arrays.size(); i++) {
-		// alter primary key table
-		Alter(transaction, *fk_arrays[i]);
 	}
 }
 
@@ -427,8 +426,6 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
-	case CatalogType::COLLATION_ENTRY:
-		return collations;
 	case CatalogType::COORDINATE_SYSTEM_ENTRY:
 		return coordinate_systems;
 	case CatalogType::TYPE_ENTRY:
@@ -449,7 +446,6 @@ void DuckSchemaEntry::Verify(Catalog &catalog) {
 	pragma_functions.Verify(catalog);
 	functions.Verify(catalog);
 	sequences.Verify(catalog);
-	collations.Verify(catalog);
 	types.Verify(catalog);
 }
 

@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -95,7 +96,8 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 	case LogicalTypeId::INTERVAL:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, interval_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::DECIMAL:
-		return BoundCastInfo(&VectorCastHelpers::ToDecimalCast<string_t>);
+		return DefaultCasts::WideDecimalCast(BoundCastInfo(&VectorCastHelpers::ToDecimalCast<string_t>), source,
+		                                     target);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}
@@ -323,8 +325,10 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	// set the list size after the child casts, since the casts may have replaced the child buffers
 	ListVector::SetListSize(result, total);
 
-	if (!vector_cast_data.all_converted) {
-		auto &key_validity = FlatVector::ValidityMutable(result_key_child);
+	if (!vector_cast_data.all_converted || parameters.error_message) {
+		// maps with a NULL key - from a failed key cast, or keys of type NULL - fail to convert
+		// the key cast does not necessarily produce a flat vector (e.g. when casting to NULL keys)
+		auto key_validity = result_key_child.Validity();
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!result_mask.RowIsValid(row_idx)) {
 				continue;
@@ -332,13 +336,30 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 			auto list = list_data[row_idx];
 			for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 				auto idx = list.offset + list_idx;
-				if (!key_validity.RowIsValid(idx)) {
-					result_mask.SetInvalid(row_idx);
+				if (!key_validity.IsValid(idx)) {
+					HandleVectorCastError::Operation<string_t>("Map keys can not be NULL.", result_mask, row_idx,
+					                                           vector_cast_data);
+					break;
 				}
 			}
 		}
 	}
-	MapVector::MapConversionVerify(result, count);
+	if (!parameters.error_message) {
+		MapVector::MapConversionVerify(result, count);
+		return vector_cast_data.all_converted;
+	}
+	// TRY_CAST: nullify maps with duplicate keys instead of throwing
+	SelectionVector row_sel(1);
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!result_mask.RowIsValid(row_idx)) {
+			continue;
+		}
+		row_sel.set_index(0, row_idx);
+		if (MapVector::CheckMapValidity(result, 1, row_sel) != MapInvalidReason::VALID) {
+			HandleVectorCastError::Operation<string_t>("Map keys must be unique.", result_mask, row_idx,
+			                                           vector_cast_data);
+		}
+	}
 	return vector_cast_data.all_converted;
 }
 
@@ -479,6 +500,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>);
 	case LogicalTypeId::GEOMETRY:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>);
+	case LogicalTypeId::GEOGRAPHY:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToGeography>);
 	case LogicalTypeId::SQLNULL:
 		return &DefaultCasts::TryVectorNullCast;
 	case LogicalTypeId::VARCHAR:
@@ -506,7 +529,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
 	case LogicalTypeId::BIGNUM:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, bignum_t, TryCastToBignum>);
+		return BoundCastInfo(&Bignum::VarcharToBignumCast);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

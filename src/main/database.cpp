@@ -6,6 +6,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -19,6 +20,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
@@ -48,14 +50,14 @@
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
+#include "duckdb/main/settings.hpp"
 #endif
 
 namespace duckdb {
 
 DBConfig::DBConfig() {
+	file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	encoding_functions = make_uniq<EncodingFunctionSet>();
-	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
 	type_manager = make_uniq<TypeManager>(*this);
@@ -86,6 +88,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
+	services = make_uniq<Context>(*this);
 }
 
 ParserCache &DatabaseInstance::GetParserCache() {
@@ -97,7 +100,10 @@ DatabaseInstance::~DatabaseInstance() {
 	if (db_manager) {
 		db_manager->ResetDatabases();
 	}
-	config.http_transport_manager->Close();
+	// an instance whose initialization failed may not have every member yet, and a destructor cannot throw
+	if (config.http_transport_manager) {
+		config.http_transport_manager->Close();
+	}
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
@@ -112,8 +118,10 @@ DatabaseInstance::~DatabaseInstance() {
 
 	buffer_manager.reset();
 
-	// flush allocations and disable the background thread
-	config.block_allocator->FlushAll();
+	// Flush allocations and disable the background thread.
+	if (config.block_allocator) {
+		config.block_allocator->FlushOnShutdown();
+	}
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
@@ -156,6 +164,14 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
+VirtualFileSystem &VirtualFileSystem::Get(DatabaseInstance &db) {
+	return *db.config.file_system;
+}
+
+VirtualFileSystem &VirtualFileSystem::Get(ClientContext &context) {
+	return Get(*context.db);
+}
+
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
@@ -173,7 +189,7 @@ DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
 }
 
 ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
-	return context.config;
+	return context.GetContext().GetClientConfig();
 }
 
 DBConfig &DBConfig::Get(AttachedDatabase &db) {
@@ -185,7 +201,7 @@ const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
 }
 
 const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
-	return context.config;
+	return context.GetContext().GetClientConfig();
 }
 
 TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
@@ -282,12 +298,12 @@ void DatabaseInstance::LoadExtensionSettings() {
 			}
 			ExtensionOption extension_option;
 			if (!config.TryGetExtensionOption(name, extension_option)) {
-				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+				throw InternalException("Extension %s did not provide the %s config setting", extension_name, name);
 			}
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, extension_option, SetScope::GLOBAL, value);
+			PhysicalSet::SetExtensionVariable(context, name, extension_option, SetScope::GLOBAL, value);
 		}
 
 		con.Commit();
@@ -326,8 +342,9 @@ void DatabaseInstance::InitializeEmpty(DBConfig *user_config) {
 }
 
 void DatabaseInstance::StartScheduler() {
-	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
-	scheduler->SetAsyncThreads(config.options.async_threads);
+	scheduler->SetThreads(NumericCast<idx_t>(Settings::Get<ThreadsSetting>(config)),
+	                      Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(NumericCast<idx_t>(Settings::Get<AsyncThreadsSetting>(config)));
 	scheduler->RelaunchThreads();
 }
 
@@ -388,12 +405,9 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
-		if (!config.file_system) {
-			throw InternalException("No file system!?");
-		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
+			ExtensionHelper::LoadExternalExtension(*this, fs, {config.options.database_type});
 		}
 	}
 
@@ -467,22 +481,20 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	auto &default_fs = vfs.GetDefaultFileSystem();
-	if (default_fs.IsLocalFileSystem()) {
-		return default_fs;
-	}
-	owned = make_uniq<LocalFileSystem>();
-	return *owned;
-}
-
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+    : file_system(VirtualFileSystem::Get(db_p)), database_opener(db_p) {
+	if (!file_system.GetDefaultFileSystem().IsLocalFileSystem()) {
+		owned_file_system = make_uniq<LocalFileSystem>();
+	}
 }
 
-FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
+VirtualFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	return file_system;
+}
+
+optional_ptr<BaseFileSystem> LocalDatabaseFileSystem::GetFixedFileSystem() const {
+	auto &local_fs = owned_file_system ? *owned_file_system : file_system.GetDefaultFileSystem();
+	if (file_system.SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;
@@ -521,8 +533,12 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
+	config.file_system = std::move(new_config.file_system);
+	new_config.file_system = make_uniq<VirtualFileSystem>();
 	config.options = new_config.options;
+	config.SetDisabledOptimizers(config.options.disabled_optimizers);
 	config.user_settings = new_config.user_settings;
+	os_util = make_uniq<OSUtil>(*this, config.options.configuration_env);
 	// carry over a capability set handed to us, so a database created by code with its own copy of
 	// DuckDB can be given the extensions the binary that created it links
 	config.linked_extensions = new_config.linked_extensions;
@@ -541,17 +557,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetDefaultTempDirectory();
 	}
 
-	if (new_config.options.http_proxy.empty()) {
-		HTTPProxySetting::ResetGlobal(this, config);
-	}
-
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
-	}
-	if (new_config.file_system) {
-		config.file_system = std::move(new_config.file_system);
-	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
@@ -566,12 +573,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
-	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
-		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
-	}
-	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
-		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
-	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
@@ -579,10 +580,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	config.block_allocator = std::move(new_config.block_allocator);
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
-		config.block_allocator = make_uniq<BlockAllocator>(
-		    *config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
-		    config.options.block_allocator_size);
+		config.block_allocator =
+		    make_uniq<BlockAllocator>(*config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory());
 	}
+	config.block_allocator->SetEnabled(config.options.enable_block_allocator);
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	if (new_config.callback_manager) {
 		config.callback_manager = std::move(new_config.callback_manager);
@@ -601,9 +602,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
-		                                                 config.options.buffer_manager_track_eviction_timestamps,
-		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
+		config.buffer_pool = make_shared_ptr<BufferPool>(
+		    *config.block_allocator, config.options.maximum_memory,
+		    Settings::Get<BufferManagerTrackEvictionTimestampsSetting>(config),
+		    DBConfig::ParseMemoryLimitOrMaximum(Settings::Get<AllocatorBulkDeallocationFlushThresholdSetting>(config)));
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);
@@ -650,7 +652,7 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil(bool force_mbedtls) 
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
-	auto force_mbedtls = config.options.force_mbedtls;
+	auto force_mbedtls = Settings::Get<ForceMbedtlsUnsafeSetting>(config);
 
 	if (force_mbedtls) {
 		// return mbedtls if setting is enabled
@@ -705,6 +707,11 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+OSUtil &DatabaseInstance::GetOSUtil() {
+	D_ASSERT(os_util);
+	return *os_util;
 }
 
 MetricsManager &DatabaseInstance::GetMetricsManager() {

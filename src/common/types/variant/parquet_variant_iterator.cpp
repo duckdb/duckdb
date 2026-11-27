@@ -10,11 +10,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/string_map_set.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <set>
 #include <type_traits>
 
 namespace duckdb {
@@ -23,8 +24,8 @@ namespace {
 
 //! Throw if reading 'size' bytes starting at 'ptr' would read past the end of the value buffer
 void CheckBinaryRead(const_data_ptr_t ptr, idx_t size, const_data_ptr_t end) {
-	if (ptr + size > end) {
-		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity", size);
+	if (ptr > end || size > NumericCast<idx_t>(end - ptr)) {
+		throw DataCorruptionException("Corrupted VARIANT 'value' buffer, read of %llu bytes is out of bounds", size);
 	}
 }
 
@@ -61,6 +62,8 @@ struct BinaryObjectReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The field ids and offsets of 'count' fields must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, (count * field_id_size) + (NumericCast<idx_t>(count + 1) * field_offset_size), end);
 		field_ids = data;
 		field_offsets = data + (count * field_id_size);
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
@@ -107,6 +110,8 @@ struct BinaryArrayReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The offsets of 'count' elements must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, NumericCast<idx_t>(count + 1) * field_offset_size, end);
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
@@ -386,7 +391,11 @@ void ParquetVariantIterator::BeginRow(idx_t row) {
 
 const VariantMetadata &ParquetVariantIterator::GetMetadata() const {
 	if (!current_metadata) {
-		current_metadata = make_uniq<VariantMetadata>(metadata[current_row].GetValueUnsafe());
+		auto metadata_entry = metadata[current_row];
+		if (!metadata_entry.IsValid()) {
+			throw DataCorruptionException("VARIANT metadata cannot be NULL");
+		}
+		current_metadata = make_uniq<VariantMetadata>(metadata_entry.GetValue());
 	}
 	return *current_metadata;
 }
@@ -466,7 +475,24 @@ ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
 //===--------------------------------------------------------------------===//
 // ParquetVariantNode
 //===--------------------------------------------------------------------===//
-VariantLogicalType ParquetVariantNode::GetTypeId() const {
+LogicalTypeId ParquetVariantNode::GetTypeId() const {
+	return VariantTypeToLogicalTypeId(GetVariantType());
+}
+
+LogicalType ParquetVariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
+bool ParquetVariantNode::GetBool() const {
+	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
+}
+
+VariantLogicalType ParquetVariantNode::GetVariantType() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
@@ -507,6 +533,13 @@ T ParquetVariantNode::GetData() const {
 	case VariantPrimitiveType::DECIMAL16:
 		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(hugeint_t), binary_end);
 		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
+	case VariantPrimitiveType::TIME_NTZ_MICROS: {
+		auto micros = LoadChecked<int64_t>(payload, binary_end);
+		if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
+			throw IOException("Corrupted VARIANT 'value' buffer, TIME value (%d) is out of range", micros);
+		}
+		return LoadChecked<T>(payload, binary_end);
+	}
 	default:
 		//! Fixed-width primitives are stored in the canonical little-endian layout
 		return LoadChecked<T>(payload, binary_end);
@@ -549,10 +582,14 @@ string_t ParquetVariantNode::GetString() const {
 	return string_t(string_data, size);
 }
 
+string_t ParquetVariantNode::GetWideDecimal() const {
+	throw InternalException("Parquet VARIANT decimals have at most 38 digits");
+}
+
 VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	if (kind == Kind::SHREDDED) {
-		uint8_t width;
-		uint8_t scale;
+		uint32_t width;
+		uint32_t scale;
 		view->typed_type.GetDecimalProperties(width, scale);
 		return VariantDecimalProperties(width, scale);
 	}
@@ -560,18 +597,36 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
 	uint8_t scale = LoadChecked<uint8_t>(payload, binary_end);
+	if (scale > Decimal::MAX_WIDTH_INT128) {
+		throw IOException("Corrupted VARIANT 'value' buffer, decimal scale %d exceeds the maximum of %d", scale,
+		                  Decimal::MAX_WIDTH_INT128);
+	}
 	auto value_data = payload + sizeof(uint8_t);
+	uint32_t width;
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::DECIMAL4:
-		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end)),
-		                                scale);
+		width = ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end));
+		break;
 	case VariantPrimitiveType::DECIMAL8:
-		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end)),
-		                                scale);
-	default:
+		width = ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end));
+		break;
+	default: {
 		D_ASSERT(value_metadata.primitive_type == VariantPrimitiveType::DECIMAL16);
-		return VariantDecimalProperties(DecimalWidth<hugeint_t>::max, scale);
+		CheckBinaryRead(value_data, sizeof(hugeint_t), binary_end);
+		hugeint_t value;
+		value.lower = Load<uint64_t>(value_data);
+		value.upper = Load<int64_t>(value_data + sizeof(uint64_t));
+		auto &limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
+		if (value >= limit || value <= -limit) {
+			throw IOException("Corrupted VARIANT 'value' buffer, DECIMAL16 value exceeds the maximum width of %d",
+			                  Decimal::MAX_WIDTH_INT128);
+		}
+		width = Decimal::MAX_WIDTH_INT128;
+		break;
 	}
+	}
+	//! The scale can exceed the digits of the unscaled value (e.g. 0.005), the width must cover it
+	return VariantDecimalProperties(MaxValue<uint32_t>(width, scale), scale);
 }
 
 ParquetObjectIterator ParquetVariantNode::GetObjectChildren(VariantIterationOrder order) const {
@@ -595,30 +650,44 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 // ParquetObjectIterator
 //===--------------------------------------------------------------------===//
 void ParquetObjectIterator::Finalize() {
-	std::sort(ordered_entries.begin(), ordered_entries.end(),
-	          [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) { return a.key < b.key; });
+	// the fields of a Parquet variant object are stored sorted by key, so this is usually a no-op
+	auto key_less = [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) {
+		return a.key < b.key;
+	};
+	if (!std::is_sorted(ordered_entries.begin(), ordered_entries.end(), key_less)) {
+		std::sort(ordered_entries.begin(), ordered_entries.end(), key_less);
+	}
+	// the keys of a Variant object have to be unique
+	for (idx_t i = 1; i < ordered_entries.size(); i++) {
+		if (ordered_entries[i].key == ordered_entries[i - 1].key) {
+			throw InvalidInputException("Invalid VARIANT: object contains the key \"%s\" more than once",
+			                            ordered_entries[i].key.GetString());
+		}
+	}
 }
 
 ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view,
                                              idx_t index, const_data_ptr_t overlay, const_data_ptr_t overlay_end) {
 	//! Typed (shredded) fields - skipping the ones that are missing for this row
-	std::set<string> typed_keys;
 	for (idx_t i = 0; i < view.fields.size(); i++) {
 		auto node = state.ResolveGroup(*view.fields[i], index);
 		if (node.IsMissing()) {
 			continue;
 		}
 		auto &name = view.field_names[i];
-		typed_keys.insert(name);
 		ordered_entries.push_back(
 		    ParquetObjectEntry {string_t(name.c_str(), NumericCast<uint32_t>(name.size())), node});
 	}
 	//! Leftover (overlay) fields from the binary 'value' - typed fields win on key collisions
 	if (overlay) {
+		string_set_t typed_keys;
+		for (auto &entry : ordered_entries) {
+			typed_keys.insert(entry.key);
+		}
 		BinaryObjectReader reader(state.GetMetadata(), overlay, overlay_end);
 		for (idx_t i = 0; i < reader.count; i++) {
 			auto key = reader.Key(i);
-			if (typed_keys.count(key.GetString())) {
+			if (typed_keys.count(key)) {
 				continue;
 			}
 			ordered_entries.push_back(

@@ -5,6 +5,13 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;
@@ -38,22 +45,32 @@ idx_t ChangedRows(QueryResult &result) {
 	if (types.size() != 1 || types[0].id() != duckdb::LogicalTypeId::BIGINT) {
 		return 0;
 	}
-	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in an array with a
-	// single int64 child
 	auto &arrays = result.Collection<ArrowFormat>();
 	if (arrays.empty()) {
 		return 0;
 	}
-	auto &array = arrays.front()->arrow_array;
-	if (array.length != 1 || array.n_children != 1 || !array.children || !array.children[0]) {
-		return 0;
+	return ArrowFormat::ChangedRows(arrays.front()->arrow_array);
+}
+
+//! Rejects an array whose shape disagrees with the resolved schema before anything reads it, so a malformed
+//! array is an input error rather than a crash inside the conversion (mirrors CV2ValidateArrowArray).
+void ValidateArrowArrayShape(duckdb::ArrowTableSchema &arrow_table, const ArrowArray &array) {
+	auto column_count = arrow_table.GetTypes().size();
+	if (duckdb::NumericCast<idx_t>(array.n_children) != column_count) {
+		throw duckdb::InvalidInputException("Arrow array child count does not match the schema's column count");
 	}
-	auto &child = *array.children[0];
-	if (child.n_buffers < 2 || !child.buffers || !child.buffers[1]) {
-		return 0;
+	if (column_count > 0 && !array.children) {
+		throw duckdb::InvalidInputException("Arrow array has null children");
 	}
-	auto counts = reinterpret_cast<const int64_t *>(child.buffers[1]);
-	return duckdb::NumericCast<idx_t>(counts[array.offset + child.offset]);
+	for (idx_t i = 0; i < column_count; i++) {
+		auto *child_array = array.children[i];
+		if (!child_array || !child_array->release) {
+			throw duckdb::InvalidInputException("Arrow array child is null or already released");
+		}
+		if (child_array->length != array.length) {
+			throw duckdb::InvalidInputException("Arrow array child length does not match the array length");
+		}
+	}
 }
 
 } // namespace
@@ -144,22 +161,31 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto &types = arrow_table->GetTypes();
 
+	try {
+		ValidateArrowArrayShape(*arrow_table, *arrow_array);
+	} catch (const duckdb::Exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (const std::exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	}
+
 	auto dchunk = duckdb::make_uniq<duckdb::DataChunk>();
 	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, duckdb::NumericCast<idx_t>(arrow_array->length));
 
 	auto &arrow_types = arrow_table->GetColumns();
 	dchunk->SetChildCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
+	// All columns share ownership of the array, so it is only released once no column references it anymore
+	auto owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
+	owned_data->arrow_array = *arrow_array;
+	// We set it to nullptr to effectively transfer the ownership
+	arrow_array->release = nullptr;
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
 		auto &array = parent_array.children[i];
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
-		// We need to make sure that our chunk will hold the ownership
-		array_state->owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
-		array_state->owned_data->arrow_array = *arrow_array;
-		// We set it to nullptr to effectively transfer the ownership
-		arrow_array->release = nullptr;
+		array_state->owned_data = owned_data;
 		try {
 			switch (array_physical_type) {
 			case duckdb::ArrowArrayPhysicalType::DICTIONARY_ENCODED:
@@ -475,16 +501,35 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		if (!input) {
 			return DuckDBError;
 		}
+		// a CONNECT-ed connection routes a statement as its SQL text, which a statement built from parser nodes lacks
+		if (cconn->context->IsConnected()) {
+			return DuckDBError;
+		}
+		// construct the `arrow_scan(...)` function expression
 		auto factory = duckdb::make_shared_ptr<CArrowScanFactory>(*input);
-		cconn->TableFunction("arrow_scan", {}, {}, std::move(factory))
-		    ->CreateView(duckdb::Identifier(table_name), true, false);
+		auto scan = duckdb::make_uniq<duckdb::TableFunctionRef>();
+		scan->function = duckdb::make_uniq<duckdb::FunctionExpression>(
+		    "arrow_scan", duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>());
+		scan->bind_info = std::move(factory);
+		// construct the `SELECT * FROM arrow_scan(...)` statement
+		auto node = duckdb::make_uniq<duckdb::SelectNode>();
+		node->select_list.push_back(duckdb::make_uniq<duckdb::StarExpression>());
+		node->from_table = std::move(scan);
+		auto select = duckdb::make_uniq<duckdb::SelectStatement>();
+		select->node = std::move(node);
+		// construct the `CREATE TEMP VIEW AS` statement using the select statement
+		auto info = duckdb::make_uniq<duckdb::CreateViewInfo>(duckdb::QualifiedName(
+		    duckdb::Identifier(), duckdb::Identifier::InvalidSchema(), duckdb::Identifier(table_name)));
+		info->query = std::move(select);
+		info->temporary = true;
+		info->on_conflict = duckdb::OnCreateConflict::REPLACE_ON_CONFLICT;
+		auto statement = duckdb::make_uniq<duckdb::CreateStatement>();
+		statement->info = std::move(info);
+		// Execute the CREATE VIEW
+		if (cconn->Query(std::move(statement))->HasError()) {
+			return DuckDBError;
+		}
 	} catch (...) { // LCOV_EXCL_START
-		// Tried covering this in tests, but it proved harder than expected. At the time of writing:
-		// - Passing any name to `CreateView` worked without throwing an exception
-		// - Passing a null Arrow array worked without throwing an exception
-		// - Passing an invalid schema (without any columns) led to an InternalException with SIGABRT, which is meant to
-		//   be un-catchable. This case likely needs to be handled gracefully within `arrow_scan`.
-		// Ref: https://discord.com/channels/909674491309850675/921100573732909107/1115230468699336785
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 

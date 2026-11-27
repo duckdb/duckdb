@@ -4,22 +4,6 @@ if(NOT CLANG_TIDY)
   find_package(Python3)
 endif()
 
-if(POLICY CMP0026)
-  cmake_policy(SET CMP0026 NEW)
-endif()
-
-if(POLICY CMP0051)
-  cmake_policy(SET CMP0051 NEW)
-endif()
-
-if(POLICY CMP0054)
-  cmake_policy(SET CMP0054 NEW)
-endif()
-
-if(POLICY CMP0063)
-  cmake_policy(SET CMP0063 NEW)
-endif()
-
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -93,7 +77,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
   find_program(COMPILER_LAUNCHER NAMES ccache sccache)
@@ -217,7 +203,8 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang" AND NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
 elseif(WIN32 AND MSVC)
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
+  # clang-cl sets MSVC=TRUE and takes this branch, so /Gw is needed here too
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy /Gw")
 endif()
 
 option(SHADOW_FORBIDDEN_FUNCTIONS
@@ -247,10 +234,9 @@ if(${FORCE_COLORED_OUTPUT})
 endif()
 
 # Enable Clang thread-safety annotations when using Clang compiler
-# TODO(hjiang): enable error for thread annotation warnings, because of certain
-# extensions.
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety")
+  set(CMAKE_CXX_FLAGS
+      "${CMAKE_CXX_FLAGS} -Wthread-safety -Werror=thread-safety")
 endif()
 
 if(DUCKDB_EXPLICIT_PLATFORM)
@@ -715,6 +701,8 @@ option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
+option(WINDOWS_STATIC_LIBRARY_EXPORTS
+       "Keep core DLL exports in self-contained Windows extensions" OFF)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 set(SMALLER_BINARY
     ""
@@ -1107,6 +1095,7 @@ else()
   string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_WINDOWS_FLAGS}")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /DDEBUG")
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
@@ -1337,17 +1326,28 @@ if(PREBUILT_BINARY)
     )
   endif()
 
-  # capabilities shipped next to the prebuilt library become their archive
-  # targets
+  # capabilities shipped next to the prebuilt library, or at their place in the
+  # build tree that made it, become their archive targets
   get_filename_component(_DUCKDB_PREBUILT_DIRECTORY "${PREBUILT_BINARY_PATH}"
                          DIRECTORY)
-  foreach(DUCKDB_PREBUILT_CAPABILITY duckdb_httplib duckdb_loadable_extensions)
+  foreach(DUCKDB_PREBUILT_CAPABILITY_ENTRY
+          duckdb_httplib:main/http duckdb_loadable_extensions:main/extension)
+    string(REPLACE ":" ";" DUCKDB_PREBUILT_CAPABILITY_ENTRY
+                   "${DUCKDB_PREBUILT_CAPABILITY_ENTRY}")
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 0 DUCKDB_PREBUILT_CAPABILITY)
+    list(GET DUCKDB_PREBUILT_CAPABILITY_ENTRY 1
+         _DUCKDB_PREBUILT_CAPABILITY_SUBDIR)
     if(MSVC)
-      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/${DUCKDB_PREBUILT_CAPABILITY}.lib")
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "${DUCKDB_PREBUILT_CAPABILITY}.lib")
     else()
+      set(_DUCKDB_PREBUILT_CAPABILITY_FILE "lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+    endif()
+    set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+        "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}")
+    if(NOT EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}")
       set(_DUCKDB_PREBUILT_CAPABILITY_PATH
-          "${_DUCKDB_PREBUILT_DIRECTORY}/lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+          "${_DUCKDB_PREBUILT_DIRECTORY}/${_DUCKDB_PREBUILT_CAPABILITY_SUBDIR}/${_DUCKDB_PREBUILT_CAPABILITY_FILE}"
+      )
     endif()
     if(EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
        AND NOT TARGET ${DUCKDB_PREBUILT_CAPABILITY})
@@ -1396,6 +1396,7 @@ elseif(BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
   add_subdirectory(extension)
 endif()
+duckdb_link_deferred_extension_libraries()
 
 if(NOT EXTENSION_CONFIG_BUILD)
   if(PREBUILT_BINARY)

@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
+#include <cmath>
 #include <cstring>
 
 namespace duckdb {
@@ -79,26 +81,115 @@ struct Comparator {
 	}
 };
 
-template <>
-DUCKDB_API int8_t Comparator::Operation(const float &left, const float &right);
-template <>
-DUCKDB_API int8_t Comparator::Operation(const double &left, const double &right);
+//===--------------------------------------------------------------------===//
+// Floating Point Comparisons
+//===--------------------------------------------------------------------===//
+template <class T>
+inline bool EqualsFloat(T left, T right) {
+	if (DUCKDB_UNLIKELY(std::isnan(left) && std::isnan(right))) {
+		return true;
+	}
+	return left == right;
+}
 
 template <>
-DUCKDB_API bool Equals::Operation(const float &left, const float &right);
-template <>
-DUCKDB_API bool Equals::Operation(const double &left, const double &right);
+DUCKDB_API inline bool Equals::Operation(const float &left, const float &right) {
+	return EqualsFloat<float>(left, right);
+}
 
 template <>
-DUCKDB_API bool GreaterThan::Operation(const float &left, const float &right);
-template <>
-DUCKDB_API bool GreaterThan::Operation(const double &left, const double &right);
+DUCKDB_API inline bool Equals::Operation(const double &left, const double &right) {
+	return EqualsFloat<double>(left, right);
+}
+
+template <class T>
+inline bool GreaterThanFloat(T left, T right) {
+	// handle nans
+	// nan is always bigger than everything else
+	bool left_is_nan = std::isnan(left);
+	bool right_is_nan = std::isnan(right);
+	// if right is nan, there is no number that is bigger than right
+	if (DUCKDB_UNLIKELY(right_is_nan)) {
+		return false;
+	}
+	// if left is nan, but right is not, left is always bigger
+	if (DUCKDB_UNLIKELY(left_is_nan)) {
+		return true;
+	}
+	return left > right;
+}
 
 template <>
-DUCKDB_API bool GreaterThanEquals::Operation(const float &left, const float &right);
-template <>
-DUCKDB_API bool GreaterThanEquals::Operation(const double &left, const double &right);
+DUCKDB_API inline bool GreaterThan::Operation(const float &left, const float &right) {
+	return GreaterThanFloat<float>(left, right);
+}
 
+template <>
+DUCKDB_API inline bool GreaterThan::Operation(const double &left, const double &right) {
+	return GreaterThanFloat<double>(left, right);
+}
+
+template <class T>
+inline bool GreaterThanEqualsFloat(T left, T right) {
+	// handle nans
+	// nan is always bigger than everything else
+	bool left_is_nan = std::isnan(left);
+	bool right_is_nan = std::isnan(right);
+	// if right is nan, there is no bigger number
+	// we only return true if left is also nan (in which case the numbers are equal)
+	if (DUCKDB_UNLIKELY(right_is_nan)) {
+		return left_is_nan;
+	}
+	// if left is nan, but right is not, left is always bigger
+	if (DUCKDB_UNLIKELY(left_is_nan)) {
+		return true;
+	}
+	return left >= right;
+}
+
+template <>
+DUCKDB_API inline bool GreaterThanEquals::Operation(const float &left, const float &right) {
+	return GreaterThanEqualsFloat<float>(left, right);
+}
+
+template <>
+DUCKDB_API inline bool GreaterThanEquals::Operation(const double &left, const double &right) {
+	return GreaterThanEqualsFloat<double>(left, right);
+}
+
+template <class T>
+inline int8_t ComparatorFloat(T left, T right) {
+	bool left_is_nan = std::isnan(left);
+	bool right_is_nan = std::isnan(right);
+	if (DUCKDB_UNLIKELY(left_is_nan || right_is_nan)) {
+		if (left_is_nan && right_is_nan) {
+			return Comparator::VALUES_ARE_EQUAL;
+		}
+		// NaN is bigger than anything
+		return left_is_nan ? Comparator::LEFT_IS_GREATER : Comparator::RIGHT_IS_GREATER;
+	}
+	if (left < right) {
+		return Comparator::RIGHT_IS_GREATER;
+	}
+	if (left > right) {
+		return Comparator::LEFT_IS_GREATER;
+	}
+	return Comparator::VALUES_ARE_EQUAL;
+}
+
+template <>
+DUCKDB_API inline int8_t Comparator::Operation(const float &left, const float &right) {
+	return ComparatorFloat<float>(left, right);
+}
+
+template <>
+DUCKDB_API inline int8_t Comparator::Operation(const double &left, const double &right) {
+	return ComparatorFloat<double>(left, right);
+}
+
+//===--------------------------------------------------------------------===//
+// Distinct Comparisons
+//===--------------------------------------------------------------------===//
 // Distinct semantics are from Postgres record sorting. NULL = NULL and not-NULL < NULL
 // Deferring to the non-distinct operations removes the need for further specialisation.
 // TODO: To reverse the semantics, swap left_null and right_null for comparisons
@@ -247,6 +338,38 @@ template <>
 inline bool GreaterThan::Operation(const string_t &left, const string_t &right) {
 	return left > right;
 }
+
+//! Branchless string equality, only valid when one side is inlined (e.g. a short constant)
+struct InlinedStringEquals {
+	template <class T>
+	static inline bool Operation(const T &left, const T &right) {
+		return string_t::StringComparisonOperators::InlinedEquals(left, right);
+	}
+};
+struct InlinedStringNotEquals {
+	template <class T>
+	static inline bool Operation(const T &left, const T &right) {
+		return !string_t::StringComparisonOperators::InlinedEquals(left, right);
+	}
+};
+
+//! Maps Equals / NotEquals to the operator to use against an inlined string constant
+template <class OP>
+struct InlinedStringEqualityOperator {
+	static constexpr bool ENABLED = false;
+};
+
+template <>
+struct InlinedStringEqualityOperator<Equals> {
+	static constexpr bool ENABLED = true;
+	using OPERATOR = InlinedStringEquals;
+};
+
+template <>
+struct InlinedStringEqualityOperator<NotEquals> {
+	static constexpr bool ENABLED = true;
+	using OPERATOR = InlinedStringNotEquals;
+};
 
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators

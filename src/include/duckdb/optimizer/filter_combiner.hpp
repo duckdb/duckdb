@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 #include <functional>
@@ -54,14 +55,36 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
+	//! Whether expression equality preserves the identity of constants within this expression.
+	static bool CanMatchExpression(const Expression &expr);
+	//! A predicate that can be copied without changing evaluation effects or conflating matched operands.
+	static bool CanCopyFilter(const Expression &filter);
+	//! A safe predicate with the same truth value for keys equal under NOT DISTINCT FROM.
+	static bool IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys);
+	//! Derive a linear set of visible equalities and key constraints, retaining the source filters.
+	static void GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+	                                      const std::function<bool(const Expression &)> &can_project,
+	                                      const std::function<void(unique_ptr<Expression>)> &callback);
+	//! Remove exact duplicate, non-throwing, non-volatile predicates.
+	static void DeduplicateFilters(vector<unique_ptr<Expression>> &filters);
 	void GenerateEquivalentFilters(const Expression &filter,
 	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
+	//! The expression that a comparison, BETWEEN or IN filter compares with constants, or nullptr for other filters.
+	//! Such a filter is false for NULL and has the same result for all values equal to that expression.
+	static optional_ptr<const Expression> GetComparedExpression(const Expression &filter);
+	//! Generates key constraints implied for the target side by equality conditions, e.g. [i = a, i = 500] => [a =
+	//! 500]. Replaces only whole keys, including in NULL tests and Boolean combinations, preserving value equality.
+	static void GenerateJoinFilters(const vector<JoinCondition> &conditions,
+	                                const vector<reference<const Expression>> &filters, JoinSide target_side,
+	                                const std::function<void(unique_ptr<Expression> filter)> &callback);
 	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
 	                                        vector<FilterPushdownResult> &pushdown_results);
 
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
 private:
+	void GenerateEquivalentKeyFilters(const Expression &filter,
+	                                  const std::function<void(unique_ptr<Expression> filter)> &callback);
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
 	FilterResult AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root = true);

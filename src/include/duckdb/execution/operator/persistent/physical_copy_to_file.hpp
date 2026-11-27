@@ -31,6 +31,8 @@ struct CopyToFileInfo {
 	Value partition_keys;
 };
 
+class CopyOutputLifecycle;
+
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
@@ -38,7 +40,7 @@ public:
 
 public:
 	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
-	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
+	                   cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 	~PhysicalCopyToFile() override;
 
 public:
@@ -48,7 +50,15 @@ public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
-	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
+	//! Creates or checks the directory a COPY writes several files into
+	static void PrepareOutputDirectory(ClientContext &context, const string &directory,
+	                                   CopyOverwriteMode overwrite_mode, CopyOutputLifecycle &output_lifecycle);
+	static void ReturnStatistics(Context &context, DataChunk &chunk, CopyToFileInfo &written_file_info);
+	//! Adds the RETURN_STATS row of a COPY that wrote no file, so that RETURN_COLUMN_TYPES can still return the types
+	static void ReturnNoFileStatistics(DataChunk &chunk);
+	//! Sets the last column of every row in the chunk to the RETURN_COLUMN_TYPES value
+	static void ReturnColumnTypes(DataChunk &chunk, const vector<Identifier> &query_names,
+	                              const vector<LogicalType> &query_types);
 
 	bool Rotate() const;
 
@@ -105,7 +115,7 @@ public:
 public:
 	//! Function and associated bind data
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 
 	//! Names and types going into the file(s)
 	vector<Identifier> names;
@@ -135,6 +145,9 @@ public:
 	CopyOverwriteMode overwrite_mode;
 	//! What to return, e.g., number of written rows
 	CopyFunctionReturnType return_type;
+	//! The names and types of the copied query, for RETURN_COLUMN_TYPES
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 	//! Whether to write an empty file if there was no data
 	bool write_empty_file;
 
@@ -146,6 +159,8 @@ public:
 	//! Directory (relative to file_path) of a partition's files, replacing the hive layout if set. Evaluated per
 	//! partition over a single row holding the partition values, in partition_columns order.
 	unique_ptr<Expression> partition_path_expression;
+	//! Statistics of the partition columns, if known
+	vector<unique_ptr<BaseStatistics>> partition_stats;
 
 	//! If the data should be sorted
 	vector<BoundOrderByNode> order_columns;

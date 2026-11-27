@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FINISHED };
+enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FINISH, FINISHED };
 
 class WindowMergeSortTree;
 
@@ -29,7 +29,7 @@ public:
 	//! Sort the data
 	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Process sorted leaf data
-	virtual void BuildLeaves() = 0;
+	virtual void BuildLeaves(Context &context) = 0;
 
 	//! The index tree we are building
 	WindowMergeSortTree &window_tree;
@@ -60,13 +60,16 @@ public:
 	//! Make a local sort for a thread
 	optional_ptr<LocalSinkState> InitializeLocalSort(ExecutionContext &context) const;
 
-	//! Thread-safe post-sort cleanup
+	//! Find the starts of all the blocks (run as part of the single FINALIZE task)
+	//! Returns the total number of rows
+	virtual idx_t MeasurePayloadBlocks();
+	//! Post-sort cleanup (run as the single FINISH task)
 	virtual void Finished();
 
 	//! Sort state machine
 	bool TryPrepareSortStage(WindowMergeSortTreeLocalState &lstate);
 	//! Build the MST in parallel from the sorted data
-	void Build();
+	void Build(ClientContext &context);
 
 	//! The column indices for sorting
 	const vector<column_t> order_idx;
@@ -75,6 +78,8 @@ public:
 	vector<idx_t> scan_cols;
 	//! The sort key columns
 	vector<idx_t> key_cols;
+	//! DISTINCT FROM comparison of the sort keys
+	unique_ptr<Expression> key_distinct_from;
 	//! The sort specification
 	unique_ptr<Sort> sort;
 	//! The sorted data
@@ -91,7 +96,7 @@ public:
 	idx_t total_tasks = 0;
 	//! Tasks launched
 	idx_t tasks_assigned = 0;
-	//! Tasks landed
+	//! Tasks completed successfully
 	atomic<idx_t> tasks_completed;
 
 	// Merge sort trees for various sizes
@@ -100,11 +105,6 @@ public:
 	using MergeSortTree64 = MergeSortTree<uint64_t, uint64_t>;
 	unique_ptr<MergeSortTree32> mst32;
 	unique_ptr<MergeSortTree64> mst64;
-
-protected:
-	//! Find the starts of all the blocks
-	//! Returns the total number of rows
-	virtual idx_t MeasurePayloadBlocks();
 };
 
 } // namespace duckdb

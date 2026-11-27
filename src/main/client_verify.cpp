@@ -14,7 +14,9 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -30,6 +32,18 @@ struct PreparedStatementVerification {
 
 	identifier_map_t<unique_ptr<ParsedExpression>> values;
 };
+
+//! The offset of a MATCH_RECOGNIZE navigation (FIRST, LAST, PREV or NEXT), which must stay a constant
+static optional_ptr<unique_ptr<ParsedExpression>> MatchRecognizeNavigationOffset(FunctionExpression &function) {
+	if (function.GetArguments().size() != 2 || function.GetQualifiedName().Path().size() > 1) {
+		return nullptr;
+	}
+	auto name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+	if (name != "FIRST" && name != "LAST" && name != "PREV" && name != "NEXT") {
+		return nullptr;
+	}
+	return &function.GetArgumentsMutable()[1].GetExpressionMutable();
+}
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
@@ -62,8 +76,19 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		expr = std::move(parameter);
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr,
-	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery = expr->Cast<SubqueryExpression>().Subquery();
+		ConvertConstants(*subquery->node);
+	}
+	optional_ptr<unique_ptr<ParsedExpression>> constant_child;
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		constant_child = MatchRecognizeNavigationOffset(expr->Cast<FunctionExpression>());
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		if (&child != constant_child.get()) {
+			ConvertConstants(child);
+		}
+	});
 }
 
 //! Swap in a statement produced by verification, carrying over the source text of the statement the user
@@ -74,7 +99,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 }
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-                                          QueryParameters query_parameters) {
+                                          QueryParameters query_parameters, bool allow_nested_statements) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -83,10 +108,6 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		}
 		ReplaceStatement(statement, statement->Copy());
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
-		if (statement->type == StatementType::RELATION_STATEMENT) {
-			// reparsing not supported for relation statements
-			return;
-		}
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
 		Parser parser(*this, IdentifierCaseMode::PRESERVE_CASE);
@@ -178,7 +199,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			throw InternalException("Unsupported type for serialization verification");
 		}
 	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
-		if (statement->type != StatementType::SELECT_STATEMENT) {
+		if (!allow_nested_statements || statement->type != StatementType::SELECT_STATEMENT) {
 			// only supported for SELECT (for now?)
 			return;
 		}
@@ -241,7 +262,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 	           verification == DebugStatementVerification::EXPLAIN_SQL ||
 	           verification == DebugStatementVerification::EXPLAIN_SQL_STRICT) {
 		const bool export_sql = verification != DebugStatementVerification::EXPLAIN_STATEMENT;
-		if (export_sql && statement->type != StatementType::SELECT_STATEMENT) {
+		if (!allow_nested_statements || (export_sql && statement->type != StatementType::SELECT_STATEMENT)) {
 			return;
 		}
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {

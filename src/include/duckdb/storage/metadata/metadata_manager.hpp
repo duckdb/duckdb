@@ -30,6 +30,8 @@ struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
+	//! The blocks that are free on disk but cannot be reused yet, as a mask
+	idx_t pending_reuse;
 	atomic<bool> dirty;
 
 	void Write(WriteStream &sink);
@@ -83,8 +85,15 @@ public:
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
 
-	void MarkBlocksAsModified();
+	//! Frees the blocks the checkpoint no longer uses. With readers, returns them instead, for ReuseFreedBlocks
+	unordered_map<block_id_t, idx_t> MarkBlocksAsModified(bool has_readers);
+	//! Lets blocks that MarkBlocksAsModified returned be reused
+	void ReuseFreedBlocks(const unordered_map<block_id_t, idx_t> &freed_blocks);
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
+	//! Sets the storage version of the file, which decides whether keeping a block also keeps its next block
+	void SetStorageVersion(StorageVersion storage_version);
+	//! The block that the next pointer of a block in use refers to, invalid at the end of its chain
+	MetaBlockPointer GetNextBlock(MetaBlockPointer pointer);
 
 	vector<MetadataBlockInfo> GetMetadataInfo() const;
 	vector<shared_ptr<BlockHandle>> GetBlocks() const;
@@ -101,6 +110,9 @@ protected:
 	mutable mutex block_lock;
 	unordered_map<block_id_t, MetadataBlock> blocks;
 	unordered_map<block_id_t, idx_t> modified_blocks;
+	//! Readers before v1.4.2 resolve the next pointer of a block when they enter it, so for files they can open the
+	//! block a kept block points to must stay a metadata block
+	bool keep_next_blocks = false;
 
 protected:
 	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);

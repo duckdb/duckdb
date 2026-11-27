@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 
 namespace duckdb {
 
@@ -93,6 +94,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		if (j_ref.condition) {
 			expr_callback(j_ref.condition);
 		}
+		for (auto &column : j_ref.duplicate_eliminated_columns) {
+			expr_callback(column);
+		}
+		if (j_ref.ranking_expression) {
+			expr_callback(j_ref.ranking_expression);
+		}
 		break;
 	}
 	case TableReferenceType::PIVOT: {
@@ -100,6 +107,19 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
 		for (auto &aggr : p_ref.aggregates) {
 			expr_callback(aggr);
+		}
+		for (auto &pivot : p_ref.pivots) {
+			for (auto &expr : pivot.pivot_expressions) {
+				expr_callback(expr);
+			}
+			for (auto &entry : pivot.entries) {
+				if (entry.expr) {
+					expr_callback(entry.expr);
+				}
+			}
+			if (pivot.subquery) {
+				EnumerateQueryNodeChildren(*pivot.subquery, expr_callback, ref_callback);
+			}
 		}
 		break;
 	}
@@ -113,9 +133,43 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		expr_callback(tf_ref.function);
 		break;
 	}
-	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::MATCH_RECOGNIZE: {
+		auto &mr_ref = ref.Cast<MatchRecognizeRef>();
+		for (auto &expr : mr_ref.config->partition_expressions) {
+			expr_callback(expr);
+		}
+		for (auto &order : mr_ref.config->order_by_expressions) {
+			expr_callback(order.expression);
+		}
+		for (auto &expr : mr_ref.config->measures_expression_list) {
+			expr_callback(expr);
+		}
+		for (auto &expr : mr_ref.config->defines_expression_list) {
+			expr_callback(expr);
+		}
+		if (mr_ref.config->pattern) {
+			expr_callback(mr_ref.config->pattern);
+		}
+		if (mr_ref.input) {
+			EnumerateTableRefChildren(*mr_ref.input, expr_callback, ref_callback);
+		}
+		break;
+	}
+	case TableReferenceType::SHOW_REF: {
+		auto &show_ref = ref.Cast<ShowRef>();
+		if (show_ref.query) {
+			EnumerateQueryNodeChildren(*show_ref.query, expr_callback, ref_callback);
+		}
+		break;
+	}
+	case TableReferenceType::BASE_TABLE: {
+		auto &base_ref = ref.Cast<BaseTableRef>();
+		if (base_ref.at_clause && base_ref.at_clause->ExpressionMutable()) {
+			expr_callback(base_ref.at_clause->ExpressionMutable());
+		}
+		break;
+	}
 	case TableReferenceType::EMPTY_FROM:
-	case TableReferenceType::SHOW_REF:
 	case TableReferenceType::COLUMN_DATA:
 	case TableReferenceType::DELIM_GET:
 		// these TableRefs do not need to be unfolded
@@ -156,7 +210,9 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 			expr_callback(sel_node.qualify);
 		}
 
-		EnumerateTableRefChildren(*sel_node.from_table.get(), expr_callback, ref_callback);
+		if (sel_node.from_table) {
+			EnumerateTableRefChildren(*sel_node.from_table, expr_callback, ref_callback);
+		}
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {

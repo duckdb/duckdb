@@ -1,5 +1,6 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
 
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 
@@ -8,6 +9,7 @@
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -22,40 +24,62 @@ DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
 }
 
 void DeltaLengthByteArrayDecoder::InitializePage() {
-	if (reader.Type().InternalType() != PhysicalType::VARCHAR) {
+	auto &type = reader.Type();
+	if (type.InternalType() != PhysicalType::VARCHAR) {
 		throw std::runtime_error("Delta Length Byte Array encoding is only supported for string/blob data");
 	}
+	// only VARCHAR and BLOB columns are read by a StringColumnReader; a wide DECIMAL shares the physical type
+	decode_to_plain = type.id() != LogicalTypeId::VARCHAR && type.id() != LogicalTypeId::BLOB;
+
 	// read the binary packed lengths
 	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
-	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	// Resize (inside ReadDbpData) must run unpinned so an evicted buffer is reallocated instead of reloaded
+	ResizeableBuffer::SizedBacking backing {reader.GetAllocator(), buffer_manager};
+	DeltaByteArrayDecoder::ReadDbpData(backing, block, length_buffer, byte_array_count);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, buffer_manager);
 
 	// Verify that the sum of DBP string lengths match up with the available string data
 	idx_t total_string_length = 0;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 	for (idx_t i = 0; i < byte_array_count; i++) {
 		total_string_length += length_data[i];
 	}
-	block.available(total_string_length);
+	block.Available(total_string_length);
 
 	length_idx = 0;
+	if (decode_to_plain) {
+		DecodeToPlain(block, total_string_length);
+	}
+}
+
+//! Rewrite the page into the plain BYTE_ARRAY layout ([4-byte length][data] repeated) and consume it from the block
+void DeltaLengthByteArrayDecoder::DecodeToPlain(ResizeableBuffer &block, idx_t total_string_length) {
+	auto &allocator = reader.reader.allocator;
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
+	plain_data = make_shared_ptr<ResizeableBuffer>();
+	plain_data->Resize(allocator, total_string_length + byte_array_count * sizeof(uint32_t));
+	auto output = plain_data->GetCurrentLoc();
+	for (idx_t i = 0; i < byte_array_count; i++) {
+		const auto len = length_data[i];
+		Store<uint32_t>(len, output);
+		output += sizeof(uint32_t);
+		memcpy(output, block.GetCurrentLoc(), len);
+		output += len;
+		block.UnsafeInc(len);
+	}
 }
 
 bool IsContinuationByte(uint8_t b) {
 	return (b & 0xC0) == 0x80;
 }
 
-bool TouchesUtf8Boundary(const char *data, uint32_t len) {
-	if (len == 0) {
-		return false;
-	}
-	const uint8_t first = static_cast<uint8_t>(data[0]);
-	const uint8_t last = static_cast<uint8_t>(data[len - 1]);
-	return IsContinuationByte(first) || (last & 0x80) != 0;
-}
-
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
                                        Vector &result, idx_t result_offset) {
+	if (decode_to_plain) {
+		reader.Plain(plain_data, defines, read_count, result_offset, result);
+		return;
+	}
 	if (defines) {
 		ReadInternal<true>(block_ref, defines, read_count, result, result_offset);
 	} else {
@@ -67,7 +91,8 @@ template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -88,7 +113,8 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	    reader.Type().IsJSONType() || reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option !=
 	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 
-	const auto start_ptr = block.ptr;
+	const auto start_ptr = block.GetCurrentLoc();
+	auto current_ptr = start_ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
@@ -105,27 +131,35 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 				    length_idx, byte_array_count);
 			}
 		}
-		const auto &str_len = length_data[length_idx++];
+		const auto str_len = length_data[length_idx++];
 
 		if (needs_full_individual_validation) {
-			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			auto verified = string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
-			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
-				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			// Batch validation below catches incomplete trailing characters. Within a valid batch, a character
+			// can only cross a string boundary if the next nonempty string starts with a continuation byte.
+			if (str_len > 0 && IsContinuationByte(current_ptr[0])) {
+				string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			}
-			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteStringRef(string_t(char_ptr_cast(current_ptr), str_len));
 		}
-		block.unsafe_inc(str_len);
+		current_ptr += str_len;
 	}
 
+	block.UnsafeInc(NumericCast<idx_t>(current_ptr - start_ptr));
 	if (!needs_full_individual_validation) {
-		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
+		string_column_reader.VerifyString(char_ptr_cast(start_ptr),
+		                                  NumericCast<uint32_t>(block.GetCurrentLoc() - start_ptr));
 	}
-	StringColumnReader::ReferenceBlock(result, block_ref);
+	StringColumnReader::ReferenceBlock(result, block_ref, reader.reader.buffer_manager);
 }
 
 void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	if (decode_to_plain) {
+		reader.PlainSkip(*plain_data, defines, skip_count);
+		return;
+	}
 	if (defines) {
 		SkipInternal<true>(defines, skip_count);
 	} else {
@@ -136,7 +170,8 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -163,7 +198,7 @@ void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_coun
 		}
 		skip_bytes += length_data[length_idx++];
 	}
-	block.inc(skip_bytes);
+	block.Inc(skip_bytes);
 }
 
 } // namespace duckdb

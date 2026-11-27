@@ -1,3 +1,5 @@
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -12,16 +14,17 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "json_common.hpp"
 
 namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, idx_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(Context &context, const Value &path_val, string &path, idx_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
-	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
+	const auto path_str_val = path_val.CastAs(context, LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
 	const auto ptr = path_str.GetData();
@@ -63,9 +66,19 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
+//! An integral path is an array index, other paths are cast to VARCHAR
+void JSONReadFunctionData::ResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
+	if (input.GetArgumentType(1).IsIntegral()) {
+		bound_function.GetArguments()[1] = LogicalType::BIGINT;
+	} else {
+		bound_function.GetArguments()[1] = LogicalType::VARCHAR;
+	}
+}
+
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
 	bool constant = false;
 	string path;
@@ -74,12 +87,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 	auto path_val = input.TryGetConstant(1);
 	if (path_val && !path_val->IsNull()) {
 		constant = true;
-		path_type = CheckPath(*path_val, path, len);
-	}
-	if (arguments[1]->GetReturnType().IsIntegral()) {
-		bound_function.GetArguments()[1] = LogicalType::BIGINT;
-	} else {
-		bound_function.GetArguments()[1] = LogicalType::VARCHAR;
+		path_type = CheckPath(input.GetClientContext().GetContext(), *path_val, path, len);
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.SetReturnType(LogicalType::LIST(bound_function.GetReturnType()));
@@ -123,7 +131,8 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		if (JSONReadFunctionData::CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+		if (JSONReadFunctionData::CheckPath(input.GetClientContext().GetContext(), path_val, paths.back(),
+		                                    lens.back()) == JSONPathType::WILDCARD) {
 			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
@@ -135,17 +144,17 @@ JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
     : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
+JSONFunctionLocalState::JSONFunctionLocalState(Context &context)
     : JSONFunctionLocalState(BufferAllocator::Get(context)) {
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data) {
+                                                            optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<JSONFunctionLocalState>(state.GetContext());
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
-	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(parameters.context->GetContext())
 	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 
@@ -356,7 +365,9 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 					        JSONCommon::FormatParseError(input.GetDataWriteable(), input.GetSize(), error), parameters);
 				    } else if (!unsafe_yyjson_is_arr(doc->root)) {
 					    auto truncated_input =
-					        input.GetSize() > 50 ? string(input.GetData(), 47) + "..." : input.GetString();
+					        input.GetSize() > 50
+					            ? StringUtil::TruncateUTF8TOByteLength(input.GetData(), input.GetSize(), 47)
+					            : input.GetString();
 					    HandleCastError::AssignError(
 					        StringUtil::Format("Cannot cast to list of JSON. Input \"%s\"", truncated_input),
 					        parameters);

@@ -1,0 +1,113 @@
+# name: test/sql/copy/parquet/multi_file/multi_file_skipped_open_reader.test
+# description: A filter that skips a file whose reader is already open keeps the rows of the open readers before it
+# group: [multi_file]
+
+require parquet
+
+statement ok
+COPY (SELECT i AS x FROM range(10) r(i)) TO '{TEST_DIR}/skip_open_a.parquet'
+
+statement ok
+COPY (SELECT i + 100 AS x FROM range(10) r(i)) TO '{TEST_DIR}/skip_open_b.parquet'
+
+statement ok
+COPY (SELECT i + 200 AS x FROM range(10) r(i)) TO '{TEST_DIR}/skip_open_c.parquet'
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads}
+
+# maximum_files_for_stats opens every file at bind, so the scan starts with several open readers
+# the second reader is skipped, the first one is not
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet'], maximum_files_for_stats = 2)
+WHERE filename = '{TEST_DIR}/skip_open_a.parquet'
+----
+10	45
+
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_a.parquet'], maximum_files_for_stats = 2)
+WHERE filename = '{TEST_DIR}/skip_open_a.parquet'
+----
+10	45
+
+# a skipped reader between two that are read
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+WHERE filename <> '{TEST_DIR}/skip_open_b.parquet'
+----
+20	2090
+
+# the last two readers are skipped
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+WHERE filename = '{TEST_DIR}/skip_open_a.parquet'
+----
+10	45
+
+# the first and the last reader are skipped
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+WHERE filename = '{TEST_DIR}/skip_open_b.parquet'
+----
+10	1045
+
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+WHERE filename <> '{TEST_DIR}/skip_open_c.parquet' AND x % 2 = 0
+----
+10	540
+
+# every reader is skipped
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+WHERE filename = 'nope'
+----
+0	NULL
+
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet'], maximum_files_for_stats = 2)
+WHERE file_index >= 2
+----
+0	NULL
+
+# no reader is skipped
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], maximum_files_for_stats = 3)
+----
+30	3135
+
+# without the option only the first file is open: it is skipped, the files after it are opened by the scan
+query II
+SELECT count(*), sum(x)
+FROM read_parquet('{TEST_DIR}/skip_open_*.parquet')
+WHERE filename <> '{TEST_DIR}/skip_open_a.parquet'
+----
+20	3090
+
+query II
+SELECT count(*), sum(x)
+FROM read_parquet('{TEST_DIR}/skip_open_*.parquet')
+WHERE filename = '{TEST_DIR}/skip_open_a.parquet'
+----
+10	45
+
+# union_by_name opens every file at bind as well
+query II
+SELECT count(*), sum(x)
+FROM read_parquet(['{TEST_DIR}/skip_open_a.parquet', '{TEST_DIR}/skip_open_b.parquet', '{TEST_DIR}/skip_open_c.parquet'], union_by_name = true)
+WHERE filename <> '{TEST_DIR}/skip_open_b.parquet'
+----
+20	2090
+
+endloop

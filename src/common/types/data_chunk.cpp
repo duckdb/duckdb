@@ -1,11 +1,14 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
@@ -80,8 +83,8 @@ idx_t DataChunk::DeriveSize() const {
 			return v.size();
 		}
 	}
-	if (data.empty()) {
-		// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
+	if (data.empty() || !vector_caches.empty()) {
+		// a column-less chunk, or an initialized chunk whose columns are all unset, is empty without an explicit count
 		return 0;
 	}
 	throw InternalException(
@@ -336,7 +339,9 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 		list.WriteObject([&](Serializer &object) {
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
-			serialized_vector.Reference(data[i]);
+			if (data[i].GetBufferRef()) {
+				serialized_vector.Reference(data[i]);
+			}
 			serialized_vector.Serialize(object, compressed_serialization);
 		});
 	});
@@ -352,6 +357,14 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 		auto type = list.ReadElement<LogicalType>();
 		types.push_back(type);
 	});
+
+	for (auto &type : types) {
+		if (!type.HasPhysicalType()) {
+			// the type is named by its id: it can lack the type info that ToString reads
+			throw SerializationException("Failed to deserialize data chunk: a vector cannot hold the type %s",
+			                             EnumUtil::ToString(type.id()));
+		}
+	}
 
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
@@ -415,25 +428,6 @@ unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 		data[col_idx].ToUnifiedFormat(unified_data[col_idx]);
 	}
 	return unified_data;
-}
-
-void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	auto hash_count = size();
-	VectorOperations::Hash(data[0], result, hash_count);
-	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], hash_count);
-	}
-}
-
-void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	D_ASSERT(!column_ids.empty());
-	auto hash_count = size();
-	VectorOperations::Hash(data[column_ids[0]], result, hash_count);
-	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], hash_count);
-	}
 }
 
 void DataChunk::Verify(ClientContext &context) {
@@ -510,6 +504,14 @@ void DataChunk::VerifyInternal(DebugVerificationMode mode, optional_ptr<Database
 			DBConfig &config = DBConfig::GetConfig(*db);
 			if (config.options.storage_compatibility.manually_set) {
 				options.storage_compatibility = config.options.storage_compatibility;
+			}
+		}
+		// GEOGRAPHY cannot be written to the storage versions that predate it, so there is nothing to round-trip
+		if (!options.storage_compatibility.Compare(Geometry::GEOGRAPHY_VERSION_ADDED)) {
+			for (auto &type : GetTypes()) {
+				if (TypeVisitor::Contains(type, LogicalTypeId::GEOGRAPHY)) {
+					return;
+				}
 			}
 		}
 

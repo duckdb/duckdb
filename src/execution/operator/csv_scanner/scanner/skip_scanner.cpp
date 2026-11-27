@@ -20,7 +20,8 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 }
 
 void SkipResult::SetComment(SkipResult &result, idx_t buffer_pos) {
-	if (!result.states.WasStandard()) {
+	// The rule of the sniffer, which counts the lines to skip: a comment behind a delimiter does not start the line
+	if (!result.states.WasStandard() && !result.states.WasState(CSVState::DELIMITER)) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;
@@ -83,9 +84,10 @@ void SkipScanner::FinalizeChunkProcess() {
 			Process(result);
 		}
 	}
-	// Skip Carriage Return
+	// Skip the LF of a CRLF pair
 	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
-	    states.states[1] == CSVState::CARRIAGE_RETURN) {
+	    states.IsCarriageReturn() && cur_buffer_handle && iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+	    buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
 		iterator.pos.buffer_pos++;
 	}
 	iterator.done = FinishedFile();

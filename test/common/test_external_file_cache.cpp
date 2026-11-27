@@ -1,17 +1,24 @@
 #include "catch.hpp"
+#include "bound_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "caching_test_utils.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "test_helpers.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/object_cache.hpp"
 
 #include <chrono>
 #include <condition_variable>
+#include <thread>
 
 namespace duckdb {
 
@@ -82,40 +89,44 @@ private:
 	idx_t read_count DUCKDB_GUARDED_BY(lock) = 0;
 };
 
-//! Records the ranges of positional reads.
-class ReadRecordingFileSystem : public SimpleTrackingFileSystem {
+class LocationBlockingFileSystem : public SimpleTrackingFileSystem {
 public:
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		{
-			annotated_lock_guard<annotated_mutex> guard(lock);
-			reads.emplace_back(location, NumericCast<idx_t>(nr_bytes));
+			annotated_unique_lock<annotated_mutex> guard(lock);
+			if (block_reads && location == blocked_location) {
+				read_blocked = true;
+				read_started.notify_all();
+				read_released.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return !block_reads; });
+			}
 		}
 		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
-	//! Recorded reads sorted by location, clears them
-	vector<pair<idx_t, idx_t>> TakeReads() {
+	void BlockReadsAt(idx_t location) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		auto result = std::move(reads);
-		reads.clear();
-		std::sort(result.begin(), result.end());
-		return result;
+		blocked_location = location;
+		block_reads = true;
+	}
+
+	void WaitForBlockedRead() {
+		annotated_unique_lock<annotated_mutex> guard(lock);
+		read_started.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return read_blocked; });
+	}
+
+	void ReleaseReads() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_reads = false;
+		read_released.notify_all();
 	}
 
 private:
 	annotated_mutex lock;
-	vector<pair<idx_t, idx_t>> reads DUCKDB_GUARDED_BY(lock);
-};
-
-const string REMOTE_PREFIX = "s3://efc-test/";
-
-//! Serves REMOTE_PREFIX + local path from the local file, so the cache treats it as a remote file.
-class RemotePathFileSystem : public ReadRecordingFileSystem {
-public:
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		return ReadRecordingFileSystem::OpenFile(path.substr(REMOTE_PREFIX.size()), flags, opener);
-	}
+	std::condition_variable read_started DUCKDB_GUARDED_BY(lock);
+	std::condition_variable read_released DUCKDB_GUARDED_BY(lock);
+	idx_t blocked_location DUCKDB_GUARDED_BY(lock) = 0;
+	bool block_reads DUCKDB_GUARDED_BY(lock) = false;
+	bool read_blocked DUCKDB_GUARDED_BY(lock) = false;
 };
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
@@ -146,8 +157,9 @@ string MakeTestContent(idx_t size) {
 	return content;
 }
 
-string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
-	auto group = handle.Read(size, offset);
+string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0,
+                const vector<pair<idx_t, idx_t>> &absorb_ranges = {}) {
+	auto group = handle.Read(size, offset, absorb_ranges);
 	string result(size, '\0');
 	group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), size);
 	return result;
@@ -162,8 +174,8 @@ string ReadSequential(CachingFileHandle &handle, idx_t size) {
 }
 
 void WriteTestContent(const string &path, const string &content) {
-	auto local_fs = FileSystem::CreateLocal();
-	auto handle = local_fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	auto &local_fs = TestLocalFileSystem();
+	auto handle = local_fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
 	handle->Sync();
 }
@@ -191,13 +203,15 @@ void EvictObjectCache(ObjectCache &object_cache) {
 TEST_CASE("Reads cache exactly the requested bytes", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 65536;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_exact_ranges.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -220,7 +234,7 @@ TEST_CASE("Reads cache exactly the requested bytes", "[external_file_cache]") {
 TEST_CASE("Large reads are split at the cache block size", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
@@ -230,7 +244,9 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_split_reads.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -248,17 +264,152 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	REQUIRE(CountCachedBlocks(cache) == 4);
 }
 
+TEST_CASE("Uncached reads are split at the cache block size", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	auto &cache = db_instance.GetExternalFileCache();
+	cache.SetEnabled(false);
+
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_uncached_split_reads.bin", content);
+
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	// The same reads as with the cache enabled, but nothing is kept
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {
+	            {0, BLOCK_SIZE}, {BLOCK_SIZE, BLOCK_SIZE}, {2 * BLOCK_SIZE, BLOCK_SIZE}, {3 * BLOCK_SIZE, 100}});
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// A read of at most one block stays a single read
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE, 100) == content.substr(100, BLOCK_SIZE));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{100, BLOCK_SIZE}});
+
+	// Without async threads, worker threads still run the pieces in parallel, so the read is still split
+	REQUIRE(!con.Query("SET threads=4")->HasError());
+	REQUIRE(!con.Query("SET async_threads=0")->HasError());
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads().size() == 4);
+
+	// Without any other thread the pieces cannot run in parallel, so the read stays whole
+	REQUIRE(!con.Query("SET threads=1")->HasError());
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
+TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_local_unsplit_reads.bin", content);
+
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	// Local files are not cached by default, so their reads stay whole
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
+TEST_CASE("A handle can still read after its caching file system is destroyed", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t FILE_SIZE = 65536;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_handle_outlives_fs.bin", content);
+
+	// Readers own their caching file system, but read-ahead tasks can keep the handle alive longer
+	BoundFileSystem recording_bound_fs(*recording_fs, nullptr);
+	auto cfs = make_uniq<CachingFileSystem>(recording_bound_fs, db_instance);
+	auto handle = cfs->OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	cfs.reset();
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	db_instance.GetExternalFileCache().SetEnabled(false);
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+}
+
+TEST_CASE("Compressed remote files are read in chunks of up to the file size", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	EFCTestFileGuard test_file("test_compressed_read_chunks.csv.gz", "");
+	REQUIRE(!con.Query(StringUtil::Format("COPY (SELECT i, md5(i::VARCHAR) AS h FROM range(20000) t(i)) TO '%s' "
+	                                      "(FORMAT csv, COMPRESSION gzip)",
+	                                      test_file.GetPath()))
+	             ->HasError());
+
+	GZipFileSystem gzip_fs;
+	SimpleTrackingFileSystem tracking_fs;
+	auto open_compressed = [&](const string &path) {
+		auto child = tracking_fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, nullptr);
+		return gzip_fs.OpenCompressedFile(*con.context, std::move(child), false);
+	};
+	auto read_all = [](FileHandle &handle) {
+		string result;
+		vector<char> buffer(65536);
+		int64_t read;
+		while ((read = handle.Read(buffer.data(), buffer.size())) > 0) {
+			result.append(buffer.data(), NumericCast<idx_t>(read));
+		}
+		return result;
+	};
+
+	SECTION("local files keep the buffer size of the compression") {
+		auto local = open_compressed(test_file.GetPath());
+		REQUIRE(local->Cast<CompressedFile>().stream_data.in_buf_size == gzip_fs.InBufferSize());
+	}
+	SECTION("remote files smaller than a chunk are read whole") {
+		auto local = open_compressed(test_file.GetPath());
+		auto remote = open_compressed(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath());
+		REQUIRE(remote->GetFileSize() > gzip_fs.InBufferSize());
+		REQUIRE(remote->Cast<CompressedFile>().stream_data.in_buf_size == remote->GetFileSize());
+		REQUIRE(read_all(*remote) == read_all(*local));
+	}
+	SECTION("the buffers count toward the memory limit") {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+		const auto used_before = buffer_manager.GetUsedMemory();
+		auto remote = open_compressed(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath());
+		auto &stream_data = remote->Cast<CompressedFile>().stream_data;
+		REQUIRE(buffer_manager.GetUsedMemory() >= used_before + stream_data.in_buf_size + stream_data.out_buf_size);
+		remote.reset();
+		REQUIRE(buffer_manager.GetUsedMemory() == used_before);
+	}
+}
+
 TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	// larger than the default local block size, so the file is not fetched whole
 	const idx_t FILE_SIZE = 20480;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_fill_gaps.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -275,7 +426,7 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 65536;
 	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
@@ -286,7 +437,9 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_absorb.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -310,7 +463,7 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves no request", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 65536;
 	Connection con(db);
@@ -321,7 +474,9 @@ TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves n
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_absorb_no_saving.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -334,17 +489,72 @@ TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves n
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 }
 
+TEST_CASE("A read re-fetches the cached ranges with the gaps only within the ranges it asks for",
+          "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 65536;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+
+	const idx_t FILE_SIZE = 100000;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard plain_file("test_efc_absorb_plain.bin", content);
+	EFCTestFileGuard elsewhere_file("test_efc_absorb_elsewhere.bin", content);
+	EFCTestFileGuard absorbed_file("test_efc_absorb_asked.bin", content);
+
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+	const vector<pair<idx_t, idx_t>> kept_reads {
+	    {0, 8192}, {24576, BLOCK_SIZE}, {24576 + BLOCK_SIZE, FILE_SIZE - 24576 - BLOCK_SIZE}};
+
+	// a cached range larger than an eighth of the block is kept by an ordinary read: the gaps around it are fetched
+	auto plain = cfs.OpenFile(MakeTestOpenFileInfo(plain_file.GetPath()), ReaderSizedFlags());
+	REQUIRE(ReadFull(*plain, 16384, 8192) == content.substr(8192, 16384));
+	recording_fs->TakeReads();
+	REQUIRE(ReadFull(*plain, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == kept_reads);
+	REQUIRE(CountCachedBlocks(cache) == 4);
+
+	// a read that asks for absorption elsewhere in the file keeps the range as well
+	auto elsewhere = cfs.OpenFile(MakeTestOpenFileInfo(elsewhere_file.GetPath()), ReaderSizedFlags());
+	REQUIRE(ReadFull(*elsewhere, 16384, 8192) == content.substr(8192, 16384));
+	recording_fs->TakeReads();
+	REQUIRE(ReadFull(*elsewhere, FILE_SIZE, 0, {{50000, FILE_SIZE}}) == content);
+	REQUIRE(recording_fs->TakeReads() == kept_reads);
+	REQUIRE(CountCachedBlocks(cache) == 8);
+
+	// a read whose asked-for range covers it re-fetches it with its gaps, saving a request
+	auto absorbed = cfs.OpenFile(MakeTestOpenFileInfo(absorbed_file.GetPath()), ReaderSizedFlags());
+	REQUIRE(ReadFull(*absorbed, 16384, 8192) == content.substr(8192, 16384));
+	recording_fs->TakeReads();
+	REQUIRE(ReadFull(*absorbed, FILE_SIZE, 0, {{0, 30000}}) == content);
+	REQUIRE(recording_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {{0, BLOCK_SIZE}, {BLOCK_SIZE, FILE_SIZE - BLOCK_SIZE}});
+	REQUIRE(CountCachedBlocks(cache) == 10);
+	REQUIRE(TotalCachedBytes(cache) == 3 * FILE_SIZE);
+
+	REQUIRE(ReadFull(*absorbed, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads().empty());
+}
+
 TEST_CASE("Cached ranges of local files between gaps are kept at the default block size", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	// larger than the default local block size, so the file is not fetched whole
 	const idx_t FILE_SIZE = 20480;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_keep_local.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -361,13 +571,15 @@ TEST_CASE("Cached ranges of local files between gaps are kept at the default blo
 TEST_CASE("A file no larger than the block size is fetched whole on the first read", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 3000;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_small_file.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -384,7 +596,7 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 TEST_CASE("Reads of remote files are rounded out to the minimum blocks around them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto remote_fs = make_uniq<RemotePathFileSystem>();
+	auto remote_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t MAX_BLOCK_SIZE = 16384;
 	Connection con(db);
@@ -394,8 +606,11 @@ TEST_CASE("Reads of remote files are rounded out to the minimum blocks around th
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_min_block.bin", content);
 
-	CachingFileSystem cfs(*remote_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
+	BoundFileSystem cfs_bound(*remote_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto handle =
+	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
 
 	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
 	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
@@ -418,13 +633,15 @@ TEST_CASE("Reads of remote files are rounded out to the minimum blocks around th
 TEST_CASE("Short reads of local files are not widened", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 65636;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_local_short.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 
 	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
@@ -434,7 +651,7 @@ TEST_CASE("Short reads of local files are not widened", "[external_file_cache]")
 TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 	auto &cache = db_instance.GetExternalFileCache();
 
 	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
@@ -442,7 +659,9 @@ TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[exter
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_cache_sized.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 
 	REQUIRE(ReadFull(*handle, 100, 0) == content.substr(0, 100));
@@ -467,7 +686,7 @@ TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[exter
 TEST_CASE("Reads past the end of the file fetch only the bytes in it", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 	auto &cache = db_instance.GetExternalFileCache();
 
 	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
@@ -475,7 +694,9 @@ TEST_CASE("Reads past the end of the file fetch only the bytes in it", "[externa
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_past_end.bin", content);
 
-	CachingFileSystem cfs(*recording_fs, db_instance);
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 
 	auto group = handle->Read(100, FILE_SIZE - 10);
@@ -501,7 +722,8 @@ TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[ext
 	EFCTestFileGuard test_file("test_efc_disabled.bin", content);
 
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	// Disable the cache.
 	cache.SetEnabled(false);
@@ -537,7 +759,9 @@ TEST_CASE("Sequential read preserves its position when the cache is disabled", "
 	const string second_block(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_disabled_sequential_position.bin", first_block + second_block);
 
-	CachingFileSystem cfs(*tracking_fs, *db.instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(ReadSequential(*handle, block_size) == first_block);
 	REQUIRE(CountCachedBlocks(cache) == 1);
@@ -556,7 +780,8 @@ TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[ext
 	EFCTestFileGuard test_file("test_efc_reenabled_live_handle_metadata.bin", content_a);
 
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(handle->GetFileSize() == content_a.size());
@@ -580,7 +805,8 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 	EFCTestFileGuard test_file("test_efc_set_vs_read.bin", content);
 
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	constexpr idx_t READER_COUNT = 4;
 	constexpr idx_t SETTER_COUNT = 2;
@@ -654,7 +880,8 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
 	auto &object_cache = db_instance.GetObjectCache();
 
@@ -686,7 +913,8 @@ TEST_CASE("Entry evicted while referenced allows re-creation of the same path", 
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
 	auto &object_cache = db_instance.GetObjectCache();
 
@@ -720,14 +948,15 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-	CachingFileSystem cfs(*tracking_fs, db_instance);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
 
-	auto local_fs = FileSystem::CreateLocal();
+	auto &local_fs = TestLocalFileSystem();
 	const auto missing_a = TestCreatePath("test_efc_missing_a.bin");
 	const auto missing_b = TestCreatePath("test_efc_missing_b.bin");
-	local_fs->TryRemoveFile(missing_a);
-	local_fs->TryRemoveFile(missing_b);
+	local_fs.TryRemoveFile(missing_a);
+	local_fs.TryRemoveFile(missing_b);
 
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ));
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_b), FileFlags::FILE_FLAGS_READ));
@@ -759,7 +988,9 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
 	EFCTestFileGuard test_file("test_efc_freshness_reuse.bin", content_a);
 
-	CachingFileSystem cfs(*fresh_fs, db_instance);
+	BoundFileSystem cfs_bound(*fresh_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	// First read populates the cache.
 	{
@@ -802,7 +1033,9 @@ TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "
 	const string content_c(BLOCK_SIZE, 'C');
 	EFCTestFileGuard test_file("test_efc_no_validation_freshness.bin", content_a);
 
-	CachingFileSystem cfs(*fresh_fs, db_instance);
+	BoundFileSystem cfs_bound(*fresh_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	{
 		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
@@ -856,7 +1089,9 @@ TEST_CASE("File with freshness deadline is invalidated when the file size change
 	const string content_b(BLOCK_SIZE * 2, 'B');
 	EFCTestFileGuard test_file("test_efc_freshness_size_change.bin", content_a);
 
-	CachingFileSystem cfs(*fresh_fs, db_instance);
+	BoundFileSystem cfs_bound(*fresh_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -886,7 +1121,9 @@ TEST_CASE("Long-lived handle does not use cache after the freshness deadline", "
 	const string content_b(BLOCK_SIZE, 'B');
 	EFCTestFileGuard test_file("test_efc_freshness_long_lived_handle.bin", content_a);
 
-	CachingFileSystem cfs(*fresh_fs, db_instance);
+	BoundFileSystem cfs_bound(*fresh_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
 
@@ -911,7 +1148,9 @@ TEST_CASE("Long-lived handle with validators stops using cache after the freshne
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_validator_freshness_long_lived_handle.bin", content_a);
 
-	CachingFileSystem cfs(*validating_fs, *db.instance);
+	BoundFileSystem cfs_bound(*validating_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(ReadFull(*handle, block_size) == content_a);
 	REQUIRE(validating_fs->stats_count == 1);
@@ -936,7 +1175,8 @@ TEST_CASE("File marked as not cacheable does not retain cached blocks", "[extern
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_no_store.bin", content_a);
-	CachingFileSystem cfs(*policy_fs, *db.instance);
+	BoundFileSystem cfs_bound(*policy_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -964,7 +1204,8 @@ TEST_CASE("Explicit cache reuse prohibition is honored under NO_VALIDATION", "[e
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_no_reuse_no_validation.bin", content_a);
-	CachingFileSystem cfs(*policy_fs, *db.instance);
+	BoundFileSystem cfs_bound(*policy_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 
 	{
 		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -993,7 +1234,9 @@ TEST_CASE("Expired freshness deadline is not served from cache", "[external_file
 	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
 	EFCTestFileGuard test_file("test_efc_freshness_expired.bin", content_a);
 
-	CachingFileSystem cfs(*fresh_fs, db_instance);
+	BoundFileSystem cfs_bound(*fresh_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -1016,7 +1259,8 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content(block_size, 'A');
 	EFCTestFileGuard test_file("test_efc_loading_waiter.bin", content);
-	CachingFileSystem cfs(*policy_fs, *db.instance);
+	BoundFileSystem cfs_bound(*policy_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 
 	// Open both handles while the policy still allows sharing.
 	auto handle_a = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -1058,6 +1302,45 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
+TEST_CASE("An evicted block held by an in-flight read is fetched once", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	Connection con(db);
+	REQUIRE(!con.Query("SET threads=1")->HasError());
+	REQUIRE(!con.Query("SET async_threads=0")->HasError());
+	const idx_t BLOCK_SIZE = 2097152;
+	const idx_t SMALL_READ = 4096;
+	REQUIRE(
+	    !con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE))->HasError());
+
+	auto content = MakeTestContent(BLOCK_SIZE * 3);
+	EFCTestFileGuard test_file("test_efc_held_evicted_block.bin", content);
+	auto blocking_fs = make_uniq<LocationBlockingFileSystem>();
+	BoundFileSystem cfs_bound(*blocking_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
+	auto handle_a = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	auto handle_b = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	REQUIRE(ReadFull(*handle_b, 100, BLOCK_SIZE) == content.substr(BLOCK_SIZE, 100));
+	REQUIRE(blocking_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE, BLOCK_SIZE}});
+
+	blocking_fs->BlockReadsAt(BLOCK_SIZE - SMALL_READ);
+	string result_a;
+	std::thread reader_a([&]() { result_a = ReadFull(*handle_a, SMALL_READ + 100, BLOCK_SIZE - SMALL_READ); });
+	blocking_fs->WaitForBlockedRead();
+	auto evict = con.Query("SET memory_limit='2MB'");
+	auto restore = con.Query("SET memory_limit='1GB'");
+	auto result_b = ReadFull(*handle_b, 100, BLOCK_SIZE);
+	blocking_fs->ReleaseReads();
+	reader_a.join();
+
+	REQUIRE(!evict->HasError());
+	REQUIRE(!restore->HasError());
+	REQUIRE(result_a == content.substr(BLOCK_SIZE - SMALL_READ, SMALL_READ + 100));
+	REQUIRE(result_b == content.substr(BLOCK_SIZE, 100));
+	REQUIRE(blocking_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {{BLOCK_SIZE - SMALL_READ, SMALL_READ}, {BLOCK_SIZE, BLOCK_SIZE}});
+}
+
 TEST_CASE("Content response can prohibit cache reuse", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &cache = db.instance->GetExternalFileCache();
@@ -1067,7 +1350,8 @@ TEST_CASE("Content response can prohibit cache reuse", "[external_file_cache]") 
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_content_policy.bin", content_a);
-	CachingFileSystem cfs(*policy_fs, *db.instance);
+	BoundFileSystem cfs_bound(*policy_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
 
 	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	// Cache validation expiration is found after a successful open.
@@ -1092,7 +1376,9 @@ TEST_CASE("No-metadata file is not cached and always returns fresh content", "[e
 	const string content_b(BLOCK_SIZE * 2, 'B');
 	EFCTestFileGuard test_file("test_efc_no_metadata.bin", content_a);
 
-	CachingFileSystem cfs(*no_meta_fs, db_instance);
+	BoundFileSystem cfs_bound(*no_meta_fs, nullptr);
+
+	CachingFileSystem cfs(cfs_bound, db_instance);
 
 	// First read: data is fetched from source.  No blocks should be stored in the cache.
 	{
@@ -1144,6 +1430,133 @@ TEST_CASE("Dropping cache blocks preserves existing readers and starts a new gen
 	REQUIRE(replacements.size() == 2);
 	REQUIRE(replacements[0] != acquired[0]);
 	REQUIRE(replacements[1] != acquired[1]);
+}
+
+TEST_CASE("Metadata eviction stops when enough memory is reclaimed", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto &buffer_pool = db.instance->GetBufferPool();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+	constexpr idx_t FILE_COUNT = 20;
+	constexpr idx_t EVICT_COUNT = 5;
+	constexpr idx_t BLOCK_SIZE = 1024;
+	idx_t block_count = 0;
+	SECTION("Large metadata reservations") {
+		block_count = 1024;
+	}
+	SECTION("Metadata reservations below the memory counter flush threshold") {
+		block_count = 4;
+	}
+
+	idx_t file_memory = 0;
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("metadata-eviction-%02llu", i));
+		cache.AcquireBlocks(*file, 0, block_count * BLOCK_SIZE, BLOCK_SIZE);
+		if (i == 0) {
+			file_memory = buffer_pool.GetUsedMemory() - initial_memory;
+		}
+	}
+	REQUIRE(file_memory > 0);
+	REQUIRE(cache.GetCachedFileCount() == FILE_COUNT);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + FILE_COUNT * file_memory);
+
+	const auto limit = initial_memory + (FILE_COUNT - EVICT_COUNT) * file_memory;
+	buffer_pool.SetLimit(limit, "");
+	REQUIRE(buffer_pool.GetUsedMemory() == limit);
+	REQUIRE(cache.GetCachedFileCount() == FILE_COUNT - EVICT_COUNT);
+
+	// The newest files keep their metadata; looking up an evicted file creates an empty one.
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("metadata-eviction-%02llu", i));
+		const annotated_lock_guard<annotated_mutex> guard(file->map_lock);
+		REQUIRE(file->blocks.size() == (i < EVICT_COUNT ? 0 : block_count));
+	}
+}
+
+TEST_CASE("Metadata eviction accounts for files retained by readers", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto &object_cache = db.instance->GetObjectCache();
+	auto &buffer_pool = db.instance->GetBufferPool();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+	constexpr idx_t FILE_COUNT = 3;
+	constexpr idx_t BLOCK_COUNT = 1024;
+	constexpr idx_t BLOCK_SIZE = 1024;
+
+	shared_ptr<ExternalFileCache::CachedFile> retained_file;
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("retained-metadata-%llu", i));
+		cache.AcquireBlocks(*file, 0, BLOCK_COUNT * BLOCK_SIZE, BLOCK_SIZE);
+		if (i == 0) {
+			retained_file = file;
+		}
+	}
+	const auto entry_memory = object_cache.GetCurrentMemory() / FILE_COUNT;
+	const auto total_memory = buffer_pool.GetUsedMemory();
+	const auto file_memory = (total_memory - initial_memory) / FILE_COUNT;
+	const auto metadata_memory = file_memory - entry_memory;
+	REQUIRE(metadata_memory > entry_memory);
+
+	// Removing the oldest entry only frees its entry reservation while a reader retains the file.
+	const auto limit = total_memory - entry_memory - file_memory;
+	buffer_pool.SetLimit(limit, "");
+	REQUIRE(buffer_pool.GetUsedMemory() == limit);
+	REQUIRE(cache.GetCachedFileCount() == 1);
+	{
+		const annotated_lock_guard<annotated_mutex> guard(retained_file->map_lock);
+		REQUIRE(retained_file->blocks.size() == BLOCK_COUNT);
+	}
+
+	retained_file.reset();
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + file_memory);
+}
+
+TEST_CASE("Request sizing can make every read cover the aligned blocks around it", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	con.Query("SET external_file_cache_request_sizing='GRID'");
+
+	const idx_t FILE_SIZE = 5 * BLOCK_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_request_sizing_grid.bin", content);
+
+	// a reader that sizes its own requests reads whole blocks
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, 100, BLOCK_SIZE + 10) == content.substr(BLOCK_SIZE + 10, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE, BLOCK_SIZE}});
+}
+
+TEST_CASE("Request sizing can make every read cover exactly the requested bytes", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	con.Query("SET external_file_cache_request_sizing='EXACT'");
+
+	const idx_t FILE_SIZE = 5 * BLOCK_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_request_sizing_exact.bin", content);
+
+	// a reader sized by the cache reads exactly the requested bytes
+	BoundFileSystem cfs_bound(*recording_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, 100, BLOCK_SIZE + 10) == content.substr(BLOCK_SIZE + 10, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE + 10, 100}});
 }
 
 } // namespace duckdb

@@ -41,7 +41,7 @@ COPY (
 statement error
 FROM read_csv('{TEST_DIR}/invalid_utf16.csv', encoding = 'utf-16')
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 statement ok
 COPY (

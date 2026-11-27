@@ -8,19 +8,17 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 
-class LocalFileSystem : public FileSystem {
+class LocalFileSystem : public BaseFileSystem {
 public:
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override;
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override;
 
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options,
-	                                           optional_ptr<FileOpener> opener = nullptr) override;
+	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -49,33 +47,32 @@ public:
 	FileType GetFileType(FileHandle &handle) override;
 	//! Returns the file stats of the attached handle.
 	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
-	                                        optional_ptr<FileOpener> opener = nullptr) override;
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
 	//! Check if a directory exists
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	//! Create a directory if it does not exist
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override;
 	//! Recursively remove a directory and all files in it
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 	//! Check if a file exists
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	//! Check if path is a pipe or character device
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	//! Remove a file from disk
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 	//! Close and remove an incomplete output file

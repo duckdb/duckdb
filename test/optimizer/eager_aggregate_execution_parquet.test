@@ -35,3 +35,40 @@ SELECT max(i), count(i), min(i) FROM '{TEST_DIR}/eager_agg.parquet'
 ----
 8191	8192	0
 
+# x is exact, but the column chunk at its top-level position is s.b, whose statistics are truncated
+statement ok
+COPY (SELECT {'a': i, 'b': repeat('x', 300) || i::VARCHAR} AS s, i AS x FROM range(8192) t(i)) TO '{TEST_DIR}/eager_agg_struct.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query II
+EXPLAIN SELECT min(x), max(x) FROM '{TEST_DIR}/eager_agg_struct.parquet'
+----
+physical_plan	<!REGEX>:.*PARQUET_SCAN.*
+
+query II
+SELECT min(x), max(x) FROM '{TEST_DIR}/eager_agg_struct.parquet'
+----
+0	8191
+
+query II
+SELECT min(s.a), max(s.a) FROM '{TEST_DIR}/eager_agg_struct.parquet'
+----
+0	8191
+
+query II
+SELECT min(file_row_group_number), max(file_row_group_number) FROM '{TEST_DIR}/eager_agg_struct.parquet'
+----
+0	3
+
+# INT96 struct fields have no physical child columns or usable min/max statistics
+query II
+SELECT min(ts['date']), max(ts['date'])
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='struct')
+----
+1970-01-02	2200-12-31
+
+query II
+SELECT min(ts['time']), max(ts['time'])
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds_dictionary.parquet', int96_as='struct')
+----
+00:00:00.000000001	10:20:30.123456789
+

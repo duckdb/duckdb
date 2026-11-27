@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,25 @@ static vector<FunctionArgument> &GetFunctionArgumentsMutable(ParsedExpression &e
 		return expr.Cast<WindowExpression>().GetArgumentsMutable();
 	}
 	return expr.Cast<FunctionExpression>().GetArgumentsMutable();
+}
+
+static void FindColumnsRelation(const ParsedExpression &expr, optional<Identifier> &relation_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		auto &star = expr.Cast<StarExpression>();
+		if (star.IsColumns()) {
+			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
+		}
+		if (relation_name && *relation_name != star.RelationName()) {
+			if (relation_name->empty() || star.RelationName().empty()) {
+				throw BinderException(expr, "COLUMNS cannot mix qualified and unqualified stars");
+			}
+			throw BinderException(expr, "COLUMNS cannot combine stars from different relations");
+		}
+		relation_name = star.RelationName();
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { FindColumnsRelation(child, relation_name); });
 }
 
 StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
@@ -95,6 +115,18 @@ StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr
 			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
 		}
 		in_columns = true;
+
+		if (current_star.Expression()) {
+			// Preserve the selection scope before inner stars become lists of unqualified names.
+			optional<Identifier> relation_name;
+			if (!current_star.RelationName().empty()) {
+				relation_name = current_star.RelationName();
+			}
+			FindColumnsRelation(*current_star.Expression(), relation_name);
+			if (relation_name) {
+				current_star.RelationNameMutable() = *relation_name;
+			}
+		}
 
 		if (*star) {
 			// we can have multiple
@@ -215,7 +247,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "like_escape"};
 	if (supported_ops.count(function.FunctionName().GetIdentifierName()) == 0) {
 		// unsupported op for * expression
-		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.FunctionName());
+		throw BinderException(*root, "Function %s cannot be applied to a star expression", function.FunctionName());
 	}
 	auto &right = function.GetArgumentsMutable()[1];
 	if (right.GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -232,8 +264,19 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	unique_ptr<ParsedExpression> child_expr;
 	if (!inverse && function.FunctionName() == "regexp_full_match" && function.GetArguments().size() == 2 &&
 	    star.ExcludeList().empty()) {
-		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
-		child_expr = std::move(right.GetExpressionMutable());
+		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('^(?:[regex])$') - COLUMNS matches partially
+		auto &pattern = right.GetExpression().Cast<ConstantExpression>();
+		if (pattern.GetLiteral().kind == LiteralKind::STRING) {
+			child_expr = ConstantExpression::String("^(?:" + pattern.GetLiteral().text + ")$");
+		} else {
+			vector<unique_ptr<ParsedExpression>> prefix_children;
+			prefix_children.push_back(ConstantExpression::String("^(?:"));
+			prefix_children.push_back(std::move(right.GetExpressionMutable()));
+			vector<unique_ptr<ParsedExpression>> anchored_children;
+			anchored_children.push_back(make_uniq<FunctionExpression>("||", std::move(prefix_children)));
+			anchored_children.push_back(ConstantExpression::String(")$"));
+			child_expr = make_uniq<FunctionExpression>("||", std::move(anchored_children));
+		}
 	} else {
 		// for other expressions -> generate a columns expression
 		// "* LIKE '%literal%'

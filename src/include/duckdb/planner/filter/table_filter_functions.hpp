@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -59,7 +61,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX = 0, BF = 1, PRF = 3 };
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX = 0, BF = 1, PRF = 3, IN_FILTER = 4 };
 
 void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
                                    idx_t &n_vectors_to_check);
@@ -87,44 +89,130 @@ struct TableFilterFunctions {
 };
 
 //! Runtime bloom-filter state used by join pushdown and internal tablefilter functions.
+//! A filter is first built (Initialize, then InsertHashes) and afterwards sealed. Only a sealed filter
+//! describes a complete key set, so only a sealed filter may be looked up or handed to a scan.
 class BloomFilter {
 public:
-	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, idx_t number_of_rows);
+	class ReadView {
+	public:
+		ReadView(const uint64_t *buffer, uint64_t bitmask) : buffer(buffer), bitmask(bitmask) {
+		}
 
-	void InsertHashes(const Vector &hashes_v) const;
+		bool LookupOne(hash_t hash) const;
+		idx_t LookupHashes(const Vector &hashes, SelectionVector &result, idx_t count) const;
+		idx_t LookupHashes(const Vector &hashes, const SelectionVector &sel, SelectionVector &result,
+		                   idx_t count) const;
+
+	private:
+		const uint64_t *buffer;
+		uint64_t bitmask;
+	};
+
+	//! Deferred buffers must be cleared through InitializeRange before inserting any keys.
+	enum class Initialization { IMMEDIATE, DEFERRED };
+
+	//! Cap the bitmap size without reducing its desired bits per key.
+	void Initialize(ClientContext &context_p, idx_t number_of_rows,
+	                idx_t max_bitmap_bytes = NumericLimits<idx_t>::Maximum(),
+	                Initialization initialization = Initialization::IMMEDIATE);
+	//! Deferred initialization must cover disjoint ranges of [0,total) before insertion begins.
+	void InitializeRange(idx_t begin, idx_t end, idx_t total);
+
+	//! VectorOperations::Hash writes at the source row positions, so the hashes to insert are the ones sel
+	//! points at rather than the first count entries
+	void InsertHashes(const Vector &hashes_v, const SelectionVector &sel, idx_t count);
+	//! Inserts every hash the vector carries
+	void InsertHashes(const Vector &hashes_v);
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 	//! result_sel contains local positions into sel rather than source row ids.
 	idx_t LookupHashes(const Vector &hashes_v, const SelectionVector &sel, SelectionVector &result_sel,
 	                   idx_t count) const;
 
-	void InsertOne(hash_t hash) const;
+	void InsertOne(hash_t hash);
 	bool LookupOne(hash_t hash) const;
-	void Merge(const BloomFilter &other);
-	void Reset();
+	//! Folds the filter down to the smallest size that still meets the target false positive rate, releases excess
+	//! spare capacity, and marks the filter complete.
+	void Seal(ClientContext &context);
 
+	idx_t GetBitmapSize() const {
+		return num_sectors * sizeof(uint64_t);
+	}
+	idx_t GetAllocationSize() const {
+		return buf_.GetSize();
+	}
+	idx_t GetMemoryBudget() const {
+		return memory_budget;
+	}
+	//! Completed buffers may be replaced only before publication.
+	HugeAllocation CopyBuffer(ClientContext &context) const;
+	void ReplaceBuffer(HugeAllocation buffer);
+	void InstallReadCopy(HugeAllocation buffer);
+	ReadView GetReadView(idx_t buffer_index = 0) const;
+
+	//! Allocation and geometry are configured; only a sealed filter is ready for lookup.
 	bool IsInitialized() const {
 		return initialized;
+	}
+	bool IsSealed() const {
+		return sealed;
+	}
+	//! Whether the sealed filter still rejects enough for pushing it into a scan to pay off
+	bool IsUseful() const {
+		D_ASSERT(sealed);
+		return useful;
+	}
+	bool IsPublished() const {
+		return published;
+	}
+	//! Marks the filter as handed to a probe-side consumer: it must stay immutable afterwards
+	void MarkPublished() {
+		D_ASSERT(initialized && sealed);
+		published = true;
 	}
 
 	static idx_t GetNumberOfSectors(idx_t number_of_rows);
 
 private:
+	//! Halves the filter until only new_num_sectors sectors remain. Bit-exact with a filter that was built at
+	//! the smaller size from the start, because the sector index is the low bits of the hash and the bits set
+	//! within a sector are taken from the high bits.
+	void Fold(idx_t new_num_sectors);
+	//! Fraction of bits that are set, over the sectors currently in use
+	double Density() const;
+
+private:
 	idx_t num_sectors;
+	idx_t memory_budget = 0;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
 	bool initialized = false;
-	AllocatedData buf_;
+	bool sealed = false;
+	bool useful = false;
+	bool published = false;
+	Initialization initialization = Initialization::IMMEDIATE;
+	HugeAllocation buf_;
 	uint64_t *bf;
+	HugeAllocation read_copy;
 };
+
+//! Captured by the producer; a missing group selects the primary buffer.
+struct BloomFilterReadLocality {
+	idx_t shard_count = 1;
+	optional_idx replica_group;
+};
+
+BloomFilter::ReadView GetBloomFilterReadView(const BloomFilter &filter, const BloomFilterReadLocality &locality);
 
 //! FunctionData for bloom filter internal function
 struct BloomFilterFunctionData : public FunctionData {
-	BloomFilterFunctionData(optional_ptr<BloomFilter> filter_p, bool filters_null_values_p,
+	BloomFilterFunctionData(shared_ptr<const BloomFilter> filter_p, bool filters_null_values_p,
 	                        const string &key_column_name_p, const LogicalType &key_type_p,
-	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p);
+	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p,
+	                        BloomFilterReadLocality locality_p = {});
 
-	optional_ptr<BloomFilter> filter;
+	//! Published filters are shared and immutable: the hash table may drop its own reference at any time
+	shared_ptr<const BloomFilter> filter;
+	BloomFilterReadLocality locality;
 	bool filters_null_values;
 	string key_column_name;
 	LogicalType key_type;
@@ -158,7 +246,8 @@ public:
 	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
 	virtual void InsertKeys(Vector &keys, BuildState &state) const = 0;
 	virtual void InsertKeysParallel(Vector &keys, BuildState &state) const = 0;
-	virtual void MergeBuildState(BuildState &state) = 0;
+	//! Consumes a completed state after all writers have finished.
+	virtual void MergeBuildState(unique_ptr<BuildState> state) = 0;
 	virtual idx_t GetBuildStateSize() const = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	//! result_sel contains local positions into sel rather than source row ids.
@@ -166,9 +255,19 @@ public:
 	                         idx_t count) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
+	bool IsPublished() const {
+		return published;
+	}
+	void MarkPublished() {
+		D_ASSERT(IsInitialized());
+		published = true;
+	}
 	static bool SupportedType(const LogicalType &type);
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
+
+private:
+	bool published = false;
 };
 
 //! FunctionData for prefix range internal function
@@ -193,9 +292,9 @@ struct DynamicFilterData {
 public:
 	DynamicFilterData(ExpressionType comparison_type, Value constant);
 
-	mutex lock;
+	mutable annotated_shared_mutex lock;
 	ExpressionType comparison_type;
-	Value constant;
+	Value constant DUCKDB_GUARDED_BY(lock);
 	atomic<bool> initialized = {false};
 
 	unique_ptr<Expression> ToExpression(const Expression &column) const;

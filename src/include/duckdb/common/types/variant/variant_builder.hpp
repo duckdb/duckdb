@@ -35,6 +35,14 @@
 
 namespace duckdb {
 
+//! Grants the variant builder access to the storage-level type of a VariantNode / ParquetVariantNode
+struct VariantNodeStorageAccess {
+	template <class NODE>
+	static VariantLogicalType GetStorageType(const NODE &node) {
+		return node.GetVariantType();
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Building a VARIANT in a single pass
 //===--------------------------------------------------------------------===//
@@ -65,15 +73,19 @@ inline void VariantBuilderAppendBytes(string &blob, const_data_ptr_t data, idx_t
 	blob.append(const_char_ptr_cast(data), size);
 }
 
-inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const string_t &key) {
+inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, ArenaAllocator &keys_arena,
+                                               const string_t &key) {
 	auto unsorted_idx = dictionary.size();
 	//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
-	return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
+	return dictionary.emplace(std::make_pair(key, unsorted_idx), keys_arena).first->second;
 }
 
 //! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
 inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
-	if (width > DecimalWidth<int64_t>::max) {
+	if (width > DecimalWidth<hugeint_t>::max) {
+		// decimals wider than 38 digits are BIGNUM blobs
+		return PhysicalType::VARCHAR;
+	} else if (width > DecimalWidth<int64_t>::max) {
 		return PhysicalType::INT128;
 	} else if (width > DecimalWidth<int32_t>::max) {
 		return PhysicalType::INT64;
@@ -85,7 +97,8 @@ inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
 
 //! Accumulates the canonical representation of a single chunk while traversing the source once.
 struct VariantBuilder {
-	explicit VariantBuilder(OrderedOwningStringMap<uint32_t> &dictionary) : dictionary(dictionary) {
+	VariantBuilder(OrderedOwningStringMap<uint32_t> &dictionary, ArenaAllocator &keys_arena)
+	    : dictionary(dictionary), keys_arena(keys_arena) {
 	}
 
 	//! values: (type_id, byte_offset) in pre-order
@@ -100,6 +113,8 @@ struct VariantBuilder {
 	string blob;
 	//! maps a key string to its (unsorted) dictionary index, owned by the result's keys vector
 	OrderedOwningStringMap<uint32_t> &dictionary;
+	//! the result's keys arena, the dictionary's keys are allocated in
+	ArenaAllocator &keys_arena;
 
 	static constexpr idx_t INIT_NESTING_DEPTH = 8;
 
@@ -153,7 +168,7 @@ struct VariantBuilder {
 		for (idx_t i = 0; i < n; i++) {
 			child_value_ids[block + i] = LocalValue();
 			child_key_ids[block + i] = LocalKey();
-			key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, key_fn(i)));
+			key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key_fn(i)));
 			emit_fn(i);
 		}
 	}
@@ -291,8 +306,8 @@ struct VariantBuilder {
 		case LogicalTypeId::DECIMAL: {
 			variant_type = VariantLogicalType::DECIMAL;
 			auto &type = primitive.type();
-			uint8_t width;
-			uint8_t scale;
+			uint32_t width;
+			uint32_t scale;
 			type.GetDecimalProperties(width, scale);
 			VariantBuilderAppendVarint(blob, width);
 			VariantBuilderAppendVarint(blob, scale);
@@ -309,6 +324,13 @@ struct VariantBuilder {
 			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, primitive.GetValueUnsafe<hugeint_t>());
 				break;
+			case PhysicalType::VARCHAR: {
+				// the BIGNUM blob of a decimal wider than 38 digits
+				auto bignum = primitive.GetValueUnsafe<string_t>();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			default:
 				throw InternalException("Unexpected physical type for Decimal value: %s",
 				                        EnumUtil::ToString(type.InternalType()));
@@ -319,6 +341,7 @@ struct VariantBuilder {
 		case LogicalTypeId::BIGNUM:
 		case LogicalTypeId::BIT:
 		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::GEOGRAPHY:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
 				variant_type = VariantLogicalType::BLOB;
@@ -328,6 +351,8 @@ struct VariantBuilder {
 				variant_type = VariantLogicalType::BITSTRING;
 			} else if (type_id == LogicalTypeId::GEOMETRY) {
 				variant_type = VariantLogicalType::GEOMETRY;
+			} else if (type_id == LogicalTypeId::GEOGRAPHY) {
+				variant_type = VariantLogicalType::GEOGRAPHY;
 			} else {
 				variant_type = VariantLogicalType::VARCHAR;
 			}
@@ -342,6 +367,12 @@ struct VariantBuilder {
 		}
 		type_ids.push_back(static_cast<uint8_t>(variant_type));
 		byte_offsets.push_back(byte_offset);
+	}
+
+	//! Emit a primitive value sourced from a VariantNode-like cursor, using the storage type of the cursor
+	template <class NODE>
+	void EmitPrimitiveNode(const NODE &it) {
+		EmitPrimitiveNode(it, VariantNodeStorageAccess::GetStorageType(it));
 	}
 
 	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by
@@ -445,9 +476,15 @@ struct VariantBuilder {
 			case PhysicalType::INT64:
 				VariantBuilderAppendFixed(blob, it.template GetData<int64_t>());
 				break;
-			default:
+			case PhysicalType::INT128:
 				VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
 				break;
+			default: {
+				auto bignum = it.GetWideDecimal();
+				VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(bignum.GetSize()));
+				VariantBuilderAppendBytes(blob, const_data_ptr_cast(bignum.GetData()), bignum.GetSize());
+				break;
+			}
 			}
 			break;
 		}
@@ -455,7 +492,8 @@ struct VariantBuilder {
 		case VariantLogicalType::BLOB:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::BITSTRING:
-		case VariantLogicalType::GEOMETRY: {
+		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY: {
 			auto str = it.GetString();
 			VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(str.GetSize()));
 			VariantBuilderAppendBytes(blob, const_data_ptr_cast(str.GetData()), str.GetSize());
@@ -484,7 +522,7 @@ struct VariantBuilder {
 	void AssignObjectChild(idx_t block, idx_t i, string_t key) {
 		child_value_ids[block + i] = LocalValue();
 		child_key_ids[block + i] = LocalKey();
-		key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, key));
+		key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, keys_arena, key));
 	}
 
 	void AssignArrayChild(idx_t block, idx_t i) {
@@ -496,10 +534,11 @@ struct VariantBuilder {
 //===--------------------------------------------------------------------===//
 // Emit (source: a VariantNode-like cursor)
 //===--------------------------------------------------------------------===//
-//! Collect the (non-missing) object children of a node in lexicographic key order
+//! Collect the (non-missing) object children of a node - the key order of an object is not significant, so the
+//! children are emitted in the order they are stored
 template <class NODE>
 auto CollectObjectChildren(const NODE &it) {
-	auto object = it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC);
+	auto object = it.GetObjectChildren(VariantIterationOrder::INTERNAL);
 	using EntryT = std::decay_t<decltype(*object.begin())>;
 	vector<EntryT> children;
 	for (auto &entry : object) {
@@ -530,7 +569,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 			builder.EmitNull();
 			return;
 		}
-		auto type_id = node.GetTypeId();
+		auto type_id = VariantNodeStorageAccess::GetStorageType(node);
 		switch (type_id) {
 		case VariantLogicalType::OBJECT: {
 			auto children = CollectObjectChildren(node);
@@ -629,8 +668,8 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 
 	//! The dictionary is backed by the keys vector's string allocator so the finalized keys are owned
 	//! by the result (see FinalizeVariantKeys).
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
-	VariantBuilder builder(dictionary);
+	OrderedOwningStringMap<uint32_t> dictionary;
+	VariantBuilder builder(dictionary, StringVector::GetStringAllocator(keys_entry));
 
 	vector<list_entry_t> keys_entries(count);
 	vector<list_entry_t> children_entries(count);

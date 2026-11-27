@@ -6,10 +6,89 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
+#include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
+#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
+#include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
+#include "duckdb/optimizer/rule/in_clause_simplification.hpp"
+#include "duckdb/optimizer/rule/join_dependent_filter.hpp"
+#include "duckdb/optimizer/rule/list.hpp"
+#include "duckdb/optimizer/rule/monotone_preimage.hpp"
+#include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
+
+vector<unique_ptr<Rule>> ExpressionRewriter::CreateDefaultRules(ExpressionRewriter &rewriter) {
+	vector<unique_ptr<Rule>> rules;
+	rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
+	rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
+	rules.push_back(make_uniq<DistributivityRule>(rewriter));
+	rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<LeastGreatestSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<OrRangeMergeRule>(rewriter));
+	rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<BetweenNullSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<RowComparisonSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<EnumCompareSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
+	rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
+	rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
+	rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
+	rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
+	rules.push_back(make_uniq<StringPrefixRule>(rewriter));
+	rules.push_back(make_uniq<InstrPrefixRule>(rewriter));
+	rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
+	rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
+	rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
+	rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
+	rules.push_back(make_uniq<RegexpReplaceExtractRule>(rewriter));
+	rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
+	rules.push_back(make_uniq<NoopReplaceRemovalRule>(rewriter));
+	rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
+	rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
+	rules.push_back(make_uniq<TimeStampComparison>(rewriter));
+	rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
+	rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
+	rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
+	rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<NotConjunctionSimplificationRule>(rewriter));
+	rules.push_back(make_uniq<NotConstantOrNullSimplificationRule>(rewriter));
+
+#ifdef DEBUG
+	for (auto &rule : rules) {
+		// root not defined in rule
+		D_ASSERT(rule->root);
+	}
+#endif
+	return rules;
+}
+
+const vector<unique_ptr<Rule>> &ExpressionRewriter::GetRules() {
+	if (!rules.empty()) {
+		return rules;
+	}
+	auto &client_data = ClientData::Get(context);
+	CallOnce(client_data.default_expression_rewriter_once, [&]() {
+		auto default_rewriter = make_uniq<ExpressionRewriter>(context);
+		default_rewriter->rules = CreateDefaultRules(*default_rewriter);
+		client_data.default_expression_rewriter = std::move(default_rewriter);
+	});
+	return client_data.default_expression_rewriter->rules;
+}
+
+void ExpressionRewriter::AddRule(unique_ptr<Rule> rule) {
+	D_ASSERT(rule->root);
+	rules.push_back(std::move(rule));
+}
 
 struct RewriteFrame {
 	reference<unique_ptr<Expression>> expr;
@@ -17,18 +96,18 @@ struct RewriteFrame {
 	bool children_visited;
 };
 
-static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<reference<Rule>> &rules,
+static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<unique_ptr<Rule>> &rules,
                                         unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
 		vector<reference<Expression>> bindings;
-		if (rule.get().root->Match(*expr, bindings)) {
+		if (rule->root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
 			auto alias = expr->GetAlias();
 #ifdef D_ASSERT_IS_ENABLED
 			auto return_type = expr->GetReturnType();
 #endif
-			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
+			auto result = rule->Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				D_ASSERT(result->GetReturnType() != return_type ||
 				         result->GetReturnType().EqualsIncludingCollation(return_type));
@@ -54,7 +133,7 @@ static void CollectChildren(Expression &expr, vector<reference<unique_ptr<Expres
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { children.push_back(child); });
 }
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<unique_ptr<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	vector<RewriteFrame> stack;
 	vector<reference<unique_ptr<Expression>>> children;
@@ -94,19 +173,20 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context,
                                                           vector<unique_ptr<Expression>> children, Value value) {
+	for (auto &child : children) {
+		if (child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			// an untyped NULL child folds the call before its types are resolved: keep the type of the constant
+			return make_uniq<BoundConstantExpression>(Value(value.type()));
+		}
+	}
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(std::move(value)));
-	// the bind of constant_or_null derives the return type and the bind data from the leading constant
-	return BindBuiltinScalarFunction(context, ConstantOrNullFun::Name, std::move(children));
+	// constant_or_null has the type of the leading constant, also when a typed NULL child folds the call
+	return BindBuiltinScalarExpression(context, ConstantOrNullFun::Name, std::move(children));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	this->op = &op;
-
-	to_apply_rules.clear();
-	for (auto &rule : rules) {
-		to_apply_rules.push_back(*rule);
-	}
 
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
 		// For FILTER we want to ensure we always visit the split predicates
@@ -126,7 +206,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
 	bool changes_made = false;
-	*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, std::move(*expression), changes_made, true);
+	*expression = ExpressionRewriter::ApplyRules(*op, GetRules(), std::move(*expression), changes_made, true);
 }
 
 ClientContext &Rule::GetContext() const {

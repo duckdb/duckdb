@@ -1,0 +1,35 @@
+# name: test/optimizer/statistics/large_join_cardinality.test
+# description: Join estimates divide overflowing intermediate products before converting to a row count
+# group: [statistics]
+
+statement ok
+SET explain_output='optimized_only';
+
+# Materialized inputs isolate overflowing arithmetic from scan-domain heuristics.
+# Match the root's final cardinality field, rather than a leaf's range estimate.
+query II
+EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT range AS k FROM range(1152921504606846976))
+SELECT t0.k
+FROM source t0
+JOIN source t1 ON t0.k=t1.k
+JOIN source t2 ON t1.k=t2.k
+JOIN source t3 ON t2.k=t3.k
+JOIN source t4 ON t3.k=t4.k
+JOIN source t5 ON t4.k=t5.k
+JOIN source t6 ON t5.k=t6.k
+JOIN source t7 ON t6.k=t7.k
+JOIN source t8 ON t7.k=t8.k
+JOIN source t9 ON t8.k=t9.k
+JOIN source t10 ON t9.k=t10.k
+JOIN source t11 ON t10.k=t11.k
+JOIN source t12 ON t11.k=t12.k
+JOIN source t13 ON t12.k=t13.k
+JOIN source t14 ON t13.k=t14.k
+JOIN source t15 ON t14.k=t15.k
+JOIN source t16 ON t15.k=t16.k
+JOIN source t17 ON t16.k=t17.k
+JOIN source t18 ON t17.k=t18.k
+JOIN source t19 ON t18.k=t19.k;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1152921504606846976"\s*}\s*}\s*\]\s*$

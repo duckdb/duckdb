@@ -43,6 +43,8 @@ public:
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> default_parameters;
 	//! The types of the parameters
 	vector<LogicalType> types;
+	//! The declared return type, UNKNOWN when none was declared: the member's result is cast to it
+	LogicalType return_type = LogicalType::UNKNOWN;
 
 public:
 	virtual ~MacroFunction() {
@@ -59,12 +61,15 @@ public:
 	    Binder &binder, const vector<unique_ptr<MacroFunction>> &macro_functions, const Identifier &name,
 	    FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
 	    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
-	    idx_t depth);
+	    idx_t depth, optional_ptr<const ExpressionBinder> calling_binder);
 	static unique_ptr<DummyBinding>
 	CreateDummyBinding(const MacroFunction &macro_def, const Identifier &name,
 	                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
 	                   InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>>
 	                       &named_arguments);
+
+	//! Whether this member's parameter types equal the given type list exactly (ANY names an untyped slot)
+	bool MatchesSignature(const vector<LogicalType> &signature) const;
 
 	virtual string ToSQL() const;
 
@@ -75,7 +80,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast macro to type - macro type mismatch");
+			InternalException::Throw("Failed to cast macro to type - macro type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -83,7 +88,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast macro to type - macro type mismatch");
+			InternalException::Throw("Failed to cast macro to type - macro type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}

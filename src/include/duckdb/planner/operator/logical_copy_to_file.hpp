@@ -24,7 +24,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_COPY_TO_FILE;
 
 public:
-	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data, unique_ptr<CopyInfo> copy_info,
+	LogicalCopyToFile(CopyFunction function, cow_ptr<FunctionData> bind_data, unique_ptr<CopyInfo> copy_info,
 	                  TableIndex table_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(std::move(function)),
 	      bind_data(std::move(bind_data)), copy_info(std::move(copy_info)), table_index(table_index) {
@@ -32,7 +32,7 @@ public:
 
 public:
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 	unique_ptr<CopyInfo> copy_info;
 	TableIndex table_index;
 
@@ -58,11 +58,19 @@ public:
 	vector<BoundOrderByNode> order_columns;
 	//! Directory of a partition's files relative to file_path (see PhysicalCopyToFile)
 	unique_ptr<Expression> partition_path_expression;
+	//! Statistics of the partition columns as derived by the optimizer (not serialized)
+	vector<unique_ptr<BaseStatistics>> partition_stats;
 
 	vector<Identifier> names;
 	vector<LogicalType> expected_types;
+	//! The names and types of the copied query before the copy function changes them, for RETURN_COLUMN_TYPES
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	void Serialize(Serializer &serializer) const override;

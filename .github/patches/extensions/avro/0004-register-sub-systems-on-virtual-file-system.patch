@@ -1,0 +1,13 @@
+diff --git a/test/cpp/test_writer_cleanup.cpp b/test/cpp/test_writer_cleanup.cpp
+index 3448e15..368f5a3 100644
+--- a/test/cpp/test_writer_cleanup.cpp
++++ b/test/cpp/test_writer_cleanup.cpp
+@@ -127,7 +127,7 @@ void TestCopy(const std::string &codec, Faults faults, const std::string &expect
+ 		Connection con(db);
+ 		Require(!con.Query("LOAD avro")->HasError(), "Could not load avro");
+ 		Require(!con.Query("SET threads=1")->HasError(), "Could not set threads");
+-		FileSystem::GetFileSystem(*con.context).RegisterSubSystem(make_uniq<FaultFileSystem>(faults));
++		VirtualFileSystem::Get(*con.context).RegisterSubSystem(make_uniq<FaultFileSystem>(faults));
+ 		for (int attempt = 0; attempt < 3; attempt++) {
+ 			faults.writes = 0;
+ 			auto result = con.Query("COPY (SELECT 42 a) TO 'avrofault://test.avro' "

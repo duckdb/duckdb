@@ -3,6 +3,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
@@ -12,11 +14,10 @@ namespace duckdb {
 OptimisticWriteCollection::~OptimisticWriteCollection() {
 }
 
-OptimisticDataWriter::OptimisticDataWriter(ClientContext &context, DataTable &table) : context(context), table(table) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
 }
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : context(parent.GetClientContext()), table(table) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent) : table(table) {
 	if (parent.partial_manager) {
 		parent.partial_manager->ClearBlocks();
 	}
@@ -31,7 +32,7 @@ bool OptimisticDataWriter::CanWriteToDisk() const {
 	return !table.IsTemporary() && !storage_manager.InMemory() && !attached.IsReadOnly();
 }
 
-bool OptimisticDataWriter::PrepareWrite() {
+bool OptimisticDataWriter::PrepareWrite(Context &context) {
 	// check if optimistic writing is enabled
 	if (!Settings::Get<EnableOptimisticWriteSetting>(context)) {
 		return false;
@@ -44,12 +45,12 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(context, block_manager, PartialBlockType::APPEND_TO_TABLE);
+		partial_manager = make_uniq<PartialBlockManager>(block_manager, PartialBlockType::APPEND_TO_TABLE);
 	}
 	return true;
 }
 
-unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
+unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(Context &context, DataTable &storage,
                                                                              const vector<LogicalType> &insert_types,
                                                                              OptimisticWritePartialManagers type) {
 	auto table_info = storage.GetDataTableInfo();
@@ -64,16 +65,17 @@ unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(Dat
 	if (type == OptimisticWritePartialManagers::PER_COLUMN) {
 		for (idx_t i = 0; i < insert_types.size(); i++) {
 			auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-			result->partial_block_managers.push_back(make_uniq<PartialBlockManager>(
-			    QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE));
+			result->partial_block_managers.push_back(
+			    make_uniq<PartialBlockManager>(block_manager, PartialBlockType::APPEND_TO_TABLE));
 		}
 	}
 	return result;
 }
 
-void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_groups, idx_t flushed_row_group_idx) {
+void OptimisticDataWriter::WriteNewRowGroup(Context &context, OptimisticWriteCollection &row_groups,
+                                            idx_t flushed_row_group_idx) {
 	// we finished writing a complete row group
-	if (!PrepareWrite()) {
+	if (!PrepareWrite(context)) {
 		return;
 	}
 
@@ -91,12 +93,9 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 	if (!need_to_flush) {
 		// we don't need to flush based on the amount of row groups - but we still might need to flush based on the
 		// amount of
-		auto &config = DBConfig::GetConfig(context);
-		auto memory_limit = config.options.write_buffer_row_group_memory_limit;
-		if (!memory_limit.IsValid()) {
-			memory_limit = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
-		}
-		if (row_groups.unflushed_data_size >= memory_limit.GetIndex()) {
+		auto &config = DBConfig::GetConfig(context.GetDatabase());
+		auto memory_limit = config.GetWriteBufferMemoryLimit();
+		if (row_groups.unflushed_data_size >= memory_limit) {
 			// we exhausted our memory available for buffering - flush
 			need_to_flush = true;
 		}
@@ -110,7 +109,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 			to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
 			segment_indexes.push_back(segment_index);
 		}
-		FlushToDisk(row_groups, to_flush, segment_indexes);
+		FlushToDisk(context, row_groups, to_flush, segment_indexes);
 		row_groups.FinalizeFlush();
 	}
 }
@@ -128,14 +127,14 @@ void OptimisticWriteCollection::ResetCollectionAccounting() {
 	flushed_row_groups.clear();
 }
 
-void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &row_groups) {
+void OptimisticDataWriter::WriteUnflushedRowGroups(Context &context, OptimisticWriteCollection &row_groups) {
 	auto total_row_groups = row_groups.collection->GetRowGroupCount();
 	if (row_groups.flushed_row_groups.size() == total_row_groups && row_groups.partial_block_managers.empty()) {
 		// everything is flushed already and there is nothing to merge - a repeated call ends up here
 		return;
 	}
 	// we finished writing a complete row group
-	if (!PrepareWrite()) {
+	if (!PrepareWrite(context)) {
 		return;
 	}
 	// add any incomplete row groups to the set of unflushed row groups
@@ -156,11 +155,11 @@ void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &ro
 			segment_indexes.push_back(segment_index);
 		}
 
-		FlushToDisk(row_groups, to_flush, segment_indexes);
+		FlushToDisk(context, row_groups, to_flush, segment_indexes);
 	}
 
 	for (auto &partial_manager : row_groups.partial_block_managers) {
-		Merge(partial_manager);
+		Merge(context, partial_manager);
 	}
 	row_groups.FinalizeFlush();
 	row_groups.partial_block_managers.clear();
@@ -188,7 +187,7 @@ void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_co
 	collection->MergeStorage(merge_row_groups, nullptr, nullptr);
 }
 
-void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,
+void OptimisticDataWriter::FlushToDisk(Context &context, OptimisticWriteCollection &collection,
                                        const vector<const_reference<RowGroup>> &row_groups,
                                        const vector<int64_t> &segment_indexes) {
 	//! The set of column compression types (if any)
@@ -197,7 +196,7 @@ void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,
 	for (auto &column : table.Columns()) {
 		compression_types.push_back(column.CompressionType());
 	}
-	RowGroupWriteInfo info(*partial_manager, compression_types, collection.partial_block_managers);
+	RowGroupWriteInfo info(context, *partial_manager, compression_types, collection.partial_block_managers);
 	auto result = RowGroup::WriteToDisk(info, row_groups);
 	// move new (checkpointed) row groups to the row group collection
 	for (idx_t i = 0; i < row_groups.size(); i++) {
@@ -205,7 +204,7 @@ void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,
 	}
 }
 
-void OptimisticDataWriter::Merge(unique_ptr<PartialBlockManager> &other_manager) {
+void OptimisticDataWriter::Merge(Context &context, unique_ptr<PartialBlockManager> &other_manager) {
 	if (!other_manager) {
 		return;
 	}
@@ -213,24 +212,24 @@ void OptimisticDataWriter::Merge(unique_ptr<PartialBlockManager> &other_manager)
 		partial_manager = std::move(other_manager);
 		return;
 	}
-	partial_manager->Merge(*other_manager);
+	partial_manager->Merge(context, *other_manager);
 	other_manager.reset();
 }
 
-void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
-	Merge(other.partial_manager);
+void OptimisticDataWriter::Merge(Context &context, OptimisticDataWriter &other) {
+	Merge(context, other.partial_manager);
 }
 
-void OptimisticDataWriter::FinalFlush() {
+void OptimisticDataWriter::FinalFlush(Context &context) {
 	if (partial_manager) {
-		partial_manager->FlushPartialBlocks();
+		partial_manager->FlushPartialBlocks(context);
 		partial_manager.reset();
 	}
 }
 
 void OptimisticDataWriter::Rollback() {
 	if (partial_manager) {
-		partial_manager->Rollback();
+		partial_manager->ClearBlocks();
 		partial_manager.reset();
 	}
 }

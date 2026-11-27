@@ -46,7 +46,9 @@ def extract_declarations(setting) -> str:
                 definition += f"static bool OnLocalReset(ClientContext &context);\n"
         if setting.scope is not None:
             definition += f"    static Value GetSetting(const ClientContext &context);\n"
-    if setting.is_generic_setting:
+    if setting.is_generic_setting and setting.default_function:
+        definition += f"    static Value GetDefaultValue(const DBConfig &config);\n"
+    elif setting.is_generic_setting:
         if setting.conditional_defaults is not None:
             for condition, default_val in setting.conditional_defaults.items():
                 definition += f"{condition}\n"
@@ -55,6 +57,7 @@ def extract_declarations(setting) -> str:
         definition += f"    static constexpr const char *DefaultValue = \"{setting.default_value}\";\n"
         if setting.conditional_defaults is not None:
             definition += "#endif\n"
+    if setting.is_generic_setting:
         if setting.default_scope is not None:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.default_scope}_DEFAULT;\n"
         else:

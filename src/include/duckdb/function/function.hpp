@@ -11,12 +11,14 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/cow_ptr.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
@@ -37,9 +39,13 @@ class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
+class FunctionProperties;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
+class Binder;
+class DecimalWidthLimit;
+class FunctionBinder;
 
 struct PragmaInfo;
 
@@ -47,8 +53,10 @@ struct PragmaInfo;
 enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_HANDLING = 1 };
 //! The stability of the function, used by the optimizer
 //! CONSISTENT              -> this function always returns the same result when given the same input, no variance
-//! CONSISTENT_WITHIN_QUERY -> this function returns the same result WITHIN the same query/transaction
-//!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
+//! CONSISTENT_WITHIN_QUERY -> this function returns the same result for the same input WITHIN the same query, but the
+//!                            result might change across queries (e.g. NOW(), or functions whose bind reads settings
+//!                            such as TimeZone). The optimizer treats it as consistent, statements that call it are
+//!                            bound again at every execution, and index keys cannot contain it
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
 
@@ -56,10 +64,14 @@ enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTEN
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
 //! PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments
 //! IGNORE_COLLATIONS           -> collations are completely ignored by the function
+//! PUSH_DISTINCT_COLLATIONS    -> aggregate DISTINCT arguments are replaced by their comparison keys
+//!                               Only valid for aggregates that can consume keys instead of original values.
+//!                               Ordinary (non-DISTINCT) calls keep their original arguments.
 enum class FunctionCollationHandling : uint8_t {
 	PROPAGATE_COLLATIONS = 0,
 	PUSH_COMBINABLE_COLLATIONS = 1,
-	IGNORE_COLLATIONS = 2
+	IGNORE_COLLATIONS = 2,
+	PUSH_DISTINCT_COLLATIONS = 3
 };
 
 struct FunctionData {
@@ -116,6 +128,8 @@ struct FunctionLocalState {
 struct FunctionParameters {
 	vector<Value> values;
 	named_argument_map_t named_parameters;
+	//! The pragma function the parameters were bound for
+	optional_ptr<const PragmaFunction> function;
 };
 
 //! How a parameter receives its arguments, mirroring Python's parameter kinds, in the order a signature declares them
@@ -145,6 +159,15 @@ public:
 		}
 	}
 
+	//! A positional-only parameter declared without a name. It is named "col<index>" internally, as every parameter
+	//! needs one, but prints as its bare type: the name was never declared, so a caller cannot use it
+	static FunctionParameter Unnamed(LogicalType type, idx_t index) {
+		FunctionParameter result(Identifier(StringUtil::Format("col%d", index)), std::move(type), {},
+		                         FunctionParameterKind::POSITIONAL_ONLY);
+		result.named = false;
+		return result;
+	}
+
 	string ToString() const;
 
 	bool operator==(const FunctionParameter &other) const;
@@ -155,6 +178,11 @@ public:
 	}
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
+		named = true;
+	}
+	//! Whether the parameter was declared with a name, see Unnamed
+	auto IsNamed() const -> bool {
+		return named;
 	}
 
 	auto GetType() const -> const LogicalType & {
@@ -195,6 +223,7 @@ private:
 	LogicalType type;
 	shared_ptr<Value> default_value;
 	FunctionParameterKind kind;
+	bool named = true;
 };
 
 //! An option a function receives through its "**kwargs" parameter
@@ -334,11 +363,10 @@ public:
 		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value), kind);
 		return *this;
 	}
-	//! Adds a positional-only parameter named "col<N>", after its position - a caller cannot pass it by a name that
-	//! was never declared
+	//! Adds a positional-only parameter declared without a name, see FunctionParameter::Unnamed
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
-		auto name = Identifier(StringUtil::Format("col%d", parameters.size()));
-		return AddPositionalOnly(std::move(name), std::move(type));
+		parameters.push_back(FunctionParameter::Unnamed(std::move(type), parameters.size()));
+		return *this;
 	}
 	auto AddKeywordOnly(Identifier name, LogicalType type, optional<Value> default_value = {}) -> FunctionSignature & {
 		return AddParameter(std::move(name), std::move(type), std::move(default_value),
@@ -478,6 +506,9 @@ private:
 	QualifiedName qualified_name;
 };
 
+//! The kinds of functions that are selected by their arguments - every subclass of SimpleFunction is one kind
+enum class FunctionKind : uint8_t { SCALAR, AGGREGATE, WINDOW, TABLE, PRAGMA, TYPE };
+
 class SimpleFunction : public Function {
 public:
 	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
@@ -489,8 +520,15 @@ protected:
 	FunctionSignature signature;
 
 public:
-	DUCKDB_API string ToString() const;
+	//! How the function reads in errors, e.g. as a candidate of a call
+	DUCKDB_API virtual string ToString() const;
+	//! What kind of function this is
+	virtual FunctionKind GetKind() const = 0;
 	DUCKDB_API hash_t Hash() const;
+	//! The properties of scalar, aggregate and window functions - other functions have none
+	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {
+		return nullptr;
+	}
 
 	FunctionSignature &GetSignature() {
 		return signature;
@@ -557,6 +595,16 @@ public:
 		requires_ordered_execution = value;
 	}
 
+	//! Sets a generic property, e.g. "duckdb.collation.combinable", overwriting any previous value
+	DUCKDB_API void SetProperty(const string &name, Value value);
+	//! Returns the value of a generic property, or nullptr if it is not set
+	DUCKDB_API optional_ptr<const Value> GetProperty(const string &name) const;
+	//! Returns whether a generic property is the BOOLEAN true; an absent or non-BOOLEAN property is false
+	DUCKDB_API bool GetBooleanProperty(const string &name) const;
+	auto GetGenericProperties() const -> const unordered_map<string, Value> & {
+		return generic_properties;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -567,6 +615,9 @@ public:
 
 	bool operator==(const FunctionProperties &rhs) const;
 	bool operator!=(const FunctionProperties &rhs) const;
+
+private:
+	bool GenericPropertiesEqual(const FunctionProperties &rhs) const;
 
 public:
 	FunctionStability stability = FunctionStability::CONSISTENT;
@@ -584,6 +635,8 @@ public:
 	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
+	//! Generic properties by name, e.g. "duckdb.collation.combinable"
+	unordered_map<string, Value> generic_properties;
 };
 
 class BoundSimpleFunction {
@@ -654,6 +707,10 @@ public:
 	DUCKDB_API auto GetKeywordOnlyArgumentCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetKwargsCount(const FunctionSignature &signature) const -> idx_t;
 
+	//! Records the arguments of a call with constant arguments, as the function binder placed them for `signature`
+	DUCKDB_API void SetCallArguments(const FunctionSignature &signature, const vector<Value> &parameters,
+	                                 const named_argument_map_t &named_parameters);
+
 protected:
 	DUCKDB_API auto GetArgumentParameterKind(const FunctionSignature &signature, idx_t argument_index) const
 	    -> FunctionParameterKind;
@@ -675,21 +732,33 @@ public:
 class BindFunctionInput {
 public:
 	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
-	                  vector<unique_ptr<Expression>> &arguments_p,
-	                  optional_ptr<const vector<Identifier>> argument_names_p)
-	    : context(context_p), function(function_p), arguments(arguments_p), argument_names(argument_names_p) {
+	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p,
+	                  optional_ptr<Binder> binder_p = nullptr,
+	                  optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p), binder(binder_p),
+	      decimal_width_limit(decimal_width_limit_p) {
 	}
 
 	ClientContext &GetClientContext() const {
 		return context;
 	}
+	//! The binder of the query the function is bound in, if any: a rebind outside of a query has none
+	bool HasBinder() const {
+		return binder != nullptr;
+	}
+	DUCKDB_API Binder &GetBinder();
+	//! A binder for the functions the bind nests: it binds as this function is bound, within its query or within its
+	//! fixed decimal width
+	DUCKDB_API FunctionBinder NestedFunctionBinder();
+	//! The widest DECIMAL the bind constructs: the limit of the binder, the fixed limit of a bind outside of a query
+	//! (a deserialized function is rebound within the width it was bound in), or the max_decimal_width setting
+	DUCKDB_API DecimalWidthLimit GetDecimalWidthLimit() const;
 	vector<unique_ptr<Expression>> &GetArguments() const {
 		return arguments;
 	}
-	//! The resolved name of every argument, parallel to GetArguments(). Not set if the names are unavailable.
-	optional_ptr<const vector<Identifier>> GetArgumentNames() const {
-		return argument_names;
-	}
+	//! The resolved name of an argument: the parameter name for standard and keyword-only parameters, the name the
+	//! caller wrote for "**kwargs", and an empty name for "*args"
+	DUCKDB_API const Identifier &GetArgumentName(idx_t arg_idx) const;
 
 	//! Get the constant value of an argument.
 	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
@@ -706,10 +775,11 @@ public:
 	}
 
 	//! Try to get the constant value of an argument.
-	//! Never throws: returns none if the argument...
+	//! Returns none if the argument...
 	//! - is not constant (unresolved parameter or a non-foldable expression)
 	//! - index is out of range
 	//! - was not found when looking up by name
+	//! - raises an evaluation error (internal errors still propagate)
 	//! Use this when a non-constant argument should fall back to the runtime value instead of being an error.
 	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
 	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;
@@ -721,8 +791,11 @@ private:
 private:
 	ClientContext &context;
 	const BoundSimpleFunction &function;
+	const FunctionSignature &signature;
 	vector<unique_ptr<Expression>> &arguments;
-	optional_ptr<const vector<Identifier>> argument_names;
+	optional_ptr<Binder> binder;
+	//! The fixed limit of a bind outside of a query, if any
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
 };
 
 } // namespace duckdb

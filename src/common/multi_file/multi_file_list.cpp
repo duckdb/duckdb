@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
@@ -30,10 +31,11 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
+	filter_info.filename_column = Identifier(options.filename_column);
 
 	auto start_files = expanded_files.size();
 	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info);
@@ -237,6 +239,28 @@ bool MultiFileList::IsEmpty() const {
 	return GetExpandResult() == FileExpandResult::NO_FILES;
 }
 
+optional_idx MultiFileList::EstimateRowsPerFile(idx_t bytes_per_row) const {
+	D_ASSERT(bytes_per_row > 0);
+	MultiFileListScanData scan_data;
+	scan_data.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	InitializeScan(scan_data);
+	OpenFileInfo file;
+	idx_t file_count = 0;
+	idx_t row_count = 0;
+	while (Scan(scan_data, file)) {
+		idx_t file_size;
+		if (!file.extended_info || !file.extended_info->TryGetOption("file_size", file_size)) {
+			return optional_idx();
+		}
+		row_count += MaxValue<idx_t>(file_size / bytes_per_row, 1);
+		file_count++;
+	}
+	if (file_count == 0) {
+		return optional_idx();
+	}
+	return row_count / file_count;
+}
+
 unique_ptr<MultiFileList> MultiFileList::Copy() const {
 	return make_uniq<SimpleMultiFileList>(GetAllFiles());
 }
@@ -280,7 +304,7 @@ idx_t SimpleMultiFileList::GetTotalFileCount() const {
 //===--------------------------------------------------------------------===//
 // LazyFileList
 //===--------------------------------------------------------------------===//
-LazyMultiFileList::LazyMultiFileList(optional_ptr<ClientContext> context_p) : context(context_p) {
+LazyMultiFileList::LazyMultiFileList(optional_ptr<Context> services_p) : services(services_p) {
 }
 
 vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
@@ -339,94 +363,14 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
-	if (context && context->IsInterrupted()) {
-		throw InterruptException();
+	if (services) {
+		// each expansion step can be a slow remote listing, so read the clock every time
+		services->InterruptCheck();
 	}
 	if (!ExpandNextPath()) {
 		all_files_expanded = true;
 		return false;
 	}
-	return true;
-}
-
-//===--------------------------------------------------------------------===//
-// GlobMultiFileList
-//===--------------------------------------------------------------------===//
-static vector<OpenFileInfo> PathsToFiles(vector<string> paths) {
-	vector<OpenFileInfo> result;
-	result.reserve(paths.size());
-	for (auto &path : paths) {
-		result.emplace_back(std::move(path));
-	}
-	return result;
-}
-
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
-    : GlobMultiFileList(context_p, PathsToFiles(std::move(globs_p)), std::move(glob_input_p)) {
-}
-
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> globs_p, FileGlobInput glob_input_p)
-    : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
-      current_glob(0) {
-}
-
-vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {
-	// for globs we display the actual globs in the ToString() - instead of expanding to the files read
-	vector<OpenFileInfo> result;
-	for (auto &glob : globs) {
-		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
-			break;
-		}
-		result.emplace_back(glob);
-	}
-	return result;
-}
-
-bool GlobMultiFileList::ExpandNextPath() const {
-	if (current_glob >= globs.size()) {
-		return false;
-	}
-	auto &current_entry = globs[current_glob];
-	if (current_entry.extended_info) {
-		// the file was specified together with the options to open it with - use it as-is
-		expanded_files.push_back(current_entry);
-		current_glob++;
-		return true;
-	}
-	if (current_glob >= file_lists.size()) {
-		file_lists.resize(current_glob + 1);
-	}
-	if (!file_lists[current_glob]) {
-		// glob is not yet started for this file - start it and initiate the scan over this file
-		auto &fs = FileSystem::GetFileSystem(context);
-		auto glob_result = fs.GlobFileList(current_entry.path, glob_input);
-		scan_state = MultiFileListScanData();
-		glob_result->InitializeScan(scan_state);
-		file_lists[current_glob] = std::move(glob_result);
-	}
-	// get the next batch of files we can fetch through the glob
-	auto &glob_list = *file_lists[current_glob];
-	scan_state.scan_type = MultiFileListScanType::ALWAYS_FETCH;
-	OpenFileInfo file;
-	if (!glob_list.Scan(scan_state, file)) {
-		// no more files available in this glob - move to the next glob
-		current_glob++;
-		return true;
-	}
-	// we found a file as part of this glob - add it to the result
-	vector<OpenFileInfo> glob_files;
-	glob_files.push_back(std::move(file));
-
-	// now continue scanning files that are already available (i.e. that don't require extra I/O operations to fetch)
-	scan_state.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
-	while (glob_list.Scan(scan_state, file)) {
-		glob_files.push_back(std::move(file));
-	}
-
-	// sort the files and add them to the list of files
-	std::sort(glob_files.begin(), glob_files.end());
-	expanded_files.insert(expanded_files.end(), glob_files.begin(), glob_files.end());
-
 	return true;
 }
 

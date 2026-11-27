@@ -15,6 +15,7 @@ namespace duckdb {
 class BufferManager;
 class BlockHandle;
 class ClientContext;
+class Context;
 struct ColumnDataCopyFunction;
 class ColumnDataAllocator;
 class ColumnDataCollection;
@@ -23,6 +24,15 @@ class ColumnDataRowCollection;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
+//! A collection with no columns still stores row counts.
+//! The position of a chunk within a ColumnDataCollection
+struct ColumnDataChunkPosition {
+	idx_t segment_index = 0;
+	idx_t chunk_index = 0;
+	//! The number of rows before the chunk
+	idx_t row_offset = 0;
+};
+
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
@@ -36,6 +46,11 @@ public:
 	//! Constructs either an in-memory or a buffer-managed column data collection
 	DUCKDB_API
 	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
+	//! Constructs either an in-memory or a buffer-managed column data collection
+	DUCKDB_API
+	ColumnDataCollection(Context &context, vector<LogicalType> types,
 	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
 	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
@@ -148,6 +163,9 @@ public:
 	//! Materializes every row on each call, so read many values through GetRows instead
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
+	//! Truncates the collection in place. NOP if it is already smaller.
+	void Truncate(idx_t new_count);
+
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.
 	//! If they are not equal, return false and fill in the error message.
@@ -166,6 +184,8 @@ public:
 	//! Note that the returned chunk will likely not be aligned to the given row
 	//! but the scan state will provide the actual range
 	bool Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &result) const;
+	//! Positions an initialized scan so that the next Scan reads the chunk at the given position
+	void SeekScan(ColumnDataScanState &state, const ColumnDataChunkPosition &position) const;
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -191,7 +211,7 @@ private:
 
 private:
 	//! The Column Data Allocator
-	buffer_ptr<ColumnDataAllocator> allocator;
+	shared_ptr<ColumnDataAllocator> allocator;
 	//! The types of the stored entries
 	vector<LogicalType> types;
 	//! The number of entries stored in the column data collection
@@ -204,6 +224,32 @@ private:
 	bool finished_append;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
+};
+
+//! Walks the chunks of a ColumnDataCollection in storage order: exposes the position, the row count and the
+//! allocation size of every chunk, e.g. to plan scans over the collection
+class ColumnDataChunkCursor {
+public:
+	explicit ColumnDataChunkCursor(const ColumnDataCollection &collection);
+
+public:
+	//! Moves to the next chunk; returns false once past the last chunk
+	bool Next();
+	//! The position of the current chunk
+	const ColumnDataChunkPosition &Position() const {
+		return position;
+	}
+	//! The number of rows in the current chunk
+	idx_t Count() const;
+	//! The allocated bytes of the current chunk
+	idx_t AllocationSize() const;
+	//! The allocated bytes of selected columns of the current chunk
+	idx_t AllocationSize(const vector<column_t> &column_ids) const;
+
+private:
+	const ColumnDataCollection &collection;
+	ColumnDataChunkPosition position;
+	bool started = false;
 };
 
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection

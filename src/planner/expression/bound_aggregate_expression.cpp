@@ -1,8 +1,10 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -11,7 +13,7 @@ namespace duckdb {
 
 BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
                                                    vector<unique_ptr<Expression>> children,
-                                                   unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
+                                                   unique_ptr<Expression> filter, cow_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
@@ -21,6 +23,10 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
 
 bool BoundAggregateExpression::IsVolatile() const {
 	return function.GetStability() == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
+bool BoundAggregateExpression::CanThrow() const {
+	return function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR || Expression::CanThrow();
 }
 
 string BoundAggregateExpression::ToString() const {
@@ -91,6 +97,11 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 		if (!Expression::Equals(*children[i], *other.children[i])) {
 			return false;
 		}
+		// expression equality ignores the return type, but a collation lives in the return type and decides
+		// which argument values compare equal - two aggregates that disagree on it are not the same aggregate
+		if (!children[i]->GetReturnType().EqualsIncludingCollation(other.children[i]->GetReturnType())) {
+			return false;
+		}
 	}
 	if (state_export_mode != other.state_export_mode) {
 		return false;
@@ -108,6 +119,12 @@ bool BoundAggregateExpression::PropagatesNullValues() const {
 	return function.GetProperties().GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING
 	           ? false
 	           : Expression::PropagatesNullValues();
+}
+
+bool BoundAggregateExpression::CanForwardSingletonInputDomain() const {
+	return function.HasSingleValueIdentity() ||
+	       (children.size() == 2 && function.GetProperties().GetBooleanProperty(NON_NULL_SELECTOR_DOMAIN_PROPERTY) &&
+	        CreateSortKeyHelpers::IsNonNullSortKey(*children[1]));
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() const {
@@ -150,6 +167,7 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
+	deserializer.ReadDeletedProperty<bool>(207, "single_value_identity");
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");

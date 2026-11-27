@@ -285,6 +285,9 @@ typedef enum DUCKDB_TYPE {
 
 	//! duckdb_timestamp (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
+
+	//! GEOGRAPHY type, WKB blob with spherical edges
+	DUCKDB_TYPE_GEOGRAPHY = 43,
 } DUCKDB_TYPE;
 
 /*!
@@ -404,6 +407,7 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_ERROR_DATA_CORRUPTION = 43,
 	DUCKDB_INVALID_CONFIGURATION = 42,
+	DUCKDB_ERROR_RESOURCE_IN_USE = 44,
 } duckdb_error_type;
 
 /*!
@@ -732,7 +736,9 @@ struct duckdb_uhugeint {
 };
 
 /*!
- * DECIMAL is composed of a width and a scale. Value is stored in a HUGEINT.
+ * DECIMAL is composed of a width and a scale. Value is stored in a HUGEINT. Decimals wider than 38 digits store their
+ * value as BIGNUM; a duckdb_decimal can only carry those whose width fits in the uint8_t and whose value fits in 128
+ * bits, the exact value is available through the VARCHAR conversions.
  *
  * history:
  * - stable: v0.3.3
@@ -1607,6 +1613,8 @@ DUCKDB_C_API duckdb_date_struct duckdb_from_date(duckdb_date date);
 /*!
  * Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
  *
+ * If the year, month and day do not form a valid date the result will be 0.
+ *
  * history:
  * - stable: v0.2.9
  *
@@ -1700,6 +1708,8 @@ DUCKDB_C_API duckdb_timestamp_struct duckdb_from_timestamp(duckdb_timestamp ts);
 #if DUCKDB_API_VERSION_AT_LEAST(0, 2, 9)
 /*!
  * Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
+ *
+ * If the date is not valid or the timestamp is out of range the result will be 0.
  *
  * history:
  * - stable: v0.2.9
@@ -2244,10 +2254,10 @@ DUCKDB_C_API duckdb_error_data duckdb_appender_error_data(duckdb_appender append
 
 #if DUCKDB_API_VERSION_AT_LEAST(0, 2, 5)
 /*!
- * Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
- * constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError. It is
- * not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by
- * duckdb_appender_destroy to destroy the invalidated appender.
+ * Flush the appender to the table, forcing the cache of the appender to be cleared. Requires a connection with no open
+ * result. If flushing the data triggers a constraint violation or any other error, then all data is invalidated, and
+ * this function returns DuckDBError. It is not possible to append more values. Call duckdb_appender_error_data to
+ * obtain the error data followed by duckdb_appender_destroy to destroy the invalidated appender.
  *
  * history:
  * - stable: v0.2.5
@@ -5277,6 +5287,8 @@ DUCKDB_C_API duckdb_logical_type duckdb_create_enum_type(const char **member_nam
  * Creates a DECIMAL type with the specified width and scale. The resulting type should be destroyed with
  * `duckdb_destroy_logical_type`.
  *
+ * The uint8_t parameters reach widths up to 255; widths above 38 create wide decimals stored as BIGNUM.
+ *
  * history:
  * - stable: v0.3.3
  *
@@ -5304,6 +5316,9 @@ DUCKDB_C_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
 /*!
  * Retrieves the width of a decimal type.
  *
+ * The uint8_t reaches widths up to 255; a wider decimal reports 0, its values are best read through their VARCHAR
+ * conversion.
+ *
  * history:
  * - stable: v0.3.3
  *
@@ -5317,6 +5332,8 @@ DUCKDB_C_API uint8_t duckdb_decimal_width(duckdb_logical_type type);
 /*!
  * Retrieves the scale of a decimal type.
  *
+ * Reports 0 for a decimal whose width does not fit in a uint8_t, like `duckdb_decimal_width`.
+ *
  * history:
  * - stable: v0.3.3
  *
@@ -5329,6 +5346,9 @@ DUCKDB_C_API uint8_t duckdb_decimal_scale(duckdb_logical_type type);
 #if DUCKDB_API_VERSION_AT_LEAST(0, 3, 3)
 /*!
  * Retrieves the internal storage type of a decimal type.
+ *
+ * Decimals of up to 38 digits are stored as SMALLINT, INTEGER, BIGINT or HUGEINT. Wider decimals store their unscaled
+ * value as BIGNUM, which is what their vectors hold.
  *
  * history:
  * - stable: v0.3.3
@@ -5574,13 +5594,13 @@ DUCKDB_C_API duckdb_state duckdb_register_logical_type(duckdb_connection con, du
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
- * Gets the CRS (Coordinate Reference System) of a GEOMETRY type. Result must be freed with `duckdb_free`.
+ * Gets the CRS (Coordinate Reference System) of a GEOMETRY or GEOGRAPHY type. Result must be freed with `duckdb_free`.
  *
  * history:
  * - unstable: v1.5.2
  * - stable: v1.5.6
  *
- * @param type The GEOMETRY type.
+ * @param type The GEOMETRY or GEOGRAPHY type.
  * @return char*
  */
 DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
@@ -5627,6 +5647,14 @@ DUCKDB_C_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prep
 #if DUCKDB_API_VERSION_AT_LEAST(0, 5, 0)
 /*!
  * Closes the pending result and de-allocates all memory allocated for the result.
+ *
+ * Destroying a pending result whose statement has not completed aborts the statement. On autocommit, its writes are
+ * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
+ * just stops. Until the statement has completed, preparing or running another statement on the connection fails with
+ * `DUCKDB_ERROR_RESOURCE_IN_USE` and leaves it untouched. `duckdb_pending_execution_is_finished` reporting true does
+ * not mean that the statement completed. To make sure a statement takes effect, complete it before destroying the
+ * pending result: call `duckdb_execute_pending`, and fetch a streaming result until `duckdb_fetch_chunk` returns NULL.
+ * A NULL chunk is also returned on an error, so check `duckdb_result_error` afterwards.
  *
  * history:
  * - stable: v0.5.0
@@ -6501,6 +6529,13 @@ DUCKDB_C_API duckdb_state duckdb_query(duckdb_connection connection, const char 
 
 /*!
  * Closes the result and de-allocates all memory allocated for that result.
+ *
+ * Destroying a streaming result whose statement has not completed aborts the statement. On autocommit, its writes are
+ * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
+ * just stops. Until the statement has completed, preparing or running another statement on the connection fails with
+ * `DUCKDB_ERROR_RESOURCE_IN_USE` and leaves it untouched. To make sure the statement takes effect, complete it by
+ * fetching until `duckdb_fetch_chunk` returns NULL before destroying the result. A NULL chunk is also returned on an
+ * error, so check `duckdb_result_error` afterwards.
  *
  * history:
  * - stable: v0.1.0
@@ -8650,7 +8685,8 @@ DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0)
 /*!
- * Creates a DECIMAL value from a duckdb_decimal
+ * Creates a DECIMAL value from a duckdb_decimal. The uint8_t fields of a duckdb_decimal reach widths up to 255 digits;
+ * widths above 38 create a wide decimal whose unscaled value is the 128-bit value of the duckdb_decimal.
  *
  * history:
  * - stable: v1.2.0
@@ -9030,7 +9066,8 @@ DUCKDB_C_API duckdb_bignum duckdb_get_bignum(duckdb_value val);
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0)
 /*!
- * Returns the duckdb_decimal value of the given value.
+ * Returns the duckdb_decimal value of the given value. A decimal wider than 38 digits is only representable when its
+ * unscaled value fits in 128 bits; use `duckdb_get_varchar` for the exact value otherwise.
  *
  * history:
  * - stable: v1.2.0

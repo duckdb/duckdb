@@ -12,7 +12,6 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -74,7 +73,7 @@ void ExtensionLoader::UseDefaultSchema(const Identifier &name) {
 		                            loader_info.extension_schema);
 	}
 	if (name == "pg_catalog") {
-		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
+		throw InvalidInputException("Cannot set default extension schema to %s", name);
 	}
 	if (name == DEFAULT_SCHEMA) {
 		loader_info.extension_schema = Identifier::DefaultSchema();
@@ -87,7 +86,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	// adds an explicitly set extension schema to the search path
 	if (loader_info.extension_schema != schema_name || schema_name == DEFAULT_SCHEMA ||
 	    loader_info.extension_schema == DEFAULT_SCHEMA) {
-		throw InvalidInputException("Cannot add schema '%s' to search path, first set the extension schema explicitly "
+		throw InvalidInputException("Cannot add schema %s to search path, first set the extension schema explicitly "
 		                            "with UseDefaultSchema()",
 		                            schema_name);
 	}
@@ -97,7 +96,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	auto schema = system_catalog.GetSchema(data, schema_name, OnEntryNotFound::RETURN_NULL);
 	if (!schema) {
-		throw InvalidInputException("Cannot add schema '%s' to search path: schema does not exist. "
+		throw InvalidInputException("Cannot add schema %s to search path: schema does not exist. "
 		                            "Call CreateExtensionSchema() first.",
 		                            schema_name);
 	}
@@ -239,10 +238,16 @@ void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	CreatePragmaFunctionInfo info(std::move(function));
+	RegisterFunction(CreatePragmaFunctionInfo(std::move(function)));
+}
+
+void ExtensionLoader::RegisterFunction(CreatePragmaFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = GetRegisteredExtensionName();
-	info.SetQualifiedName(
-	    QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema, info.GetQualifiedName().Name()));
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
+		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema,
+		                                    info.GetQualifiedName().Name()));
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreatePragmaFunction(data, info);
@@ -267,26 +272,6 @@ void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
-}
-
-void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
-	info.extension_name = GetRegisteredExtensionName();
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
-		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema,
-		                                    info.GetQualifiedName().Name()));
-	}
-	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	system_catalog.CreateCollation(data, info);
-
-	// Also register as a function for serialisation
-	CreateScalarFunctionInfo finfo(info.function);
-	finfo.extension_name = GetRegisteredExtensionName();
-	finfo.SetQualifiedName(QualifiedName(finfo.GetQualifiedName().Catalog(), loader_info.extension_schema,
-	                                     finfo.GetQualifiedName().Name()));
-	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	system_catalog.CreateFunction(data, finfo);
 }
 
 void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info) {
@@ -334,7 +319,7 @@ optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const Identifier &nam
 ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const Identifier &name) {
 	auto catalog_entry = TryGetFunction(name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetFunction", name);
+		throw InvalidInputException("Function with name %s not found in ExtensionLoader::GetFunction", name);
 	}
 	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
 }
@@ -346,7 +331,7 @@ optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const Identifier
 TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &name) {
 	auto catalog_entry = TryGetTableFunction(name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);
+		throw InvalidInputException("Function with name %s not found in ExtensionLoader::GetTableFunction", name);
 	}
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }

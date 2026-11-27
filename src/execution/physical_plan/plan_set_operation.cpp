@@ -15,28 +15,58 @@
 
 namespace duckdb {
 
+//! The row number of a row among those equal in all columns. The last correlated_column_count columns are compared as
+//! they are, the others under their collations
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
-                                                                        const vector<LogicalType> &types) {
+                                                                        const vector<LogicalType> &types,
+                                                                        idx_t correlated_column_count) {
 	vector<unique_ptr<Expression>> res;
 	auto expr = GetBuiltinWindowFunction(client, RowNumberFun::Name, {})->Bind(client);
 	expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	expr->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
 		expr->PartitionsMutable().push_back(make_uniq<BoundReferenceExpression>(types[i], i));
-		ExpressionBinder::PushCollation(client, expr->PartitionsMutable().back(), types[i]);
+		if (i + correlated_column_count < types.size()) {
+			ExpressionBinder::PushCollation(client, expr->PartitionsMutable().back(), types[i]);
+		}
 	}
 	res.push_back(std::move(expr));
 	return res;
 }
 
-static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
+static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i,
+                                                 bool push_collation) {
 	auto left = make_uniq<BoundReferenceExpression>(type, i);
 	auto right = make_uniq<BoundReferenceExpression>(type, i);
 	JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-	ExpressionBinder::PushCollation(context, cond.LeftReference(), type);
-	ExpressionBinder::PushCollation(context, cond.RightReference(), type);
+	if (push_collation) {
+		ExpressionBinder::PushCollation(context, cond.LeftReference(), type);
+		ExpressionBinder::PushCollation(context, cond.RightReference(), type);
+	}
 
 	return cond;
+}
+
+//! The types to compare the columns of EXCEPT / INTERSECT with - a collation of either side applies (as for UNION)
+static vector<LogicalType> GetComparisonTypes(ClientContext &context, const LogicalSetOperation &op,
+                                              const vector<LogicalType> &left_types,
+                                              const vector<LogicalType> &right_types) {
+	if (op.comparison_types.size() == left_types.size()) {
+		// the types the binder resolved
+		return op.comparison_types;
+	}
+	// the types only differ in their collations here, but a collation can be missing from a child (e.g. when the
+	// projection applying a COLLATE was removed) or from the operator (it takes the types of the left child)
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < left_types.size(); i++) {
+		auto type = LogicalType::ForceMaxLogicalType(context, left_types[i], right_types[i]);
+		// the operator types can be outdated (e.g. compressed children), only take a collation from them
+		if (i < op.types.size() && op.types[i].id() == type.id()) {
+			type = LogicalType::ForceMaxLogicalType(context, op.types[i], type);
+		}
+		types.push_back(std::move(type));
+	}
+	return types;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
@@ -63,11 +93,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		}
 		auto &left = children[0];
 		auto &right = children[1];
-		auto &types = left.get().GetTypes();
+		auto types = GetComparisonTypes(context, op, left.get().GetTypes(), right.get().GetTypes());
+		D_ASSERT(op.correlated_column_count <= types.size());
 		vector<JoinCondition> conditions;
-		// create equality condition for all columns
+		// create equality condition for all columns, the correlated columns at the end are compared as they are
 		for (idx_t i = 0; i < types.size(); i++) {
-			conditions.push_back(CreateNotDistinctComparison(context, types[i], i));
+			conditions.push_back(
+			    CreateNotDistinctComparison(context, types[i], i, i + op.correlated_column_count < types.size()));
 		}
 		// For EXCEPT ALL / INTERSECT ALL we push a window operator with a ROW_NUMBER into the scans and join to get bag
 		// semantics.
@@ -75,20 +107,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			vector<LogicalType> window_types = types;
 			window_types.push_back(LogicalType::BIGINT);
 
-			auto select_list = CreatePartitionedRowNumExpression(context, types);
+			auto select_list = CreatePartitionedRowNumExpression(context, types, op.correlated_column_count);
 			auto &left_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
+			    Make<PhysicalWindow>(context, window_types, std::move(select_list), left.get().estimated_cardinality);
 			left_window.children.push_back(left);
 			left = left_window;
 
-			select_list = CreatePartitionedRowNumExpression(context, types);
+			select_list = CreatePartitionedRowNumExpression(context, types, op.correlated_column_count);
 			auto &right_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
+			    Make<PhysicalWindow>(context, window_types, std::move(select_list), right.get().estimated_cardinality);
 			right_window.children.push_back(right);
 			right = right_window;
 
 			// add window expression result to join condition
-			conditions.push_back(CreateNotDistinctComparison(context, LogicalType::BIGINT, types.size()));
+			conditions.push_back(CreateNotDistinctComparison(context, LogicalType::BIGINT, types.size(), false));
 			// join (created below) now includes the row number result column
 			op.types.push_back(LogicalType::BIGINT);
 		}

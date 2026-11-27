@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
 
@@ -10,9 +11,12 @@ TokenIterator::TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens_p)
 	if (!owned_tokens) {
 		throw InternalException("Cannot construct an owning TokenIterator without tokens");
 	}
-	for (auto &token : tokens) {
-		token.ResetLiteralInfo();
-	}
+	// Owned tokens come straight from the tokenizer and keep the literal info it cached on them.
+}
+
+TokenIterator::TokenIterator(TokenizerBehavior &behavior)
+    : TokenIterator(make_uniq<vector<MatcherToken>>(std::move(behavior.tokens))) {
+	source = &behavior.sql;
 }
 
 TokenIterator::TokenIterator(vector<MatcherToken> &tokens_p) : tokens(tokens_p) {
@@ -22,16 +26,9 @@ TokenIterator::TokenIterator(vector<MatcherToken> &tokens_p) : tokens(tokens_p) 
 	}
 }
 
-TokenIterator::TokenIterator(const TokenIterator &other) : tokens(other.tokens), position(other.position) {
-}
-
 TokenIterator::TokenIterator(TokenIterator &&other) noexcept
-    : owned_tokens(std::move(other.owned_tokens)), tokens(other.tokens), position(other.position) {
-}
-
-bool TokenIterator::AtEnd() const {
-	auto current = Current();
-	return !current || current->type == TokenType::END_OF_INPUT;
+    : owned_tokens(std::move(other.owned_tokens)), tokens(other.tokens), source(other.source),
+      position(other.position) {
 }
 
 bool TokenIterator::HasMoreStatements() const {
@@ -47,14 +44,6 @@ bool TokenIterator::HasMoreStatements() const {
 	return false;
 }
 
-idx_t TokenIterator::Position() const {
-	return position;
-}
-
-idx_t TokenIterator::Size() const {
-	return tokens.size();
-}
-
 idx_t TokenIterator::EndOffset() const {
 	if (tokens.empty()) {
 		return 0;
@@ -63,11 +52,12 @@ idx_t TokenIterator::EndOffset() const {
 	return last_token.offset + last_token.length;
 }
 
-optional_ptr<const MatcherToken> TokenIterator::Current() const {
-	if (position >= tokens.size()) {
-		return nullptr;
+idx_t TokenIterator::ConsumedEndOffset() const {
+	if (position == 0) {
+		return 0;
 	}
-	return tokens[position];
+	auto &last_token = Previous();
+	return last_token.offset + last_token.length;
 }
 
 const MatcherToken &TokenIterator::Previous() const {
@@ -77,40 +67,25 @@ const MatcherToken &TokenIterator::Previous() const {
 	return GetToken(position - 1);
 }
 
-const MatcherToken &TokenIterator::GetToken(idx_t index) const {
-	if (index >= tokens.size()) {
-		throw InternalException("Token index %llu is out of range (size %llu)", index, tokens.size());
-	}
-	return tokens[index];
+void TokenIterator::ThrowIndexError(idx_t index) const {
+	throw InternalException("Token index %llu is out of range (size %llu)", index, tokens.size());
 }
 
-void TokenIterator::Advance(idx_t count) {
-	if (count > tokens.size() - position) {
-		throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
-		                        position, tokens.size());
-	}
-	position += count;
+void TokenIterator::ThrowAdvanceError(idx_t count) const {
+	throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
+	                        position, tokens.size());
 }
 
-void TokenIterator::SetPosition(idx_t position_p) {
-	if (position_p > tokens.size()) {
-		throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
-	}
-	position = position_p;
+void TokenIterator::ThrowPositionError(idx_t position_p) const {
+	throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
 }
 
-void TokenIterator::SetPosition(const TokenIterator &other) {
-	if (&tokens != &other.tokens) {
-		throw InternalException("Cannot set TokenIterator position from a different token collection");
-	}
-	SetPosition(other.position);
+void TokenIterator::ThrowCollectionError() const {
+	throw InternalException("Cannot set TokenIterator position from a different token collection");
 }
 
-void TokenIterator::SetPreviousTokenType(TokenType type) {
-	if (position == 0) {
-		throw InternalException("TokenIterator has no previous token to annotate");
-	}
-	tokens[position - 1].type = type;
+void TokenIterator::ThrowNoPreviousError() const {
+	throw InternalException("TokenIterator has no previous token to annotate");
 }
 
 vector<SimpleToken> TokenIterator::RemainingTokens() const {

@@ -2,12 +2,14 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/arena_containers/arena_sql_value_map.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/sql_value_map.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -104,13 +106,14 @@ struct ModeAttr {
 
 template <class T>
 struct ModeStandard {
-	using MAP_TYPE = sql_value_map_t<T, ModeAttr>;
+	using MAP_TYPE = arena_sql_value_map_t<T, ModeAttr>;
 
-	static MAP_TYPE *CreateEmpty(ArenaAllocator &) {
-		return new MAP_TYPE();
+	static MAP_TYPE *CreateEmpty(ArenaAllocator &allocator) {
+		return allocator.Make<MAP_TYPE>(typename MAP_TYPE::allocator_type(allocator));
 	}
-	static MAP_TYPE *CreateEmpty(Allocator &) {
-		return new MAP_TYPE();
+
+	static ModeAttr &GetOrCreate(MAP_TYPE &map, const T &key, ArenaAllocator &) {
+		return map[key];
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -122,9 +125,9 @@ struct ModeStandard {
 		return Equals::Operation(left, right);
 	}
 
-	static T *Update(T *mode, idx_t &, const T &key, AggregateInputData &) {
+	static T *Update(T *mode, idx_t &, const T &key, AggregateInputData &aggr_input_data) {
 		if (!mode) {
-			mode = new T(key);
+			mode = aggr_input_data.allocator.Make<T>(key);
 		}
 		*mode = key;
 
@@ -133,13 +136,14 @@ struct ModeStandard {
 };
 
 struct ModeString {
-	using MAP_TYPE = OwningStringMap<ModeAttr>;
+	using MAP_TYPE = ArenaOwningStringMap<ModeAttr>;
 
 	static MAP_TYPE *CreateEmpty(ArenaAllocator &allocator) {
-		return new MAP_TYPE(allocator);
+		return allocator.Make<MAP_TYPE>(allocator);
 	}
-	static MAP_TYPE *CreateEmpty(Allocator &allocator) {
-		return new MAP_TYPE(allocator);
+
+	static ModeAttr &GetOrCreate(MAP_TYPE &map, const string_t &key, ArenaAllocator &allocator) {
+		return map.GetOrCreate(key, allocator);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -155,7 +159,7 @@ struct ModeString {
 	                        AggregateInputData &aggr_input_data) {
 		if (key.IsInlined()) {
 			if (!mode) {
-				mode = new string_t(nullptr, 0);
+				mode = aggr_input_data.allocator.Make<string_t>();
 			}
 			*mode = key;
 			alloc_size = 0;
@@ -173,7 +177,7 @@ struct ModeString {
 			alloc_size = NextPowerOfTwo(len);
 			ptr = char_ptr_cast(aggr_input_data.allocator.Allocate(alloc_size));
 			if (!mode) {
-				mode = new string_t(nullptr, 0);
+				mode = aggr_input_data.allocator.Make<string_t>();
 			}
 		}
 		memcpy(ptr, key.GetData(), len);
@@ -201,27 +205,17 @@ struct ModeState {
 	//! The collection being read
 	const ColumnDataCollection *inputs;
 	//! The state used for reading the collection on this thread
-	ColumnDataScanState *scan = nullptr;
+	unique_ptr<ColumnDataScanState> scan;
+	//! The arena of the frequency map in the window path, reset when the frames are recomputed
+	unique_ptr<ArenaAllocator> window_arena;
 	//! The data chunk paged into into
 	DataChunk page;
-	//! The data pointer
-	const KEY_TYPE *data = nullptr;
-	//! The validity mask
-	const ValidityMask *validity = nullptr;
-
-	~ModeState() {
-		if (frequency_map) {
-			delete frequency_map;
-		}
-		delete mode;
-		if (scan) {
-			delete scan;
-		}
-	}
+	//! Cell access into the page, rebuilt per page load - scans can return constant and dictionary vectors
+	unique_ptr<VectorIterator<KEY_TYPE>> values;
 
 	void InitializePage(const WindowPartitionInput &partition) {
 		if (!scan) {
-			scan = new ColumnDataScanState();
+			scan = make_uniq<ColumnDataScanState>();
 		}
 		if (page.ColumnCount() == 0) {
 			D_ASSERT(partition.inputs);
@@ -245,25 +239,29 @@ struct ModeState {
 		if (!RowIsVisible(row_idx)) {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
-			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::ValidityMutable(page.data[0]);
+			values = make_uniq<VectorIterator<KEY_TYPE>>(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
 
 	inline const KEY_TYPE &GetCell(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return data[offset];
+		return (*values)[offset].GetValueUnsafe();
 	}
 
 	inline bool RowIsValid(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return validity->RowIsValid(offset);
+		return (*values)[offset].IsValid();
 	}
 
 	void Reset() {
 		if (frequency_map) {
-			frequency_map->clear();
+			// rebuild the map instead of clearing it, the arena would retain the erased nodes
+			D_ASSERT(window_arena);
+			const auto previous_size = frequency_map->size();
+			window_arena->Reset();
+			frequency_map = TYPE_OP::CreateEmpty(*window_arena);
+			frequency_map->reserve(previous_size);
 		}
 		nonzero = 0;
 		count = 0;
@@ -272,7 +270,7 @@ struct ModeState {
 
 	void ModeAdd(idx_t row, AggregateInputData &aggr_input_data) {
 		const auto &key = GetCell(row);
-		auto &attr = (*frequency_map)[key];
+		auto &attr = TYPE_OP::GetOrCreate(*frequency_map, key, *window_arena);
 		auto new_count = (attr.count += 1);
 		nonzero += size_t(new_count == 1);
 		if (new_count > count) {
@@ -287,7 +285,7 @@ struct ModeState {
 
 	void ModeRm(idx_t frame) {
 		const auto &key = GetCell(frame);
-		auto &attr = (*frequency_map)[key];
+		auto &attr = TYPE_OP::GetOrCreate(*frequency_map, key, *window_arena);
 		auto old_count = attr.count;
 		nonzero -= size_t(old_count == 1);
 
@@ -378,7 +376,7 @@ struct BaseModeFunction {
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(input_data.allocator);
 		}
-		auto &i = (*state.frequency_map)[key];
+		auto &i = TYPE_OP::GetOrCreate(*state.frequency_map, key, input_data.allocator);
 		++i.count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
 		++state.count;
@@ -394,11 +392,17 @@ struct BaseModeFunction {
 		if (!source.frequency_map) {
 			return;
 		}
+		auto &allocator = aggr_input_data.allocator;
 		if (!target.frequency_map) {
-			target.frequency_map = TYPE_OP::CreateEmpty(aggr_input_data.allocator);
+			target.frequency_map = TYPE_OP::CreateEmpty(allocator);
+			target.frequency_map->reserve(source.frequency_map->size());
+		} else if (&target.frequency_map->get_allocator().GetAllocator() != &allocator) {
+			// Copied states can share a sink arena across partitions being combined in parallel.
+			target.frequency_map = allocator.Make<typename TYPE_OP::MAP_TYPE>(*target.frequency_map, allocator);
+			target.frequency_map->reserve(target.frequency_map->size() + source.frequency_map->size());
 		}
 		for (auto &val : *source.frequency_map) {
-			auto &i = (*target.frequency_map)[val.first];
+			auto &i = TYPE_OP::GetOrCreate(*target.frequency_map, val.first, aggr_input_data.allocator);
 			i.count += val.second.count;
 			i.first_row = MinValue(i.first_row, val.second.first_row);
 		}
@@ -422,7 +426,7 @@ struct TypedModeFunction : BaseModeFunction<TYPE_OP> {
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
 		}
-		auto &i = (*state.frequency_map)[key];
+		auto &i = TYPE_OP::GetOrCreate(*state.frequency_map, key, aggr_input.input.allocator);
 		i.count += count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
 		state.count += count;
@@ -499,8 +503,11 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
 		Updater updater(state, included, aggr_input_data);
 
+		if (!state.window_arena) {
+			state.window_arena = make_uniq<ArenaAllocator>(aggr_input_data.allocator.GetUnderlyingAllocator());
+		}
 		if (!state.frequency_map) {
-			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
+			state.frequency_map = TYPE_OP::CreateEmpty(*state.window_arena);
 		}
 		const size_t tau_inverse = 4; // tau==0.25
 		for (idx_t rid = 0; rid < count; ++rid) {
@@ -564,6 +571,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                       AggregateFunction::NoClusterUpdate());
 	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	aggr.SetIsHolistic(true);
 	return aggr;
 }
 
@@ -574,6 +582,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	    type, type);
 	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
+	func.SetIsHolistic(true);
 	return func;
 }
 
@@ -667,9 +676,9 @@ static FrequencyAggregateFinalizeResult FinalizeEntropyRewrite(FrequencyAggregat
 	auto log_total = BindScalar(context, "log2", total_ref->Copy());
 	auto normalized = BindScalar(context, "/", std::move(weighted_ref), std::move(total_ref));
 	auto entropy = BindScalar(context, "-", std::move(log_total), std::move(normalized));
-	auto coalesce = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, LogicalType::DOUBLE);
-	coalesce->GetChildrenMutable().push_back(std::move(entropy));
-	coalesce->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0)));
+	auto coalesce =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, LogicalType::DOUBLE, std::move(entropy),
+	                                       make_uniq<BoundConstantExpression>(Value::DOUBLE(0)));
 	result.result = std::move(coalesce);
 	return result;
 }

@@ -13,7 +13,7 @@
 namespace duckdb {
 
 BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
-                                             unique_ptr<BoundWindowFunction> window, unique_ptr<FunctionData> bind_info)
+                                             unique_ptr<BoundWindowFunction> window, cow_ptr<FunctionData> bind_info)
     : Expression(window.get() ? window->window_enum : ExpressionType::WINDOW_AGGREGATE, ExpressionClass::BOUND_WINDOW,
                  std::move(return_type)),
       aggregate(std::move(aggregate)), window(std::move(window)), bind_info(std::move(bind_info)), ignore_nulls(false),
@@ -23,6 +23,11 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 bool BoundWindowExpression::IsVolatile() const {
 	auto stability = aggregate ? aggregate->GetStability() : window->GetStability();
 	return stability == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
+bool BoundWindowExpression::CanThrow() const {
+	auto errors = aggregate ? aggregate->GetErrorMode() : window->GetErrorMode();
+	return errors == FunctionErrors::CAN_THROW_RUNTIME_ERROR || Expression::CanThrow();
 }
 
 string BoundWindowExpression::ToString() const {
@@ -377,16 +382,15 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
-		FunctionBinder function_binder(*binder);
-		ErrorData error_win;
-		auto best = function_binder.BindFunction(func.name, func.functions, arguments, error_win);
-		if (!best.IsValid()) {
-			error_win.Throw();
+		auto best = FunctionBinder::SelectFunction(binder->context, func.functions, arguments);
+		if (!best.IsSuccess()) {
+			best.GetError().Throw();
 		}
+		FunctionBinder function_binder(*binder);
 
-		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
-
-		auto [bound_func, bind_info] = function_binder.ResolveFunction(win_func, result->children);
+		vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
+		auto [bound_func, bind_info] =
+		    function_binder.ResolveWindowFunction(best.GetBinding(), result->children, keyword_args);
 
 		result->bind_info = std::move(bind_info);
 		result->type = expression_type;

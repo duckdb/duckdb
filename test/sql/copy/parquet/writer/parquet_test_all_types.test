@@ -16,12 +16,10 @@ statement ok
 COPY all_types TO "{TEST_DIR}/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
-# hugeint/uhugeint is stored as double -> we have to cast
+# hugeint/uhugeint are stored as an exact DECIMAL(39,0), which renders the same values
 # TIME WITH TIME ZONE is stored as a UTC-adjusted Parquet TIME
 query I nosort alltypes
 SELECT * REPLACE (
-	hugeint::DOUBLE AS hugeint,
-	uhugeint::DOUBLE AS uhugeint,
 	timezone(interval '0 seconds', time_tz) AS time_tz
 )
 FROM all_types
@@ -31,6 +29,11 @@ query I nosort alltypes
 SELECT *
 FROM '{TEST_DIR}/all_types.parquet'
 ----
+
+query II
+SELECT typeof(hugeint), typeof(uhugeint) FROM '{TEST_DIR}/all_types.parquet' LIMIT 1
+----
+DECIMAL(39,0)	DECIMAL(39,0)
 
 foreach type TINYINT SMALLINT INT BIGINT UTINYINT USMALLINT UINT UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE
 
