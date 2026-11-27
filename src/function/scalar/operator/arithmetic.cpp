@@ -27,6 +27,7 @@
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -619,6 +620,8 @@ static unique_ptr<FunctionData> BindTimestampIntervalArithmetic(BindScalarFuncti
 		return nullptr;
 	}
 	function.SetArgProperties(1 - interval_idx, ArgProperties().StrictlyIncreasing());
+	// The smallest finite timestamp sorts below -infinity, so bounds may only be derived from finite ranges.
+	function.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 	return nullptr;
 }
 

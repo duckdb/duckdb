@@ -74,6 +74,42 @@ SELECT count(*) FROM inf_ts WHERE x - INTERVAL 1 HOUR < TIMESTAMP '2020-01-01';
 ----
 2
 
+# the smallest finite timestamp (raw INT64_MIN) sorts below -infinity (-INT64_MAX): a range straddling
+# the sentinel is not monotone in the raw ordering, so no bounds may be derived from it
+statement ok
+CREATE TABLE straddle_us AS
+SELECT * FROM (VALUES (make_timestamp(-9223372036854775808)), (TIMESTAMP '-infinity')) t(x);
+
+query I
+SELECT count(*) FROM straddle_us WHERE x + INTERVAL 1 SECOND > TIMESTAMP '2000-01-01';
+----
+0
+
+statement ok
+INSERT INTO straddle_us VALUES (TIMESTAMP '2000-01-01');
+
+query I
+SELECT count(*) FROM straddle_us WHERE x + INTERVAL 1 SECOND <= TIMESTAMP '-infinity';
+----
+1
+
+statement ok
+CREATE TABLE straddle_ns AS
+SELECT * FROM (VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), (TIMESTAMP_NS '-infinity')) t(x);
+
+query I
+SELECT count(*) FROM straddle_ns WHERE x + INTERVAL 1 SECOND > TIMESTAMP_NS '2000-01-01';
+----
+0
+
+statement ok
+INSERT INTO straddle_ns VALUES (TIMESTAMP_NS '2000-01-01');
+
+query I
+SELECT count(*) FROM straddle_ns WHERE x + INTERVAL 1 SECOND <= TIMESTAMP_NS '-infinity';
+----
+1
+
 # the other timestamp widths share the annotation
 foreach tstype TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
 
