@@ -1097,6 +1097,11 @@ vector<string> DBConfig::GetAllowedPaths() const {
 	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
+//! Object stores whose file system sends a '%' in a key as "%25", so an escaped separator is part of the key name
+static bool RemoteKeysKeepEscapedSeparators(const string &scheme) {
+	return scheme == "s3" || scheme == "s3a" || scheme == "s3n" || scheme == "gcs" || scheme == "gs" || scheme == "r2";
+}
+
 static bool HasRemotePathTraversal(const string &path) {
 	auto scheme_end = path.find("://");
 	if (scheme_end == string::npos || Path::FromString(path).IsLocal()) {
@@ -1114,10 +1119,13 @@ static bool HasRemotePathTraversal(const string &path) {
 	}
 
 	// Replace all separator variants with a literal /
+	auto scheme = path_to_check.substr(0, scheme_end);
 	path_to_check = path_to_check.substr(path_start);
 	path_to_check = StringUtil::Replace(path_to_check, "\\", "/");
-	path_to_check = StringUtil::Replace(path_to_check, "%2f", "/");
-	path_to_check = StringUtil::Replace(path_to_check, "%5c", "/");
+	if (!RemoteKeysKeepEscapedSeparators(scheme)) {
+		path_to_check = StringUtil::Replace(path_to_check, "%2f", "/");
+		path_to_check = StringUtil::Replace(path_to_check, "%5c", "/");
+	}
 	// Ensure encoded dots are also treated as a .
 	path_to_check = StringUtil::Replace(path_to_check, "%2e", ".");
 
