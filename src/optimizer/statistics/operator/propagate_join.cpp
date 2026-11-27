@@ -556,6 +556,8 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 
 	FilterPushdown filter_pushdown(optimizer);
 	child = filter_pushdown.Rewrite(std::move(child));
+	// Filter pushdown can introduce operators below an already propagated child.
+	child->ResolveOperatorTypes();
 	PropagateExpression(expr);
 }
 

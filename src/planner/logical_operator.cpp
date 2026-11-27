@@ -175,9 +175,36 @@ void LogicalOperator::ResolveOperatorTypes() {
 	for (auto &child : children) {
 		child->ResolveOperatorTypes();
 	}
+	ResolveOperatorTypesFromChildren();
+}
+
+void LogicalOperator::ResolveOperatorTypesFromChildren() {
+	types.clear();
 	// now resolve the types for this operator
 	ResolveTypes();
 	D_ASSERT(types.size() == GetColumnBindings().size());
+}
+
+void LogicalOperator::VerifyOperatorTypes() {
+	for (auto &child : children) {
+		child->VerifyOperatorTypes();
+	}
+	auto original_types = std::move(types);
+	types.clear();
+	try {
+		ResolveTypes();
+		bool types_match = types.size() == original_types.size();
+		for (idx_t i = 0; types_match && i < types.size(); i++) {
+			types_match = types[i].EqualsIncludingCollation(original_types[i]);
+		}
+		if (!types_match) {
+			throw InternalException("Stale output types in logical operator %s", GetName());
+		}
+	} catch (...) {
+		types = std::move(original_types);
+		throw;
+	}
+	types = std::move(original_types);
 }
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(TableIndex table_idx, idx_t column_count) {

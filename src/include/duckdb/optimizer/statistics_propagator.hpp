@@ -53,6 +53,7 @@ public:
 	StatisticsPropagator(Optimizer &optimizer, unique_ptr<LogicalOperator> &root,
 	                     StatisticsPropagationMode mode = StatisticsPropagationMode::FULL);
 
+	//! Propagate bottom-up, returning a subtree with resolved types (including any replacement operators).
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 	//! Propagate statistics through a standalone expression, given the statistics of the columns it references
 	unique_ptr<BaseStatistics>
@@ -187,7 +188,7 @@ private:
 	                                                 optional_ptr<const BaseStatistics> right,
 	                                                 ComparisonContext context);
 
-	//! Try to execute aggregates using only the statistics if possible
+	//! Try to execute aggregates using only the statistics, resolving any replacement subtree before returning.
 	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
