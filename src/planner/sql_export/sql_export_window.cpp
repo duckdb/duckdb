@@ -21,8 +21,8 @@ static bool IsRangeOffset(WindowBoundary boundary) {
 	return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
 }
 
-//! The SQL offset of a RANGE frame endpoint: the live input the binder's endpoint arithmetic was derived from, or the
-//! recorded zero offset when the optimizer removed that arithmetic
+//! The SQL offset of a RANGE frame endpoint: the live input the binder's endpoint arithmetic was derived from, or a
+//! zero offset when the optimizer reduced that arithmetic to the ordering key
 static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &expression, const WindowSQLFrame &frame,
                                                   const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
                                                   const unique_ptr<WindowRangeBoundary> &origin,
@@ -38,12 +38,10 @@ static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &e
 	if (!origin_matches_endpoint) {
 		return nullptr;
 	}
-	auto &recorded = origin->offset;
-	const bool is_zero_offset =
-	    !recorded.IsNull() && recorded.type().IsNumeric() && recorded == Value::Numeric(recorded.type(), 0);
-	if (is_zero_offset && Expression::Equals(*endpoint, *order.expression)) {
-		// the recorded constant has the type the arithmetic took it in, so that the exported frame binds the same call
-		constant = make_uniq<BoundConstantExpression>(recorded);
+	if (origin->offset_type.IsNumeric() && Expression::Equals(*endpoint, *order.expression)) {
+		// the endpoint is the ordering key: the optimizer removed the arithmetic of a zero offset, or folded it over a
+		// constant key. Zero in the type the call took its offset in binds that call again and yields the key
+		constant = make_uniq<BoundConstantExpression>(Value::Numeric(origin->offset_type, 0));
 		return constant.get();
 	}
 	auto input = origin->Match(*endpoint, *frame.order);

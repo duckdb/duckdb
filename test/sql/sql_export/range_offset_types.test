@@ -655,3 +655,102 @@ query TT
 EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY h RANGE BETWEEN getvariable('one_integer') PRECEDING AND CURRENT ROW) FROM range_edge
 ----
 sql	<REGEX>:.*RANGE BETWEEN CAST\(1 AS HUGEINT\) PRECEDING AND CURRENT ROW.*
+
+# an endpoint the optimizer reduced to the ordering key has no offset operand left. It is exported as zero in the
+# offset type of the recorded call: a zero that is not a literal, and a constant key the arithmetic was folded over
+
+statement ok
+SET VARIABLE zero_uhugeint = 0::UHUGEINT;
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+foreach mode none explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{mode}';
+
+query II
+SELECT id, count(*) OVER (ORDER BY t RANGE BETWEEN 1 - 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	1
+1	1
+2	1
+3	1
+
+query II
+SELECT id, count(*) OVER (ORDER BY b DESC RANGE BETWEEN getvariable('zero_uhugeint') PRECEDING AND 1 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	1
+1	2
+2	2
+3	2
+
+query II
+SELECT id, count(*) OVER (ORDER BY 5::INTEGER RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+query II
+SELECT id, count(*) OVER (ORDER BY 5::DOUBLE RANGE BETWEEN 0 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+# the constant key absorbs the offset, which leaves the key as the endpoint
+query II
+SELECT id, count(*) OVER (ORDER BY 1e300::DOUBLE RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge ORDER BY id
+----
+0	4
+1	4
+2	4
+3	4
+
+endloop
+
+endloop
+
+statement ok
+SET debug_verify_statement='none';
+
+statement ok
+SET debug_verify_serializer=false;
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY t RANGE BETWEEN 1 - 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0 AS INTEGER\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY b DESC RANGE BETWEEN getvariable('zero_uhugeint') PRECEDING AND 1 FOLLOWING) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0 AS BIGINT\) PRECEDING AND CAST\(1 AS BIGINT\) FOLLOWING.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 5::DOUBLE RANGE BETWEEN 0 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0\.0 AS DOUBLE\) PRECEDING AND CURRENT ROW.*
+
+query TT
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 1e300::DOUBLE RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+sql	<REGEX>:.*RANGE BETWEEN CAST\(0\.0 AS DOUBLE\) PRECEDING AND CURRENT ROW.*
+
+# an endpoint that is neither the recorded call nor the ordering key is refused: a constant key with a non-zero offset
+# folded into it, and a zero offset that is not numeric
+statement error
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY 5::INTEGER RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM range_edge
+----
+The RANGE endpoint does not retain its SQL offset and ordering operand
+
+statement error
+EXPLAIN (SQL) SELECT count(*) OVER (ORDER BY TIMESTAMP '2020-01-01' RANGE BETWEEN INTERVAL 0 DAY PRECEDING AND CURRENT ROW) FROM range_edge
+----
+The RANGE endpoint does not retain its SQL offset and ordering operand

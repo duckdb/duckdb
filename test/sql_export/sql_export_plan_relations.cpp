@@ -281,7 +281,8 @@ TEST_CASE("Window SQL export rejects unrelated RANGE endpoints",
 		window.StartExprMutable() = endpoint->Copy();
 		auto &arithmetic = window.StartExprMutable()->Cast<BoundFunctionExpression>();
 		if (missing_offset) {
-			window.StartExprMutable() = window.OrderBy()[0].expression->Copy();
+			// neither the recorded call nor the ordering key, which is the endpoint of a zero offset
+			window.StartExprMutable() = make_uniq<BoundConstantExpression>(Value::INTEGER(100));
 		} else {
 			arithmetic.GetChildrenMutable()[0] = make_uniq<BoundConstantExpression>(Value::INTEGER(100));
 		}

@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -82,16 +81,6 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	}
 	if (origin) {
 		*origin = WindowRangeBoundary::Capture(*function, *bound_order, *offset);
-	}
-	if (origin && *origin) {
-		// a constant offset is recorded in the type the call takes it in, which is the type its SQL has to be
-		// exported in for the frame to bind this call again
-		auto &fitted_offset = *function->Cast<BoundFunctionExpression>().GetChildren()[1];
-		Value fitted_value;
-		if (fitted_offset.IsFoldable() && ExpressionExecutor::TryEvaluateScalar(context, fitted_offset, fitted_value) &&
-		    !fitted_value.IsNull()) {
-			(*origin)->offset = std::move(fitted_value);
-		}
 	}
 	bound = std::move(function);
 	return bound->GetReturnType();
