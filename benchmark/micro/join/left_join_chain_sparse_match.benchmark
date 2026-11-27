@@ -1,0 +1,21 @@
+# name: benchmark/micro/join/left_join_chain_sparse_match.benchmark
+# description: Null-rejected LEFT joins with sparse right-hand keys spanning most of the left-hand key range
+# group: [join]
+
+group micro
+subgroup join
+
+load
+CREATE TABLE sales AS SELECT i % 1000000 AS k, (i % 7)::INTEGER AS qty FROM range(10000000) t(i);
+CREATE TABLE web AS SELECT i * 100 AS k, 1 AS qty FROM range(4900) t(i);
+CREATE TABLE catalog AS SELECT 490000 + i * 100 AS k, 1 AS qty FROM range(4900) t(i);
+
+run
+SELECT count(*), sum(s.qty)
+FROM (SELECT k, sum(qty) qty FROM sales GROUP BY k) s
+LEFT JOIN (SELECT k, sum(qty) qty FROM web GROUP BY k) w ON s.k=w.k
+LEFT JOIN (SELECT k, sum(qty) qty FROM catalog GROUP BY k) c ON s.k=c.k
+WHERE w.qty IS NOT NULL OR c.qty IS NOT NULL;
+
+result II
+9800	294000

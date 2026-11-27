@@ -1,0 +1,225 @@
+# name: test/optimizer/left_join_chain_plan.test
+# description: Activation and safety guards for LEFT join chain reassociation
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE sales(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO sales VALUES
+    (1,10,5), (1,10,7), (2,20,3), (2,20,4), (3,30,9),
+    (4,40,11), (5,50,13), (7,70,17), (8,80,19), (9,NULL,6);
+
+# Include left-hand keys that have no match on either right-hand side.
+statement ok
+INSERT INTO sales SELECT i,i,1 FROM range(100,200) t(i);
+
+statement ok
+CREATE TABLE web(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO web VALUES (1,10,2), (3,30,1), (3,30,2), (5,51,3), (7,70,0), (8,80,-4), (9,NULL,5);
+
+statement ok
+CREATE TABLE catalog(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO catalog VALUES (2,20,4), (3,30,5), (6,50,6);
+
+statement ok
+CREATE VIEW s AS SELECT k, j, sum(qty) AS qty FROM sales GROUP BY k, j;
+
+statement ok
+CREATE VIEW w AS SELECT k, j, sum(qty) AS qty FROM web GROUP BY k, j;
+
+statement ok
+CREATE VIEW c AS SELECT k, j, sum(qty) AS qty FROM catalog GROUP BY k, j;
+
+query II
+EXPLAIN SELECT s.k, s.j, s.qty, w.qty, c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*
+
+query II
+EXPLAIN SELECT s.k FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)=0 OR coalesce(c.qty,0)=0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# Broad RHS domains need no NDV admission heuristic: the join count stays the same.
+statement ok
+CREATE TABLE broad_membership AS SELECT i k,hash(i) j,1 qty FROM range(100) t(i);
+
+query II
+EXPLAIN SELECT count(*)
+FROM (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) a
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) b
+ON a.k=b.k AND a.j=b.j
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) c
+ON a.k=c.k AND a.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*
+
+# No aggregation or right-hand projection is required.
+statement ok
+CREATE TABLE channel_one(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_one VALUES (1,2),(3,5),(7,0);
+
+statement ok
+CREATE TABLE channel_two(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_two VALUES (2,4),(3,6),(8,-1);
+
+query II
+EXPLAIN SELECT a.k,a.qty,b.qty,c.qty FROM sales a
+LEFT JOIN channel_one b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*
+
+# A longer chain must also preserve rows present only in its last RHS.
+statement ok
+CREATE TABLE channel_three(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_three VALUES (3,7),(4,8);
+
+query II
+EXPLAIN SELECT a.k,b.qty,c.qty,d.qty FROM s a
+LEFT JOIN channel_one b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+LEFT JOIN channel_three d ON a.k=d.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0 OR coalesce(d.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*Join Type: FULL.*
+
+# Composite null-safe keys can be partially or entirely NULL.
+statement ok
+INSERT INTO sales VALUES (NULL,10,21),(NULL,NULL,22);
+
+statement ok
+INSERT INTO web VALUES (NULL,10,2),(NULL,NULL,3);
+
+statement ok
+INSERT INTO catalog VALUES (NULL,NULL,4);
+
+query II
+EXPLAIN SELECT s.k,s.j,w.qty,c.qty
+FROM s LEFT JOIN w ON s.k IS NOT DISTINCT FROM w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.j IS NOT DISTINCT FROM c.j AND s.k IS NOT DISTINCT FROM c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*
+
+query II
+EXPLAIN SELECT s.k,s.j,w.qty,c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.j IS NOT DISTINCT FROM c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*Join Type: FULL.*
+
+# Incompatible comparison semantics and residual ON predicates are not reassociated.
+query II
+EXPLAIN SELECT s.k FROM s
+LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k IS NOT DISTINCT FROM c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+query II
+EXPLAIN SELECT s.k FROM s
+LEFT JOIN w ON s.k=w.k AND s.j=w.j AND s.qty>w.qty
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# Combining two unbounded duplicate sources could multiply keys absent from the LHS.
+query II
+EXPLAIN SELECT s.k FROM s
+LEFT JOIN web b ON s.k=b.k AND s.j=b.j
+LEFT JOIN catalog c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# Reassociation must not expose a throwing filter to unmatched RHS rows.
+statement ok
+CREATE TABLE text_channel(k INTEGER PRIMARY KEY, qty VARCHAR);
+
+statement ok
+INSERT INTO text_channel VALUES (1,'2'),(1000,'invalid');
+
+query II
+EXPLAIN SELECT a.k FROM s a
+LEFT JOIN text_channel b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+WHERE coalesce(b.qty::INTEGER,0)>0 OR coalesce(c.qty,0)>0;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# CTE filter pushdown also invokes the rule.
+query II
+EXPLAIN WITH joined AS MATERIALIZED (
+    SELECT s.k,w.qty wqty,c.qty cqty FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+    LEFT JOIN c ON s.k=c.k AND s.j=c.j
+)
+SELECT k FROM joined WHERE coalesce(wqty,0)>0 OR coalesce(cqty,0)>0;
+----
+physical_plan	<REGEX>:.*Join Type: FULL.*
+
+# Throwing preserved inputs are not reassociated.
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE observed_rows AS SELECT i k FROM range(65536) t(i);
+
+statement ok
+CREATE VIEW observed_c AS SELECT k,max(k) q FROM observed_rows WHERE k%3=3 GROUP BY k;
+
+statement ok
+CREATE OR REPLACE VIEW observed_s AS
+SELECT k,IF(k=65535,'bad',k::VARCHAR)::INTEGER q FROM observed_rows;
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k=0 GROUP BY k;
+
+query II
+EXPLAIN SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*
+
+# Throwing right-hand inputs are also excluded from reassociation.
+statement ok
+CREATE OR REPLACE VIEW observed_s AS SELECT k FROM observed_rows WHERE k%65536=100;
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows GROUP BY k;
+
+statement ok
+CREATE OR REPLACE VIEW observed_c AS
+SELECT k,IF(k=65535,'bad',k::VARCHAR)::INTEGER q FROM observed_rows GROUP BY k;
+
+query II
+EXPLAIN SELECT count(*),min(b.q),min(c.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+physical_plan	<!REGEX>:.*Join Type: FULL.*

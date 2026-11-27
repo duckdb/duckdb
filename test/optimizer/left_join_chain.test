@@ -1,0 +1,316 @@
+# name: test/optimizer/left_join_chain.test
+# description: Preserve results when reassociating null-rejected LEFT join chains
+# group: [optimizer]
+
+statement ok
+CREATE TABLE sales(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO sales VALUES
+    (1,10,5), (1,10,7), (2,20,3), (2,20,4), (3,30,9),
+    (4,40,11), (5,50,13), (7,70,17), (8,80,19), (9,NULL,6);
+
+# Include left-hand keys that have no match on either right-hand side.
+statement ok
+INSERT INTO sales SELECT i,i,1 FROM range(100,200) t(i);
+
+statement ok
+CREATE TABLE web(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO web VALUES (1,10,2), (3,30,1), (3,30,2), (5,51,3), (7,70,0), (8,80,-4), (9,NULL,5);
+
+statement ok
+CREATE TABLE catalog(k INTEGER, j INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO catalog VALUES (2,20,4), (3,30,5), (6,50,6);
+
+statement ok
+CREATE VIEW s AS SELECT k, j, sum(qty) AS qty FROM sales GROUP BY k, j;
+
+statement ok
+CREATE VIEW w AS SELECT k, j, sum(qty) AS qty FROM web GROUP BY k, j;
+
+statement ok
+CREATE VIEW c AS SELECT k, j, sum(qty) AS qty FROM catalog GROUP BY k, j;
+
+# B-only, C-only, both, neither, full-key cross pairs, and nonpositive payloads.
+# Multiple input rows in each retained group must all contribute to its aggregate.
+query IIIII rowsort
+SELECT s.k, s.j, s.qty, w.qty, c.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12	2	NULL
+2	20	7	NULL	4
+3	30	9	3	5
+
+# RHS keys can mix group and aggregate bindings with overlapping column indexes.
+query II rowsort
+SELECT s.k,s.qty
+FROM s LEFT JOIN (SELECT min(k) k,j,sum(qty) qty FROM web GROUP BY j) b
+ON s.k=b.k AND s.j=b.j
+LEFT JOIN c ON s.j=c.j AND s.k=c.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+# Duplicate RHS keys retain their payload multiplicity.
+query IIII rowsort
+SELECT s.k, s.qty, b.qty, c.qty
+FROM s LEFT JOIN (SELECT k,j,qty FROM web) b ON s.k=b.k AND s.j=b.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12	2	NULL
+2	7	NULL	4
+3	9	1	5
+3	9	2	5
+
+query III rowsort
+SELECT s.k, s.j, s.qty
+FROM s LEFT JOIN w ON s.k IS NOT DISTINCT FROM w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.k IS NOT DISTINCT FROM c.k AND s.j IS NOT DISTINCT FROM c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12
+2	20	7
+3	30	9
+9	NULL	6
+
+# The proof also applies to predicates that do not have a syntactic OR.
+query II rowsort
+SELECT s.k, s.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+# Unknown matches are necessary only if all-NULL RHS outputs fail the predicate.
+query I
+SELECT count(*) FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)=0 OR coalesce(c.qty,0)=0;
+----
+107
+
+# Existing materialized CTE inputs remain valid.
+query II rowsort
+WITH wb AS MATERIALIZED (SELECT * FROM w WHERE k<3)
+SELECT s.k, s.qty FROM s LEFT JOIN wb ON s.k=wb.k AND s.j=wb.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(wb.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	12
+2	7
+3	9
+
+statement ok
+PREPARE left_join_chain AS
+SELECT sum(s.qty) FROM s LEFT JOIN w ON s.k=w.k AND s.j=w.j
+LEFT JOIN c ON s.k=c.k AND s.j=c.j
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+
+query I
+EXECUTE left_join_chain;
+----
+28
+
+query I
+EXECUTE left_join_chain;
+----
+28
+
+# Broad RHS domains need no NDV admission heuristic: the join count stays the same.
+statement ok
+CREATE TABLE broad_membership AS SELECT i k,hash(i) j,1 qty FROM range(100) t(i);
+
+query I
+SELECT count(*)
+FROM (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) a
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) b
+ON a.k=b.k AND a.j=b.j
+LEFT JOIN (SELECT k,j,sum(qty) qty FROM broad_membership GROUP BY k,j) c
+ON a.k=c.k AND a.j=c.j
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+100
+
+# No aggregation or right-hand projection is required.
+statement ok
+CREATE TABLE channel_one(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_one VALUES (1,2),(3,5),(7,0);
+
+statement ok
+CREATE TABLE channel_two(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_two VALUES (2,4),(3,6),(8,-1);
+
+query IIII rowsort
+SELECT a.k,a.qty,b.qty,c.qty FROM sales a
+LEFT JOIN channel_one b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	5	2	NULL
+1	7	2	NULL
+2	3	NULL	4
+2	4	NULL	4
+3	9	5	6
+
+# A longer chain must also preserve rows present only in its last RHS.
+statement ok
+CREATE TABLE channel_three(k INTEGER PRIMARY KEY, qty INTEGER);
+
+statement ok
+INSERT INTO channel_three VALUES (3,7),(4,8);
+
+query IIII rowsort
+SELECT a.k,b.qty,c.qty,d.qty FROM s a
+LEFT JOIN channel_one b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+LEFT JOIN channel_three d ON a.k=d.k
+WHERE coalesce(b.qty,0)>0 OR coalesce(c.qty,0)>0 OR coalesce(d.qty,0)>0;
+----
+1	2	NULL	NULL
+2	NULL	4	NULL
+3	5	6	7
+4	NULL	NULL	8
+
+# Composite null-safe keys can be partially or entirely NULL.
+statement ok
+INSERT INTO sales VALUES (NULL,10,21),(NULL,NULL,22);
+
+statement ok
+INSERT INTO web VALUES (NULL,10,2),(NULL,NULL,3);
+
+statement ok
+INSERT INTO catalog VALUES (NULL,NULL,4);
+
+query IIIII rowsort
+SELECT s.k,s.j,s.qty,w.qty,c.qty
+FROM s LEFT JOIN w ON s.k IS NOT DISTINCT FROM w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.j IS NOT DISTINCT FROM c.j AND s.k IS NOT DISTINCT FROM c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12	2	NULL
+2	20	7	NULL	4
+3	30	9	3	5
+9	NULL	6	5	NULL
+NULL	10	21	2	NULL
+NULL	NULL	22	3	4
+
+# Equality semantics can differ between components if they agree across the joins.
+query III rowsort
+SELECT s.k,s.j,s.qty
+FROM s LEFT JOIN w ON s.k=w.k AND s.j IS NOT DISTINCT FROM w.j
+LEFT JOIN c ON s.j IS NOT DISTINCT FROM c.j AND s.k=c.k
+WHERE coalesce(w.qty,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	10	12
+2	20	7
+3	30	9
+9	NULL	6
+
+# Reassociation must not expose a throwing filter to unmatched RHS rows.
+statement ok
+CREATE TABLE text_channel(k INTEGER PRIMARY KEY, qty VARCHAR);
+
+statement ok
+INSERT INTO text_channel VALUES (1,'2'),(1000,'invalid');
+
+query II rowsort
+SELECT a.k,b.qty::INTEGER FROM s a
+LEFT JOIN text_channel b ON a.k=b.k
+LEFT JOIN channel_two c ON a.k=c.k
+WHERE coalesce(b.qty::INTEGER,0)>0 OR coalesce(c.qty,0)>0;
+----
+1	2
+2	NULL
+3	NULL
+
+# An empty combined RHS must not skip observable work in the preserved input.
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE observed_rows AS SELECT i k FROM range(65536) t(i);
+
+statement ok
+CREATE SEQUENCE left_chain_seq;
+
+statement ok
+CREATE VIEW observed_s AS SELECT k,nextval('left_chain_seq') q FROM observed_rows;
+
+statement ok
+CREATE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k%2=2 GROUP BY k;
+
+statement ok
+CREATE VIEW observed_c AS SELECT k,max(k) q FROM observed_rows WHERE k%3=3 GROUP BY k;
+
+query II
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+0	NULL
+
+query I
+SELECT nextval('left_chain_seq');
+----
+65537
+
+# Filtering earlier must not hide a cast error, even when the combined RHS is nonempty.
+statement ok
+CREATE OR REPLACE VIEW observed_s AS
+SELECT k,IF(k=65535,'bad',k::VARCHAR)::INTEGER q FROM observed_rows;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+Could not convert string 'bad' to INT32
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k=0 GROUP BY k;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+Could not convert string 'bad' to INT32
+
+# Table function scans can raise errors outside their bound expressions.
+statement ok
+COPY (SELECT i k,IF(i=65535,'bad',i::VARCHAR) q FROM range(65536) t(i))
+TO '{TEST_DIR}/left_join_chain_bad.csv' (HEADER true);
+
+statement ok
+CREATE OR REPLACE VIEW observed_s AS
+SELECT * FROM read_csv('{TEST_DIR}/left_join_chain_bad.csv',auto_detect=false,header=true,
+columns={'k':'BIGINT','q':'INTEGER'});
+
+statement ok
+CREATE OR REPLACE VIEW observed_b AS SELECT k,max(k) q FROM observed_rows WHERE k%2=2 GROUP BY k;
+
+statement ok
+CREATE OR REPLACE VIEW observed_c AS SELECT k,max(k) q FROM observed_rows WHERE k%3=3 GROUP BY k;
+
+statement error
+SELECT count(*),sum(s.q) FROM observed_s s
+LEFT JOIN observed_b b ON s.k=b.k LEFT JOIN observed_c c ON s.k=c.k
+WHERE b.q IS NOT NULL OR c.q IS NOT NULL;
+----
+CSV Error

@@ -36,6 +36,7 @@
         "test/optimizer/filter_pullup_key_constraints.test",
         "test/optimizer/join_elimination_duplicate_insensitive.test",
         "test/optimizer/joins/aggregate_key_join_ce.test",
+        "test/optimizer/left_join_chain_plan.test",
         "test/optimizer/partial_aggregate_precomputation.test",
         "test/optimizer/partial_aggregate_pushdown.test",
         "test/optimizer/partial_aggregate_pushdown_exported_state.test",

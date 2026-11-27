@@ -100,6 +100,9 @@ private:
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
 	                                             unordered_set<TableIndex> &left_bindings,
 	                                             unordered_set<TableIndex> &right_bindings);
+	bool FilterRemovesNull(const Expression &expr, const unordered_set<TableIndex> &nullable_bindings);
+	//! Reassociate a null-rejected LEFT join chain into an INNER join over FULL joins
+	unique_ptr<LogicalOperator> PushdownLeftJoinChain(unique_ptr<LogicalOperator> op);
 
 	// Pushdown an outer join
 	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op,

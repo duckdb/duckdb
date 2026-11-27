@@ -17,6 +17,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -546,6 +547,13 @@ void FilterTargetFinder::FindJoinFilterTargets(LogicalOperator &op, const Filter
 	}
 	const auto inner = op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
 	                   op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
+	if (!inner && op.Cast<LogicalComparisonJoin>().join_type == JoinType::RIGHT_ANTI) {
+		// An empty filtered build can skip the left input.
+		if (context.CanSkipSubtree(*op.children[0]) && LogicalSubtreeIsRepeatable(*op.children[0])) {
+			FindFilterTargets(*op.children[1], std::move(columns), targets, context);
+		}
+		return;
+	}
 	if (!inner && !FilterTargetPreservesLeftInput(op.Cast<LogicalComparisonJoin>().join_type)) {
 		return;
 	}

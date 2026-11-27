@@ -8,6 +8,7 @@ add_library_unity(
   pushdown_inner_join.cpp
   pushdown_limit.cpp
   pushdown_left_join.cpp
+  pushdown_left_join_chain.cpp
   pushdown_mark_join.cpp
   pushdown_outer_join.cpp
   pushdown_projection.cpp
