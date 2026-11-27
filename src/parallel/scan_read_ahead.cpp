@@ -119,8 +119,8 @@ private:
 		}
 		~RunningRead() {
 			if (read_ahead && read_ahead->running_reads.fetch_sub(1) == 1) {
-				// A parked consumer must retry even when the remaining reads have not started.
-				read_ahead->SignalProgress(false);
+				// Wake every parked scan, since a resumed task may stop without fetching again
+				read_ahead->SignalProgress(true);
 			}
 		}
 
