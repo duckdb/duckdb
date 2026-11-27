@@ -10,9 +10,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_cte.hpp"
-#include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -26,70 +23,6 @@ static bool AnyVolatile(const LogicalOperator &op) {
 		}
 	});
 	return is_volatile;
-}
-
-RemovedSubtreeEffects::RemovedSubtreeEffects(LogicalOperator &plan) {
-	CollectDefinitions(plan);
-}
-
-void RemovedSubtreeEffects::CollectDefinitions(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		materialized_ctes.emplace(op.Cast<LogicalCTE>().table_index, op);
-	} else if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		recursive_ctes.insert(op.Cast<LogicalCTE>().table_index);
-	}
-	for (auto &child : op.children) {
-		CollectDefinitions(*child);
-	}
-}
-
-bool RemovedSubtreeEffects::DefinitionHasEffect(TableIndex cte_index) {
-	auto known = definition_has_effect.find(cte_index);
-	if (known != definition_has_effect.end()) {
-		return known->second;
-	}
-	auto cte = materialized_ctes.find(cte_index);
-	if (cte == materialized_ctes.end()) {
-		// a reference to something that is not defined in this plan: assume the worst
-		return true;
-	}
-	// a materialized CTE cannot reference itself, so the definition is known before it is asked about again
-	const bool has_effect = HasEffect(*cte->second.get().children[0]);
-	definition_has_effect.emplace(cte_index, has_effect);
-	return has_effect;
-}
-
-bool RemovedSubtreeEffects::HasEffect(LogicalOperator &subtree) {
-	if (AnyVolatile(subtree)) {
-		return true;
-	}
-	switch (subtree.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_DELETE:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_MERGE_INTO:
-		return true;
-	case LogicalOperatorType::LOGICAL_GET:
-		if (subtree.Cast<LogicalGet>().function.stability == FunctionStability::VOLATILE) {
-			return true;
-		}
-		break;
-	case LogicalOperatorType::LOGICAL_CTE_REF: {
-		auto cte_index = subtree.Cast<LogicalCTERef>().cte_index;
-		if (recursive_ctes.find(cte_index) == recursive_ctes.end() && DefinitionHasEffect(cte_index)) {
-			return true;
-		}
-		break;
-	}
-	default:
-		break;
-	}
-	for (auto &child : subtree.children) {
-		if (HasEffect(*child)) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void JoinElimination::OptimizeChild(LogicalOperator &op, idx_t child_idx, JoinElimination &child_optimizer,

@@ -1,0 +1,327 @@
+# name: test/sql/optimizer/aggregate_filter_pushdown.test
+# description: Shared and disjunctive input filters for ungrouped aggregates
+# group: [optimizer]
+
+statement ok
+CREATE TABLE aggregate_filters(g INTEGER, x INTEGER, p BOOLEAN, q BOOLEAN);
+
+statement ok
+INSERT INTO aggregate_filters VALUES
+	(1, 1, true, false),
+	(1, 1, true, true),
+	(1, 2, false, true),
+	(2, 3, NULL, false),
+	(2, 4, false, NULL),
+	(3, NULL, true, NULL),
+	(4, 7, NULL, NULL);
+
+# A shared filter applies to every aggregate, including NULL-sensitive ones.
+query IIIT
+SELECT sum(x) FILTER (WHERE p),
+       count(*) FILTER (WHERE p),
+       count(DISTINCT x) FILTER (WHERE p),
+       list(x ORDER BY x) FILTER (WHERE p)
+FROM aggregate_filters;
+----
+2	3	1	[1, 1, NULL]
+
+# Different filters remain on their respective aggregates.
+query IIII
+SELECT sum(x) FILTER (WHERE p),
+       sum(x) FILTER (WHERE q),
+       count(*) FILTER (WHERE p),
+       count(*) FILTER (WHERE q)
+FROM aggregate_filters;
+----
+2	3	3	2
+
+# A single-column OR prefilter must retain each aggregate's own predicate.
+query IIII
+SELECT sum(x) FILTER (WHERE x <= 1),
+       sum(x) FILTER (WHERE x >= 4),
+       count(*) FILTER (WHERE x <= 1),
+       count(*) FILTER (WHERE x >= 4)
+FROM aggregate_filters;
+----
+2	11	2	2
+
+# Dense disjunctions and NULLs still use each aggregate's exact filter.
+query II
+SELECT sum(x) FILTER (WHERE x < 3), sum(x) FILTER (WHERE x >= 3)
+FROM aggregate_filters;
+----
+4	14
+
+# A branch with only an optional prefilter cannot restrict the shared producer.
+query III
+SELECT count(DISTINCT g) FILTER (WHERE p),
+       sum(x) FILTER (WHERE x <= 1), sum(x) FILTER (WHERE x >= 4)
+FROM aggregate_filters;
+----
+2	2	11
+
+# A table function cannot consume the optional scan filter.
+query II
+SELECT sum(x) FILTER (WHERE x < 2), sum(x) FILTER (WHERE x > 3)
+FROM (SELECT i + 1 AS x, i % 2 AS unused FROM range(6) t(i)) t;
+----
+1	15
+
+# Factoring out p leaves each aggregate's remaining predicate in place.
+query II
+SELECT sum(x) FILTER (WHERE p AND x <= 1), count(*) FILTER (WHERE p AND g = 3)
+FROM aggregate_filters;
+----
+2	1
+
+# Branches can be filtered separately after DISTINCT expansion.
+query III
+SELECT count(DISTINCT x) FILTER (WHERE p),
+       sum(DISTINCT x) FILTER (WHERE q),
+       count(*) FILTER (WHERE p OR q)
+FROM aggregate_filters;
+----
+1	3	4
+
+# An unrestricted aggregate requires rows rejected by every other aggregate.
+query III
+SELECT count(*), sum(x) FILTER (WHERE p), count(DISTINCT x) FILTER (WHERE q)
+FROM aggregate_filters;
+----
+7	2	2
+
+# FALSE and NULL both reject a row; an empty scalar aggregate still returns one row.
+query IIII
+SELECT count(*) FILTER (WHERE false),
+       sum(x) FILTER (WHERE NULL),
+       count(DISTINCT x) FILTER (WHERE false),
+       list(x) FILTER (WHERE NULL)
+FROM aggregate_filters;
+----
+0	NULL	0	NULL
+
+query IIII
+SELECT count(*) FILTER (WHERE p),
+       sum(x) FILTER (WHERE q),
+       count(DISTINCT x) FILTER (WHERE p),
+       list(x) FILTER (WHERE q)
+FROM aggregate_filters WHERE g > 10;
+----
+0	NULL	0	NULL
+
+# Frequency aggregate recipes have the same input-filter opportunity.
+query III
+SELECT m, e, h[1]
+FROM (
+	SELECT mode(x) FILTER (WHERE p) AS m,
+	       entropy(x) FILTER (WHERE q) AS e,
+	       histogram(x) FILTER (WHERE p) AS h
+	FROM aggregate_filters
+);
+----
+1	1	2
+
+query III
+SELECT mode(x) FILTER (WHERE false),
+       entropy(x) FILTER (WHERE NULL),
+       histogram(x) FILTER (WHERE false)
+FROM aggregate_filters;
+----
+NULL	0	NULL
+
+# Grouped aggregates retain groups whose rows all fail the aggregate filters.
+query IIII
+SELECT g, count(*) FILTER (WHERE p), sum(x) FILTER (WHERE q), count(DISTINCT x) FILTER (WHERE p)
+FROM aggregate_filters GROUP BY g ORDER BY g;
+----
+1	2	3	1
+2	0	NULL	0
+3	1	NULL	0
+4	0	NULL	0
+
+statement ok
+CREATE TABLE aggregate_filter_errors(x VARCHAR, p BOOLEAN, q BOOLEAN);
+
+statement ok
+INSERT INTO aggregate_filter_errors VALUES ('bad', false, false), ('1', true, true);
+
+# Arguments and ORDER BY expressions keep their eager error behavior.
+statement error
+SELECT sum(x::INTEGER) FILTER (WHERE p), count(*) FILTER (WHERE q) FROM aggregate_filter_errors;
+----
+Conversion Error
+
+statement error
+SELECT count(DISTINCT x::INTEGER) FILTER (WHERE p), count(*) FILTER (WHERE q)
+FROM aggregate_filter_errors;
+----
+Conversion Error
+
+statement error
+SELECT list(DISTINCT x ORDER BY x::INTEGER) FILTER (WHERE p) FROM aggregate_filter_errors;
+----
+Conversion Error
+
+statement ok
+CREATE SEQUENCE aggregate_filter_argument;
+
+query I
+SELECT sum(nextval('aggregate_filter_argument')) FILTER (WHERE p)
+FROM aggregate_filters;
+----
+9
+
+query I
+SELECT currval('aggregate_filter_argument');
+----
+7
+
+statement ok
+CREATE SEQUENCE aggregate_filter_predicate;
+
+# Volatile predicates cannot be copied into a prefilter.
+query II
+SELECT count(*) FILTER (WHERE nextval('aggregate_filter_predicate') % 2 = 0),
+       count(*) FILTER (WHERE p)
+FROM aggregate_filters;
+----
+3	3
+
+query I
+SELECT currval('aggregate_filter_predicate');
+----
+7
+
+statement ok
+CREATE SEQUENCE aggregate_filter_shared_input;
+
+# Branch predicates must not prune the shared projection that evaluates nextval.
+query II
+SELECT count(DISTINCT nextval('aggregate_filter_shared_input')) FILTER (WHERE i > 1),
+       sum(DISTINCT i) FILTER (WHERE i > 1)
+FROM range(4) t(i);
+----
+2	5
+
+query I
+SELECT currval('aggregate_filter_shared_input');
+----
+4
+
+statement ok
+CREATE SEQUENCE aggregate_filter_empty_branch;
+
+query II
+SELECT count(DISTINCT nextval('aggregate_filter_empty_branch')) FILTER (WHERE false),
+       sum(DISTINCT i) FILTER (WHERE i > 1)
+FROM range(4) t(i);
+----
+0	5
+
+query I
+SELECT currval('aggregate_filter_empty_branch');
+----
+4
+
+statement ok
+CREATE SEQUENCE aggregate_filter_nested_cte;
+
+query II
+WITH source AS MATERIALIZED (
+	SELECT i, nextval('aggregate_filter_nested_cte') AS x FROM range(4) t(i)
+), intermediate AS MATERIALIZED (
+	SELECT * FROM source
+)
+SELECT count(DISTINCT x) FILTER (WHERE i > 1),
+       sum(DISTINCT i) FILTER (WHERE i > 1)
+FROM intermediate;
+----
+2	5
+
+query I
+SELECT currval('aggregate_filter_nested_cte');
+----
+4
+
+statement ok
+CREATE SEQUENCE aggregate_filter_independent_cte;
+
+# Filters created in a pure branch must not prune an independent volatile producer.
+query III
+WITH effectful AS MATERIALIZED (
+	SELECT i, nextval('aggregate_filter_independent_cte') AS x FROM range(4) t(i)
+)
+SELECT v.n, p.n, p.s
+FROM (SELECT count(DISTINCT x) FILTER (WHERE i > 1) AS n FROM effectful) v
+CROSS JOIN (
+	SELECT count(DISTINCT x) FILTER (WHERE p) AS n, sum(DISTINCT g) FILTER (WHERE q) AS s
+	FROM aggregate_filters
+) p;
+----
+2	1	1
+
+query I
+SELECT currval('aggregate_filter_independent_cte');
+----
+4
+
+# Combining repeated filters must retain independent volatile evaluations.
+statement ok
+CREATE SEQUENCE aggregate_filter_duplicate_predicates;
+
+query I
+SELECT count(*) FROM range(4) t(i)
+WHERE (nextval('aggregate_filter_duplicate_predicates') > 0 OR i > 10)
+  AND (nextval('aggregate_filter_duplicate_predicates') > 0 OR i > 10);
+----
+4
+
+query I
+SELECT currval('aggregate_filter_duplicate_predicates');
+----
+8
+
+# Empty aggregate input must not skip volatile table functions.
+statement ok
+SET enable_logging=true;
+
+query I
+SELECT count(*) FILTER (WHERE false) FROM disable_logging();
+----
+0
+
+query I
+SELECT current_setting('enable_logging');
+----
+0
+
+statement ok
+SET enable_logging=true;
+
+query I
+WITH logging_input AS MATERIALIZED (SELECT * FROM disable_logging())
+SELECT count(*) FILTER (WHERE false) FROM logging_input;
+----
+0
+
+query I
+SELECT current_setting('enable_logging');
+----
+0
+
+# Predicate equality must not conflate signed zeros while factoring an input filter.
+statement ok
+CREATE TABLE aggregate_filter_identity AS SELECT i::DOUBLE AS x FROM range(1, 5) t(i);
+
+statement ok
+SET disabled_optimizers='common_subexpressions';
+
+query II
+SELECT sum(x) FILTER (WHERE signbit(atan2('0.0'::DOUBLE, x)) AND x = 1),
+       count(*) FILTER (WHERE signbit(atan2('-0.0'::DOUBLE, x)) AND x = 2)
+FROM aggregate_filter_identity;
+----
+NULL	1
+
+statement ok
+RESET disabled_optimizers;

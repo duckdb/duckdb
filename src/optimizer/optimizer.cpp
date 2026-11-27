@@ -292,6 +292,19 @@ void Optimizer::RunBuiltInOptimizers() {
 	                                               !OptimizerDisabled(OptimizerType::DISTINCT_AGGREGATE_REWRITE));
 	aggregate_rewriter.VisitOperator(plan);
 
+	if (aggregate_rewriter.HasNewFilters()) {
+		// Branching exposes filters shared by all aggregates in each branch.
+		RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
+			FilterPushdown filter_pushdown(*this);
+			plan = filter_pushdown.Rewrite(std::move(plan));
+		});
+		RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
+			CTEFilterPusher cte_filter_pusher(*this);
+			plan = cte_filter_pusher.Optimize(std::move(plan));
+		});
+		CTEFilterPusher::ClearDependencies(*plan);
+	}
+
 	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
 		DisjunctiveJoinRewriter disjunctive_join_rewriter(binder);
 		plan = disjunctive_join_rewriter.Optimize(std::move(plan));

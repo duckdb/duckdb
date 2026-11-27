@@ -153,6 +153,23 @@ FROM distinct_rewrite_order;
 ----
 4	d,c,b,a
 
+# empty ungrouped FILTER is zero or NULL
+query III
+SELECT count(DISTINCT x) FILTER (WHERE y > 100),
+       avg(DISTINCT x) FILTER (WHERE y > 100),
+       sum(DISTINCT x) FILTER (WHERE false)
+FROM distinct_rewrite;
+----
+0	NULL	NULL
+
+# ungrouped filters with different predicates stay separate
+query II
+SELECT count(DISTINCT x) FILTER (WHERE x % 2 = 0),
+       sum(DISTINCT x) FILTER (WHERE x % 2 = 1)
+FROM distinct_rewrite;
+----
+4	9
+
 # grouped distinct aggregate filters preserve groups with no matching distinct values
 query II
 SELECT g, count(DISTINCT x) FILTER (WHERE y > 3)

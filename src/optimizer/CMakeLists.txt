@@ -10,6 +10,7 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  aggregate_filter_extractor.cpp
   aggregate_rewrite.cpp
   aggregate_function_rewriter.cpp
   aggregate_reuse.cpp
@@ -63,6 +64,7 @@ add_library_unity(
   remove_redundant_order.cpp
   remove_redundant_order_keys.cpp
   remove_unused_columns.cpp
+  removed_subtree_effects.cpp
   row_group_pruner.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp

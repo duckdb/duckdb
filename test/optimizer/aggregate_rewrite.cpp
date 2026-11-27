@@ -5,13 +5,17 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/aggregate_filter_extractor.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
 
@@ -184,4 +188,74 @@ TEST_CASE("Aggregate rewrite policies own strategy selection", "[optimizer][aggr
 	REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() == 3);
 	REQUIRE(cost_calls == 0);
 	REQUIRE(rewrite_calls == 0);
+}
+
+TEST_CASE("Aggregate rewriting requests pushdown only for new input filters", "[optimizer][aggregate_rewrite]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	string sql;
+	bool expect_filter = false;
+	SECTION("Unfiltered DISTINCT") {
+		sql = "SELECT count(DISTINCT i) FROM range(10) t(i)";
+	}
+	SECTION("Filtered branches") {
+		sql = "SELECT count(DISTINCT i) FILTER (WHERE i < 3), sum(i) FILTER (WHERE i > 7) "
+		      "FROM range(10) t(i)";
+		expect_filter = true;
+	}
+	SECTION("Grouped aggregates retain their filters") {
+		sql = "SELECT count(DISTINCT i) FILTER (WHERE i < 3) FROM range(10) t(i) GROUP BY i % 2";
+	}
+	con.context->RunFunctionInTransaction([&]() {
+		Parser parser(*con.context);
+		parser.ParseQuery(sql);
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		Optimizer optimizer(*planner.binder, *con.context);
+		MultiStageAggregateRewriter rewriter(optimizer, AggregateRewritePolicy::UNCONDITIONAL, true);
+		rewriter.VisitOperator(planner.plan);
+		REQUIRE(rewriter.WasChanged());
+		REQUIRE(rewriter.HasNewFilters() == expect_filter);
+	});
+}
+
+TEST_CASE("Aggregate filter extraction preserves predicate identity", "[optimizer][aggregate_rewrite]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	string first_filter;
+	string second_filter;
+	bool expect_filter = false;
+	SECTION("Distinct representations must not become a shared filter") {
+		first_filter = "signbit(atan2('0.0'::DOUBLE, i))";
+		second_filter = "signbit(atan2('-0.0'::DOUBLE, i))";
+	}
+	SECTION("Distinct representations must not become a common conjunct") {
+		first_filter = "signbit(atan2('0.0'::DOUBLE, i)) AND i = 1";
+		second_filter = "signbit(atan2('-0.0'::DOUBLE, i)) AND i = 2";
+	}
+	SECTION("Identical integer predicates can still be extracted") {
+		first_filter = second_filter = "i < 3";
+		expect_filter = true;
+	}
+	con.context->RunFunctionInTransaction([&]() {
+		Parser parser(*con.context);
+		parser.ParseQuery("SELECT sum(i) FILTER (WHERE " + first_filter + "), count(*) FILTER (WHERE " + second_filter +
+		                  ") FROM range(1, 5) t(i)");
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		Optimizer optimizer(*planner.binder, *con.context);
+		optimizer.rewriter.VisitOperator(*planner.plan);
+		optional_ptr<LogicalOperator> node = *planner.plan;
+		while (node->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			REQUIRE(node->children.size() == 1);
+			node = *node->children[0];
+		}
+		auto &aggr = node->Cast<LogicalAggregate>();
+		AggregateFilterExtractor extractor(optimizer, aggr);
+		auto input_filter = extractor.Extract({0, 1});
+		REQUIRE(bool(input_filter) == expect_filter);
+		for (auto &expr : aggr.expressions) {
+			REQUIRE(bool(expr->Cast<BoundAggregateExpression>().GetFilter()) == !expect_filter);
+		}
+	});
 }

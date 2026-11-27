@@ -35,6 +35,13 @@
       ]
     },
     {
+      "reason": "Checks input-filter extraction and placement for ungrouped aggregates.",
+      "paths": [
+        "test/sql/aggregate/distinct/rewrite/distinct_ungrouped_filter_plan.test",
+        "test/sql/optimizer/aggregate_filter_pushdown_plan.test"
+      ]
+    },
+    {
       "reason": "Rejecting corrupt Parquet geometry statistics requires optimizer statistics propagation.",
       "paths": [
         "test/parquet/corrupt/geometry_add_wkb_type_oob.test"

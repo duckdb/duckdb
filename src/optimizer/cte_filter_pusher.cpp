@@ -6,6 +6,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
@@ -115,7 +116,6 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	if (info.filters.empty()) {
 		return;
 	}
-
 	// Create an OR expression with all the filters on all references of the CTE
 	unique_ptr<Expression> outer_expr;
 	for (auto &filter : info.filters) {
@@ -139,6 +139,9 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 		// We copy the filters and replace the CTE reference bindings with the bindings in the CTE definition
 		unique_ptr<Expression> inner_expr;
 		for (auto &filter_expr : filter.get().expressions) {
+			if (ExpressionFilter::IsOptionalExpression(*filter_expr)) {
+				continue;
+			}
 			// Dropping a conjunct must not expose errors it previously short-circuited.
 			if (filter_expr->IsVolatile() || ExpressionBarrier::Contains(*filter_expr) ||
 			    (!all_conjuncts_repeatable && filter_expr->CanThrow())) {

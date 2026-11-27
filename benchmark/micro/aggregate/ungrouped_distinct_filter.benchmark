@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/ungrouped_distinct_filter.benchmark
+# description: Ungrouped COUNT(DISTINCT) with a selective FILTER
+# group: [aggregate]
+
+name Ungrouped Distinct Filter
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i AS x, i % 1000 = 0 AS keep FROM range(0, 100000000) tbl(i);
+
+run
+SELECT count(DISTINCT x) FILTER (WHERE keep) FROM integers
+
+result I
+100000

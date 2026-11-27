@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/aggregate_filter_extractor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -43,6 +44,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	// pushdown into AGGREGATE and GROUP BY
 	// we cannot push expressions that refer to the aggregate
 	FilterPushdown child_pushdown(optimizer, projection_mode);
+	vector<idx_t> aggregate_indices;
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		aggregate_indices.push_back(i);
+	}
+	AggregateFilterExtractor filter_extractor(optimizer, aggr);
+	auto aggregate_filter = filter_extractor.Extract(aggregate_indices);
+	if (aggregate_filter && child_pushdown.AddFilter(std::move(aggregate_filter)) == FilterResult::UNSATISFIABLE) {
+		// An empty input still produces the scalar aggregate's one output row.
+		op->children[0] = make_uniq<LogicalEmptyResult>(std::move(op->children[0]));
+		return PushFinalFilters(std::move(op));
+	}
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		if (f.bindings.find(aggr.aggregate_index) != f.bindings.end()) {

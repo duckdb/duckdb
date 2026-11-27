@@ -21,11 +21,11 @@ SELECT count(*) FILTER (WHERE sha256(s) < '8' AND random() < 2.0), sum(i) FILTER
 ----
 10056	100093689
 
-# identical deterministic filters stay with the ungrouped aggregate and are evaluated once: nothing is projected
+# Identical deterministic filters move to the scan and are evaluated once.
 query II
 EXPLAIN (FORMAT compact) SELECT count(*) FILTER (WHERE sha256(s) < '8'), sum(i) FILTER (WHERE sha256(s) < '8') FROM g
 ----
-physical_plan	<REGEX>:(?s).*UNGROUPED_AGGREGATE.*sha256\(.*PROJECTION.*SEQ_SCAN.*
+physical_plan	<REGEX>:(?s).*UNGROUPED_AGGREGATE.*SEQ_SCAN.*Filters: \(sha256\(s\) < '8'\).*
 
 query II
 EXPLAIN (FORMAT compact) SELECT count(*) FILTER (WHERE sha256(s) < '8'), sum(i) FILTER (WHERE sha256(s) < '8') FROM g

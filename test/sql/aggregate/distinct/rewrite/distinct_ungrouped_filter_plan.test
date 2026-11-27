@@ -1,0 +1,18 @@
+# name: test/sql/aggregate/distinct/rewrite/distinct_ungrouped_filter_plan.test
+# description: Ungrouped DISTINCT FILTER drops rows before deduplication
+# group: [rewrite]
+
+statement ok
+CREATE TABLE distinct_ungrouped_filter AS
+	SELECT i AS x, i % 10 = 0 AS keep
+	FROM range(20) tbl(i);
+
+statement ok
+SET explain_output='optimized_only';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT x) FILTER (WHERE keep)
+FROM distinct_ungrouped_filter;
+----
+logical_opt	<REGEX>:.*"Filters":\s*"keep".*"Groups":\s*"x".*"Expressions":\s*"count_star\(\)".*

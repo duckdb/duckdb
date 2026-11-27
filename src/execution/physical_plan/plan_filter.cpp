@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -13,6 +14,11 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	D_ASSERT(op.children.size() == 1);
 	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
+		if (ExpressionFilter::IsOptionalExpression(*op.expressions[i])) {
+			op.expressions.erase_at(i--);
+		}
+	}
 	if (!op.expressions.empty()) {
 		// create a filter if there is anything to filter
 		auto &filter = Make<PhysicalFilter>(plan.get().GetTypes(), std::move(op.expressions), op.estimated_cardinality);
