@@ -74,8 +74,7 @@ struct DSDGenTableSchema {
 
 template <class T>
 static DSDGenTableSchema TableSchema() {
-	return DSDGenTableSchema {T::Name,    T::Columns,           T::Types,
-	                          T::ColumnCount, T::PrimaryKeyColumns, T::PrimaryKeyCount};
+	return DSDGenTableSchema {T::Name, T::Columns, T::Types, T::ColumnCount, T::PrimaryKeyColumns, T::PrimaryKeyCount};
 }
 
 static DSDGenTableSchema GetDSDGenTableSchema(int table_id) {
@@ -213,8 +212,7 @@ static idx_t GetDSDGenReturnPercent(int table_id) {
 
 static idx_t GetDSDGenTableProgressUnitsPerRow(int table_id) {
 	auto output_rows = GetDSDGenTableOutputMultiplier(table_id);
-	auto progress_units =
-	    output_rows * GetDSDGenTableSchema(table_id).column_count * DSDGEN_PROGRESS_UNIT_SCALE;
+	auto progress_units = output_rows * GetDSDGenTableSchema(table_id).column_count * DSDGEN_PROGRESS_UNIT_SCALE;
 	auto child_table = GetDSDGenChildTable(table_id);
 	if (child_table != -1) {
 		progress_units += output_rows * GetDSDGenReturnPercent(table_id) *
@@ -410,6 +408,20 @@ struct DSDGenItemBuffers {
 	std::vector<std::unique_ptr<tpcds_append_information>> append_info;
 };
 
+//! Inserts the work items of one table, and the rows they generate for its child table, in the order of their steps.
+//! Each table inserts through its own connection, so the tables are filled in parallel.
+struct DSDGenTableInserter {
+	//! Closed once every work item of the table is inserted
+	std::unique_ptr<Connection> connection;
+	//! Held while inserting: the connection runs one statement at a time, and the rows go in step order
+	std::mutex insert_lock;
+	//! Protects the finished work items and the next step to insert
+	std::mutex queue_lock;
+	std::vector<std::unique_ptr<DSDGenItemBuffers>> finished_items;
+	int next_step = 0;
+	//! The work items still to insert, written while holding the insert lock
+	idx_t remaining_items = 0;
+};
 
 class TPCDSDSDGenGenerator : public DSDGenGenerator {
 public:
@@ -426,14 +438,26 @@ public:
 		thread_count = 1;
 #ifndef DUCKDB_NO_THREADS
 		auto threads = context.GetConfig().GetOption("threads").value;
-		thread_count = static_cast<idx_t>(std::max<int64_t>(1, threads.Cast(factory, factory.ParseType("BIGINT")).Get<int64_t>()));
+		thread_count =
+		    static_cast<idx_t>(std::max<int64_t>(1, threads.Cast(factory, factory.ParseType("BIGINT")).Get<int64_t>()));
 #endif
 		if (scale > 0) {
 			InitializeDSDgen(scale);
 			PlanWork();
 		}
+		connection.reset();
+		inserters.resize(DBGEN_VERSION);
+		for (auto &work_item : work_items) {
+			auto &inserter = inserters[work_item.table_id];
+			if (!inserter) {
+				inserter = std::make_unique<DSDGenTableInserter>();
+				inserter->connection = std::make_unique<Connection>(context.ConnectInTransaction());
+			}
+			inserter->remaining_items++;
+		}
+		remaining_items = work_items.size();
 		if (work_items.empty()) {
-			Finish();
+			finished.store(true);
 		}
 	}
 
@@ -532,8 +556,6 @@ private:
 			}
 			return left.step < right.step;
 		});
-		next_insert_step.assign(DBGEN_VERSION, 0);
-		remaining_items = work_items.size();
 	}
 
 	//! Takes the next step: inserts a finished work item, or generates the next one. The generator keeps its state
@@ -588,9 +610,10 @@ private:
 			}
 		}
 		generated_work.fetch_add((work_item.count - reported_rows) * work_item.progress_units_per_row);
+		auto &inserter = *inserters[work_item.table_id];
 		{
-			std::lock_guard<std::mutex> guard(finished_lock);
-			finished_items.push_back(std::move(buffers));
+			std::lock_guard<std::mutex> guard(inserter.queue_lock);
+			inserter.finished_items.push_back(std::move(buffers));
 		}
 		return true;
 	}
@@ -607,8 +630,9 @@ private:
 		}
 	}
 
-	//! Inserts the rows of every buffer of the work item
-	void InsertBuffers(DSDGenItemBuffers &buffers) {
+	//! Inserts the rows of every buffer of the work item through the connection of its table
+	void InsertBuffers(DSDGenTableInserter &inserter, DSDGenItemBuffers &buffers) {
+		auto &connection = *inserter.connection;
 		for (int table_id = CALL_CENTER; table_id < DBGEN_VERSION; table_id++) {
 			auto &append = buffers.append_info[table_id];
 			if (!append) {
@@ -618,82 +642,98 @@ private:
 			if (append->GetBuffer().GetRowCount() == 0) {
 				continue;
 			}
-			auto statement =
-			    ParseStatement(*connection, "INSERT INTO " + table_names[table_id] + " SELECT * FROM " + DSDGEN_BUFFER_NAME);
+			auto statement = ParseStatement(connection, "INSERT INTO " + table_names[table_id] + " SELECT * FROM " +
+			                                                DSDGEN_BUFFER_NAME);
 			statement.AddCollection(DSDGEN_BUFFER_NAME, append->GetBuffer());
-			connection->Execute(statement).Drain();
+			connection.Execute(statement).Drain();
 			append->ResetBuffer();
 		}
 	}
 
-	//! Inserts the rows generated so far when the work item is the next one of its table: rows are inserted in order
-	void TryInsertPartial(DSDGenItemBuffers &buffers) {
-		std::lock_guard<std::mutex> guard(insert_lock);
-		if (!connection || next_insert_step[buffers.work_item.table_id] != buffers.work_item.step) {
-			return;
-		}
-		InsertBuffers(buffers);
+	bool IsNextStep(DSDGenTableInserter &inserter, const DSDGenWorkItem &work_item) {
+		std::lock_guard<std::mutex> guard(inserter.queue_lock);
+		return inserter.next_step == work_item.step;
 	}
 
-	//! Takes the finished work item that is next in its table, if any
-	std::unique_ptr<DSDGenItemBuffers> TakeInsertableItem() {
-		std::lock_guard<std::mutex> guard(finished_lock);
-		for (auto it = finished_items.begin(); it != finished_items.end(); it++) {
-			auto &work_item = (*it)->work_item;
-			if (work_item.step == next_insert_step[work_item.table_id]) {
+	//! Inserts the rows generated so far when the work item is the next one of its table: rows are inserted in order
+	void TryInsertPartial(DSDGenItemBuffers &buffers) {
+		auto &inserter = *inserters[buffers.work_item.table_id];
+		std::unique_lock<std::mutex> guard(inserter.insert_lock, std::try_to_lock);
+		if (!guard.owns_lock() || !IsNextStep(inserter, buffers.work_item)) {
+			return;
+		}
+		InsertBuffers(inserter, buffers);
+	}
+
+	//! Takes the finished work item that is next in the table, if any
+	std::unique_ptr<DSDGenItemBuffers> TakeInsertableItem(DSDGenTableInserter &inserter) {
+		std::lock_guard<std::mutex> guard(inserter.queue_lock);
+		auto &items = inserter.finished_items;
+		for (auto it = items.begin(); it != items.end(); it++) {
+			if ((*it)->work_item.step == inserter.next_step) {
 				auto result = std::move(*it);
-				finished_items.erase(it);
+				items.erase(it);
 				return result;
 			}
 		}
 		return nullptr;
 	}
 
-	bool HasInsertableItem() {
-		std::lock_guard<std::mutex> guard(finished_lock);
-		for (auto &buffers : finished_items) {
-			if (buffers->work_item.step == next_insert_step[buffers->work_item.table_id]) {
+	bool HasInsertableItem(DSDGenTableInserter &inserter) {
+		std::lock_guard<std::mutex> guard(inserter.queue_lock);
+		for (auto &buffers : inserter.finished_items) {
+			if (buffers->work_item.step == inserter.next_step) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	//! Inserts one finished work item that is next in its table, returning whether it did. When another thread is
-	//! inserting, it leaves the item to that one, which keeps inserting as long as there are items.
-	bool TryInsertFinishedItem() {
+	//! Inserts one finished work item that is next in the table, returning whether it did. When another thread is
+	//! inserting into the table, it leaves the item to that one, which keeps inserting as long as there are items.
+	bool TryInsertFinishedItem(DSDGenTableInserter &inserter) {
 		while (!failed.load()) {
 			{
-				std::unique_lock<std::mutex> guard(insert_lock, std::try_to_lock);
+				std::unique_lock<std::mutex> guard(inserter.insert_lock, std::try_to_lock);
 				if (!guard.owns_lock()) {
 					return false;
 				}
-				auto buffers = TakeInsertableItem();
+				auto buffers = TakeInsertableItem(inserter);
 				if (buffers) {
-					InsertBuffers(*buffers);
+					InsertBuffers(inserter, *buffers);
 					inserted_work.fetch_add(buffers->work_item.progress_units);
 					{
-						std::lock_guard<std::mutex> finished_guard(finished_lock);
-						next_insert_step[buffers->work_item.table_id]++;
+						std::lock_guard<std::mutex> queue_guard(inserter.queue_lock);
+						inserter.next_step++;
+					}
+					if (--inserter.remaining_items == 0) {
+						// the transaction cannot commit while the connection is open
+						inserter.connection.reset();
 					}
 					if (--remaining_items == 0) {
-						Finish();
+						finished.store(true);
 					}
 					return true;
 				}
 			}
 			// an item may have finished after the check, while its thread could not take the lock
-			if (!HasInsertableItem()) {
+			if (!HasInsertableItem(inserter)) {
 				return false;
 			}
 		}
 		return false;
 	}
 
-	//! Closes the connection: the transaction cannot commit while it is open
-	void Finish() {
-		connection.reset();
-		finished.store(true);
+	//! Inserts one finished work item of any table, starting at a different table for each call to spread the threads
+	bool TryInsertFinishedItem() {
+		auto start = next_insert_table.fetch_add(1);
+		for (idx_t i = 0; i < inserters.size(); i++) {
+			auto &inserter = inserters[(start + i) % inserters.size()];
+			if (inserter && TryInsertFinishedItem(*inserter)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 private:
@@ -708,16 +748,12 @@ private:
 	std::atomic<idx_t> inserted_work {0};
 	std::atomic<bool> failed {false};
 	std::atomic<bool> finished {false};
-
-	//! Protects the finished items and the next step to insert of each table
-	std::mutex finished_lock;
-	std::vector<std::unique_ptr<DSDGenItemBuffers>> finished_items;
-	std::vector<int> next_insert_step;
-	//! Held while inserting, the connection runs one statement at a time
-	std::mutex insert_lock;
-	idx_t remaining_items = 0;
-	//! Declared last, so it closes before the buffers whose rows it inserts are destroyed
+	std::atomic<idx_t> remaining_items {0};
+	std::atomic<idx_t> next_insert_table {0};
+	//! Creates the tables, then closes
 	std::unique_ptr<Connection> connection;
+	//! Per table a work item was planned for; declared last, so the connections close before the buffers are destroyed
+	std::vector<std::unique_ptr<DSDGenTableInserter>> inserters;
 };
 
 std::unique_ptr<DSDGenGenerator> DSDGenGenerator::Create(Context &context, const DSDGenOptions &options) {
