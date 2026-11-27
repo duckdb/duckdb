@@ -307,6 +307,38 @@ TEST_CASE("Uncached reads are split at the cache block size", "[external_file_ca
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
 }
 
+TEST_CASE("Uncached remote reads honor EXACT request sizing", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const idx_t BLOCK_SIZE = 16384;
+	REQUIRE(!con.Query("SET threads=4")->HasError());
+	REQUIRE(!con.Query("SET async_threads=0")->HasError());
+	REQUIRE(!con.Query("SET enable_external_file_cache=false")->HasError());
+	REQUIRE(
+	    !con.Query(StringUtil::Format("SET external_file_cache_remote_max_block_size=%llu", BLOCK_SIZE))->HasError());
+
+	const idx_t READ_OFFSET = 100;
+	const idx_t READ_SIZE = 2 * BLOCK_SIZE + 1;
+	auto content = MakeTestContent(READ_OFFSET + READ_SIZE);
+	EFCTestFileGuard test_file("test_efc_uncached_exact_reads.bin", content);
+	EFCTrackingFileSystem recording_fs;
+	BoundFileSystem cfs_bound(recording_fs, nullptr);
+	CachingFileSystem cfs(cfs_bound, *db.instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath()),
+	                           FileFlags::FILE_FLAGS_READ);
+
+	REQUIRE(ReadFull(*handle, READ_SIZE, READ_OFFSET) == content.substr(READ_OFFSET));
+	REQUIRE(recording_fs.TakeReads() == vector<pair<idx_t, idx_t>> {{READ_OFFSET, BLOCK_SIZE},
+	                                                                {READ_OFFSET + BLOCK_SIZE, BLOCK_SIZE},
+	                                                                {READ_OFFSET + 2 * BLOCK_SIZE, 1}});
+
+	REQUIRE(!con.Query("SET external_file_cache_request_sizing='EXACT'")->HasError());
+	REQUIRE(ReadFull(*handle, READ_SIZE, READ_OFFSET) == content.substr(READ_OFFSET));
+	auto reads = recording_fs.TakeReads();
+	REQUIRE(reads.size() == 1);
+	REQUIRE(reads[0] == make_pair(READ_OFFSET, READ_SIZE));
+}
+
 TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
 	DuckDB db(nullptr);
 	auto &db_instance = *db.instance;
