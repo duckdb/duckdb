@@ -463,3 +463,37 @@ TEST_CASE("Test reopening a database from several threads while it shuts down", 
 		}
 	}
 }
+
+class ProbeFileSystem : public BaseFileSystem {
+public:
+	explicit ProbeFileSystem(vector<string> &opened_paths) : opened_paths(opened_paths) {
+	}
+
+	string GetName() const override {
+		return "ProbeFileSystem";
+	}
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, "probe://");
+	}
+	unique_ptr<FileHandle> OpenFile(Context &context, const string &path, FileOpenFlags flags) override {
+		opened_paths.push_back(path);
+		throw IOException("ProbeFileSystem does not open files");
+	}
+
+private:
+	vector<string> &opened_paths;
+};
+
+TEST_CASE("Test the instance cache keeps the paths of a non-local file system", "[api]") {
+	for (string path : {"probe://bucket/a//b.duckdb", "probe://bucket/x/../y.duckdb"}) {
+		vector<string> opened_paths;
+		DBInstanceCache instance_cache;
+		DBConfig config;
+		config.file_system->RegisterSubSystem(make_uniq<ProbeFileSystem>(opened_paths));
+		REQUIRE_THROWS(instance_cache.GetOrCreateInstance(path, config, true));
+		REQUIRE(!opened_paths.empty());
+		for (auto &opened_path : opened_paths) {
+			REQUIRE(opened_path == path);
+		}
+	}
+}
