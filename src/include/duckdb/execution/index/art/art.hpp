@@ -95,7 +95,7 @@ public:
 	void RemovalMerge(BoundIndex &source_index) DUCKDB_EXCLUDES(lock);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
-	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existing
+	// FIXME: This is only used to merge deltas, and even then it is used in lieu of the existing
 	// MergeIndexes which don't support deprecated leaf chains. Once support for that is added, this simpler insert
 	// merge may be removed.
 	ErrorData InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppendMode append_mode)
@@ -162,7 +162,7 @@ public:
 
 protected:
 	unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const override;
-	ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index) override;
+	ErrorData MergeDelta(IndexDeltaType type, BoundIndex &delta_index, IndexAppendMode append_mode) override;
 
 public:
 	//! ART key generation.

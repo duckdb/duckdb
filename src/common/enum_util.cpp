@@ -3495,8 +3495,8 @@ IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value)
 const StringUtil::EnumStringLiteral *GetIndexDeltaTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(IndexDeltaType::DELETED_ROWS_IN_USE), "DELETED_ROWS_IN_USE" },
-		{ static_cast<uint32_t>(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT), "ADDED_DATA_DURING_CHECKPOINT" },
-		{ static_cast<uint32_t>(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT), "REMOVED_DATA_DURING_CHECKPOINT" }
+		{ static_cast<uint32_t>(IndexDeltaType::ADDED_DATA), "ADDED_DATA" },
+		{ static_cast<uint32_t>(IndexDeltaType::REMOVED_DATA), "REMOVED_DATA" }
 	};
 	return values;
 }

@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -12,6 +13,8 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
@@ -23,6 +26,29 @@ static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCrea
 
 	cindex.children.push_back(prev);
 	return cindex;
+}
+
+//! Returns an empty index to build in place, or nullptr if the index type does not support it
+static shared_ptr<const BoundIndex> CreateIndexTemplate(ClientContext &context, LogicalCreateIndex &op,
+                                                        const IndexType &index_type) {
+	if (index_type.create_plan || !index_type.create_instance) {
+		return nullptr;
+	}
+	auto &table = op.table.Cast<DuckTableEntry>();
+	auto &storage = table.GetStorage();
+	vector<column_t> storage_ids;
+	for (auto &column_id : op.info->column_ids) {
+		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
+	}
+	IndexStorageInfo storage_info;
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::NONE,
+	                       op.info->GetIndexName(), storage_ids, op.unbound_expressions, storage_info,
+	                       op.info->options);
+	auto index = index_type.create_instance(input);
+	if (!index || !index->SupportsDeltaIndexes()) {
+		return nullptr;
+	}
+	return shared_ptr<const BoundIndex>(std::move(index));
 }
 
 static PhysicalOperator &AddFilter(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev) {
@@ -133,6 +159,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	D_ASSERT(op.children.size() == 1);
+	auto &get = op.children[0]->Cast<LogicalGet>();
+	get.bind_data.write().Cast<TableScanBindData>().index_template = CreateIndexTemplate(context, op, *index_type);
 	auto &scan = CreatePlanRecursive(*op.children[0]);
 
 	// Index has a plan replacement function

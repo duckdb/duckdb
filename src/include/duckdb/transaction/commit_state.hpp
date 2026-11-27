@@ -75,7 +75,8 @@ struct IndexDataRemover {
 public:
 	explicit IndexDataRemover(DuckTransaction &transaction, QueryContext context, IndexRemovalType removal_type);
 
-	void PushDelete(DeleteInfo &info);
+	//! Removes the deleted rows from the indexes; returns true if they stay in deleted_rows_in_use
+	bool PushDelete(DeleteInfo &info);
 	void Verify();
 
 private:
@@ -106,7 +107,8 @@ public:
 
 private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitInfo &info);
-	void CommitDelete(DeleteInfo &info, transaction_t old_id);
+	//! Returns true if the deleted rows stay in deleted_rows_in_use until cleanup
+	bool CommitDelete(DeleteInfo &info, transaction_t old_id);
 
 private:
 	DuckTransaction &transaction;

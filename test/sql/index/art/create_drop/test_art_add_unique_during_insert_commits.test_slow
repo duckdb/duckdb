@@ -1,0 +1,48 @@
+# name: test/sql/index/art/create_drop/test_art_add_unique_during_insert_commits.test_slow
+# description: Test ALTER TABLE ADD UNIQUE while another connection commits inserts
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS c0, range AS c1, range AS c2, range AS c3 FROM range(1000000);
+
+# thread 0 adds a UNIQUE constraint per column, thread 1 commits inserts of new keys;
+# an insert into the table version an ALTER replaced conflicts
+concurrentloop threadid 0 2
+
+loop j 0 4
+
+onlyif threadid=0
+statement ok
+ALTER TABLE t ADD UNIQUE (c{j});
+
+endloop
+
+loop i 0 20
+
+onlyif threadid=1
+statement maybe
+INSERT INTO t SELECT r, r, r, r FROM (SELECT 10000000 + {i} * 100000 + range AS r FROM range(100000));
+----
+<REGEX>:.*(attempting to insert into table "t" but it has been altered|another transaction has altered this table).*
+
+endloop
+
+endloop
+
+query I
+SELECT count(*) FROM duckdb_constraints() WHERE table_name = 't' AND constraint_type = 'UNIQUE';
+----
+4
+
+# range scans through the new indexes find every row committed while they were built
+statement ok
+SET index_scan_max_count = 10000000;
+
+loop j 0 4
+
+query I
+SELECT (SELECT count(*) FROM t WHERE c{j} >= 10000000) = (SELECT count(*) FILTER (WHERE c{j} >= 10000000) FROM t);
+----
+true
+
+endloop

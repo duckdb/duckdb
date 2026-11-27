@@ -32,6 +32,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -162,7 +163,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.version = DataTableVersion::ALTERED;
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
+DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint,
+                     optional_idx max_index_count)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE) {
 	// ALTER COLUMN to add a new constraint.
 
@@ -171,6 +173,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
+	// publishing needs this lock and fails once the parent is ALTERED, so no index appears after this count
+	if (max_index_count.IsValid() && info->indexes.CountBuiltIndexes() > max_index_count.GetIndex()) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.",
+		                          parent.GetTableName());
+	}
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -370,7 +377,15 @@ void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanS
 	local_storage.Scan(state.local_state, state.GetColumnIds(), result);
 }
 
-bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result) {
+bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexEntry> build) {
+	if (build) {
+		ScanOptions options(
+		    TransactionData(build->GetBuildTransaction(), VisibilityBound::Through(build->GetLastCommit())));
+		// the transaction's own deletes reach the index when it commits
+		options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+		options.update_type = UpdateScanType::DISALLOW_UPDATES;
+		return state.table_state.Scan(options, result);
+	}
 	return state.table_state.Scan(result, TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED);
 }
 
@@ -393,8 +408,90 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
+unique_lock<mutex> DataTable::LockMainTableForIndex(unique_lock<mutex> &table_lock) {
+	while (true) {
+		auto commit_lock = db.GetStorageManager().GetCommitLock();
+		// an ALTER holds the append lock while replacing the table: don't wait for it under the commit lock
+		table_lock = unique_lock<mutex>(append_lock, std::try_to_lock);
+		if (!table_lock.owns_lock()) {
+			commit_lock.unlock();
+			lock_guard<mutex> wait_for_alter(append_lock);
+			continue;
+		}
+		if (!IsMainTable()) {
+			// commits to the new table cannot maintain an index on the old columns
+			throw TransactionException(
+			    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
+		}
+		return commit_lock;
+	}
+}
+
+shared_ptr<IndexEntry> DataTable::AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template) {
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	// no commit is in progress: every later commit sees the entry
+	unique_lock<mutex> table_lock;
+	auto commit_lock = LockMainTableForIndex(table_lock);
+	// the transaction holds the checkpoint lock, so no checkpoint runs during the build
+	D_ASSERT(!transaction_manager.GetActiveCheckpoint().IsValid());
+	return info->indexes.AddBuildingIndex(index_template, transaction_manager.GetLastCommit(),
+	                                      transaction.GetTransactionId());
+}
+
+//! The maximum changed rows merged while holding the commit lock
+static constexpr idx_t INDEX_BUILD_LOCKED_ROWS = DEFAULT_ROW_GROUP_SIZE;
+//! The maximum merge rounds outside the commit lock
+static constexpr idx_t INDEX_BUILD_MAX_ROUNDS = 64;
+//! The maximum consecutive rounds in which the changed rows grow
+static constexpr idx_t INDEX_BUILD_MAX_GROWING_ROUNDS = 3;
+
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	unique_lock<mutex> table_lock;
+	auto commit_lock = LockMainTableForIndex(table_lock);
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
+}
+
+shared_ptr<IndexEntry> DataTable::FinishIndexBuild(ClientContext &context, DuckTransaction &transaction,
+                                                   unique_ptr<BoundIndex> index, idx_t index_oid,
+                                                   ConstraintCheckMode check_mode) {
+	auto entry = info->indexes.FindBuildingIndex(transaction.GetTransactionId());
+	if (!entry) {
+		// no building entry: publish between commits
+		D_ASSERT(!index->SupportsDeltaIndexes());
+		unique_lock<mutex> table_lock;
+		auto commit_lock = LockMainTableForIndex(table_lock);
+		return info->indexes.AddIndex(std::move(index), index_oid, check_mode);
+	}
+	idx_t rounds = 0;
+	idx_t growing_rounds = 0;
+	idx_t previous_changed_rows = 0;
+	// merge outside the locks until few changed rows are left
+	while (true) {
+		unique_lock<mutex> table_lock;
+		auto commit_lock = LockMainTableForIndex(table_lock);
+		// under the commit lock, a commit and its revert always land in the same deltas
+		auto deltas = entry->TakeBuildDeltas();
+		if (deltas.changed_rows <= INDEX_BUILD_LOCKED_ROWS) {
+			IndexEntry::MergeBuildDeltas(*index, deltas);
+			entry->FinishBuild(std::move(index), index_oid, check_mode);
+			return entry;
+		}
+		if (rounds > 0) {
+			growing_rounds = deltas.changed_rows > previous_changed_rows ? growing_rounds + 1 : 0;
+		}
+		if (rounds == INDEX_BUILD_MAX_ROUNDS || growing_rounds == INDEX_BUILD_MAX_GROWING_ROUNDS) {
+			throw TransactionException(
+			    "CREATE INDEX on table %s cannot keep up with concurrent changes to it: %llu changed rows are left "
+			    "after %llu rounds. Retry when fewer rows are written to the table",
+			    GetTableName(), deltas.changed_rows, rounds);
+		}
+		table_lock.unlock();
+		commit_lock.unlock();
+		IndexEntry::MergeBuildDeltas(*index, deltas);
+		context.FastInterruptCheck();
+		previous_changed_rows = deltas.changed_rows;
+		rounds++;
+	}
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -1291,8 +1388,10 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-                                  IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
+                                  IndexRemovalType removal_type, optional_idx active_checkpoint,
+                                  VisibilityBound bound) {
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint,
+	                              bound);
 }
 
 //===--------------------------------------------------------------------===//
