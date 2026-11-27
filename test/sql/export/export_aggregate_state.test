@@ -7,6 +7,14 @@
 statement ok
 SET threads=1;
 
+# aggregate state columns require storage version v2.0.0, so run in an in-memory database
+# regardless of the storage version the test config attaches the default database with
+statement ok
+ATTACH ':memory:' AS agg;
+
+statement ok
+USE agg;
+
 statement ok
 BEGIN TRANSACTION
 
@@ -103,6 +111,24 @@ statement error
 CREATE TABLE bad_order(s AGGREGATE_STATE('min', ['INTEGER'], [NULL], [{'column': 9, 'order': 'ASC'}], 'STRUCT(v0 INTEGER)'));
 ----
 AGGREGATE_STATE: ORDER BY column 9 is out of range
+
+# importing into a database at a storage version without aggregate state support refuses cleanly
+statement ok
+ATTACH '{TEST_DIR}/export_aggregate_state_old.db' AS old_db (STORAGE_VERSION 'v1.0.0');
+
+statement ok
+USE old_db;
+
+statement error
+IMPORT DATABASE '{TEST_DIR}/export_aggregate_state'
+----
+Aggregate state columns are not supported in storage versions prior to v2.0.0
+
+statement ok
+USE agg;
+
+statement ok
+DETACH old_db;
 
 require parquet
 
