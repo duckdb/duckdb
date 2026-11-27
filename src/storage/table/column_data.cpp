@@ -89,6 +89,10 @@ StorageManager &ColumnData::GetStorageManager() const {
 }
 
 bool ColumnData::HasUpdates() const {
+	if (!updates_may_exist.load(std::memory_order_acquire)) {
+		return false;
+	}
+	// Also synchronizes callers with the writer; the guard does not publish a constructed segment.
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
 }
@@ -360,6 +364,8 @@ void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &tab
                                 idx_t row_group_start) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
+		// Publish before construction so readers synchronize through update_lock.
+		updates_may_exist.store(true, std::memory_order_release);
 		updates = make_uniq<UpdateSegment>(*this);
 	}
 	updates->Update(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,

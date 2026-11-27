@@ -372,6 +372,15 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
 	state.skipped_rows = 0;
+	state.claim_index.store(0, std::memory_order_relaxed);
+	state.claim_nodes.clear();
+	if (state.claim_mode == ParallelScanClaimMode::ATOMIC) {
+		auto l = state.row_groups->Lock();
+		state.claim_nodes.reserve(state.row_groups->GetSegmentCount(l));
+		for (auto &node : state.row_groups->ReferenceLoadedSegmentsMutable(l)) {
+			state.claim_nodes.emplace_back(*node);
+		}
+	}
 	if (state.reorderer) {
 		// row groups pruned by the reorderer are never scanned
 		idx_t total_rows = 0;
@@ -386,6 +395,54 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
                                                   CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
+	switch (state.claim_mode) {
+	case ParallelScanClaimMode::ATOMIC:
+		return NextParallelScanAtomic(context, state, scan_state, initialize_columns);
+	case ParallelScanClaimMode::LOCKED:
+		return NextParallelScanLocked(context, state, scan_state, initialize_columns);
+	default:
+		throw InternalException("Unknown parallel scan claim mode");
+	}
+}
+
+optional_idx RowGroupCollection::NextParallelScanAtomic(ClientContext &context, ParallelCollectionScanState &state,
+                                                        CollectionScanState &scan_state, bool initialize_columns) {
+	D_ASSERT(!state.reorderer && !state.partitions_to_scan);
+	D_ASSERT(!state.row_number_base.IsValid() && !scan_state.row_number_base.IsValid());
+	D_ASSERT(!ClientConfig::GetConfig(context).verify_parallelism);
+	idx_t skipped_rows = 0;
+	while (true) {
+		const auto index = state.claim_index.fetch_add(1, std::memory_order_relaxed);
+		if (index >= state.claim_nodes.size()) {
+			break;
+		}
+		auto &node = state.claim_nodes[index].get();
+		auto &row_group = node.GetNode();
+		const auto start = node.GetRowStart();
+		const auto end = MinValue<idx_t>(start + row_group.count, state.max_row);
+		const auto count = end > start ? end - start : 0;
+		scan_state.batch_index = node.GetIndex() + 1;
+		if (count &&
+		    InitializeScanInRowGroup(context, scan_state, *state.collection, node, 0, end, initialize_columns)) {
+			if (skipped_rows) {
+				state.skipped_rows.fetch_add(skipped_rows, std::memory_order_relaxed);
+			}
+			return count;
+		}
+		skipped_rows += count;
+		if ((index + 1) % 2048 == 0) {
+			context.InterruptCheck();
+		}
+	}
+	if (skipped_rows) {
+		state.skipped_rows.fetch_add(skipped_rows, std::memory_order_relaxed);
+	}
+	scan_state.batch_index = state.claim_nodes.size();
+	return optional_idx();
+}
+
+optional_idx RowGroupCollection::NextParallelScanLocked(ClientContext &context, ParallelCollectionScanState &state,
+                                                        CollectionScanState &scan_state, bool initialize_columns) {
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
