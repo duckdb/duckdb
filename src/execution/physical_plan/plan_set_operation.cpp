@@ -72,10 +72,10 @@ static vector<LogicalType> GetComparisonTypes(ClientContext &context, const Logi
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 	ArenaLinkedList<reference<PhysicalOperator>> children(physical_plan->ArenaRef());
 	for (auto &child : op.children) {
-		children.push_back(CreatePlan(*child));
+		children.push_back(CreatePlanRecursive(*child));
 	}
-	for (idx_t i = 1; i < children.size(); i++) {
-		if (children[i].get().GetTypes() != children[0].get().GetTypes()) {
+	for (auto &child : children) {
+		if (child.get().GetTypes() != children[0].get().GetTypes()) {
 			throw InvalidInputException("Type mismatch for SET OPERATION");
 		}
 	}

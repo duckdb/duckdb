@@ -34,7 +34,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 		                                        op.estimated_cardinality);
 		if (!op.children.empty()) {
 			D_ASSERT(op.children.size() == 1);
-			auto &plan = CreatePlan(*op.children[0]);
+			auto &plan = CreatePlanRecursive(*op.children[0]);
 			create.children.push_back(plan);
 		}
 		return create;
