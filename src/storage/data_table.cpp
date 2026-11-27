@@ -1635,11 +1635,17 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	SelectionVector sel_local_update(count), sel_global_update(count);
 	idx_t n_local_update = 0;
 	idx_t n_global_update = 0;
-	for (auto row_id : row_ids.Values<row_t>()) {
-		if (row_id.GetValue() >= MAX_ROW_ID) {
-			sel_local_update.set_index(n_local_update++, row_id.GetIndex());
+	auto ids = row_ids.Values<row_t>();
+	for (idx_t i = 0; i < count; i++) {
+		auto row_id = ids[i].GetValue();
+		if (i + 1 < count && ids[i + 1].GetValue() == row_id) {
+			// of adjacent entries for the same row only the last one is written, all of them were checked above
+			continue;
+		}
+		if (row_id >= MAX_ROW_ID) {
+			sel_local_update.set_index(n_local_update++, i);
 		} else {
-			sel_global_update.set_index(n_global_update++, row_id.GetIndex());
+			sel_global_update.set_index(n_global_update++, i);
 		}
 	}
 
