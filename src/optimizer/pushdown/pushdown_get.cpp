@@ -138,6 +138,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
 
+		// Return an empty relation when file-filter pushdown removes every file.
+		if (get.extra_info.FilesPrunedToEmpty()) {
+			restore_barrier_filters();
+			return make_uniq<LogicalEmptyResult>(std::move(op));
+		}
+
 		if (expressions.empty()) {
 			restore_barrier_filters();
 			return PushFinalFilters(std::move(op));
