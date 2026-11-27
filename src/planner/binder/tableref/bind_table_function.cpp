@@ -1,5 +1,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
+#include "duckdb/common/identifier.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -16,6 +19,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -493,6 +497,53 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			error.Throw();
 		}
 
+		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
+			if (!binder->correlated_columns.empty()) {
+				throw BinderException("WITH ORDINALITY is not supported for correlated table macros");
+			}
+			auto constexpr ordinality_name = "ordinality";
+			string ordinality_column_name = ordinality_name;
+			identifier_set_t ci_return_names;
+			idx_t ordinality_name_suffix = 0;
+			for (auto &name : query.names) {
+				ci_return_names.insert(name);
+			}
+			for (auto &name : ref.column_name_alias) {
+				ci_return_names.insert(name);
+			}
+			while (ci_return_names.find(Identifier(ordinality_column_name)) != ci_return_names.end()) {
+				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
+			}
+
+			auto window_index = GenerateTableIndex();
+			auto window = make_uniq<duckdb::LogicalWindow>(window_index, optional_idx());
+			auto row_number = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
+			row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+			row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
+			Identifier ordinality_alias(ordinality_column_name);
+			if (query.names.size() < ref.column_name_alias.size()) {
+				row_number->SetAlias(ref.column_name_alias[query.names.size()]);
+				ordinality_alias = ref.column_name_alias[query.names.size()];
+			} else {
+				row_number->SetAlias(Identifier(ordinality_column_name));
+			}
+			query.names.push_back(ordinality_alias);
+			query.types.push_back(LogicalType::BIGINT);
+			window->expressions.push_back(std::move(row_number));
+			window->types.push_back(LogicalType::BIGINT);
+			window->children.push_back(std::move(query.plan));
+			auto projection_index = GenerateTableIndex();
+			vector<unique_ptr<Expression>> select_list;
+			auto child_bindings = window->GetColumnBindings();
+			for (idx_t i = 0; i < child_bindings.size(); i++) {
+				select_list.push_back(
+				    make_uniq<BoundColumnRefExpression>(query.names[i], query.types[i], child_bindings[i]));
+			}
+			auto projection = make_uniq<LogicalProjection>(projection_index, std::move(select_list));
+			projection->children.push_back(std::move(window));
+			query.plan = std::move(projection);
+		}
+
 		auto bind_index = query.plan->GetRootIndex();
 		// string alias;
 		string alias =
@@ -501,6 +552,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		// remember ref here is TableFunctionRef and NOT base class
 		bind_context.AddSubquery(bind_index, Identifier(alias), ref, query);
 		MoveCorrelatedExpressions(*binder);
+
 		return query;
 	}
 	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
