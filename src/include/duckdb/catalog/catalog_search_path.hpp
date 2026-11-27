@@ -51,6 +51,8 @@ public:
 	DUCKDB_API vector<Identifier> GetSchemaPath() const;
 	//! The schema name, including its parent path for nested schemas
 	string GetSchemaName() const;
+	//! The schema path rendered with quotes where required, so that it can be parsed back
+	string SchemaToString() const;
 
 	string ToString() const;
 	static string ListToString(const vector<CatalogSearchEntry> &input);

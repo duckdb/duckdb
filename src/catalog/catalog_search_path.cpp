@@ -40,15 +40,20 @@ string CatalogSearchEntry::GetSchemaName() const {
 	return IsNested() ? QualifiedName::FromPath(GetSchemaPath()).ToString() : schema.GetIdentifierName();
 }
 
+string CatalogSearchEntry::SchemaToString() const {
+	string result;
+	for (auto &parent : parent_schemas) {
+		result += WriteOptionallyQuoted(parent) + ".";
+	}
+	return result + WriteOptionallyQuoted(schema);
+}
+
 string CatalogSearchEntry::ToString() const {
 	string result;
 	if (!catalog.empty()) {
 		result = WriteOptionallyQuoted(catalog) + ".";
 	}
-	for (auto &parent : parent_schemas) {
-		result += WriteOptionallyQuoted(parent) + ".";
-	}
-	return result + WriteOptionallyQuoted(schema);
+	return result + SchemaToString();
 }
 
 string CatalogSearchEntry::WriteOptionallyQuoted(const Identifier &input) {
