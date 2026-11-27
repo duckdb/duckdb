@@ -690,10 +690,10 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Process the partition boundaries
+		                   partition_count += ndistinct;
 		                   for (idx_t i = 0; i < ndistinct; ++i) {
 			                   const idx_t curr_index = row_idx + distinct.get_index(i);
 			                   partition_mask.SetValidUnsafe(curr_index);
-			                   ++partition_count;
 			                   for (auto &order_mask : order_masks) {
 				                   order_mask.second.SetValidUnsafe(curr_index);
 			                   }
@@ -1188,8 +1188,8 @@ bool WindowHashGroup::ShouldCoEvaluate(idx_t size) const {
 	const auto active_rows = npartitions * k;
 	const auto prob_i_active = active_rows / dcount;
 	const auto prob_i_inactive = 1 - prob_i_active;
-	const auto avg_inactive = (partition_avg - partition_limit) / 2;
 	const auto dsize = LossyNumericCast<double, idx_t>(size);
+	const auto avg_inactive = MinValue(dsize, (partition_avg - k) / 2);
 
 	double expected = 0;
 	//	Case 1: begin is active
