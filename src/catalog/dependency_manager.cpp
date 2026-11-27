@@ -714,7 +714,9 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		if (!set->DropEntry(transaction, entry.name, cascade)) {
 			continue;
 		}
-		entry.ParentSchema().DropForeignKeyReferences(transaction, fk_references);
+		if (!fk_references.empty()) {
+			entry.ParentSchema().DropForeignKeyReferences(transaction, fk_references);
+		}
 	}
 }
 
