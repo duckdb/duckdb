@@ -146,3 +146,25 @@ query I
 SELECT count(*) FROM scan_without_del()
 ----
 9
+
+# the filter query resolves names with the search path of the scanning connection
+statement ok
+ATTACH ':memory:' AS filter_query_other
+
+statement ok
+USE filter_query_other
+
+statement ok
+CREATE TABLE other_del(pos BIGINT)
+
+statement ok
+INSERT INTO other_del VALUES (4)
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transaction.parquet', 'filter_query':
+    'SELECT 0::BIGINT AS row_start, min(pos) AS row_end, NULL::BIT AS bits FROM other_del'}])
+----
+4
+
+statement ok
+USE memory

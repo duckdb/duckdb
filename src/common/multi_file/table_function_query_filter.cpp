@@ -1,5 +1,6 @@
 #include "duckdb/common/multi_file/table_function_query_filter.hpp"
 
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/bit_utils.hpp"
@@ -10,6 +11,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -72,6 +74,11 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 	// caller, and that joins the transaction of the caller so that it sees what the caller sees
 	auto connection = Connection::CreateInternal(context);
 	auto &inner = *connection.context;
+	// resolve names as the caller does (USE, SET schema, SET search_path)
+	auto &caller_paths = ClientData::Get(context).catalog_search_path->GetSetPaths();
+	if (!caller_paths.empty()) {
+		ClientData::Get(inner).catalog_search_path->Set(caller_paths, CatalogSetPathType::SET_DIRECTLY);
+	}
 	ErrorData error;
 	try {
 		auto statements = connection.ExtractStatements(query);
