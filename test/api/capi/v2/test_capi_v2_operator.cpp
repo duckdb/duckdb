@@ -661,6 +661,54 @@ TEST_CASE("V2 operator: argument input runs once for constant arguments", "[capi
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM explode((SELECT 5000))") == 5000);
 }
 
+// explode_step(n, step := ...): checks at bind time that it reads the named parameter, also when the positional
+// argument is a subquery whose rows are the operator's input and so has no value at bind time
+void StepBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_table_function_bind_info_handle result,
+                duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	idx_t index = 0;
+	bool found = false;
+	duckdb_v2_value_handle value = nullptr;
+	int64_t step = 0;
+	if (duckdb_v2_function_bind_get_arg_index(info, "step", 4, &index, &found, err) != DUCKDB_V2_ERROR_NONE || !found ||
+	    duckdb_v2_function_bind_get_arg_value(info, index, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto rc = duckdb_v2_value_get_bigint(value, &step, err);
+	duckdb_v2_value_destroy(&value);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (step != 2) {
+		SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "unexpected step");
+		return;
+	}
+	if (RequireBigintInput(result, err)) {
+		AddBigintColumn(result, context, "i", err);
+	}
+}
+
+TEST_CASE("V2 operator: argument input binds the named parameters after the input arguments",
+          "[capi_v2][capi_v2_operator]") {
+	EnvFixture fx;
+	auto function = MakeTable(fx.conn, "explode_step");
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	AddParam(function, "n", bigint);
+	AddParam(function, "step", bigint, DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_ONLY);
+	duckdb_v2_logical_type_destroy(&bigint);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, StepBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto op = MakeOperator(fx.conn, ExplodeExecCb);
+	REQUIRE(duckdb_v2_operator_set_init_local_callback(op, ExplodeInitLocalCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Register(fx.conn, function, op, DUCKDB_V2_TABLE_OPERATOR_INPUT_ARGUMENTS) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM explode_step(3, step := 2)") == 3);
+	REQUIRE(QueryError(fx.conn, "SELECT count(*) FROM explode_step(3, step := 5)").find("unexpected step") !=
+	        std::string::npos);
+	// a subquery argument is streamed in, so only the named parameter has a value at bind time
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM explode_step((SELECT 3), step := 2)") == 3);
+	REQUIRE(QueryError(fx.conn, "SELECT count(*) FROM explode_step((SELECT 3), step := 5)").find("unexpected step") !=
+	        std::string::npos);
+}
+
 TEST_CASE("V2 operator: argument input runs per row for LATERAL arguments", "[capi_v2][capi_v2_operator]") {
 	EnvFixture fx;
 	RegisterExplode(fx);
