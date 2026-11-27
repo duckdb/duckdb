@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_optimizer_pullup
   OBJECT
+  pullup_constraints.cpp
   pullup_filter.cpp
   pullup_projection.cpp
   pullup_from_left.cpp

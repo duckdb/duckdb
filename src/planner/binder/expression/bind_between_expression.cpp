@@ -26,14 +26,15 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
+	const auto decimal_width_limit = binder.GetDecimalWidthLimit();
 	if (!BoundComparisonExpression::TryBindComparison(context, input_sql_type, lower_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
+	                                                  expr.GetExpressionType(), decimal_width_limit)) {
 		throw BinderException(expr,
 		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
 		                      input_sql_type.ToString(), lower_sql_type.ToString());
 	}
 	if (!BoundComparisonExpression::TryBindComparison(context, input_type, upper_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
+	                                                  expr.GetExpressionType(), decimal_width_limit)) {
 		throw BinderException(expr,
 		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
 		                      input_type.ToString(), upper_sql_type.ToString());
@@ -47,8 +48,8 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	PushCollation(context, lower, input_type);
 	PushCollation(context, upper, input_type);
 
-	if (!input->IsVolatile() && !input->HasParameter() && !input->HasSubquery()) {
-		// the expression does not have side effects and can be copied: create two comparisons
+	if (input->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		// the input is a column reference and can be copied cheaply: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
 		auto left_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
@@ -61,7 +62,7 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
 		return BindResult(
-		    BoundBetweenExpression::Create(std::move(input), std::move(lower), std::move(upper), true, true));
+		    BoundBetweenExpression::Create(context, std::move(input), std::move(lower), std::move(upper), true, true));
 	}
 }
 

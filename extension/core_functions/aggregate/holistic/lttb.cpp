@@ -207,7 +207,10 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 	}
 
 	// Reusable vector for materializing each groups points, sized up-front to the largest group.
-	Vector points(struct_type, MaxValue<idx_t>(max_v, 1));
+	// A group can be the whole input, so the vector is allocated through the (tracked) base allocator.
+	DataChunk points_chunk;
+	points_chunk.Initialize(data.allocator.GetUnderlyingAllocator(), {struct_type}, MaxValue<idx_t>(max_v, 1));
+	auto &points = points_chunk.data[0];
 
 	// Now do the selection for each list
 	for (idx_t state_idx = 0; state_idx < count; state_idx++) {
@@ -362,7 +365,8 @@ auto LTTBBind(BindAggregateFunctionInput &input) -> unique_ptr<FunctionData> {
 	return make_uniq<LTTBBindData>(NumericCast<idx_t>(n));
 }
 
-auto LTTBSerialize(Serializer &ser, const optional_ptr<FunctionData> bdata, const BoundAggregateFunction &) -> void {
+auto LTTBSerialize(Serializer &ser, const optional_ptr<const FunctionData> bdata, const BoundAggregateFunction &)
+    -> void {
 	auto &bind_data = bdata->Cast<LTTBBindData>();
 	ser.WriteProperty<idx_t>(100, "n", bind_data.n);
 }
@@ -378,7 +382,7 @@ auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 	auto &function = input.function;
 	using ST = LTTBState::STATE_TYPE;
 	AggregateStateLayout layout;
-	if (function.GetReturnType().IsAggregateState()) {
+	if (function.ReturnsExportedState()) {
 		// The function has been modified for state export, its return type IS the state type already
 		layout.type = function.GetReturnType();
 	} else {
@@ -398,13 +402,15 @@ auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 //! -> LIST(STRUCT(x, y))
 template <class XTYPE, class YTYPE>
 AggregateFunction GetLTTBFunction(const LogicalType &x_type, const LogicalType &y_type) {
-	AggregateFunction fun("lttb", {x_type, y_type, LogicalType::BIGINT},
-	                      LogicalType::LIST(LTTBStructType(x_type, y_type)), AggregateFunction::StateSize<LTTBState>,
+	AggregateFunction fun("lttb", {}, LogicalType::LIST(LTTBStructType(x_type, y_type)),
+	                      AggregateFunction::StateSize<LTTBState>,
 	                      AggregateFunction::StateInitialize<LTTBState, LTTBFunction>, LTTBUpdate,
 	                      ListCombineFunction<LTTBFunction>, LTTBFinalize<XTYPE, YTYPE>, LTTBClusterUpdate, LTTBBind);
+	fun.GetSignature().AddParameter("x", x_type).AddParameter("y", y_type).AddParameter("n", LogicalType::BIGINT);
 	fun.SetSerializeCallback(LTTBSerialize);
 	fun.SetDeserializeCallback(LTTBDeserialize);
 	fun.SetStructStateExport(LTTBStateLayout);
+	fun.SetFallible(); // finalize throws when a group exceeds the selection vector limit
 	return fun;
 }
 

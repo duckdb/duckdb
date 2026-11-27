@@ -2,6 +2,7 @@
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/arena_containers/arena_sql_value_map.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -38,23 +39,11 @@ static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context
 static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,
                                          vector<unique_ptr<Expression>> children) {
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children));
 }
 
 template <class MAP_TYPE>
 struct HistogramFunction {
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &) {
-		if (state.hist) {
-			delete state.hist;
-		}
-	}
-
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -64,11 +53,15 @@ struct HistogramFunction {
 		if (!source.hist) {
 			return;
 		}
+		auto &allocator = input_data.allocator;
 		if (!target.hist) {
-			target.hist = MAP_TYPE::CreateEmpty(input_data.allocator);
+			target.hist = MAP_TYPE::CreateEmpty(allocator);
+		} else if (&target.hist->get_allocator().GetAllocator() != &allocator) {
+			// Copied states can share a sink arena across partitions being combined in parallel.
+			target.hist = allocator.Make<typename MAP_TYPE::MAP_TYPE>(*target.hist, allocator);
 		}
 		for (auto &entry : *source.hist) {
-			(*target.hist)[entry.first] += entry.second;
+			MAP_TYPE::GetOrCreate(*target.hist, entry.first, input_data.allocator) += entry.second;
 		}
 	}
 };
@@ -77,8 +70,13 @@ template <class TYPE>
 struct DefaultMapType {
 	using MAP_TYPE = TYPE;
 
-	static TYPE *CreateEmpty(ArenaAllocator &) {
-		return new TYPE();
+	static TYPE *CreateEmpty(ArenaAllocator &allocator) {
+		return allocator.Make<TYPE>(typename TYPE::allocator_type(allocator));
+	}
+
+	template <class KEY>
+	static typename TYPE::mapped_type &GetOrCreate(TYPE &map, const KEY &key, ArenaAllocator &) {
+		return map[key];
 	}
 };
 
@@ -87,7 +85,11 @@ struct StringMapType {
 	using MAP_TYPE = TYPE;
 
 	static TYPE *CreateEmpty(ArenaAllocator &allocator) {
-		return new TYPE(allocator);
+		return allocator.Make<TYPE>(allocator);
+	}
+
+	static typename TYPE::mapped_type &GetOrCreate(TYPE &map, const string_t &key, ArenaAllocator &allocator) {
+		return map.GetOrCreate(key, allocator);
 	}
 };
 
@@ -114,7 +116,7 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 			state.hist = MAP_TYPE::CreateEmpty(aggr_input.allocator);
 		}
 		auto &input_value = input_values[idx];
-		++(*state.hist)[input_value];
+		++MAP_TYPE::GetOrCreate(*state.hist, input_value, aggr_input.allocator);
 	}
 }
 
@@ -172,11 +174,12 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using HIST_FUNC = HistogramFunction<MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	auto function = AggregateFunction(
-	    "histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	    AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>, HistogramUpdateFunction<OP, T, MAP_TYPE>,
-	    AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>, HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr,
-	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
+	auto function = AggregateFunction("histogram", {}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	                                  AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>,
+	                                  HistogramUpdateFunction<OP, T, MAP_TYPE>,
+	                                  AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>,
+	                                  HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr, nullptr, nullptr);
+	function.GetSignature().AddParameter("arg", type);
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return function;
 }
@@ -189,17 +192,17 @@ AggregateFunction GetMapTypeInternal(const LogicalType &type) {
 template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetMapTypeInternal<OP, T, DefaultMapType<sql_value_ordered_map_t<T, idx_t>>>(type);
+		return GetMapTypeInternal<OP, T, DefaultMapType<arena_sql_value_ordered_map_t<T, idx_t>>>(type);
 	}
-	return GetMapTypeInternal<OP, T, DefaultMapType<sql_value_map_t<T, idx_t>>>(type);
+	return GetMapTypeInternal<OP, T, DefaultMapType<arena_sql_value_map_t<T, idx_t>>>(type);
 }
 
 template <class OP, bool IS_ORDERED>
 AggregateFunction GetStringMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetMapTypeInternal<OP, string_t, StringMapType<OrderedOwningStringMap<idx_t>>>(type);
+		return GetMapTypeInternal<OP, string_t, StringMapType<ArenaOrderedOwningStringMap<idx_t>>>(type);
 	} else {
-		return GetMapTypeInternal<OP, string_t, StringMapType<OwningStringMap<idx_t>>>(type);
+		return GetMapTypeInternal<OP, string_t, StringMapType<ArenaOwningStringMap<idx_t>>>(type);
 	}
 }
 
@@ -286,16 +289,19 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 
 AggregateFunctionSet HistogramFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AggregateFunction histogram_function("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr, nullptr, nullptr,
-	                                     nullptr, nullptr, nullptr, HistogramBindFunction, nullptr);
+	AggregateFunction histogram_function("histogram", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr,
+	                                     nullptr, nullptr, HistogramBindFunction, nullptr);
+	histogram_function.GetSignature().AddParameter("arg", LogicalType::ANY);
 	fun.AddFunction(HistogramFun::BinnedHistogramFunction());
 	fun.AddFunction(histogram_function);
 	return fun;
 }
 
 AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {
-	return AggregateFunction("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, nullptr, HistogramBindFunction<false>, nullptr);
+	AggregateFunction function("histogram", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, HistogramBindFunction<false>, nullptr);
+	function.GetSignature().AddParameter("arg", LogicalType::ANY);
+	return function;
 }
 
 } // namespace duckdb

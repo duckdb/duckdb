@@ -33,6 +33,10 @@ build/reldebug/test/unittest "*"
 
 It is recommended to use `make reldebug` and `build/reldebug/test/unittest` unless a good reason exists to use the debug build - the debug build is much slower than the reldebug build.
 
+### Debugging with LLDB
+
+Before using LLDB to investigate DuckDB code or a failing sqllogictest, or modifying the LLDB helpers, read [scripts/lldb/AGENTS.md](scripts/lldb/AGENTS.md). It covers SQL-aware breakpoints, smart-pointer and array printing, and stepping past wrapper checks.
+
 ### Time-Limiting Queries
 
 Use the `max_execution_time` setting (milliseconds, `0` = no limit) to abort a query that runs too long:
@@ -49,7 +53,7 @@ The setting is `LOCAL` by default; use `SET GLOBAL max_execution_time=...` to ap
 build/reldebug/duckdb -c "SET max_execution_time=5000; SELECT ..."
 ```
 
-The deadline is enforced at `ClientContext::InterruptCheck()` call sites, so it only fires once execution reaches one of them. Queries that check in frequently abort close to the limit, but time spent in planning or inside a long non-interruptible stretch is not bounded by it.
+The deadline is enforced at `ClientContext::InterruptCheck()` and `FastInterruptCheck()` call sites, so it only fires once execution reaches one of them. Queries that check in frequently abort close to the limit, but time spent in planning or inside a long non-interruptible stretch is not bounded by it.
 
 
 ### Test File Format
@@ -85,6 +89,10 @@ Test directives:
 Slow tests should use `.test_slow` extension instead of `.test`.
 
 Do not add `PRAGMA enable_verification` to tests - it should no longer be used in new tests.
+
+Tests must not emit DuckDB warnings (e.g. from deprecated pragmas or settings). The `test/configs/warnings_as_errors.json` config (`--warnings-as-errors`) fails any statement that logs a warning; tests that check a warning on purpose should `SET enable_logging=true; SET warnings_as_errors=true;` and expect the warning with `statement error`.
+
+Do not loop over `enable_optimizer` (or similar settings) in tests - tests are already run with optimizers disabled through the `configs/disable_optimizer.json` config.
 
 ## Code Formatting
 
@@ -230,6 +238,7 @@ DuckDB supports two types of extensions:
 - Full list in `.github/config/out_of_tree_extensions.cmake`
 - When changes have to be made, they have to be made in patch files stored in `.github/patches`
 - Before adapting an out-of-tree extension, changing its pinned revision, or modifying `.github/patches/extensions`, read and follow `.github/patches/extensions/AGENTS.md`.
+- Some out-of-tree extensions (e.g. `iceberg`) need vcpkg. If a build fails with `VCPKG_TOOLCHAIN_PATH is not set`, follow "Installing vcpkg" in `extension/README.md`.
 
 Building with extensions:
 ```bash
@@ -467,13 +476,16 @@ Some files are auto-generated. After modifying their sources, run:
 make generate-files
 ```
 This regenerates:
-- C API bindings
+- C API bindings (V1 only; V2 is regenerated with `./scripts/capi_v2_regen.sh`)
 - Function registration
 - Settings
 - Serialization code
 - Storage info
 - Metric enums
 - Enum utilities
+
+Before changing anything under `api_spec/`, `src/main/capi/` or `tools/cpp/`, or a generated C API
+header, read [api_spec/AGENTS.md](api_spec/AGENTS.md).
 
 ## Documentation
 

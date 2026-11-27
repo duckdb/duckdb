@@ -15,8 +15,10 @@
 
 namespace duckdb {
 struct BenchmarkFileReader;
-class MaterializedQueryResult;
 struct InterpretedBenchmarkState;
+
+//! How the benchmark consumes the result of its run query
+enum class BenchmarkResultMode : uint8_t { RETAINED, STREAMING, ARROW, ARROW_STREAM };
 
 const string DEFAULT_DB_PATH = "duckdb_benchmark_db.db";
 
@@ -69,20 +71,18 @@ public:
 	bool RequireReinit() override {
 		return require_reinit;
 	}
-	QueryResultType ResultMode() const {
-		return result_type;
-	}
-	idx_t ArrowBatchSize() const {
-		return arrow_batch_size;
-	}
 
 private:
-	string VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query, MaterializedQueryResult &result);
+	string VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query, QueryResult &result);
 
 	BenchmarkQuery ReadQueryFromFile(BenchmarkFileReader &reader, string file);
 	BenchmarkQuery ReadQueryFromReader(BenchmarkFileReader &reader, const string &sql, const string &header);
 
 	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
+	//! Run the load query, discarding partial data and retrying on failure
+	void LoadData(unique_ptr<InterpretedBenchmarkState> &state, const string &full_db_path, const string &load_query);
+	unique_ptr<InterpretedBenchmarkState> OpenState(const string &full_db_path);
+	static optional_ptr<QueryResult> FirstError(QueryResult &result);
 
 	void ProcessFile(const string &path);
 	void AddExtension(const string &extension, bool load_only);
@@ -108,7 +108,7 @@ private:
 	//! Queries used to assert a given state of the data
 	vector<BenchmarkQuery> assert_queries;
 	vector<BenchmarkQuery> result_queries;
-	//! How many times to retry the load, if any
+	//! How many times to retry a failed load (HTTP errors are always retried a few times)
 	idx_t retry_load = 0;
 
 	string display_name;
@@ -117,7 +117,7 @@ private:
 
 	bool in_memory = true;
 	string storage_version;
-	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
+	BenchmarkResultMode result_mode = BenchmarkResultMode::RETAINED;
 	//! Discard fetched chunks instead of materializing them into the benchmark result
 	bool discard_stream_result = false;
 	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;

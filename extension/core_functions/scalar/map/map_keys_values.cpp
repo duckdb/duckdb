@@ -52,6 +52,7 @@ static unique_ptr<BaseStatistics> MapValuesStats(ClientContext &, FunctionStatis
 	}
 	auto result = ListStats::CreateEmpty(input.expr.GetReturnType());
 	result.CopyValidity(input.child_stats[0]);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(input.child_stats[0]));
 	ListStats::GetChildStats(result).Copy(StructStats::GetChildStats(entry_stats, 1));
 	return result.ToUnique();
 }
@@ -61,7 +62,8 @@ ScalarFunction MapKeysFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
-	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(key_type), MapKeysFunction);
+	ScalarFunction function({}, LogicalType::LIST(key_type), MapKeysFunction);
+	function.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type));
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	function.SetFallible();
@@ -72,7 +74,8 @@ ScalarFunction MapValuesFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
-	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(val_type), MapValuesFunction);
+	ScalarFunction function({}, LogicalType::LIST(val_type), MapValuesFunction);
+	function.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type));
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetStatisticsCallback(MapValuesStats);
 

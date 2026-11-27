@@ -39,6 +39,35 @@ TEST_CASE("Test the database instance cache in the C API", "[api][.]") {
 	duckdb_destroy_instance_cache(&instance_cache);
 }
 
+TEST_CASE("Test the database instance cache in the C API with a connection that outlives the database", "[capi]") {
+	auto instance_cache = duckdb_create_instance_cache();
+	auto path = TestCreatePath("instance_cache_in_use.db");
+	duckdb_database db;
+	REQUIRE(duckdb_get_or_create_from_cache(instance_cache, path.c_str(), &db, nullptr, nullptr) == DuckDBSuccess);
+	duckdb_connection con;
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "CREATE TABLE t AS SELECT 42 AS i", nullptr) == DuckDBSuccess);
+	duckdb_close(&db);
+
+	duckdb_database reopened;
+	REQUIRE(duckdb_get_or_create_from_cache(instance_cache, path.c_str(), &reopened, nullptr, nullptr) ==
+	        DuckDBSuccess);
+	duckdb_connection reopened_con;
+	REQUIRE(duckdb_connect(reopened, &reopened_con) == DuckDBSuccess);
+	duckdb_result result;
+	REQUIRE(duckdb_query(reopened_con, "SELECT i FROM t", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_value_int32(&result, 0, 0) == 42);
+	duckdb_destroy_result(&result);
+	duckdb_disconnect(&reopened_con);
+	duckdb_close(&reopened);
+
+	// the first connection outlives both handles
+	REQUIRE(duckdb_query(con, "INSERT INTO t VALUES (43)", nullptr) == DuckDBSuccess);
+	duckdb_disconnect(&con);
+	duckdb_destroy_instance_cache(&instance_cache);
+	TestDeleteFile(path);
+}
+
 TEST_CASE("Test the database instance cache in the C API with a null path", "[capi]") {
 	auto instance_cache = duckdb_create_instance_cache();
 	duckdb_database db;
@@ -70,7 +99,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 	// Check that file on disk is created in user-specified case
 	// independently whether FS is case-sensitive or not.
 	// FS access can be eventually changed to CAPI FS.
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	string work_dir = TestDirectoryPath();
 	auto instance_cache = duckdb_create_instance_cache();
 
@@ -78,8 +107,8 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 	for (const string &db_file : db_file_list) {
 		string db_path = TestJoinPath(work_dir, db_file);
 		string attached_db_path = TestJoinPath(work_dir, "attached_" + db_file);
-		fs->TryRemoveFile(db_path);
-		fs->TryRemoveFile(attached_db_path);
+		fs.TryRemoveFile(db_path);
+		fs.TryRemoveFile(attached_db_path);
 
 		duckdb_database db1 = nullptr;
 		REQUIRE(duckdb_get_or_create_from_cache(instance_cache, db_path.c_str(), &db1, nullptr, nullptr) ==
@@ -92,7 +121,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 
 		// Check the file with originally specified case exists in FS
 		bool found = false;
-		fs->ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
+		fs.ListFiles(work_dir, [&db_file, &found](const string &name, bool) {
 			if (name == db_file) {
 				found = true;
 			}
@@ -105,7 +134,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		std::transform(db_file_lower.begin(), db_file_lower.end(), db_file_lower.begin(),
 		               [](unsigned char c) { return tolower(c); });
 		string db_path_lower = TestJoinPath(work_dir, db_file_lower);
-		fs->TryRemoveFile(db_path_lower);
+		fs.TryRemoveFile(db_path_lower);
 		duckdb_database db2 = nullptr;
 		REQUIRE(duckdb_get_or_create_from_cache(instance_cache, db_path_lower.c_str(), &db2, nullptr, nullptr) ==
 		        DuckDBSuccess);
@@ -134,10 +163,10 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		duckdb_disconnect(&conn1);
 		duckdb_close(&db1);
 		if (count == 0) {
-			fs->TryRemoveFile(db_path_lower);
+			fs.TryRemoveFile(db_path_lower);
 		}
-		fs->TryRemoveFile(db_path);
-		fs->TryRemoveFile(attached_db_path);
+		fs.TryRemoveFile(db_path);
+		fs.TryRemoveFile(attached_db_path);
 	}
 	duckdb_destroy_instance_cache(&instance_cache);
 }

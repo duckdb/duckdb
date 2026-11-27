@@ -19,7 +19,6 @@ add_library_unity(
   plan_distinct.cpp
   plan_dummy_scan.cpp
   plan_empty_result.cpp
-  plan_execute.cpp
   plan_explain.cpp
   plan_export.cpp
   plan_filter.cpp
@@ -48,6 +47,7 @@ add_library_unity(
   plan_load.cpp
   plan_transaction.cpp
   plan_update_extensions.cpp
+  plan_top_key_filter.cpp
   plan_top_n.cpp
   plan_update.cpp
   plan_window.cpp

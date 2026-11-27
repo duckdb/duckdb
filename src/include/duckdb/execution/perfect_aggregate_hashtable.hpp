@@ -11,6 +11,7 @@
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,10 @@ public:
 
 	//! Combines the target perfect aggregate HT into this one
 	void Combine(PerfectAggregateHashTable &other);
+
+	idx_t Capacity() const {
+		return total_groups;
+	}
 
 	//! Scan the HT starting from the scan_position
 	void Scan(idx_t &scan_position, DataChunk &result);
@@ -63,6 +68,8 @@ protected:
 	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
 	ClusteredAggrState clustered_state;
+	//! The finalize state of the scan, kept across Scan calls like the finalize local states it holds
+	unique_ptr<RowOperationsState> scan_row_state;
 
 private:
 	//! Try adding a chunk using the clustered aggregation path. Returns false if not applicable.

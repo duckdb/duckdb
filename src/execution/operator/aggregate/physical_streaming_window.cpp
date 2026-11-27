@@ -5,7 +5,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/window_function.hpp"
-#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -13,9 +12,9 @@ namespace duckdb {
 
 PhysicalStreamingWindow::PhysicalStreamingWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                  vector<unique_ptr<Expression>> select_list,
-                                                 idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
-      select_list(std::move(select_list)) {
+                                                 idx_t estimated_cardinality, optional_idx partition_limit)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::STREAMING_WINDOW, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)), partition_limit(partition_limit) {
 }
 
 class StreamingWindowGlobalState : public GlobalOperatorState {
@@ -35,8 +34,7 @@ public:
 	public:
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
-		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), hashes(LogicalType::HASH),
-		      addresses(LogicalType::POINTER) {
+		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.AggregateFunction();
 			bind_data = wexpr.BindInfo().get();
@@ -89,7 +87,7 @@ public:
 		//! The state vector for the single state
 		Vector statev;
 		//! The aggregate binding data (if any)
-		FunctionData *bind_data = nullptr;
+		optional_ptr<const FunctionData> bind_data = nullptr;
 		//! The aggregate state destructor (if any)
 		aggregate_destructor_t dtor = nullptr;
 		//! The inputs rows that pass the FILTER
@@ -107,8 +105,6 @@ public:
 		unique_ptr<GroupedAggregateHashTable> distinct;
 		//! Filtered arguments for checking distinctness
 		DataChunk distinct_args;
-		//! Reusable hash vector
-		Vector hashes;
 		//! Rows that produced new distinct values
 		SelectionVector distinct_sel;
 		//! Pointers to groups in the hash table.
@@ -153,6 +149,22 @@ public:
 		chunk.Reset();
 	}
 
+	//	Limit a returned data chunk
+	template <typename T>
+	T Limit(DataChunk &output, optional_idx partition_limit, const T result) {
+		if (!partition_limit.IsValid()) {
+			return result;
+		}
+
+		const auto remaining = partition_limit.GetIndex() - emitted_count;
+		if (remaining < output.size()) {
+			output.Slice(0, remaining);
+		}
+		emitted_count += output.size();
+
+		return output.size() ? result : T::FINISHED;
+	}
+
 public:
 	//! We can't initialise until we have an input chunk
 	bool initialized;
@@ -170,6 +182,8 @@ public:
 	//! Set when `delayed` has been flushed into the output by reference - we must defer resetting (resizing) it
 	//! until the next call, by which point the referencing output chunk has been consumed.
 	bool flushed_delayed = false;
+	//! The number of rows emitted (for limiting)
+	idx_t emitted_count = 0;
 };
 
 StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
@@ -183,7 +197,7 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWi
 	}
 	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
-		if (wexpr.AggregateFunction()->HasStateDestructorCallback()) {
+		if (wexpr.AggregateFunction()->HasStateDestructorCallback() || !wexpr.AggregateFunction()->CanStream()) {
 			return false;
 		}
 		// We can stream aggregates if they are "running totals"
@@ -252,11 +266,8 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		auto &distinct_sel = aggr_state.distinct_sel;
 		if (filtered) {
 			// FindOrCreateGroups assumes non-empty input
-			auto &hashes = aggr_state.hashes;
-			distinct_args.Hash(hashes);
-
 			auto &addresses = aggr_state.addresses;
-			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, hashes, addresses, distinct_sel);
+			distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, addresses, distinct_sel);
 		}
 
 		//	Translate the distinct selection from filtered row numbers
@@ -277,12 +288,13 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s, 1);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	// This doesn't work for STRUCTs because the SV
-	// is not copied to the children when you slice
+	// This doesn't work for STRUCTs and ARRAYs because
+	// slicing them does not keep a reference to the SV
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		const auto &col_vec = arg_cursor.data[col_idx];
-		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
+		const auto internal_type = col_vec.GetType().InternalType();
+		if (internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY) {
 			structs.emplace_back(col_idx);
 		} else {
 			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
@@ -294,15 +306,22 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	                                           aggr_state.arena_allocator);
 	for (idx_t i = 0; i < count; ++i) {
 		sel.set_index(0, i);
-		for (const auto struct_idx : structs) {
-			arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
-		}
 		if (filter_mask.RowIsValid(i) && distinct_mask.RowIsValid(i)) {
+			for (const auto struct_idx : structs) {
+				arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
+			}
 			aggregate.GetStateUpdateCallback()(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(),
 			                                   statev, 1);
 		}
 		aggregate.GetStateFinalizeCallback()(statev, aggr_input_data, result, 1, i);
 	}
+}
+
+PipelineSourceConsumption PhysicalStreamingWindow::GetSourceConsumption() const {
+	if (partition_limit.IsValid()) {
+		return PipelineSourceConsumption::MAY_STOP_EARLY;
+	}
+	return PhysicalOperator::GetSourceConsumption();
 }
 
 void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataChunk &output, DataChunk &delayed,
@@ -407,7 +426,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		// Without LEAD nothing is ever delayed (the delayed buffer is not even initialized), so emit the input
 		// directly.
 		ExecuteInput(context, delayed, input, output, gstate_p);
-		return OperatorResultType::NEED_MORE_INPUT;
+		return state.Limit(output, partition_limit, OperatorResultType::NEED_MORE_INPUT);
 	}
 	// We can Reset delayed now that no one can be referencing it (the previous output has been consumed).
 	if (state.flushed_delayed) {
@@ -421,14 +440,14 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		//	then just delay more rows, return nothing
 		//	and ask for more data.
 		delayed.Append(input);
-		return OperatorResultType::NEED_MORE_INPUT;
+		return state.Limit(output, partition_limit, OperatorResultType::NEED_MORE_INPUT);
 	} else if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
 		output.SetChildCardinality(input.size());
 		ExecuteShifted(context, delayed, input, output, gstate_p);
 		// We delayed the unused input so ask for more
-		return OperatorResultType::NEED_MORE_INPUT;
+		return state.Limit(output, partition_limit, OperatorResultType::NEED_MORE_INPUT);
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
@@ -436,11 +455,11 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		// output has been consumed), since resizing its buffers now would corrupt the referencing output chunk.
 		state.flushed_delayed = true;
 		// Come back to process the input
-		return OperatorResultType::HAVE_MORE_OUTPUT;
+		return state.Limit(output, partition_limit, OperatorResultType::HAVE_MORE_OUTPUT);
 	} else {
 		//	No delayed rows, so emit what we can and delay the rest.
 		ExecuteInput(context, delayed, input, output, gstate_p);
-		return OperatorResultType::NEED_MORE_INPUT;
+		return state.Limit(output, partition_limit, OperatorResultType::NEED_MORE_INPUT);
 	}
 }
 
@@ -459,7 +478,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 			//	More than one output buffer was delayed, so shift in what we can
 			output.SetChildCardinality(STANDARD_VECTOR_SIZE);
 			ExecuteShifted(context, delayed, input, output, gstate_p);
-			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
+			return state.Limit(output, partition_limit, OperatorFinalizeResultType::HAVE_MORE_OUTPUT);
 		}
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
 	}
@@ -477,6 +496,10 @@ InsertionOrderPreservingMap<string> PhysicalStreamingWindow::ParamsToString() co
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+	if (partition_limit.IsValid()) {
+		result["Limit"] = to_string(partition_limit.GetIndex());
+	}
+
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

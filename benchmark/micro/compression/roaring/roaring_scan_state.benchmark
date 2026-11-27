@@ -1,0 +1,18 @@
+# name: benchmark/micro/compression/roaring/roaring_scan_state.benchmark
+# description: Reuse Roaring container state
+# group: [roaring]
+
+name Roaring scan state
+group roaring
+storage persistent v1.5.0
+
+load
+SET force_compression = 'roaring';
+CREATE TABLE nullable_state AS SELECT CASE WHEN i % 3 = 0 THEN i ELSE NULL END v FROM range(3000000) t(i);
+CHECKPOINT;
+
+run
+SELECT count(*) FROM nullable_state WHERE v IS NOT NULL;
+
+result I
+1000000

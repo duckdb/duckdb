@@ -42,24 +42,52 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 		return;
 	}
 	auto &metadata = column.meta_data;
+	if (metadata.data_page_offset < 0 || metadata.dictionary_page_offset < 0 || metadata.index_page_offset < 0 ||
+	    metadata.total_compressed_size < 0) {
+		if (file_name) {
+			throw DataCorruptionException(
+			    "Failed to read file \"%s\": metadata is corrupt. Column chunk has a negative offset or size",
+			    file_name);
+		}
+		throw DataCorruptionException("Parquet metadata is corrupt. Column chunk has a negative offset or size");
+	}
 	if (metadata.num_values < 0) {
 		if (file_name) {
-			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
-			                            "number of values (%lld)",
-			                            file_name, metadata.num_values);
+			throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                              "number of values (%lld)",
+			                              file_name, metadata.num_values);
 		}
-		throw InvalidInputException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
-		                            metadata.num_values);
+		throw DataCorruptionException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
+		                              metadata.num_values);
 	}
 	if (validate_row_count && !type.IsNested() && max_repeat == 0 && metadata.num_values != row_group_num_rows) {
 		if (file_name) {
-			throw InvalidInputException(
+			throw DataCorruptionException(
 			    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
 			    file_name, metadata.num_values, row_group_num_rows);
 		}
-		throw InvalidInputException("Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
-		                            metadata.num_values, row_group_num_rows);
+		throw DataCorruptionException("Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
+		                              metadata.num_values, row_group_num_rows);
 	}
+}
+
+void ParquetColumnSchema::ValidateNullCount(const ColumnChunk &column, const char *file_name) const {
+	if (max_define != 0 || !column.__isset.meta_data || !column.meta_data.__isset.statistics) {
+		return;
+	}
+	auto &statistics = column.meta_data.statistics;
+	if (!statistics.__isset.null_count || statistics.null_count <= 0) {
+		return;
+	}
+	// the column has no definition levels, so its values cannot be NULL
+	if (file_name) {
+		throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Column \"%s\" cannot hold "
+		                              "NULL values but its statistics count %lld NULL values",
+		                              file_name, name, statistics.null_count);
+	}
+	throw DataCorruptionException("Parquet metadata is corrupt. Column \"%s\" cannot hold NULL values but its "
+	                              "statistics count %lld NULL values",
+	                              name, statistics.null_count);
 }
 
 //! Writer constructors
@@ -155,7 +183,7 @@ ParquetColumnSchema ParquetColumnSchema::FileRowGroupNumber() {
 
 unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_meta_data,
                                                       const ParquetOptions &parquet_options, idx_t row_group_idx_p,
-                                                      const vector<ColumnChunk> &columns) const {
+                                                      const duckdb_parquet::ColumnChunkList &columns) const {
 	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
 		return nullptr;
 	}
@@ -194,7 +222,7 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}
-	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options.can_have_nan);
+	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options);
 }
 
 } // namespace duckdb

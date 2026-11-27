@@ -1,0 +1,43 @@
+# name: test/sql/copy/parquet/parquet_coalesce_null_row_group.test
+# description: A row group whose column is all NULL keeps the bounds of COALESCE and CASE over the column
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+# row group 0 holds 0 - 2047 without NULLs, row group 1 only NULLs: it has no min/max
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN i END AS n FROM range(4096) t(i)) TO '{TEST_DIR}/coalesce_null_row_group.parquet' (ROW_GROUP_SIZE 2048);
+
+# in row group 1 both expressions are -1
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE coalesce(n, -1) = 1000;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE coalesce(n, -1) = 1000;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE CASE WHEN n IS NULL THEN -1 ELSE n END = 1000;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE CASE WHEN n IS NULL THEN -1 ELSE n END = 1000;
+----
+1
+
+# only row group 1 produces -1
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE coalesce(n, -1) = -1;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/coalesce_null_row_group.parquet' WHERE coalesce(n, -1) = -1;
+----
+2048

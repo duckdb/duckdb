@@ -365,6 +365,18 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
+	// a positional join pads the shorter side with NULLs
+	const bool full_outer = result->type == JoinType::OUTER || ref.ref_type == JoinRefType::POSITIONAL;
+	if (result->type == JoinType::LEFT || full_outer) {
+		for (auto &binding : right_binder.bind_context.GetBindingsList()) {
+			binding->SetNullExtended();
+		}
+	}
+	if (result->type == JoinType::RIGHT || full_outer) {
+		for (auto &binding : left_binder.bind_context.GetBindingsList()) {
+			binding->SetNullExtended();
+		}
+	}
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
 	auto left_bindings = left_binder.bind_context.GetBindingAliases();
 	bind_context.AddContext(std::move(left_binder.bind_context));
@@ -376,9 +388,8 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	// AND the USING/NATURAL conditions onto the condition written in the query, in that order
 	for (auto &condition : extra_conditions) {
 		if (result->condition) {
-			auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-			conjunction->GetChildrenMutable().push_back(std::move(result->condition));
-			conjunction->GetChildrenMutable().push_back(std::move(condition));
+			auto conjunction = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(result->condition), std::move(condition));
 			result->condition = std::move(conjunction);
 		} else {
 			result->condition = std::move(condition);

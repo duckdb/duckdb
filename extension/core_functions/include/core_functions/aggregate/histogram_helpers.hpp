@@ -31,10 +31,6 @@ struct HistogramFunctor {
 	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, AggregateInputData &) {
 		return UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
 	}
-
-	static bool RequiresExtract() {
-		return false;
-	}
 };
 
 struct HistogramStringFunctorBase {
@@ -53,10 +49,6 @@ struct HistogramStringFunctorBase {
 		// now insert it into the histogram
 		string_t histogram_str(char_ptr_cast(string_memory), input_str_size);
 		return histogram_str;
-	}
-
-	static bool RequiresExtract() {
-		return true;
 	}
 };
 
@@ -90,9 +82,14 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		extra_state.Reserve(input.size());
 		CreateSortKeyHelpers::CreateSortKey(input, modifiers, extra_state);
-		input.Flatten();
 		extra_state.Flatten();
-		FlatVector::ValidityMutable(extra_state).Initialize(FlatVector::Validity(input));
+		auto input_validity = input.Validity();
+		auto &validity = FlatVector::ValidityMutable(extra_state);
+		for (idx_t i = 0; i < input_validity.size(); i++) {
+			if (!input_validity.IsValid(i)) {
+				validity.SetInvalid(i);
+			}
+		}
 		extra_state.ToUnifiedFormat(result);
 	}
 };

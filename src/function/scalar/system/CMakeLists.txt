@@ -6,6 +6,7 @@ add_library_unity(
   current_transaction_id.cpp
   current_connection_id.cpp
   current_query_id.cpp
+  extension_repository_url.cpp
   parse_log_message.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_system>

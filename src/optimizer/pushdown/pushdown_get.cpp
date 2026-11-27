@@ -2,7 +2,6 @@
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -11,6 +10,11 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
+
+static unique_ptr<Expression> RenameColumnRef(const BoundColumnRefExpression &ref, Identifier alias) {
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), ref.GetReturnType(), ref.Binding(), ref.Depth(),
+	                                           ref.GetQueryLocation());
+}
 
 /**
  * When a BoundColumnRefExpression that's part of expr (a filter) arrives here, its
@@ -22,23 +26,23 @@ namespace duckdb {
  */
 static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const LogicalGet &get) {
 	const vector<ColumnIndex> &column_ids = get.GetColumnIds();
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &slot) {
 		const ColumnBinding &binding = ref.Binding();
 		if (binding.table_index != get.table_index || binding.column_index >= column_ids.size()) {
 			return;
 		}
 		const ColumnIndex &col_idx = column_ids[binding.column_index];
 		if (!col_idx.HasPrimaryIndex()) {
-			ref.SetAlias(Identifier(col_idx.GetFieldName()));
+			slot = RenameColumnRef(ref, Identifier(col_idx.GetFieldName()));
 			return;
 		}
 		const idx_t primary = col_idx.GetPrimaryIndex();
 		if (col_idx.IsVirtualColumn()) {
 			if (const auto it = get.virtual_columns.find(primary); it != get.virtual_columns.end()) {
-				ref.SetAlias(Identifier(it->second.name.GetIdentifierName()));
+				slot = RenameColumnRef(ref, Identifier(it->second.name.GetIdentifierName()));
 			}
 		} else if (primary < get.names.size()) {
-			ref.SetAlias(Identifier(col_idx.GetName(get.names[primary].GetIdentifierName())));
+			slot = RenameColumnRef(ref, Identifier(col_idx.GetName(get.names[primary].GetIdentifierName())));
 		}
 	});
 }
@@ -122,7 +126,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			}
 		}
 	}
-	if (get.function.pushdown_complex_filter) {
+	const bool assigns_ordinality = get.ordinality_idx.IsValid();
+	if (get.function.pushdown_complex_filter && !assigns_ordinality) {
 		// for the remaining filters, check if we can push any of them into the scan as well
 		vector<unique_ptr<Expression>> expressions;
 		expressions.reserve(filters.size());
@@ -145,9 +150,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			filters.push_back(std::move(f));
 		}
 	}
-
-	if (get.table_filters.HasFilters() || !get.function.filter_pushdown) {
-		// the table function does not support filter pushdown: push a LogicalFilter on top
+	// Partial type-based filter pushdown is not implemented for table in-out functions.
+	const bool requires_partial_pushdown = !get.children.empty() && get.function.supports_pushdown_type;
+	// WITH ORDINALITY numbers the rows the function emits, so pushing a filter into the function would renumber the
+	// surviving rows rather than report their original positions
+	if (get.table_filters.HasFilters() || !get.function.filter_pushdown || requires_partial_pushdown ||
+	    assigns_ordinality) {
+		// these filters cannot be pushed into the scan: push a LogicalFilter on top
 		restore_barrier_filters();
 		return FinishPushdown(std::move(op));
 	}
@@ -179,18 +188,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown.
+		// Keep expressions owned by InClauseRewriter in the logical plan so they can become hash joins.
 		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
-		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
-			if (expr.CanThrow()) {
-				continue;
-			}
-			auto &in_expr = expr.Cast<BoundOperatorExpression>();
-			if (!in_expr.GetChildren().empty() &&
-			    in_expr.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-			    in_expr.GetChildren().size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
-				continue;
-			}
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
+		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
+			continue;
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
 		if (expr.CanThrow() && filters.size() > 1) {

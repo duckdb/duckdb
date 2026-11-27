@@ -109,6 +109,12 @@
         "name": "distinct_validity",
         "type": "TupleDataValidityType",
         "default": "TupleDataValidityType::CAN_HAVE_NULL_VALUES"
+      },
+      {
+        "id": 208,
+        "name": "preserve_input_order",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": [
@@ -131,10 +137,17 @@
         "id": 201,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "partition_limit",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
-      "window_index"
+      "window_index",
+      "partition_limit"
     ]
   },
   {
@@ -171,6 +184,12 @@
         "id": 201,
         "name": "offset_val",
         "type": "BoundLimitNode"
+      },
+      {
+        "id": 202,
+        "name": "unpruned_offset",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
@@ -218,12 +237,39 @@
         "id": 202,
         "name": "offset",
         "type": "idx_t"
+      },
+      {
+        "id": 203,
+        "name": "unpruned_offset",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
       "orders",
       "limit",
       "offset"
+    ]
+  },
+  {
+    "class": "LogicalTopKeyFilter",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TOP_KEY_FILTER",
+    "members": [
+      {
+        "id": 200,
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      },
+      {
+        "id": 201,
+        "name": "limit",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": [
+      "orders",
+      "limit"
     ]
   },
   {
@@ -278,6 +324,53 @@
         "id": 201,
         "name": "pushed_filters",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "has_source",
+        "type": "bool"
+      },
+      {
+        "id": 203,
+        "name": "source_name",
+        "type": "QualifiedName",
+        "default": "QualifiedName()"
+      },
+      {
+        "id": 204,
+        "name": "source_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 205,
+        "name": "has_at_clause",
+        "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "at_unit",
+        "type": "Identifier"
+      },
+      {
+        "id": 207,
+        "name": "at_value",
+        "type": "Value",
+        "default": "Value()"
+      },
+      {
+        "id": 208,
+        "name": "output_bindings",
+        "type": "vector<ColumnBinding>"
+      },
+      {
+        "id": 209,
+        "name": "output_expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 210,
+        "name": "source_filters",
+        "type": "vector<Expression*>"
       }
     ]
   },
@@ -492,12 +585,18 @@
         "id": 208,
         "name": "predicate",
         "type": "Expression*",
-        "status": "deleted"
+        "status": "read_only",
+        "deserialize_skip_assign": true
       }
     ],
     "constructor": [
       "join_type",
       "type"
+    ],
+    "finalize_deserialization": [
+      "if (predicate) {",
+      "\tresult->conditions.emplace_back(std::move(predicate));",
+      "}"
     ]
   },
   {
@@ -539,15 +638,13 @@
     "class": "LogicalCrossProduct",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CROSS_PRODUCT",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "LogicalPositionalJoin",
     "base": "LogicalOperator",
     "enum": "LOGICAL_POSITIONAL_JOIN",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "LogicalSetOperation",
@@ -579,6 +676,17 @@
         "name": "allow_out_of_order",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "comparison_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 205,
+        "name": "correlated_column_count",
+        "type": "idx_t",
+        "default": "0"
       }
     ],
     "constructor": [
@@ -878,12 +986,6 @@
         "id": 208,
         "name": "old_row_columns",
         "type": "vector<idx_t>"
-      },
-      {
-        "id": 209,
-        "name": "row_id_handling",
-        "type": "RowIdHandling",
-        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [
@@ -938,7 +1040,10 @@
         "type": "vector<idx_t>"
       }
     ],
-    "constructor": ["$ClientContext", "table_info&"]
+    "constructor": [
+      "$ClientContext",
+      "table_info&"
+    ]
   },
   {
     "class": "BoundMergeIntoAction",
@@ -1042,6 +1147,12 @@
         "id": 203,
         "name": "logical_plan_opt",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "sql_output_names",
+        "type": "vector<Identifier>",
+        "default": "vector<Identifier>()"
       }
     ],
     "constructor": [

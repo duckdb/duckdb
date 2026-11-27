@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -50,12 +51,16 @@ private:
 };
 
 struct CachingFileHandle {
+	friend class CachingFileSystem;
+
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
 
+private:
+	CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
+	                  FileOpenFlags flags, optional_ptr<FileOpener> opener);
+
 public:
-	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -66,6 +71,10 @@ public:
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
+	//! Read [nr_bytes] bytes at [location]; within absorb_ranges ([begin, end) pairs), smaller cached blocks are
+	//! re-fetched with the gaps around them when that saves a request (see ExternalFileCache::AcquireBlocks)
+	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location,
+	                                      const vector<pair<idx_t, idx_t>> &absorb_ranges);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
@@ -74,6 +83,7 @@ public:
 	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
+	DUCKDB_API optional_ptr<FileOpener> GetOpener() const;
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API timestamp_t GetLastModifiedTime();
 	DUCKDB_API string GetVersionTag();
@@ -81,28 +91,44 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	//! Whether reads through this handle go through the external file cache (enabled, file cacheable, metadata valid)
+	DUCKDB_API bool ReadsAreCached();
 	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
+	//! The number of small cached blocks of this file whose data is still available (resident or spilled) that
+	//! overlap [location, location + nr_bytes); 0 without a cache
+	DUCKDB_API idx_t CountCachedBlocks(idx_t location, idx_t nr_bytes);
+	//! Whether the cache can serve all of [location, location + nr_bytes) without a read; false without a cache
+	DUCKDB_API bool IsCached(idx_t location, idx_t nr_bytes);
+	//! The memory limit of the buffer manager that holds the cached blocks
+	DUCKDB_API idx_t GetMaxMemory() const;
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Open the file unless cached blocks allow deferring it; returns false if the file system returned no handle
+	bool Initialize();
+	//! Open the underlying FileHandle if not yet open; returns nullptr if the file system returned no handle
+	shared_ptr<FileHandle> TryGetFileHandle();
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
+	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
+	void ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Reconcile cached blocks with validation metadata observed while reading them.
-	void ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
-	                             const vector<shared_ptr<CacheBlock>> &blocks);
+	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
 	QueryContext context;
 
-	//! The client caching file system that was used to create this CachingFileHandle
-	CachingFileSystem &caching_file_system;
+	//! The file system, held directly because the caching file system can be destroyed before this handle
+	FileSystem &file_system;
+	//! The DatabaseInstance
+	DatabaseInstance &db;
 	//! The DB external file cache
 	ExternalFileCache &external_file_cache;
 	//! For opening the file (possibly with extra info)
@@ -145,10 +171,11 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
+	                                                  const FileOpenFlags &flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

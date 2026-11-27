@@ -17,20 +17,21 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
+LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOffsetClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
 OffsetFetchClause <- OffsetClause FetchClause
+FetchOffsetClause <- FetchClause OffsetClause
 FetchOnlyClause <- FetchClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
-SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
+SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SelectSampleClause?
 
 SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+WithStatement <- ColIdOrString ColumnAliases? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- CTESelectBody / CTEDMLBody
 CTESelectBody <- Parens(SelectStatementInternal)
 CTEDMLBody <- Parens(Statement)
@@ -50,13 +51,15 @@ DistinctOnTargets <- 'ON' Parens(List(Expression))
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
-TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias?
+TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias? SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
-ValuesRef <- TableAliasColon? ValuesClause TableAlias?
-ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+ValuesRef <- TableAliasColon? ValuesClause TableAlias? SampleClause?
+ParensTableRef <- TableAliasColon? Parens(JoinedTableRef) TableAlias? SampleClause?
+JoinedTableRef <- JoinedTableRefChain / ParensTableRef
+JoinedTableRefChain <- InnerTableRef JoinOrPivot+
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
@@ -82,13 +85,16 @@ SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification+ ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias? SampleClause?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
+QualifiedTableFunction <- CatalogReservedSchemaTableFunctionName / TableFunctionNameAsQualifiedName
+# after a qualification a reserved keyword can name a table function, as in g.describe('a')
+CatalogReservedSchemaTableFunctionName <- CatalogQualification SchemaQualification* ReservedTableFunctionName
+TableFunctionNameAsQualifiedName <- TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
-NamedFunctionArgument <- NamedParameter
+NamedFunctionArgument <- TypeFuncName NamedParameterAssignment Expression
 PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
@@ -115,7 +121,7 @@ NearestValuesRef <- ValuesClause
 NearestTableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality?
 NearestTableSubquery <- Lateral? SubqueryReference
 NearestBaseTableRef <- BaseTableName AtClause? SampleClause?
-NearestParensTableRef <- Parens(TableRef) SampleClause?
+NearestParensTableRef <- Parens(JoinedTableRef) SampleClause?
 ApproxOrExact <- NearestApprox / NearestExact
 NearestApprox <- 'APPROX'
 NearestExact <- 'EXACT'
@@ -128,7 +134,8 @@ Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
-UsingClause <- 'USING' Parens(List(ColumnName))
+UsingClause <- 'USING' Parens(List(UsingColumnName))
+UsingColumnName <- ColumnName / StringLiteralIdentifier
 
 JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
@@ -147,7 +154,8 @@ WhereClause <- 'WHERE' Expression
 GroupByClause <- 'GROUP' 'BY' GroupByExpressions
 HavingClause <- 'HAVING' Expression
 QualifyClause <- 'QUALIFY' Expression
-SampleClause <- (TableSample / UsingSample) SampleEntry
+SampleClause <- TableSample SampleEntry
+SelectSampleClause <- UsingSample SampleEntry
 UsingSample <- 'USING' 'SAMPLE'
 TableSample <- 'TABLESAMPLE'
 WindowClause <- 'WINDOW' List(WindowDefinition)
@@ -202,14 +210,16 @@ LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
 LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
-FetchClause <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
+FetchClause <- FetchClauseWithoutValue / FetchClauseWithValue
+FetchClauseWithoutValue <- 'FETCH' FirstOrNext RowOrRows 'ONLY'
+FetchClauseWithValue <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
 FirstOrNext <- 'FIRST' / 'NEXT'
 FetchValue <- Expression
 
 AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression
 ExpressionAsCollabel <- Expression 'AS' ColLabelOrString
-ExpressionOptIdentifier <- Expression Identifier?
+ExpressionOptIdentifier <- Expression BareColLabel?
 
 ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))

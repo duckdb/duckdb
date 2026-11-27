@@ -36,8 +36,8 @@ TEST_CASE("Filter pushdown rewrites BoundColumnRef alias to the scan column name
 	    },
 	    [](auto &, auto &) -> unique_ptr<GlobalTableFunctionState> { return {}; });
 
-	tf.pushdown_complex_filter = [](auto &, auto &get, auto *bind_data_p, auto &filters) {
-		auto &data = bind_data_p->template Cast<BindData>();
+	tf.pushdown_complex_filter = [](auto &, auto &get, auto, auto &filters) {
+		auto &data = get.bind_data.write().template Cast<BindData>();
 		for (auto &expr : filters) {
 			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &) {
 				if (ref.Binding().table_index == get.table_index && data.alias.empty()) {
@@ -65,7 +65,7 @@ TEST_CASE("Filter pushdown rewrites BoundColumnRef alias to the scan column name
 	string explain;
 	for (idx_t row = 0; row < result->RowCount(); row++) {
 		for (idx_t col = 0; col < result->ColumnCount(); col++) {
-			explain += result->GetValue(col, row).ToString();
+			explain += result->Collection().GetValue(col, row).ToString();
 		}
 	}
 	REQUIRE(StringUtil::Contains(explain, "FilterAlias: col"));

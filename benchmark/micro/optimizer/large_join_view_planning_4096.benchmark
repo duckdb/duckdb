@@ -1,0 +1,9 @@
+# name: benchmark/micro/optimizer/large_join_view_planning_4096.benchmark
+# description: Plan 4096 table references exposed by repeated self-joined views
+# group: [optimizer]
+
+template benchmark/micro/optimizer/large_join_view_planning.benchmark.in
+BENCHMARK_NAME=Large Join View Planning (4096)
+VIEW=v12
+ODD_KEY=a.k
+EVEN_KEY=a.k

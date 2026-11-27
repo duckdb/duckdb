@@ -1,0 +1,105 @@
+# name: test/sql/window/test_fill_dependent_order.test
+# description: fill with a window ordering that is constant or depends on the partitioning
+# group: [window]
+
+# fill interpolates along the ORDER BY value, so the ordering is kept even when it is constant within each partition
+query I
+SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY 1) FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
+# the same holds for a constant ordering without a partitioning
+query I
+SELECT fill(c0) OVER (ORDER BY 1) FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
+query I
+SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY c0) FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
+query I
+SELECT fill(c0) OVER (PARTITION BY c0 ORDER BY c0 + 1) FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
+statement ok
+CREATE TABLE fills AS FROM (VALUES (0, 0, 7), (0, 1, NULL), (0, 2, 7), (1, 0, 10), (1, 1, NULL), (1, 2, 30), (2, 0, NULL)) t(g, k, v);
+
+# all rows of a partition are peers, so the missing value of partition 0 lies between two equal values
+query III
+SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY 1) FROM fills WHERE g <> 1 ORDER BY ALL;
+----
+0	0	7
+0	1	7
+0	2	7
+2	0	NULL
+
+query III
+SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY g) FROM fills WHERE g <> 1 ORDER BY ALL;
+----
+0	0	7
+0	1	7
+0	2	7
+2	0	NULL
+
+# same result as without the optimization
+statement ok
+SET disabled_optimizers = 'redundant_order_keys';
+
+query III
+SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY g) FROM fills WHERE g <> 1 ORDER BY ALL;
+----
+0	0	7
+0	1	7
+0	2	7
+2	0	NULL
+
+statement ok
+RESET disabled_optimizers;
+
+# an argument ordering is used for the interpolation, whatever happens to the window ordering
+query III
+SELECT g, k, fill(v ORDER BY k) OVER (PARTITION BY g ORDER BY g) FROM fills ORDER BY ALL;
+----
+0	0	7
+0	1	7
+0	2	7
+1	0	10
+1	1	20
+1	2	30
+2	0	NULL
+
+query III
+SELECT g, k, fill(v) OVER (PARTITION BY g ORDER BY k) FROM fills ORDER BY ALL;
+----
+0	0	7
+0	1	7
+0	2	7
+1	0	10
+1	1	20
+1	2	30
+2	0	NULL
+
+# a constant argument ordering is kept as well
+query I
+SELECT fill(c0 ORDER BY 1) OVER () FROM range(3) AS r(c0) ORDER BY ALL;
+----
+0
+1
+2
+
+# the connection is still usable
+query I
+SELECT 42;
+----
+42

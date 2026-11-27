@@ -14,6 +14,9 @@
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/main/http/http_retry_budget.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -42,10 +45,20 @@ struct HTTPParams {
 	uint64_t retries = DEFAULT_RETRIES;
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
+	//! Whether the host's retry quota may refuse a throttled retry (http_retry_quota_throttled)
+	bool retry_quota_throttled = true;
+	//! Smallest base wait of the back-off between throttled retries (http_retry_throttled_wait_ms)
+	uint64_t retry_throttled_wait_ms = 0;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool follow_location = true;
 	bool override_verify_ssl = false;
 	bool verify_ssl = true;
+	//! When set, the caller has already checked the url against the file access settings, so the central check in
+	//! HTTPUtil::Request is skipped (used by extension installation, which also allows the official repositories)
+	bool skip_external_access_check = false;
+	//! The path the request accesses, for file systems that map their own paths onto HTTP urls (e.g. s3://bucket/key).
+	//! When set, the file access settings are checked against it instead of the url
+	string access_path;
 
 	string http_proxy;
 	idx_t http_proxy_port = 0;
@@ -58,6 +71,9 @@ struct HTTPParams {
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
 	DUCKDB_API idx_t GetTransportReuseDomain() const;
+	//! Require server certificate verification for the requests made with these parameters, whatever the settings and
+	//! secrets they were initialized from said. The provider recaptures its connection-reuse domain from the new values
+	DUCKDB_API void RequireServerCertificateVerification();
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -78,6 +94,10 @@ private:
 	friend class HTTPUtil;
 	friend class HTTPTransportManager;
 
+	bool ShouldRedactLogs() const;
+
+	//! Borrowed database.
+	optional_ptr<DatabaseInstance> db;
 	//! Manager borrowed from the owning DatabaseInstance.
 	optional_ptr<HTTPTransportManager> transport_manager;
 	//! Provider publication captured by the creating manager session.
@@ -115,7 +135,7 @@ struct HTTPClientInitializationOptions {
 
 struct HTTPHeaders {
 	using header_values_t = vector<string>;
-	using header_map_t = case_insensitive_map_t<string>;
+	using header_map_t = multimap<string, string, CaseInsensitiveStringCompare>;
 
 public:
 	HTTPHeaders() = default;
@@ -123,14 +143,21 @@ public:
 	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
 	DUCKDB_API ~HTTPHeaders();
 
-	void Insert(string key, string value);
+	//! Insert only if the name is absent.
+	void InsertIfAbsent(string key, string value);
+	[[deprecated("Use InsertIfAbsent instead")]] void Insert(string key, string value);
 	//! Append another field line without combining its value.
 	void Append(string key, string value);
+	//! Replace all field lines with this name.
+	void Set(string key, string value);
+	//! Remove all field lines with this name.
+	void RemoveAll(const string &key);
 	bool HasHeader(const string &key) const;
 	//! Return the first field value.
 	string GetHeaderValue(const string &key) const;
 	header_values_t GetHeaderValues(const string &key) const;
 
+	//! Iteration visits every field line, in insertion order for each name.
 	header_map_t::iterator begin() { // NOLINT: match stl API
 		return headers.begin();
 	}
@@ -149,14 +176,9 @@ public:
 	header_map_t::const_iterator cend() const { // NOLINT: match stl API
 		return headers.end();
 	}
-	header_map_t::mapped_type &operator[](const header_map_t::key_type &key) {
-		return headers[key];
-	}
 
 private:
 	header_map_t headers;
-	//! HTTP responses can contain multiple field lines with the same name (i.e., Cache-Control).
-	case_insensitive_map_t<header_values_t> repeated_headers;
 };
 
 struct HTTPResponse {
@@ -230,7 +252,7 @@ struct BaseRequest {
 	static HTTPHeaders MergeHeaders(const HTTPHeaders &headers, HTTPParams &params) {
 		HTTPHeaders result = headers;
 		for (const auto &header : params.extra_headers) {
-			result.Insert(header.first, header.second);
+			result.InsertIfAbsent(header.first, header.second);
 		}
 		return result;
 	}
@@ -261,7 +283,7 @@ struct PutRequestInfo : public BaseRequest {
 
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
-	const string &content_type;
+	string content_type;
 };
 
 struct HeadRequestInfo : public BaseRequest {
@@ -392,8 +414,18 @@ public:
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
-	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides
+	//! Whether a failed request should be retried. Judges received responses and statuses a handler turned into an
+	//! exception alike; core knows only the generic statuses (IsRetryableStatus), a provider adds what its service
+	//! says in the body (e.g. an S3 error document whose code is retryable behind a final-looking status).
 	DUCKDB_API virtual bool ShouldRetry(const BaseRequest &request, const HTTPResponse &response);
+	//! Runs before every attempt with the 1-based attempt number and the configured maximum, e.g. to tag headers.
+	DUCKDB_API virtual void PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_attempts);
+	//! Retry quota shared by all requests of this provider against one host.
+	DUCKDB_API shared_ptr<HTTPRetryQuota> GetRetryQuota(const string &proto_host_port);
+	//! Whether a received status is worth retrying: 408, 418, 429 and the server errors that can clear up.
+	DUCKDB_API static bool IsRetryableStatus(HTTPStatusCode status);
+	//! Hosts remembered for retry quotas; past this the host unused for longest makes room.
+	static constexpr idx_t MAX_RETRY_QUOTAS = 1024;
 
 	//! Whether replaying this request is safe. POST is the only method we cannot assume is idempotent.
 	DUCKDB_API static bool IsIdempotent(RequestType type);
@@ -412,9 +444,15 @@ private:
 	                                         HTTPClientCachePolicy initial_cache_policy,
 	                                         HTTPClientCachePolicy &retry_cache_policy);
 
+private:
+	//! Protects retry_quotas.
+	mutex retry_quota_lock;
+	//! Per-host retry quotas, created on first use; budgets keep theirs alive across an eviction.
+	unordered_map<string, shared_ptr<HTTPRetryQuota>> retry_quotas;
+
 public:
 	static duckdb::unique_ptr<HTTPResponse>
-	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
+	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, BaseRequest &request,
 	                    const std::function<void(void)> &retry_cb);
 };
 } // namespace duckdb

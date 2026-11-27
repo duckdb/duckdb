@@ -25,6 +25,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
@@ -102,6 +103,75 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 	return FilterResult::SUCCESS;
 }
 
+bool FilterCombiner::CanMatchExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		// Expression equality must not conflate constants a function can distinguish, such as signed zeros.
+		return expr.GetReturnType().EqualValuesAreIdentical();
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		return false;
+	}
+	bool can_match = true;
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](const Expression &child) { can_match &= CanMatchExpression(child); });
+	return can_match;
+}
+
+bool FilterCombiner::CanCopyFilter(const Expression &filter) {
+	if (filter.IsVolatile() || filter.CanThrow() || filter.HasParameter()) {
+		return false;
+	}
+	auto compared = GetComparedExpression(filter);
+	const bool merged_comparison = BoundComparisonExpression::IsComparison(filter) ||
+	                               filter.GetExpressionType() == ExpressionType::COMPARE_BETWEEN;
+	return CanMatchExpression(compared && merged_comparison ? *compared : filter);
+}
+
+bool FilterCombiner::IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys) {
+	if (!CanCopyFilter(filter)) {
+		return false;
+	}
+	switch (filter.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::OPERATOR_NOT: {
+		bool valid = true;
+		ExpressionIterator::EnumerateChildren(filter,
+		                                      [&](const Expression &child) { valid &= IsKeyConstraint(child, keys); });
+		return valid;
+	}
+	default:
+		break;
+	}
+	auto compared = FilterCombiner::GetComparedExpression(filter);
+	if (filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL ||
+	    filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) { compared = &child; });
+	}
+	if (!compared) {
+		return false;
+	}
+	for (auto &key : keys) {
+		if (FilterCombiner::CanMatchExpression(key) && key.get().Equals(*compared)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void FilterCombiner::DeduplicateFilters(vector<unique_ptr<Expression>> &filters) {
+	expression_set_t seen;
+	vector<unique_ptr<Expression>> unique_filters;
+	for (auto &filter : filters) {
+		if (!filter->IsVolatile() && !filter->CanThrow() && CanMatchExpression(*filter) &&
+		    !seen.insert(*filter).second) {
+			continue;
+		}
+		unique_filters.push_back(std::move(filter));
+	}
+	filters = std::move(unique_filters);
+}
+
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
@@ -114,6 +184,18 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
+FilterResult FilterCombiner::AddConjuncts(unique_ptr<Expression> expr) {
+	vector<unique_ptr<Expression>> conjuncts;
+	conjuncts.push_back(std::move(expr));
+	LogicalFilter::SplitPredicates(conjuncts);
+	for (auto &conjunct : conjuncts) {
+		if (AddFilter(std::move(conjunct)) == FilterResult::UNSATISFIABLE) {
+			return FilterResult::UNSATISFIABLE;
+		}
+	}
+	return FilterResult::SUCCESS;
+}
+
 void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
                                                const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	if (filter.IsVolatile()) {
@@ -122,6 +204,10 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 	// collect every column reference that belongs to an equivalence set
 	vector<reference<const BoundColumnRefExpression>> candidate_columns;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(filter, [&](const BoundColumnRefExpression &col) {
+		// An arbitrary expression can distinguish equal values with different representations.
+		if (!col.GetReturnType().EqualValuesAreIdentical()) {
+			return;
+		}
 		auto entry = equivalence_set_map.find(col);
 		if (entry == equivalence_set_map.end()) {
 			return;
@@ -138,24 +224,151 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
-			auto copy = filter.Copy();
-			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-			    copy, [&](BoundColumnRefExpression &cref, unique_ptr<Expression> &child) {
-				    if (cref.Equals(col)) {
-					    child = item.get().Copy();
-				    }
-			    });
-			callback(std::move(copy));
+			if (item.get().Equals(col) || item.get().CanThrow() || item.get().IsVolatile() ||
+			    !CanMatchExpression(item)) {
+				continue;
+			}
+			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
+		}
+	}
+}
+
+static optional_ptr<const Expression> GetConstraintKey(const Expression &filter) {
+	auto key = FilterCombiner::GetComparedExpression(filter);
+	if (key) {
+		return key;
+	}
+	switch (filter.GetExpressionType()) {
+	case ExpressionType::OPERATOR_IS_NULL:
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) { key = &child; });
+		break;
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::OPERATOR_NOT:
+		ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) {
+			if (!key) {
+				key = GetConstraintKey(child);
+			}
+		});
+		break;
+	default:
+		break;
+	}
+	return key;
+}
+
+void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+                                               const std::function<bool(const Expression &)> &can_project,
+                                               const std::function<void(unique_ptr<Expression>)> &callback) {
+	FilterCombiner combiner(context);
+	auto &groups = combiner.equivalence_map;
+	auto &group_ids = combiner.equivalence_set_map;
+	for (auto &filter : filters) {
+		if (filter->GetExpressionType() != ExpressionType::COMPARE_EQUAL || !CanCopyFilter(*filter)) {
+			continue;
+		}
+		auto &comparison = filter->Cast<BoundFunctionExpression>();
+		if (BoundComparisonExpression::Left(comparison).IsScalar() ||
+		    BoundComparisonExpression::Right(comparison).IsScalar()) {
+			continue;
+		}
+		auto left = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::LeftMutable(comparison)));
+		auto right = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::RightMutable(comparison)));
+		if (left == right) {
+			continue;
+		}
+		// Merge smaller classes and discard old buckets: hidden chains must not retain quadratic state.
+		if (groups[left].size() < groups[right].size()) {
+			std::swap(left, right);
+		}
+		auto &target = groups[left];
+		for (auto &member : groups[right]) {
+			group_ids[member] = left;
+			target.push_back(member);
+		}
+		groups.erase(right);
+		combiner.constant_values.erase(right);
+	}
+	unordered_map<idx_t, reference<const Expression>> representatives;
+	for (auto &entry : groups) {
+		for (auto &member : entry.second) {
+			if (!can_project(member)) {
+				continue;
+			}
+			auto representative = representatives.find(entry.first);
+			if (representative == representatives.end()) {
+				representatives.emplace(entry.first, member.get());
+			} else {
+				// A star connects the visible members without generating pairs involving hidden keys.
+				callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+				                                           representative->second.get().Copy(), member.get().Copy()));
+			}
+		}
+	}
+	for (auto &filter : filters) {
+		auto key = GetConstraintKey(*filter);
+		if (!key || !IsKeyConstraint(*filter, {*key})) {
+			continue;
+		}
+		auto entry = group_ids.find(*key);
+		if (entry == group_ids.end()) {
+			continue;
+		}
+		auto representative = representatives.find(entry->second);
+		if (representative != representatives.end() && !key->Equals(representative->second)) {
+			callback(ExpressionIterator::ReplaceExpression(*filter, *key, representative->second));
+		}
+	}
+}
+
+void FilterCombiner::GenerateEquivalentKeyFilters(const Expression &filter,
+                                                  const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	if (!CanMatchExpression(filter)) {
+		return;
+	}
+	auto source = GetConstraintKey(filter);
+	if (!source || !IsKeyConstraint(filter, {*source})) {
+		return;
+	}
+	auto entry = equivalence_set_map.find(*source);
+	if (entry == equivalence_set_map.end()) {
+		return;
+	}
+	// Replace the whole key: repeated passes cannot form combinations of independent substitutions.
+	for (auto &target : equivalence_map[entry->second]) {
+		if (!source->Equals(target) && !target.get().CanThrow() && !target.get().IsVolatile() &&
+		    CanMatchExpression(target)) {
+			callback(ExpressionIterator::ReplaceExpression(filter, *source, target));
 		}
 	}
 }
 
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
-	// first loop over the remaining filters
+	vector<unique_ptr<Expression>> inferred;
+	{
+		expression_set_t seen;
+		for (auto &filter : remaining_filters) {
+			if (!filter->IsVolatile() && !filter->CanThrow() && CanMatchExpression(*filter)) {
+				seen.insert(*filter);
+			}
+		}
+		for (auto &filter : remaining_filters) {
+			GenerateEquivalentKeyFilters(*filter, [&](unique_ptr<Expression> copy) {
+				if (seen.insert(*copy).second) {
+					inferred.push_back(std::move(copy));
+				}
+			});
+		}
+	}
+	// Scan pushdown results refer to the unchanged prefix of original filters.
 	for (auto &filter : remaining_filters) {
 		callback(std::move(filter));
 	}
 	remaining_filters.clear();
+	for (auto &filter : inferred) {
+		callback(std::move(filter));
+	}
 	// now loop over the equivalence sets
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
@@ -207,7 +420,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
 					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
 					auto between =
-					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					    BoundBetweenExpression::Create(context, entries[i].get().Copy(), std::move(lower_constant),
 					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
 					callback(std::move(between));
 				}
@@ -282,6 +495,17 @@ static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Ex
 	return make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(child_expr), col_type));
 }
 
+static unique_ptr<ExpressionFilter> CreateAdaptiveInFilter(unique_ptr<Expression> in_expr, const LogicalType &type) {
+	// Keep large lists pruning-only; evaluating them per row is expensive.
+	if (in_expr->Cast<BoundOperatorExpression>().GetChildren().size() >=
+	        InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD ||
+	    !ExpressionFilterExecutor::TryCreate(*in_expr)) {
+		return CreateOptionalExpressionFilter(std::move(in_expr), type);
+	}
+	return ExpressionFilter::CreateSelectivityOptionalFilter(std::move(in_expr), type,
+	                                                         SelectivityOptionalFilterType::IN_FILTER);
+}
+
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
 	for (idx_t i = 0; i < in_list.size(); i++) {
 		if (in_list[i].IsNull()) {
@@ -334,6 +558,52 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	}
 }
 
+optional_ptr<const Expression> FilterCombiner::GetComparedExpression(const Expression &filter) {
+	const auto filter_type = filter.GetExpressionType();
+	// BETWEEN and IN compare their first child with the others
+	const bool compares_first_child =
+	    filter_type == ExpressionType::COMPARE_BETWEEN || filter_type == ExpressionType::COMPARE_IN;
+	if ((!SupportedFilterComparison(filter_type) && !compares_first_child) || filter.IsVolatile()) {
+		return nullptr;
+	}
+	optional_ptr<const Expression> compared;
+	bool valid = true;
+	idx_t child_idx = 0;
+	ExpressionIterator::EnumerateChildren(filter, [&](const Expression &child) {
+		if (!child.IsFoldable()) {
+			valid = valid && !compared && (!compares_first_child || child_idx == 0);
+			compared = &child;
+		}
+		child_idx++;
+	});
+	return valid ? compared : nullptr;
+}
+
+void FilterCombiner::GenerateJoinFilters(const vector<JoinCondition> &conditions,
+                                         const vector<reference<const Expression>> &filters, JoinSide target_side,
+                                         const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	D_ASSERT(target_side == JoinSide::LEFT || target_side == JoinSide::RIGHT);
+	for (auto &cond : conditions) {
+		// A matched row has the same key value, including NULL for NOT DISTINCT FROM.
+		if (!cond.IsComparison() || (cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
+		                             cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+			continue;
+		}
+		auto &source = target_side == JoinSide::LEFT ? cond.GetRHS() : cond.GetLHS();
+		auto &target = target_side == JoinSide::LEFT ? cond.GetLHS() : cond.GetRHS();
+		// the join evaluates both sides once per row, a generated filter must not evaluate them differently
+		if (source.IsVolatile() || target.IsVolatile() || target.CanThrow() || source.IsFoldable() ||
+		    target.IsFoldable()) {
+			continue;
+		}
+		for (auto &filter : filters) {
+			if (CanMatchExpression(target) && IsKeyConstraint(filter, {source})) {
+				callback(ExpressionIterator::ReplaceExpression(filter.get(), source, target));
+			}
+		}
+	}
+}
+
 static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
@@ -342,11 +612,6 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 		return true;
 	}
 	return false;
-}
-
-static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
-	auto physical = type.InternalType();
-	return TypeIsNumeric(physical) || physical == PhysicalType::VARCHAR || physical == PhysicalType::BOOL;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
@@ -398,89 +663,6 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	    });
 }
 
-static bool IsColumnConstantOr(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
-	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
-		return false;
-	}
-	const auto &conjunction = expr.Cast<BoundConjunctionExpression>();
-	if (conjunction.GetChildren().empty()) {
-		return false;
-	}
-	for (const auto &child : conjunction.GetChildren()) {
-		if (!BoundComparisonExpression::IsComparison(*child) ||
-		    !SupportedFilterComparison(child->GetExpressionType())) {
-			return false;
-		}
-		const auto &comparison = child->Cast<BoundFunctionExpression>();
-		const auto &left = BoundComparisonExpression::Left(comparison);
-		const auto &right = BoundComparisonExpression::Right(comparison);
-		optional_ptr<const BoundColumnRefExpression> column_ref;
-		optional_ptr<const BoundConstantExpression> constant;
-		if (left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-		    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			column_ref = left.Cast<BoundColumnRefExpression>();
-			constant = right.Cast<BoundConstantExpression>();
-		} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		           right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			column_ref = right.Cast<BoundColumnRefExpression>();
-			constant = left.Cast<BoundConstantExpression>();
-		} else {
-			return false;
-		}
-		if (constant->GetValue().IsNull() || !TypeSupportsConstantFilter(column_ref->GetReturnType())) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static bool IsDirectNumericColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
-		return false;
-	}
-	const auto &comparison = expr.Cast<BoundFunctionExpression>();
-	const auto &left = BoundComparisonExpression::Left(comparison);
-	const auto &right = BoundComparisonExpression::Right(comparison);
-	const auto comparison_type = comparison.GetExpressionType();
-	const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
-	                                  comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
-	                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-	                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-	                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-	                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	return supported_comparison && left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-	       right.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-	       TypeSupportsMultiColumnComparison(left.GetReturnType()) &&
-	       TypeSupportsMultiColumnComparison(right.GetReturnType());
-}
-
-static bool IsMonotoneIntervalColumn(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION || expr.GetReturnType() != LogicalType::INTERVAL) {
-		return false;
-	}
-	const auto &function = expr.Cast<BoundFunctionExpression>();
-	return function.GetChildren().size() == 1 &&
-	       function.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-	       function.Function().GetStability() == FunctionStability::CONSISTENT &&
-	       IsKnownMonotonic(function.Function().GetArgProperties(0).monotonicity);
-}
-
-static bool IsMonotoneIntervalColumnComparison(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	if (bindings.size() != 2 || bindings[0] == bindings[1] || !BoundComparisonExpression::IsComparison(expr)) {
-		return false;
-	}
-	const auto &comparison = expr.Cast<BoundFunctionExpression>();
-	return SupportedFilterComparison(comparison.GetExpressionType()) &&
-	       IsMonotoneIntervalColumn(BoundComparisonExpression::Left(comparison)) &&
-	       IsMonotoneIntervalColumn(BoundComparisonExpression::Right(comparison));
-}
-
-static bool CanPushdownMultiColumnExpression(const Expression &expr, const vector<ColumnBinding> &bindings) {
-	return IsDirectNumericColumnComparison(expr, bindings) || IsMonotoneIntervalColumnComparison(expr, bindings) ||
-	       IsColumnConstantOr(expr);
-}
-
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
                                                                          const vector<ColumnBinding> &bindings) {
 	vector<ColumnBinding> distinct_bindings;
@@ -500,8 +682,11 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 	vector<ProjectionIndex> column_indexes;
 	column_indexes.reserve(distinct_bindings.size());
 	for (const auto &binding : distinct_bindings) {
-		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size()) {
+			return nullptr;
+		}
+		auto &column_id = get.GetColumnIds()[binding.column_index];
+		if (column_id.IsVirtualColumn() && !column_id.IsRowIdColumn()) {
 			return nullptr;
 		}
 		column_indexes.emplace_back(binding.column_index);
@@ -534,20 +719,23 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto table = get.GetTable();
-	if (table && table->IsDuckTable() && CanPushdownMultiColumnExpression(expr, bindings)) {
-		auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
-		if (!filter) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+	bool has_multiple_bindings = false;
+	for (idx_t binding_idx = 1; binding_idx < bindings.size(); ++binding_idx) {
+		if (bindings[binding_idx] != bindings[0]) {
+			has_multiple_bindings = true;
+			break;
 		}
-		get.table_filters.PushMultiColumnFilter(std::move(filter));
-		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
-	// we can only pushdown expressions that refer to exactly one column
-	for (idx_t i = 1; i < bindings.size(); i++) {
-		if (bindings[i] != bindings[0]) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+	if (has_multiple_bindings) {
+		auto table = get.GetTable();
+		if (table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr)) {
+			auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
+			if (filter) {
+				get.table_filters.PushMultiColumnFilter(std::move(filter));
+				return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+			}
 		}
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (!get.function.pushdown_expression(context, get, expr)) {
 		// the scan does not support pushing down THIS expression
@@ -580,6 +768,10 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	}
 	auto &column_ref = func.GetChildren()[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
+	if (constant_value_expr.GetValue().IsNull()) {
+		// prefix(col, NULL) is NULL and filters out every row - leave the filter in place, do not push it down
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	auto prefix_string = StringValue::Get(constant_value_expr.GetValue());
 	if (prefix_string.empty()) {
 		// empty prefix - skip
@@ -647,13 +839,8 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
 	auto proj_index = column_ref.Binding().column_index;
 
-	// constant value expr can sometimes be null. if so, push is not null filter, which will
-	// make the filter unsatisfiable and return no results.
 	if (constant_value_expr.GetValue().IsNull()) {
-		auto is_not_null = ExpressionFilter::CreateNullCheckExpression(
-		    CreateFilterTargetExpression(*func.GetChildren()[0]), ExpressionType::OPERATOR_IS_NOT_NULL);
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(is_not_null)));
-		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &like_string = StringValue::Get(constant_value_expr.GetValue());
 	if (like_string[0] == '%' || like_string[0] == '_') {
@@ -702,6 +889,20 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
 	}
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+}
+
+static bool TryPushdownDenseInFilter(TableFilterSet &table_filters, const BoundColumnRefExpression &column,
+                                     vector<Value> &values) {
+	if (values.empty() || !FilterCombiner::IsDenseRange(values)) {
+		return false;
+	}
+	// IsDenseRange sorts the values and only accepts consecutive integers.
+	auto lower_bound = CreateComparisonExpression(column, ExpressionType::COMPARE_GREATERTHANOREQUALTO, values.front());
+	auto upper_bound =
+	    CreateComparisonExpression(column, ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(values.back()));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	return true;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_filters,
@@ -755,21 +956,13 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		D_ASSERT(!const_value_expr.GetValue().IsNull());
 		in_list.push_back(const_value_expr.GetValue());
 	}
-	if (type.IsIntegral() && IsDenseRange(in_list)) {
-		// dense range! turn this into x >= min AND x <= max
-		// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
-		auto lower_bound = CreateComparisonExpression(
-		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
-		auto upper_bound = CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                              std::move(in_list.back()));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
-	// if this is not a dense range we can push an optional filter for zone-map pruning
+	// Keep the residual filter so scans can skip row filtering when it is not selective.
 	auto in_expr =
 	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.GetChildren()[0]), std::move(in_list));
-	table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(in_expr), type));
+	table_filters.PushFilter(proj_index, CreateAdaptiveInFilter(std::move(in_expr), type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -788,6 +981,9 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	}
 	ProjectionIndex proj_id;
 	LogicalType col_type = LogicalType::INVALID;
+	optional_ptr<const BoundColumnRefExpression> equality_column;
+	vector<Value> equality_values;
+	bool only_equalities = true;
 	for (idx_t i = 0; i < conj.GetChildren().size(); i++) {
 		auto &child = conj.GetChildren()[i];
 		if (!BoundComparisonExpression::IsComparison(*child)) {
@@ -820,6 +1016,11 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 
 		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+		only_equalities &= comparison_type == ExpressionType::COMPARE_EQUAL;
+		if (comparison_type == ExpressionType::COMPARE_EQUAL && !const_val->GetValue().IsNull()) {
+			equality_column = column_ref;
+			equality_values.push_back(const_val->GetValue());
+		}
 		if (const_val->GetValue().IsNull()) {
 			switch (comparison_type) {
 			case ExpressionType::COMPARE_DISTINCT_FROM: {
@@ -844,6 +1045,16 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			    CreateComparisonExpression(*column_ref, comparison_type, const_val->GetValue()));
 		}
 	}
+	if (only_equalities && equality_column) {
+		if (TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
+			return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		}
+		// Push the same filter as for `col IN (...)`, which index scans can use.
+		auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*equality_column),
+		                                                    std::move(equality_values));
+		table_filters.PushFilter(proj_id, CreateAdaptiveInFilter(std::move(in_expr), col_type));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
@@ -858,19 +1069,30 @@ static bool IsLessThan(ExpressionType type) {
 
 //! Returns the relaxation margin in native units of the source type for a temporal cast.
 //! Returns -1 if the cast pair is not supported for relaxed pushdown.
-//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+//! Margins: 48h for timestamp casts that read the time zone, 1 day DATE->TIMESTAMPTZ, 24h for time of day, 1s rounding.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
+	static constexpr int64_t TIME_ZONE_MARGIN = 2LL * Interval::MICROS_PER_DAY; // microseconds
 	if (source == target) {
-		return 0;
+		switch (source) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return 0;
+		default:
+			// non-temporal types with the same id can differ (e.g. UNION or DECIMAL types)
+			return -1;
+		}
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		// native unit: microseconds
 		switch (target) {
-		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return 2LL * Interval::MICROS_PER_HOUR;
+			return TIME_ZONE_MARGIN;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY;
 		case LogicalTypeId::TIMESTAMP_MS:
@@ -879,8 +1101,18 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		default:
 			return -1;
 		}
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return TIME_ZONE_MARGIN;
+		default:
+			return -1;
+		}
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -889,6 +1121,19 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return Interval::MICROS_PER_SEC * 1000LL;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		// ICU does not override these, so they only lose precision
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+			return TIME_ZONE_MARGIN * 1000LL;
 		default:
 			return -1;
 		}
@@ -1115,6 +1360,7 @@ void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, con
 
 TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
                                                         vector<FilterPushdownResult> &pushdown_results) {
+	DeduplicateFilters(remaining_filters);
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
@@ -1197,7 +1443,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		return ret;
 	} else {
 		// comparison between two non-scalars
-		// only handle comparisons for now
 		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return FilterResult::UNSUPPORTED;
 		}
@@ -1241,7 +1486,8 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 }
 
 FilterResult FilterCombiner::AddFilter(Expression &expr) {
-	if (expr.HasParameter()) {
+	// every occurrence of a volatile expression is its own evaluation, so it cannot share an equivalence set
+	if (expr.HasParameter() || expr.IsVolatile()) {
 		return FilterResult::UNSUPPORTED;
 	}
 	if (expr.IsFoldable()) {
@@ -1250,7 +1496,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
 			return FilterResult::UNSUPPORTED;
 		}
-		result = result.DefaultCastAs(LogicalType::BOOLEAN);
+		result = result.CastAs(context, LogicalType::BOOLEAN);
 		// check if the filter passes
 		if (result.IsNull() || !BooleanValue::Get(result)) {
 			// the filter does not pass the scalar test, create an empty result
@@ -1352,47 +1598,18 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	return FilterResult::UNSUPPORTED;
 }
 
-/*
- * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
- * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
- */
+// Infer constant bounds from comparisons between non-scalar expressions.
 FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root) {
 	if (!IsGreaterThan(comparison.GetExpressionType()) && !IsLessThan(comparison.GetExpressionType())) {
 		return FilterResult::UNSUPPORTED;
 	}
+	// Derived bounds must not duplicate volatile or throwing expressions.
+	if (comparison.IsVolatile() || comparison.CanThrow()) {
+		return FilterResult::UNSUPPORTED;
+	}
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*BoundComparisonExpression::LeftMutable(comparison));
-	reference<Expression> right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
-	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-	do {
-		if (right_node.get().GetExpressionType() != ExpressionType::OPERATOR_CAST) {
-			break;
-		}
-		auto &bound_cast_expr = right_node.get().Cast<BoundFunctionExpression>();
-		if (BoundCastExpression::Child(bound_cast_expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			break;
-		}
-		auto &col_ref = BoundCastExpression::Child(bound_cast_expr).Cast<BoundColumnRefExpression>();
-		for (auto &stored_exp : stored_expressions) {
-			const_reference<Expression> expr = stored_exp.first;
-			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-				expr = BoundCastExpression::Child(right_node.get().Cast<BoundFunctionExpression>());
-			}
-			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
-			if (st_col_ref.Binding() != col_ref.Binding()) {
-				continue;
-			}
-			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
-				continue;
-			}
-			BoundCastExpression::ChildMutable(bound_cast_expr) = stored_exp.second->Copy();
-			right_node = GetNode(*BoundCastExpression::ChildMutable(bound_cast_expr));
-			break;
-		}
-	} while (false);
+	auto &right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
 
 	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;

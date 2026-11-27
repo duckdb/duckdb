@@ -6,8 +6,17 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 
 namespace duckdb {
+
+[[noreturn]] static void ThrowUnsupportedMatchType(const char *message, PhysicalType type) {
+	throw InternalException(message, EnumUtil::ToString(type));
+}
+
+[[noreturn]] static void ThrowUnsupportedMatchPredicate(const char *message, ExpressionType predicate) {
+	throw InternalException(message, EnumUtil::ToString(predicate));
+}
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
@@ -62,9 +71,15 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 }
 
 template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
-                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
-                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+static idx_t TemplatedMatch(Vector &lhs, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
+                            const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                            const idx_t col_idx, const vector<MatchFunction> &child_functions,
+                            SelectionVector *no_match_sel, idx_t &no_match_count) {
+	if constexpr (std::is_same_v<T, string_t> && StringComparison::IsOrdering<OP>()) {
+		using WIDE_OP = StringOrderingOperator<OP, StringComparisonMode::PREFIX>;
+		return TemplatedMatch<NO_MATCH_SEL, T, WIDE_OP>(lhs, lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                col_idx, child_functions, no_match_sel, no_match_count);
+	}
 #if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);
@@ -158,7 +173,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 template <typename OP>
 static idx_t SelectComparison(const Vector &, const Vector &, const SelectionVector &, idx_t, SelectionVector *,
                               SelectionVector *) {
-	throw NotImplementedException("Unsupported list comparison operand for RowMatcher::GetMatchFunction");
+	NotImplementedException::Throw("Unsupported list comparison operand for RowMatcher::GetMatchFunction");
 }
 
 template <>
@@ -332,8 +347,7 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 		// Same logic as for lists
 		return GetListMatchFunction<NO_MATCH_SEL>(predicate);
 	default:
-		throw InternalException("Unsupported PhysicalType for RowMatcher::GetMatchFunction: %s",
-		                        EnumUtil::ToString(type.InternalType()));
+		ThrowUnsupportedMatchType("Unsupported PhysicalType for RowMatcher::GetMatchFunction: %s", type.InternalType());
 	}
 }
 
@@ -366,8 +380,7 @@ MatchFunction RowMatcher::GetMatchFunction(const ExpressionType predicate) {
 		result.function = TemplatedMatch<NO_MATCH_SEL, T, LessThanEquals>;
 		break;
 	default:
-		throw InternalException("Unsupported ExpressionType for RowMatcher::GetMatchFunction: %s",
-		                        EnumUtil::ToString(predicate));
+		ThrowUnsupportedMatchPredicate("Unsupported ExpressionType for RowMatcher::GetMatchFunction: %s", predicate);
 	}
 	return result;
 }
@@ -415,8 +428,8 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThanEquals>;
 		return result;
 	default:
-		throw InternalException("Unsupported ExpressionType for RowMatcher::GetStructMatchFunction: %s",
-		                        EnumUtil::ToString(predicate));
+		ThrowUnsupportedMatchPredicate("Unsupported ExpressionType for RowMatcher::GetStructMatchFunction: %s",
+		                               predicate);
 	}
 
 	result.child_functions.reserve(StructType::GetChildCount(type));
@@ -456,8 +469,8 @@ MatchFunction RowMatcher::GetListMatchFunction(const ExpressionType predicate) {
 		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThanEquals>;
 		break;
 	default:
-		throw InternalException("Unsupported ExpressionType for RowMatcher::GetListMatchFunction: %s",
-		                        EnumUtil::ToString(predicate));
+		ThrowUnsupportedMatchPredicate("Unsupported ExpressionType for RowMatcher::GetListMatchFunction: %s",
+		                               predicate);
 	}
 	return result;
 }

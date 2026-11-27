@@ -1,0 +1,24 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_logging_wrapper.test
+# description: Cache events of reads through the caching file system wrapper are attributed to the query
+# group: [external_file_cache]
+
+require httpfs
+
+require skip_reload
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+CALL enable_logging('ExternalFileCache', storage = 'memory');
+
+statement ok
+from read_csv('https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv');
+
+statement ok
+CALL disable_logging();
+
+query II
+select count(*) > 0, count(*) filter (query_id is null) from duckdb_logs_parsed('ExternalFileCache');
+----
+true	0

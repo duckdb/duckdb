@@ -16,6 +16,9 @@ namespace duckdb {
 //! LogicalLimit represents a LIMIT clause
 class LogicalLimit : public LogicalOperator {
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_LIMIT;
 
 public:
@@ -23,6 +26,8 @@ public:
 
 	BoundLimitNode limit_val;
 	BoundLimitNode offset_val;
+	//! SQL offset before row group pruning removed rows from the scan.
+	optional_idx unpruned_offset;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -30,6 +35,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
+	//! Warns that an OFFSET skips rows of an input whose row order is not guaranteed
+	static void WarnUnorderedOffset(ClientContext &context);
 
 protected:
 	void ResolveTypes() override;

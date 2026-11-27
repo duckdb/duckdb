@@ -1,6 +1,7 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -63,7 +64,7 @@ public:
 			const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 			if (!path_val.IsNull()) {
 				constant = true;
-				path = path_val.DefaultCastAs(LogicalType::VARCHAR).GetValue<string>();
+				path = path_val.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			}
 		}
 		return make_uniq<JSONModifyFunctionData>(constant, std::move(path));
@@ -361,35 +362,45 @@ static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetSetFunction() {
-	ScalarFunction fun("json_set", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonSetFunction, JSONModifyFunctionData::Bind, nullptr,
+	ScalarFunction fun("json_set", {}, LogicalType::JSON(), JsonSetFunction, JSONModifyFunctionData::Bind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.GetSignature()
+	    .AddParameter("json", LogicalType::JSON())
+	    .AddParameter("path", LogicalType::VARCHAR)
+	    .AddParameter("value", LogicalType::JSON());
 	// throws for invalid JSON paths
 	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetInsertFunction() {
-	ScalarFunction fun("json_insert", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonInsertFunction, JSONModifyFunctionData::Bind, nullptr,
-	                   JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_insert", {}, LogicalType::JSON(), JsonInsertFunction, JSONModifyFunctionData::Bind,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature()
+	    .AddParameter("json", LogicalType::JSON())
+	    .AddParameter("path", LogicalType::VARCHAR)
+	    .AddParameter("value", LogicalType::JSON());
 	// throws for invalid JSON paths
 	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetReplaceFunction() {
-	ScalarFunction fun("json_replace", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonReplaceFunction, JSONModifyFunctionData::Bind, nullptr,
-	                   JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_replace", {}, LogicalType::JSON(), JsonReplaceFunction, JSONModifyFunctionData::Bind,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature()
+	    .AddParameter("json", LogicalType::JSON())
+	    .AddParameter("path", LogicalType::VARCHAR)
+	    .AddParameter("value", LogicalType::JSON());
 	// throws for invalid JSON paths
 	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRemoveFunction() {
-	ScalarFunction fun("json_remove", {LogicalType::JSON(), LogicalType::VARCHAR}, LogicalType::JSON(),
-	                   JsonRemoveFunction, JSONModifyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_remove", {}, LogicalType::JSON(), JsonRemoveFunction, JSONModifyFunctionData::Bind,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", LogicalType::JSON()).AddParameter("path", LogicalType::VARCHAR);
 	// throws for invalid JSON paths
 	fun.SetFallible();
 	return ScalarFunctionSet(fun);

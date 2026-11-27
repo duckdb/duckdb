@@ -37,17 +37,21 @@ void WindowCollection::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &sp
 }
 
 void WindowCollection::Combine(const ColumnSet &validity_cols) {
-	lock_guard<mutex> collection_guard(lock);
+	CallOnce(combine_once, [&] {
+		try {
+			CombineInternal(validity_cols);
+		} catch (...) {
+			combine_error = std::current_exception();
+		}
+	});
+	if (combine_error) {
+		std::rethrow_exception(combine_error);
+	}
+}
 
+void WindowCollection::CombineInternal(const ColumnSet &validity_cols) {
 	// If there are no columns (COUNT(*)) then this is a NOP
 	if (types.empty()) {
-		return;
-	}
-
-	// Have we already combined?
-	if (inputs->Count()) {
-		D_ASSERT(collections.empty());
-		D_ASSERT(ranges.empty());
 		return;
 	}
 
@@ -144,10 +148,19 @@ WindowCursor::WindowCursor(const WindowCollection &paged, column_t col_idx)
 }
 
 LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_t begin) {
+	vector<LogicalType> types;
+	for (column_t c = 0; c < end; ++c) {
+		types.push_back(chunk.data[c].GetType());
+	}
+	return PrefixStructType(types, end, begin);
+}
+
+LogicalType WindowCollectionChunkScanner::PrefixStructType(const vector<LogicalType> &types, column_t end,
+                                                           column_t begin) {
 	child_list_t<LogicalType> partition_children;
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
-		auto type = chunk.data[c].GetType();
+		auto type = types[c];
 		std::pair<Identifier, LogicalType> child {Identifier(name), type};
 		partition_children.emplace_back(child);
 	}

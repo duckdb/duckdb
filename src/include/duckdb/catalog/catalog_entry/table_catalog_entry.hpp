@@ -27,6 +27,7 @@
 namespace duckdb {
 
 class DataTable;
+class DuckTableEntry;
 struct CreateTriggerInfo;
 
 struct RenameColumnInfo;
@@ -89,7 +90,7 @@ public:
 	virtual DataTable &GetStorage();
 
 	//! Returns a list of the constraints of the table
-	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints() const;
+	DUCKDB_API virtual const vector<unique_ptr<Constraint>> &GetConstraints() const;
 	DUCKDB_API string ToSQL() const override;
 
 	//! Get statistics of a column (physical or virtual) within the table
@@ -109,8 +110,15 @@ public:
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
 	                                      const EntryLookupInfo &lookup_info);
 
+	//! Whether this table should be bound like a DuckDB table. Entries that are not a DuckTableEntry can also
+	//! return true (e.g. to have DML bound with the DuckDB table layout), so use TryGetDuckTableEntry() instead of
+	//! casting.
 	virtual bool IsDuckTable() const {
 		return false;
+	}
+	//! Returns this entry as a DuckTableEntry, or nullptr if it is not one
+	virtual optional_ptr<DuckTableEntry> TryGetDuckTableEntry() {
+		return nullptr;
 	}
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);

@@ -1,7 +1,9 @@
 #include "core_functions/scalar/blob_functions.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/function/encoding_function.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -11,6 +13,13 @@ void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// encode is essentially a nop cast from varchar to blob
 	// we only need to reinterpret the data using the blob type
 	result.Reinterpret(args.data[0]);
+}
+
+unique_ptr<BaseStatistics> EncodeStats(ClientContext &context, FunctionStatisticsInput &input) {
+	// the bytes are unchanged, so the input stats carry over to the blob
+	auto result = BaseStatistics::CreateEmpty(LogicalType::BLOB);
+	result.Merge(input.child_stats[0]);
+	return result.ToUnique();
 }
 
 enum class DecodeErrorBehavior : uint8_t {
@@ -82,7 +91,7 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			    auto new_str = Utf8Proc::RemoveInvalid(input_data, input_length);
 			    auto target = StringVector::EmptyString(result, new_str.size());
 			    auto output = target.GetDataWriteable();
-			    memcpy(output, new_str.data(), new_str.size());
+			    memcpy(output, new_str.data(), new_str.size()); // NOLINT(bugprone-not-null-terminated-result)
 			    target.Finalize();
 			    return target;
 		    }
@@ -102,24 +111,52 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
+unique_ptr<Expression> BindEncodeExpression(FunctionBindExpressionInput &input) {
+	return EncodingFunction::BindCall(input.context, input.children, true);
+}
+
+unique_ptr<Expression> BindDecodeExpression(FunctionBindExpressionInput &input) {
+	return EncodingFunction::BindCall(input.context, input.children, false);
+}
+
 } // namespace
 
-ScalarFunction EncodeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction);
+ScalarFunctionSet EncodeFun::GetFunctions() {
+	ScalarFunctionSet encode("encode");
+
+	ScalarFunction unary_function({}, LogicalType::BLOB, EncodeFunction);
+	unary_function.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	unary_function.SetStatisticsCallback(EncodeStats);
+
+	// the encoding is bound to the function of the encoding in system.encodings
+	ScalarFunction binary_function({}, LogicalType::BLOB, nullptr);
+	binary_function.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("encoding", LogicalType::VARCHAR);
+	binary_function.SetBindExpressionCallback(BindEncodeExpression);
+	binary_function.SetFallible();
+
+	encode.AddFunction(unary_function);
+	encode.AddFunction(binary_function);
+	return encode;
 }
 
 ScalarFunctionSet DecodeFun::GetFunctions() {
 	ScalarFunctionSet decode("decode");
 
-	ScalarFunction unary_function({LogicalType::BLOB}, LogicalType::VARCHAR, UnaryDecodeFunction);
-	ScalarFunction binary_function({LogicalType::BLOB, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               BinaryDecodeFunction);
+	ScalarFunction unary_function({}, LogicalType::VARCHAR, UnaryDecodeFunction);
+	unary_function.GetSignature().AddParameter("blob", LogicalType::BLOB);
 
-	unary_function.SetFallible();
-	binary_function.SetFallible();
+	ScalarFunction binary_function({}, LogicalType::VARCHAR, BinaryDecodeFunction);
+	binary_function.GetSignature()
+	    .AddParameter("blob", LogicalType::BLOB)
+	    .AddParameter("error_option", LogicalType::VARCHAR);
+
+	binary_function.SetBindExpressionCallback(BindDecodeExpression);
 
 	decode.AddFunction(unary_function);
 	decode.AddFunction(binary_function);
+	decode.SetFallible();
 
 	return decode;
 }

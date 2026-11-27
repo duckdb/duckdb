@@ -15,8 +15,6 @@ class FullSortGroup {
 public:
 	FullSortGroup(ClientContext &client, const Sort &sort);
 
-	atomic<idx_t> count;
-
 	//	Sink
 	unique_ptr<GlobalSinkState> sort_global;
 
@@ -24,7 +22,7 @@ public:
 	unique_ptr<GlobalSourceState> sort_source;
 };
 
-FullSortGroup::FullSortGroup(ClientContext &client, const Sort &sort) : count(0) {
+FullSortGroup::FullSortGroup(ClientContext &client, const Sort &sort) {
 	sort_global = sort.GetGlobalSinkState(client);
 }
 
@@ -38,7 +36,7 @@ public:
 	FullSortGlobalSinkState(ClientContext &client, const FullSort &full_sort);
 
 	// OVER(PARTITION BY...) (hash grouping)
-	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
+	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress);
 
 	//! System and query state
 	ClientContext &client;
@@ -50,6 +48,8 @@ public:
 
 	// Threading
 	atomic<idx_t> count;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 };
 
 FullSortGlobalSinkState::FullSortGlobalSinkState(ClientContext &client, const FullSort &full_sort)
@@ -58,23 +58,10 @@ FullSortGlobalSinkState::FullSortGlobalSinkState(ClientContext &client, const Fu
 	hash_group = make_uniq<FullSortGroup>(client, *full_sort.sort);
 }
 
-ProgressData FullSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
+ProgressData FullSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) {
 	lock_guard<mutex> guard(lock);
-	const auto &sort = full_sort.sort;
-
-	const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-	result.done += group_progress.done;
-	result.invalid = result.invalid || group_progress.invalid;
-
-	return result;
+	const auto sorted_count = hash_group ? full_sort.sort->GetSortedCount(*hash_group->sort_global) : 0;
+	return Sort::GetSinkProgress(source, sorted_count, count, sink_progress);
 }
 
 SinkFinalizeType FullSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
@@ -186,7 +173,6 @@ SinkResultType FullSort::Sink(ExecutionContext &context, DataChunk &input_chunk,
 	auto &hash_group = *gstate.hash_group;
 	OperatorSinkInput input {*hash_group.sort_global, *sort_local, sink.interrupt_state};
 	sort->Sink(context, payload_chunk, input);
-	hash_group.count += payload_chunk.size();
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -229,7 +215,11 @@ FullSortGlobalSourceState::FullSortGlobalSourceState(ClientContext &client, Full
 
 	auto &hash_group = gsink.hash_group;
 	if (hash_group) {
-		chunk_row.count = hash_group->count;
+		chunk_row.count = gsink.count;
+		const auto &partition_limit = gsink.full_sort.partition_limit;
+		if (partition_limit.IsValid()) {
+			chunk_row.count = MinValue(chunk_row.count, partition_limit.GetIndex());
+		}
 		chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	}
 
@@ -240,8 +230,8 @@ FullSortGlobalSourceState::FullSortGlobalSourceState(ClientContext &client, Full
 // FullSort
 //===--------------------------------------------------------------------===//
 FullSort::FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys, const Types &input_types,
-                   bool require_payload)
-    : SortStrategy(input_types) {
+                   bool require_payload, optional_idx partition_limit)
+    : SortStrategy(input_types, partition_limit) {
 	//	We have to compute ordering expressions ourselves and materialise them.
 	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
 	for (const auto &order : order_bys) {
@@ -333,7 +323,11 @@ FullSort::HashGroupPtr FullSort::GetColumnData(idx_t hash_bin, OperatorSourceInp
 
 	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
 	//	get the result...
-	if (result && result->Count() == hash_group.count) {
+	if (result && result->Count() == gsink.count) {
+		const auto &partition_limit = gsink.full_sort.partition_limit;
+		if (partition_limit.IsValid()) {
+			result->Truncate(partition_limit.GetIndex());
+		}
 		return result;
 	}
 
@@ -357,7 +351,7 @@ FullSort::SortedRunPtr FullSort::GetSortedRun(ClientContext &client, idx_t hash_
 
 	auto result = sort->GetSortedRun(sort_global);
 	if (!result) {
-		D_ASSERT(hash_group.count == 0);
+		D_ASSERT(gsink.count == 0);
 		result = make_uniq<SortedRun>(client, *sort, false);
 	}
 

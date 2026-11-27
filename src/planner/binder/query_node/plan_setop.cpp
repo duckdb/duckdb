@@ -71,24 +71,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
-	// create actual logical ops for setops
-	LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID;
-	switch (node.setop_type) {
-	case SetOperationType::UNION:
-	case SetOperationType::UNION_BY_NAME:
-		logical_type = LogicalOperatorType::LOGICAL_UNION;
-		break;
-	case SetOperationType::EXCEPT:
-		logical_type = LogicalOperatorType::LOGICAL_EXCEPT;
-		break;
-	case SetOperationType::INTERSECT:
-		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
-		break;
-	default:
-		throw InternalException("Unsupported logical operator type for set-operation");
-	}
 	// Generate the logical plan for the children of the set operation
-
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
 	for (auto &child : node.bound_children) {
@@ -98,8 +81,36 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		child_node = CastLogicalOperatorToTypes(child.types, node.types, std::move(child_node));
 		children.push_back(std::move(child_node));
 	}
-	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type,
-	                                           node.setop_all);
+	unique_ptr<LogicalOperator> root;
+	switch (node.setop_type) {
+	case SetOperationType::UNION:
+	case SetOperationType::UNION_BY_NAME:
+		root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children),
+		                                      LogicalOperatorType::LOGICAL_UNION, node.setop_all);
+		break;
+	case SetOperationType::EXCEPT:
+	case SetOperationType::INTERSECT: {
+		D_ASSERT(children.size() == 2);
+		auto logical_type = node.setop_type == SetOperationType::EXCEPT ? LogicalOperatorType::LOGICAL_EXCEPT
+		                                                                : LogicalOperatorType::LOGICAL_INTERSECT;
+		if (node.setop_all) {
+			// EXCEPT ALL and INTERSECT ALL stay a set operation until the optimizer has moved the filters around
+			// it and chooses how to run it (see SetOperationAggregate)
+			auto setop = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children),
+			                                            logical_type, true);
+			// the types of the set operation carry the collations its columns are compared under
+			setop->comparison_types = node.types;
+			root = std::move(setop);
+		} else {
+			// EXCEPT is an ANTI join and INTERSECT a SEMI join on all columns
+			root = LogicalSetOperation::CreateJoin(*this, node.types, node.setop_index, logical_type, false,
+			                                       std::move(children[0]), std::move(children[1]));
+		}
+		break;
+	}
+	default:
+		throw InternalException("Unsupported logical operator type for set-operation");
+	}
 	return VisitQueryNode(node, std::move(root));
 }
 

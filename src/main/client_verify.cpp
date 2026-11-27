@@ -14,7 +14,9 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -30,6 +32,18 @@ struct PreparedStatementVerification {
 
 	identifier_map_t<unique_ptr<ParsedExpression>> values;
 };
+
+//! The offset of a MATCH_RECOGNIZE navigation (FIRST, LAST, PREV or NEXT), which must stay a constant
+static optional_ptr<unique_ptr<ParsedExpression>> MatchRecognizeNavigationOffset(FunctionExpression &function) {
+	if (function.GetArguments().size() != 2 || function.GetQualifiedName().Path().size() > 1) {
+		return nullptr;
+	}
+	auto name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+	if (name != "FIRST" && name != "LAST" && name != "PREV" && name != "NEXT") {
+		return nullptr;
+	}
+	return &function.GetArgumentsMutable()[1].GetExpressionMutable();
+}
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
@@ -62,8 +76,19 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		expr = std::move(parameter);
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr,
-	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery = expr->Cast<SubqueryExpression>().Subquery();
+		ConvertConstants(*subquery->node);
+	}
+	optional_ptr<unique_ptr<ParsedExpression>> constant_child;
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		constant_child = MatchRecognizeNavigationOffset(expr->Cast<FunctionExpression>());
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		if (&child != constant_child.get()) {
+			ConvertConstants(child);
+		}
+	});
 }
 
 //! Swap in a statement produced by verification, carrying over the source text of the statement the user
@@ -74,7 +99,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 }
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-                                          PendingQueryParameters query_parameters) {
+                                          QueryParameters query_parameters, bool allow_nested_statements) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -83,15 +108,9 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		}
 		ReplaceStatement(statement, statement->Copy());
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
-		if (statement->type == StatementType::RELATION_STATEMENT) {
-			// reparsing not supported for relation statements
-			return;
-		}
-		auto parser_options = GetParserOptions();
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
-		parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
-		Parser parser(parser_options);
+		Parser parser(*this, IdentifierCaseMode::PRESERVE_CASE);
 		ErrorData error;
 		parser.ParseQuery(statement->ToString());
 		// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
@@ -180,7 +199,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			throw InternalException("Unsupported type for serialization verification");
 		}
 	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
-		if (statement->type != StatementType::SELECT_STATEMENT) {
+		if (!allow_nested_statements || statement->type != StatementType::SELECT_STATEMENT) {
 			// only supported for SELECT (for now?)
 			return;
 		}
@@ -188,7 +207,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// not supported for statements that already take parameters
 			return;
 		}
-		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+		if (query_parameters.statement_args && !query_parameters.statement_args->empty()) {
 			// not supported for statements that already have parameters
 			return;
 		}
@@ -239,7 +258,13 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		execute->named_values = std::move(prep_verifier.values);
 
 		ReplaceStatement(statement, std::move(execute));
-	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT) {
+	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT ||
+	           verification == DebugStatementVerification::EXPLAIN_SQL ||
+	           verification == DebugStatementVerification::EXPLAIN_SQL_STRICT) {
+		const bool export_sql = verification != DebugStatementVerification::EXPLAIN_STATEMENT;
+		if (!allow_nested_statements || (export_sql && statement->type != StatementType::SELECT_STATEMENT)) {
+			return;
+		}
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {
 			// don't explain explain...
 			return;
@@ -248,24 +273,66 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// not supported for statements that already take parameters
 			return;
 		}
-		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+		if (query_parameters.statement_args && !query_parameters.statement_args->empty()) {
 			// not supported for statements that already have parameters
 			return;
 		}
-		// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
-		// query would let it consume the error location that belongs to the statement we are verifying
-		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
-		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
-		// (which would lose parser timing captured before StatementVerification was called) and from
-		// overwriting the profiling output file with the EXPLAIN's profiling data.
-		auto &client_config = ClientConfig::GetConfig(*this);
-		bool saved_profiler = client_config.enable_profiler;
-		ScopedConfigSetting suppress_profiling(
-		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
-		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
-		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
-		if (explain_result->HasError()) {
-			explain_result->ThrowError();
+		auto explain_and_replace = [&]() {
+			// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
+			// query would let it consume the error location that belongs to the statement we are verifying
+			auto explain_stmt = make_uniq<ExplainStatement>(
+			    statement->Copy(), export_sql ? ExplainType::EXPLAIN_SQL : ExplainType::EXPLAIN_STANDARD);
+			explain_stmt->allow_unsupported_sql = verification == DebugStatementVerification::EXPLAIN_SQL;
+			// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
+			// (which would lose parser timing captured before StatementVerification was called) and from
+			// overwriting the profiling output file with the EXPLAIN's profiling data.
+			auto &client_config = ClientConfig::GetConfig(*this);
+			bool saved_profiler = client_config.enable_profiler;
+			ScopedConfigSetting suppress_profiling(
+			    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+			    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
+			auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
+			explain_result->ThrowIfError();
+			if (!export_sql) {
+				return;
+			}
+			auto chunk = explain_result->Fetch();
+			if (!chunk || chunk->size() == 0) {
+				D_ASSERT(verification == DebugStatementVerification::EXPLAIN_SQL);
+				return;
+			}
+			D_ASSERT(chunk && chunk->size() == 1 && chunk->ColumnCount() == 2);
+			auto sql = chunk->GetValue(1, 0).GetValue<string>();
+			auto parser_options = GetParserOptions();
+			parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
+			Parser parser(parser_options);
+			parser.ParseQuery(sql);
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT ||
+			    !parser.statements[0]->named_param_map.empty()) {
+				throw InternalException("SQL export verification did not produce one parameter-free SELECT");
+			}
+			ReplaceStatement(statement, std::move(parser.statements[0]));
+		};
+		// The generated SQL encodes what the optimizer derived under the planning snapshot (statistics, exact
+		// cardinalities), so it must execute in the transaction the EXPLAIN planned it in
+		const bool shared_transaction = export_sql && transaction.IsAutoCommit();
+		if (shared_transaction) {
+			transaction.SetAutoCommit(false);
+		}
+		try {
+			explain_and_replace();
+		} catch (...) {
+			if (shared_transaction) {
+				if (transaction.HasActiveTransaction()) {
+					transaction.Rollback(nullptr);
+				}
+				transaction.SetAutoCommit(true);
+			}
+			throw;
+		}
+		if (shared_transaction) {
+			// the transaction stays open and the verified statement commits it
+			transaction.SetAutoCommit(true);
 		}
 	}
 }

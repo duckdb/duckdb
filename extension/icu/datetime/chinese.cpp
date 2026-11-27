@@ -141,7 +141,10 @@ struct YearCache {
 };
 
 //! Two calendar systems, each with a cache of solstices and one of new years
-static thread_local YearCache YEAR_CACHES[2][2] = {};
+static YearCache &GetYearCache(idx_t setting, idx_t event) {
+	static thread_local YearCache year_caches[2][2] = {};
+	return year_caches[setting][event];
+}
 
 static bool TryGetCached(YearCache &cache, int32_t year, int32_t &day) {
 	const auto &entry = cache.entries[idx_t(uint32_t(year)) % YearCache::SIZE];
@@ -168,7 +171,7 @@ static int32_t SynodicMonthsBetween(int32_t day1, int32_t day2) {
 }
 
 int32_t ChineseCalendar::WinterSolstice(int32_t gyear) const {
-	auto &cache = YEAR_CACHES[GetSettingIndex()][0];
+	auto &cache = GetYearCache(GetSettingIndex(), 0);
 	int32_t cached;
 	if (TryGetCached(cache, gyear, cached)) {
 		return cached;
@@ -211,14 +214,20 @@ bool ChineseCalendar::IsLeapMonthBetween(int32_t new_moon1, int32_t new_moon2) c
 }
 
 int32_t ChineseCalendar::NewYear(int32_t gyear) const {
-	auto &cache = YEAR_CACHES[GetSettingIndex()][1];
+	auto &cache = GetYearCache(GetSettingIndex(), 1);
 	int32_t cached;
 	if (TryGetCached(cache, gyear, cached)) {
 		return cached;
 	}
 
 	const auto solstice_before = WinterSolstice(gyear - 1);
+	if (HasFailedInternal()) {
+		return 0;
+	}
 	const auto solstice_after = WinterSolstice(gyear);
+	if (HasFailedInternal()) {
+		return 0;
+	}
 	const auto new_moon1 = NewMoonNear(solstice_before + 1, true);
 	const auto new_moon2 = NewMoonNear(new_moon1 + SYNODIC_GAP, true);
 	const auto new_moon11 = NewMoonNear(solstice_after + 1, false);
@@ -367,7 +376,10 @@ int64_t ChineseCalendar::ComputeMonthStart(int32_t eyear, int32_t month, bool is
 	}
 
 	const auto new_year = NewYear(eyear);
-	auto new_moon = NewMoonNear(new_year + month * 29, true);
+	if (HasFailedInternal()) {
+		return 0;
+	}
+	auto new_moon = NewMoonNear(double(new_year) + month * 29, true);
 	if (HasFailedInternal()) {
 		return 0;
 	}

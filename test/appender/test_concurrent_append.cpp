@@ -5,6 +5,7 @@
 #include <atomic>
 #include <thread>
 #include <vector>
+#include "duckdb/main/settings.hpp"
 
 using namespace duckdb;
 
@@ -31,7 +32,7 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 TEST_CASE("Test concurrent appends", "[appender][.]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DBConfig config;
-	config.options.maximum_threads = 1;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 

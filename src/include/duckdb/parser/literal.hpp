@@ -67,8 +67,12 @@ public:
 	//! Negates a numeric literal by toggling the leading '-'
 	Literal Negate() const;
 
+	//! Throws if text does not conform to kind (used to validate deserialized literals)
+	void Verify() const;
 	//! Converts the literal into a Value
 	Value ToValue() const;
+	//! Converts the literal into a Value, a numeric literal wider than max_decimal_width digits becomes a DOUBLE
+	Value ToValue(uint32_t max_decimal_width) const;
 	//! Renders the literal as SQL text that parses back to the same literal
 	string ToString() const;
 

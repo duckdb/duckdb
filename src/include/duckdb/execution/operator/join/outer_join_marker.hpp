@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
@@ -19,6 +20,9 @@ struct OuterJoinGlobalScanState {
 	mutex lock;
 	ColumnDataCollection *data = nullptr;
 	ColumnDataParallelScanState global_scan;
+	atomic<idx_t> rows_scanned {0};
+
+	ProgressData GetProgress() const;
 };
 
 struct OuterJoinLocalScanState {
@@ -59,8 +63,9 @@ public:
 	//! Initialize a local scan
 	void InitializeScan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate);
 
-	//! Perform the scan
-	void Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result);
+	//! Perform the scan: the rows without a match, or with `matched` the rows with one
+	void Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result,
+	          bool matched = false);
 
 	//! Read-only matches vector
 	const bool *GetMatches() const {

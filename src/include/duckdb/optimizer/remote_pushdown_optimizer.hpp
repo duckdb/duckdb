@@ -90,6 +90,17 @@ public:
 
 	void Rewrite(unique_ptr<SQLStatement> &statement);
 
+	//! Drop the given catalog qualifier from every name in the tree. A two-part name (e.g. "db1.t") parses as
+	//! schema.name, so the catalog can sit in either slot
+	static void StripCatalogName(SQLStatement &statement, const Identifier &catalog_name);
+	static void StripCatalogName(QueryNode &node, const Identifier &catalog_name);
+	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
+	static void StripCatalogName(CreateInfo &info, const Identifier &catalog_name);
+	static void StripCatalogName(AlterInfo &info, const Identifier &catalog_name);
+	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
+	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
+	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
+
 private:
 	void FindRemoteCatalogsInSearchPath();
 	CatalogPushdownResult Rewrite(QueryNode &node);
@@ -123,8 +134,12 @@ private:
 	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
 	//! Resolve a (possibly nested) qualified name into the catalog it lives in and its schema path. This runs the
 	//! same catalog/schema ambiguity resolution the binder does, and - unlike Catalog()/Schema() - keeps every
-	//! level of a nested schema path. The catalog is empty when the name is not catalog-qualified
-	void ResolveQualification(const QualifiedName &name, Identifier &catalog_name, vector<Identifier> &schema_path);
+	//! level of a nested schema path. The catalog is empty when the name is not catalog-qualified. Returns false
+	//! when the name is a nested schema path its catalog doesn't support, so it can't name anything there and must
+	//! not be pushed down.
+	[[nodiscard]] bool ResolveQualification(const QualifiedName &name, Identifier &catalog_name,
+	                                        vector<Identifier> &schema_path,
+	                                        CatalogType type = CatalogType::TABLE_ENTRY);
 	//! Look an entry up in a catalog, defaulting to the main schema when the name carries no schema
 	optional_ptr<CatalogEntry> LookupEntry(const Identifier &catalog_name, const EntryLookupInfo &lookup,
 	                                       const vector<Identifier> &schema_path);
@@ -183,14 +198,6 @@ private:
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
-	static void StripCatalogName(SQLStatement &statement, const Identifier &catalog_name);
-	static void StripCatalogName(QueryNode &node, const Identifier &catalog_name);
-	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
-	static void StripCatalogName(CreateInfo &info, const Identifier &catalog_name);
-	static void StripCatalogName(AlterInfo &info, const Identifier &catalog_name);
-	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
-	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
-	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
 	bool RefersToLocalTable(const ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const;

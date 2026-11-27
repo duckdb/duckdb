@@ -1,0 +1,433 @@
+# name: test/optimizer/join_to_semi_join_volatile.test
+# description: join_to_semi_join does not change how often a volatile expression is evaluated: in its region, or between the region and a consumer that ignores duplicates; and it leaves a relation that modifies data or scans a VOLATILE table function alone
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+create table a as select * from (values (0, 0), (1, 10), (2, 20), (2, 20), (3, 30), (4, NULL), (NULL, 50), (6, 60), (7, 70), (7, 75)) t(x, y);
+
+statement ok
+create table b as select * from (values (0, 0), (1, 1), (2, 2), (2, 0), (3, NULL), (NULL, 1), (5, 2), (7, 0), (7, 0), (9, 1)) t(x, z);
+
+statement ok
+create table p as select * from (values (15, 35), (25, 45), (25, 45), (200, 300), (NULL, 50), (60, NULL), (0, 0)) t(lo, hi);
+
+statement ok
+create table q as select * from (values (5, 25), (NULL, NULL)) t(lo, hi);
+
+statement ok
+create table e (lo integer, hi integer);
+
+statement ok
+create table s as select * from (values ('1'), ('20'), ('x'), (NULL)) t(v);
+
+statement ok
+create sequence seq;
+
+statement ok
+create table log_t (lo integer);
+
+# a volatile predicate of the region is evaluated once per row of the region
+query II
+explain select distinct a.x from a, p where a.y > p.lo and nextval('seq') > 0;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile condition of a join above the region, below the DISTINCT
+query II
+explain select distinct t.x from (select a.x from a, p where a.y > p.lo) t join b on t.x = b.x and (t.x + nextval('seq')) > -100;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the same with the region's relations in the join itself, next to an outer join
+query II
+explain select distinct a.x from (a left join b on a.x = b.x) join p on a.y > p.lo and (a.x + nextval('seq')) > -100;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile filter above the region, below the DISTINCT
+query II
+explain select distinct x from (select a.x from a, p where a.y > p.lo) t where nextval('seq') > 0;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile projection that feeds the DISTINCT
+query II
+explain select distinct x, n from (select a.x, nextval('seq') > 0 as n from a, p where a.y > p.lo) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# max over a volatile argument
+query II
+explain select a.x, max(case when nextval('seq') > 0 then a.y end) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# max with a volatile FILTER
+query II
+explain select a.x, max(a.y) filter (where nextval('seq') > 0) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile condition of an outer join above the region
+query II
+explain select distinct t.x from (select a.x from a, p where a.y > p.lo) t left join b on t.x = b.x and nextval('seq') > 0;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile condition of the SEMI join whose right side the region is
+query II
+explain select * from b where exists (select 1 from a, p where a.y > p.lo and a.x = b.x and nextval('seq') > 0);
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*Join Type: SEMI.*
+
+# The volatile filter keeps the outer MARK join; its right side is still read as a set.
+query II
+explain select * from b where nextval('seq') > 0 and b.x in (select a.x from a, p where a.y > p.lo);
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*Join Type: SEMI.*
+
+# a materialized CTE whose definition is volatile: as the relation the predicates read
+query II
+explain with d as materialized (select lo, nextval('seq') as n from p) select distinct a.x from a, d where a.y > d.n;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# and as the relation they filter
+query II
+explain with d as materialized (select x, y, nextval('seq') as n from a) select distinct d.x from d, p where d.n > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a materialized CTE whose definition modifies data: an INSERT ... RETURNING as the relation the predicates read
+query II
+explain with d as materialized (insert into log_t select lo from p returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# an UPDATE ... RETURNING read through a plain CTE (a CTE that modifies data runs to completion either way)
+query II
+explain with d as (update log_t set lo = 0 returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a scan of a table function that declares itself VOLATILE: as the relation the predicates read
+query II
+explain select distinct a.x from a, duckdb_memory() m where a.y > least(m.memory_usage_bytes, 0);
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# and as the relation they filter
+query II
+explain select distinct length(m.tag) > 0 as b from duckdb_memory() m, p where length(m.tag) > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the results, with the optimizer on and off
+# ('extension' disables nothing that is used here: that is the run with the optimizer on)
+foreach disabled extension join_to_semi_join
+
+statement ok
+SET disabled_optimizers = '{disabled}';
+
+# a volatile predicate of the region is evaluated once per row of the region
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+select distinct a.x from a, p where a.y > p.lo and nextval('seq') > 0;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# a volatile condition of a join above the region, below the DISTINCT
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+select distinct t.x from (select a.x from a, p where a.y > p.lo) t join b on t.x = b.x and (t.x + nextval('seq')) > -100;
+----
+1
+2
+3
+7
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# the same with the region's relations in the join itself, next to an outer join
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+select distinct a.x from (a left join b on a.x = b.x) join p on a.y > p.lo and (a.x + nextval('seq')) > -100;
+----
+1
+2
+3
+6
+7
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+11
+
+# a volatile filter above the region, below the DISTINCT
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+select distinct x from (select a.x from a, p where a.y > p.lo) t where nextval('seq') > 0;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# a volatile projection that feeds the DISTINCT
+statement ok
+create or replace sequence seq;
+
+query II rowsort
+select distinct x, n from (select a.x, nextval('seq') > 0 as n from a, p where a.y > p.lo) t;
+----
+1	true
+2	true
+3	true
+6	true
+7	true
+NULL	true
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# max over a volatile argument
+statement ok
+create or replace sequence seq;
+
+query II rowsort
+select a.x, max(case when nextval('seq') > 0 then a.y end) from a, p where a.y > p.lo group by a.x;
+----
+1	10
+2	20
+3	30
+6	60
+7	75
+NULL	50
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# max with a volatile FILTER
+statement ok
+create or replace sequence seq;
+
+query II rowsort
+select a.x, max(a.y) filter (where nextval('seq') > 0) from a, p where a.y > p.lo group by a.x;
+----
+1	10
+2	20
+3	30
+6	60
+7	75
+NULL	50
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+28
+
+# a volatile condition of an outer join above the region
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+select distinct t.x from (select a.x from a, p where a.y > p.lo) t left join b on t.x = b.x and nextval('seq') > 0;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the sequence was advanced as often as without the optimizer: the LEFT join stays, its condition is volatile
+query I
+select nextval('seq');
+----
+34
+
+# a volatile condition of the SEMI join whose right side the region is
+statement ok
+create or replace sequence seq;
+
+query II rowsort
+select * from b where exists (select 1 from a, p where a.y > p.lo and a.x = b.x and nextval('seq') > 0);
+----
+1	1
+2	0
+2	2
+3	NULL
+7	0
+7	0
+
+# the sequence was advanced as often as without the optimizer
+query I
+select nextval('seq');
+----
+34
+
+# a volatile filter on the other side of an IN: the right side is read as a set, the left side is untouched
+statement ok
+create or replace sequence seq;
+
+query II rowsort
+select * from b where nextval('seq') > 0 and b.x in (select a.x from a, p where a.y > p.lo);
+----
+1	1
+2	0
+2	2
+3	NULL
+7	0
+7	0
+
+# The MARK join preserves all ten probe rows for the volatile filter.
+query I
+select nextval('seq');
+----
+11
+
+# a materialized CTE whose definition is volatile: as the relation the predicates read
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+with d as materialized (select lo, nextval('seq') as n from p) select distinct a.x from a, d where a.y > d.n;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the sequence was advanced once per row of the CTE
+query I
+select nextval('seq');
+----
+8
+
+# and as the relation they filter
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+with d as materialized (select x, y, nextval('seq') as n from a) select distinct d.x from d, p where d.n > p.lo;
+----
+0
+1
+2
+3
+4
+6
+7
+NULL
+
+# the sequence was advanced once per row of the CTE
+query I
+select nextval('seq');
+----
+11
+
+# a materialized CTE whose definition modifies data: the INSERT runs once either way, its RETURNING rows are the
+# relation the predicates read
+statement ok
+delete from log_t;
+
+query I rowsort
+with d as materialized (insert into log_t select lo from p returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the rows of p were inserted once
+query I
+select count(*) from log_t;
+----
+7
+
+# an UPDATE ... RETURNING read through a plain CTE, which runs to completion as well
+query I rowsort
+with d as (update log_t set lo = 0 returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+1
+2
+3
+6
+7
+NULL
+
+# every row was updated once
+query II
+select count(*), count(*) filter (where lo = 0) from log_t;
+----
+7	7
+
+# a scan of a table function that declares itself VOLATILE runs once in either plan; the predicate does not depend on
+# the live state, so that the result can be pinned
+query I rowsort
+select distinct a.x from a, duckdb_memory() m where a.y > least(m.memory_usage_bytes, 0);
+----
+1
+2
+3
+6
+7
+NULL
+
+# and as the relation the predicates filter
+query I
+select distinct length(m.tag) > 0 as b from duckdb_memory() m, p where length(m.tag) > p.lo;
+----
+true
+
+endloop
+
+statement ok
+RESET disabled_optimizers;

@@ -1,0 +1,70 @@
+# name: test/sql/cte/materialized/cte_empty_direct_fanout.test
+# description: Empty CTE fanout does not allocate every consumer's executor for every worker
+# group: [materialized]
+
+require 64bit
+
+require exact_vector_size 2048
+
+set query_timeout 60
+
+statement ok
+SET threads=64;
+
+statement ok
+SET memory_limit='1GB';
+
+statement ok
+CREATE TABLE cte_fanout_src(c0 VARCHAR);
+
+statement ok
+SET VARIABLE cte_fanout_query = (
+	SELECT 'WITH u0 AS MATERIALIZED (SELECT * FROM cte_fanout_src), ' ||
+	       'u1 AS MATERIALIZED (SELECT * FROM u0) ' ||
+	       string_agg('SELECT ' || branch_id::VARCHAR || ' AS k, c0 FROM u1 GROUP BY ALL',
+	                  ' UNION ALL ' ORDER BY branch_id)
+	FROM range(1000) t(branch_id)
+);
+
+# The second CTE introduces parallel exchange readers even when its input is empty.
+query I
+CREATE TABLE cte_fanout_out AS
+SELECT * FROM query(getvariable('cte_fanout_query'));
+----
+0
+
+query I
+SELECT count(*) FROM cte_fanout_out;
+----
+0
+
+# Consumers that receive no rows must still finalize their aggregate states.
+query II
+WITH u0 AS MATERIALIZED (SELECT * FROM cte_fanout_src),
+     u1 AS MATERIALIZED (SELECT * FROM u0)
+SELECT (SELECT count(*) FROM u1), (SELECT sum(length(c0)) FROM u1);
+----
+0	NULL
+
+query TI
+WITH u0 AS MATERIALIZED (SELECT * FROM cte_fanout_src),
+     u1 AS MATERIALIZED (SELECT * FROM u0)
+SELECT c0, count(*) FROM u1 GROUP BY GROUPING SETS ((c0), ());
+----
+NULL	0
+
+# A worker that receives input creates and retains its consumers until finalization.
+statement ok
+INSERT INTO cte_fanout_src VALUES ('x'), ('x'), (NULL);
+
+query ITI rowsort
+WITH u0 AS MATERIALIZED (SELECT * FROM cte_fanout_src),
+     u1 AS MATERIALIZED (SELECT * FROM u0)
+SELECT 0 AS k, c0, count(*) FROM u1 GROUP BY ALL
+UNION ALL
+SELECT 1 AS k, c0, count(*) FROM u1 GROUP BY ALL;
+----
+0	NULL	1
+0	x	2
+1	NULL	1
+1	x	2

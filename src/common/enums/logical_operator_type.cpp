@@ -44,6 +44,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ORDER_BY";
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		return "TOP_N";
+	case LogicalOperatorType::LOGICAL_TOP_KEY_FILTER:
+		return "TOP_KEY_FILTER";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
@@ -88,8 +90,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_MACRO";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "EXPLAIN";
-	case LogicalOperatorType::LOGICAL_EXECUTE:
-		return "EXECUTE";
 	case LogicalOperatorType::LOGICAL_VACUUM:
 		return "VACUUM";
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:

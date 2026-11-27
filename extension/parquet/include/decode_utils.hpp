@@ -42,7 +42,8 @@ public:
 			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 		const auto mask = BITPACK_MASKS[width];
-		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
+		// check once that every byte touched from the current bit position is available
+		src.Available((bitpack_pos + count * width + BITPACK_DLEN - 1) / BITPACK_DLEN);
 		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
 			idx_t remainder = count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			idx_t aligned_count = count - remainder;
@@ -51,13 +52,13 @@ public:
 			count = remainder;
 		}
 		for (idx_t i = 0; i < count; i++) {
-			auto val = (src.unsafe_get<uint8_t>() >> bitpack_pos) & mask;
+			auto val = (src.UnsafeGet<uint8_t>() >> bitpack_pos) & mask;
 			bitpack_pos += width;
 			while (bitpack_pos > BITPACK_DLEN) {
-				src.unsafe_inc(1);
-				val |= (static_cast<T>(src.unsafe_get<uint8_t>())
-				        << static_cast<T>(BITPACK_DLEN - (bitpack_pos - width))) &
-				       mask;
+				src.UnsafeInc(1);
+				val |=
+				    (static_cast<T>(src.UnsafeGet<uint8_t>()) << static_cast<T>(BITPACK_DLEN - (bitpack_pos - width))) &
+				    mask;
 				bitpack_pos -= BITPACK_DLEN;
 			}
 			dst[i] = val;
@@ -66,7 +67,8 @@ public:
 
 	static void Skip(ByteBuffer &src, bitpacking_width_t &bitpack_pos, idx_t count, const bitpacking_width_t width) {
 		CheckWidth(width);
-		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
+		// check once that every byte touched from the current bit position is available
+		src.Available((bitpack_pos + count * width + BITPACK_DLEN - 1) / BITPACK_DLEN);
 		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
 			idx_t remainder = count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			idx_t aligned_count = count - remainder;
@@ -78,7 +80,7 @@ public:
 			bitpack_pos = UnsafeNumericCast<bitpacking_width_t>(total_bits);
 		} else {
 			const idx_t bytes_to_advance = (total_bits - 1) / BITPACK_DLEN;
-			src.unsafe_inc(bytes_to_advance);
+			src.UnsafeInc(bytes_to_advance);
 			bitpack_pos = UnsafeNumericCast<bitpacking_width_t>(total_bits - bytes_to_advance * BITPACK_DLEN);
 		}
 	}
@@ -99,10 +101,31 @@ public:
 			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 
-		if (cast_pointer_to_uint64(src.ptr) % sizeof(T) == 0) {
+		if constexpr (std::is_unsigned<T>::value && (sizeof(T) == 4 || sizeof(T) == 8)) {
+			if (count >= 128) {
+				if (cast_pointer_to_uint64(src.GetCurrentLoc()) % sizeof(uint32_t) == 0) {
+					BitpackingPrimitives::UnPackBufferWithFrame<T>(data_ptr_cast(dst), src.GetCurrentLoc(), count,
+					                                               width, 0);
+					src.UnsafeInc(count * width / BITPACK_DLEN);
+					return;
+				}
+				T aligned_data[1024];
+				for (idx_t i = 0; i < count; i += 1024) {
+					const auto batch_count = MinValue<idx_t>(count - i, 1024);
+					const auto read_size = batch_count * width / BITPACK_DLEN;
+					memcpy(aligned_data, src.GetCurrentLoc(), read_size);
+					BitpackingPrimitives::UnPackBufferWithFrame<T>(data_ptr_cast(dst + i), data_ptr_cast(aligned_data),
+					                                               batch_count, width, 0);
+					src.UnsafeInc(read_size);
+				}
+				return;
+			}
+		}
+
+		if (cast_pointer_to_uint64(src.GetCurrentLoc()) % sizeof(T) == 0) {
 			// Fast path: aligned
-			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);
-			src.unsafe_inc(count * width / BITPACK_DLEN);
+			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.GetCurrentLoc(), count, width);
+			src.UnsafeInc(count * width / BITPACK_DLEN);
 			return;
 		}
 
@@ -113,12 +136,12 @@ public:
 			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 			// Copy over to aligned buffer
-			memcpy(aligned_data, src.ptr, next_read);
+			memcpy(aligned_data, src.GetCurrentLoc(), next_read);
 
 			// Unpack
 			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);
 
-			src.unsafe_inc(next_read);
+			src.UnsafeInc(next_read);
 			dst += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		}
 	}
@@ -131,7 +154,7 @@ public:
 			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 		}
 		const auto read_size = count * width / BITPACK_DLEN;
-		src.available(read_size); // check if buffer has enough space available once
+		src.Available(read_size); // check if buffer has enough space available once
 		BitUnpackAlignedInternal(src, dst, count, width);
 	}
 
@@ -142,7 +165,7 @@ public:
 			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 		}
 		const auto read_size = count * width / BITPACK_DLEN;
-		src.inc(read_size);
+		src.Inc(read_size);
 	}
 
 	//===--------------------------------------------------------------------===//
@@ -213,9 +236,9 @@ public:
 		while (true) {
 			uint8_t byte;
 			if (CHECKED) {
-				byte = buf.read<uint8_t>();
+				byte = buf.Read<uint8_t>();
 			} else {
-				byte = buf.unsafe_read<uint8_t>();
+				byte = buf.UnsafeRead<uint8_t>();
 			}
 			result |= T(byte & 127) << shift;
 			if ((byte & 128) == 0) {

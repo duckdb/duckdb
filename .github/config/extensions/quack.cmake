@@ -1,7 +1,7 @@
 duckdb_extension_load(quack
-    ## LOAD_TESTS
+    LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-quack
-    GIT_TAG 50bd1913e42999211208ace844db8ed6f1ba8687
-    SUBMODULES extension-ci-tools
+    GIT_TAG 02c9d4a085d7b4f4ad7846aefca8c8c1c78c2bd2
     APPLY_PATCHES
+    SUBMODULES extension-ci-tools
 )

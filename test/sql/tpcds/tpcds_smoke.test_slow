@@ -1,0 +1,9 @@
+# name: test/sql/tpcds/tpcds_smoke.test_slow
+# description: Run TPC-DS SF0.01 with bounded parallelism for smoke testing
+# group: [tpcds]
+
+# Concurrent smoke workers already provide parallelism across tests.
+statement ok
+SET threads=4;
+
+include test/sql/tpcds/tpcds_sf001.test_slow

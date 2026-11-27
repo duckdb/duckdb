@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/time_point.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 
@@ -19,6 +19,8 @@ struct RenderingResultIterator;
 
 struct ResultMetadata {
 	explicit ResultMetadata(duckdb::QueryResult &result);
+	explicit ResultMetadata(duckdb::QueryResultStream<> &stream);
+	ResultMetadata(const vector<duckdb::Identifier> &names, const vector<duckdb::LogicalType> &result_types);
 
 	vector<string> column_names;
 	vector<duckdb::LogicalType> types;
@@ -37,8 +39,12 @@ struct RowData {
 
 struct RenderingQueryResult {
 	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer);
+	RenderingQueryResult(duckdb::QueryResultStream<> &stream, ShellRenderer &renderer);
 
-	duckdb::QueryResult &result;
+	//! The retained result, or null when the rows come from a stream
+	duckdb::optional_ptr<duckdb::QueryResult> result;
+	//! The stream the rows come from, or null when they come from a retained result
+	duckdb::optional_ptr<duckdb::QueryResultStream<>> stream;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
 	vector<unique_ptr<duckdb::DataChunk>> chunks;
@@ -49,6 +55,10 @@ struct RenderingQueryResult {
 		return metadata.ColumnCount();
 	}
 	bool TryConvertChunk();
+	//! Runs the result to completion without rendering it. Stops early on an interrupt
+	void Drain(ShellState &state);
+	//! Whether the query failed while its rows were streamed: Fetch then returns null, like a clean end
+	bool HasError() const;
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
@@ -161,14 +171,14 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 };
 
-class ShellLogStorage : public duckdb::LogStorage {
+class ShellLogSink : public duckdb::LogSink {
 public:
-	explicit ShellLogStorage(ShellState &state);
+	explicit ShellLogSink(ShellState &state);
 
-	~ShellLogStorage() override = default;
+	~ShellLogSink() override = default;
 
-	const string GetStorageName() override {
-		return "ShellLogStorage";
+	const string GetSinkName() override {
+		return "ShellLogSink";
 	}
 
 protected:

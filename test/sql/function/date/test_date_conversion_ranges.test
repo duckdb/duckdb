@@ -1,0 +1,72 @@
+# name: test/sql/function/date/test_date_conversion_ranges.test
+# description: Year, month and day extraction round-trips over the full DATE range
+# group: [date]
+
+statement ok
+CREATE TABLE dates AS
+SELECT DATE '1970-01-01' + i::INTEGER AS d FROM range(-200000, 200000) t(i)
+UNION ALL
+SELECT DATE '1970-01-01' + i::INTEGER FROM range(-536010000, -535990000) t(i)
+UNION ALL
+SELECT DATE '1970-01-01' + i::INTEGER FROM range(535990000, 536010000) t(i)
+UNION ALL
+SELECT DATE '1970-01-01' + i::INTEGER FROM range(-2147483646, 2147483647, 99991) t(i)
+UNION ALL
+SELECT DATE '1970-01-01' + i::INTEGER FROM range(-2147483646, -2147483546) t(i)
+UNION ALL
+SELECT DATE '1970-01-01' + i::INTEGER FROM range(2147483547, 2147483647) t(i)
+
+query I
+SELECT count(*) FROM dates
+----
+483154
+
+# year/month/day (cached for common dates) round-trip through make_date
+query I
+SELECT count(*) FROM dates WHERE make_date(year(d), month(d), day(d)) <> d
+----
+0
+
+# the struct variant does not use the lookup cache
+query I
+SELECT count(*) FROM dates
+WHERE date_part(['year', 'month', 'day'], d) <> {'year': year(d), 'month': month(d), 'day': dayofmonth(d)}
+----
+0
+
+query I
+SELECT count(*) FROM dates WHERE d::VARCHAR::DATE <> d
+----
+0
+
+query I
+SELECT count(*) FROM dates WHERE year(d) > -5877641 AND dayofyear(d) <> d - make_date(year(d), 1, 1) + 1
+----
+0
+
+statement ok
+CREATE TABLE timestamps AS SELECT d, d::TIMESTAMP AS ts FROM dates WHERE year(d) BETWEEN -290000 AND 290000
+
+query I
+SELECT count(*) FROM timestamps WHERE (year(ts), month(ts), day(ts)) <> (year(d), month(d), day(d))
+----
+0
+
+query IIIIII
+SELECT d, year(d), month(d), day(d), dayofyear(d), date_part(['year', 'month', 'day'], d)
+FROM (VALUES (DATE '5877642-06-25 (BC)'), (DATE '5881580-07-10'), (DATE '2000-02-29'), (DATE '1900-02-28'),
+             (DATE '0001-01-01 (BC)'), (DATE '1600-03-01'), (DATE '2050-12-31'), (DATE '2051-01-01'),
+             (DATE '1969-12-31'), ('infinity'::DATE), ('-infinity'::DATE), (NULL)) t(d)
+----
+5877642-06-25 (BC)	-5877641	6	25	176	{'year': -5877641, 'month': 6, 'day': 25}
+5881580-07-10	5881580	7	10	192	{'year': 5881580, 'month': 7, 'day': 10}
+2000-02-29	2000	2	29	60	{'year': 2000, 'month': 2, 'day': 29}
+1900-02-28	1900	2	28	59	{'year': 1900, 'month': 2, 'day': 28}
+0001-01-01 (BC)	0	1	1	1	{'year': 0, 'month': 1, 'day': 1}
+1600-03-01	1600	3	1	61	{'year': 1600, 'month': 3, 'day': 1}
+2050-12-31	2050	12	31	365	{'year': 2050, 'month': 12, 'day': 31}
+2051-01-01	2051	1	1	1	{'year': 2051, 'month': 1, 'day': 1}
+1969-12-31	1969	12	31	365	{'year': 1969, 'month': 12, 'day': 31}
+infinity	NULL	NULL	NULL	NULL	{'year': NULL, 'month': NULL, 'day': NULL}
+-infinity	NULL	NULL	NULL	NULL	{'year': NULL, 'month': NULL, 'day': NULL}
+NULL	NULL	NULL	NULL	NULL	NULL

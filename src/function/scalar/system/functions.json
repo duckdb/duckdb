@@ -1,21 +1,21 @@
 [
     {
         "name": "finalize",
-        "parameters": "col0",
+        "parameters": "state",
         "description": "",
         "example": "",
         "type": "scalar_function"
     },
     {
         "name": "combine",
-        "parameters": "col0,col1",
+        "parameters": "state1,state2",
         "description": "",
         "example": "",
         "type": "scalar_function"
     },
     {
         "name": "to_aggregate_state",
-        "parameters": "data,name,signature",
+        "parameters": "data,name,signature,constant_parameters,order_by",
         "description": "Converts a value into the aggregate state of the aggregate function with the given name and signature. The type of the value must exactly match the state layout of the aggregate function. An optional fourth argument supplies constant parameter values (e.g. string_agg's separator) as a list with one entry per argument, using NULL for arguments that are not bound to a constant.",
         "example": "to_aggregate_state({'count': 1, 'value': 42.0}, 'avg', ['DOUBLE'])",
         "type": "scalar_function_set"
@@ -48,6 +48,14 @@
         "example": "current_query_id()",
         "type": "scalar_function",
         "struct": "CurrentQueryId"
+    },
+    {
+        "name": "extension_repository_url",
+        "parameters": "host",
+        "description": "Returns the extension repository url that the given host publishes in its well-known metadata file, i.e., where CREATE EXTENSION REPOSITORY <host> would install and load extensions from. Reads the host's metadata file over https and nothing else: no repository is created and no key is trusted",
+        "example": "extension_repository_url('duckdb.org')",
+        "type": "scalar_function",
+        "struct": "ExtensionRepositoryUrl"
     },
     {
         "name": "parse_duckdb_log_message",

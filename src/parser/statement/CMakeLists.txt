@@ -11,6 +11,7 @@ add_library_unity(
   create_statement.cpp
   detach_statement.cpp
   disconnect_statement.cpp
+  passthrough_statement.cpp
   delete_statement.cpp
   drop_statement.cpp
   execute_statement.cpp
@@ -23,7 +24,6 @@ add_library_unity(
   multi_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp
-  relation_statement.cpp
   select_statement.cpp
   set_statement.cpp
   transaction_statement.cpp

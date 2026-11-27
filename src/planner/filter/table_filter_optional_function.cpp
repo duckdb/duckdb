@@ -32,7 +32,7 @@ bool OptionalFilterFunctionData::Equals(const FunctionData &other_p) const {
 	return child_filter_expr->Equals(*other.child_filter_expr);
 }
 
-static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                     const BoundScalarFunction &function) {
 	if (!bind_data) {
 		return;
@@ -57,6 +57,7 @@ static idx_t OptionalFilterSelect(DataChunk &args, ExpressionState &state, optio
 
 ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, OptionalFilterFunction, TableFilterFunctions::Bind);
+	func.GetSignature().GetParameter(0).SetName("col");
 	func.SetSelectCallback(OptionalFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(OptionalFilterScalarFun::FilterPrune);

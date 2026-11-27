@@ -33,19 +33,20 @@ struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
+struct AlterSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
-struct CreateCollationInfo;
 struct CreateCoordinateSystemInfo;
 struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
 struct MetadataBlockInfo;
+class SchemaScanFilters;
 
 class AttachedDatabase;
 class ClientContext;
@@ -53,7 +54,6 @@ class QueryContext;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
-class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
@@ -193,9 +193,6 @@ public:
 	//! Creates a Enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(ClientContext &context, CreateTypeInfo &info);
-	//! Creates a collation in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(ClientContext &context, CreateCollationInfo &info);
 	//! Creates a coordinate system in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                             CreateCoordinateSystemInfo &info);
@@ -229,9 +226,6 @@ public:
 	//! Creates a enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                 CreateTypeInfo &info);
-	//! Creates a collation in the catalog
-	DUCKDB_API static optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction,
-	                                                             SchemaCatalogEntry &schema, CreateCollationInfo &info);
 	//! Creates a coordinate system in the catalog
 	DUCKDB_API static optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                                    SchemaCatalogEntry &schema,
@@ -243,6 +237,23 @@ public:
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction,
 	                                                                 const EntryLookupInfo &schema_lookup,
 	                                                                 OnEntryNotFound if_not_found) = 0;
+
+	//! Whether the catalog supports nested schema lookup, creation and dropping.
+	//! Also enables nested paths in string schema arguments. Literal dotted names do not require this capability.
+	virtual bool SupportsNestedSchemas() const {
+		return false;
+	}
+	//! Whether the schema path of name is not nested, or nested and supported by this catalog. Lookups of an
+	//! unsupported path find nothing, without passing the path to the catalog's LookupSchema.
+	DUCKDB_API bool SupportsSchemaPath(const QualifiedName &name, CatalogType type) const;
+	//! Reject unsupported nested paths when creating a schema.
+	DUCKDB_API void CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const;
+	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
+	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
+	                                          const string &entry_name, CatalogType type = CatalogType::TABLE_ENTRY,
+	                                          optional_ptr<BoundAtClause> at_clause = nullptr);
+	//! Resolve a string schema argument, with the same literal-name fallback as ResolveEntryName.
+	DUCKDB_API SchemaCatalogEntry &ResolveSchema(ClientContext &context, const string &schema_arg);
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup);
@@ -289,6 +300,13 @@ public:
 	          OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
+	//! The schemas a system catalog scan (such as duckdb_tables) visits in this catalog, given the filters pushed down
+	//! on the schema identity columns. Lists every schema and keeps those the filters accept. A catalog may override
+	//! this to avoid the listing; it must return every schema the filters accept and may return more. A schema_name
+	//! filter is evaluated on the schema's own name, so with nested schemas it accepts every schema with that leaf
+	//! name at any depth.
+	DUCKDB_API virtual vector<reference<SchemaCatalogEntry>> GetSchemasForScan(ClientContext &context,
+	                                                                           const SchemaScanFilters &filters);
 
 	//! Gets the entry described by the (optionally catalog/schema-qualified) EntryLookupInfo. If the entry does not
 	//! exist behavior depends on OnEntryNotFound
@@ -395,6 +413,9 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	virtual ErrorData SupportsCreateSchema(CreateSchemaInfo &info);
+	//! Alter a schema of this catalog (e.g. ALTER SCHEMA ... SET/RESET (<options>))
+	virtual void AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;
@@ -493,10 +514,16 @@ public:
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
 protected:
+	//! Resolve a bound schema path, preserving time travel and error context at every level.
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	LookupSchemaPath(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found,
+	                 const std::function<optional_ptr<CatalogEntry>(const EntryLookupInfo &)> &lookup_root);
+
 	//! Reference to the database
 	AttachedDatabase &db;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
+	mutable mutex default_table_lock;
 	Identifier default_table;
 	Identifier default_table_schema;
 
@@ -515,6 +542,7 @@ private:
 	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
 	                                             OnEntryNotFound if_not_found);
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
+	CatalogEntryLookup TryLookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info);
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);
 	//! Looks the entry up within this catalog only, using the schema carried in the lookup_info. Does not resolve the

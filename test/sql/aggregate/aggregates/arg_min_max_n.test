@@ -33,6 +33,13 @@ SELECT arg_max(even_groups, i, 3) FROM t2;
 [4, 3, 2]
 
 
+# Concrete MIN/MAX and their N overloads still use their native implementations.
+query IIII
+SELECT min(v), max(v), min(v, 2), max(v, 2) FROM (VALUES (1),(4),(1),(NULL)) input(v);
+----
+1	4	[1, 1]	[4, 1]
+
+
 # Test limits
 
 foreach FUNC min max
@@ -72,3 +79,11 @@ select {FUNC}(arg, val, 1000000) from t1;
 Invalid Input Error: Invalid input for arg_min/arg_max: n value must be < 1000000
 
 endloop
+
+statement ok
+SET memory_limit='1GB';
+
+query II
+SELECT count(*), sum(m[1]) FROM (SELECT max(i, 100000) m FROM range(20000) r(i) GROUP BY i);
+----
+20000	199990000

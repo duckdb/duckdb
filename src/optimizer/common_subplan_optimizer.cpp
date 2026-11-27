@@ -9,8 +9,13 @@
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 
 #include <algorithm>
 
@@ -19,6 +24,102 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Subplan Signature/Info
 //===--------------------------------------------------------------------===//
+static vector<ColumnBinding>
+GetExpandedColumnBindings(LogicalOperator &op, optional_ptr<vector<reference<LogicalGet>>> scans = nullptr,
+                          optional_ptr<vector<reference<LogicalOperator>>> expression_sources = nullptr) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+		return GetExpandedColumnBindings(*op.children[0], scans, expression_sources);
+	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		auto bindings = GetExpandedColumnBindings(*op.children[0], scans, expression_sources);
+		const auto table_index = op.GetTableIndex()[0];
+		for (auto col_idx : ProjectionIndex::GetIndexes(op.expressions.size())) {
+			bindings.emplace_back(table_index, col_idx);
+		}
+		return bindings;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		if (join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI) {
+			return GetExpandedColumnBindings(*op.children[1], scans, expression_sources);
+		}
+		auto left_bindings = GetExpandedColumnBindings(*op.children[0], scans, expression_sources);
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			return left_bindings;
+		}
+		if (join.join_type == JoinType::MARK) {
+			left_bindings.emplace_back(join.mark_index, ProjectionIndex(0));
+			return left_bindings;
+		}
+		auto right_bindings = GetExpandedColumnBindings(*op.children[1], scans, expression_sources);
+		left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+		return left_bindings;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN: {
+		auto left_bindings = GetExpandedColumnBindings(*op.children[0], scans, expression_sources);
+		auto right_bindings = GetExpandedColumnBindings(*op.children[1], scans, expression_sources);
+		left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+		return left_bindings;
+	}
+	case LogicalOperatorType::LOGICAL_GET:
+		if (scans) {
+			scans->emplace_back(op.Cast<LogicalGet>());
+		}
+		return op.GetColumnBindings();
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		if (expression_sources) {
+			expression_sources->emplace_back(op);
+		}
+		return op.GetColumnBindings();
+	default:
+		return op.GetColumnBindings();
+	}
+}
+
+static TableIndex GetExpressionOutputTableIndex(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		return op.Cast<LogicalAggregate>().aggregate_index;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.Cast<LogicalProjection>().table_index;
+	default:
+		throw InternalException("Operator has no expandable expression outputs");
+	}
+}
+
+static bool CanShareSubplanExpression(const Expression &expr) {
+	if (expr.IsVolatile() || expr.CanThrow() || ExpressionBarrier::Contains(expr)) {
+		return false;
+	}
+	bool unsafe = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &ref) { unsafe |= ref.Depth() != 0; });
+	ExpressionIterator::VisitExpression<BoundFunctionExpression>(expr, [&](const BoundFunctionExpression &function) {
+		unsafe |= ExpressionFilter::IsOptionalExpression(function);
+	});
+	return !unsafe;
+}
+
+static bool CanCombineAggregateState(const BoundAggregateExpression &aggregate) {
+	const auto &function = aggregate.Function();
+	if (aggregate.IsDistinct() || aggregate.GetOrderBys() ||
+	    aggregate.StateExportMode() != AggregateStateExportMode::NONE || !function.HasGetStateTypeCallback() ||
+	    function.HasExportAggregateStateCallback() || function.HasImportAggregateStateCallback()) {
+		return false;
+	}
+	// Combining growing states can use more memory than evaluating the original aggregates separately.
+	const auto layout = function.GetStateType(aggregate.BindInfo().get());
+	return layout.field.IsFixedSize(layout.type);
+}
+
 enum class ConversionType {
 	TO_CANONICAL,
 	RESTORE_ORIGINAL,
@@ -73,6 +174,10 @@ public:
 		return table_index_map;
 	}
 
+	void AddColumnMapping(TableIndex table_index, ProjectionIndex original, ProjectionIndex canonical) {
+		table_index_map.at(table_index).Insert(original, canonical);
+	}
+
 	template <ConversionType TYPE>
 	bool Convert(LogicalOperator &op) {
 		Initialize<TYPE>(op);
@@ -100,7 +205,7 @@ private:
 
 			// Store temporary mapping
 			for (const auto &child_op : op.children) {
-				for (const auto &child_cb : child_op->GetColumnBindings()) {
+				for (const auto &child_cb : GetExpandedColumnBindings(*child_op)) {
 					const auto &original = child_cb.table_index;
 					auto it = to_canonical_table_index.find(original);
 					if (it != to_canonical_table_index.end()) {
@@ -250,6 +355,9 @@ private:
 			auto &get = op.Cast<LogicalGet>();
 			switch (TYPE) {
 			case ConversionType::TO_CANONICAL: {
+				// Source ordinality is represented by the bound operators.
+				source_ordinality = get.source_ordinality;
+				get.source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 				D_ASSERT(column_ids.empty());
 				// Grab selected GET columns and populate with all possible columns
 				column_ids = std::move(get.GetMutableColumnIds());
@@ -327,6 +435,7 @@ private:
 				break;
 			}
 			case ConversionType::RESTORE_ORIGINAL:
+				get.source_ordinality = source_ordinality;
 				D_ASSERT(!column_ids.empty());
 				get.GetMutableColumnIds() = std::move(column_ids);
 				D_ASSERT(get.projection_ids.empty());
@@ -407,7 +516,7 @@ private:
 		bool can_materialize = true;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
 			ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child) {
-				ConvertExpression<TYPE>(*child, info_idx, can_materialize);
+				ConvertExpression<TYPE>(child, info_idx, can_materialize);
 			});
 		});
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -415,46 +524,53 @@ private:
 			for (auto &entry : get.table_filters) {
 				auto &expression_filter =
 				    ExpressionFilter::GetExpressionFilter(entry.Filter(), "CommonSubplanOptimizer::ConvertExpressions");
-				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
+				ConvertExpression<TYPE>(expression_filter.expr, info_idx, can_materialize);
 			}
 		}
 		return can_materialize;
 	}
 
 	template <ConversionType TYPE>
-	void ConvertExpression(Expression &expr, idx_t &info_idx, bool &can_materialize) {
+	void ConvertExpression(unique_ptr<Expression> &expr_p, idx_t &info_idx, bool &can_materialize) {
 		const auto &table_index_mapping =
 		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
 
-		// Replace column binding
-		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &col_ref = expr.Cast<BoundColumnRefExpression>();
+		// Determine the default fields: these are cleared when converting to canonical and restored afterwards
+		Identifier alias;
+		QueryLocation query_location;
+		switch (TYPE) {
+		case ConversionType::TO_CANONICAL:
+			expression_info.emplace_back(expr_p->GetAlias(), expr_p->GetQueryLocation());
+			break;
+		case ConversionType::RESTORE_ORIGINAL: {
+			auto &info = expression_info[info_idx++];
+			alias = Identifier(std::move(info.first));
+			query_location = info.second;
+			break;
+		}
+		}
+
+		if (expr_p->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			// Replace column binding
+			auto &col_ref = expr_p->Cast<BoundColumnRefExpression>();
+			auto binding = col_ref.Binding();
 			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-			                            ? col_ref.Binding().table_index
-			                            : restore_original_table_index.at(col_ref.Binding().table_index);
+			                            ? binding.table_index
+			                            : restore_original_table_index.at(binding.table_index);
 			auto &table_map = table_index_map.at(lookup_idx);
 			if (!table_map.Empty<TYPE>()) {
 				// Replace column index
-				col_ref.BindingMutable().column_index = table_map.Get<TYPE>(col_ref.Binding().column_index);
+				binding.column_index = table_map.Get<TYPE>(binding.column_index);
 			}
 			// Replace table index
-			col_ref.BindingMutable().table_index = table_index_mapping.at(col_ref.Binding().table_index);
+			binding.table_index = table_index_mapping.at(binding.table_index);
+			expr_p = make_uniq<BoundColumnRefExpression>(std::move(alias), col_ref.GetReturnType(), binding,
+			                                             col_ref.Depth(), query_location);
+		} else {
+			expr_p->SetAlias(std::move(alias));
+			expr_p->SetQueryLocation(query_location);
 		}
-
-		// Replace default fields
-		switch (TYPE) {
-		case ConversionType::TO_CANONICAL:
-			expression_info.emplace_back(expr.GetAlias(), expr.GetQueryLocation());
-			expr.ClearAlias();
-			expr.SetQueryLocation(optional_idx());
-			break;
-		case ConversionType::RESTORE_ORIGINAL:
-			auto &info = expression_info[info_idx++];
-			expr.SetAlias(Identifier(std::move(info.first)));
-			expr.SetQueryLocation(info.second);
-			break;
-		}
-		if (expr.IsVolatile()) {
+		if (expr_p->IsVolatile()) {
 			can_materialize = false;
 		}
 	}
@@ -480,6 +596,7 @@ private:
 	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
+	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	vector<ColumnIndex> column_ids;
 	vector<column_t> chunk_column_ids;
 	vector<ProjectionIndex> projection_ids;
@@ -487,92 +604,47 @@ private:
 	vector<unique_ptr<LogicalOperator>> children;
 };
 
-class PlanSignatureCreateState {
-public:
-	explicit PlanSignatureCreateState(ClientContext &context)
-	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
-	      table_index_map(allocator) {
-	}
-
-public:
-public:
-	//! For serializing operators to a binary string
-	MemoryStream stream;
-	BinarySerializer serializer;
-
-	//! For batching allocations together
-	ArenaAllocator allocator;
-
-	//! Manages mappings
-	PlanSignatureTableIndexMap table_index_map;
-};
+class PlanSignatureCreateState;
 
 class PlanSignature {
-public:
+private:
 	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
+	              vector<reference<const PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
 	    : stream(stream_p), offset(offset_p), length(length_p),
-	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
-	      operator_count(operator_count_p) {
+	      signature_hash(ComputeHash(stream_p, offset_p, length_p, child_signatures_p)),
+	      child_signatures(std::move(child_signatures_p)), operator_count(operator_count_p) {
 	}
 
 public:
-	static arena_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
-	                                       vector<reference<PlanSignature>> &&child_signatures) {
-		if (!OperatorIsSupported(op)) {
-			return nullptr;
-		}
+	static optional_ptr<const PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
+	                                                vector<reference<const PlanSignature>> &&child_signatures,
+	                                                const vector<vector<ColumnBinding>> &positional_inputs = {});
 
-		auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
-
-		// Serialize canonical representation of operator
-		const auto offset = state.stream.GetPosition();
-		state.serializer.Begin();
-		try { // Operators will throw if they cannot serialize, so we need to try/catch here
-			op.Serialize(state.serializer);
-		} catch (std::exception &) {
-			can_materialize = false;
-		}
-		state.serializer.End();
-		const auto length = state.stream.GetPosition() - offset;
-
-		// Convert back from canonical
-		state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
-
-		if (!can_materialize) {
-			return nullptr; // Cannot materialize, no point in adding it
-		}
-
-		// Collect some statistics so we can select a good candidate later
-		idx_t operator_count = 1;
-		for (auto &child_signature : child_signatures) {
-			operator_count += child_signature.get().OperatorCount();
-		}
-		return state.allocator.MakePtr<PlanSignature>(state.stream, offset, length, std::move(child_signatures),
-		                                              operator_count);
-	}
+	PlanSignature(PlanSignature &&) = default;
+	PlanSignature(const PlanSignature &) = delete;
 
 	idx_t OperatorCount() const {
 		return operator_count;
 	}
 
 	hash_t HashSignature() const {
-		auto res = signature_hash;
-		for (auto &child : child_signatures) {
-			res = CombineHash(res, child.get().HashSignature());
-		}
-		return res;
+		return signature_hash;
 	}
 
 	bool Equals(const PlanSignature &other) const {
+		D_ASSERT(RefersToSameObject(stream, other.stream));
+		if (RefersToSameObject(*this, other)) {
+			return true;
+		}
 		if (this->GetSignature() != other.GetSignature()) {
 			return false;
 		}
 		if (this->child_signatures.size() != other.child_signatures.size()) {
 			return false;
 		}
+		// Children are interned before their parents, so their identities prove exact subtree equality.
 		for (idx_t child_idx = 0; child_idx < this->child_signatures.size(); ++child_idx) {
-			if (!this->child_signatures[child_idx].get().Equals(other.child_signatures[child_idx].get())) {
+			if (!RefersToSameObject(this->child_signatures[child_idx].get(), other.child_signatures[child_idx].get())) {
 				return false;
 			}
 		}
@@ -580,11 +652,20 @@ public:
 	}
 
 private:
-	String GetSignature() const {
-		return String(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
+	static hash_t ComputeHash(const MemoryStream &stream, idx_t offset, idx_t length,
+	                          const vector<reference<const PlanSignature>> &children) {
+		auto result = Hash(stream.GetData() + offset, length);
+		for (auto &child : children) {
+			result = Hash(CombineHash(result, child.get().HashSignature()));
+		}
+		return result;
 	}
 
-	static bool OperatorIsSupported(const LogicalOperator &op) {
+	String GetSignature() const {
+		return String::Reference(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
+	}
+
+	static bool OperatorIsSupported(LogicalOperator &op) {
 		if (!op.SupportSerialization()) {
 			return false;
 		}
@@ -597,7 +678,6 @@ private:
 		case LogicalOperatorType::LOGICAL_LIMIT:
 		case LogicalOperatorType::LOGICAL_ORDER_BY:
 		case LogicalOperatorType::LOGICAL_TOP_N:
-		case LogicalOperatorType::LOGICAL_DISTINCT:
 		case LogicalOperatorType::LOGICAL_PIVOT:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -612,12 +692,17 @@ private:
 			return true;
 		case LogicalOperatorType::LOGICAL_GET: {
 			auto &get = op.Cast<LogicalGet>();
-			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty() &&
-			    get.named_parameters.empty()) {
+			// A function's arguments do not describe hidden state or volatile work performed by its scan.
+			// Only share scans that explicitly promise repeatable results, or scan an ordinary table.
+			if (ClassifyLogicalOperatorRepeatability(get) != LogicalOperatorRepeatability::REPEATABLE) {
+				return false;
+			}
+			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty()) {
 				// Without serialization callbacks, the serialized form carries only the call parameters
-				// (see LogicalGet::Serialize). A parameter-less scan - e.g., one created through an
-				// attached catalog - keeps its identity solely in the bind data, so equal serialized
-				// bytes cannot prove that two scans read the same table.
+				// (see LogicalGet::Serialize). A scan without positional parameters - e.g., one created through
+				// an attached catalog - keeps its identity solely in the bind data, and its options do not
+				// identify what it reads, so equal serialized bytes cannot prove that two scans read the same
+				// table.
 				return false;
 			}
 			return true;
@@ -650,7 +735,7 @@ private:
 
 	const hash_t signature_hash;
 
-	const vector<reference<PlanSignature>> child_signatures;
+	vector<reference<const PlanSignature>> child_signatures;
 	const idx_t operator_count;
 };
 
@@ -665,6 +750,84 @@ struct PlanSignatureEquality {
 		return a.Equals(b);
 	}
 };
+
+class PlanSignatureCreateState {
+public:
+	explicit PlanSignatureCreateState(ClientContext &context)
+	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
+	      table_index_map(allocator) {
+	}
+
+private:
+	//! For serializing operators to a binary string
+	MemoryStream stream;
+	BinarySerializer serializer;
+
+public:
+	//! For batching allocations together
+	ArenaAllocator allocator;
+
+	//! Manages mappings
+	PlanSignatureTableIndexMap table_index_map;
+
+private:
+	friend class PlanSignature;
+
+	const PlanSignature &Intern(PlanSignature signature) {
+		auto entry = signatures.find(signature);
+		if (entry != signatures.end()) {
+			return entry->first.get();
+		}
+		auto owned = allocator.MakePtr<PlanSignature>(std::move(signature));
+		auto &result = *owned;
+		signatures.emplace(result, std::move(owned));
+		return result;
+	}
+
+private:
+	//! Own canonical signatures for this discovery pass; parent signatures borrow their children.
+	unordered_map<reference<const PlanSignature>, arena_ptr<PlanSignature>, PlanSignatureHash, PlanSignatureEquality>
+	    signatures;
+};
+
+optional_ptr<const PlanSignature> PlanSignature::Create(PlanSignatureCreateState &state, LogicalOperator &op,
+                                                        vector<reference<const PlanSignature>> &&child_signatures,
+                                                        const vector<vector<ColumnBinding>> &positional_inputs) {
+	if (!OperatorIsSupported(op)) {
+		return nullptr;
+	}
+
+	auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
+
+	// Serialize canonical representation of operator
+	const auto offset = state.stream.GetPosition();
+	state.serializer.Begin();
+	state.serializer.WriteProperty(100, "positional_inputs", positional_inputs);
+	state.serializer.End();
+	state.serializer.Begin();
+	try { // Operators will throw if they cannot serialize, so we need to try/catch here
+		op.Serialize(state.serializer);
+	} catch (std::exception &) {
+		can_materialize = false;
+	}
+	state.serializer.End();
+	const auto length = state.stream.GetPosition() - offset;
+
+	// Convert back from canonical
+	state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
+
+	if (!can_materialize) {
+		return nullptr; // Cannot materialize, no point in adding it
+	}
+
+	// Collect some statistics so we can select a good candidate later
+	idx_t operator_count = 1;
+	for (auto &child_signature : child_signatures) {
+		D_ASSERT(RefersToSameObject(state.stream, child_signature.get().stream));
+		operator_count += child_signature.get().OperatorCount();
+	}
+	return state.Intern(PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
+}
 
 struct Subplan {
 	reference<unique_ptr<LogicalOperator>> op;
@@ -683,7 +846,50 @@ struct SubplanInfo {
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
-using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+using subplan_map_t =
+    unordered_map<reference<const PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+
+//! Append generated CTEs in extraction order at each original lowest common ancestor.
+class CommonSubplanCTEPlacement {
+public:
+	void Insert(unique_ptr<LogicalOperator> &ancestor, Identifier name, TableIndex index, idx_t column_count,
+	            unique_ptr<LogicalOperator> producer) {
+		auto entry = insertion_points.emplace(ancestor, ancestor).first;
+		auto &consumer = entry->second.get();
+		auto cte = make_uniq<LogicalMaterializedCTE>(std::move(name), index, column_count, std::move(producer),
+		                                             std::move(consumer), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+		auto &result = *cte;
+		consumer = std::move(cte);
+		entry->second = result.children[1];
+	}
+
+private:
+	//! Earlier CTEs must enclose later ones to preserve pipeline dependencies. The original ancestor slots
+	//! identify insertion sites; their consumer tails move into the newly appended CTEs.
+	//! Subplans are extracted smallest first, so a site's extractions finish before an enclosing subplan can remove it.
+	reference_map_t<unique_ptr<LogicalOperator>, reference<unique_ptr<LogicalOperator>>> insertion_points;
+};
+
+//! Rewrite a consumer scope without revisiting the producers already finalized by this extraction.
+class CommonSubplanBindingRewriter : public ColumnBindingReplacer {
+public:
+	CommonSubplanBindingRewriter(const BindingReplacementGraph &replacements, TableIndex first_cte_index_p)
+	    : ColumnBindingReplacer(replacements), first_cte_index(first_cte_index_p) {
+	}
+
+	void VisitOperator(LogicalOperator &op) override {
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE &&
+		    op.Cast<LogicalMaterializedCTE>().table_index >= first_cte_index) {
+			VisitOperator(*op.children[1]);
+			VisitOperatorBindings(op);
+			return;
+		}
+		ColumnBindingReplacer::VisitOperator(op);
+	}
+
+private:
+	TableIndex first_cte_index;
+};
 
 //===--------------------------------------------------------------------===//
 // CommonSubplanFinder
@@ -700,7 +906,7 @@ private:
 
 		unique_ptr<LogicalOperator> &parent;
 		const idx_t depth;
-		arena_ptr<PlanSignature> signature;
+		optional_ptr<const PlanSignature> signature;
 	};
 
 	struct StackNode {
@@ -721,18 +927,89 @@ private:
 	};
 
 	struct SubplanStats {
-		idx_t base_table_count;
-		idx_t max_base_table_cardinality;
+		idx_t base_table_count = 0;
+		idx_t max_base_table_cardinality = 0;
+		bool ends_in_aggregate_or_distinct = false;
+	};
 
-		void Combine(const SubplanStats &other) {
-			this->base_table_count += other.base_table_count;
-			this->max_base_table_cardinality =
-			    MaxValue(this->max_base_table_cardinality, other.max_base_table_cardinality);
+	using subplan_stats_map_t = reference_map_t<const LogicalOperator, SubplanStats>;
+
+	struct SubplanBindings {
+		struct ExpressionSource {
+			ExpressionSource(LogicalOperator &op, const vector<unique_ptr<Expression>> &expressions,
+			                 SubplanBindings input)
+			    : op(op), expressions(expressions), input(make_uniq<SubplanBindings>(std::move(input))) {
+			}
+
+			LogicalOperator &op;
+			const vector<unique_ptr<Expression>> &expressions;
+			unique_ptr<SubplanBindings> input;
+		};
+
+		column_binding_map_t<ColumnBinding> bindings;
+		unordered_map<TableIndex, optional_ptr<LogicalGet>> scans;
+		unordered_map<TableIndex, unique_ptr<ExpressionSource>> expression_sources;
+
+		bool Contains(const ColumnBinding &binding) const {
+			auto scan = scans.find(binding.table_index);
+			if (bindings.find(binding) != bindings.end() || (scan != scans.end() && scan->second)) {
+				return true;
+			}
+			auto expression_source = expression_sources.find(binding.table_index);
+			if (expression_source == expression_sources.end() || !expression_source->second) {
+				return false;
+			}
+			auto &source = *expression_source->second;
+			bool available = true;
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    *source.expressions[binding.column_index],
+			    [&](const BoundColumnRefExpression &ref) { available &= source.input->Contains(ref.Binding()); });
+			return available;
+		}
+
+		ColumnBinding Expose(const ColumnBinding &binding) {
+			auto entry = bindings.find(binding);
+			if (entry != bindings.end()) {
+				return entry->second;
+			}
+			ColumnBinding result;
+			auto scan_entry = scans.find(binding.table_index);
+			if (scan_entry != scans.end() && scan_entry->second) {
+				auto &scan = *scan_entry->second;
+				// Appending columns preserves existing filter and expression bindings.
+				auto column_index = scan.TryGetProjectionIndex(binding.column_index.GetIndex());
+				if (!column_index.IsValid()) {
+					column_index = scan.AddColumnId(binding.column_index.GetIndex());
+				}
+				// Scan projections prune columns; they cannot reorder a full-width scan.
+				scan.projection_ids.clear();
+				result = ColumnBinding(scan.table_index, column_index);
+			} else {
+				auto &source = *expression_sources.at(binding.table_index);
+				auto expression = source.expressions[binding.column_index]->Copy();
+				expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+				    std::move(expression), [&](const BoundColumnRefExpression &ref) {
+					    return ref.WithBinding(source.input->Expose(ref.Binding()));
+				    });
+				result = ColumnBinding(GetExpressionOutputTableIndex(source.op),
+				                       ProjectionIndex(source.op.expressions.size()));
+				source.op.expressions.push_back(std::move(expression));
+			}
+			bindings.emplace(binding, result);
+			return result;
 		}
 	};
 
 public:
 	void FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+		// Filtering does not change the tree. Discard its statistics before CTE extraction starts.
+		subplan_stats_map_t subplan_stats;
+		CollectCommonSubplans(root, subplan_stats);
+		FilterSubplans(subplan_stats);
+	}
+
+private:
+	void CollectCommonSubplans(reference<unique_ptr<LogicalOperator>> root, subplan_stats_map_t &subplan_stats) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
 			root = root.get()->children[0];
@@ -754,6 +1031,11 @@ public:
 				continue;
 			}
 
+			subplan_stats.emplace(
+			    *current.op, GetSubplanStats(*current.op, [&](const LogicalOperator &child) -> const SubplanStats & {
+				    return subplan_stats.at(child);
+			    }));
+
 			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
 				D_ASSERT(operator_infos.find(current.op) != operator_infos.end());
@@ -773,6 +1055,7 @@ public:
 							D_ASSERT(to_canonical_table_index.find(table_index) == to_canonical_table_index.end());
 							to_canonical_table_index.emplace(table_index, next_canonical_table_index);
 						}
+						RegisterExpressionBindings(current.op);
 
 						// Add new subplan
 						SubplanInfo subplan_info(state.allocator, current.op, std::move(canonical_table_indices),
@@ -786,6 +1069,7 @@ public:
 							to_canonical_table_index.emplace(current_op_table_index[i],
 							                                 info.canonical_table_indices[i]);
 						}
+						RegisterExpressionBindings(current.op);
 
 						// Add subplan to existing
 						info.subplans.push_back({current.op, GetCanonicalBindings(*current.op)});
@@ -799,7 +1083,7 @@ public:
 		}
 	}
 
-	void FilterSubplans() {
+	void FilterSubplans(const subplan_stats_map_t &subplan_stats) {
 		// Filter out redundant or ineligible subplans before returning
 		vector<subplan_map_t::key_type> to_remove;
 		for (auto &entry : subplans) {
@@ -825,7 +1109,8 @@ public:
 					const auto subplan_count = subplan_info.subplans.size() * signature.OperatorCount();
 					const auto parent_subplan_count = parent_it->second.subplans.size();
 					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
-					if (parent_subplan_count != 1 && parent_count >= subplan_count) {
+					if (parent_subplan_count != 1 && parent_count >= subplan_count &&
+					    ShouldMaterialize(parent_it->second, subplan_stats)) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
@@ -835,7 +1120,6 @@ public:
 			// We can bail on a subplan for various reasons (some of which could potentially be fixed)
 			bool bail = false;
 
-			column_binding_set_t required_bindings;
 			for (auto &subplan : subplan_info.subplans) {
 				column_binding_set_t subplan_bindings;
 				for (auto &cb : subplan.canonical_bindings) {
@@ -845,46 +1129,16 @@ public:
 						break;
 					}
 					subplan_bindings.insert(cb);
-					required_bindings.insert(cb);
 				}
 				if (bail) {
 					break;
 				}
 			}
 
-			idx_t primary_subplan_idx = subplan_info.subplans.size();
-			idx_t primary_subplan_binding_count = 0;
-			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size() && !bail; subplan_idx++) {
-				const auto expanded_bindings =
-				    GetExpandedCanonicalBindings(*subplan_info.subplans[subplan_idx].op.get());
-				bool contains_required_bindings = true;
-				for (auto &cb : required_bindings) {
-					if (std::find(expanded_bindings.begin(), expanded_bindings.end(), cb) == expanded_bindings.end()) {
-						contains_required_bindings = false;
-						break;
-					}
-				}
-				if (!contains_required_bindings) {
-					continue;
-				}
-				auto &subplan = subplan_info.subplans[subplan_idx];
-				if (primary_subplan_idx == subplan_info.subplans.size() ||
-				    subplan.canonical_bindings.size() > primary_subplan_binding_count) {
-					primary_subplan_idx = subplan_idx;
-					primary_subplan_binding_count = subplan.canonical_bindings.size();
-				}
-			}
-			if (primary_subplan_idx == subplan_info.subplans.size()) {
-				bail = true; // None of the subplans can expose every binding required by the duplicate occurrences
-			}
-
-			if (bail) {
+			if (bail || !SelectPrimarySubplan(subplan_info)) {
 				to_remove.push_back(signature);
 				continue;
 			}
-
-			// Move the primary subplan to the front
-			std::swap(subplan_info.subplans[0], subplan_info.subplans[primary_subplan_idx]);
 		}
 
 		// Only remove them all at the end so the logic above doesn't get affected
@@ -893,25 +1147,27 @@ public:
 		}
 	}
 
+public:
 	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
 		const auto sorted_subplans = GetSortedSubplans();
+		CommonSubplanCTEPlacement placement;
+		BindingReplacementGraph pending_replacements;
+		TableIndex first_cte_index;
 		idx_t index = 1;
-		bool converted_subplans = false;
 		for (auto &entry : sorted_subplans) {
 			auto &subplan_info = entry.get().second;
 			if (!ShouldMaterialize(subplan_info)) {
 				continue; // No longer worth materializing due to other materializations
 			}
+			if (!SelectPrimarySubplan(subplan_info)) {
+				continue; // Nested subplans were replaced by CTE refs that no longer expose the required bindings
+			}
 
 			const auto cte_index = optimizer.binder.GenerateTableIndex();
 			const auto cte_name = StringUtil::Format("__common_subplan_%llu", index++);
-			if (!min_cte_idx.IsValid()) {
-				min_cte_idx = cte_index;
+			if (!first_cte_index.IsValid()) {
+				first_cte_index = cte_index;
 			}
-
-			// Resolve types to be used for creating the materialized CTE and refs
-			op->ResolveOperatorTypes();
-
 			const auto &primary_subplan = subplan_info.subplans[0];
 
 			vector<vector<ColumnBinding>> old_bindings(subplan_info.subplans.size());
@@ -920,6 +1176,8 @@ public:
 			column_binding_set_t required_canonical_binding_set;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				auto &subplan = subplan_info.subplans[subplan_idx];
+				// Earlier extractions can introduce new CTE readers within this subplan.
+				subplan.op.get()->ResolveOperatorTypes();
 				old_bindings[subplan_idx] = subplan.op.get()->GetColumnBindings();
 				old_types[subplan_idx] = subplan.op.get()->types;
 				for (auto &cb : subplan.canonical_bindings) {
@@ -931,35 +1189,26 @@ public:
 				}
 			}
 
-			if (required_canonical_bindings.size() != primary_subplan.canonical_bindings.size()) {
-				// The signature ignores projection maps. If duplicate subplans expose different
-				// subsets of the same work, widen the materialized producer just enough to make
-				// every referenced output available, then project each reader back to its original
-				// schema below.
-				ClearProjectionMaps(*primary_subplan.op.get());
-				primary_subplan.op.get()->ResolveOperatorTypes();
-			}
-
-			const auto materialized_bindings = primary_subplan.op.get()->GetColumnBindings();
-			const auto materialized_canonical_bindings = GetCanonicalBindings(*primary_subplan.op.get());
-			column_binding_map_t<idx_t> materialized_binding_index;
-			for (idx_t i = 0; i < materialized_canonical_bindings.size(); i++) {
-				materialized_binding_index.emplace(materialized_canonical_bindings[i], i);
-			}
-
-			vector<LogicalType> types;
+			auto available_bindings = GetAvailableBindings(*primary_subplan.op.get());
 			vector<ColumnBinding> materialized_output_bindings;
-			types.reserve(required_canonical_bindings.size());
 			materialized_output_bindings.reserve(required_canonical_bindings.size());
 			column_binding_map_t<idx_t> cte_binding_index;
 			for (idx_t i = 0; i < required_canonical_bindings.size(); i++) {
 				auto &cb = required_canonical_bindings[i];
-				const auto entry = materialized_binding_index.find(cb);
-				D_ASSERT(entry != materialized_binding_index.end()); // guaranteed by FilterSubplans
-				const auto materialized_col_idx = entry->second;
 				cte_binding_index.emplace(cb, i);
-				types.push_back(primary_subplan.op.get()->types[materialized_col_idx]);
-				materialized_output_bindings.push_back(materialized_bindings[materialized_col_idx]);
+				materialized_output_bindings.push_back(available_bindings.Expose(cb));
+			}
+			ClearProjectionMaps(*primary_subplan.op.get());
+			primary_subplan.op.get()->ResolveOperatorTypes();
+
+			const auto materialized_bindings = primary_subplan.op.get()->GetColumnBindings();
+			column_binding_map_t<idx_t> materialized_binding_index;
+			for (idx_t i = 0; i < materialized_bindings.size(); i++) {
+				materialized_binding_index.emplace(materialized_bindings[i], i);
+			}
+			vector<LogicalType> types;
+			for (auto &binding : materialized_output_bindings) {
+				types.push_back(primary_subplan.op.get()->types[materialized_binding_index.at(binding)]);
 			}
 
 			// Get names
@@ -988,7 +1237,7 @@ public:
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
-			ColumnBindingReplacer replacer;
+			BindingReplacementGraph replacements;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
@@ -1016,7 +1265,7 @@ public:
 				D_ASSERT(old_bindings[subplan_idx].size() == new_bindings.size());
 				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
-					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+					replacements.Add(old_bindings[subplan_idx][i], new_bindings[i]);
 #ifdef D_ASSERT_IS_ENABLED
 					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
 					D_ASSERT(inserted.second);
@@ -1027,10 +1276,8 @@ public:
 			}
 
 			// Create the materialized CTE and replace the common subplans with references to it
-			auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
 			const auto materialized_column_count = types.size();
 			auto materialized_subplan = std::move(primary_subplan.op.get());
-			auto remainder = std::move(lowest_common_ancestor);
 			vector<unique_ptr<Expression>> materialized_select_list;
 			for (idx_t i = 0; i < materialized_output_bindings.size(); i++) {
 				materialized_select_list.emplace_back(
@@ -1039,51 +1286,97 @@ public:
 			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
 			                                                            std::move(materialized_select_list));
 			materialized_projection->children.emplace_back(std::move(materialized_subplan));
-			auto cte = make_uniq<LogicalMaterializedCTE>(Identifier(cte_name), cte_index, materialized_column_count,
-			                                             std::move(materialized_projection), std::move(remainder),
-			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+			// Finish this producer using only earlier extractions. Its own output replacements apply to
+			// its readers, never to the retained definition. Later extractions cannot occur inside it.
+			if (!pending_replacements.Empty()) {
+				CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+				rewriter.VisitOperator(*materialized_projection);
+			}
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				subplan.op.get() = std::move(cte_refs[subplan_idx]);
 			}
-			lowest_common_ancestor = std::move(cte);
-
-			// Replace bindings of subplans with those of the CTE refs
-			replacer.stop_operator = lowest_common_ancestor.get();
-			replacer.VisitOperator(*op);                                  // Replace from the root until CTE
-			replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child
-
-			// We have to be careful with the order in which we place the CTEs created by this optimizer
-			// Pipeline dependencies cannot be set up if CTEs are in the wrong order
-			// This performs "CTE pushdown" until the CTEs are in the correct order
-			reference<unique_ptr<LogicalOperator>> current_op = lowest_common_ancestor;
-			while (true) {
-				auto &rhs_child = current_op.get()->children[1];
-				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-					if (child_table_index >= min_cte_idx && child_table_index < cte_index) {
-						auto tmp = std::move(rhs_child->children[1]);
-						rhs_child->children[1] = std::move(current_op.get());
-						current_op.get() = std::move(rhs_child);
-						rhs_child = std::move(tmp);
-						current_op = current_op.get()->children[1];
-						continue;
-					}
-				}
-				break;
-			}
-			converted_subplans = true;
+			placement.Insert(subplan_info.lowest_common_ancestor, Identifier(cte_name), cte_index,
+			                 materialized_column_count, std::move(materialized_projection));
+			pending_replacements.Merge(replacements);
 		}
-		if (converted_subplans) {
-			// Subplan replacement changes child output bindings under existing positional projection maps.
-			// Invalidate them here; column lifetime runs again later and rebuilds the maps.
-			ClearProjectionMaps(*op);
+		// Selection reads output bindings and canonical expressions, which do not require rewriting
+		// the remaining consumer expressions after every extraction.
+		if (!pending_replacements.Empty()) {
+			CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+			rewriter.VisitOperator(*op);
 		}
 	}
 
 private:
-	arena_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
-		vector<reference<PlanSignature>> child_signatures;
+	bool CanExpandExpressionOutputs(const LogicalOperator &op) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			break;
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggregate = op.Cast<LogicalAggregate>();
+			if (!aggregate.groups.empty() || !aggregate.grouping_sets.empty() ||
+			    !aggregate.grouping_functions.empty()) {
+				return false;
+			}
+			for (const auto &expression : aggregate.expressions) {
+				if (!CanCombineAggregateState(expression->Cast<BoundAggregateExpression>())) {
+					return false;
+				}
+			}
+			break;
+		}
+		default:
+			return false;
+		}
+		for (const auto &expression : op.expressions) {
+			if (!CanShareSubplanExpression(*expression)) {
+				return false;
+			}
+		}
+		unordered_map<TableIndex, TableIndex> input_tables;
+		for (const auto &binding : GetExpandedColumnBindings(*op.children[0])) {
+			const auto canonical_table_index = to_canonical_table_index.at(binding.table_index);
+			auto entry = input_tables.emplace(canonical_table_index, binding.table_index);
+			if (!entry.second && entry.first->second != binding.table_index) {
+				// Expression matching must distinguish repeated occurrences of the same input.
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void RegisterExpressionBindings(unique_ptr<LogicalOperator> &op) {
+		if (!CanExpandExpressionOutputs(*op)) {
+			return;
+		}
+		const auto output_table_index = GetExpressionOutputTableIndex(*op);
+		auto &expressions = canonical_expressions[to_canonical_table_index.at(output_table_index)];
+		unordered_set<idx_t> used_indexes;
+		for (idx_t i = 0; i < op->expressions.size(); i++) {
+			auto expression = op->expressions[i]->Copy();
+			expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+			    std::move(expression), [&](const BoundColumnRefExpression &ref) {
+				    return ref.WithBinding(GetCanonicalBinding(ref.Binding()));
+			    });
+			idx_t index = 0;
+			for (; index < expressions.size(); index++) {
+				if (used_indexes.find(index) == used_indexes.end() &&
+				    expression->GetReturnType().EqualsIncludingCollation(expressions[index]->GetReturnType()) &&
+				    expression->Equals(*expressions[index])) {
+					break;
+				}
+			}
+			if (index == expressions.size()) {
+				expressions.push_back(std::move(expression));
+			}
+			used_indexes.insert(index);
+			state.table_index_map.AddColumnMapping(output_table_index, ProjectionIndex(i), ProjectionIndex(index));
+		}
+	}
+
+	optional_ptr<const PlanSignature> CreatePlanSignature(unique_ptr<LogicalOperator> &op) {
+		vector<reference<const PlanSignature>> child_signatures;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
 			D_ASSERT(it != operator_infos.end());
@@ -1092,7 +1385,33 @@ private:
 			}
 			child_signatures.emplace_back(*it->second.signature);
 		}
-		return PlanSignature::Create(state, *op, std::move(child_signatures));
+		vector<vector<ColumnBinding>> positional_inputs;
+		switch (op->type) {
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT:
+		case LogicalOperatorType::LOGICAL_PIVOT:
+		case LogicalOperatorType::LOGICAL_GET:
+			// These operators consume child values by position rather than by bound expressions.
+			for (auto &child : op->children) {
+				auto bindings = child->GetColumnBindings();
+				for (auto &binding : bindings) {
+					binding = GetCanonicalBinding(binding);
+				}
+				positional_inputs.push_back(std::move(bindings));
+			}
+			break;
+		default:
+			break;
+		}
+		if (CanExpandExpressionOutputs(*op)) {
+			// Match the row domain separately from the expandable expression outputs.
+			auto expressions = std::move(op->expressions);
+			auto signature = PlanSignature::Create(state, *op, std::move(child_signatures), positional_inputs);
+			op->expressions = std::move(expressions);
+			return signature;
+		}
+		return PlanSignature::Create(state, *op, std::move(child_signatures), positional_inputs);
 	}
 
 	arena_vector<ColumnBinding> GetCanonicalBindings(LogicalOperator &op) {
@@ -1131,65 +1450,99 @@ private:
 		return a.get();
 	}
 
-	vector<ColumnBinding> GetExpandedColumnBindings(LogicalOperator &op) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_FILTER:
-		case LogicalOperatorType::LOGICAL_ORDER_BY:
-			return GetExpandedColumnBindings(*op.children[0]);
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			auto &join = op.Cast<LogicalJoin>();
-			auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
-			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-				return left_bindings;
-			}
-			if (join.join_type == JoinType::MARK) {
-				left_bindings.emplace_back(join.mark_index, ProjectionIndex(0));
-				return left_bindings;
-			}
-			auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
-			if (join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI) {
-				return right_bindings;
-			}
-			left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
-			return left_bindings;
+	ColumnBinding GetCanonicalBinding(const ColumnBinding &binding) {
+		auto generated_entry = generated_binding_map.find(binding);
+		if (generated_entry != generated_binding_map.end()) {
+			return generated_entry->second;
 		}
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN: {
-			auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
-			auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
-			left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
-			return left_bindings;
-		}
-		default:
-			return op.GetColumnBindings();
-		}
+		const auto &table_index_map = state.table_index_map.GetMap();
+		const auto canonical_table_index = to_canonical_table_index.at(binding.table_index);
+		auto &table_map = table_index_map.at(binding.table_index);
+		auto column_index = table_map.Empty<ConversionType::TO_CANONICAL>()
+		                        ? binding.column_index
+		                        : table_map.Get<ConversionType::TO_CANONICAL>(binding.column_index);
+		return ColumnBinding(canonical_table_index, column_index);
 	}
 
 	arena_vector<ColumnBinding> GetCanonicalBindings(const vector<ColumnBinding> &original_bindings) {
-		const auto &table_index_map = state.table_index_map.GetMap();
 		arena_vector<ColumnBinding> canonical_bindings(state.allocator);
 		for (auto &cb : original_bindings) {
-			auto generated_entry = generated_binding_map.find(cb);
-			if (generated_entry != generated_binding_map.end()) {
-				canonical_bindings.push_back(generated_entry->second);
-				continue;
-			}
-			const auto canonical_table_index = to_canonical_table_index.at(cb.table_index);
-			auto &table_map = table_index_map.at(cb.table_index);
-			if (table_map.Empty<ConversionType::TO_CANONICAL>()) {
-				canonical_bindings.emplace_back(canonical_table_index, cb.column_index);
-			} else {
-				const auto canonical_col_idx = table_map.Get<ConversionType::TO_CANONICAL>(cb.column_index);
-				canonical_bindings.emplace_back(canonical_table_index, canonical_col_idx);
-			}
+			canonical_bindings.push_back(GetCanonicalBinding(cb));
 		}
 		return canonical_bindings;
 	}
 
-	arena_vector<ColumnBinding> GetExpandedCanonicalBindings(LogicalOperator &op) {
-		return GetCanonicalBindings(GetExpandedColumnBindings(op));
+	SubplanBindings GetAvailableBindings(LogicalOperator &op) {
+		vector<reference<LogicalGet>> scans;
+		vector<reference<LogicalOperator>> expression_sources;
+		const auto expanded_bindings = GetExpandedColumnBindings(op, scans, expression_sources);
+		const auto canonical_bindings = GetCanonicalBindings(expanded_bindings);
+		SubplanBindings result;
+		for (idx_t i = 0; i < expanded_bindings.size(); i++) {
+			result.bindings.emplace(canonical_bindings[i], expanded_bindings[i]);
+		}
+		for (auto &scan : scans) {
+			if (!CanExpandScan(scan)) {
+				continue;
+			}
+			const auto table_index = to_canonical_table_index.at(scan.get().table_index);
+			auto entry = result.scans.emplace(table_index, scan.get());
+			if (!entry.second) {
+				// Multiple occurrences of the same scan do not identify an unambiguous column source.
+				entry.first->second = nullptr;
+			}
+		}
+		for (auto &op : expression_sources) {
+			auto table_index = to_canonical_table_index.find(GetExpressionOutputTableIndex(op));
+			if (table_index == to_canonical_table_index.end()) {
+				continue; // Generated CTE reader projections expose only their existing bindings.
+			}
+			auto expressions = canonical_expressions.find(table_index->second);
+			if (expressions == canonical_expressions.end()) {
+				continue;
+			}
+			auto source = make_uniq<SubplanBindings::ExpressionSource>(op, expressions->second,
+			                                                           GetAvailableBindings(*op.get().children[0]));
+			auto entry = result.expression_sources.emplace(table_index->second, std::move(source));
+			if (!entry.second) {
+				entry.first->second.reset();
+			}
+		}
+		return result;
+	}
+
+	//! Moves a subplan that can expose every binding required by the duplicate occurrences to the front
+	bool SelectPrimarySubplan(SubplanInfo &subplan_info) {
+		column_binding_set_t required_bindings;
+		for (auto &subplan : subplan_info.subplans) {
+			required_bindings.insert(subplan.canonical_bindings.begin(), subplan.canonical_bindings.end());
+		}
+
+		optional_idx primary_subplan_idx;
+		idx_t primary_subplan_binding_count = 0;
+		for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+			auto &subplan = subplan_info.subplans[subplan_idx];
+			const auto available_bindings = GetAvailableBindings(*subplan.op.get());
+			bool contains_required_bindings = true;
+			for (auto &cb : required_bindings) {
+				if (!available_bindings.Contains(cb)) {
+					contains_required_bindings = false;
+					break;
+				}
+			}
+			if (!contains_required_bindings) {
+				continue;
+			}
+			if (!primary_subplan_idx.IsValid() || subplan.canonical_bindings.size() > primary_subplan_binding_count) {
+				primary_subplan_idx = subplan_idx;
+				primary_subplan_binding_count = subplan.canonical_bindings.size();
+			}
+		}
+		if (!primary_subplan_idx.IsValid()) {
+			return false;
+		}
+		std::swap(subplan_info.subplans[0], subplan_info.subplans[primary_subplan_idx.GetIndex()]);
+		return true;
 	}
 
 	static void ClearProjectionMaps(LogicalOperator &op) {
@@ -1218,47 +1571,72 @@ private:
 
 	bool ShouldMaterialize(const SubplanInfo &subplan_info) const {
 		auto &subplan = subplan_info.subplans[0].op.get();
-		return CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan);
+		return CTEInlining::EndsInAggregateOrDistinct(*subplan) ||
+		       (subplan->has_estimated_cardinality &&
+		        IsSelectiveMultiTablePlan(*subplan, subplan->estimated_cardinality));
 	}
 
-	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+	bool ShouldMaterialize(const SubplanInfo &subplan_info, const subplan_stats_map_t &subplan_stats) const {
+		auto &subplan = *subplan_info.subplans[0].op.get();
+		const auto &stats = subplan_stats.at(subplan);
+		return stats.ends_in_aggregate_or_distinct ||
+		       (subplan.has_estimated_cardinality && IsSelectiveMultiTablePlan(stats, subplan.estimated_cardinality));
+	}
+
+	static bool CanExpandScan(const LogicalGet &get) {
+		return get.children.empty() && !get.has_pushed_projection && !get.extra_info.sample_options &&
+		       !get.dynamic_filters;
+	}
+
+	template <class GET_CHILD_STATS>
+	static SubplanStats GetSubplanStats(const LogicalOperator &op, GET_CHILD_STATS get_child_stats) {
 		SubplanStats subplan_stats;
+		subplan_stats.ends_in_aggregate_or_distinct = CTEInlining::IsAggregateOrWindow(op);
 		if (op.children.empty()) {
 			subplan_stats.base_table_count = 1;
 			subplan_stats.max_base_table_cardinality = op.has_estimated_cardinality ? op.estimated_cardinality : 0;
 		} else {
-			subplan_stats = GetSubplanStats(*op.children[0]);
-			for (idx_t i = 1; i < op.children.size(); i++) {
-				subplan_stats.Combine(GetSubplanStats(*op.children[i]));
+			for (auto &child : op.children) {
+				const auto &child_stats = get_child_stats(*child);
+				subplan_stats.base_table_count += child_stats.base_table_count;
+				subplan_stats.max_base_table_cardinality =
+				    MaxValue(subplan_stats.max_base_table_cardinality, child_stats.max_base_table_cardinality);
+				if (op.children.size() == 1) {
+					subplan_stats.ends_in_aggregate_or_distinct |= child_stats.ends_in_aggregate_or_distinct;
+				}
 			}
 		}
 		return subplan_stats;
 	}
 
-	static bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) {
+	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+		return GetSubplanStats(op, [](const LogicalOperator &child) { return GetSubplanStats(child); });
+	}
+
+	static bool IsSelectiveMultiTablePlan(const SubplanStats &subplan_stats, idx_t cardinality) {
 		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
 
-		// Must have an estimated cardinality
-		if (!op->has_estimated_cardinality) {
-			return false;
-		}
-
 		// Must select more than 1 base table
-		const auto subplan_stats = GetSubplanStats(*op);
 		if (subplan_stats.base_table_count < 2) {
 			return false;
 		}
 
 		// If it has this cardinality or less, just materialize
-		if (op->estimated_cardinality <= CARDINALITY_THRESHOLD) {
+		if (cardinality <= CARDINALITY_THRESHOLD) {
 			return true;
 		}
 
 		// Otherwise, materialize if it is selective enough
-		return op->estimated_cardinality < subplan_stats.max_base_table_cardinality / CARDINALITY_RATIO;
+		return cardinality < subplan_stats.max_base_table_cardinality / CARDINALITY_RATIO;
 	}
 
+public:
+	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
+		return IsSelectiveMultiTablePlan(GetSubplanStats(op), cardinality);
+	}
+
+private:
 	vector<reference<subplan_map_t::value_type>> GetSortedSubplans() {
 		// Grab entries from map, and sort by smallest plans first
 		vector<reference<subplan_map_t::value_type>> subplan_infos;
@@ -1283,8 +1661,244 @@ private:
 	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	//! Mapping from generated CTE bindings to canonical bindings
 	column_binding_map_t<ColumnBinding> generated_binding_map;
-	//! Minimum CTE index created by this optimizer
-	TableIndex min_cte_idx;
+	//! Output expressions in canonical input bindings, indexed by canonical output column.
+	unordered_map<TableIndex, vector<unique_ptr<Expression>>> canonical_expressions;
+};
+
+//===--------------------------------------------------------------------===//
+// Filtered join inputs
+//===--------------------------------------------------------------------===//
+class CommonJoinFilters {
+	struct Candidate {
+		explicit Candidate(unique_ptr<LogicalOperator> &op) : op(op) {
+		}
+
+		reference<unique_ptr<LogicalOperator>> op;
+		vector<reference<unique_ptr<LogicalOperator>>> scans;
+	};
+
+	struct CandidateGroup {
+		explicit CandidateGroup(Candidate &candidate) {
+			candidates.emplace_back(candidate);
+		}
+
+		bool TryAdd(Candidate &candidate) {
+			auto &primary = candidates[0].get();
+			if (candidate.scans.size() != primary.scans.size()) {
+				return false;
+			}
+			auto varying_scan = differing_scan;
+			for (idx_t i = 0; i < primary.scans.size(); i++) {
+				auto &left = primary.scans[i].get()->Cast<LogicalGet>();
+				auto &right = candidate.scans[i].get()->Cast<LogicalGet>();
+				if (left.GetColumnIds() != right.GetColumnIds()) {
+					return false;
+				}
+				if (left.table_filters.Equals(right.table_filters)) {
+					continue;
+				}
+				// One varying input avoids cross-combinations between independent filter disjunctions.
+				if (varying_scan.IsValid() && varying_scan.GetIndex() != i) {
+					return false;
+				}
+				varying_scan = i;
+			}
+			differing_scan = varying_scan;
+			candidates.emplace_back(candidate);
+			return true;
+		}
+
+		vector<reference<Candidate>> candidates;
+		optional_idx differing_scan;
+	};
+
+public:
+	explicit CommonJoinFilters(ClientContext &context) : state(context) {
+	}
+
+	void Normalize(unique_ptr<LogicalOperator> &op) {
+		FindCandidates(op);
+		for (auto &entry : candidates) {
+			vector<CandidateGroup> groups;
+			for (auto &candidate : entry.second) {
+				bool added = false;
+				for (auto &group : groups) {
+					if (group.TryAdd(candidate)) {
+						added = true;
+						break;
+					}
+				}
+				if (!added) {
+					groups.emplace_back(candidate);
+				}
+			}
+			for (auto &group : groups) {
+				NormalizeGroup(group);
+			}
+		}
+	}
+
+private:
+	static bool IsInnerJoin(const LogicalOperator &op) {
+		return op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		       op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
+	}
+
+	optional_ptr<const PlanSignature> Signature(unique_ptr<LogicalOperator> &op, Candidate &candidate, bool movable) {
+		const bool traverse = movable && (IsInnerJoin(*op) || op->type == LogicalOperatorType::LOGICAL_FILTER);
+		if (traverse) {
+			bool safe = true;
+			LogicalOperatorVisitor::EnumerateExpressions(
+			    *op, [&](unique_ptr<Expression> *expr) { safe &= CanShareSubplanExpression(**expr); });
+			if (!safe) {
+				return nullptr;
+			}
+		}
+		vector<reference<const PlanSignature>> children;
+		for (auto &child : op->children) {
+			auto signature = Signature(child, candidate, traverse);
+			if (!signature) {
+				return nullptr;
+			}
+			children.emplace_back(*signature);
+		}
+		auto create = [&]() {
+			return PlanSignature::Create(state, *op, std::move(children));
+		};
+		if (!movable || op->type != LogicalOperatorType::LOGICAL_GET) {
+			return create();
+		}
+		auto &get = op->Cast<LogicalGet>();
+		if (!get.children.empty() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters ||
+		    get.extra_info.sample_options || get.has_pushed_projection) {
+			return create();
+		}
+		for (auto &entry : get.table_filters) {
+			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "CommonJoinFilters");
+			if (!CanShareSubplanExpression(*filter.expr) || ExpressionFilter::IsOptionalFilter(filter)) {
+				return create();
+			}
+		}
+		auto filters = std::move(get.table_filters);
+		auto signature = create();
+		get.table_filters = std::move(filters);
+		candidate.scans.emplace_back(op);
+		return signature;
+	}
+
+	void FindCandidates(unique_ptr<LogicalOperator> &op) {
+		if (IsInnerJoin(*op)) {
+			Candidate candidate(op);
+			auto signature = Signature(op, candidate, true);
+			if (signature) {
+				candidates[*signature].push_back(std::move(candidate));
+			}
+			return;
+		}
+		for (auto &child : op->children) {
+			FindCandidates(child);
+		}
+	}
+
+	static unique_ptr<Expression> ScanPredicate(LogicalGet &get) {
+		vector<unique_ptr<Expression>> expressions;
+		for (auto &entry : get.table_filters) {
+			const auto index = entry.GetIndex();
+			BoundColumnRefExpression column(get.GetColumnType(get.GetColumnIds()[index]),
+			                                ColumnBinding(get.table_index, index));
+			expressions.push_back(entry.Filter().ToExpression(column));
+		}
+		if (expressions.empty()) {
+			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		}
+		return BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(expressions));
+	}
+
+	static void ExposeFilterColumns(LogicalOperator &op) {
+		if (IsInnerJoin(op)) {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			join.left_projection_map.clear();
+			join.right_projection_map.clear();
+		} else if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			op.Cast<LogicalFilter>().projection_map.clear();
+		} else {
+			return;
+		}
+		for (auto &child : op.children) {
+			ExposeFilterColumns(*child);
+		}
+	}
+
+	void NormalizeGroup(CandidateGroup &candidate_group) {
+		auto &group = candidate_group.candidates;
+		auto differing_scan = candidate_group.differing_scan;
+		if (group.size() < 2 || !differing_scan.IsValid()) {
+			return;
+		}
+		auto &primary = group[0].get();
+		idx_t cardinality = 0;
+		for (Candidate &candidate : group) {
+			auto &op = *candidate.op.get();
+			if (!op.has_estimated_cardinality ||
+			    op.estimated_cardinality > NumericLimits<idx_t>::Maximum() - cardinality) {
+				return;
+			}
+			cardinality += op.estimated_cardinality;
+		}
+		if (!CommonSubplanFinder::IsSelectiveMultiTablePlan(*primary.op.get(), cardinality)) {
+			return;
+		}
+
+		vector<unique_ptr<Expression>> predicates;
+		vector<TableIndex> table_indexes;
+		for (Candidate &candidate : group) {
+			auto &get = candidate.scans[differing_scan.GetIndex()].get()->Cast<LogicalGet>();
+			predicates.push_back(ScanPredicate(get));
+			table_indexes.push_back(get.table_index);
+		}
+		for (idx_t i = 0; i < group.size(); i++) {
+			auto &candidate = group[i].get();
+			auto &op = candidate.op.get();
+			const auto old_cardinality = op->estimated_cardinality;
+			const auto old_bindings = op->GetColumnBindings();
+			auto &scan = candidate.scans[differing_scan.GetIndex()].get();
+			auto &get = scan->Cast<LogicalGet>();
+			vector<unique_ptr<Expression>> disjuncts;
+			for (idx_t j = 0; j < predicates.size(); j++) {
+				auto predicate = predicates[j]->Copy();
+				ColumnBindingReplacer replacer;
+				for (auto index : ProjectionIndex::GetIndexes(get.GetColumnIds().size())) {
+					replacer.replacement_bindings.emplace_back(ColumnBinding(table_indexes[j], index),
+					                                           ColumnBinding(get.table_index, index));
+				}
+				replacer.VisitExpression(&predicate);
+				disjuncts.push_back(std::move(predicate));
+			}
+			get.table_filters.ClearFilters();
+			get.projection_ids.clear();
+			auto guard = make_uniq<LogicalFilter>(
+			    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(disjuncts)));
+			guard->children.push_back(std::move(scan));
+			scan = std::move(guard);
+			ExposeFilterColumns(*op);
+			op->SetEstimatedCardinality(cardinality);
+			auto new_bindings = op->GetColumnBindings();
+			auto residual = make_uniq<LogicalFilter>(predicates[i]->Copy());
+			for (auto &binding : old_bindings) {
+				auto entry = std::find(new_bindings.begin(), new_bindings.end(), binding);
+				D_ASSERT(entry != new_bindings.end());
+				residual->projection_map.emplace_back(NumericCast<idx_t>(entry - new_bindings.begin()));
+			}
+			residual->SetEstimatedCardinality(old_cardinality);
+			residual->children.push_back(std::move(op));
+			op = std::move(residual);
+		}
+	}
+
+private:
+	PlanSignatureCreateState state;
+	unordered_map<reference<const PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality>
+	    candidates;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1294,10 +1908,11 @@ CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimiz
 }
 
 unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
+	CommonJoinFilters join_filters(optimizer.context);
+	join_filters.Normalize(op);
 	// Bottom-up identification of identical subplans
 	CommonSubplanFinder finder(optimizer.context);
 	finder.FindCommonSubplans(op);
-	finder.FilterSubplans();
 	finder.ConvertSubplansToCTEs(optimizer, op);
 	return op;
 }

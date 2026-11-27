@@ -163,8 +163,6 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 		case LogicalTypeId::SQLNULL:
 			struct_children.emplace_back(make_pair(string(), LogicalTypeId::SQLNULL));
 			break;
-		case LogicalTypeId::UNKNOWN:
-			throw ParameterNotResolvedException();
 		default:
 			throw BinderException("Parameter type needs to be List");
 		}
@@ -175,7 +173,7 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 
 ScalarFunction ListZipFun::GetFunction() {
 	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

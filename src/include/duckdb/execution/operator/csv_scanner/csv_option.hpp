@@ -41,7 +41,7 @@ public:
 		D_ASSERT(!(by_user && set_by_user));
 		if (!set_by_user) {
 			// If it's not set by user we can change the value
-			value = value_p;
+			value = std::move(value_p); // NOLINT(performance-move-const-arg)
 			set_by_user = by_user;
 		}
 	}
@@ -55,11 +55,6 @@ public:
 			value = value_p;
 			set_by_user = by_user;
 		}
-	}
-
-	// this is due to a hacky implementation in the read csv relation
-	void ChangeSetByUserTrue() {
-		set_by_user = true;
 	}
 
 	bool operator==(const CSVOption &other) const {

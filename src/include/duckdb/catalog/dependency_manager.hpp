@@ -94,7 +94,7 @@ public:
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
-	void ReorderEntries(catalog_entry_vector_t &entries);
+	void ReorderEntries(catalog_entry_vector_t &entries, VisibilityBound bound);
 	void ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context);
 
 private:
@@ -119,6 +119,9 @@ public:
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
+	//! The drop error for an entry with dependents, for catalogs that track their own dependents.
+	DUCKDB_API static string FormatDropError(const CatalogEntry &object,
+	                                         const vector<reference<CatalogEntry>> &dependents);
 	//! Navigate the given schema path (outermost first) and return the deepest schema in it. Returns nullptr for an
 	//! empty path (the entry lives in the catalog root) or if a schema along the path does not exist.
 	optional_ptr<SchemaCatalogEntry> NavigateSchemaPath(CatalogTransaction transaction,
@@ -129,7 +132,8 @@ private:
 	                  catalog_entry_vector_t &order, bool allow_internal);
 	void ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction, bool allow_internal);
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
-	void VerifyExistence(CatalogTransaction transaction, DependencyEntry &object);
+	void VerifyExistence(CatalogTransaction transaction, CatalogTransaction snapshot_transaction,
+	                     DependencyEntry &object);
 	void VerifyCommitDrop(CatalogTransaction transaction, VisibilityBound visibility_bound, CatalogEntry &object);
 	//! Returns the objects that should be dropped alongside the object
 	catalog_entry_set_t CheckDropDependencies(CatalogTransaction transaction, CatalogEntry &object, bool cascade);

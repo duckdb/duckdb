@@ -54,3 +54,44 @@ TEST_CASE("Test table info reports the resolved table location", "[api]") {
 	REQUIRE(info);
 	REQUIRE(info->qualified_name.Name() == "FooBar");
 }
+
+TEST_CASE("Test table info on a view keeps the open transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE u(k INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW vw AS SELECT 1 AS k"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (1)"));
+	REQUIRE(con.TableInfo("vw") == nullptr);
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (2)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	auto result = con.Query("SELECT k FROM u ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+}
+
+TEST_CASE("Test table info on a temporary view that hides a table", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE shadowed AS SELECT 'table' AS k"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY VIEW shadowed AS SELECT 'temporary view' AS k"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE u(k INTEGER)"));
+
+	auto result = con.Query("SELECT k FROM shadowed");
+	REQUIRE(CHECK_COLUMN(result, 0, {"temporary view"}));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (1)"));
+	REQUIRE(con.TableInfo("shadowed") == nullptr);
+	auto info = con.TableInfo("memory", "main", "shadowed");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "memory");
+	REQUIRE(info->qualified_name.Name() == "shadowed");
+	REQUIRE(info->columns.size() == 1);
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (2)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT k FROM u ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+}

@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -12,6 +14,8 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
@@ -51,18 +55,83 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		return true;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		// the ±infinity sentinels keep the finite domain bounded away from INT64_MIN/MAX, so the
-		// never-true sentinels (hi+1 / lo-1) in the bisection can't overflow
+		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them). Search
+		// between the ±infinity sentinels so that hi+1 and lo-1 stay representable. Apply handles the finite
+		// INT64_MIN below -infinity.
 		lo = timestamp_t::ninfinity().value + 1;
 		hi = timestamp_t::infinity().value - 1;
 		has_infinity = true;
 		return true;
+	case LogicalTypeId::DECIMAL: {
+		// the unscaled integer of a decimal is exact like the integer types
+		const auto width = DecimalType::GetWidth(type);
+		if (width > Decimal::MAX_WIDTH_INT64) {
+			return false;
+		}
+		hi = NumericHelper::POWERS_OF_TEN[width] - 1;
+		lo = -hi;
+		return true;
+	}
 	default:
 		// BIGINT's full int64 domain would overflow the never-true bisection sentinels, other timestamp
-		// resolutions and HUGEINT need a wider midpoint, and floating types are only monotone up to
-		// rounding: all left to a later extension.
+		// resolutions, HUGEINT and wide decimals need a wider midpoint, and floating types are only monotone up
+		// to rounding (see FloatRoundingPreimage for the exceptions): all left to a later extension.
 		return false;
 	}
+}
+
+//! The functions rounding a FLOAT or DOUBLE to an integer. They are exact, unlike the libm functions that are
+//! declared monotone, so their preimage is computed in closed form instead of by bisection.
+static bool GetFloatRounding(const BoundFunctionExpression &func, const LogicalType &col_type,
+                             IntegerRounding &rounding) {
+	if (col_type.id() != LogicalTypeId::FLOAT && col_type.id() != LogicalTypeId::DOUBLE) {
+		return false;
+	}
+	rounding = func.Function().GetArgProperties(0).integer_rounding;
+	return rounding != IntegerRounding::UNKNOWN;
+}
+
+//! `rounding(col) >= k`, or its complement `rounding(col) < k`, as a comparison on col. NaN sorts above every number
+//! and the infinities and NaN round to themselves, so this agrees with comparing the rounding for every value.
+static unique_ptr<Expression> RoundingAtLeast(IntegerRounding rounding, double k, bool complement,
+                                              const BoundColumnRefExpression &col, const LogicalType &col_type) {
+	// floor and positive trunc reach k at k, ceil and non-positive trunc right above k - 1
+	const bool from_k = rounding == IntegerRounding::FLOOR || (rounding == IntegerRounding::TRUNCATE && k > 0);
+	auto type = from_k ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+	const double bound = from_k ? k : k - 1;
+	if (complement) {
+		type = NegateComparisonExpression(type);
+	}
+	auto value = col_type.id() == LogicalTypeId::FLOAT ? Value::FLOAT(static_cast<float>(bound)) : Value::DOUBLE(bound);
+	return BoundComparisonExpression::Create(type, col.Copy(), make_uniq<BoundConstantExpression>(std::move(value)));
+}
+
+//! Preimage of `rounding(col) cmp c` on a FLOAT or DOUBLE column
+static unique_ptr<Expression> FloatRoundingPreimage(ClientContext &context, IntegerRounding rounding,
+                                                    ExpressionType cmp, const Value &c,
+                                                    const BoundColumnRefExpression &col, const LogicalType &col_type) {
+	const auto value = c.GetValue<double>();
+	// the integers next to the constant must be exact, which they are not beyond 2^24 (FLOAT) or 2^53 (DOUBLE)
+	const double exact_limit = col_type.id() == LogicalTypeId::FLOAT ? 16777216.0 : 9007199254740992.0;
+	if (!Value::IsFinite(value) || std::fabs(value) > exact_limit - 2) {
+		return nullptr;
+	}
+	// the rounding is an integer (or NaN or an infinity), so it is compared with the integer next to the constant
+	if (cmp == ExpressionType::COMPARE_EQUAL) {
+		if (std::floor(value) != value) {
+			return ExpressionRewriter::ConstantOrNull(context, col.Copy(), Value::BOOLEAN(false));
+		}
+		auto lower = RoundingAtLeast(rounding, value, false, col, col_type);
+		auto upper = RoundingAtLeast(rounding, value + 1, true, col, col_type);
+		return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower),
+		                                             std::move(upper));
+	}
+	const bool at_least =
+	    cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp == ExpressionType::COMPARE_GREATERTHAN;
+	const bool use_ceil =
+	    cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp == ExpressionType::COMPARE_LESSTHAN;
+	const double k = use_ceil ? std::ceil(value) : std::floor(value) + 1;
+	return RoundingAtLeast(rounding, k, !at_least, col, col_type);
 }
 
 //! Evaluate f at the probe value with internal representation `i`, returning false if the result is
@@ -145,10 +214,20 @@ static int64_t LastTruePrefix(PRED pred, int64_t lo, int64_t hi, bool &ok) {
 	return l;
 }
 
-static unique_ptr<Expression> MakeColComparison(ExpressionType type, const BoundColumnRefExpression &col,
-                                                const LogicalType &col_type, int64_t bound) {
-	return BoundComparisonExpression::Create(type, col.Copy(),
-	                                         make_uniq<BoundConstantExpression>(Value::Numeric(col_type, bound)));
+//! Emit `col >= bound` (lower) or `col <= bound` (upper). On types with ±infinity a bound on the edge of the
+//! finite domain is written as a strict comparison against the adjacent sentinel instead (`col > -infinity`,
+//! `col < infinity`), as nothing lies between the two.
+static unique_ptr<Expression> MakeColBound(bool lower, const BoundColumnRefExpression &col, const LogicalType &col_type,
+                                           int64_t bound, int64_t dom_edge, bool has_infinity) {
+	if (has_infinity && bound == dom_edge) {
+		auto sentinel = lower ? Value::NegativeInfinity(col_type) : Value::Infinity(col_type);
+		return BoundComparisonExpression::Create(lower ? ExpressionType::COMPARE_GREATERTHAN
+		                                               : ExpressionType::COMPARE_LESSTHAN,
+		                                         col.Copy(), make_uniq<BoundConstantExpression>(std::move(sentinel)));
+	}
+	return BoundComparisonExpression::Create(
+	    lower ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_LESSTHANOREQUALTO, col.Copy(),
+	    make_uniq<BoundConstantExpression>(Value::Numeric(col_type, bound)));
 }
 
 unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -159,7 +238,7 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 
 	// the matched function must be a monotone, deterministic unary function of a bare column
 	if (func.GetChildren().size() != 1 || !func.Function().HasArgProperties() ||
-	    func.Function().GetStability() != FunctionStability::CONSISTENT) {
+	    func.Function().GetStability() == FunctionStability::VOLATILE) {
 		return nullptr;
 	}
 	auto m = func.Function().GetArgProperties(0).monotonicity;
@@ -172,9 +251,11 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	auto &col = func.GetChildren()[0]->Cast<BoundColumnRefExpression>();
 	auto &col_type = col.GetReturnType();
 
-	int64_t dom_lo, dom_hi;
-	bool has_infinity;
-	if (!GetFiniteDomain(col_type, dom_lo, dom_hi, has_infinity)) {
+	int64_t dom_lo = 0, dom_hi = 0;
+	bool has_infinity = false;
+	IntegerRounding rounding = IntegerRounding::FLOOR;
+	const bool is_float_rounding = GetFloatRounding(func, col_type, rounding);
+	if (!is_float_rounding && !GetFiniteDomain(col_type, dom_lo, dom_hi, has_infinity)) {
 		return nullptr;
 	}
 	// Infinity sentinels can make date/time functions return NULL for non-NULL inputs.
@@ -188,7 +269,7 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 		return nullptr;
 	}
 	if (c.type() != func.GetReturnType()) {
-		auto cast = c.DefaultTryCastAs(func.GetReturnType());
+		auto cast = c.TryCastAs(GetContext(), func.GetReturnType());
 		if (!cast) {
 			return nullptr;
 		}
@@ -213,6 +294,9 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	}
 
 	auto &context = GetContext();
+	if (is_float_rounding) {
+		return FloatRoundingPreimage(context, rounding, cmp, c, col, col_type);
+	}
 	bool ok = true;
 	auto ge = [&](int64_t i, bool &v, bool &okref) {
 		Value fv;
@@ -320,13 +404,32 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	if (!need_lower && !need_upper) {
 		return nullptr; // no narrowing
 	}
+	// include the finite value below -infinity when it satisfies the comparison
+	bool below_sentinel_matches = false;
+	if (has_infinity && a == dom_lo) {
+		Value below_sentinel;
+		if (!EvalFunc(context, func, col_type, dom_lo - 2, below_sentinel)) {
+			return nullptr;
+		}
+		auto check = BoundComparisonExpression::Create(cmp, make_uniq<BoundConstantExpression>(below_sentinel),
+		                                               make_uniq<BoundConstantExpression>(c));
+		Value matches;
+		if (!ExpressionExecutor::TryEvaluateScalar(context, *check, matches) || matches.IsNull()) {
+			return nullptr;
+		}
+		below_sentinel_matches = BooleanValue::Get(matches);
+	}
 	unique_ptr<Expression> lower;
 	unique_ptr<Expression> upper;
-	if (need_lower) {
-		lower = MakeColComparison(ExpressionType::COMPARE_GREATERTHANOREQUALTO, col, col_type, a);
+	if (need_lower && below_sentinel_matches) {
+		lower =
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_NOTEQUAL, col.Copy(),
+		                                      make_uniq<BoundConstantExpression>(Value::NegativeInfinity(col_type)));
+	} else if (need_lower) {
+		lower = MakeColBound(true, col, col_type, a, dom_lo, has_infinity);
 	}
 	if (need_upper) {
-		upper = MakeColComparison(ExpressionType::COMPARE_LESSTHANOREQUALTO, col, col_type, b);
+		upper = MakeColBound(false, col, col_type, b, dom_hi, has_infinity);
 	}
 	if (lower && upper) {
 		return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower),

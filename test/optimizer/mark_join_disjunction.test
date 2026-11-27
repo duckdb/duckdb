@@ -1,0 +1,353 @@
+# name: test/optimizer/mark_join_disjunction.test
+# description: A filtering OR of same-key MARK joins becomes one SEMI join over their build keys
+# group: [optimizer]
+
+statement ok
+SET max_execution_time = 5000;
+
+statement ok
+CREATE TABLE p(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO p VALUES (1, 10), (1, 11), (1, 10), (2, 20), (3, 30), (4, 40), (NULL, 50), (5, NULL), (NULL, NULL), (6, 60);
+
+statement ok
+CREATE TABLE a(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO a VALUES (1, 10), (1, 10), (2, NULL), (NULL, 50), (8, 80);
+
+statement ok
+CREATE TABLE b(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO b VALUES (2, 20), (3, 30), (NULL, NULL), (5, NULL), (8, 81);
+
+statement ok
+CREATE TABLE c AS SELECT * FROM (VALUES (4, 40), (6, 60)) t(k, v);
+
+statement ok
+CREATE TABLE e(k INTEGER, v INTEGER);
+
+# NULL marks do not pass WHERE; duplicates on either side do not multiply probe rows.
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+5	NULL
+
+statement ok
+SET explain_output = 'optimized_only';
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+logical_opt	<!REGEX>:(?s).*MARK.*
+
+# A longer chain still tests membership in the union, preserving probe multiplicity.
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b) OR k IN (SELECT k FROM c);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+4	40
+5	NULL
+6	60
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b) OR k IN (SELECT k FROM c);
+----
+logical_opt	<!REGEX>:(?s).*MARK.*
+
+# Complete key tuples must stay together. Ordinary equality does not match NULLs.
+query II rowsort
+SELECT * FROM p WHERE EXISTS (SELECT 1 FROM a WHERE p.k = a.k AND p.v = a.v) OR EXISTS (SELECT 1 FROM b WHERE p.k = b.k AND p.v = b.v);
+----
+1	10
+1	10
+2	20
+3	30
+
+query II
+EXPLAIN SELECT * FROM p WHERE EXISTS (SELECT 1 FROM a WHERE p.k = a.k AND p.v = a.v) OR EXISTS (SELECT 1 FROM b WHERE p.k = b.k AND p.v = b.v);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+# Null-safe equality retains matching NULL keys, including an all-NULL tuple.
+query II rowsort
+SELECT * FROM p WHERE EXISTS (SELECT 1 FROM a WHERE p.k IS NOT DISTINCT FROM a.k AND p.v IS NOT DISTINCT FROM a.v) OR EXISTS (SELECT 1 FROM b WHERE p.k IS NOT DISTINCT FROM b.k AND p.v IS NOT DISTINCT FROM b.v);
+----
+1	10
+1	10
+2	20
+3	30
+5	NULL
+NULL	50
+NULL	NULL
+
+# Empty inputs retain the other branch's membership semantics.
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM e) OR k IN (SELECT k FROM b);
+----
+2	20
+3	30
+5	NULL
+
+query I
+SELECT count(*) FROM p WHERE k IN (SELECT k FROM e) OR k IN (SELECT k FROM e WHERE v > 0);
+----
+0
+
+# Output layout preservation is correct without relying on later column pruning.
+statement ok
+SET disabled_optimizers = 'unused_columns';
+
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+5	NULL
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+statement ok
+RESET disabled_optimizers;
+
+# The OR result does not determine the individual markers: retain visible aliases.
+query IIII rowsort
+SELECT * FROM (SELECT k, v, k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p) t WHERE ma OR mb;
+----
+1	10	true	NULL
+1	10	true	NULL
+1	11	true	NULL
+2	20	true	true
+3	30	NULL	true
+5	NULL	NULL	true
+
+query II
+EXPLAIN SELECT * FROM (SELECT k, v, k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p) t WHERE ma OR mb;
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+query II
+SELECT count(ma), count(mb) FROM (SELECT k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p) t WHERE ma OR mb;
+----
+4	3
+
+query II rowsort
+SELECT ma, count(*) FROM (SELECT k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p) t WHERE ma OR mb GROUP BY ma;
+----
+true	4
+NULL	2
+
+# Positional consumers must see the original markers too.
+query IIII rowsort
+WITH t AS MATERIALIZED (SELECT k, v, k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p)
+SELECT * FROM t WHERE ma OR mb UNION ALL SELECT 9, 90, false, false;
+----
+1	10	true	NULL
+1	10	true	NULL
+1	11	true	NULL
+2	20	true	true
+3	30	NULL	true
+5	NULL	NULL	true
+9	90	false	false
+
+# Different probe keys cannot share a single membership test.
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR v IN (SELECT v FROM b);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR v IN (SELECT v FROM b);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+# Ordered ANY may simplify independently, but must not become union membership.
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k < ANY (SELECT k FROM b);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+4	40
+5	NULL
+6	60
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k < ANY (SELECT k FROM b);
+----
+logical_opt	<!REGEX>:(?is).*UNION.*
+
+# Different build-side coercions are not combined.
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k::BIGINT FROM b);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+# Volatile inputs and throwing comparisons retain their evaluation boundaries.
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k + random()::INTEGER FROM a) OR k IN (SELECT k FROM b);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+query II
+EXPLAIN SELECT * FROM p WHERE (k::VARCHAR)::INTEGER IN (SELECT k FROM a) OR (k::VARCHAR)::INTEGER IN (SELECT k FROM b);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+statement ok
+SET disabled_optimizers = 'mark_join_simplifier';
+
+query II
+EXPLAIN SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*Join Type: MARK.*
+
+query II rowsort
+SELECT * FROM p WHERE k IN (SELECT k FROM a) OR k IN (SELECT k FROM b);
+----
+1	10
+1	10
+1	11
+2	20
+3	30
+5	NULL
+
+statement ok
+RESET disabled_optimizers;
+
+query II
+EXPLAIN SELECT * FROM p WHERE EXISTS (SELECT 1 FROM a WHERE p.k IS NOT DISTINCT FROM a.k AND p.v IS NOT DISTINCT FROM a.v) OR EXISTS (SELECT 1 FROM b WHERE p.k IS NOT DISTINCT FROM b.k AND p.v IS NOT DISTINCT FROM b.v);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+# An additional predicate needs the actual mark, even though it is not returned.
+query II rowsort
+SELECT k, v FROM (SELECT *, k IN (SELECT k FROM a) AS ma, k IN (SELECT k FROM b) AS mb FROM p) t WHERE (ma OR mb) AND ma IS NULL;
+----
+3	30
+5	NULL
+
+# Do not combine builds that still depend on the current probe row.
+query II
+SELECT * FROM p WHERE k IN (SELECT k FROM a WHERE a.v < p.v) OR k IN (SELECT k FROM b WHERE b.v < p.v);
+----
+1	11
+
+# Nullability analysis of the resulting SEMI may look up a CTE elsewhere in the plan.
+statement ok
+CREATE TABLE nn(k INTEGER NOT NULL);
+
+statement ok
+INSERT INTO nn VALUES (1), (2), (3);
+
+query I rowsort
+WITH t AS MATERIALIZED (SELECT * FROM nn)
+SELECT * FROM t WHERE EXISTS (SELECT 1 FROM a WHERE a.k = t.k) OR EXISTS (SELECT 1 FROM b WHERE b.k = t.k);
+----
+1
+2
+3
+
+query II
+EXPLAIN WITH t AS MATERIALIZED (SELECT * FROM nn)
+SELECT * FROM t WHERE EXISTS (SELECT 1 FROM a WHERE a.k = t.k) OR EXISTS (SELECT 1 FROM b WHERE b.k = t.k);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+# Native nested equality treats tuple members differently from top-level NULLs.
+# Keep TUPLE columns temporary because v1 storage cannot persist them.
+statement ok
+CREATE TEMP TABLE tuple_probe(id INTEGER, k TUPLE(INTEGER, INTEGER));
+
+statement ok
+INSERT INTO tuple_probe VALUES (1, row(1, NULL)), (2, row(1, 2)), (3, NULL), (4, row(NULL, 2)), (5, row(3, 4));
+
+statement ok
+CREATE TEMP TABLE tuple_a(k TUPLE(INTEGER, INTEGER));
+
+statement ok
+INSERT INTO tuple_a VALUES (row(1, NULL)), (row(NULL, 2)), (NULL);
+
+statement ok
+CREATE TEMP TABLE tuple_b(k TUPLE(INTEGER, INTEGER));
+
+statement ok
+INSERT INTO tuple_b VALUES (row(3, 4)), (row(3, 4));
+
+query I rowsort
+SELECT id FROM tuple_probe WHERE k IN (SELECT k FROM tuple_a) OR k IN (SELECT k FROM tuple_b);
+----
+1
+4
+5
+
+query II
+EXPLAIN SELECT id FROM tuple_probe WHERE k IN (SELECT k FROM tuple_a) OR k IN (SELECT k FROM tuple_b);
+----
+logical_opt	<REGEX>:(?is).*Join Type: (RIGHT_)?SEMI.*UNION.*
+
+statement ok
+DROP TABLE tuple_probe;
+DROP TABLE tuple_a;
+DROP TABLE tuple_b;
+
+statement ok
+CREATE TABLE union_probe(id INTEGER, k UNION(i INTEGER, s VARCHAR));
+
+statement ok
+INSERT INTO union_probe VALUES (1, union_value(i := 1)), (2, union_value(i := NULL)), (3, NULL), (4, union_value(s := 'x')), (5, union_value(s := NULL)), (6, union_value(i := 2));
+
+statement ok
+CREATE TABLE union_a(k UNION(i INTEGER, s VARCHAR));
+
+statement ok
+INSERT INTO union_a VALUES (union_value(i := 1)), (union_value(i := NULL)), (NULL);
+
+statement ok
+CREATE TABLE union_b(k UNION(i INTEGER, s VARCHAR));
+
+statement ok
+INSERT INTO union_b VALUES (union_value(s := 'x')), (union_value(s := NULL));
+
+query I rowsort
+SELECT id FROM union_probe WHERE k IN (SELECT k FROM union_a) OR k IN (SELECT k FROM union_b);
+----
+1
+4
+
+query I rowsort
+SELECT id FROM union_probe p WHERE EXISTS (SELECT 1 FROM union_a WHERE p.k IS NOT DISTINCT FROM union_a.k) OR EXISTS (SELECT 1 FROM union_b WHERE p.k IS NOT DISTINCT FROM union_b.k);
+----
+1
+2
+3
+4
+5

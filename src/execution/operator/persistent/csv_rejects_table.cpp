@@ -23,14 +23,6 @@ TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
 	return table_entry;
 }
 
-idx_t CSVRejectsTable::GetCurrentFileIndex(idx_t query_id) {
-	if (current_query_id != query_id) {
-		current_query_id = query_id;
-		current_file_idx = 0;
-	}
-	return current_file_idx++;
-}
-
 shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &rejects_scan,
                                                          const string &rejects_error) {
 	// Check that these names can't be the same
@@ -38,7 +30,9 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 		throw BinderException("The names of the rejects scan and rejects error tables can't be the same. Use different "
 		                      "names for these tables.");
 	}
-	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
+	// length-prefix the scan name so that different name pairs can't produce the same key
+	auto upper_scan = StringUtil::Upper(rejects_scan);
+	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%llu_%s_%s", upper_scan.size(), upper_scan,
 	                              StringUtil::Upper(rejects_error));
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
@@ -65,7 +59,29 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 
+idx_t CSVRejectsTable::GetFileIndex(idx_t query_id, optional_ptr<const PhysicalOperator> scan_op, idx_t file_index) {
+	const lock_guard<mutex> lock(file_index_lock);
+	if (file_index_query_id != query_id) {
+		// the file indexes are unique within a query
+		file_index_query_id = query_id;
+		next_file_index = 0;
+		scan_file_indexes.clear();
+	}
+	if (!scan_op) {
+		// we cannot tell which scan this file belongs to - give it an index of its own
+		return next_file_index++;
+	}
+	auto &file_indexes = scan_file_indexes[*scan_op];
+	// Earlier files may still be running, so reserve their indexes before assigning this one.
+	while (file_indexes.size() <= file_index) {
+		file_indexes.push_back(next_file_index++);
+	}
+	return file_indexes[file_index];
+}
+
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
+	// every file of a scan initializes the table it reports its rejects to, and files are opened in parallel
+	const lock_guard<mutex> lock(write_lock);
 	// (Re)Create the temporary rejects table
 	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 

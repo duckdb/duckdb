@@ -4,5 +4,4 @@ race:NextInnerJoin
 race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel
 race:*duckdb/third_party/jemalloc/*
-race:ValidityAppend
 race:ResolveComplexJoin

@@ -33,8 +33,7 @@ unique_ptr<FunctionData> StatsBind(BindScalarFunctionInput &input) {
 
 unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	auto &bind_data = input.bind_data;
-	auto &info = bind_data->Cast<StatsBindData>();
+	auto &info = input.bind_data.write().Cast<StatsBindData>();
 	info.stats = child_stats[0].ToStruct().CastAs(context, LogicalType::VARIANT());
 	return nullptr;
 }
@@ -42,7 +41,8 @@ unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionS
 } // namespace
 
 ScalarFunction StatsFun::GetFunction() {
-	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARIANT(), StatsFunction, StatsBind, StatsPropagateStats);
+	ScalarFunction stats({}, LogicalType::VARIANT(), StatsFunction, StatsBind, StatsPropagateStats);
+	stats.GetSignature().AddParameter("expression", LogicalType::ANY);
 	stats.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	stats.SetStability(FunctionStability::VOLATILE);
 	return stats;
