@@ -531,12 +531,15 @@ void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t lo
 	auto &scheduler = TaskScheduler::GetScheduler(db);
 	// idle worker threads also run async tasks, so the pieces are only sure to run serially without any other thread
 	const bool single_threaded = scheduler.NumberOfThreads() <= 1 && scheduler.NumberOfAsyncThreads() == 0;
+	const bool exact_uncached =
+	    !external_file_cache.IsEnabled() &&
+	    Settings::Get<ExternalFileCacheRequestSizingSetting>(db) == ExternalFileCacheRequestSizing::EXACT;
 	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() ||
-	    single_threaded) {
+	    single_threaded || exact_uncached) {
 		ReadAndRecord(context, buffer, nr_bytes, location);
 		return;
 	}
-	// split like cached reads, so the requests are the same whether or not the cache is enabled
+	// Split at the same block size as cached reads.
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
 		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,

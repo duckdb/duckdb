@@ -1819,9 +1819,9 @@ struct ExternalFileCacheRequestSizingSetting {
 	using RETURN_TYPE = ExternalFileCacheRequestSizing;
 	static constexpr const char *Name = "external_file_cache_request_sizing";
 	static constexpr const char *Description =
-	    "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache "
-	    "block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are "
-	    "always exact.";
+	    "How external file reads are sized: AUTO lets each reader choose, GRID aligns cached reads to cache block "
+	    "boundaries, and EXACT uses reader-sized ranges. When the external file cache is disabled, EXACT also skips "
+	    "splitting reads at the cache block size.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
