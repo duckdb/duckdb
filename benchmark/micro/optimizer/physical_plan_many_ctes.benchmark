@@ -1,0 +1,18 @@
+# name: benchmark/micro/optimizer/physical_plan_many_ctes.benchmark
+# description: Physically plan 4096 distinct aggregate subplans, each used twice
+# group: [optimizer]
+
+name Physical Plan Many CTEs
+group micro
+subgroup optimizer
+
+load
+SET max_expression_depth=10000;
+
+# Generate SQL from constants so PREPARE also constructs the physical plan.
+run
+PREPARE physical_plan_properties AS
+FROM query(array_to_string(
+	list_transform(range(8192), lambda i: format('SELECT sum(i) total FROM range({}) r(i)', 8 + i // 2)),
+	' UNION ALL '
+));

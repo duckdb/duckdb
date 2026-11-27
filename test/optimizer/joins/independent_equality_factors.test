@@ -1,0 +1,121 @@
+# name: test/optimizer/joins/independent_equality_factors.test
+# description: Count distinct equality connections in cycles without composite joins
+# group: [joins]
+
+statement ok
+SET explain_output='optimized_only';
+
+statement ok
+CREATE TABLE coordinates AS
+SELECT (i % 4)::INTEGER x, ((i // 4) % 4)::INTEGER y, ((i // 16) % 4)::INTEGER z, i v
+FROM range(64) t(i);
+
+statement ok
+ANALYZE coordinates;
+
+# Each pair joins on one coordinate. Closing the relation cycle adds a distinct equality connection.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4096"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
+----
+4096
+
+# Reordering the inputs and repeating a reversed condition does not change the factors.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates c JOIN coordinates b ON c.y=b.y
+JOIN coordinates a ON a.z=c.z AND b.x=a.x AND a.x=b.x;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4096"\s*}\s*}\s*\]\s*$
+
+# A transitive equality within one coordinate is redundant, even though it closes a relation cycle.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.x=c.x AND c.x=a.x;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"16384"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.x=c.x AND c.x=a.x;
+----
+16384
+
+# Multiple coordinates between the same pair retain the existing estimate, even outside the statistical cap.
+statement ok
+CREATE TABLE repeated_coordinates AS
+SELECT (i % 4)::INTEGER x, ((i // 4) % 4)::INTEGER y, ((i // 16) % 4)::INTEGER z, i v
+FROM range(256) t(i);
+
+statement ok
+ANALYZE repeated_coordinates;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8192"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y);
+----
+4096
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y, z);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8192"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y, z);
+----
+1024
+
+# The fallback applies to the whole region, including its two-way subsets.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y)
+JOIN repeated_coordinates c USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"524288"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y)
+JOIN repeated_coordinates c USING (x, y);
+----
+65536
+
+# Marginal distinct counts cannot distinguish these correlated columns from independent coordinates.
+statement ok
+CREATE TABLE correlated AS SELECT (i % 4)::INTEGER x, (i % 4)::INTEGER y FROM range(64) t(i);
+
+statement ok
+ANALYZE correlated;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.x FROM correlated a JOIN correlated b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"512"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM correlated a JOIN correlated b USING (x, y);
+----
+1024
+
+# Unknown domains retain the existing fallback even without a composite pair.
+query II
+EXPLAIN (FORMAT JSON)
+WITH coordinates AS NOT MATERIALIZED (
+    SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, ((i//16)%4)::INTEGER z, i v FROM range(64) t(i)
+)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"64"\s*}\s*}\s*\]\s*$

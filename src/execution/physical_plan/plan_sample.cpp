@@ -24,7 +24,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		child_cardinality = first_child.EstimateCardinality(context);
 	}
 
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 	if (!op.sample_options->seed.IsValid()) {
 		auto &random_engine = RandomEngine::Get(context);
 		op.sample_options->SetSeed(random_engine.NextSeed32());

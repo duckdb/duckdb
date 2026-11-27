@@ -104,7 +104,8 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	// we need to search for any index creation entries
+	// statements of connections that share the transaction can add entries concurrently
+	lock_guard<mutex> guard(allocator.lock);
 	return allocator.head.get();
 }
 
@@ -130,9 +131,6 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			auto info = reinterpret_cast<DeleteInfo *>(data);
 			if (info->is_consecutive) {
 				properties.estimated_size += sizeof(row_t) * info->count;
-			}
-			if (info->table->GetStorage().HasIndexes()) {
-				properties.has_index_deletes = true;
 			}
 			properties.has_deletes = true;
 			break;

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -257,7 +258,9 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 	auto subject_entry = LookupEntry(transaction, info.subject.entry);
 	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
 	if (!subject_entry) {
-		throw InternalException("Couldn't locate entry: '%s'", CatalogEntryInfoToString(info.subject.entry));
+		// a connection that shares the transaction dropped or renamed the entry in the meantime
+		throw TransactionException("Catalog write-write conflict: could not locate entry '%s'",
+		                           CatalogEntryInfoToString(info.subject.entry));
 	}
 
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);

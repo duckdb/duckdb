@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -69,8 +70,9 @@ public:
 	reference<DataTable> table_ref;
 	//! The DuckTableEntry visible to this transaction that references table_ref.
 	//! Updated through the append path (InitializeAppend, Append, LocalMerge) and
-	//! propagated from parent storage on ALTER operations.
-	optional_ptr<DuckTableEntry> table_entry;
+	//! propagated from parent storage on ALTER operations. Atomic: connections that share a transaction set it
+	//! concurrently.
+	atomic<optional_ptr<DuckTableEntry>> table_entry;
 
 	Allocator &allocator;
 	//! The main row group collection.
@@ -87,6 +89,8 @@ public:
 
 	//! Whether or not the storage was dropped
 	atomic<bool> is_dropped {false};
+	//! Whether an ALTER of a connection sharing the transaction replaced the storage by the one of the new table
+	atomic<bool> replaced_by_alter {false};
 
 	//! Serializes the appends and merges into the primary collection
 	StorageLock append_lock;
@@ -94,6 +98,9 @@ public:
 	StorageLock flush_lock;
 
 public:
+	//! Locks to use the primary collection (throw if the table was altered in the meantime)
+	unique_ptr<StorageLockKey> LockShared();
+	unique_ptr<StorageLockKey> LockAppend();
 	//! Initialize a scan; the context of the scanning query is used for pushed down casts and zonemap checks
 	void InitializeScan(const QueryContext &context, CollectionScanState &state,
 	                    optional_ptr<TableFilterSet> table_filters = nullptr);
@@ -128,6 +135,8 @@ public:
 	OptimisticWriteCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(const PhysicalIndex collection_index);
+	//! Whether a statement is writing an optimistic row group collection of the table
+	bool HasOptimisticCollections();
 	//! Returns the optimistic writer.
 	OptimisticDataWriter &GetOptimisticWriter();
 
@@ -149,6 +158,8 @@ private:
 class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
+	//! Replaces the storage of a table by the storage of its altered version
+	void ReplaceEntry(DataTable &old_table, DataTable &new_table, shared_ptr<LocalTableStorage> entry);
 	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
 	shared_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;
@@ -160,6 +171,8 @@ public:
 private:
 	mutable mutex table_storage_lock;
 	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> table_storage;
+	//! The old versions of the tables whose storage was replaced by an ALTER
+	reference_set_t<const DataTable> altered_tables;
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -259,11 +272,21 @@ public:
 	}
 
 private:
+	//! The locks that are held while the storage of an altered table is replaced
+	struct LocalStorageAlterLocks {
+		unique_ptr<StorageLockKey> append_key;
+		unique_ptr<StorageLockKey> flush_key;
+	};
+
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 	bool synced_flushed_blocks = false;
 
 private:
+	//! Takes the locks of the storage of the table that an ALTER replaces. Throws if other statements use it
+	shared_ptr<LocalTableStorage> BeginAlter(DataTable &old_dt, LocalStorageAlterLocks &locks);
+	//! Replaces the storage of the old version of the table by the one of the new version
+	void FinishAlter(DataTable &old_dt, DataTable &new_dt, shared_ptr<LocalTableStorage> new_storage);
 	//! Flushes the local rows into the shared table and indexes; invalidates the database if they cannot be restored
 	void Flush(Context &context, DataTable &table, LocalTableStorage &storage,
 	           optional_ptr<StorageCommitState> commit_state);

@@ -1,0 +1,130 @@
+# name: test/optimizer/pushdown/adaptive_redundant_scan_filters_plan.test
+# description: Check adaptive redundant filters on direct join scans
+# group: [pushdown]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+CREATE TABLE adaptive_probe AS
+SELECT (i%100)::TINYINT AS k, i FROM range(100000) t(i);
+
+statement ok
+INSERT INTO adaptive_probe VALUES (NULL,100000);
+
+statement ok
+CREATE TABLE adaptive_build AS
+SELECT i::TINYINT AS k, i::TINYINT AS v FROM range(100) t(i);
+
+statement ok
+INSERT INTO adaptive_build VALUES (8,99),(NULL,100);
+
+# Only the probe copy is optional.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+----
+physical_plan	<REGEX>:(?s).*adaptive_probe[^}]*"Filters": "optional: \(k != 7\)"[^}]*.*adaptive_build[^}]*"Filters": "\(k != 7\)".*
+
+# Keep unrelated probe requirements mandatory.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k
+WHERE b.k<>7 AND p.i<>99908;
+----
+physical_plan	<!REGEX>:(?s).*optional: \(i != 99908\).*
+
+# An additional computed condition cannot admit new evaluation inputs.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k AND p.i+1>b.v WHERE b.k<>7;
+----
+physical_plan	<!REGEX>:(?s).*optional:.*
+
+# The preserved side of a LEFT join needs its exact filter.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p LEFT JOIN adaptive_build b ON p.k=b.k WHERE p.k<>7;
+----
+physical_plan	<!REGEX>:(?s).*optional:.*
+
+# Keep the existing predicate batch when the scan evaluates a fallible cast.
+statement ok
+CREATE TABLE guarded_probe AS
+SELECT i::TINYINT AS k, CASE WHEN i=7 THEN 'bad' ELSE '1' END AS s FROM range(10) t(i);
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(b.v)
+FROM guarded_probe p JOIN adaptive_build b ON p.k=b.k
+WHERE p.k<>7 AND CASE WHEN p.s='bad' THEN NULL ELSE p.s::INTEGER END>0;
+----
+physical_plan	<!REGEX>:(?s).*optional:.*
+
+# Binary string equality also preserves the constant predicate.
+statement ok
+CREATE TABLE string_probe AS
+SELECT repeat('x',20)||k::VARCHAR AS k,i FROM adaptive_probe;
+
+statement ok
+CREATE TABLE string_build AS
+SELECT repeat('x',20)||k::VARCHAR AS k,v FROM adaptive_build;
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM string_probe p JOIN string_build b ON p.k=b.k WHERE b.k<>repeat('x',20)||'7';
+----
+physical_plan	<REGEX>:(?s).*string_probe[^}]*"Filters": "optional:.*string_build[^}]*"Filters": "\(k !=.*
+
+# Disabling this optimizer retains both mandatory filters.
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,join_filter_pushdown';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+----
+physical_plan	<!REGEX>:(?s).*optional:.*
+
+statement ok
+RESET disabled_optimizers;
+
+require parquet
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+COPY adaptive_probe TO '{TEST_DIR}/adaptive_probe.parquet';
+
+statement ok
+COPY adaptive_build TO '{TEST_DIR}/adaptive_build.parquet';
+
+# The same proof applies to file scans on either side of the join.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM read_parquet('{TEST_DIR}/adaptive_probe.parquet') p
+JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
+----
+physical_plan	<REGEX>:(?s).*READ_PARQUET[^}]*"Filters": "optional: \(k != 7\)".*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*),sum(p.i),sum(b.v)
+FROM adaptive_probe p
+JOIN read_parquet('{TEST_DIR}/adaptive_build.parquet') b ON p.k=b.k WHERE b.k<>7;
+----
+physical_plan	<REGEX>:(?s).*adaptive_probe[^}]*"Filters": "optional: \(k != 7\)".*READ_PARQUET[^}]*"Filters": "\(k != 7\)".*
+
+statement ok
+RESET disabled_optimizers;

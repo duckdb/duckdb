@@ -39,6 +39,7 @@ add_library_unity(
   test_numeric_utils.cpp
   test_optional_idx.cpp
   test_time_point.cpp
+  test_test_runner.cpp
   test_parse_expression.cpp
   test_parse_load_statement.cpp
   test_parse_external_resource_source.cpp

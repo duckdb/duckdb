@@ -1,0 +1,53 @@
+# name: test/sql/index/art/create_drop/test_art_create_drop_index_during_deletes.test_slow
+# description: CREATE INDEX and DROP INDEX while other connections commit deletes leave the database usable
+# group: [create_drop]
+
+statement ok
+ATTACH '{TEST_DIR}/create_drop_index_during_deletes.db' AS db;
+
+# no checkpoint runs, so only the commits and their cleanups touch the indexes
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET checkpoint_threshold = '1TB';
+
+statement ok
+CREATE TABLE db.t AS SELECT range AS i, range % 100000 AS j FROM range(400000);
+
+concurrentloop threadid 0 4
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+CREATE INDEX idx ON db.t(j);
+
+# the lookup through idx skips the rows deleted while it was built
+onlyif threadid=0
+query I
+SELECT (SELECT count(*) FROM db.t WHERE j = 7) = (SELECT count(*) FROM db.t WHERE j = 7 AND hash(j) IS NOT NULL);
+----
+true
+
+onlyif threadid=0
+statement ok
+DROP INDEX db.idx;
+
+skipif threadid=0
+statement ok
+DELETE FROM db.t
+WHERE i >= ({threadid} * 100000 + {i} * 1000)
+  AND i < ({threadid} * 100000 + ({i} + 1) * 1000);
+
+endloop
+
+endloop
+
+query I
+SELECT count(*) FROM db.t;
+----
+340000
+
+statement ok
+DETACH db;

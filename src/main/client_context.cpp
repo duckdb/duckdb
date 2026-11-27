@@ -237,6 +237,19 @@ void ClientContext::Destroy() {
 	CleanupInternal(lock);
 }
 
+void ClientContext::LeaveSharedTransaction() {
+	if (Exception::UncaughtException() || !transaction.IsInSharedTransaction()) {
+		return;
+	}
+	try {
+		Destroy();
+	} catch (...) {
+		// the transaction cannot be left while the active query may still be running
+		return;
+	}
+	RollbackActiveTransaction();
+}
+
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
 	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
@@ -1226,6 +1239,10 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 
 void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info) {
 	auto type = info.type;
+	if (transaction.IsInherited()) {
+		throw TransactionException(
+		    "a connection that inherited its transaction cannot start, join, commit or roll back a transaction");
+	}
 	if (type == TransactionType::COMMIT && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		// transaction is invalidated - turn COMMIT into ROLLBACK
@@ -1253,6 +1270,9 @@ void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info)
 		}
 		break;
 	}
+	case TransactionType::JOIN_TRANSACTION:
+		transaction.JoinTransaction(info.share_id);
+		break;
 	case TransactionType::COMMIT:
 		if (transaction.IsAutoCommit()) {
 			throw TransactionException("cannot commit - no transaction is active");

@@ -20,8 +20,9 @@
 
 #define DUCKDB_CATCH_EXCEPTION_ASSERTION(exception_type, ...)                                                          \
 	do {                                                                                                               \
-		static_assert(!std::is_base_of<duckdb::Exception, exception_type>::value,                                      \
-		              "Use REQUIRE_THROWS_WITH or CHECK_THROWS_WITH with a stable message for DuckDB exceptions");     \
+		static_assert(                                                                                                 \
+		    !std::is_base_of<duckdb::Exception, exception_type>::value,                                                \
+		    "Match std::exception with ExceptionMatches from test_exception_matcher.hpp for DuckDB exceptions");       \
 		DUCKDB_CATCH_ASSERTION(__VA_ARGS__);                                                                           \
 	} while (false)
 

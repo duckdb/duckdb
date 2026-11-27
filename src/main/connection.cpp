@@ -38,6 +38,15 @@ Connection Connection::CreateInternal(ClientContext &caller) {
 	return con;
 }
 
+Connection Connection::CreateInTransaction(ClientContext &context) {
+	Connection con(*context.db);
+	auto &new_context = *con.context;
+	new_context.base_context = context.base_context ? context.base_context : context.shared_from_this();
+	new_context.internal_depth = context.internal_depth + 1;
+	new_context.transaction.InheritTransaction(context);
+	return con;
+}
+
 Connection::Connection(Connection &&other) noexcept {
 	std::swap(context, other.context);
 	std::swap(connection_id, other.connection_id);
@@ -54,6 +63,8 @@ Connection::~Connection() {
 		return;
 	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
+	// outstanding results can keep the context alive, but the connection stops participating in a shared transaction
+	context->LeaveSharedTransaction();
 }
 
 string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {

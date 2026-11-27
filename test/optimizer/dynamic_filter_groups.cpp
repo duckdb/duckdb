@@ -31,6 +31,7 @@ TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dy
 	const auto prefix = GENERATE(false, true);
 	const auto optional = GENERATE(false, true);
 	const auto filters_null_values = GENERATE(false, true);
+	const auto pruning_hint = GENERATE(false, true);
 	Vector build_keys(LogicalType::BIGINT, 3);
 	{
 		auto writer = FlatVector::Writer<int64_t>(build_keys, 3);
@@ -66,6 +67,23 @@ TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dy
 	                                                                       std::move(children), std::move(bind_data));
 	if (optional) {
 		expression = CreateSelectivityOptionalFilterExpression(std::move(expression), LogicalType::BIGINT, 1.0f, 8);
+	}
+	if (pruning_hint) {
+		vector<Value> members;
+		for (int64_t i = 0; i < 37; i++) {
+			members.push_back(Value::BIGINT(i));
+		}
+		auto hint = CreateOptionalFilterExpression(
+		    ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0),
+		                                         std::move(members)),
+		    LogicalType::BIGINT);
+		auto hints = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+		hints->GetChildrenMutable().push_back(hint->Copy());
+		hints->GetChildrenMutable().push_back(std::move(hint));
+		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+		conjunction->GetChildrenMutable().push_back(std::move(hints));
+		conjunction->GetChildrenMutable().push_back(std::move(expression));
+		expression = std::move(conjunction);
 	}
 	auto state = make_uniq<ExpressionFilterState>(context.GetContext(), *expression);
 	REQUIRE(state->fast_executor);
@@ -108,7 +126,7 @@ TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dy
 						input.SetValue(selected.get_index(i), Value::BIGINT(22));
 					}
 				}
-				CAPTURE(prefix, optional, filters_null_values, scan_count, selection_type, repeat);
+				CAPTURE(prefix, optional, filters_null_values, pruning_hint, scan_count, selection_type, repeat);
 				SelectionVector expected(selected);
 				auto expected_count = count;
 				ColumnSegment::FilterSelection(expected, input, *fallback, scan_count, expected_count);
@@ -290,6 +308,107 @@ struct FilterGroupTest {
 	PhysicalOperator &second;
 	PhysicalTableScan &scan;
 };
+
+TEST_CASE("Runtime bounds combine with static filters separately for each execution", "[dynamic_filter_groups]") {
+	FilterGroupTest test;
+	auto &context = *test.con.context;
+	TableFilterSet static_filters;
+	static_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                  ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(10)));
+	auto original = static_filters.Copy();
+	DynamicTableFilterSet dynamic;
+	for (int32_t threshold : {20, 30, 5}) {
+		dynamic.ClearFilters(test.first);
+		auto bound =
+		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(threshold));
+		bound->expr = CreateSelectivityOptionalFilterExpression(std::move(bound->expr), LogicalType::INTEGER, 0.0f, 8);
+		dynamic.PushFilter(test.first, ProjectionIndex(0), std::move(bound));
+		auto combined = dynamic.GetFinalTableFilters(test.scan, static_filters);
+		REQUIRE(combined);
+		REQUIRE(static_filters.Equals(*original));
+		auto expected = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN,
+		                                                         Value::INTEGER(MaxValue<int32_t>(10, threshold)));
+		auto &expr = *combined->GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr;
+		REQUIRE(expr.Equals(*expected->expr));
+		REQUIRE_FALSE(EvaluateGroupTestFilter(context, *combined, {Value::INTEGER(10)}));
+		REQUIRE_FALSE(EvaluateGroupTestFilter(context, *combined, {Value(LogicalType::INTEGER)}));
+		REQUIRE(EvaluateGroupTestFilter(context, *combined, {Value::INTEGER(40)}));
+
+		// Even after the optional wrapper would have paused, the promoted bound must still reject rows.
+		ExpressionFilterState state(context.GetContext(), expr);
+		Vector input(Value::INTEGER(15), count_t(32));
+		for (idx_t batch = 0; batch < 20; batch++) {
+			SelectionVector selected;
+			idx_t count = input.size();
+			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
+			REQUIRE(count == (threshold > 15 ? 0 : input.size()));
+		}
+	}
+	dynamic.ClearFilters(test.first);
+	auto combined = dynamic.GetFinalTableFilters(test.scan, static_filters);
+	REQUIRE(combined->Equals(*original));
+	REQUIRE(static_filters.Equals(*original));
+}
+
+TEST_CASE("Runtime optional IN retains static bounds when bypassing row filtering", "[dynamic_filter_groups]") {
+	const auto adaptive = GENERATE(false, true);
+	// Each batch must advance the optional filter's selectivity state only once.
+	const auto batch_size = MinValue<idx_t>(32, STANDARD_VECTOR_SIZE);
+	FilterGroupTest test;
+	auto &context = *test.con.context;
+	TableFilterSet static_filters;
+	static_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                  ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(10)));
+	static_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                  ExpressionType::COMPARE_LESSTHAN, Value::INTEGER(100)));
+	auto original = static_filters.Copy();
+	DynamicTableFilterSet dynamic;
+	for (int32_t key : {20, 40, 60}) {
+		dynamic.ClearFilters(test.first);
+		auto in = ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0ULL),
+		                                               {Value::INTEGER(key), Value::INTEGER(key + 1)});
+		in = adaptive ? CreateSelectivityOptionalFilterExpression(std::move(in), LogicalType::INTEGER, 0.5f, 8)
+		              : CreateOptionalFilterExpression(std::move(in), LogicalType::INTEGER);
+		auto expected = static_filters.Copy();
+		expected->PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(in->Copy()));
+		dynamic.PushFilter(test.first, ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(in)));
+		auto combined = dynamic.GetFinalTableFilters(test.scan, static_filters);
+		REQUIRE(combined);
+		REQUIRE(static_filters.Equals(*original));
+		auto &expr = *combined->GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr;
+		REQUIRE(combined->Equals(*expected));
+		ExpressionFilterState state(context.GetContext(), expr);
+		REQUIRE(state.fast_executor);
+		{
+			Vector input(Value::INTEGER(15), count_t(batch_size));
+			SelectionVector selected;
+			idx_t count = input.size();
+			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
+			REQUIRE(count == (adaptive ? 0 : input.size()));
+		}
+		// After unselective batches, bypass IN while continuing to enforce the static bounds.
+		for (idx_t batch = 0; batch < 20; batch++) {
+			Vector input(Value::INTEGER(key), count_t(batch_size));
+			SelectionVector selected;
+			idx_t count = input.size();
+			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
+			REQUIRE(count == input.size());
+		}
+		for (const auto &value : {Value::INTEGER(5), Value::INTEGER(15), Value::INTEGER(key), Value::INTEGER(key + 1),
+		                          Value::INTEGER(99), Value(LogicalType::INTEGER)}) {
+			Vector input(value, count_t(batch_size));
+			SelectionVector selected;
+			idx_t count = input.size();
+			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
+			const auto matches = !value.IsNull() && value > Value::INTEGER(10) && value < Value::INTEGER(100);
+			REQUIRE(count == (matches ? input.size() : 0));
+		}
+	}
+	dynamic.ClearFilters(test.first);
+	auto combined = dynamic.GetFinalTableFilters(test.scan, static_filters);
+	REQUIRE(combined->Equals(*original));
+	REQUIRE(static_filters.Equals(*original));
+}
 
 TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dynamic_filter_groups]") {
 	const auto strings = GENERATE(false, true);

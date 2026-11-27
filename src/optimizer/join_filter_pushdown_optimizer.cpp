@@ -8,6 +8,7 @@
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -198,8 +200,8 @@ bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
 }
 
 struct FilterColumnHash {
-	hash_t operator()(const JoinFilterPushdownColumn &column) const {
-		auto result = CombineHash(Hash(column.join_filter_idx), ColumnBindingHashFunction()(column.probe_column_index));
+	static hash_t HashWithBinding(const JoinFilterPushdownColumn &column, ColumnBinding binding) {
+		auto result = CombineHash(Hash(column.join_filter_idx), ColumnBindingHashFunction()(binding));
 		result = CombineHash(result, column.storage_type.Hash());
 		result = CombineHash(result, Hash(uint8_t(column.mode)));
 		if (column.input_expression) {
@@ -207,16 +209,23 @@ struct FilterColumnHash {
 		}
 		return result;
 	}
+
+	hash_t operator()(const JoinFilterPushdownColumn &column) const {
+		return HashWithBinding(column, column.probe_column_index);
+	}
 };
 
 struct FilterColumnEquality {
-	bool operator()(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) const {
-		if (a.join_filter_idx != b.join_filter_idx || a.probe_column_index != b.probe_column_index ||
-		    a.storage_type != b.storage_type || a.mode != b.mode ||
+	static bool EqualsIgnoringBinding(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) {
+		if (a.join_filter_idx != b.join_filter_idx || a.storage_type != b.storage_type || a.mode != b.mode ||
 		    bool(a.input_expression) != bool(b.input_expression)) {
 			return false;
 		}
 		return !a.input_expression || a.input_expression->Equals(*b.input_expression);
+	}
+
+	bool operator()(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) const {
+		return a.probe_column_index == b.probe_column_index && EqualsIgnoringBinding(a, b);
 	}
 };
 
@@ -511,30 +520,56 @@ bool FilterTargetFinder::CanSkipSubtreeInternal(const LogicalOperator &op) {
 	return true;
 }
 
+// The traversal borrows only from its immutable input columns, never from the growing worklist.
+// Copies become owned filter columns only after equality expansion has finished.
+struct EquivalentFilterColumn {
+	reference<const JoinFilterPushdownColumn> source;
+	ColumnBinding binding;
+
+	struct Hash {
+		hash_t operator()(const EquivalentFilterColumn &column) const {
+			return FilterColumnHash::HashWithBinding(column.source.get(), column.binding);
+		}
+	};
+	struct Equality {
+		bool operator()(const EquivalentFilterColumn &a, const EquivalentFilterColumn &b) const {
+			return a.binding == b.binding &&
+			       FilterColumnEquality::EqualsIgnoringBinding(a.source.get(), b.source.get());
+		}
+	};
+};
+
 vector<JoinFilterPushdownColumn>
 FilterTargetFinder::ExpandEquivalentFilterColumns(const filter_equality_graph_t &equalities,
                                                   const vector<JoinFilterPushdownColumn> &columns) {
 	D_ASSERT(!equalities.empty());
-	vector<JoinFilterPushdownColumn> result;
-	filter_column_set_t seen;
+	vector<EquivalentFilterColumn> pending;
+	unordered_set<EquivalentFilterColumn, EquivalentFilterColumn::Hash, EquivalentFilterColumn::Equality> seen;
 	for (auto &column : columns) {
-		if (seen.insert(column.Copy()).second) {
-			result.push_back(column.Copy());
+		EquivalentFilterColumn initial {column, column.probe_column_index};
+		if (seen.insert(initial).second) {
+			pending.push_back(initial);
 		}
 	}
-	for (idx_t i = 0; i < result.size(); i++) {
-		auto entry = equalities.find(result[i].probe_column_index);
+	for (idx_t i = 0; i < pending.size(); i++) {
+		auto entry = equalities.find(pending[i].binding);
 		if (entry == equalities.end()) {
 			continue;
 		}
 		for (auto &binding : entry->second) {
-			auto inferred = result[i].Copy();
-			inferred.probe_column_index = binding;
-			auto inserted = seen.insert(std::move(inferred));
-			if (inserted.second) {
-				result.push_back(inserted.first->Copy());
+			auto inferred = pending[i];
+			inferred.binding = binding;
+			if (seen.insert(inferred).second) {
+				pending.push_back(inferred);
 			}
 		}
+	}
+	vector<JoinFilterPushdownColumn> result;
+	result.reserve(pending.size());
+	for (auto &column : pending) {
+		auto inferred = column.source.get().Copy();
+		inferred.probe_column_index = column.binding;
+		result.push_back(std::move(inferred));
 	}
 	return result;
 }
@@ -804,10 +839,90 @@ bool JoinFilterPushdownOptimizer::CanGenerateJoinFilters(const LogicalComparison
 	return true;
 }
 
+static bool CanAdaptScanFilters(const LogicalGet &get) {
+	return get.children.empty() && !get.has_pushed_projection && !get.ordinality_idx.IsValid() &&
+	       !get.table_filters.HasMultiColumnFilters();
+}
+
+static bool IsScanKeyConstraint(const LogicalGet &get, ProjectionIndex column_index, const TableFilter &filter) {
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		return false;
+	}
+	auto &expression = filter.Cast<ExpressionFilter>();
+	if (!expression.column_indexes.empty()) {
+		return false;
+	}
+	auto &column = get.GetColumnIds()[column_index];
+	if (column.IsVirtualColumn() || column.HasChildren() || column.IsPushdownExtract()) {
+		return false;
+	}
+	auto &type = get.GetColumnType(column);
+	if (!type.EqualValuesAreIdentical()) {
+		return false;
+	}
+	BoundReferenceExpression key(type, idx_t(0));
+	return FilterCombiner::CanMatchExpression(*expression.expr) &&
+	       FilterCombiner::IsKeyConstraint(*expression.expr, {key});
+}
+
+static void MakeRedundantProbeFiltersAdaptive(LogicalComparisonJoin &join) {
+	if (join.join_type != JoinType::INNER || join.children[0]->type != LogicalOperatorType::LOGICAL_GET ||
+	    join.children[1]->type != LogicalOperatorType::LOGICAL_GET || !join.expressions.empty()) {
+		return;
+	}
+	auto &probe = join.children[0]->Cast<LogicalGet>();
+	auto &build = join.children[1]->Cast<LogicalGet>();
+	if (!CanAdaptScanFilters(probe) || !CanAdaptScanFilters(build) || !probe.table_filters.HasFilters() ||
+	    !build.table_filters.HasFilters()) {
+		return;
+	}
+	// Computed conditions may have been simplified using the probe filter's statistics.
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+		    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetLHS().GetReturnType() != condition.GetRHS().GetReturnType()) {
+			return;
+		}
+	}
+	// Pausing a probe filter must not expose unsafe scan expressions to additional rows.
+	for (auto &entry : probe.table_filters) {
+		if (!IsScanKeyConstraint(probe, entry.GetIndex(), entry.Filter())) {
+			return;
+		}
+	}
+	for (auto &condition : join.conditions) {
+		auto &probe_key = condition.GetLHS().Cast<BoundColumnRefExpression>();
+		auto &build_key = condition.GetRHS().Cast<BoundColumnRefExpression>();
+		if (probe_key.Depth() != 0 || build_key.Depth() != 0 || probe_key.Binding().table_index != probe.table_index ||
+		    build_key.Binding().table_index != build.table_index) {
+			continue;
+		}
+		auto probe_column = probe_key.Binding().column_index;
+		auto build_column = build_key.Binding().column_index;
+		auto probe_filter = probe.table_filters.TryGetFilterByColumnIndex(probe_column);
+		auto build_filter = build.table_filters.TryGetFilterByColumnIndex(build_column);
+		if (!probe_filter || !build_filter || !IsScanKeyConstraint(build, build_column, *build_filter)) {
+			continue;
+		}
+		auto &probe_expression = probe_filter->Cast<ExpressionFilter>();
+		auto &build_expression = build_filter->Cast<ExpressionFilter>();
+		if (!probe_expression.Equals(build_expression)) {
+			continue;
+		}
+		// The build predicate and equality still enforce this constraint on every output row.
+		probe.table_filters.SetFilterByColumnIndex(
+		    probe_column,
+		    ExpressionFilter::CreateSelectivityOptionalFilter(probe_expression.expr->Copy(), probe_key.GetReturnType(),
+		                                                      SelectivityOptionalFilterType::MIN_MAX));
+	}
+}
+
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
 	if (!CanGenerateJoinFilters(join)) {
 		return;
 	}
+	MakeRedundantProbeFiltersAdaptive(join);
 	// re-order conditions here - otherwise this will happen later on and invalidate the indexes we generate
 	PhysicalComparisonJoin::ReorderConditions(join.conditions);
 	auto pushdown_info = make_uniq<JoinFilterPushdownInfo>();

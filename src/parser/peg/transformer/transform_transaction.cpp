@@ -32,6 +32,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommitTransaction(PEGTr
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::COMMIT));
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformJoinTransaction(PEGTransformer &transformer,
+                                                                         const string &share_id) {
+	auto info = make_uniq<TransactionInfo>(TransactionType::JOIN_TRANSACTION);
+	info->share_id = share_id;
+	return make_uniq<TransactionStatement>(std::move(info));
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformRollbackTransaction(PEGTransformer &transformer,
                                                                              const bool &has_result) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::ROLLBACK));

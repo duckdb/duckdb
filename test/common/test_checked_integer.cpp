@@ -3,6 +3,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/type_util.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "test_exception_matcher.hpp"
 
 using namespace duckdb; // NOLINT
 
@@ -301,15 +302,9 @@ TEST_CASE("CheckedInteger atomic operations", "[checked_integer]") {
 	SECTION("custom error category propagates through atomic") {
 		using i32_invalid_t = CheckedInteger<int32_t, InvalidInputException>;
 		std::atomic<i32_invalid_t> a(NumericLimits<int32_t>::Maximum());
-		REQUIRE_THROWS_MATCHES(a.fetch_add(i32_invalid_t(1)), std::exception,
-		                       Catch::Predicate<std::exception>(
-		                           [](const std::exception &ex) {
-			                           ErrorData error(ex);
-			                           return error.Type() == ExceptionType::INVALID_INPUT &&
-			                                  error.RawMessage().find("Overflow in addition for CheckedInteger") !=
-			                                      string::npos;
-		                           },
-		                           "an invalid input error for checked integer addition"));
+		REQUIRE_THROWS_MATCHES(
+		    a.fetch_add(i32_invalid_t(1)), std::exception,
+		    ExceptionMatches(ExceptionType::INVALID_INPUT, Catch::Contains("Overflow in addition for CheckedInteger")));
 	}
 
 	SECTION("compare_exchange_strong success and failure") {

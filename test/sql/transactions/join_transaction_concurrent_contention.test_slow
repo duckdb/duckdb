@@ -1,0 +1,55 @@
+# name: test/sql/transactions/join_transaction_concurrent_contention.test_slow
+# description: Connections of one shared transaction modify the same rows at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl AS SELECT i, 0 AS v, 'x' || i AS s FROM range(50000) t(i);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+# let every connection join before a failing statement can abort the shared transaction
+sleep 2 second
+
+loop r 0 10
+
+# the statements are not atomic with respect to each other, a concurrent delete of the rows can make them fail
+statement maybe
+UPDATE tbl SET v = v + 1, s = s || 'y' WHERE i % 1000 < 50
+----
+Conflict
+
+statement maybe
+UPDATE tbl SET v = {threadid} WHERE i = {r} * 8 + {threadid}
+----
+Conflict
+
+statement maybe
+SELECT count(*), sum(v) FROM tbl
+----
+Conflict
+
+endloop
+
+statement maybe
+COMMIT
+----
+Conflict
+
+endloop
+
+# the shared transaction can be invalidated by a failing statement, then the final commit fails
+statement maybe
+COMMIT
+----
+<REGEX>:.*(rolled it back|aborted|Conflict|invalidated).*

@@ -79,14 +79,8 @@ function(
     CAPI_VERSION
     PARAMETERS)
     set(TARGET_NAME ${NAME}_loadable_extension)
-    set(PREBUILT_EXTENSION FALSE)
-    if(TARGET ${NAME}_extension)
-        get_property(
-            PREBUILT_EXTENSION
-            TARGET ${NAME}_extension
-            PROPERTY DUCKDB_PREBUILT_EXTENSION)
-    endif()
-    if(LOCAL_EXTENSION_REPO AND NOT PREBUILT_EXTENSION)
+    string(FIND "${PARAMETERS}" "-host-bound" HOST_BOUND)
+    if(LOCAL_EXTENSION_REPO)
         add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
     endif()
     # all parameters after output_directory
@@ -116,7 +110,7 @@ function(
     set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
     set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
     set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-    if(NOT EXTENSION_STATIC_BUILD)
+    if(${HOST_BOUND} GREATER -1 OR NOT EXTENSION_STATIC_BUILD)
         set_property(TARGET ${TARGET_NAME} PROPERTY DUCKDB_DYNAMIC_LOADABLE_EXTENSION TRUE)
     endif()
     if(${IGNORE_WARNINGS} GREATER -1)
@@ -147,6 +141,10 @@ function(
                 TARGET ${TARGET_NAME}
                 APPEND
                 PROPERTY LINK_DEPENDS "${EXPORTS_MAP}")
+        endif()
+    elseif(${HOST_BOUND} GREATER -1)
+        if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND APPLE)
+            set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
         endif()
     elseif(EXTENSION_STATIC_BUILD)
         if(WIN32)
@@ -252,8 +250,7 @@ function(
     add_dependencies(${TARGET_NAME} duckdb_platform)
     if(NOT ${EXTENSION_CONFIG_BUILD}
        AND NOT ${EXTENSION_TESTS_ONLY}
-       AND NOT CLANG_TIDY
-       AND NOT PREBUILT_EXTENSION)
+       AND NOT CLANG_TIDY)
         add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
     endif()
 endfunction()
@@ -290,11 +287,14 @@ endfunction()
 # Compiles a C++ extension once into lib<NAME>_extension.a and links its loadable from that archive. NO_LOADABLE builds
 # the archive only; NO_WARNINGS silences compiler warnings.
 function(build_extension_library NAME)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS;DEFAULT_VISIBILITY" "" "")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS;DEFAULT_VISIBILITY;HOST_BOUND" "" "")
     set(FILES ${ARG_UNPARSED_ARGUMENTS})
     set(PARAMETERS "-warnings")
     if(ARG_NO_WARNINGS)
         set(PARAMETERS "-no-warnings")
+    endif()
+    if(ARG_HOST_BOUND AND NOT WIN32)
+        string(APPEND PARAMETERS " -host-bound")
     endif()
 
     build_static_extension(${NAME} ${FILES})

@@ -36,6 +36,8 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -214,6 +216,10 @@ const ColumnList &DuckTableEntry::GetColumns() const {
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
+	if (context.transaction.HasActiveTransaction() && context.transaction.ActiveTransaction().IsShared()) {
+		// connections sharing the transaction can write values outside of the statistics before the query reads them
+		return nullptr;
+	}
 	// Get the committed statistics
 	auto stats = storage->GetStatistics(context, column_id);
 	if (!stats) {
@@ -1421,7 +1427,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	}
 
 	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
-	// dependency yet, but it has already registered its index with the storage.
+	// dependency yet, so the new storage checks the indexes registered with it.
 	idx_t constraint_index_count = 0;
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
@@ -1434,9 +1440,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			}
 		}
 	}
-	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
-		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
-	}
 
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
@@ -1445,7 +1448,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(context, *bound_create_info, info);
 
-	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint, constraint_index_count);
 	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
 	return std::move(new_entry);
 }

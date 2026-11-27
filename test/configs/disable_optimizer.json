@@ -11,6 +11,12 @@
       ]
     },
     {
+      "reason": "Checks scan filter placement after repeated optimizer pushdown.",
+      "paths": [
+        "test/optimizer/filter_pushdown/existing_scan_filters.test"
+      ]
+    },
+    {
       "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
       "paths": [
         "test/optimizer/mark_join_simplifier.test",

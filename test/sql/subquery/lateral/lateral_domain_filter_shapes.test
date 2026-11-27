@@ -187,7 +187,7 @@ EXPLAIN SELECT count(*) FROM (
     FROM owners input JOIN vertices target ON target.id=input.person
 ) q WHERE person=1 AND found;
 ----
-physical_plan	<REGEX>:[\s\S]*Filters: person = 1[\s\S]*
+physical_plan	<REGEX>:[\s\S]*Filters: (person = 1|optional: \(person = 1\))[\s\S]*
 
 query I
 SELECT count(*) FROM (
@@ -213,7 +213,7 @@ EXPLAIN SELECT count(*) FROM (
     FROM owners input JOIN vertices target ON target.id=input.person
 ) q WHERE person=1 AND found;
 ----
-physical_plan	<REGEX>:[\s\S]*Filters: person = 1[\s\S]*
+physical_plan	<REGEX>:[\s\S]*Filters: (person = 1|optional: \(person = 1\))[\s\S]*
 
 # UNION deduplicates within each key, including NULL keys and duplicate outer rows.
 query II

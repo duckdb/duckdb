@@ -1,0 +1,142 @@
+# name: test/sql/aggregate/aggregate_state_export/interval_sum_export_state.test
+# description: Wide interval sum states and repeated combination
+# group: [aggregate_state_export]
+
+query T
+SELECT sum(INTERVAL '1 month 30 days 24 hours') EXPORT_STATE
+----
+{'months': 1, 'days': 30, 'micros': 86400000000}
+
+query TT
+SELECT sum(NULL::INTERVAL) EXPORT_STATE, sum(INTERVAL '0 days') EXPORT_STATE
+----
+NULL	{'months': 0, 'days': 0, 'micros': 0}
+
+query T
+SELECT sum(i) EXPORT_STATE FROM (SELECT INTERVAL '1 day' i WHERE false)
+----
+NULL
+
+query TT
+WITH s AS (SELECT sum(NULL::INTERVAL) EXPORT_STATE s)
+SELECT finalize(combine_aggr(s)), finalize(combine_aggr(s, 2147483648)) FROM s
+----
+NULL	NULL
+
+# Zero multiplicity leaves the state empty, including for a valid zero interval
+query TT
+WITH s AS (SELECT sum(INTERVAL '1 microsecond') EXPORT_STATE s, sum(INTERVAL '0 days') EXPORT_STATE z)
+SELECT finalize(combine_aggr(s, 0)), finalize(combine_aggr(z, 0)) FROM s
+----
+NULL	NULL
+
+foreach count 1 2147483647 2147483648
+
+query IT
+WITH s AS (SELECT sum(INTERVAL '1 microsecond') EXPORT_STATE s, sum(INTERVAL '0 days') EXPORT_STATE z)
+SELECT finalize(combine_aggr(s, {count}))::VARCHAR = to_microseconds({count})::VARCHAR,
+       finalize(combine_aggr(z, {count}))::VARCHAR FROM s
+----
+true	00:00:00
+
+endloop
+
+query T
+WITH s AS (SELECT sum(INTERVAL '1 microsecond') EXPORT_STATE s)
+SELECT finalize(combine_aggr(s, 2147483648)) FROM s
+----
+00:35:47.483648
+
+# All three components can exceed their result ranges in an exported state
+statement ok
+CREATE TABLE wide_states AS
+SELECT sum(INTERVAL '2000000000 months 2000000000 days 9000000000000000000 microseconds') EXPORT_STATE s
+FROM range(3)
+
+query T
+SELECT s FROM wide_states
+----
+{'months': 6000000000, 'days': 6000000000, 'micros': 27000000000000000000}
+
+query T
+SELECT combine_aggr(s, 2147483648) FROM wide_states
+----
+{'months': 12884901888000000000, 'days': 12884901888000000000, 'micros': 57982058496000000000000000000}
+
+statement error
+SELECT finalize(s) FROM wide_states
+----
+Overflow in SUM of INTERVAL
+
+# Explicit export/import must keep wide values available for subsequent cancellation
+statement ok
+CREATE TABLE cancellation_states AS
+SELECT to_aggregate_state(s::STRUCT(months HUGEINT, days HUGEINT, micros HUGEINT), 'sum', ['INTERVAL']) s
+FROM wide_states
+UNION ALL
+SELECT sum(INTERVAL '-2000000000 months -2000000000 days -9000000000000000000 microseconds') EXPORT_STATE
+FROM range(3)
+UNION ALL
+SELECT sum(INTERVAL '1 month 30 days 24 hours') EXPORT_STATE
+UNION ALL
+SELECT sum(NULL::INTERVAL) EXPORT_STATE
+
+query TT
+SELECT finalize(combine_aggr(s))::VARCHAR, finalize(combine_aggr(s, 2))::VARCHAR
+FROM cancellation_states
+----
+1 month 30 days 24:00:00	2 months 60 days 48:00:00
+
+# Multiplicity one and ordinary combination must agree for imported states
+query TT
+SELECT combine_aggr(s), combine_aggr(s, 1) FROM cancellation_states
+----
+{'months': 1, 'days': 30, 'micros': 86400000000}	{'months': 1, 'days': 30, 'micros': 86400000000}
+
+foreach unit months days
+
+# Repeated combination applies result limits only when finalized
+foreach sign 1 -1
+
+statement error
+WITH s AS (SELECT sum(INTERVAL '{sign} {unit}') EXPORT_STATE s)
+SELECT finalize(combine_aggr(s, 2147483649)) FROM s
+----
+Overflow in SUM of INTERVAL
+
+endloop
+
+endloop
+
+foreach sign 2 -2
+
+statement error
+WITH s AS (SELECT sum(INTERVAL '{sign} microseconds') EXPORT_STATE s)
+SELECT finalize(combine_aggr(s, 9223372036854775807)) FROM s
+----
+Overflow in SUM of INTERVAL
+
+endloop
+
+# Imported states still need checked arithmetic even though normal input sums fit in HUGEINT
+foreach field months days micros
+
+foreach limit 170141183460469231731687303715884105727 -170141183460469231731687303715884105728
+
+statement error
+SELECT combine_aggr(to_aggregate_state(
+    struct_update({'months': 0::HUGEINT, 'days': 0::HUGEINT, 'micros': 0::HUGEINT}, {field} := '{limit}'::HUGEINT),
+    'sum', ['INTERVAL']), 2)
+----
+Overflow in HUGEINT multiplication
+
+statement error
+SELECT combine_aggr(to_aggregate_state(
+    struct_update({'months': 0::HUGEINT, 'days': 0::HUGEINT, 'micros': 0::HUGEINT}, {field} := '{limit}'::HUGEINT),
+    'sum', ['INTERVAL'])) FROM range(2)
+----
+Overflow in HUGEINT addition
+
+endloop
+
+endloop

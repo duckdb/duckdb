@@ -562,7 +562,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
-	bool store_transaction = undo_properties.has_updates || undo_properties.has_index_deletes ||
+	bool store_transaction = undo_properties.has_updates || info.has_index_deletes ||
 	                         undo_properties.has_catalog_changes || error.HasError();
 
 	if (!commit_wal) {

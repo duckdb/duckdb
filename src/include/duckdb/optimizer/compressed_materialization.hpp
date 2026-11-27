@@ -109,6 +109,7 @@ public:
 	                          const vector<reference<unique_ptr<LogicalOperator>>> &ancestors,
 	                          statistics_map_t &statistics_map);
 
+	//! Compress an operator after statistics propagation has resolved its input and output types.
 	void Compress(unique_ptr<LogicalOperator> &op);
 
 private:

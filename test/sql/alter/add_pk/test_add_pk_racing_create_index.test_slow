@@ -1,0 +1,115 @@
+# name: test/sql/alter/add_pk/test_add_pk_racing_create_index.test_slow
+# description: ADD PRIMARY KEY racing CREATE INDEX must not publish the primary key after the other index
+# group: [add_pk]
+
+loop attempt 0 40
+
+statement ok
+ATTACH '{TEST_DIR}/add_pk_racing_create_index_{attempt}.db' AS db{attempt};
+
+statement ok
+CREATE TABLE db{attempt}.t AS SELECT range AS id, range % 10 AS c FROM range(5000000);
+
+concurrentforeach task create alter
+
+# delay the CREATE INDEX by a varying amount, so it finishes at different points of the ADD PRIMARY KEY
+onlyif task=create
+statement ok
+SELECT sum(i) FROM range(2500000 + {attempt} * 100000) tbl(i);
+
+onlyif task=create
+statement maybe
+CREATE INDEX ix ON db{attempt}.t(c);
+----
+
+onlyif task=alter
+statement maybe
+ALTER TABLE db{attempt}.t ADD PRIMARY KEY (id);
+----
+
+endloop
+
+# detaching checkpoints the indexes in list order
+statement ok
+DETACH db{attempt};
+
+statement ok
+ATTACH '{TEST_DIR}/add_pk_racing_create_index_{attempt}.db' AS db{attempt};
+
+query I
+SELECT count(*) FROM db{attempt}.t WHERE c = 1;
+----
+500000
+
+# a loaded primary key still rejects duplicates
+statement maybe
+INSERT INTO db{attempt}.t VALUES (1, 1);
+----
+violates primary key constraint
+
+query I
+SELECT (SELECT count(*) FROM duckdb_constraints() WHERE database_name = 'db{attempt}' AND constraint_type = 'PRIMARY KEY') = 0
+    OR (SELECT count(*) FROM db{attempt}.t WHERE id = 1) = 1;
+----
+true
+
+statement ok
+DETACH db{attempt};
+
+endloop
+
+loop attempt 40 80
+
+statement ok
+ATTACH '{TEST_DIR}/add_pk_racing_create_index_{attempt}.db' AS db{attempt};
+
+statement ok
+CREATE TABLE db{attempt}.t AS SELECT range AS id, range % 10 AS c FROM range(5000000);
+
+concurrentforeach task create alter
+
+onlyif task=create
+statement maybe
+CREATE INDEX ix ON db{attempt}.t(c);
+----
+
+# delay the ADD PRIMARY KEY instead, so the CREATE INDEX starts first
+onlyif task=alter
+statement ok
+SELECT sum(i) FROM range(({attempt} - 40) * 5000000) tbl(i);
+
+onlyif task=alter
+statement maybe
+ALTER TABLE db{attempt}.t ADD PRIMARY KEY (id);
+----
+
+endloop
+
+# detaching checkpoints the indexes in list order
+statement ok
+DETACH db{attempt};
+
+statement ok
+ATTACH '{TEST_DIR}/add_pk_racing_create_index_{attempt}.db' AS db{attempt};
+
+query I
+SELECT count(*) FROM db{attempt}.t WHERE c = 1;
+----
+500000
+
+# a loaded primary key still rejects duplicates
+statement maybe
+INSERT INTO db{attempt}.t VALUES (1, 1);
+----
+violates primary key constraint
+
+query I
+SELECT (SELECT count(*) FROM duckdb_constraints() WHERE database_name = 'db{attempt}' AND constraint_type = 'PRIMARY KEY') = 0
+    OR (SELECT count(*) FROM db{attempt}.t WHERE id = 1) = 1;
+----
+true
+
+statement ok
+DETACH db{attempt};
+
+endloop

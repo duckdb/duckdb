@@ -139,8 +139,9 @@ INSERT INTO secrets VALUES (1, 'top_secret'), (2, '42')
 statement ok
 CREATE TABLE allowed(id INTEGER)
 
+# Keep the hidden row inside the join-key range so static pruning cannot protect the unbarred cast.
 statement ok
-INSERT INTO allowed VALUES (2)
+INSERT INTO allowed VALUES (0), (2)
 
 statement ok
 CREATE SECURE VIEW joined_secure_view AS SELECT sec.id, sec.s FROM secrets sec JOIN allowed a ON (sec.id = a.id)

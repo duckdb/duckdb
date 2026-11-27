@@ -1,0 +1,284 @@
+# name: test/sql/index/art/create_drop/test_art_build_sorted.test
+# description: Test building an ART from sorted data with CREATE INDEX on existing rows
+# group: [create_drop]
+
+load {TEST_DIR}/test_art_build_sorted.db
+
+# A single key.
+
+statement ok
+CREATE TABLE single AS SELECT 42 AS i;
+
+statement ok
+CREATE UNIQUE INDEX idx_single ON single(i);
+
+query I
+SELECT i FROM single WHERE i = 42;
+----
+42
+
+query I
+SELECT count(*) FROM single WHERE i = 41;
+----
+0
+
+statement error
+INSERT INTO single VALUES (42);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+# One inner node of each type, all children empty when it is created.
+
+statement ok
+CREATE TABLE n4 AS SELECT range::INTEGER AS i FROM range(3);
+
+statement ok
+CREATE TABLE n16 AS SELECT range::INTEGER AS i FROM range(10);
+
+statement ok
+CREATE TABLE n48 AS SELECT range::INTEGER AS i FROM range(40);
+
+statement ok
+CREATE TABLE n256 AS SELECT range::INTEGER AS i FROM range(200);
+
+statement ok
+CREATE UNIQUE INDEX idx_n4 ON n4(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_n16 ON n16(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_n48 ON n48(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_n256 ON n256(i);
+
+query II
+EXPLAIN ANALYZE SELECT i FROM n256 WHERE i = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+loop i 0 3
+
+query I
+SELECT count(*) FROM n4 WHERE i = {i};
+----
+1
+
+endloop
+
+loop i 0 10
+
+query I
+SELECT count(*) FROM n16 WHERE i = {i};
+----
+1
+
+endloop
+
+loop i 0 40
+
+query I
+SELECT count(*) FROM n48 WHERE i = {i};
+----
+1
+
+endloop
+
+loop i 0 200
+
+query I
+SELECT count(*) FROM n256 WHERE i = {i};
+----
+1
+
+endloop
+
+query I
+SELECT count(*) FROM n256 WHERE i = 200;
+----
+0
+
+# Several inner-node levels: Node4, then Node16, then Node256.
+
+statement ok
+CREATE TABLE levels AS
+SELECT (a * 65536 + b * 256 + c)::BIGINT AS k
+FROM range(2) t1(a), range(5) t2(b), range(200) t3(c);
+
+statement ok
+CREATE UNIQUE INDEX idx_levels ON levels(k);
+
+query I
+SELECT k FROM levels WHERE k = 0;
+----
+0
+
+query I
+SELECT k FROM levels WHERE k = 1124;
+----
+1124
+
+query I
+SELECT k FROM levels WHERE k = 66759;
+----
+66759
+
+query I
+SELECT count(*) FROM levels WHERE k = 1280;
+----
+0
+
+query I
+SELECT count(*) FROM levels WHERE k = 200;
+----
+0
+
+# Prefix chains longer than one prefix node, before an inner node and before a leaf.
+
+statement ok
+CREATE TABLE long_prefix AS
+SELECT repeat('x', 40) || chr((97 + range)::INTEGER) || repeat(chr((97 + range)::INTEGER), 40) AS k FROM range(20);
+
+statement ok
+CREATE UNIQUE INDEX idx_long_prefix ON long_prefix(k);
+
+loop i 0 20
+
+query I
+SELECT count(*) FROM long_prefix WHERE k = repeat('x', 40) || chr(97 + {i}) || repeat(chr(97 + {i}), 40);
+----
+1
+
+endloop
+
+query I
+SELECT count(*) FROM long_prefix WHERE k = repeat('x', 40) || 'a' || repeat('a', 39);
+----
+0
+
+# Duplicates in a non-unique index, with and without a prefix before the gate.
+
+statement ok
+CREATE TABLE dup_no_prefix AS
+SELECT (range % 3)::INTEGER AS i FROM range(30)
+UNION ALL SELECT 7 FROM range(300);
+
+statement ok
+CREATE INDEX idx_dup_no_prefix ON dup_no_prefix(i);
+
+query II
+SELECT i, count(*) FROM dup_no_prefix WHERE i = 7 GROUP BY i;
+----
+7	300
+
+loop i 0 3
+
+query I
+SELECT count(*) FROM dup_no_prefix WHERE i = {i};
+----
+10
+
+endloop
+
+statement ok
+CREATE TABLE dup_prefix AS
+SELECT chr((97 + range % 4)::INTEGER) || repeat('y', 30) AS k FROM range(400)
+UNION ALL SELECT 'e' || repeat('z', 30);
+
+statement ok
+CREATE INDEX idx_dup_prefix ON dup_prefix(k);
+
+loop i 0 4
+
+query I
+SELECT count(*) FROM dup_prefix WHERE k = chr(97 + {i}) || repeat('y', 30);
+----
+100
+
+endloop
+
+query I
+SELECT count(*) FROM dup_prefix WHERE k = 'e' || repeat('z', 30);
+----
+1
+
+# All keys equal: the root is a prefix chain over a gate.
+
+statement ok
+CREATE TABLE dup_root AS SELECT repeat('w', 50) AS k FROM range(100);
+
+statement ok
+CREATE INDEX idx_dup_root ON dup_root(k);
+
+query I
+SELECT count(*) FROM dup_root WHERE k = repeat('w', 50);
+----
+100
+
+# A unique violation while building.
+
+statement ok
+CREATE TABLE violation AS SELECT range::INTEGER AS i FROM range(100) UNION ALL SELECT 50;
+
+statement error
+CREATE UNIQUE INDEX idx_violation ON violation(i);
+----
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+statement ok
+CREATE TABLE violation_prefix AS
+SELECT repeat('v', 40) || range::VARCHAR AS k FROM range(100) UNION ALL SELECT repeat('v', 40) || '50';
+
+statement error
+CREATE UNIQUE INDEX idx_violation_prefix ON violation_prefix(k);
+----
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+# The indexes survive a checkpoint and restart.
+
+restart
+
+query I
+SELECT i FROM single WHERE i = 42;
+----
+42
+
+loop i 0 200
+
+query I
+SELECT count(*) FROM n256 WHERE i = {i};
+----
+1
+
+endloop
+
+query I
+SELECT k FROM levels WHERE k = 66759;
+----
+66759
+
+query I
+SELECT count(*) FROM long_prefix WHERE k = repeat('x', 40) || 'q' || repeat('q', 40);
+----
+1
+
+query II
+SELECT i, count(*) FROM dup_no_prefix WHERE i = 7 GROUP BY i;
+----
+7	300
+
+query I
+SELECT count(*) FROM dup_prefix WHERE k = 'c' || repeat('y', 30);
+----
+100
+
+query I
+SELECT count(*) FROM dup_root WHERE k = repeat('w', 50);
+----
+100
+
+statement error
+INSERT INTO n48 VALUES (17);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*

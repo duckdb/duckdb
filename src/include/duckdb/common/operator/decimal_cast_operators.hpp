@@ -743,9 +743,18 @@ struct DecimalCastOperation {
 			return true;
 		} else {
 			// positive exponent: append 0's
-			for (idx_t i = 0; i < idx_t(exponent); i++) {
-				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
-					return false;
+			if (state.result != 0) {
+				for (idx_t i = 0; i < idx_t(exponent); i++) {
+					if (NEGATIVE) {
+						if (state.result < DecimalCastLimits<typename T::StoreType>::MinimumDiv10) {
+							return false;
+						}
+					} else {
+						if (state.result > DecimalCastLimits<typename T::StoreType>::MaximumDiv10) {
+							return false;
+						}
+					}
+					state.result *= 10;
 				}
 			}
 			// decimals moved before the decimal point by the exponent do not count towards the digit count
@@ -766,9 +775,15 @@ struct DecimalCastOperation {
 			// we just truncate the decimal
 			return true;
 		}
+		if (state.result == 0 && digit == 0) {
+			// leading zeros after the decimal point still advance decimal_count
+			state.decimal_count++;
+			return true;
+		}
 		//! If we expect an exponent, we need to preserve the decimals
 		//! But we don't want to overflow, so we prevent overflowing the result with this check
-		if (state.digit_count + state.decimal_count >= DecimalWidth<decltype(state.result)>::max) {
+		if (NEGATIVE ? state.result <= DecimalCastLimits<typename T::StoreType>::MinimumDiv10
+		             : state.result >= DecimalCastLimits<typename T::StoreType>::MaximumDiv10) {
 			return true;
 		}
 		state.decimal_count++;

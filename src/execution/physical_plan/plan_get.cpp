@@ -31,7 +31,7 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
-		reference<PhysicalOperator> child = ResolveAndPlan(std::move(op.children[0]));
+		reference<PhysicalOperator> child = ResolveAndPlan(*op.children[0]);
 		auto &child_types = child.get().types;
 
 		// this is for table producing functions that consume subquery results
@@ -96,6 +96,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				table_input = true;
 				break;
 			}
+		}
+		if (!op.projected_input.empty() && op.function.in_out_function_final) {
+			throw NotImplementedException("Table in-out function %s has a finalize step, which is not supported for "
+			                              "input that is correlated with an outer query",
+			                              op.function.GetName());
 		}
 		auto &table_in_out = Make<PhysicalTableInOutFunction>(
 		    op.types, op.function, std::move(op.bind_data), column_ids, std::move(projection_indices),

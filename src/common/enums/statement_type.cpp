@@ -97,7 +97,13 @@ string StatementReturnTypeToString(StatementReturnType type) {
 
 void StatementProperties::RegisterDBRead(Catalog &catalog, ClientContext &context) {
 	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
-	D_ASSERT(read_databases.count(catalog.GetName()) == 0 || read_databases[catalog.GetName()] == catalog_identity);
+	auto entry = read_databases.find(catalog.GetName());
+	if (entry != read_databases.end()) {
+		// a connection that shares the transaction can change the catalog version while the statement is bound:
+		// keep the first version, so that the statement is rebound
+		D_ASSERT(entry->second.catalog_oid == catalog_identity.catalog_oid);
+		return;
+	}
 	read_databases[catalog.GetName()] = catalog_identity;
 }
 
@@ -109,8 +115,9 @@ void StatementProperties::RegisterDBModify(Catalog &catalog, ClientContext &cont
 		// new entry - set the identity
 		entry.first->second.identity = catalog_identity;
 	} else {
-		// existing entry - verify this has the same identity
-		D_ASSERT(entry.first->second.identity == catalog_identity);
+		// existing entry - the version can change when a connection that shares the transaction modifies the catalog,
+		// keep the first one so that the statement is rebound
+		D_ASSERT(entry.first->second.identity.catalog_oid == catalog_identity.catalog_oid);
 	}
 	entry.first->second.modifications |= modification;
 }

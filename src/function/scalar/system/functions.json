@@ -43,6 +43,13 @@
         "struct": "CurrentTransactionId"
     },
     {
+        "name": "share_transaction",
+        "description": "Share the current transaction so that other connections can join it using JOIN TRANSACTION",
+        "example": "share_transaction()",
+        "type": "scalar_function",
+        "struct": "ShareTransaction"
+    },
+    {
         "name": "current_query_id",
         "description": "Get the current query_id",
         "example": "current_query_id()",

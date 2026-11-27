@@ -207,9 +207,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	if (!is_closed && is_detached) {
-		// a reference held outside of a transaction outlived the detach
-		auto action = Exception::UncaughtException() ? DatabaseCloseAction::SKIP_CHECKPOINT : detach_close_action;
+	if (!is_closed && (is_detached || IsTemporary())) {
+		// a reference held outside of a transaction outlived the detach, or a shared transaction outlived its
+		// connection
+		auto action = Exception::UncaughtException() || IsTemporary() ? DatabaseCloseAction::SKIP_CHECKPOINT
+		                                                              : detach_close_action;
 		try {
 			Close(action);
 		} catch (std::exception &ex) {

@@ -37,6 +37,11 @@ bool JoinRelationSet::Empty() const {
 	return count == 0;
 }
 
+bool JoinRelationSet::Contains(RelationIndex relation) const {
+	auto word = relation.index / BITMASK_WORD_SIZE;
+	return word < bitmask.size() && (bitmask[word] & (idx_t(1) << (relation.index % BITMASK_WORD_SIZE))) != 0;
+}
+
 //! Returns true if sub is a subset of super
 bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub) {
 	D_ASSERT(sub.count > 0);
@@ -82,6 +87,13 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<Rel
 
 //! Create or get a JoinRelationSet from a single node with the given index
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
+	auto entries = relation_sets.equal_range(CombineHash(0, Hash(index.index)));
+	for (auto entry = entries.first; entry != entries.second; ++entry) {
+		auto &set = *entry->second;
+		if (set.count == 1 && set.relations[0] == index) {
+			return set;
+		}
+	}
 	// create a sorted vector of the relations
 	auto relations = make_unsafe_uniq_array<RelationIndex>(1);
 	relations[0] = index;

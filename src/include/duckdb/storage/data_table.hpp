@@ -29,6 +29,8 @@ class DistinctStatistics;
 class DuckTransaction;
 class Expression;
 class Index;
+class BoundIndex;
+class IndexEntry;
 class OptimisticDataWriter;
 class RowGroup;
 class RowGroupCollection;
@@ -80,8 +82,10 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<StorageIndex> &bound_columns, Expression &cast_expr,
 	          optional_ptr<BoundConstraint> constraint_to_verify = nullptr);
-	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
+	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint.
+	//! Throws if the parent has more than max_index_count built indexes.
+	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint,
+	          optional_idx max_index_count = optional_idx());
 
 	//! A reference to the database instance
 	AttachedDatabase &db;
@@ -209,9 +213,9 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
-	//! Remove the row identifiers from all the indexes of the table
+	//! Remove the row identifiers from the indexes of the table added before the bound
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());
+	                       IndexRemovalType removal_type, optional_idx checkpoint_id, VisibilityBound bound);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -263,8 +267,8 @@ public:
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result);
 
-	//! Scans the next chunk for the CREATE INDEX operator
-	bool CreateIndexScan(TableScanState &state, DataChunk &result);
+	//! Scans the next chunk for the CREATE INDEX operator, as of the build commit when building in place
+	bool CreateIndexScan(TableScanState &state, DataChunk &result, optional_ptr<const IndexEntry> build);
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -301,8 +305,14 @@ public:
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
 	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
-	//! AddIndex moves an index to this table's index list.
+	//! AddIndex moves an index to this table's index list, between commits
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
+	//! Merges the commits made during an online build into the index, then publishes it between commits
+	shared_ptr<IndexEntry> FinishIndexBuild(ClientContext &context, DuckTransaction &transaction,
+	                                        unique_ptr<BoundIndex> index, idx_t index_oid,
+	                                        ConstraintCheckMode check_mode);
+	//! Adds a building entry for the index, whose deltas receive later commits
+	shared_ptr<IndexEntry> AddBuildingIndex(DuckTransaction &transaction, const BoundIndex &index_template);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
@@ -327,6 +337,8 @@ private:
 
 	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
 	void RebuildIndexes();
+	//! Takes the commit and append locks; throws if an ALTER replaced the table
+	unique_lock<mutex> LockMainTableForIndex(unique_lock<mutex> &table_lock);
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
@@ -343,7 +355,8 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
-	//! Lock for appending entries to the table
+	//! Lock for appending entries to the table. An ALTER that replaces the table holds it from its index check until
+	//! it marks the table ALTERED, and indexes are published under it, so no index is added after that check.
 	mutex append_lock;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;

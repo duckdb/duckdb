@@ -1,0 +1,153 @@
+# name: test/optimizer/joins/known_unique_key_ce.test
+# description: Use established unique keys in composite join estimates
+# group: [joins]
+
+statement ok
+SET explain_output='optimized_only';
+
+# Each column has 16 values, but there are 256 key combinations: the statistical
+# composite-key heuristic alone does not accept this population as a key.
+statement ok
+CREATE TABLE keys(a INTEGER, b INTEGER, c INTEGER NOT NULL, PRIMARY KEY(a, b), UNIQUE(c, b));
+
+statement ok
+INSERT INTO keys SELECT i % 16, i // 16, (i + 1) % 16 FROM range(256) t(i);
+
+statement ok
+CREATE TABLE facts AS
+SELECT (i % 16)::INTEGER a, ((i // 16) % 16)::INTEGER b, ((i + 1) % 16)::INTEGER c, i v
+FROM range(1024) t(i);
+
+statement ok
+ANALYZE keys;
+
+statement ok
+ANALYZE facts;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT f.v FROM keys k JOIN facts f USING (a, b);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM keys k JOIN facts f USING (a, b);
+----
+1024
+
+# The second unique key is useful even though the first is not covered.
+query II
+EXPLAIN (FORMAT JSON) SELECT f.v FROM keys k JOIN facts f USING (c, b);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM keys k JOIN facts f USING (c, b);
+----
+1024
+
+# Reordering, renaming and an injective cast preserve a complete key.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v FROM (SELECT b AS y, a::BIGINT AS x FROM keys) k
+JOIN facts f ON k.x=f.a AND k.y=f.b;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM (SELECT b AS y, a::BIGINT AS x FROM keys) k
+JOIN facts f ON k.x=f.a AND k.y=f.b;
+----
+1024
+
+# Neither available key is complete after b has been dropped.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v FROM (SELECT a::BIGINT AS a, c FROM keys) k JOIN facts f USING (a, c);
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM (SELECT a::BIGINT AS a, c FROM keys) k JOIN facts f USING (a, c);
+----
+16384
+
+# Equal data without a declared key supplies no proof.
+statement ok
+CREATE TABLE unkeyed AS FROM keys;
+
+statement ok
+ANALYZE unkeyed;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT f.v FROM unkeyed k JOIN facts f USING (a, b);
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM unkeyed k JOIN facts f USING (a, b);
+----
+1024
+
+# Nullable UNIQUE is not a generic uniqueness proof: NULLs may repeat.
+statement ok
+CREATE TABLE nullable_keys(a INTEGER, b INTEGER, UNIQUE(a, b));
+
+statement ok
+INSERT INTO nullable_keys SELECT a, b FROM keys;
+
+statement ok
+INSERT INTO nullable_keys VALUES (NULL, 0), (NULL, 0);
+
+statement ok
+ANALYZE nullable_keys;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT f.v FROM nullable_keys k JOIN facts f USING (a, b);
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM nullable_keys k JOIN facts f USING (a, b);
+----
+1024
+
+# Grouping keys still work through a HAVING filter and projection.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) <> 5) k
+JOIN facts f ON k.x=f.a AND k.y=f.b;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) <> 5) k
+JOIN facts f ON k.x=f.a AND k.y=f.b;
+----
+1024
+
+# GROUPING() conservatively declines a key in the shared proof analysis.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v, k.g FROM (SELECT a, b, grouping(a) g FROM facts GROUP BY a, b) k
+JOIN facts f USING (a, b);
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT sum(k.g) FROM (SELECT a, b, grouping(a) g FROM facts GROUP BY a, b) k
+JOIN facts f USING (a, b);
+----
+0
+
+# A non-injective expression over a key column cannot preserve the key.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v FROM (SELECT a, b % 4 AS b FROM keys) k JOIN facts f ON k.a=f.a AND k.b=f.b;
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM (SELECT a, b % 4 AS b FROM keys) k
+JOIN facts f ON k.a=f.a AND k.b=f.b;
+----
+1024

@@ -3495,8 +3495,8 @@ IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value)
 const StringUtil::EnumStringLiteral *GetIndexDeltaTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(IndexDeltaType::DELETED_ROWS_IN_USE), "DELETED_ROWS_IN_USE" },
-		{ static_cast<uint32_t>(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT), "ADDED_DATA_DURING_CHECKPOINT" },
-		{ static_cast<uint32_t>(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT), "REMOVED_DATA_DURING_CHECKPOINT" }
+		{ static_cast<uint32_t>(IndexDeltaType::ADDED_DATA), "ADDED_DATA" },
+		{ static_cast<uint32_t>(IndexDeltaType::REMOVED_DATA), "REMOVED_DATA" }
 	};
 	return values;
 }
@@ -7452,19 +7452,20 @@ const StringUtil::EnumStringLiteral *GetTransactionTypeValues() {
 		{ static_cast<uint32_t>(TransactionType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(TransactionType::BEGIN_TRANSACTION), "BEGIN_TRANSACTION" },
 		{ static_cast<uint32_t>(TransactionType::COMMIT), "COMMIT" },
-		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" }
+		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" },
+		{ static_cast<uint32_t>(TransactionType::JOIN_TRANSACTION), "JOIN_TRANSACTION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
-	return StringUtil::EnumToString(GetTransactionTypeValues(), 4, "TransactionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTransactionTypeValues(), 5, "TransactionType", static_cast<uint32_t>(value));
 }
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
-	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 4, "TransactionType", value));
+	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 5, "TransactionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransformChildKindValues() {

@@ -61,7 +61,8 @@ CompressExpression::CompressExpression(unique_ptr<Expression> expression_p, uniq
 struct CMHelper {
 	static bool TypeRequiresRestore(CompressedMaterializationType materialization_type);
 
-	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
+	//! Construct a projection with resolved output types over an already resolved child.
+	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, unique_ptr<LogicalOperator> child,
 	                                                      vector<unique_ptr<Expression>> projections);
 	static unique_ptr<Expression> CreateStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
 	                                                   const LogicalType &target_type,
@@ -118,13 +119,15 @@ bool CMHelper::TypeRequiresRestore(CompressedMaterializationType materialization
 	return materialization_type != CompressedMaterializationType::INVALID;
 }
 
-unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
+unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimizer, unique_ptr<LogicalOperator> child,
                                                          vector<unique_ptr<Expression>> projections) {
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
-	if (source.has_estimated_cardinality) {
-		projection->SetEstimatedCardinality(source.estimated_cardinality);
+	if (child->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(child->estimated_cardinality);
 	}
+	projection->children.push_back(std::move(child));
+	projection->ResolveOperatorTypesFromChildren();
 	return projection;
 }
 
@@ -451,8 +454,6 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		return;
 	}
 
-	op->ResolveOperatorTypes();
-
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
@@ -529,11 +530,7 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	for (auto &compress_expr : compress_exprs) {
 		projections.emplace_back(std::move(compress_expr->expression));
 	}
-	auto compress_projection = CMHelper::CreateProjection(optimizer, *child_op, std::move(projections));
-	compress_projection->ResolveOperatorTypes();
-
-	compress_projection->children.emplace_back(std::move(child_op));
-	child_op = std::move(compress_projection);
+	child_op = CMHelper::CreateProjection(optimizer, std::move(child_op), std::move(projections));
 
 	// Get the new bindings and types
 	child_info.bindings_after = child_op->GetColumnBindings();
@@ -595,7 +592,7 @@ unique_ptr<Expression> CompressedMaterialization::CreateRestoreExpression(unique
 void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOperator> &op,
                                                            CompressedMaterializationInfo &info) {
 	const auto bindings = op->GetColumnBindings();
-	op->ResolveOperatorTypes();
+	op->ResolveOperatorTypesFromChildren();
 	const auto &types = op->types;
 
 	// Create decompress expressions for everything we compressed
@@ -621,10 +618,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	}
 
 	// Replace op with a projection
-	auto decompress_projection = CMHelper::CreateProjection(optimizer, *op, std::move(decompress_exprs));
-
-	decompress_projection->children.emplace_back(std::move(op));
-	op = std::move(decompress_projection);
+	op = CMHelper::CreateProjection(optimizer, std::move(op), std::move(decompress_exprs));
 
 	// Check if we're placing a projection on top of the root
 	if (RefersToSameObject(*op->children[0], *root)) {
@@ -634,7 +628,6 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 
 	// Get the new bindings and types
 	auto new_bindings = op->GetColumnBindings();
-	op->ResolveOperatorTypes();
 	auto &new_types = op->types;
 
 	// Initialize a ColumnBindingReplacer with the new bindings and types

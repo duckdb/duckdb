@@ -45,6 +45,7 @@ public:
 	JoinPredicateClass GetPredicateClass() const;
 	JoinType GetJoinType() const;
 	ExpressionType GetComparisonType() const;
+	bool IsVolatile() const;
 	JoinRelationSet &GetSet() const;
 	JoinRelationSet &GetLeftSet() const;
 	JoinRelationSet &GetRightSet() const;
@@ -72,6 +73,7 @@ private:
 	reference<FilterInfo> filter;
 	JoinPredicateClass predicate_class;
 	ExpressionType comparison_type;
+	bool is_volatile;
 	ColumnBinding left_equality_binding;
 	ColumnBinding right_equality_binding;
 	optional_idx equality_class_index;

@@ -204,7 +204,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	const auto bindings = child.GetColumnBindings();
 
 	op.estimated_cardinality = op.EstimateCardinality(context);
-	reference<PhysicalOperator> plan = CreatePlan(child);
+	reference<PhysicalOperator> plan = CreatePlanRecursive(child);
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {
 		D_ASSERT(expr->IsWindow());

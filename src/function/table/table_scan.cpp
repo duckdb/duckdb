@@ -1,4 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/function/table/native_scan_job.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -214,6 +215,7 @@ public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
 		auto l_state = make_uniq<IndexScanLocalState>();
+		l_state->fetch_state.context = context.client;
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
@@ -390,6 +392,17 @@ public:
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
+		// add the entry first: commits up to its commit are scanned, later ones reach its deltas,
+		// and the scan range fixed after this covers every row of those commits
+		if (bind_data.index_template) {
+			index_build = storage.AddBuildingIndex(tx, *bind_data.index_template);
+		}
+	}
+
+	~DuckTableScanState() override {
+		if (index_build) {
+			storage.GetDataTableInfo()->GetIndexes().RemoveBuildingIndex(*index_build);
+		}
 	}
 
 public:
@@ -414,6 +427,8 @@ private:
 	//! Preallocated counters spread progress updates without registering local states
 	vector<PaddedAtomic<idx_t>> progress;
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
+	//! The entry of the index that this CREATE INDEX scan builds in place
+	shared_ptr<IndexEntry> index_build;
 
 private:
 	void InitializeScheduling(ExecutionContext &context, TableFunctionInitInput &input) {
@@ -713,7 +728,7 @@ public:
 
 		do {
 			if (bind_data.is_create_index) {
-				storage.CreateIndexScan(l_state.scan_state, output);
+				storage.CreateIndexScan(l_state.scan_state, output, index_build.get());
 				UpdateScanProgress(l_state, l_state.scan_state);
 			} else if (scheduling == TableScanScheduling::ORDERED) {
 				if (!ScanWithReadAhead(context, data_p, l_state, output) &&
@@ -831,14 +846,22 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	if (bind_data.partitions_to_scan) {
 		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
 	}
+	auto claim_mode = ParallelScanClaimMode::ATOMIC;
+	if (bind_data.order_options || bind_data.partitions_to_scan ||
+	    ClientConfig::GetConfig(context).verify_parallelism) {
+		claim_mode = ParallelScanClaimMode::LOCKED;
+	}
 
 	// Check if row_number column is requested and initialize row_number_base
 	for (idx_t i = 0; i < input.column_ids.size(); i++) {
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
 			g_state->state.scan_state.row_number_base = 0;
+			claim_mode = ParallelScanClaimMode::LOCKED;
 			break;
 		}
 	}
+	g_state->state.scan_state.claim_mode = claim_mode;
+	g_state->state.local_state.claim_mode = claim_mode;
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);
 	if (!input.CanRemoveFilterColumns()) {
@@ -1101,7 +1124,7 @@ bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list
 	if (!art->Scan(*scan_state, row_ids)) {
 		return false;
 	}
-	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+	for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA}) {
 		auto delta_index = art.FindDelta(delta);
 		if (delta_index && !delta_index->Scan(*scan_state, row_ids)) {
 			return false;
@@ -1174,8 +1197,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto entry : indexes.IndexEntries()) {
+	auto &transaction = DuckTransaction::Get(context, storage.GetAttached());
+	for (auto entry : indexes.BuiltIndexEntries()) {
 		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			continue;
+		}
+		if (!entry->AddedBefore(transaction.view.visibility_bound)) {
 			continue;
 		}
 		{
