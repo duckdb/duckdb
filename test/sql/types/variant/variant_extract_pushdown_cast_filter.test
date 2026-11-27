@@ -1,0 +1,87 @@
+# name: test/sql/types/variant/variant_extract_pushdown_cast_filter.test
+# description: A cast pushed into the scan with variant_extract must only run on rows that pass the filter
+# group: [variant]
+
+statement ok
+PRAGMA enable_verification
+
+# row 3 holds a value that cannot be cast to INTEGER, the filter removes it
+statement ok
+CREATE TABLE t AS
+SELECT 1 AS id, {'x': 7}::VARIANT AS v
+UNION ALL SELECT 2, {'x': {'a': [1, true]}}::VARIANT
+UNION ALL SELECT 3, {'x': ['one', 'two']}::VARIANT
+UNION ALL SELECT 4, {'x': NULL}::VARIANT
+UNION ALL SELECT 5, {'y': 1}::VARIANT
+UNION ALL SELECT 6, NULL::VARIANT;
+
+query I
+SELECT variant_extract(v, 'x')::INTEGER FROM t WHERE id = 1;
+----
+7
+
+query I
+SELECT v.x::INTEGER FROM t WHERE id = 1;
+----
+7
+
+query II
+SELECT id, variant_extract(v, 'x')::INTEGER FROM t WHERE id IN (1, 4, 5, 6) ORDER BY id;
+----
+1	7
+4	NULL
+5	NULL
+6	NULL
+
+# the row the filter keeps still fails
+statement error
+SELECT variant_extract(v, 'x')::INTEGER FROM t WHERE id = 3;
+----
+Conversion Error
+
+# no filter still fails
+statement error
+SELECT variant_extract(v, 'x')::INTEGER FROM t;
+----
+Conversion Error
+
+# no cast pushed down, only the extract
+query I
+SELECT variant_extract(v, 'x')::VARCHAR FROM t WHERE id = 3;
+----
+[one, two]
+
+# fully shredded row group: the leaf is BIGINT, one value does not fit in INTEGER
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE shredded (id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO shredded SELECT i, {'x': CASE WHEN i = 1 THEN 3000000000 ELSE i END}::VARIANT FROM range(2048) t(i);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT id, variant_extract(v, 'x')::INTEGER FROM shredded WHERE id IN (0, 2, 2047) ORDER BY id;
+----
+0	0
+2	2
+2047	2047
+
+query I
+SELECT variant_extract(v, 'x')::BIGINT FROM shredded WHERE id = 1;
+----
+3000000000
+
+statement error
+SELECT variant_extract(v, 'x')::INTEGER FROM shredded WHERE id = 1;
+----
+Conversion Error
+
+statement error
+SELECT sum(variant_extract(v, 'x')::INTEGER) FROM shredded;
+----
+Conversion Error

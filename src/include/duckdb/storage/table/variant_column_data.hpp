@@ -42,6 +42,8 @@ public:
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
+	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t sel_count) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
@@ -94,7 +96,8 @@ private:
 	void CreateScanStates(ColumnScanState &state);
 	idx_t ScanWithCallback(ColumnScanState &state, Vector &result, idx_t target_count,
 	                       const std::function<idx_t(ColumnData &column, ColumnScanState &child_state,
-	                                                 Vector &target_vector, idx_t count)> &callback) const;
+	                                                 Vector &target_vector, idx_t count)> &callback,
+	                       optional_ptr<const SelectionVector> sel = nullptr, idx_t sel_count = 0) const;
 	LogicalType GetShreddedType();
 };
 
