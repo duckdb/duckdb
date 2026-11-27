@@ -77,6 +77,7 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 QueryProfiler::QueryProfiler(ClientContext &context_p)
     : context(context_p), running(false), query_started(false), query_requires_profiling(false),
       is_explain_analyze(false), metrics_finalized(false) {
+	query_metrics.SetMetricsManager(MetricsManager::Get(context));
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -178,7 +179,7 @@ void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t star
 	if (!parser_time_ns) {
 		return;
 	}
-	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns, start_time, end_time);
+	query_metrics.AddToMetricTiming(MetricParserTotalTime::MetricIndex, parser_time_ns, start_time, end_time);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -327,6 +328,18 @@ void QueryProfiler::AddToMetricTiming(const string &key, const idx_t elapsed_ns)
 	}
 }
 
+void QueryProfiler::AddToMetricCounter(idx_t metric_index, const idx_t amount) {
+	if (IsEnabled() && running) {
+		query_metrics.AddToMetricCounter(metric_index, amount);
+	}
+}
+
+void QueryProfiler::AddToMetricTiming(idx_t metric_index, const idx_t elapsed_ns) {
+	if (IsEnabled() && running) {
+		query_metrics.AddToMetricTiming(metric_index, elapsed_ns);
+	}
+}
+
 void QueryProfiler::SetMetric(const string &key, Value new_value) {
 	if (!IsEnabled() || !running) {
 		return;
@@ -361,6 +374,10 @@ idx_t QueryProfiler::GetBytesWritten() const {
 
 idx_t QueryProfiler::GetBytesScanned() const {
 	return query_metrics.GetBytesScanned();
+}
+
+MetricsTimer QueryProfiler::StartTimer(idx_t metric_index) {
+	return MetricsTimer(query_metrics, metric_index, IsEnabled());
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {

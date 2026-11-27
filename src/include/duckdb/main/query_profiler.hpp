@@ -124,7 +124,7 @@ public:
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	// The metrics an extension reports for the running query, declared with ExtensionLoader::RegisterMetric. These
-	// calls are thread-safe and take a lock while profiling is enabled, so add up per-row figures locally first. Make
+	// calls are thread-safe; the calls by name take a lock while profiling is enabled, the calls by index do not. Make
 	// them on threads the query waits for: an update that arrives after the query ends may be lost, or counted for the
 	// next query.
 
@@ -134,6 +134,9 @@ public:
 	//! thread-safe). Unlike a timer it records no start and end time. For time a timer cannot measure, e.g. requests
 	//! that were made on other threads.
 	DUCKDB_API void AddToMetricTiming(const string &key, idx_t elapsed_ns);
+	//! Add to a "uint64" counter or the nanoseconds of a "double" timing by its index (profiling-only, thread-safe)
+	DUCKDB_API void AddToMetricCounter(idx_t metric_index, idx_t amount);
+	DUCKDB_API void AddToMetricTiming(idx_t metric_index, idx_t elapsed_ns);
 	//! Add parser time measured before the per-statement profiler was started.
 	void AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time);
 
@@ -149,8 +152,17 @@ public:
 	//! Start a timer for a metric identified by its struct type.
 	template <class METRIC>
 	MetricsTimer StartTimer() {
-		return StartTimerInternal(METRIC::Name);
+		static_assert(std::is_same<typename METRIC::METRIC_TYPE, double>::value, "a timer needs a double metric");
+		return StartTimer(METRIC::MetricIndex);
 	}
+	//! Add to a counter identified by its struct type (profiling-only, thread-safe).
+	template <class METRIC>
+	void AddToMetricCounter(idx_t amount) {
+		static_assert(std::is_same<typename METRIC::METRIC_TYPE, uint64_t>::value, "a counter needs a uint64 metric");
+		AddToMetricCounter(METRIC::MetricIndex, amount);
+	}
+	//! Start a timer for a "double" metric by its index, which ends without a lock.
+	DUCKDB_API MetricsTimer StartTimer(idx_t metric_index);
 	//! Start a timer for a string-keyed metric (use the template overload when possible).
 	DUCKDB_API MetricsTimer StartTimerInternal(const string &key);
 
@@ -250,7 +262,8 @@ private:
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
-	bool is_explain_analyze;
+	//! Read by IsEnabled, which other threads than the query's may call
+	atomic<bool> is_explain_analyze;
 	//! Whether root metrics have been finalized for output
 	bool metrics_finalized;
 

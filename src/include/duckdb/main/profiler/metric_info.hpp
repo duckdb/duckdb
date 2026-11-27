@@ -20,4 +20,7 @@ struct MetricInfo {
 	string unit;
 };
 
+//! How the profiler updates a metric with an index: a "uint64" counts, a "double" times
+enum class MetricSlotKind : uint8_t { NONE, COUNTER, TIMING };
+
 } // namespace duckdb
