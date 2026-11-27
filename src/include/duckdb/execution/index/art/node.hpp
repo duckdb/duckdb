@@ -156,13 +156,15 @@ public:
 	//! Get the child node at byte, if it exists.
 	OptionalNodePtr GetChildNode(const ART &art, const uint8_t byte) const;
 	//! Get the child at byte, if it exists. The caller must retain handle while using the reference.
-	static unsafe_optional_ptr<NodePtr> GetChildMutable(NodeHandle &handle, const uint8_t byte);
+	//! If unsafe, also returns empty children (for a Node256, any byte).
+	static unsafe_optional_ptr<NodePtr> GetChildMutable(NodeHandle &handle, const uint8_t byte,
+	                                                    const bool unsafe = false);
 	//! Get the first child node >= byte, if it exists, and update byte.
 	OptionalNodePtr GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<NodePtr> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<NodePtr> GetChildMutableUnsafe(ART &art, const uint8_t byte, const bool unsafe = false) const;
+	unsafe_optional_ptr<NodePtr> GetChildMutableUnsafe(ART &art, const uint8_t byte) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<NodePtr> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
