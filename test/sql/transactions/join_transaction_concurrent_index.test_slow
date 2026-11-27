@@ -1,0 +1,168 @@
+# name: test/sql/transactions/join_transaction_concurrent_index.test_slow
+# description: Connections of one shared transaction modify tables with indexes and constraints at the same time
+# group: [transactions]
+
+statement ok
+CREATE TABLE pk(i INTEGER PRIMARY KEY, thread INTEGER, s VARCHAR);
+
+statement ok
+CREATE TABLE uq(a INTEGER, b VARCHAR UNIQUE, thread INTEGER);
+
+statement ok
+CREATE TABLE idx(a INTEGER, b INTEGER);
+
+statement ok
+CREATE INDEX idx_a ON idx(a);
+
+statement ok
+INSERT INTO pk SELECT i, -1, 'initial' FROM range(100000, 120000) t(i);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+loop r 0 20
+
+# disjoint keys per connection
+statement ok
+INSERT INTO pk SELECT {threadid} * 10000 + {r} * 100 + range, {threadid}, 'v' FROM range(100)
+
+statement ok
+INSERT INTO uq SELECT range, 'k' || {threadid} || '_' || {r} || '_' || range, {threadid} FROM range(50)
+
+statement ok
+INSERT INTO idx SELECT {threadid} * 1000 + range, {r} FROM range(100)
+
+# point lookups through the index while the other connections insert
+query I
+SELECT count(*) FROM pk WHERE i = {threadid} * 10000 + {r} * 100 + 5
+----
+1
+
+query I
+SELECT count(*) >= 1 FROM idx WHERE a = {threadid} * 1000 + 7
+----
+true
+
+# DELETE and INSERT of the same keys
+statement ok
+DELETE FROM pk WHERE i = {threadid} * 10000 + {r} * 100 + 5
+
+statement ok
+INSERT INTO pk VALUES ({threadid} * 10000 + {r} * 100 + 5, {threadid}, 'reinserted')
+
+statement ok
+UPDATE idx SET b = b + 1 WHERE a = {threadid} * 1000 + 8
+
+statement ok
+DELETE FROM uq WHERE b = 'k' || {threadid} || '_' || {r} || '_' || 0
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+query IIII
+SELECT count(*), count(DISTINCT thread), count(*) FILTER (s = 'reinserted'), count(*) FILTER (thread = -1) FROM pk
+----
+36000	9	160	20000
+
+query II
+SELECT count(*), count(DISTINCT b) FROM uq
+----
+7840	7840
+
+query II
+SELECT count(*), sum(b) FROM idx WHERE a = 1008
+----
+20	400
+
+# the indexes are consistent with the tables
+query I
+SELECT count(*) FROM pk WHERE i IN (SELECT i FROM pk WHERE thread = 3)
+----
+2000
+
+query I
+SELECT count(*) FROM uq WHERE b = 'k4_7_9'
+----
+1
+
+statement ok
+COMMIT
+
+query IIII
+SELECT count(*), count(DISTINCT thread), count(*) FILTER (s = 'reinserted'), count(*) FILTER (thread = -1) FROM pk
+----
+36000	9	160	20000
+
+# the committed keys are taken
+statement error
+INSERT INTO pk VALUES (100000, 0, 'duplicate')
+----
+<REGEX>:.*Constraint Error.*
+
+statement error
+INSERT INTO pk VALUES (3 * 10000 + 5 * 100 + 5, 0, 'duplicate')
+----
+<REGEX>:.*Constraint Error.*
+
+statement error
+INSERT INTO uq VALUES (0, 'k4_7_9', 0)
+----
+<REGEX>:.*Constraint Error.*
+
+# a constraint violation in one connection invalidates the transaction of all the connections
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:txid>
+
+concurrentloop threadid 0 8
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+# let every connection join before a failing statement can abort the shared transaction
+sleep 2 second
+
+statement maybe
+INSERT INTO pk VALUES (100000 + {threadid}, 0, 'duplicate')
+----
+<REGEX>:.*(Constraint Error|aborted).*
+
+# either the statement was rejected before the constraint violation or after: no statement succeeds afterwards
+statement maybe
+INSERT INTO pk VALUES (900000 + {threadid}, 0, 'fine')
+----
+<REGEX>:.*(aborted|invalidated).*
+
+statement maybe
+COMMIT
+----
+<REGEX>:.*(rolled it back|aborted|invalidated|Failed to commit).*
+
+endloop
+
+# a COMMIT of an aborted transaction rolls it back
+statement ok
+COMMIT
+
+query II
+SELECT count(*), count(*) FILTER (i >= 900000) FROM pk
+----
+36000	0

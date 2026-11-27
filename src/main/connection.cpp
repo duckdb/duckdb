@@ -54,6 +54,8 @@ Connection::~Connection() {
 		return;
 	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
+	// outstanding results can keep the context alive, but the connection stops participating in a shared transaction
+	context->LeaveSharedTransaction();
 }
 
 string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {

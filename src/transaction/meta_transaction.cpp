@@ -1,8 +1,11 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -10,9 +13,11 @@
 
 namespace duckdb {
 
-MetaTransaction::MetaTransaction(DatabaseInstance &db, timestamp_t start_timestamp_p, transaction_t transaction_id_p)
+MetaTransaction::MetaTransaction(DatabaseInstance &db, shared_ptr<AttachedDatabase> temporary_objects_p,
+                                 timestamp_t start_timestamp_p, transaction_t transaction_id_p)
     : start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p), transaction_validity(db),
-      modified_database(nullptr), is_read_only(false) {
+      modified_database(nullptr), is_read_only(false), temporary_objects(std::move(temporary_objects_p)),
+      finished(false) {
 }
 
 MetaTransaction::~MetaTransaction() = default;
@@ -188,6 +193,45 @@ void MetaTransaction::Rollback(ClientContext &context) {
 	if (error.HasError()) {
 		error.Throw();
 	}
+}
+
+string MetaTransaction::ShareTransaction() {
+	lock_guard<mutex> guard(shared_lock);
+	if (share_id.empty()) {
+		// the identifier grants access to the transaction, so it must not be predictable
+		share_id = UUID::ToString(UUIDv4::GenerateRandomUUID());
+	}
+	return share_id;
+}
+
+string MetaTransaction::GetShareId() {
+	lock_guard<mutex> guard(shared_lock);
+	return share_id;
+}
+
+bool MetaTransaction::Join() {
+	lock_guard<mutex> guard(shared_lock);
+	if (finished) {
+		return false;
+	}
+	participants++;
+	return true;
+}
+
+MetaTransaction::LeaveResult MetaTransaction::Leave(bool commit) {
+	lock_guard<mutex> guard(shared_lock);
+	D_ASSERT(participants > 0);
+	if (!commit) {
+		rollback_vote = true;
+	}
+	participants--;
+	LeaveResult result;
+	result.last = participants == 0;
+	result.commit = !rollback_vote;
+	if (result.last) {
+		finished = true;
+	}
+	return result;
 }
 
 void MetaTransaction::Finalize(ClientContext &context) {

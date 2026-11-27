@@ -213,6 +213,8 @@ public:
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
+	//! Ends the active query and leaves a shared transaction with a rollback vote, if the context participates in one
+	DUCKDB_API void LeaveSharedTransaction();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,

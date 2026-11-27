@@ -32,7 +32,10 @@ ClientData::~ClientData() {
 	// This needs to be destroyed first because PreparedStatementData holds a PhysicalPlan,
 	// and the PhysicalPlan holds objects that might rely on the client file opener/file system/buffer manager
 	prepared_statements.clear();
-	temporary_objects->Close(DatabaseCloseAction::SKIP_CHECKPOINT);
+	if (temporary_objects.use_count() == 1) {
+		// otherwise a shared transaction still uses it and the last reference closes it
+		temporary_objects->Close(DatabaseCloseAction::SKIP_CHECKPOINT);
+	}
 }
 
 ClientData &ClientData::Get(ClientContext &context) {
