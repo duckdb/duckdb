@@ -62,12 +62,12 @@ JOIN facts f ON k.x=f.a AND k.y=f.b;
 # Neither available key is complete after b has been dropped.
 query II
 EXPLAIN (FORMAT JSON)
-SELECT f.v FROM (SELECT a, c FROM keys) k JOIN facts f USING (a, c);
+SELECT f.v FROM (SELECT a::BIGINT AS a, c FROM keys) k JOIN facts f USING (a, c);
 ----
 logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM (SELECT a, c FROM keys) k JOIN facts f USING (a, c);
+SELECT count(*) FROM (SELECT a::BIGINT AS a, c FROM keys) k JOIN facts f USING (a, c);
 ----
 16384
 
@@ -114,18 +114,25 @@ SELECT count(*) FROM nullable_keys k JOIN facts f USING (a, b);
 # Grouping keys still work through a HAVING filter and projection.
 query II
 EXPLAIN (FORMAT JSON)
-SELECT f.v FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) > 0) k
+SELECT f.v FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) <> 5) k
 JOIN facts f ON k.x=f.a AND k.y=f.b;
 ----
-logical_opt	<REGEX>:(?s).*"COMPARISON_JOIN".*
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) > 0) k
+SELECT count(*) FROM (SELECT b AS y, a AS x, count(*) n FROM facts GROUP BY a, b HAVING count(*) <> 5) k
 JOIN facts f ON k.x=f.a AND k.y=f.b;
 ----
 1024
 
 # GROUPING() conservatively declines a key in the shared proof analysis.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v, k.g FROM (SELECT a, b, grouping(a) g FROM facts GROUP BY a, b) k
+JOIN facts f USING (a, b);
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
 query I
 SELECT sum(k.g) FROM (SELECT a, b, grouping(a) g FROM facts GROUP BY a, b) k
 JOIN facts f USING (a, b);
@@ -133,8 +140,14 @@ JOIN facts f USING (a, b);
 0
 
 # A non-injective expression over a key column cannot preserve the key.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT f.v FROM (SELECT a, b % 4 AS b FROM keys) k JOIN facts f ON k.a=f.a AND k.b=f.b;
+----
+logical_opt	<!REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
 query I
 SELECT count(*) FROM (SELECT a, b % 4 AS b FROM keys) k
-JOIN facts f ON k.a=f.a AND k.b=f.b % 4;
+JOIN facts f ON k.a=f.a AND k.b=f.b;
 ----
-4096
+1024
