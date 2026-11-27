@@ -1,0 +1,73 @@
+# name: test/sql/table_function/duckdb_columns_wide_decimal.test
+# description: Catalog functions handle DECIMAL width/scale beyond INT32
+# group: [table_function]
+
+# wide decimal columns need the latest storage version - use an in-memory database so the
+# test also runs under configs that put the default database on an older storage version
+statement ok
+ATTACH ':memory:' AS wide_decimal_db;
+
+statement ok
+USE wide_decimal_db;
+
+statement ok
+SET max_decimal_width = 4294967295;
+
+statement ok
+CREATE TABLE wide(a DECIMAL(3000000000, 0), b DECIMAL(4294967295, 2500000000));
+
+query II
+SELECT numeric_precision, numeric_scale FROM duckdb_columns() WHERE table_name = 'wide' ORDER BY column_index;
+----
+3000000000	0
+4294967295	2500000000
+
+statement ok
+FROM duckdb_columns();
+
+query II
+SELECT numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name = 'wide' ORDER BY ordinal_position;
+----
+3000000000	0
+4294967295	2500000000
+
+# a typmod this wide does not fit in INT32 - report -1, PostgreSQL's value for an unspecified typmod
+query II
+SELECT attname, atttypmod FROM pg_catalog.pg_attribute WHERE attname IN ('a', 'b') ORDER BY attname;
+----
+a	-1
+b	-1
+
+# format_type then renders the type without a modifier
+query I
+SELECT format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute WHERE attname = 'a';
+----
+numeric
+
+# the widest DECIMAL whose encoded typmod still fits in INT32: 2147483 * 1000 + 647 = 2^31 - 1
+statement ok
+CREATE TABLE fits(c DECIMAL(2147483, 647), d DECIMAL(2147484, 0));
+
+query II
+SELECT attname, atttypmod FROM pg_catalog.pg_attribute WHERE attname IN ('c', 'd') ORDER BY attname;
+----
+c	2147483647
+d	-1
+
+# a scale >= 1000 cannot be encoded positionally even when p*1000+s fits in INT32 - report -1
+statement ok
+CREATE TABLE unencodable(f DECIMAL(5000, 1500));
+
+query II
+SELECT atttypmod, format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute WHERE attname = 'f';
+----
+-1	numeric
+
+# narrow decimals keep the encoded typmod
+statement ok
+CREATE TABLE narrow(e DECIMAL(10, 2));
+
+query II
+SELECT atttypmod, format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute WHERE attname = 'e';
+----
+10002	numeric(10,2)
