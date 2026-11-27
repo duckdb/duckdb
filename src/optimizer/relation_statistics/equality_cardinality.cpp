@@ -196,10 +196,9 @@ optional<EqualitySupport> EqualityCardinalityModel::JointSupport(idx_t relation,
 			current = DistinctCount(stats.cardinality, DistinctCountSource::CARDINALITY, true);
 		}
 	}
-	if (!total) {
+	if (!total || !current) {
 		return {};
 	}
-	D_ASSERT(current);
 	auto count = MinValue(current->distinct_count, stats.cardinality);
 	return EqualitySupport {MaxValue(total->distinct_count, count), count, state->DeduplicateIdentities(identities),
 	                        total->has_usable_domain};

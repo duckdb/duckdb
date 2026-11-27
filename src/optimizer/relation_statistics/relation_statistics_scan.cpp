@@ -614,7 +614,11 @@ RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &contex
 	}
 	result.stats_initialized = true;
 	D_ASSERT(base_table_cardinality == 0 || base_table_cardinality >= result.cardinality);
-	return *ProjectOutputStats(result, output_bindings);
+	auto projected_stats = ProjectOutputStats(result, output_bindings);
+	if (!projected_stats) {
+		throw InternalException("Could not project scan statistics onto its output columns");
+	}
+	return *projected_stats;
 }
 
 static void CaptureFilterEqualities(const Expression &expression, RelationStats &stats) {
