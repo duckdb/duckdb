@@ -96,8 +96,7 @@ idx_t PipelineTask::PartialChunkCount() const {
 }
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr),
-      finished_operator_idx(-1) {
+    : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -468,7 +467,7 @@ void Pipeline::InvalidateOperatorStateForReschedule(ClientContext &client, Physi
 
 void Pipeline::ResetSourceForReschedule() {
 	NotifyProgressReset();
-	finished_operator_idx = -1;
+	finished_operator = nullptr;
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}

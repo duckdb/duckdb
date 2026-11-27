@@ -380,11 +380,16 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		} else if (!exhausted_pipeline || next_batch_blocked) {
 			SourceFetchResult source_result;
 			if (!next_batch_blocked) {
-				auto finished_operator_idx = pipeline.finished_operator_idx.load(std::memory_order_relaxed);
-				// Another task's operator finished the pipeline
-				if (finished_operator_idx >= 0) {
-					FinishProcessing(finished_operator_idx);
-					return FlushAndFinalize(chunk_budget);
+				auto finished_operator = pipeline.finished_operator.load(std::memory_order_relaxed);
+				if (finished_operator) {
+					for (idx_t i = 0; i < pipeline.operators.size(); i++) {
+						if (&pipeline.operators[i].get() == finished_operator.get()) {
+							// Preserve cached output downstream of the finishing operator.
+							FinishProcessing(NumericCast<int32_t>(i + 1));
+							return FlushAndFinalize(chunk_budget);
+						}
+					}
+					throw InternalException("Finishing operator was not found in pipeline");
 				}
 				// "Regular" path: fetch a chunk from the source and push it through the pipeline
 				source_chunk.Reset();
@@ -608,6 +613,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, Execu
 			if (sink_result == SinkResultType::BLOCKED) {
 				return OperatorResultType::BLOCKED;
 			} else if (sink_result == SinkResultType::FINISHED) {
+				// A finished sink stops only this task, e.g. PhysicalLimit counts rows per task
 				FinishProcessing();
 				return OperatorResultType::FINISHED;
 			}
@@ -795,7 +801,8 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			} else if (result == OperatorResultType::FINISHED) {
 				D_ASSERT(current_chunk.size() == 0);
 				FinishProcessing(NumericCast<int32_t>(current_idx));
-				pipeline.finished_operator_idx.store(finished_processing_idx, std::memory_order_relaxed);
+				// An intermediate operator that finished stops every task of the pipeline
+				pipeline.finished_operator.store(current_operator, std::memory_order_relaxed);
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify(context.client.db);
