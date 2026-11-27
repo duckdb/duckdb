@@ -442,6 +442,9 @@ private:
 	vector<StorageIndex> column_ids;
 };
 
+//! How workers claim assignments from a collection.
+enum class ParallelScanClaimMode { LOCKED, ATOMIC };
+
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
 	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
@@ -460,6 +463,12 @@ struct ParallelCollectionScanState {
 	atomic<idx_t> skipped_rows;
 	optional_idx row_number_base;
 	mutex lock;
+	//! Fixed during initialization; ordered, partitioned and row-number scans require LOCKED.
+	ParallelScanClaimMode claim_mode = ParallelScanClaimMode::LOCKED;
+	//! Each atomic ticket owns one entry of claim_nodes.
+	PaddedAtomic<idx_t> claim_index {0};
+	//! Immutable after initialization; row_groups keeps the referenced nodes alive.
+	vector<reference<SegmentNode<RowGroup>>> claim_nodes;
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;

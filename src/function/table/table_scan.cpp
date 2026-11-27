@@ -831,14 +831,22 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	if (bind_data.partitions_to_scan) {
 		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
 	}
+	auto claim_mode = ParallelScanClaimMode::ATOMIC;
+	if (bind_data.order_options || bind_data.partitions_to_scan ||
+	    ClientConfig::GetConfig(context).verify_parallelism) {
+		claim_mode = ParallelScanClaimMode::LOCKED;
+	}
 
 	// Check if row_number column is requested and initialize row_number_base
 	for (idx_t i = 0; i < input.column_ids.size(); i++) {
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
 			g_state->state.scan_state.row_number_base = 0;
+			claim_mode = ParallelScanClaimMode::LOCKED;
 			break;
 		}
 	}
+	g_state->state.scan_state.claim_mode = claim_mode;
+	g_state->state.local_state.claim_mode = claim_mode;
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);
 	if (!input.CanRemoveFilterColumns()) {
