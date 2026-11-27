@@ -1,0 +1,35 @@
+# name: test/sql/storage/metadata/metadata_compaction_many_tables.test
+# description: Updating a few of many tables must not accumulate metadata blocks
+# group: [metadata]
+
+require block_size 262144
+
+load {TEST_DIR}/metadata_compaction_many_tables.db
+
+statement ok
+SET checkpoint_threshold = '999999GB';
+
+loop i 0 50
+
+statement ok
+CREATE TABLE t{i} AS SELECT range a, range b FROM range(1000);
+
+endloop
+
+statement ok
+CHECKPOINT;
+
+loop i 0 8
+
+statement ok
+UPDATE t{i} SET a = a + 1;
+
+statement ok
+CHECKPOINT;
+
+endloop
+
+query I
+SELECT count(*) <= 3 FROM pragma_metadata_info();
+----
+true

@@ -5,6 +5,9 @@
 load {TEST_DIR}/full_table_metadata_reuse.test.db
 
 statement ok
+SET GLOBAL metadata_compaction = false;
+
+statement ok
 BEGIN
 
 statement ok

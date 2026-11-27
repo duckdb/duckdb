@@ -1,0 +1,28 @@
+# name: test/sql/storage/metadata/metadata_compaction_deletes.test_slow
+# description: Repeated small deletes with checkpoints must not accumulate metadata blocks
+# group: [metadata]
+
+require block_size 262144
+
+load {TEST_DIR}/metadata_compaction_deletes.db
+
+statement ok
+CREATE TABLE t AS SELECT range i FROM range(1228800);
+
+statement ok
+CHECKPOINT;
+
+loop i 0 20
+
+statement ok
+DELETE FROM t WHERE i = {i} * 61440 + 7
+
+statement ok
+CHECKPOINT;
+
+endloop
+
+query I
+SELECT count(*) <= 3 FROM pragma_metadata_info();
+----
+true

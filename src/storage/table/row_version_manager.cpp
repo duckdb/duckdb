@@ -263,12 +263,12 @@ void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bou
 	allocator.RemoveEmptyBuffers();
 }
 
-vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer, idx_t row_count) {
+vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer, idx_t row_count, bool force_rewrite) {
 	lock_guard<mutex> lock(version_lock);
 	auto &manager = *writer.GetMetadataManager();
 	auto options = writer.GetCheckpointOptions();
-	if (!oldest_uncheckpointed_delete_commit.IsValid() ||
-	    oldest_uncheckpointed_delete_commit.GetIndex() >= options.visibility_bound) {
+	if (!force_rewrite && (!oldest_uncheckpointed_delete_commit.IsValid() ||
+	                       oldest_uncheckpointed_delete_commit.GetIndex() >= options.visibility_bound)) {
 		// nothing below the bound changed since the last checkpoint; a delete above it is written by the next one
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);

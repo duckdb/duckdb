@@ -253,6 +253,34 @@ idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }
 
+bool MetadataManager::ShouldCompactAllMetadata() {
+	// free sub-blocks of a disk-backed block are only reusable once the whole block is free, so
+	// reused chains can pin many mostly-free blocks; rewriting every chain for one checkpoint
+	// relocates them together and frees the old blocks once the new header is synced
+	lock_guard<mutex> guard(block_lock);
+	idx_t disk_blocks = 0;
+	idx_t used_sub_blocks = 0;
+	for (auto &kv : blocks) {
+		auto &block = kv.second;
+		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
+			continue;
+		}
+		disk_blocks++;
+		idx_t free_count = block.free_blocks.size();
+		for (idx_t mask = block.pending_reuse; mask != 0; mask &= mask - 1) {
+			free_count++;
+		}
+		used_sub_blocks += METADATA_BLOCK_COUNT - free_count;
+	}
+	if (disk_blocks < 2) {
+		// a single metadata block cannot shrink further
+		return false;
+	}
+	// mostly free: the metadata occupies at most a quarter of its blocks, so the rewrite cost is
+	// bounded and the steady-state footprint stays below four times the live metadata
+	return used_sub_blocks * 4 <= disk_blocks * METADATA_BLOCK_COUNT;
+}
+
 void MetadataManager::Flush(QueryContext context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;

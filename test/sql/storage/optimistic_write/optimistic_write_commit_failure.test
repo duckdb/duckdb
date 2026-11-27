@@ -37,6 +37,9 @@ PRAGMA force_checkpoint;
 statement ok
 CHECKPOINT;
 
+statement ok
+SET GLOBAL debug_force_checkpoint = false;
+
 query I
 SELECT total_blocks <= 2 FROM pragma_database_size();
 ----
@@ -57,4 +60,4 @@ SELECT count(*) FROM t;
 query III
 SELECT total_blocks, used_blocks, free_blocks FROM pragma_database_size();
 ----
-3	2	1
+3	1	2

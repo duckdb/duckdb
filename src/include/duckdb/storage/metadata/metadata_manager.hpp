@@ -84,6 +84,8 @@ public:
 
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
+	//! Whether the next checkpoint should rewrite all metadata chains to compact mostly-free blocks
+	bool ShouldCompactAllMetadata();
 	//! Frees the blocks the checkpoint no longer uses. With readers, returns them instead, for ReuseFreedBlocks
 	unordered_map<block_id_t, idx_t> MarkBlocksAsModified(bool has_readers);
 	//! Lets blocks that MarkBlocksAsModified returned be reused

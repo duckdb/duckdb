@@ -6,6 +6,9 @@ require no_alternative_verify
 
 load {TEST_DIR}/partial_column_metadata_reuse.test.db readwrite latest
 
+statement ok
+SET GLOBAL metadata_compaction = false;
+
 # create a wide table with many columns
 statement ok
 CREATE TABLE wide_tbl AS SELECT
