@@ -113,13 +113,50 @@ SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND
 ----
 1920
 
-# Range cardinalities provide no observed distinct counts.
+# Multiple unknown domains retain the existing fallback.
 query II
-EXPLAIN (FORMAT JSON) SELECT a.i FROM range(16) a(i) JOIN range(16) b(i) ON a.i=b.i;
+EXPLAIN (FORMAT JSON)
+WITH coordinates AS NOT MATERIALIZED (
+    SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, i v FROM range(256) t(i)
+)
+SELECT a.v FROM coordinates a JOIN coordinates b USING(x,y);
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"80"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"256"\s*}\s*}\s*\]\s*$
 
-query I
-SELECT count(*) FROM range(16) a(i) JOIN range(16) b(i) ON a.i=b.i;
+# This known key is outside the statistical cap: 48 tuples, four values per column.
+statement ok
+CREATE TABLE unique_triples (x INTEGER, y INTEGER, z INTEGER, PRIMARY KEY(x,y,z));
+
+statement ok
+INSERT INTO unique_triples
+SELECT i%4, (i//4)%4, (i//16)%4 FROM range(64) t(i)
+WHERE (i%4+(i//4)%4+(i//16)%4)%4<>0;
+
+statement ok
+ANALYZE unique_triples;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.x FROM unique_triples a JOIN unique_triples b USING(x,y,z);
 ----
-16
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"48"\s*}\s*}\s*\]\s*$
+
+# A large domain can reject the full pair's cap while smaller domains still admit it.
+# Keep the existing region policy, including subsets that omit that larger predicate.
+statement ok
+CREATE TABLE mixed_small AS
+SELECT (i%4)::INTEGER x, ((i//4+i%4)%4)::INTEGER y, i v FROM range(8) t(i);
+
+statement ok
+CREATE TABLE mixed_large AS
+SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, i v FROM range(256) t(i);
+
+statement ok
+ANALYZE mixed_small;
+
+statement ok
+ANALYZE mixed_large;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM mixed_small a JOIN mixed_large b USING(x,y,v);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4"\s*}\s*}\s*\]\s*$
