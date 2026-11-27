@@ -1,20 +1,97 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/string.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uuid.hpp"
+
+#include <cmath>
 #ifdef __MVS__
 #include <zos-tls.h>
 #endif
 
 namespace duckdb {
 
-void UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
+static bool HasUserSettingExtensionType(const LogicalType &type) {
+	if (!type.IsNested()) {
+		return type.HasExtensionInfo();
+	}
+	return TypeVisitor::Contains(type, [](const LogicalType &child) { return child.HasExtensionInfo(); });
+}
+
+static bool UserSettingValuesEqual(const Value &left, const Value &right);
+
+static bool UserSettingChildrenEqual(const vector<Value> &left, const vector<Value> &right) {
+	if (left.size() != right.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left.size(); i++) {
+		if (!UserSettingValuesEqual(left[i], right[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool UserSettingValuesEqual(const Value &left, const Value &right) {
+	// A no-op must preserve the type; NotDistinctFrom can cast values or equate differently typed NULLs.
+	if (left.type() != right.type()) {
+		return false;
+	}
+	// Ordinary type equality ignores collations, including those on nested child types.
+	if ((left.type().IsNested() || left.type().id() == LogicalTypeId::VARCHAR) &&
+	    !left.type().EqualsIncludingCollation(right.type())) {
+		return false;
+	}
+	if (left.IsNull() || right.IsNull()) {
+		return Value::NotDistinctFrom(left, right);
+	}
+	switch (left.type().InternalType()) {
+	// NotDistinctFrom equates signed zeros and NaNs; preserve the sign and allow NaNs to miss the no-op.
+	case PhysicalType::FLOAT: {
+		const auto lvalue = left.GetValueUnsafe<float>();
+		const auto rvalue = right.GetValueUnsafe<float>();
+		return lvalue == rvalue && std::signbit(lvalue) == std::signbit(rvalue);
+	}
+	case PhysicalType::DOUBLE: {
+		const auto lvalue = left.GetValueUnsafe<double>();
+		const auto rvalue = right.GetValueUnsafe<double>();
+		return lvalue == rvalue && std::signbit(lvalue) == std::signbit(rvalue);
+	}
+	// NotDistinctFrom equates 1 month with 30 days, but date arithmetic distinguishes them.
+	case PhysicalType::INTERVAL:
+		return left.GetValueUnsafe<interval_t>().SameFields(right.GetValueUnsafe<interval_t>());
+	// SQL nested equality applies those same normalizations to children; recurse with these stricter rules.
+	case PhysicalType::STRUCT:
+		return UserSettingChildrenEqual(StructValue::GetChildren(left), StructValue::GetChildren(right));
+	case PhysicalType::LIST:
+		return UserSettingChildrenEqual(ListValue::GetChildren(left), ListValue::GetChildren(right));
+	case PhysicalType::ARRAY:
+		return UserSettingChildrenEqual(ArrayValue::GetChildren(left), ArrayValue::GetChildren(right));
+	// NotDistinctFrom does not implement comparisons for these internal types.
+	case PhysicalType::INVALID:
+	case PhysicalType::UNKNOWN:
+	case PhysicalType::BIT:
+		return false;
+	default:
+		return Value::NotDistinctFrom(left, right);
+	}
+}
+
+bool UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
 	if (setting_index >= settings.size()) {
 		settings.resize(setting_index + 1);
 	}
 	auto &generic_setting = settings[setting_index];
+	// Extension type equality can ignore missing modifiers and properties.
+	if (generic_setting.is_set && !HasUserSettingExtensionType(generic_setting.value.type()) &&
+	    !HasUserSettingExtensionType(target_value.type()) &&
+	    UserSettingValuesEqual(generic_setting.value, target_value)) {
+		return false;
+	}
 	generic_setting.is_set = true;
 	generic_setting.value = std::move(target_value);
+	return true;
 }
 
 void UserSettingsMap::ClearSetting(idx_t setting_index) {
@@ -68,8 +145,9 @@ GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &othe
 
 void GlobalUserSettings::SetUserSetting(idx_t setting_index, Value target_value) {
 	lock_guard<mutex> guard(lock);
-	settings_map.SetUserSetting(setting_index, std::move(target_value));
-	++settings_version;
+	if (settings_map.SetUserSetting(setting_index, std::move(target_value))) {
+		++settings_version;
+	}
 }
 
 void GlobalUserSettings::ClearSetting(idx_t setting_index) {

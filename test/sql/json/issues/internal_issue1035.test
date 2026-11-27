@@ -31,6 +31,13 @@ SELECT length(
 1200001
 
 # Vuln154: json_merge_patch()
+query I
+SELECT json_merge_patch(
+  (repeat('{"a":', 20000) || '1' || repeat('}', 20000))::JSON,
+  (repeat('{"a":', 20000) || '2' || repeat('}', 20000))::JSON
+) = (repeat('{"a":', 20000) || '2' || repeat('}', 20000))::JSON
+----
+true
 
 # Vuln155: json_strip_nulls()
 query I

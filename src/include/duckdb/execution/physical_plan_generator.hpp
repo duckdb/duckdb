@@ -49,7 +49,7 @@ public:
 
 public:
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
 		auto ptr = arena.Make<T>(*this, std::forward<ARGS>(args)...);
 		ops.push_back(*ptr);
@@ -118,7 +118,7 @@ public:
 	                                     PhysicalOperator &child, vector<column_t> &partition_columns);
 	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
@@ -155,6 +155,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalMergeInto &op);
 	PhysicalOperator &CreatePlan(LogicalOrder &op);
 	PhysicalOperator &CreatePlan(LogicalTopN &op);
+	PhysicalOperator &CreatePlan(LogicalTopKeyFilter &op);
 	PhysicalOperator &CreatePlan(LogicalPositionalJoin &op);
 	PhysicalOperator &CreatePlan(LogicalProjection &op);
 	PhysicalOperator &CreatePlan(LogicalInsert &op);
@@ -197,11 +198,10 @@ protected:
 		vector<ProjectionIndex> right_map;
 		vector<LogicalType> original_types;
 	};
-	PrunedJoinProjection ExtractPrunedJoinProjection(LogicalComparisonJoin &op, const PhysicalOperator &left,
+	PrunedJoinProjection ExtractPrunedJoinProjection(LogicalJoin &op, const PhysicalOperator &left,
 	                                                 const PhysicalOperator &right, bool expand_left,
 	                                                 bool expand_right);
-	PhysicalOperator &RestorePrunedJoinProjection(LogicalComparisonJoin &op, PhysicalOperator &join,
-	                                              PrunedJoinProjection info);
+	PhysicalOperator &RestorePrunedJoinProjection(LogicalJoin &op, PhysicalOperator &join, PrunedJoinProjection info);
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
 	                                              vector<unique_ptr<Expression>> &groups,

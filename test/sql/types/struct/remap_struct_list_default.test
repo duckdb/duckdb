@@ -1,0 +1,162 @@
+# name: test/sql/types/struct/remap_struct_list_default.test
+# description: A struct default for a LIST or MAP fills the entries of a mapped source, and is rejected without one
+# group: [struct]
+
+statement ok
+CREATE TABLE src AS
+SELECT * FROM (VALUES
+	(1, {l: [1, NULL], ll: [[1], [], NULL], ls: [{a: 1}, NULL], m: MAP {5: 'a'}, lm: [MAP {5: 'a'}, NULL]}),
+	(2, NULL),
+	(3, {l: [], ll: [], ls: [], m: MAP {}, lm: []}),
+	(4, {l: NULL, ll: NULL, ls: NULL, m: NULL, lm: NULL})
+) t(id, x);
+
+# a LIST or MAP without a source has no entries a struct default could fill
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*'INTEGER\[\]' is not mapped to a source.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[], n MAP(INT, INT)), {l: 'l'}, {n: {key: 1, value: 2}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*'MAP\(INTEGER, INTEGER\)' is not mapped to a source.*
+
+# the input has a list of that name, but the mapping does not refer to it
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[]), NULL, {l: {list: 1}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for l is a struct.*map it to a source or provide a default of the target type.*
+
+# the outer list is mapped, the list it holds is not
+statement error
+SELECT remap_struct(x, NULL::STRUCT(ll INT[][]), {ll: ('ll', {})}, {ll: {list: {list: 7}}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for list is a struct.*'INTEGER\[\]' is not mapped to a source.*
+
+# a list inside a struct default without a source
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[], s STRUCT(n INT[])), {l: 'l'}, {s: {n: {list: 1}}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*'INTEGER\[\]' is not mapped to a source.*
+
+# the error is raised at bind time, so calls that returned a result because execution never reached the field are
+# rejected as well: a constant NULL input, a NULL struct above the field (constant, or a NULL default that holds the
+# list default), no rows, a call that is projected away
+statement error
+SELECT remap_struct(NULL::STRUCT(l INT[]), NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}});
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+SELECT remap_struct({a: 1, o: NULL::STRUCT(b INT)}, NULL::STRUCT(a INT, o STRUCT(b INT, n INT[])), {a: 'a', o: ('o', {b: 'b'})}, {o: {n: {list: 1}}});
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[], s STRUCT(n INT[])), {l: 'l'}, {s: NULL::STRUCT(n STRUCT(list INT))}) FROM src WHERE id IN (1, 3);
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src WHERE id > 4;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+SELECT count(*) FROM (SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src);
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+# statements that bind without executing: CREATE VIEW, PREPARE, EXPLAIN
+statement error
+CREATE VIEW rejected AS SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+PREPARE rejected AS SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+statement error
+EXPLAIN SELECT remap_struct(x, NULL::STRUCT(l INT[], n INT[]), {l: 'l'}, {n: {list: 1}}) FROM src;
+----
+<REGEX>:Binder Error:.*Default value for n is a struct.*not mapped to a source.*
+
+# a missing LIST or MAP takes a default of the target type, also inside a struct default
+query II
+SELECT id, remap_struct(x, NULL::STRUCT(l INT[], n INT[], o MAP(INT, INT), s STRUCT(n INT[], p INT)), {l: 'l'},
+                        {n: [1, 2], o: MAP {1: 2}, s: {p: 4, n: NULL::INT[]}})
+FROM src ORDER BY id;
+----
+1	{'l': [1, NULL], 'n': [1, 2], 'o': {1=2}, 's': {'n': NULL, 'p': 4}}
+2	NULL
+3	{'l': [], 'n': [1, 2], 'o': {1=2}, 's': {'n': NULL, 'p': 4}}
+4	{'l': NULL, 'n': [1, 2], 'o': {1=2}, 's': {'n': NULL, 'p': 4}}
+
+# a mapped list keeps its entries when every element comes from the default:
+# a primitive default, a struct default, a NULL struct default
+query IIII
+SELECT id,
+       remap_struct(x, NULL::STRUCT(l INT[]), {l: ('l', {})}, {l: {list: 7}}),
+       remap_struct(x, NULL::STRUCT(l STRUCT(z INT)[]), {l: ('l', {})}, {l: {list: {z: 3}}}),
+       remap_struct(x, NULL::STRUCT(l STRUCT(z INT)[]), {l: ('l', {})}, {l: {list: NULL::STRUCT(z INT)}})
+FROM src ORDER BY id;
+----
+1	{'l': [7, 7]}	{'l': [{'z': 3}, {'z': 3}]}	{'l': [NULL, NULL]}
+2	NULL	NULL	NULL
+3	{'l': []}	{'l': []}	{'l': []}
+4	{'l': NULL}	{'l': NULL}	{'l': NULL}
+
+# list of list with the inner list mapped as well, and a struct in a list with one field from the default
+query III
+SELECT id,
+       remap_struct(x, NULL::STRUCT(ll INT[][]), {ll: ('ll', {list: ('list', {})})}, {ll: {list: {list: 7}}}),
+       remap_struct(x, NULL::STRUCT(ls STRUCT(a INT, b INT)[]), {ls: ('ls', {list: ('list', {a: 'a'})})}, {ls: {list: {b: 5}}})
+FROM src ORDER BY id;
+----
+1	{'ll': [[7], [], NULL]}	{'ls': [{'a': 1, 'b': 5}, NULL]}
+2	NULL	NULL
+3	{'ll': []}	{'ls': []}
+4	{'ll': NULL}	{'ls': NULL}
+
+# maps: the value from a default, the key and the value from defaults, the same for a map in a list, a root map
+query IIIII
+SELECT id,
+       remap_struct(x, NULL::STRUCT(m MAP(INT, INT)), {m: ('m', {key: 'key'})}, {m: {value: 2}}),
+       remap_struct(x, NULL::STRUCT(m MAP(INT, INT)), {m: ('m', {})}, {m: {key: 1, value: 2}}),
+       remap_struct(x, NULL::STRUCT(lm MAP(INT, INT)[]), {lm: ('lm', {list: ('list', {})})}, {lm: {list: {key: 1, value: 2}}}),
+       remap_struct(x.m, NULL::MAP(INT, INT), NULL, {key: 1, value: 2})
+FROM src ORDER BY id;
+----
+1	{'m': {5=2}}	{'m': {1=2}}	{'lm': [{1=2}, NULL]}	{1=2}
+2	NULL	NULL	NULL	NULL
+3	{'m': {}}	{'m': {}}	{'lm': []}	{}
+4	{'m': NULL}	{'m': NULL}	{'lm': NULL}	NULL
+
+# a list at the root always has a source
+query III
+SELECT id, remap_struct(x.l, NULL::INT[], NULL, {list: 7}), remap_struct(x.l, NULL::STRUCT(z INT)[], NULL, {list: NULL::STRUCT(z INT)})
+FROM src ORDER BY id;
+----
+1	[7, 7]	[NULL, NULL]
+2	NULL	NULL
+3	[]	[]
+4	NULL	NULL
+
+# more than one vector
+query IIII
+SELECT count(*), count(r), sum(len(r.l)), sum(list_sum(r.l))
+FROM (
+	SELECT remap_struct(x, NULL::STRUCT(l INT[]), {l: ('l', {})}, {l: {list: 7}}) AS r
+	FROM (
+		SELECT CASE WHEN i % 5 = 0 THEN NULL
+		            WHEN i % 5 = 1 THEN {l: NULL}
+		            WHEN i % 5 = 2 THEN {l: []}
+		            ELSE {l: [i, NULL]} END AS x
+		FROM range(10000) t(i)
+	)
+);
+----
+10000	8000	8000	56000

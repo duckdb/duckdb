@@ -1,0 +1,134 @@
+# name: test/sql/attach/attach_qualifier_schema_or_database.test
+# description: A two-part table name whose qualifier names a schema, an attached database, or both
+# group: [attach]
+
+# a schema holding a view and an attached database share the name
+statement ok
+CREATE SCHEMA x;
+
+statement ok
+CREATE VIEW x.t AS SELECT 'schema view' AS k;
+
+statement ok
+ATTACH ':memory:' AS x;
+
+statement ok
+CREATE TABLE x.main.t AS SELECT 'catalog table' AS k;
+
+statement error
+SELECT * FROM x.t;
+----
+Binder Error: Ambiguous reference to catalog or schema "x"
+
+statement ok
+DETACH x;
+
+statement ok
+DROP SCHEMA x CASCADE;
+
+# a schema holding a table and an attached database share the name
+statement ok
+CREATE SCHEMA x;
+
+statement ok
+CREATE TABLE x.t AS SELECT 'schema table' AS k;
+
+statement ok
+ATTACH ':memory:' AS x;
+
+statement ok
+CREATE TABLE x.main.t AS SELECT 'catalog table' AS k;
+
+statement error
+SELECT * FROM x.t;
+----
+Binder Error: Ambiguous reference to catalog or schema "x"
+
+# the ambiguity aborts an open transaction under the default invalidation policy, which a test config overrides
+statement ok
+SET default_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION';
+
+statement ok
+CREATE TABLE u(k INTEGER);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO u VALUES (1);
+
+statement error
+SELECT * FROM x.t;
+----
+Binder Error: Ambiguous reference to catalog or schema "x"
+
+statement error
+INSERT INTO u VALUES (2);
+----
+TransactionContext Error: Current transaction is aborted
+
+statement ok
+ROLLBACK;
+
+statement ok
+DROP TABLE u;
+
+statement ok
+DETACH x;
+
+statement ok
+DROP SCHEMA x CASCADE;
+
+# the qualifier names only an attached database, and the search path picks its schema
+statement ok
+ATTACH ':memory:' AS x;
+
+statement ok
+CREATE SCHEMA x.s;
+
+statement ok
+CREATE TABLE x.main.t AS SELECT 1 AS k;
+
+statement ok
+CREATE TABLE x.s.t AS SELECT 2 AS k;
+
+statement ok
+SET search_path = 'x.s';
+
+query I
+SELECT * FROM x.t;
+----
+2
+
+statement ok
+RESET search_path;
+
+statement ok
+DETACH x;
+
+# the qualifier names only an attached database
+statement ok
+ATTACH ':memory:' AS x;
+
+statement ok
+CREATE TABLE x.main.t AS SELECT 'catalog table' AS k;
+
+query T
+SELECT * FROM x.t;
+----
+catalog table
+
+statement ok
+DETACH x;
+
+# the qualifier names only a schema
+statement ok
+CREATE SCHEMA x;
+
+statement ok
+CREATE TABLE x.t AS SELECT 'schema table' AS k;
+
+query T
+SELECT * FROM x.t;
+----
+schema table

@@ -96,3 +96,14 @@ WITH computed AS MATERIALIZED (
 SELECT sum(v) FROM computed WHERE k=2
 ----
 1
+
+# Throwing filter inputs also permit splitting ordinary projections.
+query I
+SELECT sum(v)
+FROM (
+    SELECT i+1 AS k, CASE WHEN i=0 THEN error('filtered projection') ELSE i END AS v
+    FROM pushdown_rows
+) computed
+WHERE k=2
+----
+1

@@ -55,7 +55,7 @@ TEST_CASE("Connected hypergraphs can require original cross products", "[optimiz
 		REQUIRE(enumerator.SolveJoinOrder());
 		auto result = connection.Query(query);
 		REQUIRE_NO_FAIL(*result);
-		CHECK_COLUMN(result, 0, {10});
+		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 	connection.Rollback();
 }
@@ -171,9 +171,9 @@ static vector<unique_ptr<DPJoinNode>> EnumerateAlternatives(QueryGraphManager &g
 						continue;
 					}
 					auto rows = estimator.EstimateCardinality(set);
-					auto node = make_uniq<DPJoinNode>(
-					    set, edge.join_operator, edge.predicates, edge.generated_cross_product, left->set, right->set,
-					    costs.ComputeCost(*left, *right, edge.join_operator, rows.GetDouble()));
+					auto node = make_uniq<DPJoinNode>(set, edge.join_operator, edge.predicates,
+					                                  edge.generated_cross_product, left->set, right->set,
+					                                  costs.ComputeCost(*left, *right, edge.join_operator, set));
 					node->cardinality = rows;
 					result.push_back(std::move(node));
 				}
@@ -258,7 +258,7 @@ TEST_CASE("Equivalent mixed join plans share estimates and the cheapest plan sur
 	connection.Rollback();
 }
 
-TEST_CASE("Selected costs remain current across exact and greedy enumeration", "[optimizer][join_order]") {
+TEST_CASE("Selected costs remain current across exact and approximate enumeration", "[optimizer][join_order]") {
 	DuckDB db;
 	Connection connection(db);
 	for (idx_t i = 0; i < 12; i++) {
@@ -300,8 +300,7 @@ TEST_CASE("Selected costs remain current across exact and greedy enumeration", "
 			auto &plans = enumerator.GetPlans();
 			if (count == 12 && threshold == 30) {
 				// A complete 12-relation star exceeds the 10,000-pair budget.
-				REQUIRE(plans.size() > 500);
-				REQUIRE(plans.size() < (idx_t(1) << (count - 1)) + count - 1);
+				REQUIRE(plans.size() == 2 * count - 1);
 			}
 			VerifySelectedCost(*plans.at(root), plans);
 		}

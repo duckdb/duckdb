@@ -8,7 +8,7 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
-#include "duckdb/optimizer/join_order/cardinality_value.hpp"
+#include "duckdb/optimizer/relation_statistics/cardinality_value.hpp"
 #include "duckdb/optimizer/recursive_join_planning.hpp"
 
 namespace duckdb {

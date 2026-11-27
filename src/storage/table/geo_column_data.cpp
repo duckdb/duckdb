@@ -167,9 +167,9 @@ unique_ptr<BaseStatistics> GeoColumnData::GetUpdateStatistics() {
 
 class GeoColumnCheckpointState final : public ColumnCheckpointState {
 public:
-	GeoColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	GeoColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                         PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		// Make stats
 		global_stats = GeometryStats::CreateEmpty(column_data.type).ToUnique();
 
@@ -231,9 +231,9 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                        PartialBlockManager &partial_block_manager) {
-	return make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<GeoColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 static GeometryStorageType GetStorageType(GeometryType geom_type, VertexType vert_type) {
@@ -328,7 +328,8 @@ static GeometryStorageType GetStorageType(GeometryType geom_type, VertexType ver
 unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
                                                             const BaseStatistics &old_stats) {
 	auto &partial_block_manager = info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto &context = info.GetContext();
+	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 
 	// When the inner column is unshredded, the geometry old_stats are already correct.
 	// When the inner column is shredded, the base_column has no stats of its own (it is parented to us).

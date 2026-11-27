@@ -1,5 +1,5 @@
 if (NOT DEFINED VORTEX_ENABLED)
-    set(VORTEX_ENABLED ON)
+    set(VORTEX_ENABLED OFF)
 endif()
 if (VORTEX_ENABLED AND NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(vortex

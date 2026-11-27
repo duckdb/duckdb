@@ -281,7 +281,7 @@ bool TypedValid(const ShreddedGroupView &view, idx_t index) {
 
 //! A root that resolves to a (variant) NULL / missing is a genuine SQL NULL row (matches the unshredded path)
 bool IsRowNull(const ParquetVariantNode &root) {
-	return root.IsNull() || root.GetTypeId() == VariantLogicalType::VARIANT_NULL;
+	return root.IsNull() || root.GetTypeId() == LogicalTypeId::SQLNULL;
 }
 
 //! Set the shredded struct validity for the SQL NULL rows (used when there is no leftover to build, so the

@@ -261,6 +261,11 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 }
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
+idx_t Sort::GetLocalSizeInBytes(LocalSinkState &lstate_p) const {
+	auto &lstate = lstate_p.Cast<SortLocalSinkState>();
+	return lstate.sorted_run ? lstate.sorted_run->SizeInBytesForSorting() : 0;
+}
+
 static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) {
 	// Check if we exceed the limit (sorting the run needs a merge buffer on top of the run itself)
 	const auto sorted_run_size = lstate.sorted_run->SizeInBytesForSorting();
@@ -527,6 +532,23 @@ OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Non-Standard Interface
 //===--------------------------------------------------------------------===//
+void Sort::SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t count,
+                           idx_t variable_data_size) const {
+	auto &sink = gstate.Cast<SortGlobalSinkState>();
+	D_ASSERT(sink.sunk_tuples == 0);
+	// key and payload rows, variable-size data and merge buffer, as SizeInBytesForSorting measures them
+	const auto key_width = key_layout->GetRowWidth();
+	auto expected_size = count * (key_width + payload_layout->GetRowWidth()) + variable_data_size +
+	                     SortMergeBuffer::MaximumSize(count, key_width);
+	auto &state = *sink.temporary_memory_state;
+	// only lower the reservation: a larger sort keeps the default minimum and grows on demand
+	expected_size = MinValue(expected_size, state.GetMinimumReservation());
+	if (expected_size == 0) {
+		return;
+	}
+	state.SetRemainingSizeAndUpdateReservation(context.GetContext(), expected_size);
+}
+
 SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
 
@@ -550,7 +572,7 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 
 	while (true) {
 		// Check for interrupts since this could be a long-running task
-		context.client.InterruptCheck();
+		context.client.FastInterruptCheck();
 		// Scan a chunk
 		chunk.Reset();
 		GetData(context, chunk, input);

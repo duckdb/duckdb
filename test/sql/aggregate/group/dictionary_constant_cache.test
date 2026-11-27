@@ -1,0 +1,69 @@
+# name: test/sql/aggregate/group/dictionary_constant_cache.test
+# description: Constant groups do not disturb cached dictionary group addresses
+# group: [group]
+
+require exact_vector_size 2048
+
+require no_vector_verification
+
+statement ok
+SET threads=1
+
+statement ok
+SET enable_caching_operators=false
+
+statement ok
+SET perfect_ht_threshold=0
+
+statement ok
+SET disabled_optimizers='join_order,join_filter_pushdown,compressed_materialization'
+
+statement ok
+CREATE TABLE mapping AS SELECT i k, i+100 v FROM range(8) t(i)
+
+statement ok
+CREATE TABLE input AS SELECT i id, i%8 k FROM range(122880) t(i)
+
+# The join supplies the same dictionary before and after each constant batch.
+statement ok
+CREATE VIEW batches AS
+SELECT id, CASE WHEN id%6144 BETWEEN 2048 AND 4095 THEN -1 ELSE m.v END g
+FROM input JOIN mapping m USING(k)
+
+query I
+SELECT current_setting('debug_force_external') OR current_setting('debug_disable_optimizer')
+    OR (count(*) FILTER (WHERE vector_type(g)='DICTIONARY_VECTOR')=81920
+        AND count(*) FILTER (WHERE vector_type(g)='CONSTANT_VECTOR')=40960)
+FROM batches
+----
+true
+
+query III
+SELECT g, count(*), sum(id) FROM batches GROUP BY g ORDER BY g
+----
+-1	40960	2516561920
+100	10240	629104640
+101	10240	629114880
+102	10240	629125120
+103	10240	629135360
+104	10240	629145600
+105	10240	629155840
+106	10240	629166080
+107	10240	629176320
+
+# Reuse the pipeline and its dictionary cache in another execution.
+statement ok
+PREPARE grouped AS SELECT g, count(*), sum(id) FROM batches GROUP BY g ORDER BY g
+
+query III
+EXECUTE grouped
+----
+-1	40960	2516561920
+100	10240	629104640
+101	10240	629114880
+102	10240	629125120
+103	10240	629135360
+104	10240	629145600
+105	10240	629155840
+106	10240	629166080
+107	10240	629176320

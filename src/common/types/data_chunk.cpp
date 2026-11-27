@@ -1,6 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
@@ -357,6 +358,14 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 		types.push_back(type);
 	});
 
+	for (auto &type : types) {
+		if (!type.HasPhysicalType()) {
+			// the type is named by its id: it can lack the type info that ToString reads
+			throw SerializationException("Failed to deserialize data chunk: a vector cannot hold the type %s",
+			                             EnumUtil::ToString(type.id()));
+		}
+	}
+
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
@@ -419,25 +428,6 @@ unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 		data[col_idx].ToUnifiedFormat(unified_data[col_idx]);
 	}
 	return unified_data;
-}
-
-void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	auto hash_count = size();
-	VectorOperations::Hash(data[0], result, hash_count);
-	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], hash_count);
-	}
-}
-
-void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	D_ASSERT(!column_ids.empty());
-	auto hash_count = size();
-	VectorOperations::Hash(data[column_ids[0]], result, hash_count);
-	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], hash_count);
-	}
 }
 
 void DataChunk::Verify(ClientContext &context) {

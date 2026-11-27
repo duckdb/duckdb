@@ -1,3 +1,4 @@
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/main/context.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "core_functions/scalar/list_functions.hpp"
@@ -5,7 +6,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
-#include "duckdb/common/types/sql_value_map.hpp"
+#include "duckdb/common/arena_containers/arena_sql_value_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -57,7 +58,7 @@ struct ListAggregatesBindData : public FunctionData {
 		return result;
 	}
 
-	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
 	                              const BoundScalarFunction &function) {
 		const ListAggregatesBindData *bind_data = nullptr;
 		if (bind_data_p) {
@@ -85,7 +86,7 @@ ListAggregatesBindData::~ListAggregatesBindData() {
 }
 
 struct ListAggregatesLocalState : public FunctionLocalState {
-	ListAggregatesLocalState(Context &context, optional_ptr<FunctionData> bind_data)
+	ListAggregatesLocalState(Context &context, optional_ptr<const FunctionData> bind_data)
 	    : arena_allocator(BufferAllocator::Get(context)) {
 		if (!bind_data) {
 			return;
@@ -110,7 +111,7 @@ struct ListAggregatesLocalState : public FunctionLocalState {
 };
 
 unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data) {
+                                                            optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<ListAggregatesLocalState>(state.GetContext(), bind_data);
 }
 
@@ -160,13 +161,13 @@ struct FinalizeGenericValueFunctor {
 };
 
 struct AggregateFunctor {
-	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = arena_sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 	}
 };
 
 struct DistinctFunctor {
-	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = arena_sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
@@ -209,7 +210,7 @@ struct DistinctFunctor {
 };
 
 struct UniqueFunctor {
-	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = arena_sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
@@ -417,14 +418,14 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 			break;
 		case PhysicalType::VARCHAR:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t,
-			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
-			                                                                       count);
+			                                               ArenaOwningStringMap<idx_t>>(
+			    result, state_vector.state_vector, count);
 			break;
 #endif
 		default:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t,
-			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
-			                                                                       count);
+			                                               ArenaOwningStringMap<idx_t>>(
+			    result, state_vector.state_vector, count);
 			break;
 		}
 	}
@@ -598,11 +599,23 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	return result;
 }
 
+//! The distinct non-NULL elements of a list are at most as many as its elements
+static unique_ptr<BaseStatistics> ListDistinctStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS || list_stats.GetType() != input.expr.GetReturnType()) {
+		return nullptr;
+	}
+	auto result = list_stats.Copy();
+	ListStats::SetLengthBounds(result, 0, ListStats::MaxListLength(list_stats));
+	return result.ToUnique();
+}
+
 ScalarFunction ListDistinctFun::GetFunction() {
 	ScalarFunction fun({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
 	                   ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::TEMPLATE("T")));
 	fun.SetResolveTypesCallback(ListAggregatesResolveTypes<false>);
+	fun.SetStatisticsCallback(ListDistinctStats);
 	return fun;
 }
 

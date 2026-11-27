@@ -2,6 +2,8 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "pcg_random.hpp"
 
+#include <chrono>
+
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -53,13 +55,11 @@ RandomEngine::~RandomEngine() {
 }
 
 double RandomEngine::NextRandom(double min, double max) {
-	D_ASSERT(max >= min);
-	return min + (NextRandom() * (max - min));
+	return NextRandom(random_state->pcg, min, max);
 }
 
 double RandomEngine::NextRandom() {
-	auto uint64 = NextRandomInteger64();
-	return std::ldexp(uint64, -64);
+	return NextRandom(random_state->pcg);
 }
 
 double RandomEngine::NextRandom32(double min, double max) {
@@ -68,8 +68,7 @@ double RandomEngine::NextRandom32(double min, double max) {
 }
 
 double RandomEngine::NextRandom32() {
-	auto uint32 = NextRandomInteger();
-	return std::ldexp(uint32, -32);
+	return NextRandom32(random_state->pcg);
 }
 
 uint32_t RandomEngine::NextRandomInteger() {
@@ -77,7 +76,7 @@ uint32_t RandomEngine::NextRandomInteger() {
 }
 
 uint64_t RandomEngine::NextRandomInteger64() {
-	return (static_cast<uint64_t>(NextRandomInteger()) << UINT64_C(32)) | static_cast<uint64_t>(NextRandomInteger());
+	return NextRandomInteger64(random_state->pcg);
 }
 
 uint32_t RandomEngine::NextRandomInteger(uint32_t min, uint32_t max) {

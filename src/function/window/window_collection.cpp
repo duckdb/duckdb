@@ -148,10 +148,19 @@ WindowCursor::WindowCursor(const WindowCollection &paged, column_t col_idx)
 }
 
 LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_t begin) {
+	vector<LogicalType> types;
+	for (column_t c = 0; c < end; ++c) {
+		types.push_back(chunk.data[c].GetType());
+	}
+	return PrefixStructType(types, end, begin);
+}
+
+LogicalType WindowCollectionChunkScanner::PrefixStructType(const vector<LogicalType> &types, column_t end,
+                                                           column_t begin) {
 	child_list_t<LogicalType> partition_children;
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
-		auto type = chunk.data[c].GetType();
+		auto type = types[c];
 		std::pair<Identifier, LogicalType> child {Identifier(name), type};
 		partition_children.emplace_back(child);
 	}

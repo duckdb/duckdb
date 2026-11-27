@@ -1,0 +1,102 @@
+# name: test/sql/storage/compression/roaring/roaring_reused_container_state.test
+# description: Reinitialize Roaring readers across container kinds and selected scans
+# group: [roaring]
+
+require block_size 262144
+
+load {TEST_DIR}/roaring_reused_container_state.db readwrite v1.5.0
+
+statement ok
+SET force_compression = 'roaring'
+
+statement ok
+CREATE TABLE reused_roaring AS
+SELECT i, CASE (i // 2048) % 7
+    WHEN 0 THEN i % 3 = 0
+    WHEN 1 THEN i % 97 = 0
+    WHEN 2 THEN i % 97 <> 0
+    WHEN 3 THEN i % 2048 < 1536
+    WHEN 4 THEN i % 512 BETWEEN 100 AND 350
+    WHEN 5 THEN i % 2048 IN (3, 29, 1401)
+    ELSE i % 2048 NOT IN (3, 29, 1401) END present
+FROM range(100003) t(i)
+
+statement ok
+ALTER TABLE reused_roaring ADD COLUMN v BIGINT
+
+statement ok
+UPDATE reused_roaring SET v = CASE WHEN present THEN i ELSE NULL END
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('reused_roaring')
+WHERE segment_type = 'VALIDITY' AND compression = 'Roaring'
+----
+true
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('reused_roaring')
+WHERE column_name = 'present' AND segment_type != 'VALIDITY' AND compression = 'Roaring'
+----
+true
+
+# Updating sparse rows fetches the previous values at non-aligned offsets.
+statement ok
+BEGIN
+
+statement ok
+UPDATE reused_roaring SET v = CASE WHEN present THEN NULL ELSE i + 1 END
+WHERE i % 2048 IN (3, 29, 1401)
+
+query I
+SELECT count(*) FROM reused_roaring
+WHERE i % 2048 IN (3, 29, 1401)
+  AND v IS DISTINCT FROM CASE WHEN CASE (i // 2048) % 7
+      WHEN 0 THEN i % 3 = 0
+      WHEN 1 THEN i % 97 = 0
+      WHEN 2 THEN i % 97 <> 0
+      WHEN 3 THEN i % 2048 < 1536
+      WHEN 4 THEN i % 512 BETWEEN 100 AND 350
+      WHEN 5 THEN i % 2048 IN (3, 29, 1401)
+      ELSE i % 2048 NOT IN (3, 29, 1401) END
+    THEN NULL ELSE i + 1 END
+----
+0
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM (
+    SELECT *, CASE (i // 2048) % 7
+        WHEN 0 THEN i % 3 = 0
+        WHEN 1 THEN i % 97 = 0
+        WHEN 2 THEN i % 97 <> 0
+        WHEN 3 THEN i % 2048 < 1536
+        WHEN 4 THEN i % 512 BETWEEN 100 AND 350
+        WHEN 5 THEN i % 2048 IN (3, 29, 1401)
+        ELSE i % 2048 NOT IN (3, 29, 1401) END expected
+    FROM reused_roaring
+) WHERE present IS DISTINCT FROM expected
+     OR v IS DISTINCT FROM CASE WHEN expected THEN i ELSE NULL END
+----
+0
+
+query I
+SELECT count(*) FROM reused_roaring
+WHERE i % 101 = 0 AND v IS DISTINCT FROM CASE WHEN present THEN i ELSE NULL END
+----
+0
+
+query I
+SELECT count(*) FROM reused_roaring
+WHERE i BETWEEN 2053 AND 98761 AND v IS DISTINCT FROM CASE WHEN present THEN i ELSE NULL END
+----
+0
+
+statement ok
+DROP TABLE reused_roaring

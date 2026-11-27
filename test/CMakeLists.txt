@@ -1,6 +1,6 @@
 include_directories(../third_party/catch)
 include_directories(../third_party/sqlite/include)
-include_directories(include)
+include_directories(BEFORE include)
 include_directories(extension/debug_fs/include)
 
 if(${DISABLE_THREADS})

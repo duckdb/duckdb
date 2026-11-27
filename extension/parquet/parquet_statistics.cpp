@@ -135,6 +135,16 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 	return stats.ToUnique();
 }
 
+//! Whether every non-NULL value of the column chunk is NaN, according to its nan_count and null_count
+static bool AllValuesAreNaN(const duckdb_parquet::Statistics &parquet_stats,
+                            optional_ptr<const ColumnChunk> column_chunk) {
+	if (!column_chunk || !parquet_stats.__isset.nan_count || !parquet_stats.__isset.null_count) {
+		return false;
+	}
+	const auto nan_count = parquet_stats.nan_count;
+	return nan_count > 0 && nan_count == column_chunk->meta_data.num_values - parquet_stats.null_count;
+}
+
 bool ParquetStatisticsUtils::CanHaveNaN(const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan) {
 	if (parquet_stats.__isset.nan_count) {
 		return parquet_stats.nan_count != 0;
@@ -155,6 +165,11 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 //! Statistics values that do not fit in the width of the decimal are ignored
 template <class T>
 static Value ParquetDecimalStatsValue(T value, uint32_t width, uint32_t scale) {
+	if (width > Decimal::MAX_WIDTH_INT128) {
+		// a wide decimal (a BIGNUM blob) backed by an integer column, which every integer fits in
+		auto blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(value));
+		return Value::DECIMAL(bignum_t(string_t(blob)), width, scale);
+	}
 	const auto max_value = Hugeint::POWERS_OF_TEN[width];
 	const auto hugeint_value = hugeint_t(value);
 	if (hugeint_value >= max_value || hugeint_value <= -max_value) {
@@ -216,10 +231,6 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		return Value::FLOAT(val);
 	}
 	case LogicalTypeId::DOUBLE: {
-		if (schema_ele.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
-			// decimals cast to double
-			return Value::DOUBLE(ParquetDecimalUtils::ReadDecimalValue<double>(stats_data, stats.size(), schema_ele));
-		}
 		if (stats.size() != sizeof(double)) {
 			throw InvalidInputException("Incorrect stats size for type DOUBLE");
 		}
@@ -406,6 +417,12 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
@@ -564,6 +581,13 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformParquetStatistics(
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+		if (AllValuesAreNaN(parquet_stats, column_chunk)) {
+			auto nan_stats = NumericStats::CreateUnknown(type);
+			auto nan_value = Value("nan").DefaultCastAs(type);
+			NumericStats::SetMin(nan_stats, nan_value);
+			NumericStats::SetMax(nan_stats, nan_value);
+			return nan_stats.ToUnique();
+		}
 		if (CanHaveNaN(parquet_stats, can_have_nan)) {
 			// The column can contain NaN values - create stats without an upper max value, as NaN compares larger than
 			// anything else and is not included in the Parquet min/max
@@ -764,6 +788,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);
@@ -775,7 +801,10 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
-			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+			row_group_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+			if (parquet_stats.null_count > 0) {
+				row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
 		}
 	}
 	return row_group_stats;
@@ -870,13 +899,28 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	bool child_has_constant = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child, hash_strategy);
-		}
-	});
-	return child_has_constant;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_child_has_constant = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (!any_child_has_constant) {
+				any_child_has_constant = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return any_child_has_constant;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_have_constants = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (all_children_have_constants) {
+				all_children_have_constants = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return all_children_have_constants;
+	}
+	default:
+		return false;
+	}
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter, ParquetBloomFilterHashStrategy hash_strategy) {
@@ -998,6 +1042,10 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 		return ParquetIntervalUtils::TryHashNormalized(interval);
 	}
 	case LogicalTypeId::DECIMAL:
+		if (constant.type().InternalType() == PhysicalType::VARCHAR) {
+			// wide decimals (BIGNUM blobs) are not hashed, whichever physical type holds them
+			return nullopt;
+		}
 		if (schema.parquet_type == duckdb_parquet::Type::INT32) {
 			return ValueXH64FixedWidth<int32_t>(constant);
 		} else if (schema.parquet_type == duckdb_parquet::Type::INT64) {
@@ -1180,6 +1228,10 @@ ParquetStatisticsUtils::GetBloomFilterHashStrategy(const ParquetColumnSchema &sc
 		}
 		return nullopt;
 	case LogicalTypeId::DECIMAL:
+		if (schema.type.InternalType() == PhysicalType::VARCHAR) {
+			// wide decimals (BIGNUM blobs) are not probed, also not when an integer column holds them
+			return nullopt;
+		}
 		// We currently only support decimal bloom filters backed by 32-bit or 64-bit integers.
 		if (schema.parquet_type == duckdb_parquet::Type::INT32 || schema.parquet_type == duckdb_parquet::Type::INT64) {
 			return ParquetBloomFilterHashStrategy::STANDARD;

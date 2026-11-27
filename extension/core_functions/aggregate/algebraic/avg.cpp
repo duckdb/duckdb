@@ -92,7 +92,7 @@ struct AverageSetOperation {
 };
 
 template <class T>
-static T GetAverageDivident(uint64_t count, optional_ptr<FunctionData> bind_data) {
+static T GetAverageDivident(uint64_t count, optional_ptr<const FunctionData> bind_data) {
 	T divident = T(count);
 	if (bind_data) {
 		auto &avg_bind_data = bind_data->Cast<AverageDecimalBindData>();
@@ -522,7 +522,7 @@ static long double BignumSumToLongDouble(const BignumIntermediate &value) {
 			magnitude = (magnitude << 8) | uhugeint_t(value.GetAbsoluteByte(NumericCast<int64_t>(i)));
 		}
 		if (magnitude <= uhugeint_t(NumericLimits<hugeint_t>::Maximum())) {
-			auto sum = hugeint_t(magnitude.upper, magnitude.lower);
+			auto sum = hugeint_t(static_cast<int64_t>(magnitude.upper), magnitude.lower);
 			return Hugeint::Cast<long double>(value.is_negative ? -sum : sum);
 		}
 	}

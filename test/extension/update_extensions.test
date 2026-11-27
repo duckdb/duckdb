@@ -22,22 +22,22 @@ with cte as (select 42 AS a) UPDATE EXTENSIONS
 Providing a with clause with an UPDATE EXTENSIONS statement is not allowed
 
 # No extensions installed -> update returns empty list
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS;
 ----
 
 statement ok
 INSTALL json
 
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS;
 ----
-json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*	NULL
 
-query IIIII
+query IIIIII
 UPDATE EXTENSIONS (json);
 ----
-json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*	NULL
 
 statement error
 UPDATE EXTENSIONS (foobar);
@@ -48,11 +48,11 @@ statement ok
 INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 # The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
-query IIIII rowsort
+query IIIIII rowsort
 UPDATE EXTENSIONS;
 ----
-json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
-loadable_extension_demo	(empty)	NOT_A_REPOSITORY	default-version	default-version
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*	NULL
+loadable_extension_demo	(empty)	NOT_A_REPOSITORY	default-version	default-version	NULL
 
 # Doublecheck duckdb_extensions()
 query IIII rowsort

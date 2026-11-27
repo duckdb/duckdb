@@ -197,7 +197,8 @@ bool QueryMatches(ArrowSchema &col_schema, ArrowArray &col_array, const string &
 	return WithStream(col_schema, col_array, [&](ArrowArrayStream &stream) {
 		DuckDB db(nullptr);
 		Connection con(db);
-		con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(stream))->CreateView("arrow_view");
+		ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(stream), "arrow_view", true,
+		                                     false);
 		auto result = con.Query(query);
 		auto expected_result = con.Query(expected);
 		stream.release = nullptr;
@@ -317,7 +318,7 @@ unique_ptr<QueryResult> QueryArrowTable(Connection &con, const std::vector<Arrow
 	ArrowArrayStream stream {};
 	AdbcError err {};
 	REQUIRE(duckdb_adbc::BatchToArrayStream(&record_array, &record_schema, &stream, &err) == ADBC_STATUS_OK);
-	con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(stream))->CreateView("t", true, true);
+	ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(stream), "t", true, true);
 	return con.Query(query);
 }
 

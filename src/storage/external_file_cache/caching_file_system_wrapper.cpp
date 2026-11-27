@@ -2,25 +2,11 @@
 
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-
-namespace {
-// Get database instance from file opener, throw InvalidInput exception.
-DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
-	if (file_opener == nullptr) {
-		throw InvalidInputException("Cannot get database instance out of file opener, because file opener is nullptr.");
-	}
-	auto database_ptr = file_opener->TryGetDatabase();
-	if (database_ptr == nullptr) {
-		throw InvalidInputException("Cannot extract database instance out of file opener.");
-	}
-	return *database_ptr;
-}
-} // namespace
 
 //===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
@@ -36,6 +22,10 @@ CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemW
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
 }
 
+bool CachingFileHandleWrapper::CanSeek() {
+	return caching_handle->GetFileHandle()->CanSeek();
+}
+
 void CachingFileHandleWrapper::Close() {
 	if (caching_handle) {
 		caching_handle.reset();
@@ -46,13 +36,7 @@ void CachingFileHandleWrapper::Close() {
 // CachingFileSystemWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db, CachingMode mode)
-    : caching_file_system(file_system, db), underlying_file_system(file_system), caching_mode(mode) {
-}
-
-CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
-                                                   CachingMode mode)
-    : caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system),
-      caching_mode(mode) {
+    : underlying_file_system(file_system), caching_file_system(file_system, db), caching_mode(mode) {
 }
 
 bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
@@ -139,10 +123,13 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 
 	if (ShouldUseCache(path.path)) {
 		auto caching_handle = caching_file_system.OpenFile(path, flags, opener);
+		if (!caching_handle) {
+			return nullptr;
+		}
 		return make_uniq<CachingFileHandleWrapper>(shared_from_this(), std::move(caching_handle), flags);
 	}
 	// Bypass cache, use underlying file system directly.
-	return underlying_file_system.OpenFile(path, flags, opener);
+	return underlying_file_system.OpenFile(path, flags);
 }
 
 bool CachingFileSystemWrapper::SupportsOpenFileExtended() const {
@@ -223,14 +210,14 @@ FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 
 optional<FileMetadata> CachingFileSystemWrapper::GetStatsIfExists(const OpenFileInfo &file,
                                                                   optional_ptr<FileOpener> opener) {
-	return underlying_file_system.GetStatsIfExists(file, opener);
+	return underlying_file_system.GetStatsIfExists(file);
 }
 
 //===----------------------------------------------------------------------===//
 // Directory Operations
 //===----------------------------------------------------------------------===//
 bool CachingFileSystemWrapper::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	return underlying_file_system.DirectoryExists(directory, opener);
+	return underlying_file_system.DirectoryExists(directory);
 }
 
 void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
@@ -239,7 +226,7 @@ void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional
 
 bool CachingFileSystemWrapper::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
                                                        optional_ptr<FileOpener> opener) {
-	return underlying_file_system.CreateDirectoryExtended(directory, options, opener);
+	return underlying_file_system.CreateDirectoryExtended(directory, options);
 }
 
 void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
@@ -252,20 +239,20 @@ void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional
 
 bool CachingFileSystemWrapper::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
                                                        optional_ptr<FileOpener> opener) {
-	return underlying_file_system.RemoveDirectoryExtended(directory, options, opener);
+	return underlying_file_system.RemoveDirectoryExtended(directory, options);
 }
 
 bool CachingFileSystemWrapper::ListFiles(const string &directory,
                                          const std::function<void(const string &, bool)> &callback,
                                          FileOpener *opener) {
-	return underlying_file_system.ListFiles(directory, callback, opener);
+	return underlying_file_system.ListFiles(directory, callback);
 }
 
 bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
                                                  const std::function<void(OpenFileInfo &info)> &callback,
                                                  optional_ptr<FileOpener> opener) {
 	// Use the public ListFiles API which will internally call `ListFilesExtended` if supported.
-	return underlying_file_system.ListFiles(directory, callback, opener);
+	return underlying_file_system.ListFiles(directory, callback);
 }
 
 bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
@@ -274,23 +261,23 @@ bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
 }
 
 void CachingFileSystemWrapper::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	underlying_file_system.MoveFile(source, target, opener);
+	underlying_file_system.MoveFile(source, target);
 }
 
 bool CachingFileSystemWrapper::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return underlying_file_system.FileExists(filename, opener);
+	return underlying_file_system.FileExists(filename);
 }
 
 bool CachingFileSystemWrapper::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	return underlying_file_system.IsPipe(filename, opener);
+	return underlying_file_system.IsPipe(filename);
 }
 
 void CachingFileSystemWrapper::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	underlying_file_system.RemoveFile(filename, opener);
+	underlying_file_system.RemoveFile(filename);
 }
 
 bool CachingFileSystemWrapper::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	return underlying_file_system.TryRemoveFile(filename, opener);
+	return underlying_file_system.TryRemoveFile(filename);
 }
 
 //===----------------------------------------------------------------------===//
@@ -309,34 +296,14 @@ string CachingFileSystemWrapper::PathSeparator(const string &path) {
 }
 
 vector<OpenFileInfo> CachingFileSystemWrapper::Glob(const string &path, FileOpener *opener) {
-	return underlying_file_system.Glob(path, opener);
+	return underlying_file_system.Glob(path);
 }
 
 //===----------------------------------------------------------------------===//
 // SubSystem Operations
 //===----------------------------------------------------------------------===//
-void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
-	underlying_file_system.RegisterSubSystem(std::move(sub_fs));
-}
-
-void CachingFileSystemWrapper::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
-	underlying_file_system.RegisterCompressionFilesystem(std::move(fs));
-}
-
-void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
-	underlying_file_system.UnregisterSubSystem(name);
-}
-
-unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {
-	return underlying_file_system.ExtractSubSystem(name);
-}
-
-vector<string> CachingFileSystemWrapper::ListSubSystems() {
-	return underlying_file_system.ListSubSystems();
-}
-
 bool CachingFileSystemWrapper::CanHandleFile(const string &fpath) {
-	return underlying_file_system.CanHandleFile(fpath);
+	return BaseFileSystem::CanHandleFile(fpath);
 }
 
 //===----------------------------------------------------------------------===//
@@ -345,7 +312,7 @@ bool CachingFileSystemWrapper::CanHandleFile(const string &fpath) {
 void CachingFileSystemWrapper::Seek(FileHandle &handle, idx_t location) {
 	auto *caching_handle = GetCachingHandleIfPossible(handle);
 	if (!caching_handle) {
-		return underlying_file_system.Seek(handle, location);
+		return handle.file_system.Seek(handle, location);
 	}
 
 	caching_handle->Seek(location);
@@ -358,24 +325,20 @@ void CachingFileSystemWrapper::Reset(FileHandle &handle) {
 idx_t CachingFileSystemWrapper::SeekPosition(FileHandle &handle) {
 	auto *caching_handle = GetCachingHandleIfPossible(handle);
 	if (!caching_handle) {
-		return underlying_file_system.SeekPosition(handle);
+		return handle.file_system.SeekPosition(handle);
 	}
 
 	return caching_handle->SeekPosition();
 }
 
 bool CachingFileSystemWrapper::IsManuallySet() {
-	return underlying_file_system.IsManuallySet();
-}
-
-bool CachingFileSystemWrapper::CanSeek() {
-	return underlying_file_system.CanSeek();
+	return BaseFileSystem::IsManuallySet();
 }
 
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 	auto *caching_handle = GetCachingHandleIfPossible(handle);
 	if (!caching_handle) {
-		return underlying_file_system.OnDiskFile(handle);
+		return handle.file_system.OnDiskFile(handle);
 	}
 
 	return caching_handle->OnDiskFile();
@@ -386,23 +349,8 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 //===----------------------------------------------------------------------===//
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
-	return underlying_file_system.OpenCompressedFile(context, std::move(handle), write);
-}
-
-void CachingFileSystemWrapper::SetDisabledFileSystems(const vector<string> &names) {
-	underlying_file_system.SetDisabledFileSystems(names);
-}
-
-vector<string> CachingFileSystemWrapper::GetDisabledFileSystems() {
-	return underlying_file_system.GetDisabledFileSystems();
-}
-
-bool CachingFileSystemWrapper::SubSystemIsDisabled(const string &name) {
-	return underlying_file_system.SubSystemIsDisabled(name);
-}
-
-bool CachingFileSystemWrapper::IsDisabledForPath(const string &path) {
-	return underlying_file_system.IsDisabledForPath(path);
+	auto &file_system = handle->file_system;
+	return file_system.OpenCompressedFile(context, std::move(handle), write);
 }
 
 } // namespace duckdb

@@ -57,6 +57,29 @@ GrammarChange GrammarChange::AddTerminalRuleOverride(const string &rule_name,
 	              std::move(matcher_factory));
 }
 
+string GrammarChange::TypeName() const {
+	switch (type) {
+	case GrammarChangeType::ADD_RULE:
+		return "ADD_RULE";
+	case GrammarChangeType::ADD_CHOICE:
+		return "ADD_CHOICE";
+	case GrammarChangeType::PREPEND_CHOICE:
+		return "PREPEND_CHOICE";
+	case GrammarChangeType::REMOVE_CHOICE:
+		return "REMOVE_CHOICE";
+	case GrammarChangeType::REPLACE_CHOICE:
+		return "REPLACE_CHOICE";
+	case GrammarChangeType::REPLACE_RULE:
+		return "REPLACE_RULE";
+	case GrammarChangeType::SET_TRANSFORM:
+		return "SET_TRANSFORM";
+	case GrammarChangeType::ADD_TERMINAL_RULE_OVERRIDE:
+		return "ADD_TERMINAL_RULE_OVERRIDE";
+	default:
+		throw InternalException("Unsupported grammar change type");
+	}
+}
+
 void GrammarChange::Apply(ParsedGrammar &grammar) const {
 	switch (type) {
 	case GrammarChangeType::ADD_RULE:

@@ -5,6 +5,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -122,6 +124,22 @@ static void ListResizeResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	bound_function.SetReturnType(list_type);
 }
 
+//! The resized lists have the requested size, which is zero if it is NULL
+static unique_ptr<BaseStatistics> ListResizeStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &return_type = input.expr.GetReturnType();
+	auto &size_stats = input.child_stats[1];
+	if (return_type.id() != LogicalTypeId::LIST || size_stats.GetType().id() != LogicalTypeId::UBIGINT ||
+	    size_stats.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(size_stats)) {
+		return nullptr;
+	}
+	auto min_size = NumericStats::GetMin<uint64_t>(size_stats);
+	auto max_size = NumericStats::GetMax<uint64_t>(size_stats);
+	auto result = ListStats::CreateUnknown(return_type);
+	result.CopyValidity(input.child_stats[0]);
+	ListStats::SetLengthBounds(result, size_stats.CanHaveNull() ? 0 : min_size, max_size);
+	return result.ToUnique();
+}
+
 ScalarFunctionSet ListResizeFun::GetFunctions() {
 	ScalarFunction simple_fun({}, LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction,
 	                          VariableReturnBindData::Bind);
@@ -131,6 +149,7 @@ ScalarFunctionSet ListResizeFun::GetFunctions() {
 	simple_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	simple_fun.SetFallible();
 	simple_fun.SetResolveTypesCallback(ListResizeResolveTypes);
+	simple_fun.SetStatisticsCallback(ListResizeStats);
 	ScalarFunction default_value_fun({}, LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction,
 	                                 VariableReturnBindData::Bind);
 	default_value_fun.GetSignature()
@@ -140,6 +159,7 @@ ScalarFunctionSet ListResizeFun::GetFunctions() {
 	default_value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	default_value_fun.SetFallible();
 	default_value_fun.SetResolveTypesCallback(ListResizeResolveTypes);
+	default_value_fun.SetStatisticsCallback(ListResizeStats);
 	ScalarFunctionSet list_resize_set("list_resize");
 	list_resize_set.AddFunction(simple_fun);
 	list_resize_set.AddFunction(default_value_fun);

@@ -83,11 +83,18 @@ public:
 	//! Equal sizes return the source unchanged.
 	DUCKDB_API data_ptr_t Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size);
 
-	DUCKDB_API data_ptr_t AllocateAligned(idx_t size);
+	data_ptr_t AllocateAligned(idx_t size) {
+		AlignNext();
+		return Allocate(AlignValue<idx_t>(size));
+	}
 	DUCKDB_API data_ptr_t ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size);
 
 	//! Increment the internal cursor (if required) so the next allocation is guaranteed to be aligned to 8 bytes
-	DUCKDB_API void AlignNext();
+	void AlignNext() {
+		if (head && !ValueIsAligned<idx_t>(head->current_position)) {
+			head->current_position = AlignValue<idx_t>(head->current_position);
+		}
+	}
 
 	//! This shrinks the LAST allocation that was made using the allocator
 	//! Note that we can ONLY safely call this method if Allocate has been called previously with a size >= shrink_size
@@ -102,9 +109,24 @@ public:
 		idx_t current_position = 0;
 	};
 	//! Returns the current position of the arena
-	DUCKDB_API Position GetPosition() const;
+	Position GetPosition() const {
+		Position result;
+		if (head) {
+			result.chunk = head.get();
+			result.current_position = head->current_position;
+		}
+		return result;
+	}
 	//! Releases everything that was allocated after the position was taken - those allocations may no longer be used
-	DUCKDB_API void Rewind(const Position &position);
+	void Rewind(const Position &position) {
+		if (position.chunk && head.get() == position.chunk) {
+			// the common case: nothing but the current chunk was used since the position was taken
+			D_ASSERT(position.current_position <= head->current_position);
+			head->ResetPosition(position.current_position);
+			return;
+		}
+		RewindSlow(position);
+	}
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
@@ -133,18 +155,18 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	T *Make(ARGS &&... args) {
+	T *Make(ARGS &&...args) {
 		auto mem = AllocateAligned(sizeof(T));
 		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
 	template <class T, class... ARGS>
-	arena_ptr<T> MakePtr(ARGS &&... args) {
+	arena_ptr<T> MakePtr(ARGS &&...args) {
 		return arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
 	}
 
 	template <class T, class... ARGS>
-	unsafe_arena_ptr<T> MakeUnsafePtr(ARGS &&... args) {
+	unsafe_arena_ptr<T> MakeUnsafePtr(ARGS &&...args) {
 		return unsafe_arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
 	}
 
@@ -168,7 +190,9 @@ public:
 	}
 
 private:
-	void AllocateNewBlock(idx_t min_size);
+	DUCKDB_API void AllocateNewBlock(idx_t min_size);
+	//! Rewind to a position in an older chunk, or to the position of an arena that was empty
+	DUCKDB_API void RewindSlow(const Position &position);
 
 private:
 	//! Internal allocator that is used by the arena allocator

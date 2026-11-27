@@ -67,7 +67,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
-LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
+LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, cow_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<Identifier> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
@@ -309,18 +309,24 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 }
 
 idx_t LogicalGet::EstimateSourceCardinality(ClientContext &context) {
+	return EstimateSourceStatistics(context).estimated_cardinality;
+}
+
+NodeStatistics LogicalGet::EstimateSourceStatistics(ClientContext &context) {
+	NodeStatistics result;
 	// planning a LogicalGet consumes its bind data - the callbacks that require it must not be called,
 	// while callbacks that accept a null bind data (e.g. the range functions) return no estimate anyway
 	if (function.cardinality && bind_data) {
 		auto node_stats = function.cardinality(context, bind_data.get());
-		if (node_stats && node_stats->has_estimated_cardinality) {
-			return node_stats->estimated_cardinality;
+		if (node_stats) {
+			result = *node_stats;
 		}
 	}
-	if (!children.empty()) {
-		return children[0]->EstimateCardinality(context);
+	if (!result.has_estimated_cardinality) {
+		result.has_estimated_cardinality = true;
+		result.estimated_cardinality = children.empty() ? 1 : children[0]->EstimateCardinality(context);
 	}
-	return 1;
+	return result;
 }
 
 void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
@@ -328,7 +334,7 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 		throw InternalException("LogicalGet::SetScanOrder called but function does not have scan order defined");
 	}
 	row_group_order_options = make_uniq<RowGroupOrderOptions>(*options);
-	function.set_scan_order(std::move(options), bind_data.get());
+	function.set_scan_order(std::move(options), bind_data);
 }
 
 void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
@@ -336,7 +342,7 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 		throw InternalException("LogicalGet::SetPartitionsToScan called but function is not defined");
 	}
 	scan_partition_indices = partition_indices;
-	function.set_partitions_to_scan(std::move(partition_indices), bind_data.get());
+	function.set_partitions_to_scan(std::move(partition_indices), bind_data);
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -50,12 +51,16 @@ private:
 };
 
 struct CachingFileHandle {
+	friend class CachingFileSystem;
+
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
 
+private:
+	CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
+	                  FileOpenFlags flags, optional_ptr<FileOpener> opener);
+
 public:
-	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -78,6 +83,7 @@ public:
 	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
+	DUCKDB_API optional_ptr<FileOpener> GetOpener() const;
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API timestamp_t GetLastModifiedTime();
 	DUCKDB_API string GetVersionTag();
@@ -99,6 +105,10 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Open the file unless cached blocks allow deferring it; returns false if the file system returned no handle
+	bool Initialize();
+	//! Open the underlying FileHandle if not yet open; returns nullptr if the file system returned no handle
+	shared_ptr<FileHandle> TryGetFileHandle();
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
@@ -115,7 +125,7 @@ private:
 private:
 	QueryContext context;
 
-	//! The client file system, held directly because the caching file system can be destroyed before this handle
+	//! The file system, held directly because the caching file system can be destroyed before this handle
 	FileSystem &file_system;
 	//! The DatabaseInstance
 	DatabaseInstance &db;

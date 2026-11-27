@@ -745,9 +745,8 @@ static bool DEEstimateCollapse(RelationStatsExtractor &extractor, LogicalCompari
 			return false;
 		}
 		const auto cardinality = stats->cardinality;
-		const auto join_retains_rows =
-		    static_cast<double>(join.estimated_cardinality) >=
-		    PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * static_cast<double>(cardinality);
+		const auto join_retains_rows = static_cast<double>(join.estimated_cardinality) >=
+		                               PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * cardinality.GetDouble();
 		if (!join_retains_rows || cardinality == 0) {
 			return false;
 		}
@@ -759,16 +758,17 @@ static bool DEEstimateCollapse(RelationStatsExtractor &extractor, LogicalCompari
 			}
 			groups.push_back(column.GetIndex());
 		}
-		lower_cardinalities[side] = RelationStatisticsHelper::EstimateGroupCardinality(*join.children[side], *stats,
-		                                                                               std::move(groups), extractor);
+		const auto lower_cardinality = RelationStatisticsHelper::EstimateGroupCardinality(*join.children[side], *stats,
+		                                                                                  std::move(groups), extractor);
+		lower_cardinalities[side] = lower_cardinality.GetIndex();
 		const auto min_collapse = DERequiredCollapse(lower_cardinalities[side]);
 		const auto input_collapses = cardinality / min_collapse >= lower_cardinalities[side];
 		both_inputs_collapse &= input_collapses;
 		if (input_collapses) {
 			work_margin = MinValue(work_margin, min_collapse);
 		}
-		input_cardinality += static_cast<double>(cardinality);
-		retained_fraction *= static_cast<double>(lower_cardinalities[side]) / static_cast<double>(cardinality);
+		input_cardinality += cardinality.GetDouble();
+		retained_fraction *= (lower_cardinality / cardinality).GetDouble();
 	}
 	// Scale the join estimate by grouping reduction without interpreting its selectivity as an NDV.
 	const auto cross_product =
@@ -1150,12 +1150,12 @@ bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOper
 	const auto aggregate_cardinality = aggregate_stats->cardinality;
 	const auto key_count = MinValue(key_stats->total_domain.distinct_count, aggregate_cardinality);
 	if (aggregate_cardinality == 0 || key_count == 0 ||
-	    static_cast<double>(aggregate_cardinality) <
+	    aggregate_cardinality.GetDouble() <
 	        static_cast<double>(PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO) *
-	            static_cast<double>(key_count) ||
+	            key_count.GetDouble() ||
 	    !join.children[info.dimension_side]->has_estimated_cardinality || !join.has_estimated_cardinality ||
 	    static_cast<double>(join.estimated_cardinality) <
-	        PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * static_cast<double>(aggregate_cardinality)) {
+	        PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * aggregate_cardinality.GetDouble()) {
 		return false;
 	}
 
@@ -1167,7 +1167,7 @@ bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOper
 	lower->groups.push_back((*aggregate_key_expr)->Copy());
 	lower->children.push_back(std::move(join.children[info.aggregate_side]));
 	lower->ResolveOperatorTypes();
-	lower->SetEstimatedCardinality(key_count);
+	lower->SetEstimatedCardinality(key_count.GetIndex());
 
 	auto aggregate_key_type = (*aggregate_key_expr)->GetReturnType();
 	*aggregate_key_expr =

@@ -50,7 +50,7 @@ public:
 	}
 
 	template <class... ARGS>
-	void emplace_back(ARGS &&... args) {
+	void emplace_back(ARGS &&...args) {
 		auto node = arena.Make<Node>(std::forward<ARGS>(args)...);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;

@@ -227,10 +227,10 @@ bool CanRestart(Connection &conn) {
 			return false;
 		}
 		auto &temp_schema = schemas[0].get();
-		vector<CatalogType> catalog_types {CatalogType::TABLE_ENTRY,     CatalogType::VIEW_ENTRY,
-		                                   CatalogType::INDEX_ENTRY,     CatalogType::SEQUENCE_ENTRY,
-		                                   CatalogType::COLLATION_ENTRY, CatalogType::TYPE_ENTRY,
-		                                   CatalogType::MACRO_ENTRY,     CatalogType::TABLE_MACRO_ENTRY};
+		vector<CatalogType> catalog_types {CatalogType::TABLE_ENTRY,      CatalogType::VIEW_ENTRY,
+		                                   CatalogType::INDEX_ENTRY,      CatalogType::SEQUENCE_ENTRY,
+		                                   CatalogType::TYPE_ENTRY,       CatalogType::MACRO_ENTRY,
+		                                   CatalogType::TABLE_MACRO_ENTRY};
 		bool found_temp_object = false;
 		for (auto &catalog_type : catalog_types) {
 			temp_schema.Scan(catalog_type, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
@@ -1053,14 +1053,14 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 	// input
 	FileOpenFlags in_flags(FileFlags::FILE_FLAGS_READ);
 	in_flags.SetCompression(FileCompressionType::GZIP);
-	auto compressed_file_handle = vfs.OpenFile(input_path, in_flags);
+	auto compressed_file_handle = vfs.OpenFile(OpenFileInfo(input_path), in_flags, nullptr);
 	if (compressed_file_handle == nullptr) {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
-	auto output_file = vfs.OpenFile(extraction_path, out_flags);
+	auto output_file = vfs.OpenFile(OpenFileInfo(extraction_path), out_flags, nullptr);
 	if (!output_file) {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}
@@ -1068,12 +1068,12 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 	// read the compressed data from the file
 	while (true) {
 		duckdb::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
-		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+		int64_t bytes_read = compressed_file_handle->Read(compressed_buffer.get(), BUFFER_SIZE);
 		if (bytes_read == 0) {
 			break;
 		}
 
-		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
+		output_file->Write(compressed_buffer.get(), bytes_read);
 	}
 }
 

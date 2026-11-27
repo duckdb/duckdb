@@ -24,8 +24,8 @@ namespace {
 
 //! Throw if reading 'size' bytes starting at 'ptr' would read past the end of the value buffer
 void CheckBinaryRead(const_data_ptr_t ptr, idx_t size, const_data_ptr_t end) {
-	if (ptr + size > end) {
-		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity", size);
+	if (ptr > end || size > NumericCast<idx_t>(end - ptr)) {
+		throw DataCorruptionException("Corrupted VARIANT 'value' buffer, read of %llu bytes is out of bounds", size);
 	}
 }
 
@@ -62,6 +62,8 @@ struct BinaryObjectReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The field ids and offsets of 'count' fields must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, (count * field_id_size) + (NumericCast<idx_t>(count + 1) * field_offset_size), end);
 		field_ids = data;
 		field_offsets = data + (count * field_id_size);
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
@@ -108,6 +110,8 @@ struct BinaryArrayReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The offsets of 'count' elements must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, NumericCast<idx_t>(count + 1) * field_offset_size, end);
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
@@ -471,7 +475,24 @@ ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
 //===--------------------------------------------------------------------===//
 // ParquetVariantNode
 //===--------------------------------------------------------------------===//
-VariantLogicalType ParquetVariantNode::GetTypeId() const {
+LogicalTypeId ParquetVariantNode::GetTypeId() const {
+	return VariantTypeToLogicalTypeId(GetVariantType());
+}
+
+LogicalType ParquetVariantNode::GetType() const {
+	auto type_id = GetTypeId();
+	if (type_id == LogicalTypeId::DECIMAL) {
+		auto properties = GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	return VariantDefaultType(type_id);
+}
+
+bool ParquetVariantNode::GetBool() const {
+	return GetVariantType() == VariantLogicalType::BOOL_TRUE;
+}
+
+VariantLogicalType ParquetVariantNode::GetVariantType() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
@@ -629,8 +650,13 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 // ParquetObjectIterator
 //===--------------------------------------------------------------------===//
 void ParquetObjectIterator::Finalize() {
-	std::sort(ordered_entries.begin(), ordered_entries.end(),
-	          [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) { return a.key < b.key; });
+	// the fields of a Parquet variant object are stored sorted by key, so this is usually a no-op
+	auto key_less = [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) {
+		return a.key < b.key;
+	};
+	if (!std::is_sorted(ordered_entries.begin(), ordered_entries.end(), key_less)) {
+		std::sort(ordered_entries.begin(), ordered_entries.end(), key_less);
+	}
 	// the keys of a Variant object have to be unique
 	for (idx_t i = 1; i < ordered_entries.size(); i++) {
 		if (ordered_entries[i].key == ordered_entries[i - 1].key) {

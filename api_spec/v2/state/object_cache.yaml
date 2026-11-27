@@ -1,0 +1,333 @@
+module: object cache
+#
+# The object cache is a per-instance map of objects, shared by all connections. Entries are either pinned for as long
+# as the instance lives, or evictable: they are accounted against the memory limit and dropped, least recently used
+# first, when it is needed. It is the counterpart of DuckDB's `ObjectCache`.
+
+handles:
+  object_cache:
+    description: |
+      A borrowed opaque handle to the object cache of an instance. Obtained from `[[instance_get_object_cache]]` or
+      `[[context_get_object_cache]]`, valid for as long as the instance is, and never destroyed by the caller.
+
+  object_cache_entry:
+    description: |
+      An owned opaque handle to an entry of an object cache. Obtained from `[[object_cache_get]]` or
+      `[[object_cache_get_or_create]]`, and destroyed with `[[object_cache_entry_destroy]]`. Holding the handle keeps
+      the entry's data alive, but not in the cache: the cache may still evict, replace or delete the entry meanwhile,
+      and the data is only destroyed once the last handle is. Only entries in the cache count against the memory
+      limit: data that is held through a handle after its entry was evicted, replaced or deleted no longer does.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+
+callbacks:
+  object_cache_create_callback:
+    description: |
+      Creates the data of a cache entry that does not exist yet.
+
+      Runs outside the cache lock, while other calls creating the same entry on the same instance wait for it: it
+      must not use the object cache itself. Calls for other keys, or on other instances, do not wait. A failure
+      reported through `err` leaves the entry uncreated and fails the call, as does a `size_bytes` above the cache
+      capacity; the waiting calls then retry, running their own create callback.
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: The pointer handed to `[[object_cache_get_or_create]]`, passed through untouched.
+      data:
+        type: opaque
+        indirection: 1
+        kind: OUT
+        description: |
+          Receives the data, a pointer bundled with an optional destructor. Owned by the cache from here on. The
+          destructor may run on any thread, possibly while the cache is locked, so it must not use the object cache.
+      size_bytes:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: |
+          Receives the approximate memory the data takes up, which the cache accounts against the memory limit. 0
+          means the entry is pinned instead: never evicted, it lives until deleted or until the instance is destroyed.
+          Left at 0 if the callback does not touch it.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through.
+    return_type: void
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+
+functions:
+  instance_get_object_cache:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Borrows the object cache of an instance.
+
+      The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+    role: getter
+    belongs_to: instance
+    parameters:
+      instance:
+        type: instance
+        description: The instance to take the object cache from.
+      cache:
+        type: object_cache
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed object cache.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_get_object_cache:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Borrows the object cache of the instance a context belongs to.
+
+      The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+    parameters:
+      context:
+        type: context
+        description: The context to take the object cache from.
+      cache:
+        type: object_cache
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed object cache.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_put:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Puts an entry into the cache, replacing the entry of the same type and key, if any.
+
+      Entries are looked up by type and key together, so a key only has to be unique within its type. Name types
+      after the extension, e.g. `my_extension.footer`, as the cache is shared by everything on the instance.
+
+      The opaque handle bundles the data with an optional destructor, invoked once the entry is gone from the cache
+      and nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run
+      on any thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0
+      pins the entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it
+      evictable: the cache counts it against the memory limit while it is in the cache, and may drop it, least recently
+      used first, when memory is needed, also while it is held. Sizes above the cache capacity are rejected.
+    role: method
+    belongs_to: object_cache
+    parameters:
+      cache:
+        type: object_cache
+        description: The cache to put the entry into.
+      type:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The type of the entry. Borrowed and copied.
+      type_length:
+        type: idx
+        description: The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this is 0.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the entry. Borrowed and copied.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      data:
+        type: opaque
+        indirection: 1
+        description: |
+          Opaque handle bundling the data pointer plus an optional destructor. Owned by the cache from here on, even if
+          the call fails.
+      size_bytes:
+        type: idx
+        description: The approximate memory the data takes up, or 0 to pin the entry.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_get:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Looks an entry up, marking it as recently used.
+
+      `entry` receives null if the cache has no entry of the type under the key, because there never was one or it was
+      evicted. Otherwise the caller owns it, and must destroy it via `[[object_cache_entry_destroy]]`.
+    role: method
+    belongs_to: object_cache
+    parameters:
+      cache:
+        type: object_cache
+        description: The cache to look the entry up in.
+      type:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The type of the entry. Borrowed for the duration of the call.
+      type_length:
+        type: idx
+        description: The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this is 0.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the entry. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      entry:
+        type: object_cache_entry
+        indirection: 1
+        kind: OUT
+        description: Receives the entry, or null if there is none. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_get_or_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Looks an entry up, creating it first with the create callback if there is none.
+
+      Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others
+      wait for it and receive its result. If that creation fails, the call that ran it fails, and each waiting call
+      tries again with its own create callback. Calls for other keys never wait for a creation. The entry is returned as `[[object_cache_get]]` does, owned by the caller. Fails if the
+      key holds an entry that was not created through this API.
+    role: method
+    belongs_to: object_cache
+    parameters:
+      cache:
+        type: object_cache
+        description: The cache to look the entry up in.
+      type:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The type of the entry. Borrowed for the duration of the call.
+      type_length:
+        type: idx
+        description: The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this is 0.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the entry. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      create:
+        type: object_cache_create_callback
+        description: Creates the data of the entry if there is none yet.
+      create_user_data:
+        type: void
+        indirection: 1
+        description: Handed to the create callback. Borrowed for the duration of the call.
+      entry:
+        type: object_cache_entry
+        indirection: 1
+        kind: OUT
+        description: Receives the entry. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_delete:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Deletes an entry from the cache. Deleting an entry that is not there is not an error.
+
+      Holders of the entry keep its data until they destroy their handle, but from here on it no longer counts against
+      the memory limit.
+    role: method
+    belongs_to: object_cache
+    parameters:
+      cache:
+        type: object_cache
+        description: The cache to delete the entry from.
+      type:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The type of the entry. Borrowed for the duration of the call.
+      type_length:
+        type: idx
+        description: The length of `type` in bytes. `type` need not be null-terminated and may be NULL only when this is 0.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the entry. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_entry_get_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves the data pointer of an entry, valid for as long as the entry handle is.
+    role: getter
+    belongs_to: object_cache_entry
+    parameters:
+      entry:
+        type: object_cache_entry
+        description: The entry to take the data of.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the data pointer.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  object_cache_entry_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Destroys the entry handle, releasing its hold on the data. Always succeeds. On success the handle is set to
+      null. Safe to call on an already-null slot.
+    role: destructor
+    belongs_to: object_cache_entry
+    parameters:
+      entry:
+        type: object_cache_entry
+        indirection: 1
+        description: The entry handle to destroy.
+    return_type: ERROR
