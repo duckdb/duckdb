@@ -87,6 +87,13 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<Rel
 
 //! Create or get a JoinRelationSet from a single node with the given index
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
+	auto entries = relation_sets.equal_range(CombineHash(0, Hash(index.index)));
+	for (auto entry = entries.first; entry != entries.second; ++entry) {
+		auto &set = *entry->second;
+		if (set.count == 1 && set.relations[0] == index) {
+			return set;
+		}
+	}
 	// create a sorted vector of the relations
 	auto relations = make_unsafe_uniq_array<RelationIndex>(1);
 	relations[0] = index;
