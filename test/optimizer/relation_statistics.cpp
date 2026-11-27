@@ -1032,6 +1032,38 @@ TEST_CASE("Set operations publish computed population kinds", "[optimizer][relat
 	}
 }
 
+TEST_CASE("UNION retains only value aliases shared by every child", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto child = [](TableIndex index) {
+		vector<unique_ptr<Expression>> expressions;
+		for (idx_t i = 0; i < 3; i++) {
+			expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(0)));
+		}
+		return make_uniq<LogicalProjection>(index, std::move(expressions));
+	};
+	LogicalSetOperation op(TableIndex(30), 3, child(TableIndex(10)), child(TableIndex(20)),
+	                       LogicalOperatorType::LOGICAL_UNION, true);
+	auto left = CreateStats(op.children[0]->GetColumnBindings(), {100, 100, 100}, 100);
+	auto right = CreateStats(op.children[1]->GetColumnBindings(), {100, 100, 100}, 100);
+	left.value_equivalent_columns = {{0, 1}, {1, 2}};
+	right.value_equivalent_columns = {{0, 2}};
+	auto stats = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+	REQUIRE(stats);
+	REQUIRE(stats->GetValueAliases() == vector<idx_t> {0, 1, 0});
+	REQUIRE(stats->equivalent_columns == vector<vector<idx_t>> {{0, 2}});
+	REQUIRE(stats->cardinality == 200);
+	REQUIRE(stats->columns[0].current_domain.distinct_count == 200);
+	REQUIRE(stats->unique_keys.empty());
+
+	// Equal marginal counts do not establish equality between two output values.
+	right.value_equivalent_columns.clear();
+	stats = RelationStatisticsHelper::ExtractOperatorStats(op, *connection.context, {left, right});
+	REQUIRE(stats);
+	REQUIRE(stats->value_equivalent_columns.empty());
+	REQUIRE(stats->equivalent_columns.empty());
+}
+
 TEST_CASE("UNION population evidence includes currently empty unknown contributions",
           "[optimizer][relation_statistics]") {
 	DuckDB db(nullptr);

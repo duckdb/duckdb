@@ -357,6 +357,29 @@ static optional<RelationStats> ExtractCrossProductStats(LogicalOperator &op,
 	return ProjectChildStats(op, child_stats, cardinality, maximum);
 }
 
+static void CopyUnionValueAliases(RelationStats &result, const vector<reference<const RelationStats>> &children) {
+	vector<vector<idx_t>> aliases;
+	aliases.reserve(children.size());
+	for (auto &child : children) {
+		aliases.push_back(child.get().GetValueAliases());
+	}
+	map<vector<idx_t>, vector<idx_t>> groups;
+	for (idx_t column = 0; column < result.columns.size(); column++) {
+		vector<idx_t> signature;
+		signature.reserve(children.size());
+		for (auto &child : aliases) {
+			signature.push_back(child[column]);
+		}
+		groups[signature].push_back(column);
+	}
+	for (auto &group : groups) {
+		if (group.second.size() > 1) {
+			result.equivalent_columns.push_back(group.second);
+			result.value_equivalent_columns.push_back(std::move(group.second));
+		}
+	}
+}
+
 static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &setop,
                                                         const vector<reference<const RelationStats>> &child_stats) {
 	if (child_stats.empty()) {
@@ -472,6 +495,9 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 		if (population_bound.IsValid()) {
 			result.columns.back().TightenPopulationBound(population_bound.GetIndex());
 		}
+	}
+	if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
+		CopyUnionValueAliases(result, child_stats);
 	}
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(bindings);
