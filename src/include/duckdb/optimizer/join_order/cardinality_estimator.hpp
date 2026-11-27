@@ -56,6 +56,7 @@ private:
 	CardinalityValue GetInnerSelectivity(JoinRelationSet &set);
 	CardinalityValue GetJoinSelectivity(JoinRelationSet &set, JoinRelationSet &left, JoinRelationSet &right);
 	CardinalityValue GetSelectivity(JoinRelationSet &set);
+	bool CanUseIndependentEqualities();
 	void ProcessSelectivityEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
 	                            SelectivityState &state);
 	void CreateSelectivitySubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,

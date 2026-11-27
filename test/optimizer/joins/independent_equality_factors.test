@@ -1,0 +1,125 @@
+# name: test/optimizer/joins/independent_equality_factors.test
+# description: Count independent equality connections outside composite-key regions
+# group: [joins]
+
+statement ok
+SET explain_output='optimized_only';
+
+# Independent coordinates with identical distinct counts each reduce the join.
+# The row count is outside the statistical composite-key heuristic.
+statement ok
+CREATE TABLE coordinates AS
+SELECT (i % 4)::INTEGER x, ((i // 4) % 4)::INTEGER y, ((i // 16) % 4)::INTEGER z, i v
+FROM range(256) t(i);
+
+statement ok
+ANALYZE coordinates;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4096"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y);
+----
+4096
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y, z);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y, z);
+----
+1024
+
+# Each added relation introduces a new connection for both coordinates.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y) JOIN coordinates c USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"65536"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y) JOIN coordinates c USING (x, y);
+----
+65536
+
+# Redundant and reversed conditions do not add independent connections.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates b JOIN coordinates a ON b.y=a.y AND a.x=b.x
+JOIN coordinates c ON c.x=b.x AND a.y=c.y AND c.x=a.x;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"65536"\s*}\s*}\s*\]\s*$
+
+# Eight distinct tuples with four values per column are an eligible composite key.
+statement ok
+CREATE TABLE tuples AS
+SELECT (i % 4)::INTEGER x, ((i // 4 + i % 4) % 4)::INTEGER y, i v FROM range(8) t(i);
+
+statement ok
+ANALYZE tuples;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN tuples b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM tuples a JOIN tuples b USING (x, y);
+----
+8
+
+# Composite regions keep their existing estimate for every subset.
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN tuples b USING (x, y) JOIN tuples c USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM tuples a JOIN tuples b USING (x, y) JOIN tuples c USING (x, y);
+----
+8
+
+# A dimension attached to one coordinate does not split the composite tuple.
+statement ok
+CREATE TABLE dimension AS SELECT i::INTEGER x FROM range(4) t(i);
+
+statement ok
+ANALYZE dimension;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN dimension d USING (x) JOIN tuples b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM tuples a JOIN dimension d USING (x) JOIN tuples b USING (x, y);
+----
+8
+
+# Mixed comparisons retain the existing fallback.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND a.v<b.v;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"5461"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND a.v<b.v;
+----
+1920
+
+# Range cardinalities provide no observed distinct counts.
+query II
+EXPLAIN (FORMAT JSON) SELECT a.i FROM range(16) a(i) JOIN range(16) b(i) ON a.i=b.i;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"80"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM range(16) a(i) JOIN range(16) b(i) ON a.i=b.i;
+----
+16
