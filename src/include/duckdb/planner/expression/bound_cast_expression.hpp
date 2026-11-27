@@ -40,6 +40,9 @@ struct BoundCastExpression {
 	static unique_ptr<BaseStatistics> PropagateStatistics(BoundFunctionExpression &cast_expr,
 	                                                      const BaseStatistics &child_stats,
 	                                                      optional_ptr<ClientContext> context = nullptr);
+	//! Run the bound cast of the expression on the first count rows of source, writing the result into result
+	static void ExecuteCast(const BoundFunctionExpression &cast_expr, Vector &source, Vector &result, idx_t count,
+	                        optional_ptr<FunctionLocalState> local_state);
 
 	//! Cast an expression to the specified SQL type if required
 	DUCKDB_API static unique_ptr<Expression> AddCastToType(Context &context, unique_ptr<Expression> expr,
