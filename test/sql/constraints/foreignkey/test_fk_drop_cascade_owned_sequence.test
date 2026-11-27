@@ -27,3 +27,29 @@ query I
 SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('parent', 'child')
 ----
 0
+
+statement ok
+CREATE SEQUENCE seq3
+
+statement ok
+CREATE TABLE parent2 (id INTEGER PRIMARY KEY, n INTEGER DEFAULT nextval('seq3'))
+
+statement ok
+CREATE TABLE child2 (fk INTEGER REFERENCES parent2(id))
+
+statement ok
+ALTER SEQUENCE seq3 OWNED BY child2
+
+# dropping the child directly also drops the parent through the sequence owned by the child
+statement ok
+DROP TABLE child2 CASCADE
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('parent2', 'child2')
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'seq3'
+----
+0
