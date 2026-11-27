@@ -49,6 +49,15 @@ SELECT attname, atttypmod FROM pg_catalog.pg_attribute WHERE attname IN ('c', 'd
 c	2147483647
 d	-1
 
+# a scale >= 1000 cannot be encoded positionally even when p*1000+s fits in INT32 - report -1
+statement ok
+CREATE TABLE unencodable(f DECIMAL(5000, 1500));
+
+query II
+SELECT atttypmod, format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute WHERE attname = 'f';
+----
+-1	numeric
+
 # narrow decimals keep the encoded typmod
 statement ok
 CREATE TABLE narrow(e DECIMAL(10, 2));
