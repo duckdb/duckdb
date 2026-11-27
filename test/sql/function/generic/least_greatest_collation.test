@@ -1,0 +1,96 @@
+# name: test/sql/function/generic/least_greatest_collation.test
+# description: Test LEAST/GREATEST follow the collation of their argument type and return the original argument
+# group: [generic]
+
+# equal under the collation: the first argument is returned unchanged
+query IIII
+SELECT least(INTERVAL 30 DAY, INTERVAL 1 MONTH), least(INTERVAL 1 MONTH, INTERVAL 30 DAY),
+       least('A' COLLATE nocase, 'a'), least('a' COLLATE nocase, 'A')
+----
+30 days	1 month	A	a
+
+statement ok
+SET default_collation = 'nocase';
+
+query II
+SELECT least('B', 'a'), greatest('B', 'a')
+----
+a	B
+
+statement ok
+RESET default_collation;
+
+query II
+SELECT least(10::VARIANT, 9.5::VARIANT), greatest(10::VARIANT, 9.5::VARIANT)
+----
+9.5	10
+
+# nested types use the collation of their children
+query II
+SELECT least({'t': '13:00:00+01'::TIMETZ}, {'t': '12:30:00+00'::TIMETZ}),
+       greatest({'t': '13:00:00+01'::TIMETZ}, {'t': '12:30:00+00'::TIMETZ})
+----
+{'t': '13:00:00+01'}	{'t': '12:30:00+00'}
+
+query II
+SELECT least([INTERVAL 25 HOUR], [INTERVAL 1 DAY]),
+       least(['13:00:00+01'::TIMETZ]::TIMETZ[1], ['12:30:00+00'::TIMETZ]::TIMETZ[1])
+----
+[1 day]	['13:00:00+01']
+
+statement ok
+CREATE TABLE strs AS SELECT * FROM (VALUES
+	('b' COLLATE nocase, 'A', 'C'),
+	(NULL, 'B', 'a'),
+	(NULL, NULL, NULL),
+	('c', NULL, 'B')
+) v(a, b, c);
+
+query II
+SELECT least(a, b, c), greatest(a, b, c) FROM strs
+----
+A	C
+a	B
+NULL	NULL
+B	c
+
+# over several vectors, the result agrees with the comparison operators
+statement ok
+CREATE TABLE vals AS SELECT
+	CASE WHEN i % 7 = 0 THEN NULL ELSE (i % 50) * INTERVAL 1 HOUR END AS i1,
+	CASE WHEN i % 11 = 0 THEN NULL ELSE (i % 3) * INTERVAL 1 DAY END AS i2,
+	CASE WHEN i % 13 = 0 THEN NULL ELSE printf('12:%02d:00%+03d', i % 60, i % 5 - 2)::TIMETZ END AS t1,
+	CASE WHEN i % 17 = 0 THEN NULL ELSE printf('11:%02d:00%+03d', i % 60, i % 3 - 1)::TIMETZ END AS t2,
+	CASE WHEN i % 19 = 0 THEN NULL ELSE chr((65 + i % 26)::INTEGER) END AS s1,
+	CASE WHEN i % 23 = 0 THEN NULL ELSE chr((97 + i % 13)::INTEGER) END AS s2
+FROM range(5000) t(i);
+
+query III
+SELECT
+	count(*) FILTER (WHERE least(i1, i2) IS DISTINCT FROM
+		CASE WHEN i1 IS NULL THEN i2 WHEN i2 IS NULL THEN i1 WHEN i2 < i1 THEN i2 ELSE i1 END
+		OR greatest(i1, i2) IS DISTINCT FROM
+		CASE WHEN i1 IS NULL THEN i2 WHEN i2 IS NULL THEN i1 WHEN i2 > i1 THEN i2 ELSE i1 END),
+	count(*) FILTER (WHERE least(t1, t2) IS DISTINCT FROM
+		CASE WHEN t1 IS NULL THEN t2 WHEN t2 IS NULL THEN t1 WHEN t2 < t1 THEN t2 ELSE t1 END
+		OR greatest(t1, t2) IS DISTINCT FROM
+		CASE WHEN t1 IS NULL THEN t2 WHEN t2 IS NULL THEN t1 WHEN t2 > t1 THEN t2 ELSE t1 END),
+	count(*) FILTER (WHERE least(s1 COLLATE nocase, s2) IS DISTINCT FROM
+		CASE WHEN s1 IS NULL THEN s2 WHEN s2 IS NULL THEN s1 WHEN s2 < s1 COLLATE nocase THEN s2 ELSE s1 END)
+FROM vals
+----
+0	0	0
+
+# filters must not be pruned by statistics derived from the physical order
+statement ok
+CREATE TABLE stats_tbl AS SELECT '13:00:00+01'::TIMETZ AS t1, '12:30:00+00'::TIMETZ AS t2,
+	INTERVAL 1 MONTH AS i1, INTERVAL 31 DAY AS i2;
+
+query IIII
+SELECT
+	(SELECT count(*) FROM stats_tbl WHERE least(t1, t2) = '13:00:00+01'::TIMETZ),
+	(SELECT count(*) FROM stats_tbl WHERE greatest(t1, t2) = '12:30:00+00'::TIMETZ),
+	(SELECT count(*) FROM stats_tbl WHERE least(i1, i2) = INTERVAL 1 MONTH),
+	(SELECT count(*) FROM stats_tbl WHERE greatest(i1, i2) = INTERVAL 31 DAY)
+----
+1	1	1	1
