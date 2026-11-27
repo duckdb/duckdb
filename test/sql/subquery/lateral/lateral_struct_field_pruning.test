@@ -1,0 +1,495 @@
+# name: test/sql/subquery/lateral/lateral_struct_field_pruning.test
+# description: Prune unused STRUCT fields from LATERAL correlation keys
+# group: [lateral]
+
+# 1. Issue #28124: recursive CTE over LATERAL only reading s.m.k
+statement ok
+CREATE TABLE seeds AS
+SELECT struct_pack(
+    k := (i % 100)::BIGINT,
+    p := repeat('x', 64) || i::VARCHAR
+) AS m
+FROM range(1000) t(i);
+
+query II
+SELECT count(*) AS row_count, sum(w.k) AS total
+FROM seeds s,
+LATERAL (
+    WITH RECURSIVE w(k, depth) AS (
+        SELECT s.m.k, 0
+        UNION ALL
+        SELECT k + 1, depth + 1
+        FROM w
+        WHERE depth < 2
+    )
+    SELECT k FROM w
+) w;
+----
+3000	151500
+
+# Verify the physical plan projects m.k at scan time, joins on k = k, uses Perfect Hash Group By,
+# and no longer extracts struct_extract(m, 'k') inside the recursive CTE
+query II
+EXPLAIN SELECT count(*) AS row_count, sum(w.k) AS total
+FROM seeds s,
+LATERAL (
+    WITH RECURSIVE w(k, depth) AS (
+        SELECT s.m.k, 0
+        UNION ALL
+        SELECT k + 1, depth + 1
+        FROM w
+        WHERE depth < 2
+    )
+    SELECT k FROM w
+) w;
+----
+physical_plan	<REGEX>:[\s\S]*Projections: m\.k[\s\S]*Conditions: k = k[\s\S]*Perfect Hash Group By[\s\S]*
+
+query II
+EXPLAIN SELECT count(*) AS row_count, sum(w.k) AS total
+FROM seeds s,
+LATERAL (
+    WITH RECURSIVE w(k, depth) AS (
+        SELECT s.m.k, 0
+        UNION ALL
+        SELECT k + 1, depth + 1
+        FROM w
+        WHERE depth < 2
+    )
+    SELECT k FROM w
+) w;
+----
+physical_plan	<!REGEX>:[\s\S]*struct_extract\(m, 'k'\)[\s\S]*
+
+# 2. NULL structs and NULL struct fields under INNER and LEFT LATERAL joins
+statement ok
+CREATE TABLE null_structs AS
+SELECT * FROM (VALUES
+    (1, NULL::STRUCT(k BIGINT, p VARCHAR)),
+    (2, {'k': NULL::BIGINT, 'p': 'payload_2'}),
+    (3, {'k': 10::BIGINT, 'p': 'payload_3'}),
+    (4, {'k': 10::BIGINT, 'p': 'payload_4'})
+) t(id, m);
+
+query III
+SELECT s.id, w.k, w.depth
+FROM null_structs s,
+LATERAL (
+    WITH RECURSIVE w(k, depth) AS (
+        SELECT s.m.k, 0
+        UNION ALL
+        SELECT k + 1, depth + 1
+        FROM w
+        WHERE depth < 1 AND k IS NOT NULL
+    )
+    SELECT k, depth FROM w
+) w
+ORDER BY s.id, w.depth;
+----
+1	NULL	0
+2	NULL	0
+3	10	0
+3	11	1
+4	10	0
+4	11	1
+
+query III
+SELECT s.id, w.k, w.depth
+FROM null_structs s
+LEFT JOIN LATERAL (
+    WITH RECURSIVE w(k, depth) AS (
+        SELECT s.m.k, 0
+        UNION ALL
+        SELECT k + 1, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT k, depth FROM w WHERE k IS NOT NULL
+) w ON true
+ORDER BY s.id, w.depth;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	10	0
+3	11	1
+4	10	0
+4	11	1
+
+# 3. Multiple fields extracted (k and tag) and duplicate field references, unused field (p) pruned
+statement ok
+CREATE TABLE multi_fields AS
+SELECT i AS id,
+       {'k': (i % 3)::BIGINT, 'tag': (i % 2)::INT, 'p': repeat('z', 32) || i::VARCHAR} AS m
+FROM range(10) t(i);
+
+query II
+SELECT count(*), sum(w.v)
+FROM multi_fields s,
+LATERAL (
+    WITH RECURSIVE w(v, depth) AS (
+        SELECT s.m.k * 10 + s.m.tag + s.m.k, 0
+        UNION ALL
+        SELECT v + 1, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT v FROM w
+) w;
+----
+20	218
+
+query II
+EXPLAIN SELECT count(*), sum(w.v)
+FROM multi_fields s,
+LATERAL (
+    WITH RECURSIVE w(v, depth) AS (
+        SELECT s.m.k * 10 + s.m.tag + s.m.k, 0
+        UNION ALL
+        SELECT v + 1, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT v FROM w
+) w;
+----
+physical_plan	<REGEX>:[\s\S]*Projections: m\.k[\s\S]*m\.tag[\s\S]*Conditions:[\s\S]*k = k[\s\S]*tag = tag[\s\S]*
+
+query II
+EXPLAIN SELECT count(*), sum(w.v)
+FROM multi_fields s,
+LATERAL (
+    WITH RECURSIVE w(v, depth) AS (
+        SELECT s.m.k * 10 + s.m.tag + s.m.k, 0
+        UNION ALL
+        SELECT v + 1, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT v FROM w
+) w;
+----
+physical_plan	<!REGEX>:[\s\S]*struct_extract\(m,[\s\S]*
+
+# 4. Multiple nested STRUCT paths (sub.k, sub.b) and NULL inner structs
+statement ok
+CREATE TABLE nested_structs AS
+SELECT * FROM (VALUES
+    (0, NULL::STRUCT(sub STRUCT(k BIGINT, b BIGINT, pad VARCHAR), outer_pad VARCHAR)),
+    (1, {'sub': NULL::STRUCT(k BIGINT, b BIGINT, pad VARCHAR), 'outer_pad': 'bbb'}),
+    (2, {'sub': {'k': 5::BIGINT, 'b': 2::BIGINT, 'pad': 'aaa'}, 'outer_pad': 'bbb'}),
+    (3, {'sub': {'k': 5::BIGINT, 'b': 3::BIGINT, 'pad': 'ccc'}, 'outer_pad': 'ddd'})
+) t(id, m);
+
+query III
+SELECT s.id, w.k, w.b
+FROM nested_structs s,
+LATERAL (
+    WITH RECURSIVE w(k, b, depth) AS (
+        SELECT s.m.sub.k, s.m.sub.b, 0
+        UNION ALL
+        SELECT k + 1, b, depth + 1
+        FROM w
+        WHERE depth < 1 AND k IS NOT NULL
+    )
+    SELECT k, b FROM w
+) w
+ORDER BY s.id, w.k, w.b;
+----
+0	NULL	NULL
+1	NULL	NULL
+2	5	2
+2	6	2
+3	5	3
+3	6	3
+
+# 5. Whole-STRUCT and mixed whole-STRUCT/field fallback cases
+query II
+SELECT s.id, w.is_m_null
+FROM null_structs s,
+LATERAL (
+    SELECT (s.m IS NULL) AS is_m_null
+) w
+ORDER BY s.id;
+----
+1	true
+2	false
+3	false
+4	false
+
+query III
+SELECT s.id, w.k, w.is_m_null
+FROM null_structs s,
+LATERAL (
+    SELECT s.m.k AS k, (s.m IS NULL) AS is_m_null
+) w
+ORDER BY s.id;
+----
+1	NULL	true
+2	NULL	false
+3	10	false
+4	10	false
+
+query II
+SELECT s.id, w.whole_m.p
+FROM null_structs s,
+LATERAL (
+    SELECT s.m AS whole_m
+) w
+ORDER BY s.id;
+----
+1	NULL
+2	payload_2
+3	payload_3
+4	payload_4
+
+query II
+SELECT s.id, w.k
+FROM null_structs s
+LEFT JOIN LATERAL (
+    SELECT s.m.k AS k
+) w ON s.m IS NOT NULL
+ORDER BY s.id;
+----
+1	NULL
+2	NULL
+3	10
+4	10
+
+# 6. Nested LATERAL referencing outer STRUCT and correlated aggregate over STRUCT
+query II
+SELECT s.id, q.k
+FROM null_structs s,
+LATERAL (
+    SELECT r.k
+    FROM (SELECT 1) t,
+    LATERAL (
+        SELECT s.m.k AS k
+    ) r
+) q
+ORDER BY s.id;
+----
+1	NULL
+2	NULL
+3	10
+4	10
+
+query II
+SELECT o.id, q.k
+FROM (VALUES (1), (2), (3), (99)) o(id),
+LATERAL (
+    SELECT r.k
+    FROM (
+        SELECT first(s.m) AS agg_m
+        FROM null_structs s
+        WHERE s.id = o.id
+    ) agg,
+    LATERAL (
+        SELECT agg.agg_m.k AS k
+    ) r
+) q
+ORDER BY o.id;
+----
+1	NULL
+2	NULL
+3	10
+99	NULL
+
+# 7. SEMI / EXISTS correlation on STRUCT field
+query I
+SELECT s.id
+FROM null_structs s
+WHERE EXISTS (
+    SELECT 1
+    FROM (VALUES (10)) t(x)
+    WHERE t.x = s.m.k
+)
+ORDER BY s.id;
+----
+3
+4
+
+# 8. EqualValuesAreIdentical() safety: INTERVAL '1 month' vs '30 days' must fall back to whole-STRUCT
+statement ok
+CREATE TABLE interval_structs AS
+SELECT i AS id,
+       {'iv': CASE WHEN i = 1 THEN INTERVAL '1 month' WHEN i = 2 THEN INTERVAL '30 days' ELSE NULL END, 'pad': 'row_' || i::VARCHAR} AS m
+FROM (VALUES (1), (2), (3)) v(i);
+
+query II
+SELECT s.id, q.d
+FROM interval_structs s,
+LATERAL (
+    SELECT DATE '2024-02-01' + s.m.iv AS d
+) q
+ORDER BY s.id;
+----
+1	2024-03-01 00:00:00
+2	2024-03-02 00:00:00
+3	NULL
+
+query II
+EXPLAIN SELECT s.id, q.d
+FROM interval_structs s,
+LATERAL (
+    SELECT DATE '2024-02-01' + s.m.iv AS d
+) q;
+----
+physical_plan	<REGEX>:[\s\S]*Conditions: m = m[\s\S]*
+
+# 9. EqualValuesAreIdentical() safety: +0.0 vs -0.0 must fall back to whole-STRUCT
+statement ok
+CREATE TABLE signed_zero_structs AS
+SELECT i AS id,
+       {'x': CASE WHEN i = 1 THEN 0.0::DOUBLE WHEN i = 2 THEN CAST('-0.0' AS DOUBLE) ELSE NULL END, 'pad': 'row_' || i::VARCHAR} AS m
+FROM (VALUES (1), (2), (3)) v(i);
+
+query II
+SELECT s.id, signbit(q.x) AS sb
+FROM signed_zero_structs s,
+LATERAL (
+    SELECT s.m.x AS x
+) q
+ORDER BY s.id;
+----
+1	false
+2	true
+3	NULL
+
+query II
+EXPLAIN SELECT s.id, signbit(q.x) AS sb
+FROM signed_zero_structs s,
+LATERAL (
+    SELECT s.m.x AS x
+) q;
+----
+physical_plan	<REGEX>:[\s\S]*Conditions: m = m[\s\S]*
+
+# 10. EqualValuesAreIdentical() safety: collated VARCHAR (NOCASE) must fall back to whole-STRUCT
+statement ok
+CREATE TABLE collated_structs AS
+SELECT i AS id,
+       {'s': (CASE WHEN i = 1 THEN 'a' ELSE 'A' END)::VARCHAR COLLATE NOCASE, 'pad': 'row_' || i::VARCHAR} AS m
+FROM (VALUES (1), (2)) v(i);
+
+query II
+SELECT s.id, unicode(q.ch)
+FROM collated_structs s,
+LATERAL (
+    SELECT s.m.s AS ch
+    UNION ALL
+    SELECT s.m.s AS ch
+) q
+ORDER BY s.id;
+----
+1	97
+1	97
+2	65
+2	65
+
+query II
+EXPLAIN SELECT s.id, unicode(q.ch)
+FROM collated_structs s,
+LATERAL (
+    SELECT s.m.s AS ch
+    UNION ALL
+    SELECT s.m.s AS ch
+) q;
+----
+physical_plan	<REGEX>:[\s\S]*Conditions: m = m[\s\S]*
+
+# 11. Mixed safe + unsafe fields on the same STRUCT must fall back to whole-STRUCT
+statement ok
+CREATE TABLE mixed_safety_structs AS
+SELECT i AS id,
+       {'k': 1::BIGINT, 'x': CASE WHEN i = 1 THEN 0.0::DOUBLE ELSE CAST('-0.0' AS DOUBLE) END, 'pad': 'row_' || i::VARCHAR} AS m
+FROM (VALUES (1), (2)) v(i);
+
+query III
+SELECT s.id, q.k, signbit(q.x)
+FROM mixed_safety_structs s,
+LATERAL (
+    SELECT s.m.k AS k, s.m.x AS x
+) q
+ORDER BY s.id;
+----
+1	1	false
+2	1	true
+
+# 12. Nested extracted STRUCT types: safe child STRUCT narrows; unsafe child STRUCT (containing DOUBLE) falls back
+statement ok
+CREATE TABLE nested_type_safety AS
+SELECT i AS id,
+       {'safe_sub': {'k': 1::BIGINT, 'tag': 'ok'}, 'unsafe_sub': {'k': 1::BIGINT, 'x': CASE WHEN i = 1 THEN 0.0::DOUBLE ELSE CAST('-0.0' AS DOUBLE) END}, 'pad': 'row_' || i::VARCHAR} AS m
+FROM (VALUES (1), (2)) v(i);
+
+query III
+SELECT s.id, w.sub.k, w.depth
+FROM nested_type_safety s,
+LATERAL (
+    WITH RECURSIVE w(sub, depth) AS (
+        SELECT s.m.safe_sub, 0
+        UNION ALL
+        SELECT sub, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT sub, depth FROM w
+) w
+ORDER BY s.id, w.depth;
+----
+1	1	0
+1	1	1
+2	1	0
+2	1	1
+
+query II
+EXPLAIN SELECT s.id, w.sub.k
+FROM nested_type_safety s,
+LATERAL (
+    WITH RECURSIVE w(sub, depth) AS (
+        SELECT s.m.safe_sub, 0
+        UNION ALL
+        SELECT sub, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT sub FROM w
+) w;
+----
+physical_plan	<REGEX>:[\s\S]*Projections: m\.safe_sub[\s\S]*Conditions: safe_sub = safe_sub[\s\S]*
+
+query II
+EXPLAIN SELECT s.id, w.sub.k
+FROM nested_type_safety s,
+LATERAL (
+    WITH RECURSIVE w(sub, depth) AS (
+        SELECT s.m.safe_sub, 0
+        UNION ALL
+        SELECT sub, depth + 1
+        FROM w
+        WHERE depth < 1
+    )
+    SELECT sub FROM w
+) w;
+----
+physical_plan	<!REGEX>:[\s\S]*m\.safe_sub\.k[\s\S]*
+
+query II
+SELECT s.id, signbit(q.sub.x)
+FROM nested_type_safety s,
+LATERAL (
+    SELECT s.m.unsafe_sub AS sub
+) q
+ORDER BY s.id;
+----
+1	false
+2	true
+
+query II
+EXPLAIN SELECT s.id, signbit(q.sub.x)
+FROM nested_type_safety s,
+LATERAL (
+    SELECT s.m.unsafe_sub AS sub
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*Projections: m\.unsafe_sub[\s\S]*

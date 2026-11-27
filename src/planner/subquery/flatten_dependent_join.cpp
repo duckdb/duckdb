@@ -1,4 +1,6 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
@@ -342,11 +344,222 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::DecorrelateSubtree(
 	return result;
 }
 
+namespace {
+
+struct CorrelatedStructExtractSite {
+	unique_ptr<Expression> *expr_ptr;
+	vector<idx_t> path;
+	LogicalType field_type;
+	Identifier field_name;
+	idx_t depth;
+};
+
+struct CorrelatedStructCandidate {
+	idx_t left_pos = 0;
+	bool eligible = true;
+	vector<CorrelatedStructExtractSite> sites;
+};
+
+static bool ReplaceBaseColRefWithZeroDepth(unique_ptr<Expression> &expr_p, const ColumnBinding &target,
+                                           const ColumnBinding &replacement) {
+	if (expr_p->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expr_p->Cast<BoundColumnRefExpression>();
+		if (colref.Depth() > 0 && colref.Binding() == target) {
+			expr_p = colref.WithBinding(replacement, 0);
+			return true;
+		}
+		return false;
+	}
+	bool replaced = false;
+	ExpressionIterator::EnumerateChildren(*expr_p, [&](unique_ptr<Expression> &child) {
+		if (!replaced) {
+			replaced = ReplaceBaseColRefWithZeroDepth(child, target, replacement);
+		}
+	});
+	return replaced;
+}
+
+static void WalkStructCorrelationExpr(unique_ptr<Expression> *expr_ptr,
+                                      column_binding_map_t<CorrelatedStructCandidate> &candidates) {
+	auto &expr = **expr_ptr;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		vector<StructExtractPathEntry> path_entries;
+		auto &base = PeelStructExtractPath(expr, path_entries);
+		if (!path_entries.empty() && base.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &colref = base.Cast<BoundColumnRefExpression>();
+			if (colref.Depth() > 0) {
+				auto it = candidates.find(colref.Binding());
+				if (it != candidates.end()) {
+					// Duplicate elimination merges equal keys; only types where equality implies observational
+					// identity (excluding INTERVAL, FLOAT/DOUBLE, collated VARCHAR, etc.) are safe to narrow.
+					if (!expr.GetReturnType().EqualValuesAreIdentical()) {
+						it->second.eligible = false;
+						return;
+					}
+					vector<idx_t> path;
+					path.reserve(path_entries.size());
+					for (auto &entry : path_entries) {
+						path.push_back(entry.child_idx);
+					}
+					it->second.sites.push_back(
+					    CorrelatedStructExtractSite {expr_ptr, std::move(path), expr.GetReturnType(),
+					                                 path_entries.back().child_name, colref.Depth()});
+					return;
+				}
+			}
+		}
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		if (colref.Depth() > 0) {
+			auto it = candidates.find(colref.Binding());
+			if (it != candidates.end()) {
+				it->second.eligible = false;
+			}
+		}
+		return;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		for (auto &kv : candidates) {
+			kv.second.eligible = false;
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](unique_ptr<Expression> &child) { WalkStructCorrelationExpr(&child, candidates); });
+}
+
+static void InspectSubtreeForStructCorrelations(LogicalOperator &op,
+                                                column_binding_map_t<CorrelatedStructCandidate> &candidates) {
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		for (auto &col : op.Cast<LogicalDependentJoin>().correlated_columns) {
+			auto it = candidates.find(col.binding);
+			if (it != candidates.end()) {
+				it->second.eligible = false;
+			}
+		}
+	}
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](unique_ptr<Expression> *expr_ptr) { WalkStructCorrelationExpr(expr_ptr, candidates); });
+	for (auto &child : op.children) {
+		InspectSubtreeForStructCorrelations(*child, candidates);
+	}
+}
+
+} // namespace
+
+static BindingReplacementGraph
+NarrowCorrelatedStructColumns(Binder &binder, LogicalDependentJoin &op, bool has_parent,
+                              const column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map) {
+	BindingReplacementGraph replacements;
+	// Restrict to top-level dependent joins: nested joins carry outer domain state through children[0]
+	// (e.g. LogicalCTERef), and non-delim joins rely on a single delim_index.
+	if (has_parent || !op.perform_delim || op.correlated_columns.empty()) {
+		return replacements;
+	}
+	auto left_bindings = op.children[0]->GetColumnBindings();
+	ColumnBindingLayout left_layout(left_bindings);
+	column_binding_map_t<CorrelatedStructCandidate> candidates;
+
+	for (auto &col : op.correlated_columns) {
+		// Skip correlated aggregate bindings whose deferred empty-group CASE rewrite has not materialized yet.
+		if (col.type.id() != LogicalTypeId::STRUCT || replacement_map.find(col.binding) != replacement_map.end()) {
+			continue;
+		}
+		auto pos_it = left_layout.positions.find(col.binding);
+		if (pos_it != left_layout.positions.end()) {
+			candidates[col.binding] = CorrelatedStructCandidate {pos_it->second, true, {}};
+		}
+	}
+	if (candidates.empty()) {
+		return replacements;
+	}
+
+	InspectSubtreeForStructCorrelations(*op.children[1], candidates);
+	bool any_narrowed = false;
+	for (auto &kv : candidates) {
+		if (kv.second.eligible && !kv.second.sites.empty()) {
+			any_narrowed = true;
+			break;
+		}
+	}
+	if (!any_narrowed) {
+		return replacements;
+	}
+
+	op.children[0]->ResolveOperatorTypes();
+	auto &left_types = op.children[0]->types;
+	auto proj_index = binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> proj_exprs;
+	proj_exprs.reserve(left_bindings.size() + 4);
+	for (idx_t i = 0; i < left_bindings.size(); i++) {
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
+		replacements.Add(left_bindings[i], ColumnBinding(proj_index, ProjectionIndex(i)));
+	}
+	if (op.left_projection_map.empty() && op.join_type != JoinType::RIGHT_SEMI &&
+	    op.join_type != JoinType::RIGHT_ANTI) {
+		op.left_projection_map.reserve(left_bindings.size());
+		for (idx_t i = 0; i < left_bindings.size(); i++) {
+			op.left_projection_map.push_back(ProjectionIndex(i));
+		}
+	}
+
+	vector<CorrelatedColumnInfo> new_correlated;
+	new_correlated.reserve(op.correlated_columns.size() + 4);
+	for (auto &orig_col : op.correlated_columns) {
+		auto cand_it = candidates.find(orig_col.binding);
+		if (cand_it == candidates.end() || !cand_it->second.eligible || cand_it->second.sites.empty()) {
+			auto updated = orig_col;
+			updated.binding = replacements.Resolve(orig_col.binding);
+			new_correlated.push_back(std::move(updated));
+			continue;
+		}
+		auto &cand = cand_it->second;
+		map<vector<idx_t>, ColumnBinding> path_bindings;
+		for (auto &site : cand.sites) {
+			Identifier cname = site.field_name.empty() ? orig_col.name : site.field_name;
+			auto path_it = path_bindings.find(site.path);
+			if (path_it == path_bindings.end()) {
+				auto extract_copy = (*site.expr_ptr)->Copy();
+				bool ok = ReplaceBaseColRefWithZeroDepth(extract_copy, orig_col.binding, left_bindings[cand.left_pos]);
+				D_ASSERT(ok);
+				(void)ok;
+				ColumnBinding new_binding(proj_index, ProjectionIndex(proj_exprs.size()));
+				proj_exprs.push_back(std::move(extract_copy));
+				path_it = path_bindings.emplace(site.path, new_binding).first;
+				new_correlated.emplace_back(new_binding, site.field_type, cname, orig_col.depth);
+			}
+			*site.expr_ptr =
+			    make_uniq<BoundColumnRefExpression>(std::move(cname), site.field_type, path_it->second, site.depth);
+		}
+	}
+
+	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(proj_exprs));
+	proj->children.push_back(std::move(op.children[0]));
+	op.children[0] = std::move(proj);
+
+	op.correlated_columns.clear();
+	for (auto &col : new_correlated) {
+		op.correlated_columns.AddColumnToBack(std::move(col));
+	}
+	ColumnBindingRewrite::ApplyToOperatorBindings(op, replacements);
+	CorrelatedColumnBindingReplacer rhs_replacer(replacements);
+	rhs_replacer.VisitOperator(*op.children[1]);
+	return replacements;
+}
+
 FlattenDependentJoins::UnnestingState
 FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
                                                   vector<ColumnBinding> state) {
 	if (plan->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &op = plan->Cast<LogicalDependentJoin>();
+		auto narrow_replacements = NarrowCorrelatedStructColumns(binder, op, parent != nullptr, replacement_map);
+		if (!narrow_replacements.Empty()) {
+			InvalidateAccessCache();
+			for (auto &binding : state) {
+				binding = narrow_replacements.Resolve(binding);
+			}
+		}
 		DependentJoinOutput output;
 		auto left_output = ColumnBindingLayout(op.children[0]->GetColumnBindings());
 		auto right_output = ColumnBindingLayout(op.children[1]->GetColumnBindings());
@@ -410,6 +623,7 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 
 		// Phase 3: finalize the current dependent join using the state produced on the right.
 		auto result = FinalizeDependentJoin(plan, std::move(outer_state), right_state, std::move(output));
+		result.replacement_graph.Merge(narrow_replacements);
 
 		if (detached_cte) {
 			detached_cte->children[1] = std::move(plan);
