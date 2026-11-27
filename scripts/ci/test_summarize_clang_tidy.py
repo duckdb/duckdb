@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUMMARIZER_PATH = REPO_ROOT / "scripts" / "ci" / "summarize_clang_tidy.py"
-SPEC = importlib.util.spec_from_file_location("summarize_clang_tidy", SUMMARIZER_PATH)
+SUMMARIZER_PATH = REPO_ROOT / "scripts" / "ci" / "run_clang_tidy_check.py"
+SPEC = importlib.util.spec_from_file_location("run_clang_tidy_check", SUMMARIZER_PATH)
 SUMMARIZE_CLANG_TIDY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SUMMARIZE_CLANG_TIDY)
 
@@ -71,6 +71,26 @@ class SummarizeClangTidyTest(unittest.TestCase):
 
     def test_reports_empty_success_concisely(self):
         self.assertEqual(SUMMARIZE_CLANG_TIDY.summarize(["No warnings generated."], 0), ["No clang-tidy errors found."])
+
+    def test_preserves_worker_counts_for_success_and_failure(self):
+        worker_status = [
+            "Running clang-tidy shard 1/1 on 1000 of 1000 files with 32 parallel workers",
+        ]
+        error_block = [
+            "/work/a.cpp:3:4: error: first error [check-a,-warnings-as-errors]",
+            "   wrong();",
+            "   ^",
+        ]
+
+        self.assertEqual(
+            SUMMARIZE_CLANG_TIDY.summarize(worker_status, 0),
+            [*worker_status, "No clang-tidy errors found."],
+        )
+        self.assertEqual(
+            SUMMARIZE_CLANG_TIDY.summarize([*error_block, worker_status[0]], 1),
+            [*worker_status, "Found 1 unique clang-tidy error:", "", *error_block],
+        )
+        self.assertEqual(SUMMARIZE_CLANG_TIDY.summarize(worker_status, 2)[:1], worker_status)
 
 
 if __name__ == "__main__":

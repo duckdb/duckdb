@@ -409,21 +409,16 @@ jobs:
         fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
-    - name: Tidy Check (clangd)
-      run: |
-        mkdir -p ~/.config/clangd
-        cat > ~/.config/clangd/config.yaml <<'EOF'
-        Diagnostics:
-          UnusedIncludes: None
-        EOF
-        make tidy-check-clangd
+    - name: Tidy Check (clang-tidy)
+      shell: bash
+      run: python3 scripts/ci/run_clang_tidy_check.py -- make tidy-check TIDY_BINARY=clang-tidy-20
 
-    - name: Upload clangd-tidy logs
+    - name: Upload clang-tidy log
       if: ${{ failure() }}
       uses: actions/upload-artifact@v7
       with:
-        name: clangd-tidy-logs
-        path: build/tidy/clangd-tidy-logs
+        name: clang-tidy-log
+        path: clang-tidy.log
         if-no-files-found: ignore
 
  extensions-build:

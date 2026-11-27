@@ -1039,6 +1039,15 @@ if(NOT MSVC)
     set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
   endif()
 
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wc2y-extensions"
+                            COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+    if(COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+      set(CXX_EXTRA "${CXX_EXTRA} -Wno-c2y-extensions")
+    endif()
+  endif()
+
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                                    VERSION_GREATER 8.0)
     if(REDUCE_SYMBOLS)

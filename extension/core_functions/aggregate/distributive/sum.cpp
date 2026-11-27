@@ -782,20 +782,19 @@ AggregateStateLayout BignumSumStateLayout(AggregateLayoutInput &input) {
 void BignumSumExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                           idx_t offset) {
 	auto states = state_vector.Values<BignumState *>();
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto writer = FlatVector::Writer<string_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		if (!state.is_set) {
-			result_validity.SetInvalid(offset + i);
+			writer.WriteNull();
 			continue;
 		}
 		if (state.is_wide) {
-			result_data[offset + i] = BignumAggregates::WriteBignum(state.wide, result);
+			BignumAggregates::WriteBignum(state.wide, writer);
 		} else {
 			char blob[2 * BignumLimb::BYTES + Bignum::BIGNUM_HEADER_SIZE];
 			const auto size = BignumOperation::EncodeSmall(state.small, blob);
-			result_data[offset + i] = StringVector::AddStringOrBlob(result, blob, size);
+			writer.WriteValue(string_t(blob, UnsafeNumericCast<uint32_t>(size)));
 		}
 	}
 }

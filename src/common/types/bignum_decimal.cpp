@@ -464,12 +464,13 @@ const string &DecimalHelper<bignum_t>::RescaleState::GetPowerOfTen(idx_t exponen
 	return cached_power;
 }
 
-static string_t DivideAndRound(const BignumIntermediate &source, const BignumIntermediate &divisor,
-                               DecimalRounding rounding, StringHeap &heap, BignumArithmeticState &state) {
+string_t DecimalHelper<bignum_t>::DivideAndRound(const BignumIntermediate &source, const BignumIntermediate &divisor,
+                                                 DecimalRounding rounding, StringHeap &heap,
+                                                 BignumArithmeticState &state) {
 	string_t quotient;
 	string_t remainder;
 	if (!BignumIntermediate::TryDivMod(heap, state, source, divisor, quotient, remainder)) {
-		throw InternalException("Decimal rescaling: division by a power of ten failed");
+		throw InternalException("DivideAndRound: division by zero");
 	}
 	if (DecimalHelper<bignum_t>::IsZero(bignum_t(remainder))) {
 		return quotient;
@@ -514,7 +515,8 @@ static string_t RescaleBignum(const bignum_t &value, uint32_t source_scale, uint
 	if (target_scale > source_scale) {
 		return BignumIntermediate::Multiply(heap, state, source.intermediate, factor.intermediate);
 	}
-	return DivideAndRound(source.intermediate, factor.intermediate, DecimalRounding::HALF_AWAY_FROM_ZERO, heap, state);
+	return DecimalHelper<bignum_t>::DivideAndRound(source.intermediate, factor.intermediate,
+	                                               DecimalRounding::HALF_AWAY_FROM_ZERO, heap, state);
 }
 
 string DecimalHelper<bignum_t>::Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
