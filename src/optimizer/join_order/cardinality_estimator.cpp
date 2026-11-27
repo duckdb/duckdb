@@ -567,15 +567,17 @@ CardinalityValue CardinalityEstimator::GetUniqueJoinPairDomain(JoinRelationSet &
 		auto relation = join_pair.relations[relation_index];
 		auto &equality_bindings =
 		    relation_index == 0 ? equality_pair->first_relation_bindings : equality_pair->second_relation_bindings;
-		auto &unique_key = state->leaves.at(relation.index).unique_key;
-		bool covered = !unique_key.empty();
-		for (auto column : unique_key) {
-			ColumnBinding binding(TableIndex(relation.index), ProjectionIndex(column));
-			covered = covered && equality_bindings.find(binding) != equality_bindings.end();
-		}
-		if (covered) {
-			// Every row of this relation is a different key combination, so the other side matches at most one row.
-			domain = MaxValue(domain, GetNumerator(set_manager.GetJoinRelation(relation)));
+		for (auto &unique_key : state->leaves.at(relation.index).unique_keys) {
+			bool covered = !unique_key.empty();
+			for (auto column : unique_key) {
+				ColumnBinding binding(TableIndex(relation.index), ProjectionIndex(column));
+				covered = covered && equality_bindings.find(binding) != equality_bindings.end();
+			}
+			if (covered) {
+				// Every row has a different key combination, so the other side matches at most one row.
+				domain = MaxValue(domain, GetNumerator(set_manager.GetJoinRelation(relation)));
+				break;
+			}
 		}
 	}
 	return domain;
