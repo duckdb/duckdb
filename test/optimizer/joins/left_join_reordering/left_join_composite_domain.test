@@ -136,8 +136,8 @@ LEFT JOIN repeated_right ON a = x AND b = y;
 ----
 4096
 
-# The guarded composite prior estimates 8,192 pairs from the smaller producer's
-# row count. This is a numerical fallback, not proof of a joint domain.
+# A ratio of eight rows per key does not prove a joint domain. Both scalar
+# factors contribute, giving about 7K pairs with the recorded sampled NDVs.
 
 statement ok
 CREATE TABLE cap_l AS SELECT (i % 256)::INTEGER a, ((i // 256) % 4)::INTEGER b FROM range(1024) r(i);
@@ -149,7 +149,7 @@ query II
 EXPLAIN SELECT * FROM cap_l
 LEFT JOIN cap_r ON a = x AND b = y;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN[^~]*~8,192 rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[67],[0-9]{3} rows.*
 
 query I
 SELECT count(*) FROM cap_l
