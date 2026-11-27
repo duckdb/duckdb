@@ -15,6 +15,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -1442,7 +1443,19 @@ public:
 	bool HasCompleted() const;
 	optional<PartitionedCopyTask> TryAssignTask();
 	void ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task, InterruptState &interrupt);
+	//! The error of a task that failed: its group can never complete, so the flush fails
+	std::exception_ptr GetTaskError() const;
+	//! Fails the flush with 'error' (the first error is kept) and wakes the producers waiting on it, whose Flush then
+	//! throws it
+	void FailFlush(std::exception_ptr error);
+	bool HasTaskError() const {
+		return task_failed.load(std::memory_order_acquire);
+	}
 	vector<vector<Value>> FinishTask(const PartitionedCopyTask &task);
+
+private:
+	void ExecuteTaskInternal(ExecutionContext &execution_context, const PartitionedCopyTask &task,
+	                         InterruptState &interrupt);
 
 public:
 	//! The PartitionedCopy that this state belongs to
@@ -1462,8 +1475,14 @@ public:
 	unique_ptr<PartitionedCopyInputGlobalState> input_state;
 	//! Whether the input has been finalized into hash groups
 	bool groups_ready DUCKDB_GUARDED_BY(lock) = false;
+	//! The flush helpers the task list is split for, scheduled once the groups are ready
+	idx_t helpers DUCKDB_GUARDED_BY(lock) = 0;
 	//! The error of a failed finalization: it has taken the rows out of the input, so it is not retried
 	std::exception_ptr finalize_error DUCKDB_GUARDED_BY(lock);
+	//! The first error of a failed task, kept for every thread that waits on the flush
+	mutable mutex task_error_lock;
+	std::exception_ptr task_error;
+	atomic<bool> task_failed {false};
 	//! Per-hash-bin processing groups (populated by CreateTaskList)
 	vector<unique_ptr<PartitionedCopyHashGroup>> hash_groups;
 	//! The total number of blocks to process;
@@ -1498,11 +1517,15 @@ public:
 	void Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state);
 	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 	void NotifyFlushProgress();
+	//! Waits until no flush helper is running a task. Called once the flush is complete, when a helper can only be
+	//! finishing the task that completed it
+	void JoinFlushHelpers();
 
 public:
 	//! Partitioning-specific functions
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
+	void ScheduleFlushHelpers(const shared_ptr<PartitionedCopyState> &state, idx_t helpers);
 
 	bool HasDelayedPartition(const vector<Value> &values);
 	bool HasDelayedPartitions() const;
@@ -1532,12 +1555,14 @@ public:
 	void TryFinalizePartitionWrite(const vector<Value> &values) DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(copy_gstate.lock);
-
-private:
-	unique_ptr<const PartitionedCopyInput> ConstructInput() const;
+	//! Helps the active flush, then parks the task until the flush makes progress, unless 'can_continue'. Returns
+	//! whether the task was parked
 	template <class FUNC>
 	bool TryBlockOnFlush(ExecutionContext &execution_context, InterruptState &interrupt_state, idx_t observed_progress,
 	                     FUNC &&can_continue) DUCKDB_EXCLUDES(lock);
+
+private:
+	unique_ptr<const PartitionedCopyInput> ConstructInput() const;
 	bool TryPrepareSink(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
 	                    InterruptState &interrupt_state);
 	bool RequiresSerializedPartitionWrites() const;
@@ -1594,6 +1619,9 @@ public:
 
 	//! Delayed below-threshold partitions
 	DelayedPartitionBuffers delayed_partition_buffers;
+
+	//! The flush helpers running a task, waited for before the files are finalized
+	atomic<idx_t> helper_tasks_running {0};
 };
 
 //===--------------------------------------------------------------------===//
@@ -3572,13 +3600,25 @@ bool PartitionedCopyState::IsCombineComplete() const {
 	return combined == locals;
 }
 
+//! The flush helpers to schedule for a flush of 'rows' rows that 'producers' run on 'threads' threads. A thread that
+//! joins a flush adds a roughly fixed cost: contention on the flush's shared state (the sort's merge, the buffered
+//! partitions). So the flush gets a thread per ROWS_PER_FLUSH_THREAD rows, up to 'threads', and helpers only for the
+//! threads beyond its producers
+static constexpr idx_t ROWS_PER_FLUSH_THREAD = DEFAULT_ROW_GROUP_SIZE;
+static idx_t FlushHelperCount(idx_t threads, idx_t producers, idx_t rows) {
+	const auto flush_threads = MinValue<idx_t>((rows + ROWS_PER_FLUSH_THREAD - 1) / ROWS_PER_FLUSH_THREAD, threads);
+	return flush_threads > producers ? flush_threads - producers : 0;
+}
+
 void PartitionedCopyState::CreateTaskList(vector<unique_ptr<PartitionedCopyGroup>> groups) {
 	hash_groups.resize(groups.size());
+	idx_t total_rows = 0;
 	for (idx_t group_idx = 0; group_idx < groups.size(); ++group_idx) {
 		auto &group = groups[group_idx];
 		if (!group || !group->Count()) {
 			continue;
 		}
+		total_rows += group->Count();
 		auto hash_group = make_uniq<PartitionedCopyHashGroup>(partitioned_copy, std::move(group), group_idx);
 		total_blocks += hash_group->blocks;
 		hash_groups[group_idx] = std::move(hash_group);
@@ -3600,7 +3640,11 @@ void PartitionedCopyState::CreateTaskList(vector<unique_ptr<PartitionedCopyGroup
 	auto &ts = TaskScheduler::GetScheduler(partitioned_copy.context);
 	const auto &max_block = partition_blocks.front();
 
-	const auto threads = MinValue<idx_t>(locals, ts.NumberOfThreads());
+	// split for the producers that combined into this state, and the flush helpers that join them
+	const auto scheduler_threads = MaxValue<idx_t>(NumericCast<idx_t>(ts.NumberOfThreads()), 1);
+	const auto producers = MinValue<idx_t>(MaxValue<idx_t>(locals, 1), scheduler_threads);
+	helpers = FlushHelperCount(scheduler_threads, producers, total_rows);
+	const auto threads = producers + helpers;
 	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
 	const auto aligned_count = PartitionedCopyHashGroup::BinValue(max_block.first, aligned_scale);
 	// Split the largest group over the threads, but with many small groups a task per group keeps the threads on
@@ -3656,8 +3700,37 @@ optional<PartitionedCopyTask> PartitionedCopyState::TryAssignTask() {
 	return nullopt;
 }
 
+std::exception_ptr PartitionedCopyState::GetTaskError() const {
+	if (!HasTaskError()) {
+		return nullptr;
+	}
+	lock_guard<mutex> guard(task_error_lock);
+	return task_error;
+}
+
 void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task,
                                        InterruptState &interrupt) {
+	try {
+		ExecuteTaskInternal(execution_context, task, interrupt);
+	} catch (...) {
+		FailFlush(std::current_exception());
+		throw;
+	}
+}
+
+void PartitionedCopyState::FailFlush(std::exception_ptr error) {
+	{
+		lock_guard<mutex> guard(task_error_lock);
+		if (!task_error) {
+			task_error = std::move(error);
+		}
+	}
+	task_failed.store(true, std::memory_order_release);
+	partitioned_copy.NotifyFlushProgress();
+}
+
+void PartitionedCopyState::ExecuteTaskInternal(ExecutionContext &execution_context, const PartitionedCopyTask &task,
+                                               InterruptState &interrupt) {
 	auto &hash_group = *hash_groups[task.group_idx];
 	switch (task.stage) {
 	case PartitionedCopyStage::PREPARE_INPUT:
@@ -3953,7 +4026,19 @@ public:
 		while (partitioned_copy.flushing.load(std::memory_order_relaxed) || partitioned_copy.HasDelayedPartitions()) {
 			event->GetClientContext().FastInterruptCheck();
 			if (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
-				partitioned_copy.Flush(execution_context, interrupt_state);
+				// park until a task of the flush finishes, rather than polling while other threads run its tasks
+				idx_t observed_progress;
+				{
+					annotated_lock_guard<annotated_mutex> guard(partitioned_copy.lock);
+					observed_progress = partitioned_copy.flush_progress;
+				}
+				auto flush_done = [&]() DUCKDB_REQUIRES(partitioned_copy.lock) {
+					return !partitioned_copy.flushing;
+				};
+				if (partitioned_copy.TryBlockOnFlush(execution_context, interrupt_state, observed_progress,
+				                                     flush_done)) {
+					return TaskExecutionResult::TASK_BLOCKED;
+				}
 			} else {
 				if (!partitioned_copy.DrainDelayedPartitions(execution_context, interrupt_state)) {
 					TaskScheduler::YieldThread();
@@ -4015,6 +4100,7 @@ public:
 		}
 
 		if (done) {
+			partitioned_copy.JoinFlushHelpers();
 			partitioned_copy.FinalizeActiveWrites();
 			partitioned_copy.copy_gstate.TryFinalizeOwnedFileState();
 			partitioned_copy.copy_gstate.WaitForLifecycleTasks();
@@ -4045,10 +4131,96 @@ void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event, InterruptState 
 	}
 
 	if (should_finalize_writes) {
+		JoinFlushHelpers();
 		FinalizeActiveWrites();
 		copy_gstate.TryFinalizeOwnedFileState();
 		copy_gstate.WaitForLifecycleTasks();
 		copy_gstate.MarkSuccessful();
+	}
+}
+
+//! Runs the tasks of one flush on a thread that the COPY's producers leave idle. Without helpers, a flush runs only on
+//! its producers: the threads that sank into its state, or one finalize task per producer.
+//! A helper is a task of the query, so the executor waits for it, reports its error and profiles its work.
+//! It lives as long as its flush. It runs tasks while TryAssignTask returns one. Otherwise it parks until a task
+//! finishes, since a group's next stage opens only then.
+class PartitionedCopyFlushHelperTask : public ExecutorTask {
+public:
+	PartitionedCopyFlushHelperTask(PartitionedCopy &partitioned_copy_p, shared_ptr<PartitionedCopyState> state_p)
+	    : ExecutorTask(partitioned_copy_p.context, nullptr, partitioned_copy_p.op),
+	      partitioned_copy(partitioned_copy_p), state(std::move(state_p)) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		auto &client = partitioned_copy.context;
+		ExecutionContext execution_context(client, *thread_context, nullptr);
+		InterruptState interrupt_state(shared_from_this());
+		try {
+			while (!executor.HasError() && !state->HasTaskError()) {
+				idx_t observed_progress;
+				{
+					annotated_lock_guard<annotated_mutex> guard(partitioned_copy.lock);
+					observed_progress = partitioned_copy.flush_progress;
+				}
+				while (auto task = state->TryAssignTask()) {
+					client.InterruptCheck();
+					RunTask(execution_context, *task, interrupt_state);
+				}
+				if (state->HasCompleted()) {
+					break;
+				}
+				annotated_lock_guard<annotated_mutex> guard(partitioned_copy.lock);
+				if (observed_progress == partitioned_copy.flush_progress &&
+				    partitioned_copy.BlockTask(interrupt_state)) {
+					return TaskExecutionResult::TASK_BLOCKED;
+				}
+			}
+			return TaskExecutionResult::TASK_FINISHED;
+		} catch (...) {
+			// whatever failed, a task or the assignment of one, the flush cannot complete: fail it, so that no producer
+			// waits on it. The executor reports the error
+			state->FailFlush(std::current_exception());
+			throw;
+		}
+	}
+
+	string TaskType() const override {
+		return "PartitionedCopyFlushHelperTask";
+	}
+
+private:
+	void RunTask(ExecutionContext &execution_context, const PartitionedCopyTask &task,
+	             InterruptState &interrupt_state) {
+		partitioned_copy.helper_tasks_running++;
+		try {
+			state->ExecuteTask(execution_context, task, interrupt_state);
+		} catch (...) {
+			partitioned_copy.helper_tasks_running--;
+			throw;
+		}
+		partitioned_copy.helper_tasks_running--;
+	}
+
+	PartitionedCopy &partitioned_copy;
+	shared_ptr<PartitionedCopyState> state;
+};
+
+void PartitionedCopy::ScheduleFlushHelpers(const shared_ptr<PartitionedCopyState> &state, idx_t helpers) {
+	// Helpers are optional: the producers run every task the helpers do not, so a failure to schedule them is ignored
+	try {
+		vector<shared_ptr<Task>> tasks;
+		for (idx_t i = 0; i < helpers; i++) {
+			tasks.push_back(make_shared_ptr<PartitionedCopyFlushHelperTask>(*this, state));
+		}
+		TaskScheduler::GetScheduler(context).ScheduleTasks(Executor::Get(context).GetToken(), tasks);
+	} catch (...) { // NOLINT
+	}
+}
+
+void PartitionedCopy::JoinFlushHelpers() {
+	while (helper_tasks_running.load() > 0) {
+		// a running helper may wait on a lifecycle job, so work on those meanwhile
+		copy_gstate.lifecycle_executor.WorkOnTaskOrYield();
 	}
 }
 
@@ -4062,7 +4234,12 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 	if (!flushing_state_copy) {
 		return; // Finalization not yet complete, nothing to do
 	}
+	if (auto task_error = flushing_state_copy->GetTaskError()) {
+		// a task failed on another thread, a flush helper or a producer: the flush can never complete
+		std::rethrow_exception(task_error);
+	}
 
+	idx_t helpers = 0;
 	{
 		annotated_lock_guard<annotated_mutex> guard(flushing_state_copy->lock);
 		D_ASSERT(flushing_state_copy->combined <= flushing_state_copy->locals);
@@ -4075,8 +4252,13 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 			if (!flushing_state_copy->groups_ready) {
 				return; // Finalization not yet complete, nothing to do
 			}
+			helpers = flushing_state_copy->helpers;
 		}
 		D_ASSERT(flushing_state_copy->groups_ready);
+	}
+	if (helpers) {
+		// this thread finalized the state, so its tasks exist now
+		ScheduleFlushHelpers(flushing_state_copy, helpers);
 	}
 
 	while (auto task = flushing_state_copy->TryAssignTask()) {
