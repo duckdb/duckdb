@@ -352,7 +352,7 @@ static CardinalityValue EstimateEqualityFactor(const EqualityCardinalityModel &m
                                                const vector<RelationStats> &leaves,
                                                const vector<pair<ColumnBinding, ColumnBinding>> &equalities,
                                                const vector<idx_t> &relations) {
-	auto estimate = model.Estimate(model.Components(equalities), relations);
+	auto estimate = model.EstimateJoin(equalities, relations);
 	if (!estimate.maximum) {
 		return estimate.selectivity;
 	}

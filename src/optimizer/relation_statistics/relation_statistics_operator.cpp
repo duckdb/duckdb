@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/optimizer/join_order/join_predicate.hpp"
+#include "duckdb/optimizer/table_column_origin.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
@@ -437,6 +438,26 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 			return child_stats[child_idx].get().IsEmpty() && bound.IsValid() && bound.GetIndex() == 0;
 		};
 		bool empty_population = is_empty_population(0);
+		vector<TableColumnOrigin> union_origins;
+		auto repeated_population = [&](idx_t child_idx) {
+			if (setop.type != LogicalOperatorType::LOGICAL_UNION || child_idx >= setop.children.size()) {
+				return false;
+			}
+			auto origin = GetTableColumnOrigin(*setop.children[child_idx], column_idx);
+			if (!origin || !origin->table.get().IsDuckTable()) {
+				return false;
+			}
+			for (auto &existing : union_origins) {
+				if (SameOrigin(existing, *origin)) {
+					return true;
+				}
+			}
+			union_origins.push_back(*origin);
+			return false;
+		};
+		if (!empty_population) {
+			repeated_population(0);
+		}
 		for (idx_t child_idx = 1; child_idx < child_stats.size(); child_idx++) {
 			if (column_idx >= child_stats[child_idx].get().columns.size()) {
 				return {};
@@ -447,25 +468,30 @@ static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &set
 				restrictions.push_back(child_column.value_restriction);
 			}
 			switch (setop.type) {
-			case LogicalOperatorType::LOGICAL_UNION:
+			case LogicalOperatorType::LOGICAL_UNION: {
 				population_bound =
 				    RelationStatisticsHelper::AddCardinalityBounds(population_bound, child_column.PopulationBound());
 				if (is_empty_population(child_idx)) {
 					break;
 				}
+				auto repeated = repeated_population(child_idx);
 				if (empty_population) {
 					total_domain = child_column.total_domain;
 					current_domain = child_column.current_domain;
 					empty_population = false;
 					break;
 				}
-				total_domain.distinct_count += child_column.total_domain.distinct_count;
-				current_domain.distinct_count += child_column.current_domain.distinct_count;
+				// Every arm contributes rows, but another complete copy of a column adds no new values.
+				if (!repeated) {
+					total_domain.distinct_count += child_column.total_domain.distinct_count;
+					current_domain.distinct_count += child_column.current_domain.distinct_count;
+				}
 				total_domain.source = DistinctCountSource::DERIVED;
 				total_domain.has_usable_domain &= child_column.total_domain.has_usable_domain;
 				current_domain.has_usable_domain &= child_column.current_domain.has_usable_domain;
 				current_domain.source = DistinctCountSource::CARDINALITY;
 				break;
+			}
 			case LogicalOperatorType::LOGICAL_INTERSECT:
 				if (child_column.PopulationBound().IsValid()) {
 					population_bound = population_bound.IsValid() ? MinValue(population_bound.GetIndex(),

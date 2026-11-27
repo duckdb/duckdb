@@ -78,6 +78,80 @@ static join_column_sources_t EqualityScanSources(const vector<RelationStats> &in
 	return result;
 }
 
+TEST_CASE("Composite join cost priors retain producer populations and equality closure",
+          "[optimizer][equality_cardinality]") {
+	vector<RelationStats> inputs {EqualityInput(100000, {1000, 2000}), EqualityInput(10000, {1000, 2000})};
+	auto edges = EqualityChain(2, 2);
+	auto sources = EqualityScanSources(inputs);
+	for (idx_t r = 0; r < inputs.size(); r++) {
+		for (idx_t c = 0; c < inputs[r].columns.size(); c++) {
+			auto &source = sources.at(EqualityBinding(r, c)).direct;
+			source.source_cardinality = r == 0 ? 100000 : 10000;
+			source.domain = inputs[r].columns[c].total_domain;
+		}
+	}
+	auto joined_rows = [](vector<RelationStats> relations, const join_column_sources_t &observations,
+	                      const vector<pair<ColumnBinding, ColumnBinding>> &equalities) {
+		EqualityCardinalityModel model(relations, observations);
+		vector<idx_t> indexes;
+		CardinalityValue numerator(1);
+		for (idx_t r = 0; r < relations.size(); r++) {
+			indexes.push_back(r);
+			numerator *= relations[r].cardinality;
+		}
+		auto estimate = model.EstimateJoin(equalities, indexes);
+		return (numerator * estimate.selectivity).GetDouble();
+	};
+	REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+	SECTION("Duplicate predicates cannot charge the prior twice") {
+		edges.push_back(edges[0]);
+		std::reverse(edges.begin(), edges.end());
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+	}
+	SECTION("Filters retain their selectivity instead of shrinking the tuple population") {
+		inputs[1].cardinality = 1000;
+		inputs[1].CapCurrentDomainsToCardinality();
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(10000));
+	}
+	SECTION("Missing or mixed producer origins retain independent factors") {
+		REQUIRE(joined_rows(inputs, {}, edges) == Approx(500));
+		sources.at(EqualityBinding(1, 1)).direct.binding.table_index = TableIndex(200);
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(500));
+	}
+	SECTION("A second coordinate can close through a dimension") {
+		inputs.push_back(EqualityInput(1000, {1000}));
+		inputs.push_back(EqualityInput(2000, {2000}));
+		edges = {{EqualityBinding(0, 0), EqualityBinding(1, 0)},
+		         {EqualityBinding(1, 0), EqualityBinding(2, 0)},
+		         {EqualityBinding(0, 1), EqualityBinding(3, 0)},
+		         {EqualityBinding(1, 1), EqualityBinding(3, 0)}};
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(100000));
+	}
+	SECTION("Competing pairs remain independent") {
+		inputs.push_back(EqualityInput(10000, {1000, 2000}));
+		for (idx_t c = 0; c < 2; c++) {
+			auto binding = EqualityBinding(2, c);
+			sources.emplace(
+			    binding, JoinColumnSources({EqualityBinding(102, c), 10000, 10000, inputs[2].columns[c].total_domain}));
+			edges.emplace_back(EqualityBinding(1, c), binding);
+		}
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(2.5));
+	}
+	SECTION("Complete joint evidence has priority") {
+		for (auto &input : inputs) {
+			EqualityPopulation(input, {0, 1}, 5000, 5000, false);
+		}
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(200000));
+	}
+	SECTION("Broad fact-to-fact joins retain independent factors") {
+		for (auto &entry : sources) {
+			entry.second.direct.source_cardinality = 100000;
+		}
+		inputs[1].cardinality = 100000;
+		REQUIRE(joined_rows(inputs, sources, edges) == Approx(5000));
+	}
+}
+
 TEST_CASE("Unknown equality coordinates share a connected tuple prior", "[optimizer][equality_cardinality]") {
 	for (idx_t keys : {1, 2, 16}) {
 		vector<RelationStats> inputs(2, UnknownEqualityInput(100, vector<double>(keys, 100)));

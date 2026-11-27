@@ -23,10 +23,6 @@
 
 namespace duckdb {
 
-optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
-	return AggregateRewriteHelper::GetDirectReferenceIndex(expression, input);
-}
-
 struct AggregateJoinCandidate {
 	idx_t owner_child;
 	idx_t probe_child;
@@ -34,87 +30,6 @@ struct AggregateJoinCandidate {
 	idx_t probe_key;
 	vector<ColumnBinding> owner_groups;
 };
-
-optional_idx GetInvertibleReferenceIndex(const Expression &expression, LogicalOperator &input) {
-	auto result = GetDirectReferenceIndex(expression, input);
-	if (result.IsValid() || !BoundCastExpression::IsCast(expression)) {
-		return result;
-	}
-	auto &cast = expression.Cast<BoundFunctionExpression>();
-	if (!BoundCastExpression::CastIsInvertible(BoundCastExpression::SourceType(cast),
-	                                           BoundCastExpression::TargetType(cast))) {
-		return optional_idx();
-	}
-	return GetInvertibleReferenceIndex(BoundCastExpression::Child(cast), input);
-}
-
-optional<TableColumnOrigin> GetTableColumnOrigin(LogicalOperator &op, idx_t output_idx, bool allow_filtered) {
-	if (output_idx >= op.GetColumnBindings().size()) {
-		return nullopt;
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto &projection = op.Cast<LogicalProjection>();
-		if (projection.children.size() != 1 || output_idx >= projection.expressions.size()) {
-			return nullopt;
-		}
-		auto child_idx = allow_filtered
-		                     ? GetInvertibleReferenceIndex(*projection.expressions[output_idx], *projection.children[0])
-		                     : GetDirectReferenceIndex(*projection.expressions[output_idx], *projection.children[0]);
-		return child_idx.IsValid() ? GetTableColumnOrigin(*projection.children[0], child_idx.GetIndex(), allow_filtered)
-		                           : nullopt;
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-		if (!allow_filtered) {
-			return nullopt;
-		}
-		auto &filter = op.Cast<LogicalFilter>();
-		if (filter.children.size() != 1) {
-			return nullopt;
-		}
-		if (!filter.projection_map.empty()) {
-			if (output_idx >= filter.projection_map.size()) {
-				return nullopt;
-			}
-			output_idx = filter.projection_map[output_idx].GetIndex();
-		}
-		return GetTableColumnOrigin(*filter.children[0], output_idx, allow_filtered);
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		if (!allow_filtered) {
-			return nullopt;
-		}
-		auto binding = op.GetColumnBindings()[output_idx];
-		for (auto &child : op.children) {
-			auto bindings = child->GetColumnBindings();
-			auto entry = std::find(bindings.begin(), bindings.end(), binding);
-			if (entry != bindings.end()) {
-				return GetTableColumnOrigin(*child, NumericCast<idx_t>(entry - bindings.begin()), allow_filtered);
-			}
-		}
-		return nullopt;
-	}
-	if (op.type != LogicalOperatorType::LOGICAL_GET) {
-		return nullopt;
-	}
-	auto &get = op.Cast<LogicalGet>();
-	auto table = get.GetTable();
-	if (!table || !get.children.empty() || !get.scan_partition_indices.empty() ||
-	    (!allow_filtered &&
-	     (get.table_filters.HasFilters() || (get.dynamic_filters && get.dynamic_filters->HasFilters())))) {
-		return nullopt;
-	}
-	return TableColumnOrigin {*table, get.GetColumnIndex(ProjectionIndex(output_idx))};
-}
-
-optional<TableColumnOrigin> GetTableColumnOrigin(LogicalOperator &op, const Expression &expression,
-                                                 bool allow_filtered) {
-	auto output_idx = GetDirectReferenceIndex(expression, op);
-	return output_idx.IsValid() ? GetTableColumnOrigin(op, output_idx.GetIndex(), allow_filtered) : nullopt;
-}
-
-bool SameOrigin(const TableColumnOrigin &left, const TableColumnOrigin &right) {
-	return &left.table.get() == &right.table.get() && left.column == right.column;
-}
 
 static optional_idx GetJoinOutputReference(const Expression &expression, LogicalComparisonJoin &join,
                                            idx_t &child_index) {

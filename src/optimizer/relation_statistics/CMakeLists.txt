@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_optimizer_relation_statistics
   OBJECT
   equality_cardinality.cpp
+  equality_composite_key.cpp
   equality_evidence.cpp
   equality_projection.cpp
   finite_filter_selection.cpp

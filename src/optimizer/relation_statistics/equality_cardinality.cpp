@@ -455,8 +455,25 @@ vector<EqualitySupport> EqualityCardinalityModel::ResolveJoinDomains(const Equal
 EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<EqualityComponent> &components,
                                                                const vector<idx_t> &relations,
                                                                EqualityDomainPolicy domain_policy) const {
+	return EstimateInternal(components, relations, domain_policy, {});
+}
+
+EqualityCardinalityEstimate
+EqualityCardinalityModel::EstimateJoin(const vector<pair<ColumnBinding, ColumnBinding>> &equalities,
+                                       const vector<idx_t> &relations) const {
+	return EstimateInternal(Components(equalities), relations, EqualityDomainPolicy::JOIN, equalities);
+}
+
+EqualityCardinalityEstimate
+EqualityCardinalityModel::EstimateInternal(const vector<EqualityComponent> &components, const vector<idx_t> &relations,
+                                           EqualityDomainPolicy domain_policy,
+                                           const vector<pair<ColumnBinding, ColumnBinding>> &equalities) const {
 	EqualityCardinalityEstimate result;
 	auto factors = BuildFactors(components);
+	vector<vector<EqualitySupport>> scalar_domains;
+	if (equalities.size() > 1 && components.size() > 1 && !state->sources.empty()) {
+		scalar_domains.resize(components.size());
+	}
 	auto resolve_domains = [&](const EqualityComponent &component) {
 		if (domain_policy == EqualityDomainPolicy::JOIN) {
 			return ResolveJoinDomains(component);
@@ -502,6 +519,9 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 			CardinalityValue selectivity;
 			Intersect(points, selectivity);
 			result.selectivity *= selectivity;
+			if (!scalar_domains.empty()) {
+				scalar_domains[factor.components[0]] = std::move(points);
+			}
 			continue;
 		}
 		auto first = component.bindings.front().table_index.index;
@@ -532,6 +552,9 @@ EqualityCardinalityEstimate EqualityCardinalityModel::Estimate(const vector<Equa
 	}
 	for (auto &entry : products) {
 		result.selectivity *= entry.second.minimum_domain / entry.second.domain_product;
+	}
+	if (!scalar_domains.empty() && !result.selectivity.IsZero()) {
+		result.selectivity *= CompositeKeyCorrection(components, scalar_domains, equalities);
 	}
 	map<idx_t, vector<idx_t>> covered;
 	for (auto &component : components) {

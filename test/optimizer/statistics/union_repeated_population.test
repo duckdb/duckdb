@@ -1,0 +1,117 @@
+# name: test/optimizer/statistics/union_repeated_population.test
+# description: Repeated complete native columns add UNION rows without inventing new values
+# group: [statistics]
+
+statement ok
+SET disabled_optimizers = 'statistics_propagation,join_filter_pushdown,common_subplan';
+
+statement ok
+CREATE TABLE population AS SELECT (range % 2)::DOUBLE k, range % 5 payload FROM range(1000);
+
+statement ok
+CREATE TABLE domain AS SELECT range::DOUBLE k FROM range(2);
+
+statement ok
+CREATE TABLE independent_population AS SELECT * FROM population;
+
+statement ok
+ANALYZE population;
+
+statement ok
+ANALYZE domain;
+
+statement ok
+ANALYZE independent_population;
+
+# Both copies have two distinct values. Their 2,000 rows all match the domain.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM (
+    SELECT k FROM population UNION ALL SELECT k FROM population
+) p JOIN domain USING (k);
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"2000".*
+
+query I
+SELECT count(*) FROM (
+    SELECT k FROM population UNION ALL SELECT k FROM population
+) p JOIN domain USING (k);
+----
+2000
+
+# Reordering and renaming output columns does not change their source.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM (
+    SELECT payload, k AS key FROM population
+    UNION ALL SELECT payload, k FROM population
+) p JOIN domain d ON p.key = d.k;
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"2000".*
+
+# Equal scalar statistics on different tables do not establish identical support.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM (
+    SELECT k FROM population UNION ALL SELECT k FROM independent_population
+) p JOIN domain USING (k);
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"1000".*
+
+# A filtered copy cannot certify that the full value population remains.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM (
+    SELECT k FROM population UNION ALL SELECT k FROM population WHERE payload = 1
+) p JOIN domain USING (k);
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"600".*
+
+query I
+SELECT count(*) FROM (
+    SELECT k FROM population UNION ALL SELECT k FROM population WHERE payload = 1
+) p JOIN domain USING (k);
+----
+1200
+
+# A fixed-size sample contributes its rows but cannot certify complete support.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*) FROM (
+    SELECT k FROM population
+    UNION ALL SELECT k FROM population USING SAMPLE 100 ROWS (reservoir, 42)
+) p JOIN domain USING (k);
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"550".*
+
+query I
+SELECT count(*) FROM (
+    SELECT k FROM population
+    UNION ALL SELECT k FROM population USING SAMPLE 100 ROWS (reservoir, 42)
+) p JOIN domain USING (k);
+----
+1100
+
+statement ok
+CREATE TABLE nullable_population AS
+SELECT CASE WHEN range % 2 = 0 THEN NULL ELSE 1::DOUBLE END k FROM range(10);
+
+statement ok
+ANALYZE nullable_population;
+
+# Empty arms do not remove rows; repeated NULLs remain NULL and do not join.
+query II
+SELECT count(*), count(k) FROM (
+    SELECT k FROM nullable_population
+    UNION ALL SELECT k FROM nullable_population
+    UNION ALL SELECT k FROM nullable_population WHERE false
+) p;
+----
+20	10
+
+query I
+SELECT count(*) FROM (
+    SELECT k FROM nullable_population UNION ALL SELECT k FROM nullable_population
+) p JOIN domain USING (k);
+----
+10

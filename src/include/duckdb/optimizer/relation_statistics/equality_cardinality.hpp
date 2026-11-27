@@ -64,6 +64,9 @@ public:
 
 	EqualityCardinalityEstimate Estimate(const vector<EqualityComponent> &components, const vector<idx_t> &relations,
 	                                     EqualityDomainPolicy domain_policy = EqualityDomainPolicy::JOIN) const;
+	//! Retain applicable predicate pairs for the guarded composite-key cost prior.
+	EqualityCardinalityEstimate EstimateJoin(const vector<pair<ColumnBinding, ColumnBinding>> &equalities,
+	                                         const vector<idx_t> &relations) const;
 	//! Intersection and denominator count each normalized binding, and each proven identical support, appropriately.
 	EqualitySupport Intersect(const vector<EqualitySupport> &supports, CardinalityValue &factor) const;
 	EqualitySupport ColumnSupport(ColumnBinding binding) const;
@@ -86,6 +89,13 @@ private:
 	enum class ProjectionScope { EVIDENCE, COLUMNS_AND_EVIDENCE };
 
 private:
+	EqualityCardinalityEstimate EstimateInternal(const vector<EqualityComponent> &components,
+	                                             const vector<idx_t> &relations, EqualityDomainPolicy domain_policy,
+	                                             const vector<pair<ColumnBinding, ColumnBinding>> &equalities) const;
+	optional<CardinalityValue> OriginalProducerPopulation(const vector<ColumnBinding> &columns) const;
+	CardinalityValue CompositeKeyCorrection(const vector<EqualityComponent> &components,
+	                                        const vector<vector<EqualitySupport>> &domains,
+	                                        const vector<pair<ColumnBinding, ColumnBinding>> &equalities) const;
 	EqualitySupport IntersectJoint(const vector<EqualitySupport> &joint_points,
 	                               const vector<vector<EqualitySupport>> &coordinates, CardinalityValue &factor) const;
 	vector<EqualitySupport> ResolveJoinDomains(const EqualityComponent &component) const;

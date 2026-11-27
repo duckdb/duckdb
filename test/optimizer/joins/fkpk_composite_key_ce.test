@@ -1,5 +1,5 @@
 # name: test/optimizer/joins/fkpk_composite_key_ce.test
-# description: Independent equality components and transitive conditions on composite-key-shaped data
+# description: Guarded composite-key estimates retain independent factors and equality closure
 # group: [joins]
 
 statement ok
@@ -8,7 +8,7 @@ SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 require vector_size 2048
 
 statement ok
-set disabled_optimizers='statistics_propagation';
+set disabled_optimizers='statistics_propagation,join_filter_pushdown';
 
 # --------------------------------------------------------------------------
 # Setup: mimic TPC-H Q9 structure (partsupp, supplier, lineitem).
@@ -34,7 +34,13 @@ create table ps as select
 from range(200000);
 
 statement ok
+ANALYZE ps;
+
+statement ok
 create table su as select range s_suppkey from range(10000);
+
+statement ok
+ANALYZE su;
 
 statement ok
 create table li as select
@@ -42,41 +48,56 @@ create table li as select
     range % 200000 l_partkey
 from range(600000);
 
+statement ok
+ANALYZE li;
+
 # The generator makes x and y equal but publishes no dependency or joint key.
-# Equal scalar NDVs alone cannot remove either independent equality factor.
+# The guarded cost prior recognizes key-like dimensions without declaring a key.
 
 statement ok
 create table ck_a as select range::integer x, range::integer y from range(1000);
 
 statement ok
+ANALYZE ck_a;
+
+statement ok
 create table ck_b as select range::integer x, range::integer y from range(1000);
+
+statement ok
+ANALYZE ck_b;
 
 query II
 explain select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN[^~]*~1 row.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~1,000 rows.*
 
 query I
 select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 ----
 1000
 
-# Each side is estimated at 2K rows after filtering. Both informed equality
-# domains contribute independently: 4M / (NDV(x) * NDV(y)), about 37 rows.
+# Each side is estimated at 2K rows after filtering. The composite fallback
+# uses the original 10K producer rows, keeping both filter reductions.
 # Replacing the second equality with an inequality uses its separate fallback.
 
 statement ok
 create table ck_sel_a as select range::integer x, (range % 10)::integer y from range(10000);
 
 statement ok
+ANALYZE ck_sel_a;
+
+statement ok
 create table ck_sel_b as select range::integer x, (range % 10)::integer y from range(10000);
+
+statement ok
+ANALYZE ck_sel_b;
 
 query II
 explain select count(*)
 from ck_sel_a join ck_sel_b on ck_sel_a.x = ck_sel_b.x and ck_sel_a.y = ck_sel_b.y
 where ck_sel_a.x < 100 and ck_sel_b.x < 100;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[1-9][0-9] rows.*
+physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[1-9][0-9]{2} rows.*
 
 query II
 explain select count(*)
@@ -92,7 +113,13 @@ statement ok
 create table ff_a as select (range % 1000)::integer x, (range % 1000)::integer y from range(100000);
 
 statement ok
+ANALYZE ff_a;
+
+statement ok
 create table ff_b as select (range % 1000)::integer x, (range % 1000)::integer y from range(100000);
+
+statement ok
+ANALYZE ff_b;
 
 query II
 explain select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
@@ -110,11 +137,11 @@ select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
 # ps_suppkey=s_suppkey, enabling the plan {ps JOIN su} JOIN li.
 #
 # The transitive supplier equality contributes no additional binding.
-# The independent part and supplier factors still apply: the generator's
-# cross-column correlation is not a published joint or functional dependency.
+# The part/supplier pair receives the guarded fallback. The supplier dimension
+# still contributes its scalar factor; no joint or functional dependency is published.
 # --------------------------------------------------------------------------
 
-# Both selected joins have points in the tens under the independent scalar model.
+# Both selected joins now retain row counts on the scale of their inputs.
 # JSON keeps each estimate within its join's own extra_info object.
 query II
 explain (format json) select count(*) from ps, su, li
@@ -122,7 +149,7 @@ where su.s_suppkey = li.l_suppkey
   and ps.ps_suppkey = li.l_suppkey
   and ps.ps_partkey = li.l_partkey;
 ----
-physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]{4,5}".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]{4,5}".*
 
 # Correctness: actual join count (1 ps row + 1 su row per li row = 600K)
 query I
@@ -137,8 +164,8 @@ where su.s_suppkey = li.l_suppkey
 # Q9 can also expose the second equality indirectly. If ps joins su first, the
 # final join to li can be written as li.partkey=ps.partkey and
 # li.suppkey=su.suppkey. Since ps.suppkey=su.suppkey was already applied,
-# this implies a second li<->ps equality. Both informed domains contribute;
-# four suppliers per part is a data property, not a recorded joint-key proof.
+# this implies a second li<->ps equality. Closure must retain this coordinate
+# for the guarded fallback without publishing a joint-key proof.
 # --------------------------------------------------------------------------
 
 statement ok
@@ -148,7 +175,13 @@ create table ps4 as select
 from range(80000);
 
 statement ok
+ANALYZE ps4;
+
+statement ok
 create table su4 as select range s_suppkey from range(1000);
+
+statement ok
+ANALYZE su4;
 
 statement ok
 create table li4 as select
@@ -156,13 +189,16 @@ create table li4 as select
     ((range % 20000) * 4) % 1000 l_suppkey
 from range(60000);
 
+statement ok
+ANALYZE li4;
+
 query II
 explain (format json) select count(*) from ps4, su4, li4
 where ps4.ps_suppkey = su4.s_suppkey
   and ps4.ps_partkey = li4.l_partkey
   and su4.s_suppkey = li4.l_suppkey;
 ----
-physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]".*
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]{4,5}".*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"[1-9][0-9]{4,5}".*
 
 query I
 select count(*) from ps4, su4, li4
@@ -171,3 +207,28 @@ where ps4.ps_suppkey = su4.s_suppkey
   and su4.s_suppkey = li4.l_suppkey;
 ----
 60000
+
+# duckdb-bot's direct two-column reproduction. This is a bounded cost prior:
+# it avoids the independent estimate near 100 rows, without claiming to infer
+# the actual 500K matches from marginal NDVs alone.
+statement ok
+CREATE TABLE bot_f AS SELECT i % 1000 AS a, i % 2000 AS b FROM range(100000) r(i);
+
+statement ok
+CREATE TABLE bot_u AS SELECT i % 1000 AS a, i % 2000 AS b FROM range(10000) r(i);
+
+statement ok
+ANALYZE bot_f;
+
+statement ok
+ANALYZE bot_u;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*) FROM bot_f f JOIN bot_u u ON f.a=u.a AND f.b=u.b;
+----
+physical_plan	<REGEX>:(?s).*"Join Type":\s*"INNER"[^{}]*"Estimated Cardinality":\s*"100000".*
+
+query I
+SELECT count(*) FROM bot_f f JOIN bot_u u ON f.a=u.a AND f.b=u.b;
+----
+500000
