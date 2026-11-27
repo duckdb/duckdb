@@ -113,15 +113,16 @@ SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND
 ----
 1920
 
-# Multiple unknown domains retain the existing fallback.
+# Unknown domains retain the existing fallback even without a composite pair.
 query II
 EXPLAIN (FORMAT JSON)
 WITH coordinates AS NOT MATERIALIZED (
-    SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, i v FROM range(256) t(i)
+    SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, ((i//16)%4)::INTEGER z, i v FROM range(64) t(i)
 )
-SELECT a.v FROM coordinates a JOIN coordinates b USING(x,y);
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"256"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"64"\s*}\s*}\s*\]\s*$
 
 # This known key is outside the statistical cap: 48 tuples, four values per column.
 statement ok
