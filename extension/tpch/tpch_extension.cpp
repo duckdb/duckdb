@@ -224,22 +224,29 @@ struct DBGenRunRegistry {
 };
 
 struct DBGenGlobalState {
-	//! The connection running in the transaction of the call: open until the tables are loaded
-	std::unique_ptr<Connection> conn;
 	std::shared_ptr<DBGenRun> run;
 	int64_t run_id = -1;
 	//! Per TPC-H table, the qualified name
 	std::vector<std::string> table_names;
-	std::atomic<bool> finished {false};
+	//! The tables to load, the biggest first, and how many are claimed and loaded
+	std::vector<idx_t> load_order;
+	std::atomic<idx_t> next_table {0};
+	std::atomic<idx_t> loaded_tables {0};
+	std::mutex lock;
+	bool finished = false;
 
 	void Finish() {
+		std::lock_guard<std::mutex> guard(lock);
 		if (run_id >= 0) {
 			DBGenRunRegistry::Get().Unregister(run_id);
 			run_id = -1;
 		}
-		// the connection must be closed before the transaction ends
-		conn.reset();
 		finished = true;
+	}
+
+	bool IsFinished() {
+		std::lock_guard<std::mutex> guard(lock);
+		return finished;
 	}
 
 	~DBGenGlobalState() {
@@ -288,6 +295,8 @@ void DbgenBind(TableFunction::BindInput &input) {
 		throw InvalidInputException("Step must be defined when children are defined");
 	}
 	input.AddResultColumn("Success", input.GetContext().GetFactory().ParseType("BOOLEAN"));
+	// the call returns no rows: its threads, one per table being loaded, need not keep an order
+	input.SetOrderPreservation(OrderPreservation::NO_ORDER);
 	input.SetBindData<DBGenBindData>(std::move(data));
 }
 
@@ -325,13 +334,18 @@ void DbgenInitGlobal(TableFunction::InitGlobalInput &input) {
 	auto &data = input.GetBindData<DBGenBindData>();
 	auto &context = input.GetContext();
 	auto state = std::unique_ptr<DBGenGlobalState>(new DBGenGlobalState());
-	state->conn = std::unique_ptr<Connection>(new Connection(context.ConnectInTransaction()));
-	auto &conn = *state->conn;
+	// sets up the tables; the exec threads load them through connections of their own
+	auto conn = context.ConnectInTransaction();
 
 	// By default, the tables go to the current schema
 	auto catalog = data.catalog ? *data.catalog : QueryText(conn, "SELECT current_database()");
 	auto schema = data.schema ? *data.schema : QueryText(conn, "SELECT current_schema()");
 	auto target = ResolveSchema(conn, catalog, schema);
+	// several connections may write to DuckDB tables of one transaction at once; other catalogs load one at a time
+	auto catalog_type = QueryText(conn, "SELECT coalesce(any_value(type), '') FROM duckdb_databases() WHERE "
+	                                    "lower(database_name) = " +
+	                                        SQLString(Lower(catalog)));
+	auto load_concurrently = catalog_type == "duckdb";
 	for (idx_t i = 0; i < tpch::TPCH_TABLE_COUNT; i++) {
 		auto &table = tpch::GetTPCHTableSchema(i);
 		auto table_name = std::string(table.name) + data.suffix;
@@ -347,31 +361,55 @@ void DbgenInitGlobal(TableFunction::InitGlobalInput &input) {
 			run->total_rows += item.count;
 		}
 	}
+	// the biggest tables first, so that the small ones fill in at the end
+	std::vector<std::pair<idx_t, idx_t>> table_rows;
+	for (idx_t table = 0; table < tpch::TPCH_TABLE_COUNT; table++) {
+		idx_t rows = 0;
+		for (auto &item : run->generator->WorkItems(table)) {
+			rows += item.count;
+		}
+		if (rows > 0) {
+			table_rows.emplace_back(std::string(tpch::GetTPCHTableSchema(table).name) == "lineitem" ? 4 * rows : rows,
+			                        table);
+		}
+	}
+	std::stable_sort(
+	    table_rows.begin(), table_rows.end(),
+	    [](const std::pair<idx_t, idx_t> &a, const std::pair<idx_t, idx_t> &b) { return a.first > b.first; });
+	for (auto &entry : table_rows) {
+		state->load_order.push_back(entry.second);
+	}
 	state->run = run;
 	state->run_id = DBGenRunRegistry::Get().Register(std::move(run));
-	if (state->run->total_rows == 0) {
+	if (state->load_order.empty()) {
 		state->Finish();
 	}
+	input.SetMaxThreads(load_concurrently ? std::max<idx_t>(state->load_order.size(), 1) : 1);
 	input.SetGlobalState<DBGenGlobalStateHolder>(DBGenGlobalStateHolder {std::move(state)});
 }
 
-//! Loads the tables, one INSERT per table, each of which generates the table's rows in parallel
+//! Loads the tables, one INSERT per table, each on a connection of its own in the transaction of the call. The
+//! threads of the call load different tables at once, and each INSERT generates its table's rows in parallel.
 void DbgenExec(TableFunction::ExecInput &input) {
 	auto &state = *input.GetGlobalState<DBGenGlobalStateHolder>().state;
 	SetNoResult(input);
-	if (state.finished) {
-		return;
-	}
-	for (idx_t table = 0; table < tpch::TPCH_TABLE_COUNT; table++) {
-		if (state.run->generator->WorkItems(table).empty()) {
-			continue;
+	while (true) {
+		auto index = state.next_table++;
+		if (index >= state.load_order.size()) {
+			return;
 		}
-		state.conn
-		    ->Execute("INSERT INTO " + state.table_names[table] + " SELECT * FROM __tpch_dbgen_table(" +
-		              std::to_string(state.run_id) + ", " + std::to_string(table) + ")")
-		    .Drain();
+		auto table = state.load_order[index];
+		{
+			// closed before the call returns, so before the transaction ends
+			auto conn = input.GetContext().ConnectInTransaction();
+			conn.Execute("INSERT INTO " + state.table_names[table] + " SELECT * FROM __tpch_dbgen_table(" +
+			             std::to_string(state.run_id) + ", " + std::to_string(table) + ")")
+			    .Drain();
+		}
+		if (++state.loaded_tables == state.load_order.size()) {
+			state.Finish();
+		}
 	}
-	state.Finish();
 }
 
 void DbgenProgress(TableFunction::ProgressInput &input) {
@@ -382,7 +420,7 @@ void DbgenProgress(TableFunction::ProgressInput &input) {
 		return;
 	}
 	// the engine reports 100 once the call has returned its result
-	if (state->finished) {
+	if (state->IsFinished()) {
 		input.SetProgress(0.999);
 		return;
 	}

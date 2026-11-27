@@ -763,8 +763,21 @@ static idx_t GetMaxRowsPerIndex(int table_index) {
 	}
 }
 
+//! The average number of rows of the table one row of its dbgen table generates
+static idx_t GetAverageRowsPerIndex(int table_index) {
+	switch (table_index) {
+	case LINE:
+		return (O_LCNT_MIN + O_LCNT_MAX) / 2;
+	case PSUPP:
+		return SUPP_PER_PART;
+	default:
+		return 1;
+	}
+}
+
+//! Splits a table into work items of about DBGEN_TARGET_CHUNK_ROWS rows of output each
 static idx_t GetDefaultTableChildCount(const DBGenContext &dbgen_ctx, int table_index) {
-	auto row_count = GetDBGenTableRowCount(dbgen_ctx, table_index);
+	auto row_count = GetDBGenTableRowCount(dbgen_ctx, GetDBGenTable(table_index)) * GetAverageRowsPerIndex(table_index);
 	if (row_count <= DBGEN_TARGET_CHUNK_ROWS) {
 		return 1;
 	}
@@ -902,7 +915,7 @@ DBGenGenerator::DBGenGenerator(double flt_scale, int children, int current_step)
 		} else if (dbgen_table == SUPP || dbgen_table == CUST) {
 			table_children = default_child_count;
 		} else {
-			table_children = GetDefaultTableChildCount(base_context, dbgen_table);
+			table_children = GetDefaultTableChildCount(base_context, GetTableIndex(table_idx));
 		}
 		auto row_count = GetDBGenTableRowCount(base_context, dbgen_table);
 		auto first_step = explicit_partial_generation ? current_step : 0;
