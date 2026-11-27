@@ -532,6 +532,9 @@ struct AggregateStateLayout {
 	unordered_map<idx_t, Value> constant_parameters;
 	//! Checks the imported states for invariants the fields cannot express (e.g. between fields)
 	aggregate_validate_state_t validate_state = nullptr;
+	//! Opts a layout whose fields do not show its arena memory (e.g. a heap behind export/import callbacks) into
+	//! state spilling. Spilling exports the states of all aggregates of the hash table, not only this one
+	bool spill_opaque_arena_memory = false;
 };
 
 } // namespace duckdb

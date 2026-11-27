@@ -701,6 +701,8 @@ option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
+option(WINDOWS_STATIC_LIBRARY_EXPORTS
+       "Keep core DLL exports in self-contained Windows extensions" OFF)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 set(SMALLER_BINARY
     ""
@@ -1037,6 +1039,15 @@ if(NOT MSVC)
     set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
   endif()
 
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wc2y-extensions"
+                            COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+    if(COMPILER_SUPPORTS_C2Y_EXTENSIONS_WARNING)
+      set(CXX_EXTRA "${CXX_EXTRA} -Wno-c2y-extensions")
+    endif()
+  endif()
+
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                                    VERSION_GREATER 8.0)
     if(REDUCE_SYMBOLS)
@@ -1093,6 +1104,7 @@ else()
   string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_WINDOWS_FLAGS}")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /DDEBUG")
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.

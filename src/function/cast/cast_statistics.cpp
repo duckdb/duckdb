@@ -274,6 +274,27 @@ static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStati
 	return result.ToUnique();
 }
 
+static unique_ptr<BaseStatistics> StatisticsPropagateListToList(const BaseStatistics &input, const LogicalType &source,
+                                                                const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST);
+	if (input.GetStatsType() != StatisticsType::LIST_STATS) {
+		return nullptr;
+	}
+	if (source == target) {
+		return input.Copy().ToUnique();
+	}
+	// casting the elements keeps the length of the lists
+	auto result = ListStats::CreateUnknown(target);
+	result.CopyValidity(input);
+	ListStats::SetLengthData(result, ListStats::GetLengthData(input));
+	auto child_stats = CastStatistics::TryPropagate(ListStats::GetChildStats(input), ListType::GetChildType(source),
+	                                                ListType::GetChildType(target));
+	if (child_stats) {
+		ListStats::SetChildStats(result, std::move(child_stats));
+	}
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &stats, const LogicalType &source,
                                                         const LogicalType &target) {
 	if (source.id() == LogicalTypeId::VARIANT) {
@@ -294,6 +315,9 @@ unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &st
 	}
 	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {
 		return StatisticsPropagateArrayToList(stats, source, target);
+	}
+	if (source.id() == LogicalTypeId::LIST && target.id() == LogicalTypeId::LIST) {
+		return StatisticsPropagateListToList(stats, source, target);
 	}
 	if (!CanPropagate(source, target)) {
 		return nullptr;

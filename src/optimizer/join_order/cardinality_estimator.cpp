@@ -75,7 +75,7 @@ bool DomainEstimate::HasReliableDistinctCount() const {
 }
 
 CardinalityValue DomainEstimate::GetReliableDistinctCount() const {
-	if (!HasReliableDistinctCount()) {
+	if (!estimate || !HasReliableDistinctCount()) {
 		throw InternalException("Attempted to access an unreliable distinct count");
 	}
 	return estimate->distinct_count;

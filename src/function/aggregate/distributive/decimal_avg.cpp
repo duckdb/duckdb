@@ -1,7 +1,16 @@
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/function/aggregate/bignum_aggregates.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -54,10 +63,15 @@ struct DecimalAvgOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		// the counts of imported states can be anything, the count of rows of a table cannot overflow
+		uint64_t count;
+		if (!TryAddOperator::Operation(target.count, source.count, count)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		if (!Hugeint::TryAddInPlace(target.sum, source.sum)) {
 			OutOfRangeException::Throw("decimal_average: intermediate sum overflowed HUGEINT range during combine");
 		}
-		target.count += source.count;
+		target.count = count;
 	}
 
 	// Overload for hugeint_t result: direct assignment.
@@ -104,6 +118,80 @@ struct DecimalAvgOperation {
 		AssignResult(target, signed_q);
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// The bignum_t tier: decimals wider than 38 digits
+//
+// The state is the shared BIGNUM average accumulator (an exact sum and a non-NULL row count); the sum is divided once
+// at the end with the rounding of the fixed-size tiers (half to even). The sum has no bound, so this tier cannot
+// overflow.
+//===--------------------------------------------------------------------===//
+
+struct WideDecimalAvgOperation : BignumAvgOperation {
+	template <class RESULT, class STATE>
+	static void Finalize(STATE &state, RESULT &target, AggregateFinalizeData &finalize_data) {
+		// the state is only read: it is exported while other threads may still read it
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		StringHeap heap;
+		BignumArithmeticState arithmetic;
+		const string count_blob = DecimalHelper<bignum_t>::FromInteger(uhugeint_t(state.count));
+		const bignum_t count_value {string_t(count_blob)};
+		const BignumIntermediate divisor(count_value);
+		// the sum is divided once and rounded half to even, like in the fixed-size tiers
+		const auto quotient = DecimalHelper<bignum_t>::DivideAndRound(state.value, divisor,
+		                                                              DecimalRounding::HALF_TO_EVEN, heap, arithmetic);
+		// the average of values of the width fits the width, but an imported state can carry any sum
+		const auto &result_type = finalize_data.result.GetType();
+		if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(quotient), DecimalType::GetWidth(result_type))) {
+			throw OutOfRangeException("decimal_average: the result does not fit in %s", result_type.ToString());
+		}
+		// the result vector owns a copy of the quotient, the scratch heap is released with the finalize
+		target = bignum_t(finalize_data.ReturnString(quotient));
+	}
+};
+
+//! The states are exported as STRUCT(sum BIGNUM, count UBIGINT), the sum is NULL for an empty state
+static AggregateStateLayout WideDecimalAvgStateLayout(AggregateLayoutInput &input) {
+	return AggregateStateLayout(LogicalType::STRUCT({{"sum", LogicalType::BIGNUM}, {"count", LogicalType::UBIGINT}}),
+	                            AlignValue<idx_t>(sizeof(BignumAvgState)));
+}
+
+static void WideDecimalAvgExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                                      idx_t offset) {
+	auto states = state_vector.Values<BignumAvgState *>();
+	auto writer = FlatVector::Writer<VectorStructType<string_t, uint64_t>>(result, count, offset);
+	for (idx_t i = 0; i < count; i++) {
+		writer.WriteValue([&](auto &sum_writer, auto &count_writer) {
+			BignumAggregates::WriteAvgState(*states[i].GetValue(), count_writer, sum_writer);
+		});
+	}
+}
+
+static void WideDecimalAvgImportState(AggregateImportInputData &input) {
+	auto entries = input.input_vec.Values<VectorStructType<string_t, uint64_t>>();
+	for (idx_t i = 0; i < input.input_vec.size(); i++) {
+		auto &state = *reinterpret_cast<BignumAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
+		BignumAvgOperation::Initialize(state);
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
+			// an empty state
+			continue;
+		}
+		BignumAggregates::ImportAvgState(state, entry.GetChildValue<1>(), entry.GetChildValue<0>(), input.allocator,
+		                                 "decimal_average", "sum");
+	}
+}
+
+static AggregateFunction MakeWideDecimalAvgFunction(const LogicalType &type) {
+	auto function =
+	    AggregateFunction::UnaryAggregate<BignumAvgState, bignum_t, bignum_t, WideDecimalAvgOperation>(type, type);
+	function.SetFallible(); // the finalize throws when the average of an imported state does not fit the width
+	function.SetStateExportCallbacks(WideDecimalAvgStateLayout, WideDecimalAvgExportState, WideDecimalAvgImportState);
+	return function;
+}
 
 //===--------------------------------------------------------------------===//
 // Registration
@@ -159,8 +247,9 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		    MakeDecimalAvgFunction<hugeint_t>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, scale), return_type));
 		break;
 	case PhysicalType::VARCHAR:
-		throw NotImplementedException("decimal_average over DECIMAL types wider than %d digits is not supported yet",
-		                              Decimal::MAX_WIDTH_INT128);
+		// decimals wider than 38 digits sum their BIGNUM blobs
+		function.ReplaceImplementation(MakeWideDecimalAvgFunction(return_type));
+		break;
 	default:
 		throw InternalException("decimal_average: unexpected physical type");
 	}

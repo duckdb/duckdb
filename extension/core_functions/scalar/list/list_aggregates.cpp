@@ -1,3 +1,4 @@
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/main/context.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "core_functions/scalar/list_functions.hpp"
@@ -598,11 +599,23 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	return result;
 }
 
+//! The distinct non-NULL elements of a list are at most as many as its elements
+static unique_ptr<BaseStatistics> ListDistinctStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &list_stats = input.child_stats[0];
+	if (list_stats.GetStatsType() != StatisticsType::LIST_STATS || list_stats.GetType() != input.expr.GetReturnType()) {
+		return nullptr;
+	}
+	auto result = list_stats.Copy();
+	ListStats::SetLengthBounds(result, 0, ListStats::MaxListLength(list_stats));
+	return result.ToUnique();
+}
+
 ScalarFunction ListDistinctFun::GetFunction() {
 	ScalarFunction fun({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
 	                   ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::TEMPLATE("T")));
 	fun.SetResolveTypesCallback(ListAggregatesResolveTypes<false>);
+	fun.SetStatisticsCallback(ListDistinctStats);
 	return fun;
 }
 

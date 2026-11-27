@@ -628,4 +628,22 @@ TEST_CASE("Stable C++API: copy function registration validation", "[cpp_api]") {
 		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
 		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
+
+	// A retry after a refused registration scans with the callbacks set at the retry, not with those of the refused
+	// one.
+	{
+		conn.Execute("CREATE TABLE retry_target(i BIGINT)").Drain();
+		auto function = CopyFunction::Create(conn.GetFactory());
+		function.SetName("cpp_reader_retry").SetCopyFromExecCallback(ReaderExec);
+		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
+		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		function.SetCopyFromExecCallback(nullptr).SetCopyFromBindCallback(ReaderBind_);
+		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
+		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		function.SetCopyFromInitGlobalCallback(ReaderInitGlobal)
+		    .SetCopyFromInitLocalCallback(ReaderInitLocal)
+		    .SetCopyFromExecCallback(ReaderExec);
+		conn.Register(function);
+		REQUIRE(conn.Execute(CopyFromStatement("retry_target", "x", "cpp_reader_retry", ", ROWS 5")).Drain() == 5);
+	}
 }
