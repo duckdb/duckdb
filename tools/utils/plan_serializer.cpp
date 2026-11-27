@@ -2,6 +2,8 @@
 #include "duckdb.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
@@ -10,10 +12,11 @@
 
 #include <fstream>
 
-// This tool can be used to serialize and deserialize plans logical plans
+// This tool can be used to serialize and deserialize bound logical plans.
 // It takes a file with SQL statements as input, executes all statements except the last one and then either
 // - serializes the plan of the last statement into the <plan_file> (if mode is "serialize")
 // - deserializes the <plan_file> and executes it, comparing the results to executing the last statement directly.
+// Output targets the latest format unless a setup statement sets storage_compatibility_version.
 
 int main(int argc, char **argv) {
 	bool serialize = true;
@@ -68,8 +71,6 @@ int main(int argc, char **argv) {
 
 	// Serialize the statement
 	if (serialize) {
-		duckdb::BufferedFileWriter target(db.GetFileSystem(), target_location);
-
 		con.BeginTransaction();
 		duckdb::Parser p(*con.context);
 		p.ParseQuery(target_stmt);
@@ -79,13 +80,24 @@ int main(int argc, char **argv) {
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto plan = std::move(planner.plan);
 
-		duckdb::BinarySerializer serializer(target);
-		serializer.Begin();
-		plan->Serialize(serializer);
-		serializer.End();
+		auto &compatibility = duckdb::DBConfig::GetConfig(*con.context).options.storage_compatibility;
+		duckdb::SerializationOptions options;
+		options.storage_compatibility =
+		    compatibility.manually_set ? compatibility : duckdb::StorageCompatibility::Latest();
+		duckdb::MemoryStream stream;
+		try {
+			duckdb::BinarySerializer::Serialize(*plan, stream, options);
+		} catch (const duckdb::SerializationException &ex) {
+			fprintf(stderr, "%s\n", duckdb::ErrorData(ex).Message().c_str());
+			return 1;
+		}
 
 		con.Rollback();
 
+		duckdb::BufferedFileWriter target(db.GetFileSystem(), target_location,
+		                                  duckdb::FileFlags::FILE_FLAGS_WRITE |
+		                                      duckdb::FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		target.WriteData(stream.GetData(), stream.GetPosition());
 		target.Sync();
 
 		printf("Serialization successful!\n");
