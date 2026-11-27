@@ -58,8 +58,11 @@ struct StoredDatabasePath {
 	DatabaseManager &db_manager;
 	DatabaseFilePathManager &manager;
 	string path;
+	Identifier name;
+	bool detached = false;
 
 	void OnDetach();
+	void OnRename(const Identifier &new_name);
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
@@ -163,9 +166,7 @@ public:
 	const Identifier &GetName() const {
 		return name;
 	}
-	void SetName(const Identifier &new_name) {
-		name = new_name;
-	}
+	void SetName(const Identifier &new_name);
 	//! Move the deleter binding out, if any. Call once the attachment is out of the databases map and
 	//! held exclusively, and run the deleter only with no lock held -- it executes SQL.
 	unique_ptr<ResourceDeleter> ExtractDeleter();

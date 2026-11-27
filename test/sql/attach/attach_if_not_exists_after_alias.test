@@ -1,0 +1,78 @@
+# name: test/sql/attach/attach_if_not_exists_after_alias.test
+# description: ATTACH IF NOT EXISTS <path> after ALTER DATABASE ... SET ALIAS TO must not hang
+# group: [attach]
+
+statement ok
+ATTACH '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+
+statement ok
+CREATE TABLE orig_name.t AS SELECT range AS i FROM range(3)
+
+statement ok
+ALTER DATABASE orig_name SET ALIAS TO other_name
+
+query I
+SELECT count(*) FROM other_name.t
+----
+3
+
+statement error
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+----
+<REGEX>:.*already attached.*
+
+statement error
+ATTACH '{TEST_DIR}/attach_alias_repro.db' AS orig_name
+----
+<REGEX>:.*already attached.*other_name.*
+
+query I
+SELECT count(*) FROM other_name.t
+----
+3
+
+# case-insensitive rename must also update the tracked alias
+statement ok
+ATTACH '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
+
+statement ok
+ALTER DATABASE CASE_ORIG SET ALIAS TO case_other
+
+statement error
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
+----
+<REGEX>:.*already attached.*case_other.*
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_case_repro.db' AS CASE_OTHER
+
+# multiple read-only aliases to the same file: detaching one must not leave a stale tracked alias
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_init
+
+statement ok
+CREATE TABLE ro_init.t AS SELECT 42 AS i
+
+statement ok
+DETACH ro_init
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_b (READ_ONLY)
+
+statement ok
+DETACH ro_a
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_c (READ_ONLY)
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
+
+statement ok
+ALTER DATABASE ro_a SET ALIAS TO ro_renamed
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
