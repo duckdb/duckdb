@@ -1172,7 +1172,7 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: |
           export LSAN_OPTIONS="suppressions=$PWD/.sanitizer-leak-suppressions.txt"
-          make unittest_relassert
+          make unittest_relassert UNITTEST_SLOW_FLAGS="--track-runtime 30"
 
  no-rtti:
     name: No RTTI
@@ -1253,7 +1253,7 @@ jobs:
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_reldebug
+        run: make unittest_reldebug UNITTEST_SLOW_FLAGS="--track-runtime 30"
 
  threadsan:
     name: Thread Sanitizer

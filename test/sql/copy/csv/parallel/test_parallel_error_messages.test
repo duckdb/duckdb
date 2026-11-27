@@ -93,6 +93,8 @@ SELECT * FROM read_csv('{DATA_DIR}/csv/error/csv_error.csv', parallel=false, sep
 ----
 Line: 3002
 
+endloop
+
 # the first error is on line 3002
 statement error
 SELECT * FROM read_csv('{DATA_DIR}/csv/error/date.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': 'date', 'h2': 'varchar'}, header=True)
@@ -134,8 +136,5 @@ statement error
 SELECT * FROM read_csv('{DATA_DIR}/csv/error/timestamp.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': 'timestamp', 'h2': 'varchar'}, header=True)
 ----
 Line: 3002
-
-endloop
-
 
 endloop
