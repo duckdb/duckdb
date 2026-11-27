@@ -661,7 +661,9 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectInputColumn(JoinRelat
 	return result;
 }
 
-optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSet &set, ColumnBinding binding) {
+optional<RelationColumnStats>
+CardinalityEstimator::ProjectColumn(JoinRelationSet &set, ColumnBinding binding,
+                                    optional_ptr<const vector<EqualityComponent>> components) {
 	if (!ContainsBinding(set, binding)) {
 		return {};
 	}
@@ -685,7 +687,12 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSe
 		return result;
 	}
 	auto normalized = state->equalities->Normalize(binding);
-	for (auto &component : state->equalities->Components(GetInnerEqualities(set, InnerEqualityView::STATISTICAL))) {
+	vector<EqualityComponent> local_components;
+	if (!components) {
+		local_components = state->equalities->Components(GetInnerEqualities(set, InnerEqualityView::STATISTICAL));
+		components = &local_components;
+	}
+	for (auto &component : *components) {
 		if (std::find(component.bindings.begin(), component.bindings.end(), normalized) == component.bindings.end()) {
 			continue;
 		}
@@ -758,17 +765,17 @@ optional<RelationStats> CardinalityEstimator::ProjectStats(JoinRelationSet &set,
 	auto &estimate = state->cardinalities.at(set);
 	result.max_cardinality = estimate.maximum;
 	result.row_retention = estimate.row_retention;
+	auto equalities = GetInnerEqualities(set, InnerEqualityView::STATISTICAL);
+	auto components = state->equalities->Components(equalities);
 	result.columns.reserve(bindings.size());
 	for (auto &binding : bindings) {
-		auto column = ProjectColumn(set, binding);
+		auto column = ProjectColumn(set, binding, &components);
 		if (!column) {
 			return {};
 		}
 		result.columns.push_back(*column);
 	}
-	auto equalities = GetInnerEqualities(set, InnerEqualityView::STATISTICAL);
 	auto value_equalities = GetInnerEqualities(set, InnerEqualityView::DIRECT_VALUE);
-	auto components = state->equalities->Components(equalities);
 	vector<bool> hidden(state->leaves.size(), false);
 	vector<EqualityProjection> projections(state->leaves.size());
 	for (auto &boundary : state->boundaries) {

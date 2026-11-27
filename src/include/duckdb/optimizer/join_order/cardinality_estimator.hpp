@@ -19,6 +19,7 @@ namespace duckdb {
 class FilterInfo;
 class JoinPredicateModel;
 struct CardinalityEstimatorState;
+struct EqualityComponent;
 struct FilterInfoWithTotalDomains;
 struct LogicalJoinStats;
 
@@ -42,7 +43,8 @@ public:
 
 private:
 	optional_ptr<const LogicalJoinStats> FindBoundary(JoinRelationSet &set, optional_ptr<JoinRelationSet> &region);
-	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding);
+	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding,
+	                                            optional_ptr<const vector<EqualityComponent>> components = nullptr);
 	optional<RelationColumnStats> ProjectInputColumn(JoinRelationSet &set, ColumnBinding binding,
 	                                                 optional_ptr<const LogicalJoinStats> boundary,
 	                                                 optional_ptr<JoinRelationSet> region);
