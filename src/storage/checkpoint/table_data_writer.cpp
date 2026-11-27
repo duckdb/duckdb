@@ -43,6 +43,10 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
+vector<shared_ptr<IndexEntry>> TableDataWriter::GetIndexes() {
+	return table.GetIndexes(GetCheckpointOptions().visibility_bound);
+}
+
 void TableDataWriter::AddPendingPublication(unique_ptr<PendingPublication> publication) {
 	throw InternalException("This table writer does not support deferred publication");
 }

@@ -2,7 +2,10 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/main/context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/checkpoint/pending_publication.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
@@ -92,15 +95,19 @@ TableIndexList::~TableIndexList() {
 
 shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t index_oid,
                                                 const ConstraintCheckMode check_mode) {
-	D_ASSERT(index);
-	D_ASSERT(index_oid != DConstants::INVALID_INDEX);
+	auto index_entry = make_shared_ptr<IndexEntry>(index_oid, check_mode);
+	AddIndex(index_entry, std::move(index));
+	return index_entry;
+}
+
+void TableIndexList::AddIndex(shared_ptr<IndexEntry> index_entry, unique_ptr<Index> index) {
+	D_ASSERT(index_entry);
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), index_oid, check_mode);
+	index_entry->InstallIndex(std::move(index));
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
 		unbound_count++;
 	}
-	index_entries.push_back(index_entry);
-	return index_entry;
+	index_entries.push_back(std::move(index_entry));
 }
 
 void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
@@ -180,25 +187,18 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 	}
 }
 
-void TableIndexList::RemoveIndex(idx_t index_oid) {
-	shared_ptr<IndexEntry> removed_entry;
-	{
-		annotated_lock_guard lock(index_entries_lock);
-		for (idx_t i = 0; i < index_entries.size(); i++) {
-			auto &entry = index_entries[i];
-			if (entry->GetIndexOid() != index_oid) {
-				continue;
-			}
-			if (entry->GetBindState() != IndexBindState::BOUND) {
-				unbound_count--;
-			}
-			removed_entry = std::move(entry);
-			index_entries.erase_at(i);
-			break;
+void TableIndexList::RemoveIndex(IndexEntry &index_entry) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		auto &entry = index_entries[i];
+		if (entry.get() != &index_entry) {
+			continue;
 		}
-	}
-	if (removed_entry) {
-		removed_entry->Retire();
+		if (entry->GetBindState() != IndexBindState::BOUND) {
+			unbound_count--;
+		}
+		index_entries.erase_at(i);
+		break;
 	}
 }
 
@@ -340,13 +340,9 @@ bool TableIndexList::HasBufferedReplays() const {
 }
 
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
-	return FindEntry(index.GetIndexOid());
-}
-
-shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		if (entry->GetIndexOid() != index_oid) {
+		if (entry->GetIndexOid() != index.GetIndexOid()) {
 			continue;
 		}
 		if (entry->GetBindState() != IndexBindState::BOUND) {
@@ -526,18 +522,22 @@ private:
 
 } // namespace
 
-vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
+vector<shared_ptr<const IndexStorageInfo>> CheckpointIndexes(const vector<shared_ptr<IndexEntry>> &indexes,
+                                                             TableIndexWriter &writer) {
+	auto index_sleep_ms = Settings::Get<DebugCheckpointIndexSleepMsSetting>(writer.GetContext().GetDatabase());
 
 	vector<shared_ptr<const IndexStorageInfo>> infos;
-	infos.reserve(index_entries.size());
+	infos.reserve(indexes.size());
 
-	for (const auto &entry : index_entries) {
+	for (const auto &entry : indexes) {
 		auto checkpoint = entry->Checkpoint(writer);
 		if (checkpoint.shadow_index) {
 			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
 		}
 		infos.push_back(std::move(checkpoint.storage_info));
+		if (index_sleep_ms > 0) {
+			ThreadUtil::SleepMs(index_sleep_ms);
+		}
 	}
 
 	return infos;
@@ -569,16 +569,6 @@ unordered_set<column_t> TableIndexList::GetUniqueIndexColumns() const {
 		result.insert(index_info.column_set.begin(), index_info.column_set.end());
 	}
 	return result;
-}
-
-unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, const StorageVersion version) {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->GetIndexOid() == index_oid) {
-			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(version));
-		}
-	}
-	return nullptr;
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {

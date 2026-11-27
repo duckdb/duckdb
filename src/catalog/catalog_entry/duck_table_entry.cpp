@@ -1,4 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -33,6 +35,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -90,20 +93,45 @@ virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-                               shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
+                               const DuckTableEntry &parent, shared_ptr<DataTable> storage_p)
     : TableCatalogEntry(catalog, schema, info.Base()), columns(std::move(info.Base().columns)),
-      storage(std::move(inherited_storage)), triggers(std::move(inherited_triggers)),
+      storage(std::move(storage_p)), triggers(parent.triggers),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
-	if (!triggers) {
-		triggers = make_shared_ptr<CatalogSet>(catalog);
-	}
-	if (storage) {
-		if (!info.indexes.empty()) {
-			storage->SetIndexStorageInfo(std::move(info.indexes));
-		}
-		return;
+	D_ASSERT(storage);
+	if (!info.indexes.empty()) {
+		storage->SetIndexStorageInfo(std::move(info.indexes));
 	}
 
+	// The constraints keep their backing index OIDs.
+	for (auto &constraint_ptr : constraints) {
+		auto &constraint = *constraint_ptr;
+		if (!constraint.NeedsBackingIndex()) {
+			continue;
+		}
+		auto index_oid = constraint.GetBackingIndexOid();
+		shared_ptr<IndexEntry> index_entry;
+		for (auto &index : parent.constraint_indexes) {
+			if (index->GetIndexOid() == index_oid) {
+				index_entry = index;
+				break;
+			}
+		}
+		if (!index_entry) {
+			// ALTER TABLE added this constraint: its index is still being built
+			auto check_mode = ConstraintCheckMode::DEFAULT;
+			if (constraint.type == ConstraintType::UNIQUE) {
+				check_mode = constraint.Cast<UniqueConstraint>().check_mode;
+			}
+			index_entry = make_shared_ptr<IndexEntry>(index_oid, check_mode);
+		}
+		constraint_indexes.push_back(std::move(index_entry));
+	}
+}
+
+DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info)
+    : TableCatalogEntry(catalog, schema, info.Base()), columns(std::move(info.Base().columns)),
+      triggers(make_shared_ptr<CatalogSet>(catalog)),
+      column_dependency_manager(std::move(info.column_dependency_manager)) {
 	// the default, generated and check expressions are written to the catalog, as are the generated column types
 	auto &storage_manager = catalog.GetAttached().GetStorageManager();
 	for (auto &col_def : columns.Logical()) {
@@ -148,8 +176,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
-				                  unique.check_mode);
+				constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, constraint_type,
+				                                               std::move(index_info), index_oid, unique.check_mode));
 				continue;
 			}
 
@@ -160,8 +188,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid,
-			                  unique.check_mode);
+			constraint_indexes.push_back(storage->AddIndex(
+			    columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid, unique.check_mode));
 			continue;
 		}
 
@@ -181,8 +209,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
-					                  ConstraintCheckMode::DEFAULT);
+					constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, constraint_type,
+					                                               std::move(index_info), index_oid,
+					                                               ConstraintCheckMode::DEFAULT));
 					continue;
 				}
 
@@ -193,8 +222,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					index_storage_info.name = name_info.name;
 				}
 
-				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info),
-				                  index_oid, ConstraintCheckMode::DEFAULT);
+				constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN,
+				                                               std::move(index_storage_info), index_oid,
+				                                               ConstraintCheckMode::DEFAULT));
 			}
 		}
 	}
@@ -530,7 +560,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		triggers->AlterEntry(txn, trigger_name, *trigger_alter_info);
 	}
 
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
@@ -577,7 +607,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	}
 	SetAlterDependencies(context, *bound_create_info, info);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, new_storage);
 }
 
 struct StructMappingInfo {
@@ -872,11 +902,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(context, *bound_create_info, info);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 	}
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, new_storage);
 }
 
 struct DroppedFieldMapping {
@@ -1097,7 +1127,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(context, *bound_create_info, info);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
@@ -1123,14 +1153,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 	// Early return
 	if (has_not_null) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 	}
 
 	// Return with new storage info. Note that we need the bound column index here.
 	auto physical_columns = columns.LogicalToPhysical(LogicalIndex(not_null_idx));
 	auto bound_constraint = make_uniq<BoundNotNullConstraint>(physical_columns);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, new_storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
@@ -1159,7 +1189,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(context, *bound_create_info, info);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
@@ -1282,7 +1312,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto new_storage = make_shared_ptr<DataTable>(
 	    context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index, info.target_type,
 	    std::move(storage_oids), *bound_expression, constraint_to_verify.get());
-	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
+	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, new_storage);
 	return std::move(result);
 }
 
@@ -1301,7 +1331,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKeyInfo &info) {
@@ -1326,7 +1356,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 
 	unique_ptr<BoundCreateTableInfo> bound_create_info;
 	bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
@@ -1351,7 +1381,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(context, *bound_create_info, info);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
@@ -1362,30 +1392,55 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	// Rolls back any physical index creation for index-based constraints.
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
 	auto &prev_indexes = prev_table.GetStorage().GetDataTableInfo()->GetIndexes();
-	for (auto oid : GetAddedUniqueIndexOids(prev_table)) {
-		prev_indexes.RemoveIndex(oid);
+	for (auto &index : GetAddedConstraintIndexes(prev_table)) {
+		prev_indexes.RemoveIndex(*index);
+		index->Retire();
 	}
 }
 
-vector<idx_t> DuckTableEntry::GetAddedUniqueIndexOids(const DuckTableEntry &prev_table) const {
-	unordered_set<idx_t> prev_oids;
-	for (const auto &constraint : prev_table.GetConstraints()) {
-		if (constraint->type == ConstraintType::UNIQUE) {
-			prev_oids.insert(constraint->GetBackingIndexOid());
-		}
-	}
-
-	vector<idx_t> result;
-	for (const auto &constraint : GetConstraints()) {
-		if (constraint->type != ConstraintType::UNIQUE) {
-			continue;
-		}
-		auto oid = constraint->GetBackingIndexOid();
-		if (prev_oids.find(oid) == prev_oids.end()) {
-			result.push_back(oid);
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const {
+	vector<shared_ptr<IndexEntry>> result;
+	for (auto &index : constraint_indexes) {
+		auto &prev_indexes = prev_table.constraint_indexes;
+		if (std::find(prev_indexes.begin(), prev_indexes.end(), index) == prev_indexes.end()) {
+			result.push_back(index);
 		}
 	}
 	return result;
+}
+
+shared_ptr<IndexEntry> DuckTableEntry::GetAddedConstraintIndex(const DuckTableEntry &prev_table) const {
+	auto added_indexes = GetAddedConstraintIndexes(prev_table);
+	if (added_indexes.size() != 1) {
+		throw InternalException("Expected one added constraint index on table \"%s\", found %llu", name,
+		                        added_indexes.size());
+	}
+	return added_indexes[0];
+}
+
+const vector<shared_ptr<IndexEntry>> &DuckTableEntry::GetConstraintIndexes() const {
+	return constraint_indexes;
+}
+
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(CatalogTransaction transaction) const {
+	auto result = GetConstraintIndexes();
+	// an index catalog entry depends on its table
+	auto &dependency_manager = *catalog.GetDependencyManager();
+	auto &table_info = *storage->GetDataTableInfo();
+	for (auto &entry : dependency_manager.GetDependents(transaction, *this, CatalogType::INDEX_ENTRY)) {
+		auto &index = entry.get().Cast<DuckIndexEntry>();
+		if (&index.GetDataTableInfo() != &table_info) {
+			throw InternalException("Index \"%s\" depends on table \"%s\", but is an index of another table",
+			                        index.name, name);
+		}
+		result.push_back(index.GetIndexEntry());
+	}
+	return result;
+}
+
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(VisibilityBound bound) const {
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, bound);
+	return GetIndexes(transaction);
 }
 
 void DuckTableEntry::OnDrop() {
@@ -1449,7 +1504,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	SetAlterDependencies(context, *bound_create_info, info);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
-	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
+	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, new_storage);
 	return std::move(new_entry);
 }
 
@@ -1459,7 +1514,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableCheckpoint(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, *this, storage);
 }
 
 void DuckTableEntry::SetAsRoot() {

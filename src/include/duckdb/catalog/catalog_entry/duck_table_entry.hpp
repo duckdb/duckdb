@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class CommitDropState;
+class IndexEntry;
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
@@ -23,9 +24,10 @@ struct CreateTriggerInfo;
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
+	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info);
+	//! Create a new version of a table, which takes over the triggers and constraint indexes of its parent
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr,
-	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
+	               const DuckTableEntry &parent, shared_ptr<DataTable> storage);
 
 public:
 	const ColumnList &GetColumns() const override;
@@ -52,8 +54,14 @@ public:
 	void CommitAlter(string &column_name, CommitDropState &drop_state);
 	void CommitDrop(CommitDropState &drop_state);
 
-	//! Returns the backing index OIDs of UNIQUE constraints that are not in prev_table.
-	vector<idx_t> GetAddedUniqueIndexOids(const DuckTableEntry &prev_table) const;
+	//! Returns the index of the one constraint that ALTER TABLE added to prev_table.
+	shared_ptr<IndexEntry> GetAddedConstraintIndex(const DuckTableEntry &prev_table) const;
+	//! Returns the indexes that back the constraints of this table, in constraint order.
+	const vector<shared_ptr<IndexEntry>> &GetConstraintIndexes() const;
+	//! The indexes the transaction sees: constraint indexes in constraint order, then those of index catalog entries.
+	vector<shared_ptr<IndexEntry>> GetIndexes(CatalogTransaction transaction) const;
+	//! Returns the indexes of this table that are committed below the bound, e.g. of a checkpoint.
+	vector<shared_ptr<IndexEntry>> GetIndexes(VisibilityBound bound) const;
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
@@ -105,6 +113,8 @@ private:
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
 	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
 	                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
+	//! Returns the constraint indexes of this table that prev_table does not have.
+	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
 
 protected:
 	//! A list of columns that are part of this table
@@ -113,6 +123,8 @@ protected:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The indexes that back the constraints, in constraint order
+	vector<shared_ptr<IndexEntry>> constraint_indexes;
 	//! The catalog set holding triggers for this table
 	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table

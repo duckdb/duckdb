@@ -27,17 +27,12 @@ class WriteAheadLog;
 class ClientContext;
 
 struct DataTableInfo;
+struct IndexDataTableInfo;
 class DataTable;
 struct DeleteInfo;
 struct UpdateInfo;
 
 enum class CommitMode { COMMIT, REVERT_COMMIT };
-
-//! An index that has been marked for removal from a table's index list once the commit chain succeeds.
-struct PendingIndexRemoval {
-	reference<TableIndexList> indexes;
-	idx_t index_oid;
-};
 
 //! Accumulates block marks and index removals during commit so they can be applied together once the
 //! commit chain has succeeded and FlushCommit() has been called, since these are side effects that can't be reverted
@@ -53,10 +48,10 @@ public:
 	void DropTable(shared_ptr<DataTable> table);
 	//! Registers the on-disk blocks of dropped tables. Marks nothing, so a failure leaves nothing freed
 	void FreeTables(const vector<shared_ptr<DataTable>> &tables);
-	//! Register an index to be removed from a table's index list during FinalizeCommit. Index removal will drop in
-	//! memory index data and also marks all blocks on disk as free blocks allowing for reclamation. Block marking for
-	//! indexes is handled implicitly along destruction paths for index memory.
-	void RemoveIndex(TableIndexList &indexes, idx_t index_oid);
+	//! Register an index to be removed from a table's index list during FinalizeCommit: the table no longer
+	//! maintains it. The index memory is dropped and its blocks on disk are marked as free when the catalog entry of
+	//! the index is cleaned up.
+	void RemoveIndex(shared_ptr<IndexDataTableInfo> index_info);
 	//! Finalize accumulated block marks and index removals.
 	void FinalizeCommit();
 	//! Finalize a commit: also frees the dropped tables, or hands them over to a running checkpoint.
@@ -67,7 +62,8 @@ public:
 private:
 	optional_ptr<BlockManager> block_manager;
 	vector<block_id_t> dropped_block_ids;
-	vector<PendingIndexRemoval> pending_index_removals;
+	//! The indexes that have been marked for removal from their table's index list once the commit chain succeeds.
+	vector<shared_ptr<IndexDataTableInfo>> pending_index_removals;
 	vector<shared_ptr<DataTable>> dropped_tables;
 };
 

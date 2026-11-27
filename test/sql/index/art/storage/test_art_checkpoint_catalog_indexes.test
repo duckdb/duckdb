@@ -1,0 +1,362 @@
+# name: test/sql/index/art/storage/test_art_checkpoint_catalog_indexes.test
+# description: A checkpoint writes each table's indexes as they are in the checkpoint's catalog
+# group: [storage]
+
+# the forced commit failure crashes the alternative-verify build
+require no_alternative_verify
+
+require skip_reload
+
+load {TEST_DIR}/test_art_checkpoint_catalog_indexes.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+# three constraint indexes whose keys do not overlap: a mix-up would enforce the wrong keys
+statement ok
+CREATE TABLE pk (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE fk (a INTEGER PRIMARY KEY, i INTEGER REFERENCES pk(i), b INTEGER UNIQUE, c INTEGER);
+
+statement ok
+INSERT INTO pk SELECT range, range + 10000 FROM range(3000);
+
+statement ok
+INSERT INTO fk SELECT range + 20000, range, range + 30000, range % 100 FROM range(3000);
+
+statement ok
+CREATE INDEX fk_c ON fk(c);
+
+statement ok
+CREATE UNIQUE INDEX fk_ab ON fk(a, b);
+
+# tables and indexes with the same names in two schemas
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+CREATE TABLE s1.t (i INTEGER, k INTEGER);
+
+statement ok
+CREATE TABLE s2.t (i INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO s1.t SELECT range, range % 100 FROM range(3000);
+
+statement ok
+INSERT INTO s2.t SELECT range + 5000, range % 7 FROM range(3000);
+
+statement ok
+CREATE UNIQUE INDEX idx ON s1.t(i);
+
+statement ok
+CREATE UNIQUE INDEX idx ON s2.t(i);
+
+# a primary key added to an existing table, followed by another version of the table and an index
+statement ok
+CREATE TABLE v (m INTEGER, n INTEGER);
+
+statement ok
+INSERT INTO v SELECT range, range + 40000 FROM range(3000);
+
+statement ok
+ALTER TABLE v ADD PRIMARY KEY (m);
+
+statement ok
+ALTER TABLE v ADD COLUMN o INTEGER;
+
+statement ok
+CREATE UNIQUE INDEX v_n ON v(n);
+
+# another version of an index catalog entry
+statement ok
+COMMENT ON INDEX fk_c IS 'commented';
+
+# a table created with its indexes in one transaction
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE u (k INTEGER PRIMARY KEY, l INTEGER);
+
+statement ok
+INSERT INTO u SELECT range, range + 50000 FROM range(3000);
+
+statement ok
+CREATE UNIQUE INDEX u_l ON u(l);
+
+statement ok
+COMMIT
+
+# indexes that are not in the catalog: dropped, rolled back, and failed to commit
+statement ok
+CREATE INDEX dropped ON s1.t(k);
+
+statement ok
+DROP INDEX s1.dropped;
+
+statement ok
+BEGIN
+
+statement ok
+CREATE INDEX rolled_back ON s1.t(k);
+
+statement ok
+ROLLBACK
+
+statement ok
+SET debug_force_commit_failure=true;
+
+statement ok
+BEGIN
+
+statement ok
+CREATE INDEX failed ON s1.t(k);
+
+statement error
+COMMIT
+----
+Forced commit failure
+
+statement ok
+SET debug_force_commit_failure=false;
+
+statement ok
+CHECKPOINT
+
+restart
+
+query IIII
+SELECT schema_name, table_name, index_name, comment FROM duckdb_indexes() ORDER BY ALL
+----
+main	fk	fk_ab	NULL
+main	fk	fk_c	commented
+main	u	u_l	NULL
+main	v	v_n	NULL
+s1	t	idx	NULL
+s2	t	idx	NULL
+
+# each constraint enforces its own keys
+statement error
+INSERT INTO pk VALUES (5, 0)
+----
+Duplicate key "i: 5"
+
+statement error
+INSERT INTO pk VALUES (10005, 10005)
+----
+Duplicate key "j: 10005"
+
+statement ok
+INSERT INTO pk VALUES (10005, 5)
+
+statement error
+INSERT INTO fk VALUES (20005, 0, 0, 0)
+----
+Duplicate key "a: 20005"
+
+statement error
+INSERT INTO fk VALUES (0, 0, 30005, 0)
+----
+Duplicate key "b: 30005"
+
+statement error
+INSERT INTO fk VALUES (0, 20005, 0, 0)
+----
+Violates foreign key constraint
+
+statement error
+DELETE FROM pk WHERE i = 5
+----
+Violates foreign key constraint
+
+statement ok
+INSERT INTO fk VALUES (30005, 10005, 20005, 5)
+
+query II
+SELECT COUNT(*), SUM(a) FROM fk WHERE c = 5
+----
+31	673655
+
+statement error
+INSERT INTO s1.t VALUES (5, 0)
+----
+Duplicate key "i: 5"
+
+statement ok
+INSERT INTO s1.t VALUES (5005, 0)
+
+statement error
+INSERT INTO s2.t VALUES (5005, 0)
+----
+Duplicate key "i: 5005"
+
+statement ok
+INSERT INTO s2.t VALUES (5, 0)
+
+statement error
+INSERT INTO v VALUES (5, 0, 0)
+----
+Duplicate key "m: 5"
+
+statement error
+INSERT INTO v VALUES (40005, 40005, 0)
+----
+Duplicate key "n: 40005"
+
+statement ok
+INSERT INTO v VALUES (40005, 5, 0)
+
+statement error
+INSERT INTO u VALUES (5, 0)
+----
+Duplicate key "k: 5"
+
+statement error
+INSERT INTO u VALUES (50005, 50005)
+----
+Duplicate key "l: 50005"
+
+statement ok
+INSERT INTO u VALUES (50005, 5)
+
+# a checkpoint of indexes that were loaded, and of the changes above
+statement ok
+CHECKPOINT
+
+restart
+
+statement error
+INSERT INTO pk VALUES (10005, 0)
+----
+Duplicate key "i: 10005"
+
+statement error
+INSERT INTO fk VALUES (30005, 0, 0, 0)
+----
+Duplicate key "a: 30005"
+
+statement error
+INSERT INTO fk VALUES (0, 0, 20005, 0)
+----
+Duplicate key "b: 20005"
+
+statement error
+INSERT INTO fk VALUES (20005, 0, 30005, 0)
+----
+Duplicate key
+
+statement error
+INSERT INTO s1.t VALUES (5005, 0)
+----
+Duplicate key "i: 5005"
+
+statement error
+INSERT INTO s2.t VALUES (5, 0)
+----
+Duplicate key "i: 5"
+
+statement error
+INSERT INTO v VALUES (99999, 5, 0)
+----
+Duplicate key "n: 5"
+
+statement error
+INSERT INTO u VALUES (99999, 5)
+----
+Duplicate key "l: 5"
+
+query II
+SELECT COUNT(*), SUM(a) FROM fk WHERE c = 5
+----
+31	673655
+
+# the checkpoint when the database closes writes indexes that were loaded but not bound
+statement ok
+CREATE TABLE plain (i INTEGER);
+
+restart
+
+statement ok
+INSERT INTO plain VALUES (1);
+
+restart
+
+statement error
+INSERT INTO pk VALUES (10005, 0)
+----
+Duplicate key "i: 10005"
+
+statement error
+INSERT INTO fk VALUES (0, 0, 20005, 0)
+----
+Duplicate key "b: 20005"
+
+statement error
+INSERT INTO s2.t VALUES (5, 0)
+----
+Duplicate key "i: 5"
+
+statement error
+INSERT INTO v VALUES (99999, 5, 0)
+----
+Duplicate key "n: 5"
+
+statement error
+INSERT INTO u VALUES (99999, 5)
+----
+Duplicate key "l: 5"
+
+query II
+SELECT COUNT(*), SUM(a) FROM fk WHERE c = 5
+----
+31	673655
+
+# indexes and tables that left the catalog are not written
+statement ok
+DROP INDEX fk_c;
+
+statement ok
+DROP INDEX s2.idx;
+
+statement ok
+DROP TABLE u;
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT schema_name, table_name, index_name FROM duckdb_indexes() ORDER BY ALL
+----
+main	fk	fk_ab
+main	v	v_n
+s1	t	idx
+
+statement ok
+INSERT INTO s2.t VALUES (5, 0)
+
+statement error
+INSERT INTO s1.t VALUES (5005, 0)
+----
+Duplicate key "i: 5005"
+
+statement error
+INSERT INTO fk VALUES (30005, 0, 0, 0)
+----
+Duplicate key "a: 30005"
+
+statement error
+INSERT INTO fk VALUES (0, 0, 20005, 0)
+----
+Duplicate key "b: 20005"
+
+query II
+SELECT COUNT(*), SUM(a) FROM fk WHERE c = 5
+----
+31	673655

@@ -397,6 +397,29 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	return schema->GetEntry(transaction, type, name);
 }
 
+catalog_entry_vector_t DependencyManager::GetDependents(CatalogTransaction transaction, const CatalogEntry &object,
+                                                        CatalogType type) {
+	// Look the dependents up after the scan, which holds the lock of the dependency set.
+	vector<CatalogEntryInfo> dependents;
+	ScanDependents(transaction, GetLookupProperties(object), [&](DependencyEntry &dep) {
+		auto &info = dep.EntryInfo();
+		if (info.type == type) {
+			dependents.push_back(info);
+		}
+	});
+
+	catalog_entry_vector_t result;
+	for (auto &info : dependents) {
+		auto entry = LookupEntry(transaction, info);
+		if (!entry) {
+			throw InternalException("Catalog entry \"%s\" depends on \"%s\", but does not exist", info.name,
+			                        object.name);
+		}
+		result.push_back(*entry);
+	}
+	return result;
+}
+
 optional_ptr<CatalogEntry> DependencyManager::LookupTrigger(CatalogTransaction transaction,
                                                             SchemaCatalogEntry &schema_entry,
                                                             const CatalogEntryInfo &info) {

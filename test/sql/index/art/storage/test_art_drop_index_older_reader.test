@@ -1,0 +1,77 @@
+# name: test/sql/index/art/storage/test_art_drop_index_older_reader.test
+# description: A dropped index gives up its blocks once no transaction sees it anymore
+# group: [storage]
+
+load {TEST_DIR}/art_drop_index_older_reader.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CREATE TABLE t (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO t SELECT range, range FROM range(200000);
+
+statement ok
+CREATE INDEX idx ON t(i);
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+query I con1
+SELECT count(*) FROM t WHERE i = 42
+----
+1
+
+statement ok con2
+DROP INDEX idx
+
+query I con1
+SELECT count(*) FROM t WHERE i = 42
+----
+1
+
+# the index keeps its blocks while con1 can see it: no checkpoint may leave it out until then
+statement error con2
+CHECKPOINT
+----
+<REGEX>:.*Cannot CHECKPOINT: there are other write transactions active.*
+
+statement ok con1
+COMMIT
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*) FROM duckdb_indexes()
+----
+0
+
+restart
+
+query I
+SELECT count(*) FROM t WHERE i = 42
+----
+1
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CREATE INDEX idx ON t(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*) FROM t WHERE i = 42
+----
+1

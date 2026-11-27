@@ -41,8 +41,10 @@ public:
 
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
-	//! Adds an index entry to the list of index entries, and returns it.
+	//! Creates an index entry, adds it to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
+	//! Installs the physical index of a pending index entry, and adds the entry to the list of index entries.
+	void AddIndex(shared_ptr<IndexEntry> index_entry, unique_ptr<Index> index);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -59,11 +61,10 @@ public:
 	//! Applies a removal or removal rollback to all index entries.
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
 	                       optional_idx active_checkpoint = optional_idx());
-	//! Removes an index entry from the list of index entries and release any storage the index owns.
-	void RemoveIndex(idx_t index_oid);
-	//! Returns the entry matching the index OID.
+	//! Removes the index entry from the list, if present. The entry keeps its physical index.
+	void RemoveIndex(IndexEntry &index_entry);
+	//! Returns the bound entry of this list that has the OID of the index, e.g. its transaction-local delete index.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
-	shared_ptr<IndexEntry> FindEntry(idx_t index_oid) const;
 	//! Binds unbound indexes possibly present after loading an extension. An index whose stored keys bind to other
 	//! types here is refused, or left unbound when skip_mismatched_keys is set, for a read that can do without it.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {},
@@ -124,16 +125,12 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
-	//! Persist index buffers and install replacements before returning their metadata.
-	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
 	//! Returns the column sets of unique indexes matching the conflict target.
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
 	unordered_set<column_t> GetUniqueIndexColumns() const;
-	//! Serializes the index matching the OID for the write-ahead log, if it exists.
-	unique_ptr<IndexStorageInfo> SerializeToWAL(idx_t index_oid, const StorageVersion version);
 
 public:
 	//! Initialize an index_chunk from a table.
@@ -154,6 +151,10 @@ private:
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
 };
+
+//! Persist the buffers of the given indexes and install replacements before returning their metadata.
+vector<shared_ptr<const IndexStorageInfo>> CheckpointIndexes(const vector<shared_ptr<IndexEntry>> &indexes,
+                                                             TableIndexWriter &writer);
 
 template <class T>
 class TableIndexIterationHelper {
