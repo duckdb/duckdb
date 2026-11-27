@@ -35,6 +35,26 @@ enums:
           from 0. A function that reads a single file produces it when it is wrapped in a multi-file function (see
           `[[multi_file_function_create]]`), which is where the name of the file comes from.
 
+  TABLE_OPERATOR_INPUT:
+    description: |
+      Where the input of a table function's operator comes from: what the rows of the input chunks the operator
+      receives are. Chosen with `[[table_function_set_operator]]`.
+    values:
+      TABLE_OPERATOR_INPUT_ARGUMENTS:
+        value: 0
+        description: |
+          The positional arguments of a call of the function are the columns of the operator's input, one row per
+          set of arguments. Called with constant arguments, e.g. `f(1, 'a')`, the operator receives a single input
+          row. Called with arguments that reference the columns of a table that precedes the call in the `FROM`
+          clause, e.g. `FROM t, f(t.x)` (an implicit `LATERAL` join), it receives one input row per row of that
+          table, one at a time, and every row it produces is joined to the row of `t` it was produced for.
+      TABLE_OPERATOR_INPUT_TABLE:
+        value: 1
+        description: |
+          The function takes a table as its first argument, written as a subquery, e.g. `f((SELECT * FROM t))`, and
+          the operator receives the rows of that table as its input, chunk by chunk, possibly on several threads. The
+          columns of its input are the columns of the table.
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Handles
 #-----------------------------------------------------------------------------------------------------------------------
@@ -862,6 +882,93 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  table_function_bind_get_input_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Returns the number of columns of the input of the function's operator (see `[[table_function_set_operator]]`).
+
+      These are the vectors of the input chunks the operator's execute callback receives: the positional arguments of
+      the call for `TABLE_OPERATOR_INPUT_ARGUMENTS`, or the columns of the table argument for
+      `TABLE_OPERATOR_INPUT_TABLE`. A bind callback typically derives the function's result columns from them. Unlike
+      `[[function_bind_get_arg_value]]`, this also describes arguments that are not constant. 0 for a function without
+      an operator.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of input columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_get_input_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the type of the operator's input column at the given index (see
+      `[[table_function_bind_get_input_column_count]]`).
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+      `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the input column.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_get_input_column_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Retrieves the name of the operator's input column at the given index (see
+      `[[table_function_bind_get_input_column_count]]`).
+
+      For `TABLE_OPERATOR_INPUT_TABLE` this is the name of the column of the table argument. The arguments of
+      `TABLE_OPERATOR_INPUT_ARGUMENTS` have no names, and yield an empty name. Fails if the index is out of bounds.
+      The name is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      index:
+        type: idx
+        description: The index of the input column.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the column name. Valid only for the duration of the callback.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Stats Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
@@ -967,7 +1074,7 @@ functions:
 
       The function is registered on the connection's database, visible to every connection, in the connection's
       transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
-      and a rollback undoes it. Registration requires a name, a bind callback and an exec callback, and rejects a
+      and a rollback undoes it. Registration requires a name, a bind callback and either a data source or an operator (see `[[table_function_set_operator]]`), and rejects a
       signature that declares a return type, since a table function declares the columns it returns from its bind
       callback. The table function must have been created through a factory of the same database. The caller still owns
       the handle after registration and must destroy it with `[[table_function_destroy]]`, which does not affect the
@@ -994,7 +1101,7 @@ functions:
       Registers the table function, making it available for use in SQL queries.
 
       The function is registered on the loading extension's database and attributed to the extension. Use this from the
-      extension's load callback. Registration requires a name, a bind callback and an exec callback, and rejects a
+      extension's load callback. Registration requires a name, a bind callback and either a data source or an operator (see `[[table_function_set_operator]]`), and rejects a
       signature that declares a return type, since a table function declares the columns it returns from its bind
       callback. The table function must have been created through a factory of the same database. The caller still owns
       the handle after registration and must destroy it with `[[table_function_destroy]]`, which does not affect the
@@ -1273,6 +1380,49 @@ functions:
       value_length:
         type: idx
         description: The length of `value` in bytes. `value` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Operator
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_set_operator:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-25" ]
+    description: |
+      Makes the table function a table in-out function, whose rows the given operator produces from an input.
+
+      Instead of producing its rows from nothing by scanning a data source, the function then transforms an input into
+      its rows: the operator's execute callback receives the input chunk by chunk, and writes the function's rows
+      into its output chunk, which holds the columns declared by the bind callback. Where the input comes from is set
+      by `input`, see `[[TABLE_OPERATOR_INPUT]]`. The bind callback still runs first, declares the result columns,
+      and can inspect the input columns with `[[table_function_bind_get_input_column_count]]` and its siblings; the
+      operator reaches the bind data via e.g. `[[operator_execute_get_bind_data]]`.
+
+      The operator's configuration is copied, so the caller still owns `op` and must destroy it with
+      `[[operator_destroy]]`; it may be handed to several functions. Calling this again replaces the operator.
+
+      Registration rejects a function with an operator that also has a data source, or a callback that is part of
+      scanning: init global, init local, progress, metrics, filter pushdown, partition data, partitioning and claim
+      batch callbacks, projection pushdown and virtual columns. The operator itself carries the init and finalize
+      callbacks. For `TABLE_OPERATOR_INPUT_TABLE`, the signature must not declare positional parameters, since the
+      table is the only positional argument; registration adds it. It may declare named parameters, which are
+      constant arguments of the call as usual. Such a function cannot be overloaded, and its operator cannot have a
+      finalize callback when it is called with a table that is correlated with an outer query. For
+      `TABLE_OPERATOR_INPUT_ARGUMENTS`, the operator cannot have a finalize callback.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the operator of.
+      op:
+        type: operator
+        description: The operator producing the function's rows. Borrowed; its configuration is copied.
+      input:
+        type: TABLE_OPERATOR_INPUT
+        description: Where the operator's input comes from.
       err:
         type: error_info
         indirection: 1

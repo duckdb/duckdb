@@ -97,6 +97,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				break;
 			}
 		}
+		if (!op.projected_input.empty() && op.function.in_out_function_final) {
+			throw NotImplementedException("Table in-out function %s has a finalize step, which is not supported for "
+			                              "input that is correlated with an outer query",
+			                              op.function.GetName());
+		}
 		auto &table_in_out = Make<PhysicalTableInOutFunction>(
 		    op.types, op.function, std::move(op.bind_data), column_ids, std::move(projection_indices),
 		    std::move(table_filters), op.estimated_cardinality, std::move(op.projected_input));

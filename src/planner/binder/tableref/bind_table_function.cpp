@@ -97,7 +97,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	}
 	if (has_table_parameter) {
 		if (table_function.functions.Size() != 1) {
-			throw InternalException(
+			throw BinderException(
 			    "Function %s has a TABLE parameter, and multiple function overloads - this is not supported",
 			    table_function.name);
 		}

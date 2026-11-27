@@ -25,6 +25,7 @@ add_library_unity(
   test_capi_v2_query_metrics.cpp
   test_capi_v2_logging.cpp
   test_capi_v2_logical_type.cpp
+  test_capi_v2_operator.cpp
   test_capi_v2_option.cpp
   test_capi_v2_pragma_function.cpp
   test_capi_v2_prepared_statement.cpp
