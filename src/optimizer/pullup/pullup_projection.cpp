@@ -23,20 +23,29 @@ static bool CanRewrite(const Expression &expr, const expression_map_t<Projection
 	return can_rewrite;
 }
 
+static unique_ptr<BoundColumnRefExpression> LookupOutput(const Expression &expr, const LogicalProjection &proj,
+                                                         const expression_map_t<ProjectionIndex> &projections) {
+	auto entry = projections.find(expr);
+	if (entry == projections.end()) {
+		return nullptr;
+	}
+	const auto binding = ColumnBinding(proj.table_index, entry->second);
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		return unique_ptr_cast<Expression, BoundColumnRefExpression>(
+		    expr.Cast<BoundColumnRefExpression>().WithBinding(binding));
+	}
+	return make_uniq<BoundColumnRefExpression>(expr.GetAlias(), expr.GetReturnType(), binding);
+}
+
 static unique_ptr<Expression> RewritePredicate(unique_ptr<Expression> expr, LogicalProjection &proj,
                                                expression_map_t<ProjectionIndex> &projections, bool match_computed) {
 	return ExpressionIterator::PreorderReplace(std::move(expr), [&](const Expression &child) -> unique_ptr<Expression> {
 		if (!match_computed && child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return nullptr;
 		}
-		auto entry = projections.find(child);
-		if (entry != projections.end()) {
-			if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				return child.Cast<BoundColumnRefExpression>().WithBinding(
-				    ColumnBinding(proj.table_index, entry->second));
-			}
-			return make_uniq<BoundColumnRefExpression>(child.GetAlias(), child.GetReturnType(),
-			                                           ColumnBinding(proj.table_index, entry->second));
+		auto output = LookupOutput(child, proj, projections);
+		if (output) {
+			return std::move(output);
 		}
 		if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return nullptr;
@@ -125,8 +134,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	}
 	if (context) {
 		FilterCombiner::GenerateProjectionFilters(
-		    *context, filters_expr_pullup, [&](const Expression &key) { return CanRewrite(key, projections, true); },
-		    [&](unique_ptr<Expression> derived) { export_filter(*derived); });
+		    *context, filters_expr_pullup,
+		    [&](const Expression &expr) { return LookupOutput(expr, proj, projections); }, exported);
 	}
 	// Retain the full batch: its predicates can guard fallible operators above this projection.
 	proj.children[0] = GeneratePullupFilter(std::move(proj.children[0]), filters_expr_pullup);
