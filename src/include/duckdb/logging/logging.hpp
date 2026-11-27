@@ -38,10 +38,16 @@ struct LogConfig {
 
 	constexpr static LogLevel DEFAULT_LOG_LEVEL = LogLevel::LOG_INFO;
 	constexpr static const char *DEFAULT_LOG_STORAGE = IN_MEMORY_STORAGE_NAME;
+	//! The name of the log sink that enable_logging configures
+	constexpr static const char *DEFAULT_LOG_SINK_NAME = "default";
 
 	LogConfig();
 
 	DUCKDB_API bool IsConsistent() const;
+	//! Whether a log entry of this type and level passes this config
+	DUCKDB_API bool Accepts(const char *log_type, LogLevel log_level) const;
+	//! Whether this lowercased name is one of the log sinks DuckDB provides
+	DUCKDB_API static bool IsBuiltInLogSink(const string &sink_name);
 
 	bool enabled;
 	LogMode mode;

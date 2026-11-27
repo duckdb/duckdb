@@ -178,7 +178,7 @@ public:
 	~ShellLogSink() override = default;
 
 	const string GetSinkName() override {
-		return "ShellLogSink";
+		return "shell_log_sink";
 	}
 
 protected:

@@ -10,7 +10,7 @@ statement ok
 set enable_external_file_cache=true;
 
 statement ok
-CALL enable_logging('ExternalFileCache', storage = 'memory');
+CALL enable_logging('ExternalFileCache', sink = 'memory');
 
 statement ok
 from read_csv('https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv');

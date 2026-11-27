@@ -10,7 +10,7 @@ COPY (SELECT [(2 * (i // 2048) + i % 2)::INTEGER] AS l FROM range(20480) t(i))
 TO '{TEST_DIR}/bloom_nested_stats_decided.parquet' (ROW_GROUP_SIZE 2048);
 
 statement ok
-CALL enable_logging('FileSystem', storage = 'memory');
+CALL enable_logging('FileSystem', sink = 'memory');
 
 # IN (6, 7) covers the min/max of row group 3 and rules out the others
 query I

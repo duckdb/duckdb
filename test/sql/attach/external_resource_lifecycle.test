@@ -8,7 +8,7 @@ require httpfs
 
 # Capture recipe calls so we can prove the deleter fired (the deleter runs on an internal connection).
 statement ok
-CALL enable_logging('ExternalResource', storage='memory');
+CALL enable_logging('ExternalResource', sink='memory');
 
 # Let the OS choose a port so concurrent test processes cannot share the listener.
 statement ok

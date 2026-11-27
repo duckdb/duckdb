@@ -262,7 +262,7 @@ def test_estimate_not_logged_or_profiled(shell):
     # the estimate is not a query: it adds no query log entry and no profile
     test = (
         agent_shell(shell)
-        .statement("CALL enable_logging('QueryLog', storage = 'memory')")
+        .statement("CALL enable_logging('QueryLog', sink = 'memory')")
         .statement("SELECT sum(range) FROM range(2000000)")
         .statement("CALL disable_logging()")
         .statement("SELECT string_agg(message, ' >> ' ORDER BY timestamp) FROM duckdb_logs WHERE type = 'QueryLog'")

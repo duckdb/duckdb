@@ -88,7 +88,7 @@ void LogSink::Truncate() {
 
 void LogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	if (!config.empty()) {
-		throw InvalidInputException("Log sink '%s' does not support passing configuration", GetSinkName());
+		throw InvalidInputException("Log sink '%s' has no config options", GetSinkName());
 	}
 }
 
@@ -149,6 +149,11 @@ void CSVLogSink::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 
 void CSVLogSink::ResetAllBuffers() {
 	BufferingLogSink::ResetAllBuffers();
+	ResetCastChunk();
+}
+
+void CSVLogSink::ResizeBuffers() {
+	BufferingLogSink::ResizeBuffers();
 	ResetCastChunk();
 }
 
@@ -240,13 +245,22 @@ void CSVLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 void BufferingLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	for (const auto &it : config) {
 		if (StringUtil::CIEquals(it.first, "buffer_size")) {
+			// the log entries are kept: the buffered ones are flushed before the buffers get their new size
+			bool has_entries = false;
+			for (auto &buffer : buffers) {
+				has_entries |= IsEnabledInternal(buffer.first) && buffer.second->size() > 0;
+			}
+			if (has_entries) {
+				FlushAllInternal();
+			}
 			buffer_limit = it.second.GetValue<uint64_t>();
-			ResetAllBuffers();
+			ResizeBuffers();
 		} else if (StringUtil::CIEquals(it.first, "only_flush_on_full_buffer")) {
 			// This is a debug option used during testing. It disables the manual
 			only_flush_on_full_buffer = it.second.GetValue<bool>();
 		} else if (StringUtil::CIEquals(it.first, "normalize")) {
-			throw InternalException("'normalize' setting should be handled in child class");
+			// the sinks that can normalize the logs handle this option themselves
+			throw InvalidInputException("Log sink '%s' has no option 'normalize'", GetSinkName());
 		} else {
 			throw InvalidInputException("Unrecognized log sink config option for sink: '%s': '%s'", GetSinkName(),
 			                            it.first);
@@ -397,10 +411,11 @@ void FileLogSink::SetPaths(const string &base_path) {
 		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
 		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
 	} else {
+		// the denormalized logs go into a single file: the csv path itself, or a file in the directory
 		if (StringUtil::EndsWith(base_path, ".csv")) {
 			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
 		} else {
-			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+			tables[LoggingTargetTable::ALL_LOGS].path = fs.JoinPath(base_path, "duckdb_logs.csv");
 		}
 	}
 }
@@ -408,7 +423,8 @@ void FileLogSink::SetPaths(const string &base_path) {
 void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	auto config_copy = config;
 
-	string new_path;
+	// a config without a path keeps the current one
+	string new_path = base_path;
 	bool normalize_contexts_new_value = normalize_contexts;
 	bool normalize_set_explicitly = false;
 	bool require_reinitializing_files = false;
@@ -453,7 +469,8 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 		FlushAllInternal();
 	}
 
-	require_reinitializing_files |= normalize_contexts != normalize_contexts_new_value;
+	bool normalize_changed = normalize_contexts != normalize_contexts_new_value;
+	require_reinitializing_files |= normalize_changed;
 	normalize_contexts = normalize_contexts_new_value;
 
 	// Reset the buffers to ensure they have the correct schema
@@ -466,10 +483,14 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 		}
 	}
 
-	// Apply any path change
-	if (new_path != base_path) {
+	// Apply any path change, the paths of the tables also depend on normalize
+	if (new_path != base_path || (normalize_changed && !new_path.empty())) {
 		base_path = new_path;
 		SetPaths(new_path);
+		// the open files are the ones of the previous path
+		for (auto &table : tables) {
+			table.second.initialized = false;
+		}
 	}
 
 	for (const auto &it : to_remove) {
@@ -496,39 +517,41 @@ unique_ptr<TableRef> FileLogSink::BindReplace(ClientContext &context, TableFunct
                                               LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 
+	// denormalized logs are in a single file, the log entries and the log contexts are read from it as well
+	auto source_table = normalize_contexts ? table : LoggingTargetTable::ALL_LOGS;
+
 	// We only allow scanning enabled tables
-	if (!IsEnabledInternal(table)) {
+	if (!IsEnabledInternal(source_table)) {
 		return nullptr;
 	}
 
 	// We start by flushing the table to ensure we scan the latest version
-	FlushInternal(table);
-
-	if (normalize_contexts && table == LoggingTargetTable::ALL_LOGS) {
-		throw InvalidConfigurationException("Can not scan ALL_LOGS table when logs are normalized");
-	}
-	if (!normalize_contexts && table != LoggingTargetTable::ALL_LOGS) {
-		throw InvalidConfigurationException("Can only scan ALL_LOGS table when logs are normalized");
-	}
+	FlushInternal(source_table);
 
 	string select = "SELECT *";
-	string path = tables[table].path;
+	string path = tables[source_table].path;
 
 	string columns;
-	if (table == LoggingTargetTable::LOG_ENTRIES) {
+	if (source_table == LoggingTargetTable::ALL_LOGS) {
+		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
+		          "'type': "
+		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
+		if (table == LoggingTargetTable::LOG_ENTRIES) {
+			select = "SELECT context_id, timestamp, type, log_level, message";
+		} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
+			select = "SELECT DISTINCT context_id, scope, connection_id, transaction_id, query_id, thread_id";
+		} else {
+			select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
+			         "log_level, message ";
+		}
+	} else if (table == LoggingTargetTable::LOG_ENTRIES) {
 		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', 'type': 'VARCHAR', 'log_level': "
 		          "'VARCHAR' , "
 		          "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
 		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
-	} else if (table == LoggingTargetTable::ALL_LOGS) {
-		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
-		         "log_level, message ";
-		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
-		          "'type': "
-		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	} else {
 		throw InternalException("Invalid logging target table");
 	}
@@ -542,6 +565,11 @@ BufferingLogSink::BufferingLogSink(DatabaseInstance &db_p, idx_t buffer_size, bo
 }
 
 void BufferingLogSink::ResetLogBuffers() {
+	InitializeLogBuffers();
+	registered_contexts.clear();
+}
+
+void BufferingLogSink::InitializeLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
 	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
 	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
@@ -558,11 +586,14 @@ void BufferingLogSink::ResetLogBuffers() {
 		all_logs->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 		buffers[LoggingTargetTable::ALL_LOGS] = std::move(all_logs);
 	}
-	registered_contexts.clear();
 }
 
 void BufferingLogSink::ResetAllBuffers() {
 	ResetLogBuffers();
+}
+
+void BufferingLogSink::ResizeBuffers() {
+	InitializeLogBuffers();
 }
 
 InMemoryLogSinkScanState::InMemoryLogSinkScanState(LoggingTargetTable table) : LogSinkScanState(table) {

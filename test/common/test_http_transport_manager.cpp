@@ -33,7 +33,7 @@ TEST_CASE("PUT requests retain their content type", "[http_transport_manager]") 
 TEST_CASE("HTTP logs keep the first field line per header name", "[http_transport_manager]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("CALL enable_logging('HTTP', storage = 'memory')"));
+	REQUIRE_NO_FAIL(connection.Query("CALL enable_logging('HTTP', sink = 'memory')"));
 
 	HTTPUtil http;
 	const string url = "http://mock.test/log_headers";

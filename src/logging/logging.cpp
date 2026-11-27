@@ -20,6 +20,23 @@ bool LogConfig::IsConsistent() const {
 	return false;
 }
 
+bool LogConfig::Accepts(const char *log_type, LogLevel log_level) const {
+	if (!enabled || level > log_level) {
+		return false;
+	}
+	if (mode == LogMode::ENABLE_SELECTED) {
+		return enabled_log_types.find(log_type) != enabled_log_types.end();
+	}
+	if (mode == LogMode::DISABLE_SELECTED) {
+		return disabled_log_types.find(log_type) == disabled_log_types.end();
+	}
+	return true;
+}
+
+bool LogConfig::IsBuiltInLogSink(const string &sink_name) {
+	return sink_name == IN_MEMORY_STORAGE_NAME || sink_name == STDOUT_STORAGE_NAME || sink_name == FILE_STORAGE_NAME;
+}
+
 LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p,
                      optional_ptr<unordered_set<string>> enabled_log_types_p,
                      optional_ptr<unordered_set<string>> disabled_log_types_p)

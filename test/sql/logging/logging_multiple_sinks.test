@@ -1,0 +1,253 @@
+# name: test/sql/logging/logging_multiple_sinks.test
+# description: Enable log sinks next to the default log sink with enable_log_sink, each sink is turned on and off on its own
+# group: [logging]
+
+# the name of a type of sink is not the name of the default log sink
+statement error
+SELECT * FROM duckdb_logs('memory')
+----
+Log sink 'memory' does not exist. The default log sink is a 'memory' log sink, its name is 'default'
+
+# enabling a log sink does not turn on the default log sink, which enable_logging turns on
+statement ok
+CALL enable_log_sink('memory')
+
+query I
+SELECT current_setting('enable_logging')::BOOLEAN
+----
+false
+
+statement ok
+SELECT write_log('once')
+
+query I
+SELECT count(*) FROM duckdb_logs('memory') WHERE message = 'once'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs(sink := 'memory') WHERE message = 'once'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'once'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs('default') WHERE message = 'once'
+----
+0
+
+# duckdb_log_sinks lists the default log sink first, then the other sinks by name, with their filter and the options
+# the user set
+query IIIIII
+SELECT name, type, active, level, log_types, map_keys(config) FROM duckdb_log_sinks()
+----
+default	memory	false	INFO	NULL	[]
+memory	memory	true	INFO	NULL	[]
+
+statement ok
+SET enable_logging = true
+
+statement ok
+SELECT write_log('to both')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to both'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('memory') WHERE message = 'to both'
+----
+1
+
+# a NULL sink is the default log sink
+query I
+SELECT count(*) FROM duckdb_logs(NULL) WHERE message = 'to both'
+----
+1
+
+query II
+SELECT name, active FROM duckdb_log_sinks()
+----
+default	true
+memory	true
+
+# as in 2.0.0, duckdb_logs() leaves out the context of the log entries, denormalized_table=true adds it, like the
+# duckdb_logs view
+statement error
+SELECT scope FROM duckdb_logs('memory')
+----
+Referenced column "scope" not found
+
+query II
+SELECT scope IS NOT NULL, message FROM duckdb_logs('memory', denormalized_table=true) WHERE message = 'to both'
+----
+true	to both
+
+query I
+SELECT count(*) FROM (DESCRIBE FROM duckdb_logs())
+----
+5
+
+# disable_logging only turns off the default log sink
+statement ok
+CALL disable_logging()
+
+statement ok
+SELECT write_log('named only')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'named only'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs('memory') WHERE message = 'named only'
+----
+1
+
+# the default log sink is named 'default', enable_log_sink and disable_log_sink turn it on and off as well
+statement ok
+CALL enable_log_sink('default')
+
+query I
+SELECT current_setting('enable_logging')::BOOLEAN
+----
+true
+
+statement ok
+CALL disable_log_sink('DEFAULT')
+
+query I
+SELECT current_setting('enable_logging')::BOOLEAN
+----
+false
+
+# without a type the name is the type, an unknown name does not create a sink
+statement error
+CALL enable_log_sink('audit')
+----
+Log sink 'audit' is not yet registered
+
+statement error
+CALL enable_log_sink('file')
+----
+The 'file' log sink requires a path, e.g. CALL enable_log_sink('file', config={path: 'log.csv'})
+
+statement error
+CALL enable_log_sink('')
+----
+The log sink name cannot be empty
+
+statement error
+CALL enable_log_sink(NULL)
+----
+The log sink name cannot be NULL
+
+statement error
+CALL enable_log_sink('stdout', config=42)
+----
+enable_log_sink: config must be a struct
+
+statement error
+CALL enable_log_sink('stdout', config=NULL)
+----
+enable_log_sink: config must be a struct
+
+# the config is passed as a struct, enable_logging's sink_* shortcuts are not parameters of enable_log_sink
+statement error
+CALL enable_log_sink('stdout', sink_path='log.csv')
+----
+Invalid named parameter
+
+# a disabled sink keeps its log entries, and is listed as not active
+statement ok
+CALL disable_log_sink('memory')
+
+query II
+SELECT name, active FROM duckdb_log_sinks()
+----
+default	false
+memory	false
+
+statement ok
+SELECT write_log('while disabled')
+
+query I
+SELECT count(*) FROM duckdb_logs('memory') WHERE message IN ('once', 'while disabled')
+----
+1
+
+# disabling it again changes nothing
+statement ok
+CALL disable_log_sink('memory')
+
+# enabling it again resumes it, with its log entries
+statement ok
+CALL enable_log_sink('memory')
+
+statement ok
+SELECT write_log('resumed')
+
+query I
+SELECT count(*) FROM duckdb_logs('memory') WHERE message IN ('once', 'resumed')
+----
+2
+
+# a name that is not the name of a sink does not exist
+statement error
+CALL disable_log_sink('stdout')
+----
+Log sink 'stdout' does not exist
+
+statement error
+SELECT * FROM duckdb_logs('stdout')
+----
+Log sink 'stdout' does not exist
+
+statement error
+SELECT * FROM duckdb_logs('unknown')
+----
+Log sink 'unknown' does not exist
+
+statement error
+SELECT * FROM duckdb_log_contexts('unknown')
+----
+Log sink 'unknown' does not exist
+
+# a stdout sink cannot be read
+statement ok
+CALL enable_log_sink('STDOUT', level := 'error')
+
+query III
+SELECT name, type, level FROM duckdb_log_sinks() WHERE name = 'stdout'
+----
+stdout	stdout	ERROR
+
+statement error
+SELECT count(*) FROM duckdb_logs('stdout')
+----
+Log sink 'stdout' is a 'stdout' log sink, which cannot be read
+
+statement error
+SELECT count(*) FROM duckdb_log_contexts('stdout')
+----
+Log sink 'stdout' is a 'stdout' log sink, which cannot be read
+
+statement error
+SELECT count(*) FROM duckdb_logs('stdout', denormalized_table=true)
+----
+Log sink 'stdout' is a 'stdout' log sink, which cannot be read
+
+# sink names are case insensitive
+statement ok
+CALL disable_log_sink('Stdout')
+
+query II
+SELECT name, active FROM duckdb_log_sinks() WHERE name = 'stdout'
+----
+stdout	false
