@@ -11,12 +11,13 @@ namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<Context> context) {
+	auto client_context = Context::TryGetClientContext(context);
 	auto start_time = TimePoint::Tick();
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
 	while (true) {
-		if (context) {
-			context->InterruptCheck();
+		if (client_context) {
+			client_context->BlockingInterruptCheck();
 		}
 		auto elapsed_ms = static_cast<idx_t>(start_time.ElapsedMillis());
 		if (elapsed_ms >= sleep_ms) {
