@@ -1,0 +1,75 @@
+# name: test/sql/upsert/test_multi_constraint_ignore.test
+# description: Test INSERT OR IGNORE with multiple unique constraints and threads
+# group: [upsert]
+
+statement ok
+CREATE TABLE t(id INTEGER PRIMARY KEY, c0 DATE UNIQUE);
+
+statement ok
+INSERT OR IGNORE INTO t VALUES (1, DATE '2000-02-29'), (2, DATE '2000-02-29'), (2, DATE '2000-01-02');
+
+query II
+SELECT * FROM t ORDER BY id;
+----
+1	2000-02-29
+2	2000-01-02
+
+statement ok
+DROP TABLE t;
+
+# Test with multi-threading
+statement ok
+SET threads = 4;
+
+statement ok
+CREATE TABLE t(id INTEGER PRIMARY KEY, c0 DATE UNIQUE);
+
+statement ok
+INSERT OR IGNORE INTO t VALUES (1, DATE '2000-02-29'), (2, DATE '2000-02-29'), (2, DATE '2000-01-02');
+
+query II
+SELECT * FROM t ORDER BY id;
+----
+1	2000-02-29
+2	2000-01-02
+
+statement ok
+DROP TABLE t;
+
+# Test composite unique keys
+statement ok
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR, pincode INT, phone BIGINT, UNIQUE (pincode, phone));
+
+statement ok
+INSERT OR IGNORE INTO users VALUES
+    (1, 'Alice', 560001, 9876543210),
+    (2, 'Bob',   560001, 1111111111),
+    (3, 'Carol', 560001, 9876543210),
+    (3, 'Dave',  560002, 2222222222);
+
+query IIII
+SELECT * FROM users ORDER BY id;
+----
+1	Alice	560001	9876543210
+2	Bob	560001	1111111111
+3	Dave	560002	2222222222
+
+statement ok
+DROP TABLE users;
+
+# Test NULL handling in unique constraints (NULLs should not conflict)
+statement ok
+CREATE TABLE t_null(id INT PRIMARY KEY, c0 VARCHAR UNIQUE);
+
+statement ok
+INSERT OR IGNORE INTO t_null VALUES (1, NULL), (2, NULL), (3, 'apple'), (4, 'apple');
+
+query II
+SELECT * FROM t_null ORDER BY id;
+----
+1	NULL
+2	NULL
+3	apple
+
+statement ok
+DROP TABLE t_null;

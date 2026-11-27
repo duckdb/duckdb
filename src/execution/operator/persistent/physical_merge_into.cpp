@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -362,6 +363,22 @@ public:
 			}
 			exchanges.push_back(std::move(exchange));
 		}
+
+		optional_ptr<PhysicalInsert> insert_op;
+		for (auto &action : op.actions) {
+			if (action->action_type == MergeActionType::MERGE_INSERT && action->op) {
+				insert_op = &action->op->Cast<PhysicalInsert>();
+				break;
+			}
+		}
+		if (insert_op) {
+			auto storage = insert_op->insert_table->GetStorageInfo(context);
+			for (auto &index : storage.index_info) {
+				if (index.is_unique) {
+					unique_constraints.push_back(index.column_set);
+				}
+			}
+		}
 	}
 
 	~MergeIntoGlobalState() override {
@@ -377,6 +394,7 @@ public:
 	//! The exchange of every action - NULL for actions that have no operator to push data into
 	vector<shared_ptr<PipelineBroadcastExchange>> exchanges;
 	atomic<idx_t> merged_count;
+	vector<unordered_set<column_t>> unique_constraints;
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, MergeIntoLocalState &local_state,
 	                    OperatorSinkInput &input, MergeActionRange range, idx_t &index_in_match) {
@@ -443,7 +461,8 @@ idx_t PhysicalMergeInto::GetIndex(MergeActionCondition condition) const {
 	throw InternalException("Unsupported match action condition");
 }
 
-void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk) const {
+void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk,
+                                       const vector<unordered_set<column_t>> &unique_constraints) const {
 	auto &match_results = local_state.match_results;
 
 	// for each row, figure out if we have generated a match or not
@@ -474,12 +493,42 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 		}
 	} else {
 		// no source marker - only check row-ids
+		unordered_map<idx_t, set<vector<Value>>> seen_keys;
+
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (row_id_validity.IsValid(i)) {
 				// match
 				matched.sel.set_index(matched.count++, i);
 			} else {
 				// no match
+				vector<vector<Value>> row_keys(unique_constraints.size());
+				vector<bool> has_null(unique_constraints.size(), false);
+				bool has_conflict = false;
+				for (idx_t j = 0; j < unique_constraints.size(); j++) {
+					for (auto col_idx : unique_constraints[j]) {
+						Value val = chunk.data[col_idx].GetValue(i);
+						if (val.IsNull()) {
+							has_null[j] = true;
+						}
+						row_keys[j].push_back(std::move(val));
+					}
+					// unique constraints ignore rows with NULL values
+					if (!has_null[j] && seen_keys[j].count(row_keys[j])) {
+						has_conflict = true;
+						break;
+					}
+				}
+
+				if (has_conflict) {
+					continue;
+				}
+
+				for (idx_t j = 0; j < unique_constraints.size(); j++) {
+					if (!has_null[j]) {
+						seen_keys[j].insert(std::move(row_keys[j]));
+					}
+				}
+
 				not_matched.sel.set_index(not_matched.count++, i);
 			}
 		}
@@ -508,7 +557,7 @@ SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chu
 	auto &current_count = local_state.sink_state.current_count;
 	if (!computed_matches) {
 		// we haven't figured out which rows have which types of matches - compute them
-		ComputeMatches(local_state, chunk);
+		ComputeMatches(local_state, chunk, global_state.unique_constraints);
 
 		// set up the state so we can prepare sinking into the relevant operators
 		computed_matches = true;
