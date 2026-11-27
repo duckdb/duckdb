@@ -19,6 +19,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/common/multi_file/table_function_query_filter.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -87,6 +88,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
+	create_file_filter = nullptr;
 	parser_cache = make_uniq<ParserCache>();
 	services = make_uniq<Context>(*this);
 }
@@ -366,6 +368,7 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	create_api_v1 = CreateAPIv1Wrapper;
 	invoke_capi_v2 = InvokeCAPIV2Entrypoint;
+	create_file_filter = TableFunctionQueryFilter::TryCreate;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
@@ -703,6 +706,11 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
                                                    optional_ptr<ClientContext> context, bool statically_linked) {
 	D_ASSERT(invoke_capi_v2);
 	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
+}
+
+unique_ptr<DeleteFilter> DatabaseInstance::CreateFileFilter(ClientContext &context, BaseFileReader &reader) {
+	D_ASSERT(create_file_filter);
+	return create_file_filter(context, reader);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {

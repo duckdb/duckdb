@@ -160,6 +160,8 @@ static vector<ParquetMetadataCacheEntry> LoadMetadataCaches(ClientContext &conte
 		if (file.extended_info) {
 			file.extended_info->TryGetOption("has_deletes", has_deletes);
 		}
+		// the filter query of a file decides which of its rows are scanned
+		has_deletes = has_deletes || TableFunctionQueryFilter::HasFilterQuery(file);
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
 		const auto is_valid = metadata_entry->IsValid(file, context);
@@ -223,13 +225,11 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientContext &context,
                                                                      GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
-	for (auto &file : bind_data.file_list->GetAllFiles()) {
-		if (TableFunctionQueryFilter::HasFilterQuery(file)) {
-			// the file list decides which rows are scanned - the metadata does not tell how many rows the scan produces
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
+		if (TableFunctionQueryFilter::HasFilterQuery(bind_data.file_list->GetFirstFile())) {
+			// the filter query decides which rows are scanned - the metadata does not tell how many the scan produces
 			return vector<PartitionStatistics>();
 		}
-	}
-	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 		auto result = TableFunctionMultiFileWrapper::GetPartitionStats(context, input);
 		// Column accessors address physical ordinals and types, not the mapped output or generated roles.
 		bool identity = false;

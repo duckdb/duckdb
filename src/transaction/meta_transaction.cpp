@@ -209,6 +209,11 @@ string MetaTransaction::GetShareId() {
 	return share_id;
 }
 
+bool MetaTransaction::IsShared() {
+	lock_guard<mutex> guard(shared_lock);
+	return !share_id.empty() || participants > 1;
+}
+
 bool MetaTransaction::Join() {
 	lock_guard<mutex> guard(shared_lock);
 	if (finished) {

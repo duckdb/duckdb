@@ -211,6 +211,8 @@ struct TableFunctionMultiFileSettings {
 	bool supports_cast_map = false;
 	//! Whether the function counts the bytes it scans, reported as operator.bytes_scanned of the scan
 	bool reports_bytes_scanned = false;
+	//! Whether the function only produces the rows that TableFunctionFileInitInput::deletion_filter selects
+	bool supports_deletion_filter = false;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -253,6 +255,7 @@ public:
 public:
 	string GetReaderType() const override;
 	bool UseCastMap() const override;
+	bool SupportsDeletionFilter() const override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	unique_ptr<BaseStatistics> GetVirtualColumnStatistics(ClientContext &context, column_t virtual_column_id) override;

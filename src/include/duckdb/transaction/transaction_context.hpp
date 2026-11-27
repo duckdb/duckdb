@@ -59,6 +59,9 @@ public:
 	string ShareTransaction();
 	//! Joins the shared transaction with the given identifier (only outside of a transaction)
 	void JoinTransaction(const string &share_id);
+	//! Joins the active transaction of another connection, for a query that runs on its behalf while it waits (only
+	//! outside of a transaction). The transaction is not shared under an identifier
+	void JoinTransaction(TransactionContext &source);
 	//! The current transaction if it was shared under the given identifier, otherwise null.
 	//! Safe to call from other connections.
 	shared_ptr<MetaTransaction> GetSharedTransaction(const string &share_id);
@@ -98,6 +101,8 @@ private:
 	void SetCurrentTransaction(shared_ptr<MetaTransaction> transaction);
 	shared_ptr<MetaTransaction> TakeCurrentTransaction();
 	void RollbackTransaction(const shared_ptr<MetaTransaction> &transaction, optional_ptr<ErrorData> error);
+	//! Notifies the registered states that the connection continues in a transaction it joined
+	void NotifyTransactionBegin();
 
 	TransactionContext(const TransactionContext &) = delete;
 };

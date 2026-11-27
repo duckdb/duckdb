@@ -76,6 +76,10 @@ bool TableFunctionFileReader::UseCastMap() const {
 	return settings.supports_cast_map;
 }
 
+bool TableFunctionFileReader::SupportsDeletionFilter() const {
+	return settings.supports_deletion_filter;
+}
+
 void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options,
                                            const MultiFileOptions &file_options, bool schema_only,
                                            optional_ptr<const FunctionData> file_bind_data) {

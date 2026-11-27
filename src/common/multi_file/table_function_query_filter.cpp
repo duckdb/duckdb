@@ -1,6 +1,7 @@
 #include "duckdb/common/multi_file/table_function_query_filter.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -11,54 +12,107 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_result_stream.hpp"
+#include "duckdb/main/valid_checker.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 #include <bitset>
 
 namespace duckdb {
 
-static constexpr const char *FILTER_QUERY_OPTION = "filter_query";
+constexpr const char *TableFunctionQueryFilter::FILTER_QUERY_OPTION;
 
-bool TableFunctionQueryFilter::HasFilterQuery(const OpenFileInfo &file) {
-	if (!file.extended_info) {
-		return false;
-	}
-	auto entry = file.extended_info->options.find(FILTER_QUERY_OPTION);
-	return entry != file.extended_info->options.end() && !entry->second.IsNull();
-}
+//! A filter query can scan files with filter queries of their own - bound the nesting before it exhausts the stack
+static constexpr idx_t MAX_FILTER_QUERY_DEPTH = 8;
 
-unique_ptr<DeleteFilter> TableFunctionQueryFilter::TryCreate(ClientContext &context, const OpenFileInfo &file) {
+unique_ptr<DeleteFilter> TableFunctionQueryFilter::TryCreate(ClientContext &context, BaseFileReader &reader) {
+	auto &file = reader.file;
 	if (!HasFilterQuery(file)) {
 		return nullptr;
 	}
+	auto &query = file.extended_info->options.at(FILTER_QUERY_OPTION);
+	if (query.type().id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException("The %s option of file %s must be a VARCHAR, not %s", FILTER_QUERY_OPTION,
+		                            file.path, query.type().ToString());
+	}
+	if (!reader.SupportsDeletionFilter()) {
+		throw NotImplementedException("The %s option of file %s is not supported by the %s reader", FILTER_QUERY_OPTION,
+		                              file.path, reader.GetReaderType());
+	}
 	auto result = make_uniq<TableFunctionQueryFilter>();
-	result->ReadFilterQuery(context, StringValue::Get(file.extended_info->options.at(FILTER_QUERY_OPTION)), file.path);
+	result->ReadFilterQuery(context, StringValue::Get(query), file.path);
 	return std::move(result);
 }
 
+//! Leaves the transaction of the caller that a filter query joined - without a vote to roll it back, the filter query
+//! only reads
+static void LeaveCallerTransaction(ClientContext &inner) {
+	inner.Destroy();
+	if (!inner.transaction.HasActiveTransaction()) {
+		return;
+	}
+	if (ValidChecker::IsInvalidated(inner.transaction.ActiveTransaction())) {
+		inner.transaction.Rollback(nullptr);
+	} else {
+		inner.transaction.Commit();
+	}
+}
+
 void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const string &query, const string &path) {
-	// run the query on a connection of its own - this runs while the scan holds the lock of its context
-	Connection connection(DatabaseInstance::GetDatabase(context));
-	auto submitted = connection.Submit(StringUtil::Format("SELECT * FROM (%s)", query));
-	if (submitted->HasError()) {
-		submitted->GetErrorObject().Throw(StringUtil::Format("Failed to read the filter query of file %s: ", path));
+	if (context.internal_depth + 1 > MAX_FILTER_QUERY_DEPTH) {
+		throw InvalidInputException("Filter queries are nested too deeply (maximum depth %llu) - does the filter query "
+		                            "of file %s scan the file itself?",
+		                            MAX_FILTER_QUERY_DEPTH, path);
 	}
-	QueryResultStream<> stream(std::move(submitted));
-	auto &types = stream.GetTypes();
-	if (types.size() != 3 || types[0].id() != LogicalTypeId::BIGINT || types[1].id() != LogicalTypeId::BIGINT ||
-	    types[2].id() != LogicalTypeId::BIT) {
-		throw InvalidInputException("The filter query of file %s must return (row_start BIGINT, row_end BIGINT, bits "
-		                            "BIT)",
-		                            path);
+	if (!context.transaction.HasActiveTransaction()) {
+		throw InternalException("The filter query of file %s is read outside of a transaction", path);
 	}
-	while (auto chunk = stream.Fetch()) {
-		if (chunk->size() == 0) {
-			break;
+	// the scan holds the lock of its context: run the query on an internal connection that is interrupted with the
+	// caller, and that joins the transaction of the caller so that it sees what the caller sees
+	auto connection = Connection::CreateInternal(context);
+	auto &inner = *connection.context;
+	ErrorData error;
+	try {
+		auto statements = connection.ExtractStatements(query);
+		if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
+			throw InvalidInputException("The filter query must be a single SELECT statement");
 		}
-		AddRows(*chunk, path);
+		inner.transaction.JoinTransaction(context.transaction);
+		// a failing filter query affects the transaction of the caller as a failing statement of the caller would
+		inner.transaction.SetInvalidationPolicy(context.transaction.GetInvalidationPolicy());
+		auto prepared = connection.Prepare(std::move(statements[0]));
+		if (prepared->HasError()) {
+			prepared->GetErrorObject().Throw();
+		}
+		if (!prepared->GetStatementProperties().IsReadOnly()) {
+			throw InvalidInputException("The filter query must not modify a database");
+		}
+		vector<Value> values;
+		QueryResultStream<> stream(prepared->Submit(values));
+		if (stream.HasError()) {
+			stream.GetErrorObject().Throw();
+		}
+		auto &types = stream.GetTypes();
+		if (types.size() != 3 || types[0].id() != LogicalTypeId::BIGINT || types[1].id() != LogicalTypeId::BIGINT ||
+		    types[2].id() != LogicalTypeId::BIT) {
+			throw InvalidInputException("The filter query must return (row_start BIGINT, row_end BIGINT, bits BIT)");
+		}
+		while (auto chunk = stream.Fetch()) {
+			if (chunk->size() == 0) {
+				break;
+			}
+			AddRows(*chunk);
+		}
+		if (stream.HasError()) {
+			stream.GetErrorObject().Throw();
+		}
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
 	}
-	if (stream.HasError()) {
-		stream.GetErrorObject().Throw(StringUtil::Format("Failed to read the filter query of file %s: ", path));
+	LeaveCallerTransaction(inner);
+	if (error.HasError()) {
+		error.Throw(StringUtil::Format("Failed to read the filter query of file %s: ", path));
 	}
 	Finalize();
 }
@@ -70,7 +124,7 @@ static uint8_t ReverseBits(uint8_t value) {
 	return value;
 }
 
-void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
+void TableFunctionQueryFilter::AddRows(DataChunk &chunk) {
 	auto starts = chunk.data[0].Values<int64_t>();
 	auto ends = chunk.data[1].Values<int64_t>();
 	auto bitmaps = chunk.data[2].Values<string_t>();
@@ -80,8 +134,7 @@ void TableFunctionQueryFilter::AddRows(DataChunk &chunk, const string &path) {
 		auto bitmap = bitmaps[i];
 		if (bitmap.IsValid()) {
 			if (row_start.IsValid() && row_start.GetValue() < 0) {
-				throw InvalidInputException("The filter query of file %s returns a bitmap that starts before the file",
-				                            path);
+				throw InvalidInputException("The filter query returns a bitmap that starts before the file");
 			}
 			auto bits = bitmap.GetValue();
 			auto window_start = row_start.IsValid() ? NumericCast<idx_t>(row_start.GetValue()) : 0;

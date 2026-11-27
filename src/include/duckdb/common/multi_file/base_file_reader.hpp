@@ -84,6 +84,10 @@ public:
 		//! Whether or not to push casts into the cast map
 		return false;
 	}
+	//! Whether the reader only produces the rows its deletion filter selects
+	virtual bool SupportsDeletionFilter() const {
+		return false;
+	}
 	//! Adds a virtual column to be projected at the end
 	virtual void AddVirtualColumn(column_t virtual_column_id) {
 		throw InternalException("Reader %s does not support AddVirtualColumn", GetReaderType());

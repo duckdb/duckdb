@@ -245,3 +245,75 @@ statement error
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT -1::BIGINT, NULL::BIGINT, ''1''::BIT'}])
 ----
 starts before the file
+
+# the option has to be a string
+statement error
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 42}])
+----
+Invalid Input Error: The filter_query option of file
+
+### the filter query is a single read-only SELECT statement
+
+statement ok
+CREATE TABLE filter_query_victim(pos BIGINT)
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'DELETE FROM filter_query_victim RETURNING pos, pos, NULL::BIT'}])
+----
+must be a single SELECT statement
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, 2::BIGINT, NULL::BIT; DROP TABLE filter_query_victim'}])
+----
+must be a single SELECT statement
+
+statement error
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 1::BIGINT, 2::BIGINT, NULL::BIT); DROP TABLE filter_query_victim; SELECT * FROM (SELECT 1'}])
+----
+syntax error at or near ")"
+
+query I
+SELECT count(*) FROM filter_query_victim
+----
+0
+
+### a filter query that scans its own file
+
+statement ok
+CREATE MACRO filter_query_scan_self() AS TABLE SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_options_data.parquet', 'filter_query': 'SELECT 0::BIGINT AS row_start, (SELECT count(*) FROM filter_query_scan_self())::BIGINT AS row_end, NULL::BIT AS bits'}])
+
+statement error
+SELECT count(*) FROM filter_query_scan_self()
+----
+Filter queries are nested too deeply
+
+### readers that do not apply the filter query reject it
+
+require json
+
+statement ok
+COPY (SELECT i a FROM range(10) t(i)) TO '{TEST_DIR}/filter_query_options_data.csv'
+
+statement ok
+COPY (SELECT i a FROM range(10) t(i)) TO '{TEST_DIR}/filter_query_options_data.json'
+
+statement error
+SELECT count(*) FROM read_csv([{'filename': '{TEST_DIR}/filter_query_options_data.csv', 'filter_query': 'SELECT 2::BIGINT, 5::BIGINT, NULL::BIT'}])
+----
+The filter_query option of file
+
+statement error
+SELECT count(*) FROM read_json([{'filename': '{TEST_DIR}/filter_query_options_data.json', 'filter_query': 'SELECT 2::BIGINT, 5::BIGINT, NULL::BIT'}])
+----
+The filter_query option of file
+
+# a NULL filter query is no filter query
+query I
+SELECT count(*) FROM read_csv([{'filename': '{TEST_DIR}/filter_query_options_data.csv', 'filter_query': NULL::VARCHAR}])
+----
+10
+
+query I
+SELECT count(*) FROM read_json([{'filename': '{TEST_DIR}/filter_query_options_data.json', 'filter_query': NULL::VARCHAR}])
+----
+10

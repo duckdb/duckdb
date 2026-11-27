@@ -409,6 +409,9 @@ public:
 	string GetReaderType() const override {
 		return "Parquet";
 	}
+	bool SupportsDeletionFilter() const override {
+		return true;
+	}
 
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;

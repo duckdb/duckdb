@@ -207,7 +207,7 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 	}
 	// discard the transaction that was started for this statement and continue in the shared one
 	auto previous = TakeCurrentTransaction();
-	SetCurrentTransaction(source);
+	SetCurrentTransaction(std::move(source));
 	auto_commit = false;
 	previous->MarkFinished();
 	try {
@@ -215,6 +215,27 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 	} catch (std::exception &) {
 		// the discarded transaction is empty, a failure to end it must not undo the join
 	}
+	NotifyTransactionBegin();
+}
+
+void TransactionContext::JoinTransaction(TransactionContext &source) {
+	if (!auto_commit || HasActiveTransaction()) {
+		throw InternalException("JoinTransaction: the connection already has a transaction");
+	}
+	shared_ptr<MetaTransaction> transaction;
+	{
+		lock_guard<mutex> guard(source.current_transaction_lock);
+		transaction = source.current_transaction;
+	}
+	if (!transaction || !transaction->Join()) {
+		throw TransactionException("cannot join the transaction of a connection that has no active transaction");
+	}
+	SetCurrentTransaction(std::move(transaction));
+	auto_commit = false;
+	NotifyTransactionBegin();
+}
+
+void TransactionContext::NotifyTransactionBegin() {
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}

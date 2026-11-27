@@ -67,10 +67,8 @@ public:
 	string ShareTransaction();
 	//! The identifier under which the transaction was shared (empty if not shared)
 	string GetShareId();
-	//! Whether the transaction was shared with other connections
-	bool IsShared() {
-		return !GetShareId().empty();
-	}
+	//! Whether the transaction was shared with other connections, or another connection participates in it
+	bool IsShared();
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
 	bool Join();
 	struct LeaveResult {
