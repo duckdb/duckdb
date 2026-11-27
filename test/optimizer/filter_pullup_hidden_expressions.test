@@ -92,6 +92,161 @@ FROM (
 ----
 physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
 
+# An exactly projected computed key is also a single-column replacement.
+query I
+SELECT count(*)
+FROM (
+	SELECT length(s) AS k FROM mixed_keys
+	WHERE hidden = length(s) AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+500
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT length(s) AS k FROM mixed_keys
+	WHERE hidden = length(s) AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Leaves inside a projected subtree do not count as additional hidden inputs.
+query I
+SELECT count(*)
+FROM (
+	SELECT length(s) AS k FROM mixed_keys
+	WHERE hidden = length(s) AND hash(length(s), hidden) = hash(2::BIGINT, 2::BIGINT)
+) p JOIN mixed_targets t USING (k);
+----
+100
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT length(s) AS k FROM mixed_keys
+	WHERE hidden = length(s) AND hash(length(s), hidden) = hash(2::BIGINT, 2::BIGINT)
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*hash\(k, k\) = .*
+
+# An unusable whole-key equality class must not prevent input substitution.
+statement ok
+CREATE TABLE related_keys AS
+SELECT *, bit_count(hidden) AS other_hidden FROM source_keys;
+
+query I
+SELECT count(*)
+FROM (
+	SELECT k FROM related_keys
+	WHERE k = hidden AND bit_count(hidden) = other_hidden AND bit_count(hidden) = 1
+) p JOIN target_keys t USING (k);
+----
+800
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT k FROM related_keys
+	WHERE k = hidden AND bit_count(hidden) = other_hidden AND bit_count(hidden) = 1
+) p JOIN target_keys t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*target_keys"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Preserve the whole-key formula when its inputs and computed output are both projected.
+statement ok
+CREATE TABLE string_targets AS
+SELECT repeat('x', (i % 16 + 1)::INTEGER) AS s FROM range(1600) t(i);
+
+query I
+SELECT sum(p.n)
+FROM (
+	SELECT s, length(s) AS n FROM mixed_keys
+	WHERE hidden = length(s) AND hidden <> 2
+) p JOIN string_targets t USING (s);
+----
+13400
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(p.n)
+FROM (
+	SELECT s, length(s) AS n FROM mixed_keys
+	WHERE hidden = length(s) AND hidden <> 2
+) p JOIN string_targets t USING (s);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*string_targets"[^}]*"Filters": [^}]*length\(s\) != 2.*
+
+# Computed aliases stay connected to the other visible equality members in either order.
+query I
+SELECT sum(p.n)
+FROM (
+	SELECT s, length(s) AS n, k FROM mixed_keys
+	WHERE hidden = length(s) AND hidden = k AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+3100
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(p.n)
+FROM (
+	SELECT s, length(s) AS n, k FROM mixed_keys
+	WHERE hidden = length(s) AND hidden = k AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT sum(p.n)
+FROM (
+	SELECT s, length(s) AS n, k FROM mixed_keys
+	WHERE hidden = k AND hidden = length(s) AND bit_count(hidden) = 1
+) p JOIN mixed_targets t USING (k);
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*mixed_targets"[^}]*"Filters": [^}]*bit_count\(k\) = 1.*
+
+# Reconstructed expressions cannot expand hidden inputs through nested projections.
+statement ok
+CREATE TABLE growing_keys AS
+SELECT *, hash(x2, x2) AS x3 FROM (
+	SELECT *, hash(x1, x1) AS x2 FROM (
+		SELECT i::UBIGINT AS k, hash(i::UBIGINT, i::UBIGINT) AS x1 FROM range(16) t(i)
+	) a
+) b;
+
+statement ok
+CREATE TABLE growing_targets AS SELECT (i % 16)::UBIGINT AS k FROM range(1600) t(i);
+
+query I
+SELECT count(*)
+FROM (
+	SELECT k FROM (
+		SELECT k, x1 FROM (
+			SELECT k, x1, x2 FROM growing_keys WHERE x3 = hash(x2, x2) AND hash(x3) <> 0
+		) a WHERE x2 = hash(x1, x1)
+	) b WHERE x1 = hash(k, k)
+) p JOIN growing_targets t USING (k);
+----
+1500
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*)
+FROM (
+	SELECT k FROM (
+		SELECT k, x1 FROM (
+			SELECT k, x1, x2 FROM growing_keys WHERE x3 = hash(x2, x2) AND hash(x3) <> 0
+		) a WHERE x2 = hash(x1, x1)
+	) b WHERE x1 = hash(k, k)
+) p JOIN growing_targets t USING (k);
+----
+physical_plan	<!REGEX>:.*"Table": "[^"]*growing_targets"[^}]*"Filters": [^}]*hash.*
+
 # Equal floating-point keys need not have identical representations.
 statement ok
 CREATE TABLE float_keys(k DOUBLE, hidden DOUBLE);

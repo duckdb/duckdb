@@ -19,6 +19,7 @@
 #include <map>
 
 namespace duckdb {
+class BoundColumnRefExpression;
 class LogicalGet;
 class Optimizer;
 
@@ -61,10 +62,12 @@ public:
 	static bool CanCopyFilter(const Expression &filter);
 	//! A safe predicate with the same truth value for keys equal under NOT DISTINCT FROM.
 	static bool IsKeyConstraint(const Expression &filter, const vector<reference<const Expression>> &keys);
-	//! Derive a linear set of visible equalities and key constraints, retaining the source filters.
-	static void GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
-	                                      const std::function<bool(const Expression &)> &can_project,
-	                                      const std::function<void(unique_ptr<Expression>)> &callback);
+	//! Append a linear set of equalities and key constraints in projection output bindings.
+	//! lookup_output maps an exact input expression to an existing output column; source filters are retained.
+	static void GenerateProjectionFilters(
+	    ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+	    const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output,
+	    vector<unique_ptr<Expression>> &result);
 	//! Remove exact duplicate, non-throwing, non-volatile predicates.
 	static void DeduplicateFilters(vector<unique_ptr<Expression>> &filters);
 	void GenerateEquivalentFilters(const Expression &filter,
@@ -83,6 +86,7 @@ public:
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
 private:
+	void AddProjectionEqualities(const vector<unique_ptr<Expression>> &filters);
 	void GenerateEquivalentKeyFilters(const Expression &filter,
 	                                  const std::function<void(unique_ptr<Expression> filter)> &callback);
 	FilterResult AddFilter(Expression &expr);

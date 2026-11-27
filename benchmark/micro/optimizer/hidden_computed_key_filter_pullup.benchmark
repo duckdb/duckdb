@@ -1,0 +1,11 @@
+# name: benchmark/micro/optimizer/hidden_computed_key_filter_pullup.benchmark
+# description: Infer a selective string predicate through a hidden column equal to an existing computed output
+# group: [optimizer]
+
+template benchmark/micro/optimizer/hidden_key_filter_pullup.benchmark.in
+BENCHMARK_NAME=Hidden Computed Key Filter Pullup
+PROJECTED_KEY=lower(raw_key) AS k
+INPUT_KEY=lower(raw_key)
+PREDICATE=IN (88)
+EXPECTED_COUNT=262144
+EXPECTED_SUM=549755813888

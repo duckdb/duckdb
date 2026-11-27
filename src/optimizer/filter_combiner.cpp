@@ -258,12 +258,34 @@ static optional_ptr<const Expression> GetConstraintKey(const Expression &filter)
 	return key;
 }
 
-void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vector<unique_ptr<Expression>> &filters,
-                                               const std::function<bool(const Expression &)> &can_project,
-                                               const std::function<void(unique_ptr<Expression>)> &callback) {
-	FilterCombiner combiner(context);
-	auto &groups = combiner.equivalence_map;
-	auto &group_ids = combiner.equivalence_set_map;
+static unique_ptr<Expression>
+ProjectConstraintKey(const Expression &key,
+                     const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output) {
+	bool valid = true;
+	auto project_column = [&](const BoundColumnRefExpression &column) -> unique_ptr<Expression> {
+		auto output = lookup_output(column);
+		valid &= bool(output);
+		return std::move(output);
+	};
+	// Preserve the formula when its inputs are available, so enclosing joins can use it.
+	auto projected = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(key.Copy(), project_column);
+	if (valid) {
+		return projected;
+	}
+	valid = true;
+	projected = ExpressionIterator::PreorderReplace(key.Copy(), [&](const Expression &expr) -> unique_ptr<Expression> {
+		auto output = lookup_output(expr);
+		if (!output && expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			valid = false;
+		}
+		return std::move(output);
+	});
+	return valid ? std::move(projected) : nullptr;
+}
+
+void FilterCombiner::AddProjectionEqualities(const vector<unique_ptr<Expression>> &filters) {
+	auto &groups = equivalence_map;
+	auto &group_ids = equivalence_set_map;
 	for (auto &filter : filters) {
 		if (filter->GetExpressionType() != ExpressionType::COMPARE_EQUAL || !CanCopyFilter(*filter)) {
 			continue;
@@ -273,8 +295,8 @@ void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vec
 		    BoundComparisonExpression::Right(comparison).IsScalar()) {
 			continue;
 		}
-		auto left = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::LeftMutable(comparison)));
-		auto right = combiner.GetEquivalenceSet(combiner.GetNode(*BoundComparisonExpression::RightMutable(comparison)));
+		auto left = GetEquivalenceSet(GetNode(*BoundComparisonExpression::LeftMutable(comparison)));
+		auto right = GetEquivalenceSet(GetNode(*BoundComparisonExpression::RightMutable(comparison)));
 		if (left == right) {
 			continue;
 		}
@@ -288,78 +310,115 @@ void FilterCombiner::GenerateProjectionFilters(ClientContext &context, const vec
 			target.push_back(member);
 		}
 		groups.erase(right);
-		combiner.constant_values.erase(right);
+		constant_values.erase(right);
 	}
-	unordered_map<idx_t, reference<const Expression>> representatives;
+}
+
+namespace {
+
+struct ProjectedRepresentative {
+	unique_ptr<Expression> key;
+	unique_ptr<BoundColumnRefExpression> input;
+};
+
+static void AddProjectedKey(unique_ptr<Expression> key, unique_ptr<Expression> &representative,
+                            vector<unique_ptr<Expression>> &result) {
+	if (!key) {
+		return;
+	}
+	if (!representative) {
+		representative = std::move(key);
+	} else if (!representative->Equals(*key)) {
+		// Connect formulas and output columns in one linear equality star.
+		result.push_back(
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, representative->Copy(), std::move(key)));
+	}
+}
+
+static unordered_map<idx_t, ProjectedRepresentative>
+ProjectEquivalenceSets(const map<idx_t, vector<reference<Expression>>> &groups,
+                       const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output,
+                       vector<unique_ptr<Expression>> &result) {
+	unordered_map<idx_t, ProjectedRepresentative> representatives;
 	for (auto &entry : groups) {
-		optional_ptr<const Expression> representative;
+		ProjectedRepresentative representative;
 		for (auto &member : entry.second) {
-			if (!can_project(member)) {
-				continue;
-			}
-			if (!representative) {
-				representative = member.get();
-			}
-			// Prefer a column so substituting hidden inputs does not grow expressions.
-			if (member.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-				representative = member.get();
-				break;
+			auto input = lookup_output(member);
+			auto key = ProjectConstraintKey(member, lookup_output);
+			const bool same_output = input && key && input->Equals(*key);
+			AddProjectedKey(std::move(key), representative.key, result);
+			if (input) {
+				if (!same_output) {
+					AddProjectedKey(input->Copy(), representative.key, result);
+				}
+				if (!representative.input) {
+					representative.input = std::move(input);
+				}
 			}
 		}
-		if (!representative) {
-			continue;
-		}
-		representatives.emplace(entry.first, *representative);
-		for (auto &member : entry.second) {
-			if (representative->Equals(member) || !can_project(member)) {
-				continue;
-			}
-			// A star connects the visible members without generating pairs involving hidden keys.
-			callback(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, representative->Copy(),
-			                                           member.get().Copy()));
+		if (representative.key) {
+			representatives.emplace(entry.first, std::move(representative));
 		}
 	}
-	for (auto &filter : filters) {
-		auto key = GetConstraintKey(*filter);
-		if (!key || !IsKeyConstraint(*filter, {*key})) {
-			continue;
-		}
-		auto source = key;
-		auto entry = group_ids.find(*source);
-		if (entry == group_ids.end() && !can_project(*key)) {
-			optional_ptr<const BoundColumnRefExpression> hidden;
-			bool multiple_hidden = false;
-			auto find_hidden = [&](const BoundColumnRefExpression &col) {
-				if (can_project(col)) {
-					return;
-				}
-				if (hidden && !hidden->Equals(col)) {
-					multiple_hidden = true;
-				}
-				hidden = col;
-			};
-			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*key, find_hidden);
-			// Substitute one hidden input without forming combinations of independent keys.
-			if (!hidden || multiple_hidden || !hidden->GetReturnType().EqualValuesAreIdentical()) {
-				continue;
-			}
-			source = *hidden;
-			entry = group_ids.find(*source);
-		}
-		if (entry == group_ids.end()) {
-			continue;
-		}
+	return representatives;
+}
+
+static unique_ptr<Expression> RewriteProjectionConstraint(
+    const Expression &filter, const expression_map_t<idx_t> &group_ids,
+    const unordered_map<idx_t, ProjectedRepresentative> &representatives,
+    const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output) {
+	auto key = GetConstraintKey(filter);
+	if (!key || !FilterCombiner::IsKeyConstraint(filter, {*key})) {
+		return nullptr;
+	}
+	auto entry = group_ids.find(*key);
+	if (entry != group_ids.end()) {
 		auto representative = representatives.find(entry->second);
-		if (representative != representatives.end() && !source->Equals(representative->second)) {
-			// Repeated substitutions must not grow computed expression trees through nested projections.
-			if (source != key &&
-			    representative->second.get().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto projected = ExpressionIterator::ReplaceExpression(*filter, *source, representative->second);
-			if (can_project(*GetConstraintKey(*projected))) {
-				callback(std::move(projected));
-			}
+		if (representative != representatives.end()) {
+			return ExpressionIterator::ReplaceExpression(filter, *key, *representative->second.key);
+		}
+	}
+
+	optional_ptr<const Expression> hidden;
+	bool valid = true;
+	auto rewrite_input = [&](const Expression &expr) -> unique_ptr<Expression> {
+		auto output = lookup_output(expr);
+		if (output || expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return std::move(output);
+		}
+		auto source = group_ids.find(expr);
+		if (source == group_ids.end() || !expr.GetReturnType().EqualValuesAreIdentical() ||
+		    (hidden && !hidden->Equals(expr))) {
+			valid = false;
+			return nullptr;
+		}
+		hidden = source->first.get();
+		auto representative = representatives.find(source->second);
+		if (representative == representatives.end() || !representative->second.input) {
+			valid = false;
+			return nullptr;
+		}
+		// Existing output columns cannot grow expressions through successive projections.
+		return representative->second.input->Copy();
+	};
+	auto projected = ExpressionIterator::PreorderReplace(key->Copy(), rewrite_input);
+	return valid && hidden ? ExpressionIterator::ReplaceExpression(filter, *key, *projected) : nullptr;
+}
+
+} // namespace
+
+void FilterCombiner::GenerateProjectionFilters(
+    ClientContext &context, const vector<unique_ptr<Expression>> &filters,
+    const std::function<unique_ptr<BoundColumnRefExpression>(const Expression &)> &lookup_output,
+    vector<unique_ptr<Expression>> &result) {
+	FilterCombiner combiner(context);
+	combiner.AddProjectionEqualities(filters);
+	auto representatives = ProjectEquivalenceSets(combiner.equivalence_map, lookup_output, result);
+	for (auto &filter : filters) {
+		auto projected =
+		    RewriteProjectionConstraint(*filter, combiner.equivalence_set_map, representatives, lookup_output);
+		if (projected) {
+			result.push_back(std::move(projected));
 		}
 	}
 }
