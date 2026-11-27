@@ -15,6 +15,11 @@
 #include <cstring>
 #include <type_traits>
 #include <utility>
+#if defined(__x86_64__) && defined(_WIN32)
+#include <intrin.h>
+#elif defined(__x86_64__)
+#include <cpuid.h>
+#endif
 
 #if (defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)) && (defined(__x86_64__) || defined(__aarch64__)) &&  \
     __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && !DUCKDB_SMALLER_BINARY(autovec) // clang/gcc, little-endian x86/arm
@@ -44,13 +49,53 @@
 #endif
 
 namespace duckdb {
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+//! cpuid/xgetbv probe: unlike __builtin_cpu_supports it needs no compiler runtime library (clang-cl extensions)
+inline bool CpuSupportsAvx2() {
+	constexpr uint32_t OSXSAVE_BIT = 1u << 27; // leaf 1 ecx
+	constexpr uint32_t AVX_BIT = 1u << 28;     // leaf 1 ecx
+	constexpr uint32_t AVX2_BIT = 1u << 5;     // leaf 7 ebx
+	constexpr uint64_t XMM_YMM_STATE = 6;      // xcr0: SSE and AVX register state saved by the OS
+#if defined(_WIN32)
+	int regs[4];
+	__cpuid(regs, 0);
+	if (static_cast<uint32_t>(regs[0]) < 7) {
+		return false;
+	}
+	__cpuidex(regs, 1, 0);
+	const auto ecx1 = static_cast<uint32_t>(regs[2]);
+	if (!(ecx1 & OSXSAVE_BIT) || !(ecx1 & AVX_BIT)) {
+		return false;
+	}
+	__cpuidex(regs, 7, 0);
+	if (!(static_cast<uint32_t>(regs[1]) & AVX2_BIT)) {
+		return false;
+	}
+	return (_xgetbv(0) & XMM_YMM_STATE) == XMM_YMM_STATE;
+#else
+	unsigned int eax, ebx, ecx, edx;
+	if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx) || eax < 7) {
+		return false;
+	}
+	if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx) || !(ecx & OSXSAVE_BIT) || !(ecx & AVX_BIT)) {
+		return false;
+	}
+	if (!__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) || !(ebx & AVX2_BIT)) {
+		return false;
+	}
+	uint32_t xcr0_lo, xcr0_hi;
+	__asm__ volatile("xgetbv" : "=a"(xcr0_lo), "=d"(xcr0_hi) : "c"(0));
+	return (xcr0_lo & XMM_YMM_STATE) == XMM_YMM_STATE;
+#endif
+}
+#endif
 inline bool CpuBenefitsFromAutoVec() {
 #if !DUCKDB_AUTOVEC
 	return false; // not compiled in
 #elif defined(__aarch64__)
 	return true; // NEON is always available
 #else
-	static const bool enabled = __builtin_cpu_supports("avx2") && !getenv("DUCKDB_DISABLE_AVX2"); // cached
+	static const bool enabled = CpuSupportsAvx2() && !getenv("DUCKDB_DISABLE_AVX2"); // cached
 	return enabled;
 #endif
 }
