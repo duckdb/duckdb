@@ -2,8 +2,13 @@
 # description: Catalog functions handle DECIMAL width/scale beyond INT32
 # group: [table_function]
 
-# wide decimal columns need the latest storage version, the configs that force the default one on disk cannot hold them
-require no_force_storage
+# wide decimal columns need the latest storage version - use an in-memory database so the
+# test also runs under configs that put the default database on an older storage version
+statement ok
+ATTACH ':memory:' AS wide_decimal_db;
+
+statement ok
+USE wide_decimal_db;
 
 statement ok
 SET max_decimal_width = 4294967295;
