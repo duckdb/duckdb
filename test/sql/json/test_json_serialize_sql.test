@@ -11,7 +11,43 @@ SELECT (json_serialize_sql('SELECT' || chr(160) || ')')->>'position')::INTEGER,
 8	9
 
 statement ok
+RESET storage_compatibility_version
+
+query I
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT CASE 1 WHEN 1 THEN 10 WHEN 2 THEN 20 END'))
+----
+10
+
+statement ok
+CREATE SEQUENCE json_case_seq
+
+query I
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql(
+    'SELECT CASE nextval(''json_case_seq'') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END FROM range(3)'))
+----
+42
+42
+42
+
+query I
+SELECT currval('json_case_seq')
+----
+3
+
+statement ok
 SET storage_compatibility_version='v1.0.0'
+
+# Explicit legacy export writes searched CASE, with one operand evaluation per comparison.
+query I
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql(
+    'SELECT CASE nextval(''json_case_seq'') WHEN -1, -2 THEN 0 ELSE 42 END'))
+----
+42
+
+query I
+SELECT currval('json_case_seq')
+----
+5
 
 # Example with simple query
 statement ok

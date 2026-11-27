@@ -111,7 +111,7 @@ def generate_case_check_comparison(field_name, indent):
     ]
 
 
-def generate_func_arg_comparison(field_name, indent):
+def generate_list_element_equals(field_name, indent):
     i = indent
     ii = indent + '\t'
     iii = indent + '\t\t'
@@ -218,8 +218,8 @@ def generate_member_comparison(member, indent='\t'):
         return generate_order_by_comparison(field_name, indent)
     elif type_str == 'vector<CaseCheck>':
         return generate_case_check_comparison(field_name, indent)
-    elif type_str == 'vector<FunctionArgument>':
-        return generate_func_arg_comparison(field_name, indent)
+    elif type_str in ('vector<FunctionArgument>', 'vector<SimpleCaseCheck>'):
+        return generate_list_element_equals(field_name, indent)
     elif is_expression_map(type_str):
         return generate_expression_map_comparison(field_name, indent)
     else:
@@ -324,7 +324,7 @@ def generate_member_copy(member, indent='\t'):
             f'{indent}}}',
         ]
 
-    if type_str == 'vector<FunctionArgument>':
+    if type_str in ('vector<FunctionArgument>', 'vector<SimpleCaseCheck>'):
         return [
             f'{indent}for (auto &arg : {field}) {{',
             f'{ii}copy->{field}.emplace_back(arg.Copy());',
@@ -428,6 +428,14 @@ def generate_member_hash(member, indent='\t'):
         return []
     if type_str == 'SelectStatement*':
         return []
+    if type_str == 'vector<SimpleCaseCheck>':
+        return [
+            f'{indent}for (auto &arm : {field_name}) {{',
+            f'{indent}\tfor (auto &alternative : arm.when) {{',
+            f'{indent}\t\thash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(alternative.comparison_type)));',
+            f'{indent}\t}}',
+            f'{indent}}}',
+        ]
     if type_str == 'vector<CaseCheck>':
         return []
     if type_str == 'vector<FunctionArgument>':
@@ -523,7 +531,7 @@ def member_is_iterable_expression(member):
     return (
         is_parsed_expression_ptr(type_str)
         or is_parsed_expression_list(type_str)
-        or type_str == 'vector<CaseCheck>'
+        or type_str in ('vector<CaseCheck>', 'vector<SimpleCaseCheck>')
         or type_str == 'vector<OrderByNode>'
         or type_str == 'vector<FunctionArgument>'
         or is_expression_map(type_str)
@@ -551,6 +559,15 @@ def generate_member_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &child : {access}) {{',
                 f'\t\t\tresult.Append(child);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<SimpleCaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tfor (auto &alternative : check.when) {{',
+                f'\t\t\t\tresult.Append(alternative.expression);',
+                f'\t\t\t}}',
+                f'\t\t\tresult.Append(check.then_expr);',
                 f'\t\t}}',
             ]
         if type_str == 'vector<CaseCheck>':
@@ -653,6 +670,15 @@ def generate_member_const_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &child : {access}) {{',
                 f'\t\t\tresult.Append(*child);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<SimpleCaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tfor (auto &alternative : check.when) {{',
+                f'\t\t\t\tresult.Append(*alternative.expression);',
+                f'\t\t\t}}',
+                f'\t\t\tresult.Append(*check.then_expr);',
                 f'\t\t}}',
             ]
         if type_str == 'vector<CaseCheck>':

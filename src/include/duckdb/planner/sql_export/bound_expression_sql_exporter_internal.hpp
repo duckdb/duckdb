@@ -145,6 +145,8 @@ private:
 	                                             const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportConjunction(const BoundConjunctionExpression &expression,
 	                                                 const LogicalPlanVerificationPath &path);
+	BoundExpressionSQLExportResult ExportCaseAlternative(const Expression &test,
+	                                                     const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportCase(const BoundCaseExpression &expression,
 	                                          const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportOperator(const BoundOperatorExpression &expression,

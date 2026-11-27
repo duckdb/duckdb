@@ -175,6 +175,7 @@ public:
 	}
 
 public:
+	Identifier GetName() const override;
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
 	bool HasSubquery() const override;

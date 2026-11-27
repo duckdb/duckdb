@@ -1,6 +1,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/legacy_case.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -658,6 +659,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
                                                              AlterBindMode bind_mode) {
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &base = result->Base();
+	NormalizeLegacyCase(schema.ParentCatalog(), base);
 	base.dependencies = LogicalDependencyList();
 	auto &dependencies = base.dependencies;
 	dependencies.AddDependency(schema);

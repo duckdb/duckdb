@@ -83,6 +83,7 @@
     "class": "BoundCaseExpression",
     "base": "Expression",
     "enum": "BOUND_CASE",
+    "use_legacy_serialization": "v2.1.0",
     "members": [
       {
         "id": 200,
@@ -98,6 +99,25 @@
         "id": 202,
         "name": "else_expr",
         "type": "Expression*"
+      },
+      {
+        "id": 203,
+        "name": "operand",
+        "type": "Expression*",
+        "version": "v2.1.0"
+      }
+    ],
+    "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundCaseOperandExpression",
+    "base": "Expression",
+    "enum": "BOUND_CASE_OPERAND",
+    "members": [
+      {
+        "id": 200,
+        "name": "return_type",
+        "type": "LogicalType"
       }
     ],
     "constructor": ["return_type"]

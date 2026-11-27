@@ -86,6 +86,7 @@
     "class": "CaseExpression",
     "base": "ParsedExpression",
     "enum": "CASE",
+    "use_legacy_serialization": "v2.1.0",
     "members": [
       {
         "id": 200,
@@ -100,6 +101,32 @@
         "type": "ParsedExpression*",
         "accessor_mut": "ElseMutable()",
         "accessor": "Else()"
+      },
+      {
+        "id": 202,
+        "name": "case_operand",
+        "type": "ParsedExpression*",
+        "version": "v2.1.0",
+        "nullable": true,
+        "accessor": "CaseOperand()",
+        "accessor_mut": "CaseOperandMutable()"
+      },
+      {
+        "id": 203,
+        "name": "simple_checks",
+        "type": "vector<SimpleCaseCheck>",
+        "version": "v2.1.0",
+        "accessor": "SimpleChecks()",
+        "accessor_mut": "SimpleChecksMutable()"
+      },
+      {
+        "id": 204,
+        "name": "single_comparison",
+        "type": "bool",
+        "version": "v2.1.0",
+        "default": "false",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },

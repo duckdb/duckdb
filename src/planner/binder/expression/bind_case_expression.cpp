@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -7,9 +8,41 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
-	// first try to bind the children of the case expression
 	ErrorData error;
+	unique_ptr<Expression> operand;
+	bool share_operand = false;
 	vector<pair<unique_ptr<Expression>, unique_ptr<Expression>>> checks;
+	if (expr.CaseOperand()) {
+		operand = BindChild(expr.CaseOperandMutable(), depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
+		// Even without a volatile scalar call, a subquery can sample or choose an unordered row.
+		share_operand = operand->IsVolatile() || operand->HasSubquery();
+	}
+	for (auto &arm : expr.SimpleChecksMutable()) {
+		vector<unique_ptr<Expression>> conditions;
+		for (auto &test : arm.when) {
+			auto rhs = BindChild(test.expression, depth, error);
+			if (!rhs) {
+				return BindResult(std::move(error));
+			}
+			unique_ptr<Expression> lhs;
+			if (share_operand) {
+				lhs = make_uniq<BoundCaseOperandExpression>(operand->GetReturnType());
+			} else {
+				lhs = operand->Copy();
+			}
+			auto comparison = CreateBoundComparison(test.comparison_type, std::move(lhs), std::move(rhs), error);
+			if (!comparison) {
+				error.AddQueryLocation(expr);
+				return BindResult(std::move(error));
+			}
+			conditions.push_back(std::move(comparison));
+		}
+		auto condition = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(conditions));
+		checks.emplace_back(std::move(condition), BindChild(arm.then_expr, depth, error));
+	}
 	for (auto &check : expr.CaseChecksMutable()) {
 		auto when_expr = BindChild(check.when_expr, depth, error);
 		auto then_expr = BindChild(check.then_expr, depth, error);
@@ -42,6 +75,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		result->CaseChecksMutable().push_back(std::move(result_check));
 	}
 	result->ElseMutable() = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
+	if (share_operand) {
+		result->OperandMutable() = std::move(operand);
+	}
 	return BindResult(std::move(result));
 }
 } // namespace duckdb

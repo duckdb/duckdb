@@ -13,6 +13,25 @@
 
 namespace duckdb {
 
+struct ComparisonExpressionTail {
+	ExpressionType comparison_type;
+	unique_ptr<ParsedExpression> expression;
+
+	void Serialize(Serializer &serializer) const;
+	static ComparisonExpressionTail Deserialize(Deserializer &deserializer);
+};
+
+struct SimpleCaseCheck {
+	vector<ComparisonExpressionTail> when;
+	unique_ptr<ParsedExpression> then_expr;
+
+	SimpleCaseCheck Copy() const;
+	bool Equals(const SimpleCaseCheck &other) const;
+
+	void Serialize(Serializer &serializer) const;
+	static SimpleCaseCheck Deserialize(Deserializer &deserializer);
+};
+
 struct CaseCheck {
 	unique_ptr<ParsedExpression> when_expr;
 	unique_ptr<ParsedExpression> then_expr;
@@ -33,6 +52,28 @@ public:
 	const vector<CaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
+	//! Expand the simple operand into each comparison for pre-v2.1 storage.
+	void ConvertToSearched();
+	bool UseLegacySerialization() const {
+		return case_operand != nullptr;
+	}
+	void LegacySerialize(Serializer &serializer) const;
+	const unique_ptr<ParsedExpression> &CaseOperand() const {
+		return case_operand;
+	}
+	unique_ptr<ParsedExpression> &CaseOperandMutable() {
+		return case_operand;
+	}
+	const vector<SimpleCaseCheck> &SimpleChecks() const {
+		return simple_checks;
+	}
+	vector<SimpleCaseCheck> &SimpleChecksMutable() {
+		return simple_checks;
+	}
+	void SetSingleComparison() {
+		single_comparison = true;
+	}
+	void VerifyShape() const;
 	const ParsedExpression &Else() const {
 		return *else_expr;
 	}
@@ -47,6 +88,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -67,6 +109,10 @@ public:
 	}
 
 private:
+	//! A single simple comparison shares the searched tree for grouping and old storage formats.
+	bool single_comparison = false;
+	unique_ptr<ParsedExpression> case_operand;
+	vector<SimpleCaseCheck> simple_checks;
 	vector<CaseCheck> case_checks;
 	unique_ptr<ParsedExpression> else_expr;
 };

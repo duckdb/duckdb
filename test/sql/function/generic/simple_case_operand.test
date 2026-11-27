@@ -1,0 +1,324 @@
+# name: test/sql/function/generic/simple_case_operand.test
+# description: A simple CASE shares its operand across comparisons and alternatives
+# group: [generic]
+
+statement ok
+CREATE SEQUENCE s
+
+query T
+SELECT CASE nextval('s') WHEN 0, 2 THEN 'hit' ELSE 'miss' END
+----
+miss
+
+query I
+SELECT currval('s')
+----
+1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE v = 'bad')
+FROM (SELECT CASE nextval('s') % 3 WHEN = 0 THEN 'zero' WHEN 1, >= 2 THEN 'other' ELSE 'bad' END v
+      FROM range(10000))
+----
+10000	0
+
+query I
+SELECT currval('s')
+----
+10001
+
+# Only matching result arms are evaluated.
+query I
+SELECT CASE nextval('s') WHEN -1 THEN error('unused') WHEN > 0 THEN 42 ELSE error('unused') END
+----
+42
+
+query T
+SELECT CASE NULL WHEN NULL, 1 THEN 'bad' ELSE 'ok' END
+----
+ok
+
+query T
+SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'ok' WHEN 'ABC' THEN 'second' END
+----
+ok
+
+query T
+SELECT CASE 1 WHEN < '0' THEN 'bad' WHEN '1' THEN 'ok' END
+----
+ok
+
+statement ok
+CREATE SEQUENCE w
+
+query T
+SELECT CASE sum(nextval('w')) OVER () + random()*0 WHEN 1 THEN 'first' WHEN 2 THEN 'second' END FROM range(1)
+----
+first
+
+query I
+SELECT currval('w')
+----
+1
+
+statement ok
+CREATE SEQUENCE u
+
+query II
+SELECT count(*), sum(v) FROM (
+    SELECT CASE unnest(range(nextval('u'))) + random()*0 WHEN 0 THEN 1 WHEN 1 THEN 2 END v FROM range(1))
+----
+1	1
+
+query I
+SELECT currval('u')
+----
+1
+
+statement ok
+CREATE MACRO sample_bit() AS (SELECT i % 2 FROM range(100) t(i) USING SAMPLE reservoir(1 ROWS))
+
+# Both possible sampled values match. Separate scalar subqueries could disagree.
+loop i 0 32
+
+query I
+SELECT CASE sample_bit() WHEN 0 THEN 1 WHEN 1 THEN (SELECT 1) ELSE 0 END
+----
+1
+
+endloop
+
+query I
+SELECT CASE (SELECT 2) WHEN 1 THEN unnest([10]) WHEN 2 THEN unnest([20]) END
+----
+20
+
+query I
+SELECT CASE (SELECT x) WHEN 0 THEN (SELECT x + 10) WHEN 1 THEN (SELECT x + 20) ELSE 30 END
+FROM range(3) t(x) ORDER BY x
+----
+10
+21
+30
+
+query I
+SELECT CASE TRY((SELECT CAST('bad' AS INT))) WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 0 END
+----
+0
+
+# Both inner and outer CASE expressions share their own scalar-subquery input.
+query I
+SELECT CASE (SELECT 1) WHEN 1 THEN
+       CASE (SELECT x) WHEN 1 THEN (SELECT 10) WHEN 2 THEN 20 END
+       WHEN 2 THEN 0 END FROM range(1, 3) t(x) ORDER BY x
+----
+10
+20
+
+query I
+SELECT CASE nextval('s') WHEN > 0 THEN (SELECT 42) END
+----
+42
+
+statement ok
+CREATE MACRO nested_subquery() AS (SELECT 2)
+
+query I
+SELECT CASE random() WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE nested_subquery() END
+----
+2
+
+statement ok
+CREATE SEQUENCE expanded
+
+query I
+SELECT CASE nextval('expanded') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE unnest([2,3]) END
+----
+2
+3
+
+query I
+SELECT currval('expanded')
+----
+2
+
+query I
+SELECT CASE random()+2 WHEN (SELECT i), 1 THEN i ELSE 0 END FROM range(2) t(i)
+----
+0
+0
+
+# Binding the branches never introduces a user-visible parameter.
+query I
+SELECT 42 AS __case_operand WHERE CASE random() WHEN -1 THEN false WHEN -2 THEN false ELSE __case_operand = 42 END
+----
+42
+
+query T
+SELECT list_transform([3, 4], lambda __case_operand: CASE __case_operand + random()*0
+       WHEN 3 THEN __case_operand * 2 WHEN 4 THEN __case_operand + 1 END)
+----
+[6, 5]
+
+query T
+SELECT CASE random() WHEN -1 THEN [] WHEN -2 THEN [] ELSE list_transform([2, 3], lambda n: n + i) END
+FROM (VALUES (10)) t(i)
+----
+[12, 13]
+
+# Single comparisons retain their searched grouping and historical output names.
+query TI
+SELECT CASE i WHEN > 0 THEN 'a' ELSE 'b' END k, count(*) FROM range(3) t(i)
+GROUP BY CASE WHEN i > 0 THEN 'a' ELSE 'b' END ORDER BY k
+----
+a	2
+b	1
+
+query I
+SELECT "CASE  WHEN ((i = j)) THEN (k) ELSE z END"
+FROM (SELECT CASE i WHEN j THEN k ELSE z END FROM (VALUES (1,1,2,0)) t(i,j,k,z))
+----
+2
+
+query I
+SELECT "sum(CASE  WHEN ((i = j)) THEN (k) ELSE z END)"
+FROM (SELECT sum(CASE i WHEN j THEN k ELSE z END) FROM (VALUES (1,1,2,0)) t(i,j,k,z))
+----
+2
+
+query I
+SELECT "CASE  WHEN ((i = a)) THEN (x) WHEN ((i = b)) THEN (y) ELSE z END"
+FROM (SELECT CASE i WHEN a THEN x WHEN b THEN y ELSE z END
+      FROM range(3) t(i), (VALUES (1,2,2,4,NULL::INTEGER)) v(a,b,x,y,z) ORDER BY i)
+----
+NULL
+2
+4
+
+query I
+SELECT "sum(CASE  WHEN (((i < a) OR (i = b))) THEN (x) ELSE z END)"
+FROM (SELECT sum(CASE i WHEN < a, b THEN x ELSE z END) FROM range(3) t(i), (VALUES (1,2,2,0)) v(a,b,x,z))
+----
+4
+
+statement error
+SELECT CASE i WHEN 1 THEN 2 WHEN 2 THEN 4 END FROM range(3) t(i)
+GROUP BY CASE WHEN i = 1 THEN 2 WHEN i = 2 THEN 4 END
+----
+must appear in the GROUP BY clause
+
+query II
+SELECT CASE i WHEN 0, 1 THEN 1 ELSE 2 END k, count(*) FROM range(3) t(i) GROUP BY k ORDER BY k
+----
+1	2
+2	1
+
+statement ok
+PREPARE q AS SELECT CASE $1 WHEN < 1, > 3 THEN 0 WHEN 2 THEN 2 ELSE 1 END
+
+query I
+EXECUTE q(2)
+----
+2
+
+statement ok
+PREPARE case_parameter AS SELECT CASE random() WHEN $1 THEN 1 WHEN 2 THEN 2 ELSE 3 END
+
+query T
+SELECT result_types FROM duckdb_prepared_statements() WHERE name = 'case_parameter'
+----
+[INTEGER]
+
+query I
+EXECUTE case_parameter(-1)
+----
+3
+
+statement ok
+PREPARE case_results AS SELECT CASE random() WHEN -1 THEN $1 WHEN -2 THEN 2 ELSE $2 END
+
+query T
+SELECT result_types FROM duckdb_prepared_statements() WHERE name = 'case_results'
+----
+[INTEGER]
+
+query I
+EXECUTE case_results(5, 7)
+----
+7
+
+statement ok
+CREATE TABLE updated AS SELECT i, 0 AS v FROM range(3) t(i)
+
+statement ok
+CREATE SEQUENCE update_seq
+
+statement ok
+UPDATE updated SET v = CASE nextval('update_seq') WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 30 END
+
+query I
+SELECT v FROM updated ORDER BY v
+----
+10
+20
+30
+
+query I
+SELECT currval('update_seq')
+----
+3
+
+# Captured outer bindings survive nested lambda execution and SQL reconstruction.
+statement ok
+SET debug_verify_statement='explain_sql_strict'
+
+query T
+SELECT list_transform([5], lambda __case_operand, __case_operand_1:
+       CASE random() WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE __case_operand + __case_operand_1 END)
+----
+[6]
+
+query T
+SELECT list_transform([2], lambda n: CASE random() WHEN -1 THEN [] WHEN -2 THEN []
+       ELSE list_transform([3], lambda m: n + m) END)
+----
+[[5]]
+
+statement ok
+RESET debug_verify_statement
+
+query II
+SELECT l.i, r.i FROM (VALUES (1), (2)) l(i) LEFT JOIN (VALUES (1), (3)) r(i)
+ON l.i = CASE (SELECT r.i) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END ORDER BY l.i
+----
+1	1
+2	NULL
+
+# The regenerated SQL has the same CASE simplifications as the searched form.
+statement ok
+SET debug_disable_optimizer=false
+
+statement ok
+SET debug_verify_statement='explain_sql_strict'
+
+query I
+SELECT CASE (SELECT 2) WHEN 1 THEN (SELECT CAST('unreached' AS INTEGER)) WHEN 2 THEN 20 END
+----
+20
+
+statement ok
+RESET debug_verify_statement
+
+# With the optimizer enabled the unreachable branch subquery is discarded.
+statement ok
+CREATE SEQUENCE branch_call
+
+query I
+SELECT CASE nextval('branch_call') WHEN NULL THEN (SELECT nextval('branch_call')) WHEN 1 THEN 42 ELSE 0 END
+----
+42
+
+query I
+SELECT currval('branch_call')
+----
+1

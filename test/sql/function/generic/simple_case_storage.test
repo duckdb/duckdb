@@ -1,0 +1,226 @@
+# name: test/sql/function/generic/simple_case_storage.test
+# description: Simple CASE catalog compatibility and rendering across restart
+# group: [generic]
+
+load {TEST_DIR}/case_v21.db readwrite v2.1.0
+
+statement ok
+CREATE SEQUENCE s
+
+statement ok
+CREATE MACRO classify(x) AS CASE x WHEN < 1, > 2 THEN 0 WHEN 1 THEN 1 ELSE 2 END
+
+statement ok
+CREATE VIEW v AS SELECT CASE nextval('s') % 2 WHEN 0, 1 THEN 42 ELSE -1 END AS result
+
+statement ok
+CREATE VIEW named AS SELECT CASE i WHEN 1 THEN 2 ELSE 0 END FROM (VALUES (1)) t(i)
+
+statement ok
+CREATE VIEW multi_named AS SELECT CASE i WHEN 1 THEN 2 WHEN 2 THEN 4 END FROM range(3) t(i)
+
+statement ok
+CREATE VIEW dependent AS SELECT "CASE  WHEN ((i = 1)) THEN (2) ELSE 0 END" AS result FROM named
+
+# Generated lambda inputs can capture a CHECK column without changing its scope.
+statement ok
+CREATE TABLE checked(__case_operand INT, CHECK(CASE random() WHEN -1 THEN false WHEN -2 THEN false ELSE __case_operand > 0 END))
+
+statement ok
+INSERT INTO checked VALUES (42)
+
+statement error
+INSERT INTO checked VALUES (-1)
+----
+CHECK constraint failed
+
+query I
+SELECT result FROM v
+----
+42
+
+query I
+SELECT currval('s')
+----
+1
+
+restart
+
+query II
+SELECT result, classify(2) FROM v
+----
+42	2
+
+query I
+SELECT currval('s')
+----
+2
+
+query I
+SELECT result FROM dependent
+----
+2
+
+query I
+SELECT sql LIKE '%CASE (i) WHEN (1)%' FROM duckdb_views() WHERE view_name='named'
+----
+true
+
+query I
+SELECT sql LIKE '%CASE (i) WHEN (1) THEN (2) WHEN (2) THEN (4)%' FROM duckdb_views() WHERE view_name='multi_named'
+----
+true
+
+statement ok
+ATTACH '{TEST_DIR}/case_v20.db' AS legacy (STORAGE_VERSION 'v2.0.0')
+
+statement ok
+CREATE VIEW legacy.single AS SELECT CASE 1 WHEN > 0 THEN 42 END
+
+statement ok
+CREATE VIEW legacy.dependent AS SELECT "CASE  WHEN ((1 > 0)) THEN (42) ELSE NULL END" AS result FROM legacy.single
+
+statement ok
+CREATE VIEW legacy.multi AS SELECT CASE i WHEN 0 THEN 'a' WHEN 1 THEN 'b' END AS x FROM range(3) t(i)
+
+statement ok
+CREATE MACRO legacy.classify(x) AS CASE x WHEN < 0, > 2 THEN 0 WHEN 1 THEN 10 ELSE 20 END
+
+statement ok
+CREATE TABLE legacy.defaults(i INTEGER DEFAULT CASE 1 WHEN 0, 1 THEN 42 END)
+
+# Bind the legacy form at CREATE time, including a branch subquery that the native volatile form rejects.
+statement ok
+CREATE VIEW legacy.branch_subquery AS SELECT CASE random() WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE (SELECT 42) END AS x
+
+query I
+SELECT * FROM legacy.branch_subquery
+----
+42
+
+statement ok
+CREATE SEQUENCE legacy.calls
+
+# A CASE nested in the MATCH_RECOGNIZE input uses the same representation as a top-level CASE.
+statement ok
+CREATE VIEW legacy.volatile_view AS
+SELECT x FROM (
+    SELECT (SELECT CASE nextval('legacy.calls') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END) AS x
+) t MATCH_RECOGNIZE (ORDER BY x MEASURES FIRST(A.x) AS x PATTERN (A) DEFINE A AS true)
+
+query I
+SELECT * FROM legacy.volatile_view
+----
+42
+
+query I
+SELECT currval('legacy.calls')
+----
+2
+
+# Direct statements, temporary views, and the SELECT in CTAS keep single evaluation.
+statement ok
+USE legacy
+
+query I
+SELECT CASE nextval('calls') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END
+----
+42
+
+statement ok
+CREATE TEMP VIEW tmp AS SELECT CASE nextval('legacy.calls') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END AS x
+
+query I
+SELECT * FROM tmp
+----
+42
+
+statement ok
+CREATE TABLE materialized AS SELECT CASE nextval('calls') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END AS x
+
+query I
+SELECT currval('calls')
+----
+5
+
+# ALTER TABLE also installs a new persistent expression.
+statement ok
+ALTER TABLE defaults ALTER i SET DEFAULT CASE nextval('legacy.calls') WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END
+
+statement ok
+INSERT INTO defaults DEFAULT VALUES
+
+query I
+SELECT currval('calls')
+----
+7
+
+statement ok
+USE case_v21
+
+statement ok
+DETACH legacy
+
+statement ok
+ATTACH '{TEST_DIR}/case_v20.db' AS legacy
+
+query I
+SELECT * FROM legacy.dependent
+----
+42
+
+query T rowsort
+SELECT x FROM legacy.multi
+----
+NULL
+a
+b
+
+query III
+SELECT legacy.classify(1), legacy.classify(2), legacy.classify(3)
+----
+10	20	0
+
+statement ok
+INSERT INTO legacy.defaults DEFAULT VALUES
+
+query I
+SELECT i FROM legacy.defaults
+----
+42
+42
+
+query I
+SELECT * FROM legacy.volatile_view
+----
+42
+
+query I
+SELECT currval('legacy.calls')
+----
+11
+
+# A copied macro takes its destination's format, even when volatility only appears at invocation.
+statement ok
+ATTACH ':memory:' AS source_db
+
+statement ok
+CREATE MACRO source_db.m(x) AS TABLE SELECT CASE x WHEN -1 THEN 0 WHEN -2 THEN 1 ELSE 42 END AS y
+
+statement ok
+COPY FROM DATABASE source_db TO legacy (SCHEMA)
+
+query I
+SELECT * FROM source_db.m(nextval('legacy.calls'))
+----
+42
+
+query I
+SELECT * FROM legacy.m(nextval('legacy.calls'))
+----
+42
+
+query I
+SELECT currval('legacy.calls')
+----
+14

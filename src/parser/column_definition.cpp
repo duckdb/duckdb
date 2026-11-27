@@ -40,6 +40,11 @@ const ParsedExpression &ColumnDefinition::DefaultValue() const {
 	return *expression;
 }
 
+ParsedExpression &ColumnDefinition::DefaultValueMutable() {
+	D_ASSERT(HasDefaultValue());
+	return *expression;
+}
+
 bool ColumnDefinition::HasDefaultValue() const {
 	if (Generated()) {
 		return false;

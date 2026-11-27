@@ -3,6 +3,8 @@
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -198,5 +200,45 @@ TEST_CASE("Table filter selection preserves both partitions with mapped input", 
 				}
 			}
 		}
+	}
+}
+
+TEST_CASE("Simple CASE keeps duplicate input occurrences distinct", "[expression_executor]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), {LogicalType::INTEGER});
+	const auto input_count = MinValue<idx_t>(8, STANDARD_VECTOR_SIZE);
+	auto writer = FlatVector::Writer<int32_t>(input.data[0], input_count);
+	for (idx_t i = 0; i < input_count; i++) {
+		writer.WriteValue(10 + NumericCast<int32_t>(i));
+	}
+	input.CheckCardinality(input_count);
+
+	ScalarFunction alternate("alternate", {}, LogicalType::BOOLEAN,
+	                         [](DataChunk &args, ExpressionState &, Vector &result) {
+		                         auto output = FlatVector::Writer<bool>(result, args.size());
+		                         for (idx_t i = 0; i < args.size(); i++) {
+			                         output.WriteValue(i % 2 == 0);
+		                         }
+	                         });
+	alternate.SetVolatile();
+	BoundCaseExpression expr(make_uniq<BoundCaseOperandExpression>(LogicalType::BOOLEAN),
+	                         make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0),
+	                         make_uniq<BoundConstantExpression>(Value::INTEGER(-1)));
+	expr.OperandMutable() =
+	    make_uniq<BoundFunctionExpression>(BoundScalarFunction(alternate), vector<unique_ptr<Expression>>(), nullptr);
+	ExpressionExecutor executor(*con.context, expr);
+	executor.SetChunk(input);
+	const auto count = MinValue<idx_t>(4, input_count);
+	const auto last_row = input_count - 1;
+	SelectionVector selection(count);
+	for (idx_t i = 0; i < count; i++) {
+		selection.set_index(i, i == 2 ? last_row / 2 : last_row);
+	}
+	Vector result(LogicalType::INTEGER);
+	executor.ExecuteExpression(0, result, selection, count);
+	for (idx_t i = 0; i < count; i++) {
+		REQUIRE(result.GetValue(i) == Value::INTEGER(i % 2 == 0 ? 10 + selection.get_index(i) : -1));
 	}
 }

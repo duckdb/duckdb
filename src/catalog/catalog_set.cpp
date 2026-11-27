@@ -380,9 +380,11 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	// push the old entry in the undo buffer for this transaction
 	unique_ptr<CatalogEntry> entry_to_destroy;
 	if (transaction.transaction) {
-		// serialize the AlterInfo into a temporary buffer
+		// Preserve the full AlterInfo in the undo buffer. WriteAlter applies the destination's storage version.
 		MemoryStream stream(Allocator::Get(transaction.db));
-		BinarySerializer serializer(stream);
+		SerializationOptions options;
+		options.storage_compatibility = StorageCompatibility::Latest();
+		BinarySerializer serializer(stream, options);
 		serializer.Begin();
 		serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
 		serializer.WriteProperty(101, "alter_info", &alter_info);

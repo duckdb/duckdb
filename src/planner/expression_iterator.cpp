@@ -35,6 +35,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
+		if (case_expr.Operand()) {
+			callback(case_expr.OperandMutable());
+		}
 		for (auto &case_check : case_expr.CaseChecksMutable()) {
 			callback(case_check.when_expr);
 			callback(case_check.then_expr);
@@ -109,6 +112,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:
 	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::BOUND_CASE_OPERAND:
 	case ExpressionClass::BOUND_REF:
 		// these node types have no children
 		break;

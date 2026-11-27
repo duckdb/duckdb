@@ -74,9 +74,18 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 	}
 }
 
-void ParsedExpressionIterator::EnumerateTableRefChildren(
-    TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
-    const std::function<void(TableRef &ref)> &ref_callback) {
+namespace {
+
+struct QueryExpressionIterator {
+	const std::function<void(unique_ptr<ParsedExpression> &)> &expr_callback;
+	const std::function<void(TableRef &)> &ref_callback;
+	bool all_expressions;
+
+	void Visit(TableRef &ref);
+	void Visit(QueryNode &node);
+};
+
+void QueryExpressionIterator::Visit(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = ref.Cast<ExpressionListRef>();
@@ -89,8 +98,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	}
 	case TableReferenceType::JOIN: {
 		auto &j_ref = ref.Cast<JoinRef>();
-		EnumerateTableRefChildren(*j_ref.left, expr_callback, ref_callback);
-		EnumerateTableRefChildren(*j_ref.right, expr_callback, ref_callback);
+		Visit(*j_ref.left);
+		Visit(*j_ref.right);
 		if (j_ref.condition) {
 			expr_callback(j_ref.condition);
 		}
@@ -104,7 +113,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	}
 	case TableReferenceType::PIVOT: {
 		auto &p_ref = ref.Cast<PivotRef>();
-		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
+		Visit(*p_ref.source);
 		for (auto &aggr : p_ref.aggregates) {
 			expr_callback(aggr);
 		}
@@ -118,19 +127,22 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 				}
 			}
 			if (pivot.subquery) {
-				EnumerateQueryNodeChildren(*pivot.subquery, expr_callback, ref_callback);
+				Visit(*pivot.subquery);
 			}
 		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = ref.Cast<SubqueryRef>();
-		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);
+		Visit(*sq_ref.subquery->node);
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
 		auto &tf_ref = ref.Cast<TableFunctionRef>();
 		expr_callback(tf_ref.function);
+		if (all_expressions && tf_ref.subquery) {
+			Visit(*tf_ref.subquery->node);
+		}
 		break;
 	}
 	case TableReferenceType::MATCH_RECOGNIZE: {
@@ -151,14 +163,14 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 			expr_callback(mr_ref.config->pattern);
 		}
 		if (mr_ref.input) {
-			EnumerateTableRefChildren(*mr_ref.input, expr_callback, ref_callback);
+			Visit(*mr_ref.input);
 		}
 		break;
 	}
 	case TableReferenceType::SHOW_REF: {
 		auto &show_ref = ref.Cast<ShowRef>();
 		if (show_ref.query) {
-			EnumerateQueryNodeChildren(*show_ref.query, expr_callback, ref_callback);
+			Visit(*show_ref.query);
 		}
 		break;
 	}
@@ -182,14 +194,17 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	ref_callback(ref);
 }
 
-void ParsedExpressionIterator::EnumerateQueryNodeChildren(
-    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
-    const std::function<void(TableRef &ref)> &ref_callback) {
+void QueryExpressionIterator::Visit(QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rcte_node = node.Cast<RecursiveCTENode>();
-		EnumerateQueryNodeChildren(*rcte_node.left, expr_callback, ref_callback);
-		EnumerateQueryNodeChildren(*rcte_node.right, expr_callback, ref_callback);
+		if (all_expressions) {
+			for (auto &expr : rcte_node.key_targets) {
+				expr_callback(expr);
+			}
+		}
+		Visit(*rcte_node.left);
+		Visit(*rcte_node.right);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
@@ -211,24 +226,24 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		}
 
 		if (sel_node.from_table) {
-			EnumerateTableRefChildren(*sel_node.from_table, expr_callback, ref_callback);
+			Visit(*sel_node.from_table);
 		}
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop_node = node.Cast<SetOperationNode>();
 		for (auto &child : setop_node.children) {
-			EnumerateQueryNodeChildren(*child, expr_callback, ref_callback);
+			Visit(*child);
 		}
 		break;
 	}
 	case QueryNodeType::UPDATE_QUERY_NODE: {
 		auto &upd_node = node.Cast<UpdateQueryNode>();
 		if (upd_node.table) {
-			EnumerateTableRefChildren(*upd_node.table, expr_callback, ref_callback);
+			Visit(*upd_node.table);
 		}
 		if (upd_node.from_table) {
-			EnumerateTableRefChildren(*upd_node.from_table, expr_callback, ref_callback);
+			Visit(*upd_node.from_table);
 		}
 		if (upd_node.set_info) {
 			for (auto &expr : upd_node.set_info->expressions) {
@@ -246,10 +261,10 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	case QueryNodeType::DELETE_QUERY_NODE: {
 		auto &del_node = node.Cast<DeleteQueryNode>();
 		if (del_node.table) {
-			EnumerateTableRefChildren(*del_node.table, expr_callback, ref_callback);
+			Visit(*del_node.table);
 		}
 		for (auto &using_clause : del_node.using_clauses) {
-			EnumerateTableRefChildren(*using_clause, expr_callback, ref_callback);
+			Visit(*using_clause);
 		}
 		if (del_node.condition) {
 			expr_callback(del_node.condition);
@@ -262,10 +277,10 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	case QueryNodeType::INSERT_QUERY_NODE: {
 		auto &ins_node = node.Cast<InsertQueryNode>();
 		if (ins_node.select_statement) {
-			EnumerateQueryNodeChildren(*ins_node.select_statement->node, expr_callback, ref_callback);
+			Visit(*ins_node.select_statement->node);
 		}
 		if (ins_node.table_ref) {
-			EnumerateTableRefChildren(*ins_node.table_ref, expr_callback, ref_callback);
+			Visit(*ins_node.table_ref);
 		}
 		for (auto &expr : ins_node.returning_list) {
 			expr_callback(expr);
@@ -286,10 +301,10 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	case QueryNodeType::MERGE_QUERY_NODE: {
 		auto &merge_node = node.Cast<MergeQueryNode>();
 		if (merge_node.target) {
-			EnumerateTableRefChildren(*merge_node.target, expr_callback, ref_callback);
+			Visit(*merge_node.target);
 		}
 		if (merge_node.source) {
-			EnumerateTableRefChildren(*merge_node.source, expr_callback, ref_callback);
+			Visit(*merge_node.source);
 		}
 		if (merge_node.join_condition) {
 			expr_callback(merge_node.join_condition);
@@ -321,7 +336,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		auto &copy_node = node.Cast<CopyQueryNode>();
 		auto &copy_info = *copy_node.info;
 		if (copy_info.select_statement) {
-			EnumerateQueryNodeChildren(*copy_info.select_statement, expr_callback, ref_callback);
+			Visit(*copy_info.select_statement);
 		}
 		if (copy_info.file_path_expression) {
 			expr_callback(copy_info.file_path_expression);
@@ -338,14 +353,41 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	}
 
 	if (!node.modifiers.empty()) {
-		EnumerateQueryNodeModifiers(node, expr_callback);
+		ParsedExpressionIterator::EnumerateQueryNodeModifiers(node, expr_callback);
 	}
 
 	for (auto &kv : node.cte_map.map) {
+		if (all_expressions) {
+			for (auto &expr : kv.second->key_targets) {
+				expr_callback(expr);
+			}
+			for (auto &expr : kv.second->payload_aggregates) {
+				expr_callback(expr);
+			}
+		}
 		if (kv.second->query_node) {
-			EnumerateQueryNodeChildren(*kv.second->query_node, expr_callback, ref_callback);
+			Visit(*kv.second->query_node);
 		}
 	}
+}
+
+} // namespace
+
+void ParsedExpressionIterator::EnumerateTableRefChildren(
+    TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+    const std::function<void(TableRef &ref)> &ref_callback) {
+	QueryExpressionIterator {expr_callback, ref_callback, false}.Visit(ref);
+}
+
+void ParsedExpressionIterator::EnumerateQueryNodeChildren(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+    const std::function<void(TableRef &ref)> &ref_callback) {
+	QueryExpressionIterator {expr_callback, ref_callback, false}.Visit(node);
+}
+
+void ParsedExpressionIterator::EnumerateAllQueryNodeChildren(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback) {
+	QueryExpressionIterator {expr_callback, DefaultRefCallback, true}.Visit(node);
 }
 
 void ParsedExpressionIterator::VisitExpressionClass(

@@ -1,5 +1,7 @@
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
@@ -176,6 +178,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportInternal(con
 	case ExpressionClass::BOUND_WINDOW:
 	case ExpressionClass::BOUND_UNNEST:
 	case ExpressionClass::BOUND_LAMBDA:
+	case ExpressionClass::BOUND_CASE_OPERAND:
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::LEGACY_BOUND_CAST:
 	case ExpressionClass::LEGACY_BOUND_COMPARISON:
@@ -500,10 +503,154 @@ BoundExpressionSQLExportState::ExportConjunction(const BoundConjunctionExpressio
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }
 
+// SQL binds each WHEN independently. Only omit a cast when comparison binding will restore it.
+static bool IsRebindableCaseCast(optional_ptr<ClientContext> context, const Expression &left, const Expression &right,
+                                 ExpressionType comparison) {
+	if (!context || !BoundCastExpression::IsCast(left)) {
+		return false;
+	}
+	auto &cast = left.Cast<BoundFunctionExpression>();
+	auto &source = BoundCastExpression::Child(cast);
+	auto &target = left.GetReturnType();
+	if (source.GetExpressionClass() != ExpressionClass::BOUND_CASE_OPERAND || !target.IsNumeric() ||
+	    target != right.GetReturnType() || BoundCastExpression::IsTryCast(cast) ||
+	    !BoundCastExpression::HasValidBindData(cast) ||
+	    CastFunctionSet::Get(*context).CanOverrideDefaultCast(source.GetReturnType(), target)) {
+		return false;
+	}
+	LogicalType rebound;
+	return BoundComparisonExpression::TryBindComparison(*context, source.GetReturnType(), target, rebound,
+	                                                    comparison) &&
+	       rebound == target;
+}
+
+static bool IsNoCaseKey(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &call = expr.Cast<BoundFunctionExpression>();
+	auto &fun = call.Function();
+	return fun.GetCatalogName() == Identifier::SystemCatalog() &&
+	       fun.GetSchemaName() == CollationFunctions::GetSchema() && fun.GetName() == "nocase" &&
+	       call.GetChildren().size() == 1;
+}
+
+// Recover the argument of COLLATE nocase. After constant folding only the key survives:
+// it can stand in for the original string if applying the collation again gives the same bytes.
+static optional_ptr<const Expression> NoCaseAlternative(optional_ptr<ClientContext> context, const Expression &left,
+                                                        const Expression &right) {
+	if (!IsNoCaseKey(left) || left.Cast<BoundFunctionExpression>().GetChildren()[0]->GetExpressionClass() !=
+	                              ExpressionClass::BOUND_CASE_OPERAND) {
+		return nullptr;
+	}
+	if (IsNoCaseKey(right)) {
+		return right.Cast<BoundFunctionExpression>().GetChildren()[0].get();
+	}
+	if (!context || right.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+	    right.GetReturnType().id() != LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
+	auto key = left.Copy();
+	key->Cast<BoundFunctionExpression>().GetChildrenMutable()[0] = right.Copy();
+	Value folded;
+	if (ExpressionExecutor::TryEvaluateScalar(*context, *key, folded) &&
+	    Value::NotDistinctFrom(folded, right.Cast<BoundConstantExpression>().GetValue())) {
+		return right;
+	}
+	return nullptr;
+}
+
+BoundExpressionSQLExportResult
+BoundExpressionSQLExportState::ExportCaseAlternative(const Expression &test, const LogicalPlanVerificationPath &path) {
+	if (BoundComparisonExpression::IsComparison(test) &&
+	    test.GetExpressionType() <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		auto &comparison = test.Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		if (left.GetExpressionClass() == ExpressionClass::BOUND_CASE_OPERAND ||
+		    IsRebindableCaseCast(context.client_context, left, right, test.GetExpressionType())) {
+			return ExportChild(right, path, 1);
+		}
+		if (auto uncollated = NoCaseAlternative(context.client_context, left, right)) {
+			auto rhs_path = SQLExportHelpers::ChildPath(path, 1);
+			auto result =
+			    Export(*uncollated, uncollated.get() == &right ? rhs_path : SQLExportHelpers::ChildPath(rhs_path, 0));
+			if (!result.HasError()) {
+				result.GetValue() = make_uniq<CollateExpression>("nocase", std::move(result.GetValue()));
+			}
+			return result;
+		}
+	}
+	return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+	    path, "simple_case_predicate", "Cannot reconstruct this transformed simple CASE comparison")});
+}
+
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCase(const BoundCaseExpression &expression,
                                                                          const LogicalPlanVerificationPath &path) {
 	D_ASSERT(expression.GetExpressionType() == ExpressionType::CASE_EXPR);
 	D_ASSERT(expression.GetReturnType().IsComplete());
+	if (expression.Operand()) {
+		auto result = make_uniq<CaseExpression>();
+		auto operand = ExportChild(*expression.Operand(), path, 0);
+		if (operand.HasError()) {
+			return operand;
+		}
+		result->CaseOperandMutable() = std::move(operand.GetValue());
+		idx_t child = 1;
+		idx_t comparisons = 0;
+		for (auto &check : expression.CaseChecks()) {
+			SimpleCaseCheck arm;
+			vector<reference<const Expression>> alternatives;
+			if (check.when_expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
+				for (auto &part : check.when_expr->Cast<BoundConjunctionExpression>().GetChildren()) {
+					alternatives.emplace_back(*part);
+				}
+			} else {
+				alternatives.emplace_back(*check.when_expr);
+			}
+			auto when_path = SQLExportHelpers::ChildPath(path, child);
+			for (idx_t i = 0; i < alternatives.size(); i++) {
+				auto &test = alternatives[i].get();
+				auto rhs = ExportCaseAlternative(
+				    test, alternatives.size() == 1 ? when_path : SQLExportHelpers::ChildPath(when_path, i));
+				if (rhs.HasError()) {
+					return rhs;
+				}
+				arm.when.push_back({test.GetExpressionType(), std::move(rhs.GetValue())});
+				comparisons++;
+			}
+			auto then_result = ExportChild(*check.then_expr, path, ++child);
+			if (then_result.HasError()) {
+				return then_result;
+			}
+			arm.then_expr = std::move(then_result.GetValue());
+			result->SimpleChecksMutable().push_back(std::move(arm));
+			child++;
+		}
+		if (comparisons == 0) {
+			return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+			    path, "simple_case_predicate",
+			    "Cannot render a simple CASE with no remaining WHEN while preserving operand evaluation")});
+		}
+		if (comparisons == 1) {
+			// On rebind a single comparison becomes searched CASE. Statistics can then prove
+			// the comparison false and discard the operand, even when it contains nextval().
+			if (expression.Operand()->IsVolatile() || expression.Operand()->CanThrow() ||
+			    !expression.Operand()->IsConsistent()) {
+				return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+				    path, "simple_case_operand_evaluation",
+				    "A single remaining WHEN cannot preserve required CASE operand evaluation on rebind")});
+			}
+			result->ConvertToSearched();
+			result->SetSingleComparison();
+		}
+		auto otherwise = ExportChild(expression.Else(), path, child);
+		if (otherwise.HasError()) {
+			return otherwise;
+		}
+		result->ElseMutable() = std::move(otherwise.GetValue());
+		return BoundExpressionSQLExportResult::Success(std::move(result));
+	}
 	D_ASSERT(!expression.CaseChecks().empty());
 	vector<ChildExpression> source_children;
 	for (auto &check : expression.CaseChecks()) {

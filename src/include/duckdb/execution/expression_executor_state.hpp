@@ -100,6 +100,8 @@ struct ExpressionExecutorState {
 	ExpressionExecutor *executor = nullptr;
 	//! True while initializing the states below a TRY
 	bool inside_try = false;
+	//! Saved operand while executing the checks of a native simple CASE.
+	optional_ptr<Vector> case_operand;
 
 	void Verify();
 };

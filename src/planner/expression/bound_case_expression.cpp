@@ -18,7 +18,15 @@ BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> when_expr, uniqu
 }
 
 string BoundCaseExpression::ToString() const {
-	return CaseExpression::ToString<BoundCaseExpression, Expression>(*this);
+	auto checks = CaseExpression::ToString<BoundCaseExpression, Expression>(*this);
+	if (operand) {
+		return "CASE OPERAND (" + operand->ToString() + ") " + checks;
+	}
+	return checks;
+}
+
+void BoundCaseExpression::LegacySerialize(Serializer &) const {
+	throw SerializationException("A bound plan with a shared CASE operand requires storage version v2.1.0 or newer");
 }
 
 bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
@@ -26,7 +34,7 @@ bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<BoundCaseExpression>();
-	if (case_checks.size() != other.case_checks.size()) {
+	if (!Expression::Equals(operand, other.operand) || case_checks.size() != other.case_checks.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < case_checks.size(); i++) {
@@ -51,6 +59,7 @@ unique_ptr<Expression> BoundCaseExpression::Copy() const {
 		new_check.then_expr = check.then_expr->Copy();
 		new_case->case_checks.push_back(std::move(new_check));
 	}
+	new_case->operand = operand ? operand->Copy() : nullptr;
 	new_case->else_expr = else_expr->Copy();
 
 	new_case->CopyProperties(*this);
