@@ -165,6 +165,3 @@ SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/filter_query_transac
     'SELECT 0::BIGINT AS row_start, min(pos) AS row_end, NULL::BIT AS bits FROM other_del'}])
 ----
 4
-
-statement ok
-USE memory
