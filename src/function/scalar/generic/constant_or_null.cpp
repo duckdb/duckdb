@@ -71,14 +71,21 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static FilterPropagateResult ConstantOrNullFilterPrune(const FunctionStatisticsPruneInput &input) {
-	for (idx_t i = 0; i < input.function.GetChildren().size(); i++) {
-		auto stats = input.ChildStats(i);
-		if (stats && !stats->CanHaveNoNull()) {
-			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+static unique_ptr<BaseStatistics> ConstantOrNullPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &info = input.bind_data->Cast<ConstantOrNullBindData>();
+	auto &child_stats = input.child_stats;
+	bool can_have_null = false;
+	for (idx_t i = 1; i < child_stats.size(); i++) {
+		if (!child_stats[i].CanHaveNoNull()) {
+			return BaseStatistics::FromConstant(Value(input.expr.GetReturnType())).ToUnique();
 		}
+		can_have_null = can_have_null || child_stats[i].CanHaveNull();
 	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	auto result = BaseStatistics::FromConstant(info.value);
+	if (can_have_null) {
+		result.SetHasNull();
+	}
+	return result.ToUnique();
 }
 
 //! Resolves the type of the leading constant before binding, so that a call folded on a typed NULL keeps it
@@ -108,7 +115,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	fun.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	fun.SetResolveTypesCallback(ConstantOrNullResolveTypes);
 	fun.SetBindCallback(ConstantOrNullBind);
-	fun.SetFilterPruneCallback(ConstantOrNullFilterPrune);
+	fun.SetStatisticsCallback(ConstantOrNullPropagateStats);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	return fun;
 }
