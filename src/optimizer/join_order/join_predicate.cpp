@@ -87,7 +87,8 @@ JoinPredicate::JoinPredicate(idx_t index, FilterInfo &filter, JoinPredicateClass
                              ColumnBinding left_equality_binding, ColumnBinding right_equality_binding)
     : index(index), filter(filter), predicate_class(predicate_class),
       comparison_type(JoinOrderUtil::GetJoinPredicateComparisonType(filter)),
-      left_equality_binding(left_equality_binding), right_equality_binding(right_equality_binding) {
+      is_volatile(filter.filter && filter.filter->IsVolatile()), left_equality_binding(left_equality_binding),
+      right_equality_binding(right_equality_binding) {
 }
 
 idx_t JoinPredicate::GetIndex() const {
@@ -108,6 +109,10 @@ JoinType JoinPredicate::GetJoinType() const {
 
 ExpressionType JoinPredicate::GetComparisonType() const {
 	return comparison_type;
+}
+
+bool JoinPredicate::IsVolatile() const {
+	return is_volatile;
 }
 
 JoinRelationSet &JoinPredicate::GetSet() const {

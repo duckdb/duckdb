@@ -37,6 +37,11 @@ bool JoinRelationSet::Empty() const {
 	return count == 0;
 }
 
+bool JoinRelationSet::Contains(RelationIndex relation) const {
+	auto word = relation.index / BITMASK_WORD_SIZE;
+	return word < bitmask.size() && (bitmask[word] & (idx_t(1) << (relation.index % BITMASK_WORD_SIZE))) != 0;
+}
+
 //! Returns true if sub is a subset of super
 bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub) {
 	D_ASSERT(sub.count > 0);

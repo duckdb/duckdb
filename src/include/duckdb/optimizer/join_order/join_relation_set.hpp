@@ -24,6 +24,7 @@ public:
 public:
 	string ToString() const;
 	bool Empty() const;
+	bool Contains(RelationIndex relation) const;
 	static bool IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub);
 	static bool Intersects(const JoinRelationSet &left, const JoinRelationSet &right);
 

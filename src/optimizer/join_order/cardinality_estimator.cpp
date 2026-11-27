@@ -930,12 +930,7 @@ static bool ContainsBinding(const JoinRelationSet &set, ColumnBinding binding) {
 	if (!binding.table_index.IsValid()) {
 		return false;
 	}
-	for (idx_t i = 0; i < set.count; i++) {
-		if (set.relations[i].index == binding.table_index.index) {
-			return true;
-		}
-	}
-	return false;
+	return set.Contains(RelationIndex(binding.table_index.index));
 }
 
 SemiAntiJoinCardinalityEstimate CardinalityEstimator::EstimateMembership(const LogicalJoinStats &boundary,
@@ -1151,7 +1146,10 @@ optional<RelationColumnStats> CardinalityEstimator::ProjectColumn(JoinRelationSe
 			current = MinValue(current, input->current_domain.distinct_count);
 		}
 		for (auto &edge : component.edges) {
-			complete &= IsFilterApplicable(edge.predicate.get().GetFilter(), set);
+			if (!complete || !IsFilterApplicable(edge.predicate.get().GetFilter(), set)) {
+				complete = false;
+				break;
+			}
 		}
 		if (complete) {
 			result->current_domain = DistinctCount(current, DistinctCountSource::CARDINALITY);
