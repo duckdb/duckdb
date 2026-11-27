@@ -321,7 +321,9 @@ public:
 		capacity = read_data;
 		total_read += read_data;
 		data_buffer[read_data] = '\0';
-
+		if (ferror(fp)) {
+			fprintf(stderr, "Failed to read history file \"%s\": %s\n", filename, strerror(errno));
+		}
 		if (read_data == 0) {
 			end_of_file = true;
 		}
