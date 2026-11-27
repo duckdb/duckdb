@@ -30,6 +30,11 @@ shared_ptr<MetaTransaction> TransactionContext::TakeCurrentTransaction() {
 	return std::move(current_transaction);
 }
 
+shared_ptr<MetaTransaction> TransactionContext::GetCurrentTransaction() {
+	lock_guard<mutex> guard(current_transaction_lock);
+	return current_transaction;
+}
+
 shared_ptr<MetaTransaction> TransactionContext::GetSharedTransaction(const string &share_id) {
 	lock_guard<mutex> guard(current_transaction_lock);
 	// a transaction that was never shared has an empty share id, which must not match
@@ -79,16 +84,27 @@ void TransactionContext::Commit() {
 		throw TransactionException("failed to commit: no transaction active");
 	}
 	autocheckpoint_error = ErrorData();
+	const bool was_inherited = inherited;
 	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
-	bool commit_result = true;
-	if (!LeaveTransaction(*transaction, true, commit_result)) {
+	auto leave = transaction->Leave(true, was_inherited);
+	if (!leave.last) {
+		if (leave.orphaned) {
+			ValidChecker::Invalidate(*transaction, "the transaction was rolled back: it was ended while a connection "
+			                                       "that inherited it was still open");
+			for (auto const &state : context.GetContext().GetRegisteredState().States()) {
+				state->TransactionRollback(*transaction, context, nullptr);
+			}
+			throw TransactionException(
+			    "Failed to commit: a connection that inherited the transaction is still open, it is rolled back");
+		}
 		// other connections still participate in the transaction, the last one to leave ends it
 		for (auto &state : context.GetContext().GetRegisteredState().States()) {
 			state->TransactionCommit(*transaction, context);
 		}
 		return;
 	}
+	const bool commit_result = leave.commit;
 	if (!commit_result) {
 		// a participant rolled back: the transaction cannot be committed
 		RollbackTransaction(transaction, nullptr);
@@ -132,10 +148,16 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
+	const bool was_inherited = inherited;
 	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
-	bool commit_result = false;
-	if (!LeaveTransaction(*transaction, false, commit_result)) {
+	// a connection that inherited the transaction does not vote: its failures already invalidated the transaction
+	auto leave = transaction->Leave(was_inherited, was_inherited);
+	if (!leave.last) {
+		if (leave.orphaned) {
+			ValidChecker::Invalidate(*transaction, "the transaction was rolled back while a connection that "
+			                                       "inherited it was still open");
+		}
 		for (auto &state : context.GetContext().GetRegisteredState().States()) {
 			state->TransactionRollback(*transaction, context, error);
 		}
@@ -168,12 +190,6 @@ void TransactionContext::RollbackTransaction(const shared_ptr<MetaTransaction> &
 	transaction->Finalize(context);
 }
 
-bool TransactionContext::LeaveTransaction(MetaTransaction &transaction, bool commit, bool &commit_result) {
-	auto result = transaction.Leave(commit);
-	commit_result = result.commit;
-	return result.last;
-}
-
 string TransactionContext::ShareTransaction() {
 	if (!HasActiveTransaction() || auto_commit) {
 		throw TransactionException("a transaction can only be shared from within a BEGIN TRANSACTION block");
@@ -196,24 +212,51 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 			break;
 		}
 	}
-	if (!source || source->IsFinished()) {
-		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
+	auto not_active = StringUtil::Format("invalid transaction identifier: \"%s\"", share_id);
+	auto aborted = StringUtil::Format("cannot join transaction \"%s\": it was aborted", share_id);
+	EnterTransaction(std::move(source), false, not_active, aborted);
+}
+
+void TransactionContext::InheritTransaction(ClientContext &source) {
+	if (&source == &context) {
+		throw InvalidInputException("a connection cannot inherit its own transaction");
 	}
-	if (ValidChecker::IsInvalidated(*source)) {
-		throw TransactionException("cannot join transaction \"%s\": it was aborted", share_id);
+	if (source.db != context.db) {
+		throw InvalidInputException("cannot inherit the transaction of a connection to another database instance");
 	}
-	if (!source->Join()) {
-		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
+	if (!auto_commit || current_transaction) {
+		throw TransactionException("cannot inherit a transaction within a transaction");
 	}
-	// discard the transaction that was started for this statement and continue in the shared one
+	// errors invalidate the transaction as they would in the connection it was inherited from
+	invalidation_policy = source.transaction.GetInvalidationPolicy();
+	EnterTransaction(source.transaction.GetCurrentTransaction(), true,
+	                 "cannot inherit the transaction of a connection that has no active transaction",
+	                 "cannot inherit the transaction: it was aborted");
+}
+
+void TransactionContext::EnterTransaction(shared_ptr<MetaTransaction> transaction, bool inherit,
+                                          const string &not_active_error, const string &aborted_error) {
+	if (!transaction || transaction->IsFinished()) {
+		throw TransactionException(not_active_error);
+	}
+	if (ValidChecker::IsInvalidated(*transaction)) {
+		throw TransactionException(aborted_error);
+	}
+	if (!transaction->Join(inherit)) {
+		throw TransactionException(not_active_error);
+	}
+	// a JOIN TRANSACTION statement runs in a transaction of its own: discard it and continue in the joined one
 	auto previous = TakeCurrentTransaction();
-	SetCurrentTransaction(source);
+	SetCurrentTransaction(std::move(transaction));
 	auto_commit = false;
-	previous->MarkFinished();
-	try {
-		RollbackTransaction(previous, nullptr);
-	} catch (std::exception &) {
-		// the discarded transaction is empty, a failure to end it must not undo the join
+	inherited = inherit;
+	if (previous) {
+		previous->MarkFinished();
+		try {
+			RollbackTransaction(previous, nullptr);
+		} catch (std::exception &) {
+			// the discarded transaction is empty, a failure to end it must not undo the join
+		}
 	}
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->TransactionBegin(*current_transaction, context);
@@ -221,6 +264,7 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 }
 
 void TransactionContext::ClearTransaction() {
+	inherited = false;
 	SetAutoCommit(true);
 	SetCurrentTransaction(nullptr);
 	active_query_id = MAXIMUM_QUERY_ID;
