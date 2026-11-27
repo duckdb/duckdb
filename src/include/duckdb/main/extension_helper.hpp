@@ -186,6 +186,11 @@ public:
 	// Get all extension directory paths (flat)
 	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+	//! Resolves a configured extension directory to its version and platform specific path
+	static string ResolveExtensionDirectory(FileSystem &fs, const string &directory);
+	//! Unless extension_directory is set, validates that at most one extension directory has a repositories
+	//! subdirectory. Returns the directories with the one that has a repositories subdirectory moved to the front.
+	static vector<string> ValidateExtensionDirectories(DatabaseInstance &db, const vector<string> &directories);
 
 	// Get all extension directory paths, including those in the 'repositories' subdirectory
 	static vector<InstalledExtensionDirectory> GetInstalledExtensionDirectories(ClientContext &context);

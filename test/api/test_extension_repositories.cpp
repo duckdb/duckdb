@@ -1028,3 +1028,146 @@ TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
 	auto info = ExtensionInstallInfo::TryReadInfoFile(fs, info_path, "loadable_extension_demo");
 	REQUIRE(info->repository_url == new_prefix);
 }
+
+TEST_CASE("Test extension_directories allows a single directory with a repositories subdirectory", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain_a = TestCreatePath("edr_plain_a");
+	auto plain_b = TestCreatePath("edr_plain_b");
+	auto repo_a = TestCreatePath("edr_repo_a");
+	auto repo_b = TestCreatePath("edr_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+	auto list_query = [](const vector<string> &directories) {
+		vector<string> quoted;
+		for (auto &directory : directories) {
+			quoted.push_back("'" + directory + "'");
+		}
+		return "SET extension_directories = [" + StringUtil::Join(quoted, ", ") + "]";
+	};
+
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// no directory with a repositories subdirectory: the order is kept
+	REQUIRE_NO_FAIL(con.Query(list_query({plain_a, plain_b})));
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain_a), Value(plain_b)})}));
+
+	// the directory with a repositories subdirectory becomes the default directory
+	REQUIRE_NO_FAIL(con.Query(list_query({plain_a, plain_b, repo_a})));
+	result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(repo_a), Value(plain_a), Value(plain_b)})}));
+
+	// more than one directory with a repositories subdirectory is rejected, and all of them are listed
+	result = con.Query(list_query({repo_a, plain_a, repo_b}));
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "at most one directory"));
+	REQUIRE(StringUtil::Contains(result->GetError(), repo_a));
+	REQUIRE(StringUtil::Contains(result->GetError(), repo_b));
+	REQUIRE(!StringUtil::Contains(result->GetError(), plain_a));
+}
+
+TEST_CASE("Test extension_directories is not validated when extension_directory is set", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto default_directory = TestCreatePath("edl_default");
+	auto plain = TestCreatePath("edl_plain");
+	auto repo_a = TestCreatePath("edl_repo_a");
+	auto repo_b = TestCreatePath("edl_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+
+	DBConfig config;
+	config.SetOptionByName("extension_directory", default_directory);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	// extension_directory is the default directory: the others are neither reordered nor rejected
+	REQUIRE_NO_FAIL(con.Query("SET extension_directories = ['" + plain + "', '" + repo_a + "', '" + repo_b + "']"));
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain), Value(repo_a), Value(repo_b)})}));
+}
+
+TEST_CASE("Test extension_directories is validated at startup", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain = TestCreatePath("eds_plain");
+	auto repo_a = TestCreatePath("eds_repo_a");
+	auto repo_b = TestCreatePath("eds_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+
+	// the directory with a repositories subdirectory becomes the default directory
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_directories", Value::LIST({Value(plain), Value(repo_a)}));
+		DuckDB db(nullptr, &config);
+		Connection con(db);
+		auto result = con.Query("SELECT current_setting('extension_directories')");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(repo_a), Value(plain)})}));
+	}
+	// more than one directory with a repositories subdirectory fails the startup
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_directories", Value::LIST({Value(repo_a), Value(plain), Value(repo_b)}));
+		REQUIRE_THROWS_WITH(DuckDB(nullptr, &config), Catch::Contains("at most one directory"));
+	}
+	// unless extension_directory is set, then the list is kept as is
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_directory", TestCreatePath("eds_default"));
+		config.SetOptionByName("extension_directories", Value::LIST({Value(plain), Value(repo_a), Value(repo_b)}));
+		DuckDB db(nullptr, &config);
+		Connection con(db);
+		auto result = con.Query("SELECT current_setting('extension_directories')");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain), Value(repo_a), Value(repo_b)})}));
+	}
+}
+
+TEST_CASE("Test extension_directories is not validated when external access is disabled", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain = TestCreatePath("ede_plain");
+	auto repo_a = TestCreatePath("ede_repo_a");
+	auto repo_b = TestCreatePath("ede_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+	auto directories = Value::LIST({Value(plain), Value(repo_a), Value(repo_b)});
+
+	// at startup
+	DBConfig config;
+	config.SetOptionByName("extension_directories", directories);
+	config.SetOptionByName("enable_external_access", false);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {directories}));
+
+	// and on SET
+	REQUIRE_NO_FAIL(con.Query("SET extension_directories = ['" + repo_b + "', '" + plain + "', '" + repo_a + "']"));
+	result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(repo_b), Value(plain), Value(repo_a)})}));
+}
+
+TEST_CASE("Test extension_directories is not validated when the local file system is disabled", "[api]") {
+	auto &fs = TestLocalFileSystem();
+	auto plain = TestCreatePath("edf_plain");
+	auto repo_a = TestCreatePath("edf_repo_a");
+	auto repo_b = TestCreatePath("edf_repo_b");
+	for (auto &directory : {repo_a, repo_b}) {
+		fs.CreateDirectoriesRecursive(
+		    fs.JoinPath(ExtensionHelper::ResolveExtensionDirectory(fs, directory), "repositories"));
+	}
+
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET disabled_filesystems = 'LocalFileSystem'"));
+	REQUIRE_NO_FAIL(con.Query("SET extension_directories = ['" + plain + "', '" + repo_a + "', '" + repo_b + "']"));
+	auto result = con.Query("SELECT current_setting('extension_directories')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value(plain), Value(repo_a), Value(repo_b)})}));
+}

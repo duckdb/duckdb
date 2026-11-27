@@ -121,21 +121,65 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, 
 		}
 	}
 
-	// Process all directories with common path operations
-	auto path_components = PathComponents();
 	for (auto &extension_directory : extension_directories) {
-		// convert random separators to platform-canonic
-		extension_directory = fs.ConvertSeparators(extension_directory);
-		// expand ~ in extension directory
-		extension_directory = fs.ExpandPath(extension_directory);
+		extension_directory = ResolveExtensionDirectory(fs, extension_directory);
+	}
+	return extension_directories;
+}
 
-		// Add path components (version and platform)
-		for (auto &path_ele : path_components) {
-			extension_directory = fs.JoinPath(extension_directory, path_ele);
+string ExtensionHelper::ResolveExtensionDirectory(FileSystem &fs, const string &directory) {
+	// convert random separators to platform-canonic and expand ~
+	auto result = fs.ExpandPath(fs.ConvertSeparators(directory));
+	// add path components (version and platform)
+	for (auto &path_ele : PathComponents()) {
+		result = fs.JoinPath(result, path_ele);
+	}
+	return result;
+}
+
+vector<string> ExtensionHelper::ValidateExtensionDirectories(DatabaseInstance &db, const vector<string> &directories) {
+	if (!Settings::Get<ExtensionDirectorySetting>(db).empty()) {
+		// extension_directory is the default directory, the others are not checked
+		return directories;
+	}
+	auto &fs = FileSystem::GetFileSystem(db);
+	auto &vfs = VirtualFileSystem::Get(db);
+	vector<idx_t> repository_indexes;
+	for (idx_t i = 0; i < directories.size(); i++) {
+		// a directory that cannot be accessed cannot be installed to or loaded from either
+		if (vfs.IsDisabledForPath(directories[i])) {
+			continue;
+		}
+		auto repositories = fs.JoinPath(ResolveExtensionDirectory(fs, directories[i]), "repositories");
+		if (!db.config.CanAccessFile(repositories, FileType::FILE_TYPE_DIR)) {
+			continue;
+		}
+		if (fs.DirectoryExists(repositories)) {
+			repository_indexes.push_back(i);
 		}
 	}
-
-	return extension_directories;
+	if (repository_indexes.empty()) {
+		return directories;
+	}
+	if (repository_indexes.size() > 1) {
+		vector<string> names;
+		for (auto idx : repository_indexes) {
+			names.push_back("'" + directories[idx] + "'");
+		}
+		throw InvalidInputException("extension_directories can contain at most one directory with a \"repositories\" "
+		                            "subdirectory, but found multiple: %s",
+		                            StringUtil::Join(names, ", "));
+	}
+	// the directory with a repositories subdirectory becomes the default (first) directory
+	auto default_idx = repository_indexes[0];
+	vector<string> result;
+	result.push_back(directories[default_idx]);
+	for (idx_t i = 0; i < directories.size(); i++) {
+		if (i != default_idx) {
+			result.push_back(directories[i]);
+		}
+	}
+	return result;
 }
 
 vector<InstalledExtensionDirectory> ExtensionHelper::GetInstalledExtensionDirectories(ClientContext &context) {
