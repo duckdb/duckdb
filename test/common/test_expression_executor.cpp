@@ -208,11 +208,12 @@ TEST_CASE("Simple CASE keeps duplicate input occurrences distinct", "[expression
 	Connection con(db);
 	DataChunk input;
 	input.Initialize(Allocator::DefaultAllocator(), {LogicalType::INTEGER});
-	auto writer = FlatVector::Writer<int32_t>(input.data[0], 8);
-	for (int32_t i = 0; i < 8; i++) {
-		writer.WriteValue(10 + i);
+	const auto input_count = MinValue<idx_t>(8, STANDARD_VECTOR_SIZE);
+	auto writer = FlatVector::Writer<int32_t>(input.data[0], input_count);
+	for (idx_t i = 0; i < input_count; i++) {
+		writer.WriteValue(10 + NumericCast<int32_t>(i));
 	}
-	input.CheckCardinality(8);
+	input.CheckCardinality(input_count);
 
 	ScalarFunction alternate("alternate", {}, LogicalType::BOOLEAN,
 	                         [](DataChunk &args, ExpressionState &, Vector &result) {
@@ -229,14 +230,15 @@ TEST_CASE("Simple CASE keeps duplicate input occurrences distinct", "[expression
 	    make_uniq<BoundFunctionExpression>(BoundScalarFunction(alternate), vector<unique_ptr<Expression>>(), nullptr);
 	ExpressionExecutor executor(*con.context, expr);
 	executor.SetChunk(input);
-	SelectionVector selection(4);
-	selection.set_index(0, 7);
-	selection.set_index(1, 7);
-	selection.set_index(2, 3);
-	selection.set_index(3, 7);
+	const auto count = MinValue<idx_t>(4, input_count);
+	const auto last_row = input_count - 1;
+	SelectionVector selection(count);
+	for (idx_t i = 0; i < count; i++) {
+		selection.set_index(i, i == 2 ? last_row / 2 : last_row);
+	}
 	Vector result(LogicalType::INTEGER);
-	executor.ExecuteExpression(0, result, selection, 4);
-	for (idx_t i = 0; i < 4; i++) {
+	executor.ExecuteExpression(0, result, selection, count);
+	for (idx_t i = 0; i < count; i++) {
 		REQUIRE(result.GetValue(i) == Value::INTEGER(i % 2 == 0 ? 10 + selection.get_index(i) : -1));
 	}
 }
