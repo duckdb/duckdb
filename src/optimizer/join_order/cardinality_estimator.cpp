@@ -467,31 +467,15 @@ bool EdgeConnects(FilterInfoWithTotalDomains &edge, SelectivitySubgraph &subgrap
 vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<SelectivitySubgraph> &subgraphs,
                                        JoinRelationSetManager &set_manager) {
 	vector<idx_t> res;
-	if (subgraphs.empty()) {
-		return res;
-	} else {
-		// check the combinations of subgraphs and see if the edge connects two of them,
-		// if so, return the indexes of the two subgraphs within the vector
-		for (idx_t outer = 0; outer != subgraphs.size(); outer++) {
-			// check if the edge connects two subgraphs.
-			for (idx_t inner = outer + 1; inner != subgraphs.size(); inner++) {
-				if (EdgeConnects(edge, subgraphs.at(outer), set_manager) &&
-				    EdgeConnects(edge, subgraphs.at(inner), set_manager)) {
-					// order is important because we will delete the inner subgraph later
-					res.push_back(outer);
-					res.push_back(inner);
-					return res;
-				}
-			}
-			// if the edge does not connect two subgraphs, see if the edge connects with just outer
-			// merge subgraph.at(outer) with the RelationSet(s) that edge connects
-			if (EdgeConnects(edge, subgraphs.at(outer), set_manager)) {
-				res.push_back(outer);
-				return res;
+	// Keep the first two matches in order: merging removes the second subgraph.
+	for (idx_t index = 0; index < subgraphs.size(); index++) {
+		if (EdgeConnects(edge, subgraphs.at(index), set_manager)) {
+			res.push_back(index);
+			if (res.size() == 2) {
+				break;
 			}
 		}
 	}
-	// this edge connects only the relations it connects. Return an empty result so a new subgraph is created.
 	return res;
 }
 
