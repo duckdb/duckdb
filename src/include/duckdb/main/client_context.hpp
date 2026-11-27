@@ -170,6 +170,9 @@ public:
 	DUCKDB_API void FastInterruptCheck() const;
 	//! Check for interrupt or timeout, throws InterruptException if triggered
 	DUCKDB_API void InterruptCheck() const;
+	//! Throws an InterruptException when the query is interrupted, unless a registered state handles the interrupt
+	//! instead (see ClientContextState::OnInterrupt). Everything that acts on an interrupt calls this.
+	DUCKDB_API void HandlePossibleInterrupt() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
@@ -425,6 +428,9 @@ private:
 	//! Whether this query or, for an internal connection, the base client's query has a deadline
 	bool HasQueryDeadline() const;
 	bool QueryDeadlinePassed() const;
+	//! Lets the registered states handle what is about to fail the query (see ClientContextState::OnInterrupt).
+	//! Returns whether one did.
+	bool RegisteredStateHandlesInterrupt() const;
 	//! Ends the statement that finished: releases its executor and plan and notifies every registered state, also
 	//! when one of them fails. Returns the first failure
 	ErrorData EndStatementInternal(ClientContextLock &lock, optional_ptr<ErrorData> error);
