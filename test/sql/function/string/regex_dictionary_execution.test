@@ -23,19 +23,21 @@ CHECKPOINT
 
 restart
 
-query III
+# Forced row fetching does not produce dictionary vectors.
+query I
 WITH types AS MATERIALIZED (
     SELECT vector_type(s) AS input_type,
            vector_type(regexp_full_match(s, 'Get[A-Z].*')) AS full_match_type,
            vector_type(regexp_matches(s, 'get[a-z]', 'i')) AS partial_match_type
     FROM strings
 )
-SELECT count(*) > 0, bool_and(full_match_type = 'DICTIONARY_VECTOR'),
-       bool_and(partial_match_type = 'DICTIONARY_VECTOR')
+SELECT current_setting('debug_force_fetch_row')
+       OR (count(*) > 0 AND bool_and(full_match_type = 'DICTIONARY_VECTOR')
+           AND bool_and(partial_match_type = 'DICTIONARY_VECTOR'))
 FROM types
 WHERE input_type = 'DICTIONARY_VECTOR'
 ----
-true	true	true
+true
 
 query III
 SELECT count(*) FILTER (WHERE regexp_full_match(s, 'get[a-z]+', 'i')),
