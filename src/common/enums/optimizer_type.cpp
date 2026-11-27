@@ -72,6 +72,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"set_operation_aggregate", OptimizerType::SET_OPERATION_AGGREGATE},
     {"join_to_semi_join", OptimizerType::JOIN_TO_SEMI_JOIN},
     {"group_by_top_key", OptimizerType::GROUP_BY_TOP_KEY},
+    {"constant_propagation", OptimizerType::CONSTANT_PROPAGATION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

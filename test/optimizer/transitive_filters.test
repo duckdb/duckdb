@@ -8,67 +8,68 @@ SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 statement ok
 SET explain_output='optimized_only';
 
+# Vary the input rows so constant propagation does not fold away the filters being tested.
 ### constant comparison [=, >, >=] followed by j >= i #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 >= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0=5 AND col1 >= col0
 ----
 logical_opt	<REGEX>:.*col1 >= 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>5 AND col1 >= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0>5 AND col1 >= col0
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>=5 AND col1 >= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0>=5 AND col1 >= col0
 ----
 logical_opt	<REGEX>:.*col1 >= 5.*
 
 ### constant comparison [=, >, >=] followed by j > i #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 > col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0=5 AND col1 > col0
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>5 AND col1 > col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0>5 AND col1 > col0
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>=5 AND col1 > col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0>=5 AND col1 > col0
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 ### constant comparison [=, <, <=] followed by j <= i #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 <= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0=5 AND col1 <= col0
 ----
 logical_opt	<REGEX>:.*col1 <= 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<5 AND col1 <= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0<5 AND col1 <= col0
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<=5 AND col1 <= col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0<=5 AND col1 <= col0
 ----
 logical_opt	<REGEX>:.*col1 <= 5.*
 
 ### constant comparison [=, <, <=] followed by j < i #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 < col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0=5 AND col1 < col0
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<5 AND col1 < col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0<5 AND col1 < col0
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<=5 AND col1 < col0
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col0<=5 AND col1 < col0
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
@@ -78,65 +79,65 @@ logical_opt	<REGEX>:.*col1 < 5.*
 
 ### j >= i followed by constant comparison [=, >, >=]  #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 >= col0 AND col0=5
 ----
 logical_opt	<REGEX>:.*col1 >= 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0>5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 >= col0 AND col0>5
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0>=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 >= col0 AND col0>=5
 ----
 logical_opt	<REGEX>:.*col1 >= 5.*
 
 ### j > i followed by constant comparison [=, >, >=]  #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 > col0 AND col0=5
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0>5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 > col0 AND col0>5
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0>=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 > col0 AND col0>=5
 ----
 logical_opt	<REGEX>:.*col1 > 5.*
 
 ### j <= i followed by constant comparison [=, <, <=]  #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 <= col0 AND col0=5
 ----
 logical_opt	<REGEX>:.*col1 <= 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0<5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 <= col0 AND col0<5
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0<=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 <= col0 AND col0<=5
 ----
 logical_opt	<REGEX>:.*col1 <= 5.*
 
 ### j < i followed by constant comparison [=, <, <=]  #########################
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 < col0 AND col0=5
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0<5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 < col0 AND col0<5
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
-EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0<=5
+EXPLAIN SELECT * FROM (VALUES(0,0),(5,5),(10,10)) tbl(col0, col1) WHERE col1 < col0 AND col0<=5
 ----
 logical_opt	<REGEX>:.*col1 < 5.*
 
@@ -166,36 +167,36 @@ logical_opt	<!REGEX>:.*EMPTY_RESULT.*
 
 # Infer both bounds across the join, irrespective of the rendered child order.
 query II
-EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i>4999 AND j<=l AND k>=i AND l<5001;
+EXPLAIN SELECT * FROM (VALUES(0,0),(5000,5000),(10000,10000)) tbl1(i,j), (VALUES(NULL, NULL, 0, 0),(NULL, NULL, 5000, 5000),(NULL, NULL, 10000, 10000)) tbl2(A, B, k,l) WHERE i>4999 AND j<=l AND k>=i AND l<5001;
 ----
 logical_opt	<REGEX>:.*(j < 5001.*k > 4999|k > 4999.*j < 5001).*
 
 # Propagate the lower bound through a chain.
 query II
-EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i>4999 AND j>=i AND k>=j;
+EXPLAIN SELECT * FROM (VALUES(0,0),(5000,5000),(10000,10000)) tbl1(i,j), (VALUES(NULL, NULL, 0, 0),(NULL, NULL, 5000, 5000),(NULL, NULL, 10000, 10000)) tbl2(A, B, k,l) WHERE i>4999 AND j>=i AND k>=j;
 ----
 logical_opt	<REGEX>:.*(j > 4999.*k > 4999|k > 4999.*j > 4999).*
 
 # Reordering the comparisons must still infer both bounds.
 query II
-EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i>4999 AND k>=j AND j>=i;
+EXPLAIN SELECT * FROM (VALUES(0,0),(5000,5000),(10000,10000)) tbl1(i,j), (VALUES(NULL, NULL, 0, 0),(NULL, NULL, 5000, 5000),(NULL, NULL, 10000, 10000)) tbl2(A, B, k,l) WHERE i>4999 AND k>=j AND j>=i;
 ----
 logical_opt	<REGEX>:.*(j > 4999.*k > 4999|k > 4999.*j > 4999).*
 
 # Carry the lower bound to both columns on the other side of the join.
 query II
-EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i>4999 AND k>=j AND j>=i AND l>=k;
+EXPLAIN SELECT * FROM (VALUES(0,0),(5000,5000),(10000,10000)) tbl1(i,j), (VALUES(NULL, NULL, 0, 0),(NULL, NULL, 5000, 5000),(NULL, NULL, 10000, 10000)) tbl2(A, B, k,l) WHERE i>4999 AND k>=j AND j>=i AND l>=k;
 ----
 logical_opt	<REGEX>:.*(k > 4999.*l > 4999|l > 4999.*k > 4999).*
 
 # Upper bounds propagate in the same way.
 query II
-EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i<4999 AND k<=j AND j<=i AND l<=k;
+EXPLAIN SELECT * FROM (VALUES(0,0),(5000,5000),(10000,10000)) tbl1(i,j), (VALUES(NULL, NULL, 0, 0),(NULL, NULL, 5000, 5000),(NULL, NULL, 10000, 10000)) tbl2(A, B, k,l) WHERE i<4999 AND k<=j AND j<=i AND l<=k;
 ----
 logical_opt	<REGEX>:.*(k < 4999.*l < 4999|l < 4999.*k < 4999).*
 
 # A column is not mirrored onto itself, which would duplicate the filter.
 query II
-EXPLAIN SELECT * FROM (VALUES(2)) tbl(i) WHERE i < 1 AND abs(i) = 1;
+EXPLAIN SELECT * FROM (VALUES(-2),(2)) tbl(i) WHERE i < 1 AND abs(i) = 1;
 ----
 logical_opt	<!REGEX>:.*abs\(i\) = 1.*abs\(i\) = 1.*

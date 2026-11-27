@@ -12,7 +12,7 @@ INSERT INTO dml_target VALUES (1,'p'),(2,'q'),(3,'r');
 query TT
 EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (10);
 ----
-sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+r\d+\.c0\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*10\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)
+sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+(r\d+\.c0|CAST\(\s*10\s+AS\s+INTEGER\s*\))\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*10\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)
 
 query TT
 EXPLAIN (SQL) UPDATE dml_target SET b = 'z' WHERE a = 2;
@@ -33,7 +33,7 @@ SELECT count(*), sum(a) FROM dml_target;
 # the generated statements execute with the original statements' effects
 statement ok
 INSERT INTO main.dml_target(a, b)
-SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1
+SELECT CAST(10 AS INTEGER) AS c0, CAST('x' AS VARCHAR) AS c1
 FROM (
         VALUES (CAST(10 AS INTEGER))
     ) AS r0(c0)
@@ -67,11 +67,11 @@ SELECT a, b FROM dml_target;
 query TT
 EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (20) RETURNING a + 1 AS next_a, b;
 ----
-sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+r\d+\.c0\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*20\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)\s+RETURNING\s+"system"\.main\."\+"\(\s*a,\s*\s+CAST\(\s*1\s+AS\s+INTEGER\s*\)\s*\)\s+AS\s+next_a,\s*\s+b\s+AS\s+b
+sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+(r\d+\.c0|CAST\(\s*20\s+AS\s+INTEGER\s*\))\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*20\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)\s+RETURNING\s+"system"\.main\."\+"\(\s*a,\s*\s+CAST\(\s*1\s+AS\s+INTEGER\s*\)\s*\)\s+AS\s+next_a,\s*\s+b\s+AS\s+b
 
 query IT
 INSERT INTO main.dml_target(a, b)
-SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1
+SELECT CAST(20 AS INTEGER) AS c0, CAST('x' AS VARCHAR) AS c1
 FROM (
         VALUES (CAST(20 AS INTEGER))
     ) AS r0(c0)

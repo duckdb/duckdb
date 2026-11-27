@@ -518,7 +518,17 @@ TEST_CASE("Arrow filter pushdown - join filters respect the scan's pushdown type
 		StringColumn col("col", {"abc", "efg"}, false);
 		Batch batch({&x, &col});
 		Scan scan(batch);
-		REQUIRE(scan.Rows("SELECT x FROM t JOIN (SELECT 2 AS k) b ON t.x = b.k") == vector<int32_t> {2});
+		REQUIRE(!scan.con.Query("CREATE TABLE b AS SELECT 2 AS k")->HasError());
+		REQUIRE(scan.Rows("SELECT x FROM t JOIN b ON t.x = b.k") == vector<int32_t> {2});
+		REQUIRE(scan.ReceivedFilters().size() == 1);
+	}
+
+	SECTION("join on a constant row hands the producer the substituted filter") {
+		StringColumn col("col", {"abc", "efg"}, false);
+		Batch batch({&x, &col});
+		Scan scan(batch);
+		// This producer records accepted filters without applying them.
+		REQUIRE(scan.Rows("SELECT x FROM t JOIN (SELECT 2 AS k) b ON t.x = b.k ORDER BY x") == vector<int32_t> {1, 2});
 		REQUIRE(scan.ReceivedFilters().size() == 1);
 	}
 

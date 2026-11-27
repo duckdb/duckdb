@@ -21,6 +21,7 @@ add_library_unity(
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
   constant_or_null_simplification.cpp
+  constant_propagation.cpp
   empty_result_pullup.cpp
   common_aggregate_optimizer.cpp
   common_subplan_optimizer.cpp

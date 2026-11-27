@@ -14,9 +14,9 @@ COPY (
 	FROM range(10000) t(i)
 ) TO '{TEST_DIR}/join_filter_pushdown_struct.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
 
-# Retain the complete struct while pushing all four field comparisons into the scan.
+# Constant bounds become static scan filters.
 query II
-EXPLAIN ANALYZE
+EXPLAIN (ANALYZE, FORMAT JSON)
 WITH input_bbox AS (
 	SELECT unnest({'xmin': 4500.1, 'ymin': 4500.1, 'xmax': 4501.1, 'ymax': 4501.1})
 )
@@ -26,12 +26,24 @@ JOIN input_bbox q
   ON bbox.xmax >= q.xmin AND bbox.ymax >= q.ymin
  AND bbox.xmin <= q.xmax AND bbox.ymin <= q.ymax;
 ----
+analyzed_plan	<REGEX>:.*"Filters":.*struct_extract.*"row_groups_scanned": 1,.*
+
+statement ok
+CREATE TABLE input_bbox AS
+SELECT unnest({'xmin': 4500.1, 'ymin': 4500.1, 'xmax': 4501.1, 'ymax': 4501.1});
+
+# Retain the complete struct while pushing all four field comparisons into the scan.
+query II
+EXPLAIN ANALYZE
+SELECT b.*
+FROM read_parquet('{TEST_DIR}/join_filter_pushdown_struct.parquet') b
+JOIN input_bbox q
+  ON bbox.xmax >= q.xmin AND bbox.ymax >= q.ymin
+ AND bbox.xmin <= q.xmax AND bbox.ymin <= q.ymax;
+----
 analyzed_plan	<REGEX>:.*Dynamic Filters:.*Row Groups Scanned: 1 / [0-9]+.*
 
 query IIRRRR rowsort
-WITH input_bbox AS (
-	SELECT unnest({'xmin': 4500.1, 'ymin': 4500.1, 'xmax': 4501.1, 'ymax': 4501.1})
-)
 SELECT b.id, b.bbox IS NULL, b.bbox.xmin, b.bbox.xmax, b.bbox.ymin, b.bbox.ymax
 FROM read_parquet('{TEST_DIR}/join_filter_pushdown_struct.parquet') b
 JOIN input_bbox q
@@ -50,9 +62,6 @@ COPY (
 ) TO '{TEST_DIR}/join_filter_pushdown_struct_reordered.parquet' (FORMAT PARQUET);
 
 query II rowsort
-WITH input_bbox AS (
-	SELECT unnest({'xmin': 4500.1, 'ymin': 4500.1, 'xmax': 4501.1, 'ymax': 4501.1})
-)
 SELECT b.id, b.bbox = struct_pack(xmin := b.id::DOUBLE, xmax := b.id::DOUBLE + 0.5,
 	                             ymin := b.id::DOUBLE, ymax := b.id::DOUBLE + 0.5)
 FROM read_parquet(['{TEST_DIR}/join_filter_pushdown_struct.parquet',
@@ -92,7 +101,7 @@ ON p.s.nested.x::INTEGER = q.x;
 # Keep independent filter paths for different fields of the same parent.
 query II
 EXPLAIN ANALYZE
-SELECT p.* FROM struct_probe p JOIN (VALUES (10::BIGINT, -10::BIGINT)) q(a, b)
+SELECT p.* FROM struct_probe p JOIN (VALUES (10::BIGINT, -10::BIGINT), (20::BIGINT, -10::BIGINT)) q(a, b)
 ON p.s.a = q.a AND p.s.b = q.b;
 ----
 analyzed_plan	<REGEX>:.*Dynamic Filters:.*
@@ -110,16 +119,17 @@ CREATE TEMP TABLE tuple_probe AS SELECT i AS id, row(i, -i) AS s FROM range(100)
 
 query II
 EXPLAIN ANALYZE
-SELECT p.* FROM tuple_probe p JOIN (VALUES (10::BIGINT)) q(x)
+SELECT p.* FROM tuple_probe p JOIN (VALUES (10::BIGINT), (20::BIGINT)) q(x)
 ON struct_extract_at(p.s, 1) = q.x;
 ----
 analyzed_plan	<REGEX>:.*Dynamic Filters:.*
 
 query II rowsort
-SELECT p.id, p.s IS NULL FROM tuple_probe p JOIN (VALUES (10::BIGINT)) q(x)
+SELECT p.id, p.s IS NULL FROM tuple_probe p JOIN (VALUES (10::BIGINT), (20::BIGINT)) q(x)
 ON struct_extract_at(p.s, 1) = q.x;
 ----
 10	false
+20	false
 
 # NULL-safe field comparisons retain both NULL parents and NULL children.
 query II
@@ -143,13 +153,13 @@ CREATE TABLE struct_overflow AS
 SELECT i AS id, {'a': i} AS s FROM (VALUES (10::BIGINT), (1000::BIGINT)) t(i);
 
 statement error
-SELECT p.* FROM struct_overflow p JOIN (VALUES (10::TINYINT)) q(x)
+SELECT p.* FROM struct_overflow p JOIN (VALUES (10::TINYINT), (20::TINYINT)) q(x)
 ON p.s.a::TINYINT = q.x;
 ----
 out of range
 
 query II rowsort
-SELECT p.id, p.s IS NULL FROM struct_overflow p JOIN (VALUES (10::TINYINT)) q(x)
+SELECT p.id, p.s IS NULL FROM struct_overflow p JOIN (VALUES (10::TINYINT), (20::TINYINT)) q(x)
 ON TRY_CAST(p.s.a AS TINYINT) = q.x;
 ----
 10	false

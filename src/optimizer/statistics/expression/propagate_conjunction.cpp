@@ -70,6 +70,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 	for (idx_t expr_idx = 0; expr_idx < expr.GetChildren().size(); expr_idx++) {
 		auto &child = expr.GetChildrenMutable()[expr_idx];
 		auto stats = PropagateExpression(child);
+		if (!IsRemovable(*child)) {
+			// Later constants must not erase this effect.
+			break;
+		}
 		if (!child->IsFoldable()) {
 			continue;
 		}

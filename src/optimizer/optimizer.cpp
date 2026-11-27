@@ -10,6 +10,7 @@
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/constant_or_null_simplification.hpp"
+#include "duckdb/optimizer/constant_propagation.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
@@ -222,6 +223,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::REDUNDANT_ORDER, [&]() {
 		RemoveRedundantOrder remove_redundant_order;
 		remove_redundant_order.Optimize(plan);
+	});
+
+	RunOptimizer(OptimizerType::CONSTANT_PROPAGATION, [&]() {
+		ConstantPropagation constant_propagation(context);
+		constant_propagation.Optimize(*plan);
 	});
 
 	// perform filter pullup
