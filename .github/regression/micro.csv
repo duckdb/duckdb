@@ -74,3 +74,4 @@ benchmark/micro/pushdown/multi_key_join_filter_covered.benchmark
 benchmark/micro/pushdown/multi_key_join_filter_holes.benchmark
 benchmark/micro/pushdown/multi_key_join_filter_wide.benchmark
 benchmark/micro/optimizer/or_of_ranges_predicate_factoring.benchmark
+benchmark/micro/optimizer/physical_plan_many_ctes.benchmark

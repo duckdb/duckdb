@@ -551,6 +551,14 @@ public:
 		return factory;
 	}
 
+	/// Opens a connection that runs in the transaction of this context, to run SQL from inside a callback, e.g. to read
+	/// a table in a bind callback. It sees the transaction's uncommitted changes and this context's temporary objects;
+	/// a failing statement invalidates the transaction as one of this context would. It cannot start, commit or roll
+	/// back a transaction, and destroying it does neither. Destroy it before the transaction ends, usually before the
+	/// callback returns: a commit while it is still open rolls the transaction back.
+	/// @throws Exception When the context has no active transaction or the transaction was aborted.
+	auto ConnectInTransaction() const -> Connection;
+
 	/// Writes a message to DuckDB's log, readable through `SELECT * FROM duckdb_logs`.
 	/// Whether the entry is recorded is up to the database's log configuration; a message it filters out is dropped
 	/// without error.

@@ -87,9 +87,8 @@ public:
 	//! Cumulative estimated fraction of rows retained from the most recent statistics source.
 	//! Aggregation and DISTINCT establish a new source.
 	CardinalityValue row_retention = 1;
-	//! Indexes of the columns that together identify a row of a join-order relation, e.g. the groups of an
-	//! aggregate. Empty when no such key is known.
-	vector<idx_t> unique_key;
+	//! Alternative unique keys from Distinctness, expressed as column indexes in this relation.
+	vector<vector<idx_t>> unique_keys;
 	bool stats_initialized = false;
 	Identifier table_name;
 };

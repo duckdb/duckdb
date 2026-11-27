@@ -482,6 +482,8 @@ class CV2Connection : public Connection {
 public:
 	explicit CV2Connection(DuckDB &database) : Connection(database), context_handle(*context) {
 	}
+	explicit CV2Connection(Connection &&connection) : Connection(std::move(connection)), context_handle(*context) {
+	}
 
 	CV2ConnectionContext context_handle;
 };

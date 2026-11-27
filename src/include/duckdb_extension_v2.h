@@ -1752,6 +1752,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_set_data_source)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_data_source_handle data_source,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_in_transaction)
+	(duckdb_v2_context_handle ctx, duckdb_v2_connection_handle *out_conn, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3973,7 +3975,8 @@ typedef struct {
 #define duckdb_v2_value_variant_to_value duckdb_ext_api.duckdb_v2_value_variant_to_value
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_copy_from_set_data_source duckdb_ext_api.duckdb_v2_copy_from_set_data_source
+#define duckdb_v2_copy_from_set_data_source        duckdb_ext_api.duckdb_v2_copy_from_set_data_source
+#define duckdb_v2_connection_create_in_transaction duckdb_ext_api.duckdb_v2_connection_create_in_transaction
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
