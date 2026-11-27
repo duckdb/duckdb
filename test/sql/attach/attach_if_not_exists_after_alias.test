@@ -38,9 +38,6 @@ ATTACH '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
 statement ok
 ALTER DATABASE CASE_ORIG SET ALIAS TO case_other
 
-statement ok
-SET max_execution_time=2000
-
 statement error
 ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
 ----
@@ -75,4 +72,7 @@ statement ok
 ATTACH IF NOT EXISTS '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
 
 statement ok
-SET max_execution_time=0
+ALTER DATABASE ro_a SET ALIAS TO ro_renamed
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)

@@ -26,16 +26,20 @@
 namespace duckdb {
 
 StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
-                                       const Identifier &name)
-    : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
+                                       const Identifier &name_p)
+    : db_manager(db_manager), manager(manager), path(std::move(path_p)), name(name_p) {
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
-	manager.EraseDatabasePath(path);
+	manager.EraseDatabasePath(*this);
 }
 
 void StoredDatabasePath::OnDetach() {
-	manager.DetachDatabase(db_manager, path);
+	manager.DetachDatabase(*this);
+}
+
+void StoredDatabasePath::OnRename(const Identifier &new_name) {
+	manager.RenameDatabasePath(*this, new_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -298,6 +302,9 @@ void AttachedDatabase::MarkDetached(DatabaseCloseAction close_action) {
 	}
 	is_detached = true;
 	detach_close_action = close_action;
+	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
+		stored_database_path->OnDetach();
+	}
 }
 
 void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
@@ -445,6 +452,13 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	}
 	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
 		stored_database_path->OnDetach();
+	}
+}
+
+void AttachedDatabase::SetName(const Identifier &new_name) {
+	name = new_name;
+	if (stored_database_path) {
+		stored_database_path->OnRename(new_name);
 	}
 }
 

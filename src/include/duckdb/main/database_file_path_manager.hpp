@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
@@ -18,6 +19,7 @@
 namespace duckdb {
 struct AttachInfo;
 struct AttachOptions;
+struct StoredDatabasePath;
 class DatabaseManager;
 
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
@@ -25,10 +27,15 @@ enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 struct DatabasePathInfo {
 	DatabasePathInfo(DatabaseManager &manager, const Identifier &name_p, AccessMode access_mode);
 
-	string name;
+	Identifier name;
 	AccessMode access_mode;
-	reference_set_t<DatabaseManager> attached_databases;
+	reference_map_t<DatabaseManager, identifier_map_t<idx_t>> attached_databases;
 	idx_t reference_count = 1;
+
+	bool IsAttachedIn(DatabaseManager &manager, const Identifier &alias) const;
+	void Attach(DatabaseManager &manager, const Identifier &alias);
+	void Detach(DatabaseManager &manager, const Identifier &alias);
+	Identifier GetAttachedName(DatabaseManager &manager) const;
 };
 
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
@@ -38,12 +45,11 @@ public:
 	InsertDatabasePathResult InsertDatabasePath(DatabaseManager &manager, const string &path, const Identifier &name,
 	                                            OnCreateConflict on_conflict, AttachOptions &options);
 	//! Erase a database path - indicating we are done with using it
-	void EraseDatabasePath(const string &path);
+	void EraseDatabasePath(StoredDatabasePath &stored_path);
 	//! Called when a database is detached, but before it is fully finished being used
-	void DetachDatabase(DatabaseManager &manager, const string &path);
-	//! Rewrite `path`'s tracked name from `old_name` to `new_name`.
-	//! Silent no-op if `path` is not tracked or the tracked name is not `old_name`.
-	void RenameDatabasePath(const string &path, const Identifier &old_name, const Identifier &new_name);
+	void DetachDatabase(StoredDatabasePath &stored_path);
+	//! Update the tracked alias of an attached database
+	void RenameDatabasePath(StoredDatabasePath &stored_path, const Identifier &new_name);
 	//! Whether the (canonicalized) path is in use by an attached database
 	bool IsDatabasePath(const string &path) const;
 
