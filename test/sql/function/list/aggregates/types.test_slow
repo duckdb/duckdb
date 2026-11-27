@@ -286,7 +286,7 @@ endloop
 endloop
 
 # statement error for TEMPORAL types
-foreach func_name favg bit_and bit_or bit_xor bool_and bool_or kurtosis product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name favg bit_and bit_or bit_xor bool_and bool_or kurtosis product sem skewness fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 
