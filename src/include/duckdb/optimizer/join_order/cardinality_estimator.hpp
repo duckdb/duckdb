@@ -19,8 +19,6 @@ namespace duckdb {
 class FilterInfo;
 class JoinPredicateModel;
 struct CardinalityEstimatorState;
-struct CompositeJoinPairStats;
-struct SelectivityState;
 struct FilterInfoWithTotalDomains;
 struct SelectivitySubgraph;
 struct LogicalJoinStats;
@@ -43,6 +41,8 @@ public:
 
 private:
 	class ColumnProjection;
+	class CompositeJoinPairCaps;
+	struct SelectivityState;
 
 	optional_ptr<const LogicalJoinStats> FindBoundary(JoinRelationSet &set, optional_ptr<JoinRelationSet> &region);
 	optional<RelationColumnStats> ProjectColumn(JoinRelationSet &set, ColumnBinding binding);
@@ -72,16 +72,6 @@ private:
 	CardinalityValue CalculateInnerJoinSelectivity(CardinalityValue base_selectivity,
 	                                               FilterInfoWithTotalDomains &filter);
 	CardinalityValue GetLeftJoinSelectivity(const JoinOrderOperator &join_operator);
-	bool ApplyJoinIncrement(CardinalityValue &target_selectivity, FilterInfoWithTotalDomains &edge,
-	                        reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                        reference_set_t<JoinRelationSet> &capped_join_pairs, JoinRelationSet &scope,
-	                        optional_ptr<JoinRelationSet> join_pair = nullptr);
-	bool ApplyJoinPairCap(CardinalityValue &target_selectivity, JoinRelationSet &join_pair,
-	                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                      reference_set_t<JoinRelationSet> &capped_join_pairs);
-	bool ApplyCompositeJoinPairCaps(CardinalityValue &target_selectivity, JoinRelationSet &scope,
-	                                reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                                reference_set_t<JoinRelationSet> &capped_join_pairs);
 	CardinalityValue GetJoinPairCap(JoinRelationSet &join_pair);
 	//! The number of key combinations of a join pair whose equalities cover a unique key of one of its relations,
 	//! or 0 if they cover neither relation's key.

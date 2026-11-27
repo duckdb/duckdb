@@ -581,19 +581,51 @@ CardinalityValue CardinalityEstimator::GetUniqueJoinPairDomain(JoinRelationSet &
 	return domain;
 }
 
-bool CardinalityEstimator::ApplyJoinPairCap(CardinalityValue &target_selectivity, JoinRelationSet &join_pair,
-                                            reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
-                                            reference_set_t<JoinRelationSet> &capped_join_pairs) {
+class CardinalityEstimator::CompositeJoinPairCaps {
+public:
+	explicit CompositeJoinPairCaps(CardinalityEstimator &estimator) : estimator(estimator) {
+	}
+
+	void Register(FilterInfoWithTotalDomains &edge);
+	bool ApplyIncrement(CardinalityValue &target_selectivity, FilterInfoWithTotalDomains &edge, JoinRelationSet &scope);
+	bool ApplyPending(CardinalityValue &target_selectivity, JoinRelationSet &scope);
+
+private:
+	bool ApplyPair(CardinalityValue &target_selectivity, JoinRelationSet &join_pair);
+
+private:
+	CardinalityEstimator &estimator;
+	//! Successfully capped pairs cannot be registered again.
+	reference_map_t<JoinRelationSet, CompositeJoinPairStats> pending_join_pairs;
+	reference_set_t<JoinRelationSet> capped_join_pairs;
+};
+
+void CardinalityEstimator::CompositeJoinPairCaps::Register(FilterInfoWithTotalDomains &edge) {
+	if (!edge.IsInnerEquality()) {
+		return;
+	}
+	auto join_pair = GetEqualityJoinPair(edge, estimator.set_manager);
+	if (!join_pair || !estimator.predicate_model.HasDirectCompositeEquality(*join_pair)) {
+		return;
+	}
+	if (capped_join_pairs.find(*join_pair) != capped_join_pairs.end()) {
+		return;
+	}
+	pending_join_pairs[*join_pair].RegisterDistinctCount(edge.GetDistinctCount());
+}
+
+bool CardinalityEstimator::CompositeJoinPairCaps::ApplyPair(CardinalityValue &target_selectivity,
+                                                            JoinRelationSet &join_pair) {
 	if (capped_join_pairs.find(join_pair) != capped_join_pairs.end()) {
 		return false;
 	}
-	const auto it = join_pair_stats.find(join_pair);
-	if (it == join_pair_stats.end()) {
+	const auto it = pending_join_pairs.find(join_pair);
+	if (it == pending_join_pairs.end()) {
 		return false;
 	}
 	auto &stats = it->second;
-	auto cap = GetJoinPairCap(join_pair);
-	auto unique_domain = GetUniqueJoinPairDomain(join_pair);
+	auto cap = estimator.GetJoinPairCap(join_pair);
+	auto unique_domain = estimator.GetUniqueJoinPairDomain(join_pair);
 	if (unique_domain > 0) {
 		// The equalities cover a key: its row count is the composite NDV, not a proxy for it.
 		cap = unique_domain;
@@ -610,56 +642,49 @@ bool CardinalityEstimator::ApplyJoinPairCap(CardinalityValue &target_selectivity
 	if (cap > 0 && first_d < cap && first_d > 0) {
 		// Lower weak same-pair composite evidence to the FK/PK cap.
 		target_selectivity = target_selectivity * CardinalityValue(first_d) / CardinalityValue(cap);
-		first_d = cap;
 	}
 	capped_join_pairs.insert(join_pair);
+	pending_join_pairs.erase(it);
 	return true;
 }
 
-bool CardinalityEstimator::ApplyJoinIncrement(CardinalityValue &target_selectivity, FilterInfoWithTotalDomains &edge,
-                                              reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
-                                              reference_set_t<JoinRelationSet> &capped_join_pairs,
-                                              JoinRelationSet &scope, optional_ptr<JoinRelationSet> join_pair) {
+bool CardinalityEstimator::CompositeJoinPairCaps::ApplyIncrement(CardinalityValue &target_selectivity,
+                                                                 FilterInfoWithTotalDomains &edge,
+                                                                 JoinRelationSet &scope) {
 	if (edge.IsInnerEquality()) {
-		auto target_pair = join_pair;
-		if (!target_pair) {
-			target_pair = GetEqualityJoinPair(edge, set_manager);
-		}
+		auto target_pair = GetEqualityJoinPair(edge, estimator.set_manager);
 		if (!target_pair) {
 			return false;
 		}
 		if (!JoinRelationSet::IsSubset(scope, *target_pair) ||
-		    !predicate_model.HasDirectCompositeEquality(*target_pair)) {
+		    !estimator.predicate_model.HasDirectCompositeEquality(*target_pair)) {
 			return false;
 		}
 		if (capped_join_pairs.find(*target_pair) != capped_join_pairs.end()) {
 			// The composite-key cap already accounts for same-pair equality predicates.
 			return true;
 		}
-		return ApplyJoinPairCap(target_selectivity, *target_pair, join_pair_stats, capped_join_pairs);
+		return ApplyPair(target_selectivity, *target_pair);
 	}
 
 	return false;
 }
 
-bool CardinalityEstimator::ApplyCompositeJoinPairCaps(
-    CardinalityValue &target_selectivity, JoinRelationSet &scope,
-    reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats,
-    reference_set_t<JoinRelationSet> &capped_join_pairs) {
-	if (capped_join_pairs.size() == join_pair_stats.size()) {
+bool CardinalityEstimator::CompositeJoinPairCaps::ApplyPending(CardinalityValue &target_selectivity,
+                                                               JoinRelationSet &scope) {
+	if (pending_join_pairs.empty()) {
 		return false;
 	}
 	bool applied = false;
-	for (auto &entry : join_pair_stats) {
-		auto &join_pair = entry.first.get();
-		if (capped_join_pairs.find(join_pair) != capped_join_pairs.end()) {
-			continue;
-		}
+	for (auto it = pending_join_pairs.begin(); it != pending_join_pairs.end();) {
+		// Applying the cap erases this entry.
+		auto &join_pair = (it++)->first.get();
+		D_ASSERT(capped_join_pairs.find(join_pair) == capped_join_pairs.end());
 		if (!JoinRelationSet::IsSubset(scope, join_pair)) {
 			continue;
 		}
-		D_ASSERT(predicate_model.HasDirectCompositeEquality(join_pair));
-		applied = ApplyJoinPairCap(target_selectivity, join_pair, join_pair_stats, capped_join_pairs) || applied;
+		D_ASSERT(estimator.predicate_model.HasDirectCompositeEquality(join_pair));
+		applied = ApplyPair(target_selectivity, join_pair) || applied;
 	}
 	return applied;
 }
@@ -695,45 +720,32 @@ static bool CanIncrementExistingJoin(SelectivityEdgeKind kind) {
 	return kind == SelectivityEdgeKind::INNER_EQUIVALENCE;
 }
 
-static void RegisterCompositeJoinPair(FilterInfoWithTotalDomains &edge, JoinRelationSetManager &set_manager,
-                                      const JoinPredicateModel &predicate_model,
-                                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &join_pair_stats) {
-	if (!edge.IsInnerEquality()) {
-		return;
+struct CardinalityEstimator::SelectivityState {
+	explicit SelectivityState(CardinalityEstimator &estimator) : composite_caps(estimator) {
 	}
-	auto join_pair = GetEqualityJoinPair(edge, set_manager);
-	if (!join_pair || !predicate_model.HasDirectCompositeEquality(*join_pair)) {
-		return;
-	}
-	join_pair_stats[*join_pair].RegisterDistinctCount(edge.GetDistinctCount());
-}
 
-struct SelectivityState {
+	bool IsComplete(JoinRelationSet &set) const {
+		return subgraphs.size() == 1 && subgraphs.at(0).relations &&
+		       RefersToSameObject(*subgraphs.at(0).relations, set);
+	}
+
 	vector<SelectivitySubgraph> subgraphs;
 	unordered_set<idx_t> applied_equivalence_groups;
-	reference_map_t<JoinRelationSet, CompositeJoinPairStats> join_pair_stats;
-	reference_set_t<JoinRelationSet> capped_join_pairs;
+	CompositeJoinPairCaps composite_caps;
 	set<CardinalityValue> unused_edge_tdoms;
 };
-
-static bool SelectivitySubgraphComplete(SelectivityState &state, JoinRelationSet &set) {
-	return state.subgraphs.size() == 1 && state.subgraphs.at(0).relations &&
-	       RefersToSameObject(*state.subgraphs.at(0).relations, set);
-}
 
 void CardinalityEstimator::ProcessSelectivityEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
                                                   SelectivityState &state) {
 	auto edge_kind = ClassifySelectivityEdge(edge, state.applied_equivalence_groups);
-	if (SelectivitySubgraphComplete(state, requested_set)) {
+	if (state.IsComplete(requested_set)) {
 		auto &complete_subgraph = state.subgraphs.at(0);
-		ApplyCompositeJoinPairCaps(complete_subgraph.selectivity, *complete_subgraph.relations, state.join_pair_stats,
-		                           state.capped_join_pairs);
+		state.composite_caps.ApplyPending(complete_subgraph.selectivity, *complete_subgraph.relations);
 		if (edge_kind == SelectivityEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY) {
 			return;
 		}
 		if (CanIncrementExistingJoin(edge_kind) &&
-		    ApplyJoinIncrement(complete_subgraph.selectivity, edge, state.join_pair_stats, state.capped_join_pairs,
-		                       *complete_subgraph.relations)) {
+		    state.composite_caps.ApplyIncrement(complete_subgraph.selectivity, edge, *complete_subgraph.relations)) {
 			return;
 		}
 		if (edge.HasReliableDistinctCount()) {
@@ -746,7 +758,7 @@ void CardinalityEstimator::ProcessSelectivityEdge(FilterInfoWithTotalDomains &ed
 	if (equality_class_index.IsValid()) {
 		state.applied_equivalence_groups.insert(equality_class_index.GetIndex());
 	}
-	RegisterCompositeJoinPair(edge, set_manager, predicate_model, state.join_pair_stats);
+	state.composite_caps.Register(edge);
 
 	auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
 	auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
@@ -771,8 +783,7 @@ void CardinalityEstimator::CreateSelectivitySubgraph(FilterInfoWithTotalDomains 
 	auto selectivity = CalculateInnerJoinSelectivity(CardinalityValue(1), edge);
 	left_subgraph.relations = &set_manager.Union(edge_left_set, edge_right_set);
 	left_subgraph.selectivity = selectivity;
-	ApplyCompositeJoinPairCaps(left_subgraph.selectivity, *left_subgraph.relations, state.join_pair_stats,
-	                           state.capped_join_pairs);
+	state.composite_caps.ApplyPending(left_subgraph.selectivity, *left_subgraph.relations);
 	state.subgraphs.push_back(left_subgraph);
 }
 
@@ -789,19 +800,16 @@ void CardinalityEstimator::ExtendSelectivitySubgraph(idx_t subgraph_index, Filte
 	if (JoinRelationSet::IsSubset(*left_subgraph->relations, edge_left_set) &&
 	    JoinRelationSet::IsSubset(*left_subgraph->relations, edge_right_set)) {
 		if (can_increment_existing_join) {
-			ApplyJoinIncrement(left_subgraph->selectivity, edge, state.join_pair_stats, state.capped_join_pairs,
-			                   *left_subgraph->relations);
+			state.composite_caps.ApplyIncrement(left_subgraph->selectivity, edge, *left_subgraph->relations);
 		}
-		ApplyCompositeJoinPairCaps(left_subgraph->selectivity, *left_subgraph->relations, state.join_pair_stats,
-		                           state.capped_join_pairs);
+		state.composite_caps.ApplyPending(left_subgraph->selectivity, *left_subgraph->relations);
 		return;
 	}
 
 	auto selectivity = CalculateInnerJoinSelectivity(left_subgraph->selectivity, edge);
 	left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 	left_subgraph->selectivity = selectivity;
-	ApplyCompositeJoinPairCaps(left_subgraph->selectivity, *left_subgraph->relations, state.join_pair_stats,
-	                           state.capped_join_pairs);
+	state.composite_caps.ApplyPending(left_subgraph->selectivity, *left_subgraph->relations);
 }
 
 void CardinalityEstimator::MergeSelectivitySubgraphs(const vector<idx_t> &subgraph_connections,
@@ -815,8 +823,7 @@ void CardinalityEstimator::MergeSelectivitySubgraphs(const vector<idx_t> &subgra
 	subgraph_to_merge_into->relations =
 	    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
 	subgraph_to_merge_into->selectivity = selectivity;
-	ApplyCompositeJoinPairCaps(subgraph_to_merge_into->selectivity, *subgraph_to_merge_into->relations,
-	                           state.join_pair_stats, state.capped_join_pairs);
+	state.composite_caps.ApplyPending(subgraph_to_merge_into->selectivity, *subgraph_to_merge_into->relations);
 	subgraph_to_delete->relations = nullptr;
 	auto remove_start = std::remove_if(state.subgraphs.begin(), state.subgraphs.end(),
 	                                   [](SelectivitySubgraph &s) { return !s.relations; });
@@ -838,7 +845,7 @@ void CardinalityEstimator::MergeDisconnectedSelectivitySubgraphs(SelectivityStat
 }
 
 CardinalityValue CardinalityEstimator::GetSelectivity(JoinRelationSet &set) {
-	SelectivityState selectivity_state;
+	SelectivityState selectivity_state(*this);
 	auto process_edge = [&](FilterInfoWithTotalDomains &edge) {
 		auto &filter = edge.GetFilter();
 		if (edge.GetPredicate().GetJoinType() == JoinType::INNER && filter.left_set != filter.right_set &&
