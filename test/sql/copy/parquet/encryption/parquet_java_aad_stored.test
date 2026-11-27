@@ -1,0 +1,67 @@
+# name: test/sql/copy/parquet/encryption/parquet_java_aad_stored.test
+# description: Read parquet-java encryption with a stored AAD prefix
+# group: [encryption]
+
+require parquet
+
+require noforcestorage
+
+# Generated and independently verified with parquet-java 1.17.1.
+# AES_GCM_V1; prefix 'duckdb-parquet-java-aad' is stored in the crypto metadata.
+statement ok
+PRAGMA add_parquet_key('java_aad_key', '0123456789abcdef')
+
+statement ok
+SET debug_verify_serializer=true
+
+foreach cache false true
+
+statement ok
+SET parquet_metadata_cache={cache}
+
+# Read every column across three row groups, including dictionary pages and NULLs.
+query IIIIII
+SELECT count(*), sum(id), count(value), sum(value), sum(flag::INTEGER), count(DISTINCT label)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_java_aad_stored.parquet', encryption_config={footer_key: 'java_aad_key'});
+----
+300	44850	240	360000	150	3
+
+# Check values at page and row-group boundaries.
+query ITII
+SELECT id, label, value, flag
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_java_aad_stored.parquet', encryption_config={footer_key: 'java_aad_key'})
+WHERE id IN (0, 19, 20, 99, 100, 199, 200, 299)
+ORDER BY id;
+----
+0	group-0	NULL	true
+19	group-1	190	false
+20	group-2	NULL	true
+99	group-0	990	false
+100	group-1	NULL	true
+199	group-1	1990	false
+200	group-2	NULL	true
+299	group-2	2990	false
+
+# Filter and project dictionary-encoded data in later row groups.
+query II
+SELECT count(*), sum(id)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_java_aad_stored.parquet', encryption_config={footer_key: 'java_aad_key'})
+WHERE label = 'group-1' AND id >= 100;
+----
+67	13333
+
+# An explicitly supplied matching prefix also works on a warm metadata cache.
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_java_aad_stored.parquet',
+    encryption_config={footer_key: 'java_aad_key', aad_prefix: 'duckdb-parquet-java-aad'});
+----
+300
+
+# Cached statistics must not hide a mismatched prefix.
+statement error
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_java_aad_stored.parquet',
+    encryption_config={footer_key: 'java_aad_key', aad_prefix: 'wrong-prefix'});
+----
+aad_prefix does not match the file AAD prefix
+
+endloop

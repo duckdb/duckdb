@@ -18,6 +18,7 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/string.hpp"
@@ -73,14 +74,16 @@ private:
 
 struct CryptoMetaData {
 	CryptoMetaData(Allocator &allocator);
-	void Initialize(const std::string &unique_file_identifier_p, int16_t row_group_ordinal = -1,
-	                int16_t column_ordinal = -1, int8_t module = -1, int16_t page_ordinal = -1);
+	void Initialize(const std::string &unique_file_identifier_p, const std::string &aad_prefix,
+	                int16_t row_group_ordinal = -1, int16_t column_ordinal = -1, int8_t module = -1,
+	                int16_t page_ordinal = -1);
 	void ClearAdditionalAuthenticatedData();
 	void SetModule(int8_t module_p);
 	bool IsEmpty() const;
 
 public:
-	string unique_file_identifier = "";
+	//! AAD prefix followed by the file's unique identifier.
+	string file_aad;
 	int8_t module;
 	int16_t row_group_ordinal;
 	int16_t column_ordinal;
@@ -117,6 +120,8 @@ public:
 public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
 	const string &GetFooterKey() const;
+	const optional<string> &GetAADPrefix() const;
+	string ResolveAADPrefix(const duckdb_parquet::AesGcmV1 &algorithm) const;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -125,6 +130,7 @@ public:
 private:
 	//! The encryption key used for the footer
 	string footer_key;
+	optional<string> aad_prefix;
 	//! Mapping from column name to key name
 	unordered_map<string, string> column_keys;
 };
