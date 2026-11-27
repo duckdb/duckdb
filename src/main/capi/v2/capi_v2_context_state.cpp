@@ -44,6 +44,9 @@ static auto Convert(CV2ContextStateProfile *profile) -> duckdb_v2_context_state_
 	return reinterpret_cast<duckdb_v2_context_state_profile_handle>(profile);
 }
 
+//! Tag identifying CV2ContextState without RTTI.
+static const char CV2_CONTEXT_STATE_TAG = 0;
+
 //! Connection state set up through the C API: forwards ClientContextState's hooks to the callbacks the init set.
 class CV2ContextState final : public ClientContextState {
 public:
@@ -119,13 +122,17 @@ public:
 		callbacks.profiling_cb(Convert(&profile), GetUserData(), &handle);
 	}
 
+	const void *GetStateTag() const override {
+		return &CV2_CONTEXT_STATE_TAG;
+	}
+
 private:
 	CV2ContextStateBuilder callbacks;
 };
 
 //! Throws if `state` is not C API state.
 static void CheckState(const string &key, ClientContextState &state) {
-	if (!dynamic_cast<CV2ContextState *>(&state)) {
+	if (state.GetStateTag() != &CV2_CONTEXT_STATE_TAG) {
 		throw InvalidInputException("The key \"%s\" is in use by state that is not registered through the C API", key);
 	}
 }

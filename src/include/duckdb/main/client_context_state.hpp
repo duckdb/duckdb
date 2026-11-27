@@ -37,6 +37,10 @@ struct BindPreparedStatementCallbackInfo {
 class ClientContextState {
 public:
 	virtual ~ClientContextState() = default;
+	//! Identifies the kind of state for code that only sees the base class, null when not set
+	virtual const void *GetStateTag() const {
+		return nullptr;
+	}
 	virtual void QueryBegin(ClientContext &context) {
 	}
 	virtual void QueryEnd() {
