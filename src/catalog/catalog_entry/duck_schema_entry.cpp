@@ -46,26 +46,19 @@ namespace duckdb {
 
 static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyType alter_fk_type,
                                       vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
-	auto &constraints = table.GetConstraints();
-	auto &name = table.name;
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto &cond = constraints[i];
-		if (cond->type != ConstraintType::FOREIGN_KEY) {
-			continue;
-		}
-		auto &fk = cond->Cast<ForeignKeyConstraint>();
-		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			// the referenced table lives in the same (possibly nested) schema as this table
-			AlterEntryData alter_data(table.schema.GetQualifiedName(fk.info.table), OnEntryNotFound::THROW_EXCEPTION);
-			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns,
-			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
-			                                                   alter_fk_type));
-		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
-		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
-			throw CatalogException("Could not drop the table because this table is main key table of the table %s",
-			                       fk.info.table);
+	if (alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
+		for (auto &constraint : table.GetConstraints()) {
+			if (constraint->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+				throw CatalogException("Could not drop the table because this table is main key table of the table %s",
+				                       fk.info.table);
+			}
 		}
 	}
+	fk_arrays = table.GetForeignKeyAlters(alter_fk_type);
 }
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
@@ -176,10 +169,7 @@ bool DuckSchemaEntry::DropEntryInternal(CatalogTransaction transaction, CatalogE
 		return false;
 	}
 
-	// remove the foreign key constraint in main key table if main key table's name is valid
-	for (auto &fk_info : fk_arrays) {
-		Alter(transaction, *fk_info);
-	}
+	DropForeignKeyReferences(transaction, fk_arrays);
 	return true;
 }
 

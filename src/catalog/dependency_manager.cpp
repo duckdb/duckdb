@@ -16,6 +16,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
@@ -668,6 +669,33 @@ catalog_entry_set_t DependencyManager::CheckDropDependencies(CatalogTransaction 
 	return to_drop;
 }
 
+vector<unique_ptr<AlterForeignKeyInfo>> DependencyManager::GetForeignKeyReferences(CatalogTransaction transaction,
+                                                                                   CatalogEntry &entry) {
+	vector<unique_ptr<AlterForeignKeyInfo>> result;
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		return result;
+	}
+	// a referenced table that is being dropped has already removed its dependency on this table
+	auto info = GetLookupProperties(entry);
+	vector<Identifier> referenced_tables;
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
+		auto &subject = dep.EntryInfo();
+		if (subject.type == CatalogType::TABLE_ENTRY && subject.schema_path == info.schema_path) {
+			referenced_tables.push_back(subject.name);
+		}
+	});
+
+	auto &table = entry.Cast<TableCatalogEntry>();
+	for (auto &fk_info : table.GetForeignKeyAlters(AlterForeignKeyType::AFT_DELETE)) {
+		auto &referenced_table = fk_info->GetQualifiedName().Name();
+		if (std::find(referenced_tables.begin(), referenced_tables.end(), referenced_table) !=
+		    referenced_tables.end()) {
+			result.push_back(std::move(fk_info));
+		}
+	}
+	return result;
+}
+
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
 	if (IsSystemEntry(object)) {
 		// Don't do anything for this
@@ -678,10 +706,17 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	auto to_drop = CheckDropDependencies(transaction, object, cascade);
 	CleanupDependencies(transaction, object);
 
-	for (auto &entry : to_drop) {
-		auto set = entry.get().set;
+	for (auto &entry_ref : to_drop) {
+		auto &entry = entry_ref.get();
+		auto set = entry.set;
 		D_ASSERT(set);
-		set->DropEntry(transaction, entry.get().name, cascade);
+		auto fk_references = GetForeignKeyReferences(transaction, entry);
+		if (!set->DropEntry(transaction, entry.name, cascade)) {
+			continue;
+		}
+		if (!fk_references.empty()) {
+			entry.ParentSchema().DropForeignKeyReferences(transaction, fk_references);
+		}
 	}
 }
 
