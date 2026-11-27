@@ -352,7 +352,8 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
 			auto &cast_set = CastFunctionSet::Get(GetDatabase());
-			auto cast_input = GetCastFunctionInput::Default();
+			auto context = state.context.GetContext();
+			auto cast_input = context ? GetCastFunctionInput(*context) : GetCastFunctionInput::Default();
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);
