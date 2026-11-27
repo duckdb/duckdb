@@ -64,11 +64,27 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		delete_index = delete_entry->owned_index->Cast<BoundIndex>();
 	}
 
+	if (building) {
+		// a building index never fails a commit: an error fails the build instead
+		if (build_error.HasError()) {
+			return ErrorData();
+		}
+		build_changed_rows += chunk.size();
+		try {
+			auto &added_data = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA);
+			IndexAppendInfo index_append_info(append_mode, nullptr);
+			auto error = added_data.Append(chunk, row_ids, index_append_info);
+			if (error.HasError()) {
+				build_error = std::move(error);
+			}
+		} catch (std::exception &ex) {
+			RecordBuildError(ex);
+		}
+		return ErrorData();
+	}
+
 	bool lookup_main_index = false;
 	optional_ptr<BoundIndex> append_index;
-	if (building) {
-		build_changed_rows += chunk.size();
-	}
 	if (bound_index.SupportsDeltaIndexes() && UseDeltas(active_checkpoint)) {
 		append_index = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA);
 		if (bound_index.IsUnique()) {
@@ -102,8 +118,20 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 	return bound_index.Append(chunk, row_ids, index_append_info);
 }
 
+void IndexEntry::RecordBuildError(std::exception &ex) {
+	ErrorData error(ex);
+	if (Exception::InvalidatesDatabase(error.Type())) {
+		// the database is already invalidated: don't hide it
+		throw;
+	}
+	build_error = std::move(error);
+}
+
 void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	auto entry_lock = lock.GetExclusiveLock();
+	if (building && build_error.HasError()) {
+		return;
+	}
 	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA)) {
 		delta->Delete(chunk, row_ids);
 		return;
@@ -295,6 +323,24 @@ void IndexEntry::RemoveFromIndex(DataChunk &chunk, Vector &row_ids, const IndexR
 	}
 
 	auto &bound_index = owned_index->Cast<BoundIndex>();
+	if (building) {
+		if (build_error.HasError()) {
+			return;
+		}
+		if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE) {
+			build_changed_rows += chunk.size();
+		}
+		try {
+			if (removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
+				ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
+			} else {
+				ApplyIndexRemovalToDeltas(bound_index, deltas, chunk, row_ids, removal_type);
+			}
+		} catch (std::exception &ex) {
+			RecordBuildError(ex);
+		}
+		return;
+	}
 	// Check which indexes we should append to or remove from. This method might also involve appending to indexes:
 	// delta indexes must be filled with data we are removing, or we may be reverting a previous removal.
 	// Not all indexes require delta indexes, so those skip "deleted_rows_in_use" bookkeeping.
@@ -302,10 +348,7 @@ void IndexEntry::RemoveFromIndex(DataChunk &chunk, Vector &row_ids, const IndexR
 		// Cleanup always removes directly from "deleted_rows_in_use", even during a checkpoint.
 		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
 	} else if (bound_index.SupportsDeltaIndexes() && UseDeltas(active_checkpoint)) {
-		// During a checkpoint or a build, route changes through the deltas.
-		if (building) {
-			build_changed_rows += chunk.size();
-		}
+		// During a checkpoint, route changes through the deltas.
 		ApplyIndexRemovalToDeltas(bound_index, deltas, chunk, row_ids, removal_type);
 	} else {
 		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
@@ -606,6 +649,9 @@ void IndexEntry::MergeBuildDeltas(BoundIndex &index, const IndexBuildDeltas &del
 IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(building);
+	if (build_error.HasError()) {
+		build_error.Throw();
+	}
 	IndexBuildDeltas result;
 	result.added = deltas.Take(IndexDeltaType::ADDED_DATA);
 	result.removed = deltas.Take(IndexDeltaType::REMOVED_DATA);
@@ -617,6 +663,7 @@ IndexBuildDeltas IndexEntry::TakeBuildDeltas() {
 void IndexEntry::FinishBuild(unique_ptr<BoundIndex> index, idx_t index_oid_p, ConstraintCheckMode check_mode_p) {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(building);
+	D_ASSERT(!build_error.HasError());
 	D_ASSERT(!deltas.Find(IndexDeltaType::ADDED_DATA));
 	D_ASSERT(!deltas.Find(IndexDeltaType::REMOVED_DATA));
 	owned_index = std::move(index);

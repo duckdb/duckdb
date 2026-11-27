@@ -248,6 +248,8 @@ private:
 	void InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
 	                                    optional_ptr<TableIndexList> append_indexes) const;
 
+	//! Records an error of a building entry, rethrowing errors that invalidate the database
+	void RecordBuildError(std::exception &ex);
 	//! Replace the physical index, this assumes an exclusive lock on the index is being held.
 	void InstallShadowInternal(unique_ptr<BoundIndex> shadow_index);
 
@@ -270,6 +272,8 @@ private:
 	const transaction_t build_transaction;
 	//! The rows appended or removed since the last TakeBuildDeltas()
 	idx_t build_changed_rows = 0;
+	//! The first error a commit hit while writing the deltas of a building entry: fails the build, not the commit
+	ErrorData build_error;
 };
 
 template <class TARGET>
