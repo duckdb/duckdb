@@ -1,5 +1,5 @@
 #include "duckdb/planner/table_filter_set.hpp"
-#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
@@ -39,20 +39,6 @@ static ExpressionType FlipComparisonType(ExpressionType type) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	default:
 		return type;
-	}
-}
-
-static bool IsSupportedConstantComparison(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return true;
-	default:
-		return false;
 	}
 }
 
@@ -111,7 +97,7 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundF
 			return nullptr;
 		}
 	}
-	if (!IsSupportedConstantComparison(comparison_type)) {
+	if (!ConstantFilterCombiner::IsSupportedComparison(comparison_type)) {
 		return nullptr;
 	}
 	return WrapStructFilterPath(make_uniq<LegacyConstantFilter>(comparison_type, constant), struct_path);
@@ -546,7 +532,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 		return nullptr;
 	}
 	// Work only on this execution's copy. Contradictions can safely retain their original scan predicates.
-	FilterCombiner::CombineScanFilters(*result);
+	result->Finalize();
 	return result;
 }
 

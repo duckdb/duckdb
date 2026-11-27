@@ -59,6 +59,9 @@ public:
 	static bool IsSimpleFilterColumnRef(const Expression &expr);
 	//! Whether a literal IN can use the native single-column scan executor.
 	static bool IsNativeInFilter(const Expression &expr);
+	//! Whether a native IN is small enough to evaluate using the shared IN-list cutoff.
+	static bool IsSmallNativeInFilter(const Expression &expr);
+	static bool SupportsConstantFilterPushdown(const LogicalType &type);
 	//! Flips comparison_type for a constant on the left
 	static optional_ptr<const BoundConstantExpression>
 	TryGetColumnConstantComparison(const BoundFunctionExpression &comparison, ExpressionType &comparison_type);

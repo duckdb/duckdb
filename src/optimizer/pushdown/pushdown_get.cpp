@@ -210,8 +210,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	PushdownBarrierFilters(get, barrier_filters);
 	restore_barrier_filters();
 
-	if (has_existing_filters && has_incoming_filters &&
-	    FilterCombiner::CombineScanFilters(get.table_filters) == FilterResult::UNSATISFIABLE) {
+	if (has_existing_filters && has_incoming_filters && get.table_filters.Finalize() == FilterResult::UNSATISFIABLE) {
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 

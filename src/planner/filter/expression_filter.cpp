@@ -1,4 +1,5 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/common/in_clause.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/arg_properties.hpp"
@@ -56,6 +57,22 @@ bool ExpressionFilter::IsNativeInFilter(const Expression &expr) {
 		}
 	}
 	return true;
+}
+
+bool ExpressionFilter::IsSmallNativeInFilter(const Expression &expr) {
+	return expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
+	       expr.Cast<BoundOperatorExpression>().GetChildren().size() < IN_CLAUSE_REWRITE_THRESHOLD &&
+	       ExpressionFilter::IsNativeInFilter(expr);
+}
+
+bool ExpressionFilter::SupportsConstantFilterPushdown(const LogicalType &type) {
+	if (TypeIsNumeric(type.InternalType())) {
+		return true;
+	}
+	if (type.InternalType() == PhysicalType::VARCHAR || type.InternalType() == PhysicalType::BOOL) {
+		return true;
+	}
+	return false;
 }
 
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p) : ExpressionFilter(std::move(expr_p), {}) {

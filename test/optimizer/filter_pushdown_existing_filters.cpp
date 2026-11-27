@@ -2,8 +2,9 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/common/in_clause.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -57,6 +58,35 @@ unique_ptr<LogicalOperator> PushRepeatedScanFilter(Optimizer &optimizer, unique_
 
 } // namespace
 
+TEST_CASE("Scan filters normalize only after the complete batch is available", "[optimizer][filter_pushdown]") {
+	const auto barrier = GENERATE(false, true);
+	TableFilterSet filters;
+	for (int32_t value : {1, 10}) {
+		filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+		                                           ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(value)));
+	}
+	auto &expr = *filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr;
+	REQUIRE(expr.Cast<BoundConjunctionExpression>().GetChildren().size() == 2);
+	if (barrier) {
+		auto upper = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_LESSTHAN, Value::INTEGER(20));
+		filters.PushFilter(ProjectionIndex(0),
+		                   make_uniq<ExpressionFilter>(ExpressionBarrier::Wrap(std::move(upper->expr))));
+	}
+	auto original = filters.Copy();
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
+	if (barrier) {
+		REQUIRE(filters.Equals(*original));
+	} else {
+		auto expected =
+		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(10));
+		REQUIRE(
+		    filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected->expr));
+	}
+	auto finalized = filters.Copy();
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
+	REQUIRE(filters.Equals(*finalized));
+}
+
 TEST_CASE("Scan comparisons inherit required evaluation when an optional bound wins", "[optimizer][filter_pushdown]") {
 	const auto reverse = GENERATE(false, true);
 	const auto adaptive = GENERATE(false, true);
@@ -74,7 +104,7 @@ TEST_CASE("Scan comparisons inherit required evaluation when an optional bound w
 	TableFilterSet filters;
 	filters.PushFilter(ProjectionIndex(0), reverse ? std::move(optional) : std::move(mandatory));
 	filters.PushFilter(ProjectionIndex(0), reverse ? std::move(mandatory) : std::move(optional));
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	auto expected = bound(optional_stronger ? 20 : 10);
 	REQUIRE(filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected->expr));
 
@@ -82,7 +112,7 @@ TEST_CASE("Scan comparisons inherit required evaluation when an optional bound w
 	auto strongest = bound(30);
 	strongest->expr = CreateOptionalFilterExpression(std::move(strongest->expr), LogicalType::INTEGER);
 	filters.PushFilter(ProjectionIndex(0), std::move(strongest));
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	expected = bound(30);
 	REQUIRE(filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected->expr));
 }
@@ -97,12 +127,12 @@ TEST_CASE("Optional-only bounds and contradictory scan entries keep their origin
 		filters.PushFilter(ProjectionIndex(0), std::move(bound));
 	}
 	auto original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	REQUIRE(filters.Equals(*original));
 	filters.PushFilter(ProjectionIndex(0),
 	                   ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_LESSTHAN, Value::INTEGER(5)));
 	original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::UNSATISFIABLE);
+	REQUIRE(filters.Finalize() == FilterResult::UNSATISFIABLE);
 	REQUIRE(filters.Equals(*original));
 }
 
@@ -144,7 +174,7 @@ TEST_CASE("Exact scan IN filters replace only the comparisons they imply", "[opt
 		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(sibling)));
 	}
 	auto original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	if (implied && mode == 0) {
 		REQUIRE(filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected));
 	} else {
@@ -173,7 +203,7 @@ TEST_CASE("Scan IN implication requires a literal list on the same native column
 	filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN,
 	                                                                                Value::INTEGER(10)));
 	auto original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	REQUIRE(filters.Equals(*original));
 }
 
@@ -187,14 +217,13 @@ TEST_CASE("Native interval IN subsumes bounds using normalized interval ordering
 	filters.PushFilter(ProjectionIndex(0),
 	                   ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 	                                                            Value::INTERVAL(0, 30, 0)));
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	REQUIRE(filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected));
 }
 
 TEST_CASE("Scan IN subsumption uses the ordinary IN row-evaluation cutoff", "[optimizer][filter_pushdown]") {
 	const auto mode = GENERATE(0, 1, 2);
-	const auto value_count = GENERATE(InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD - 2,
-	                                  InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD - 1, idx_t(37));
+	const auto value_count = GENERATE(IN_CLAUSE_REWRITE_THRESHOLD - 2, IN_CLAUSE_REWRITE_THRESHOLD - 1, idx_t(37));
 	vector<Value> values;
 	for (idx_t i = 0; i < value_count; i++) {
 		values.push_back(Value::INTEGER(20 + NumericCast<int32_t>(i)));
@@ -214,8 +243,8 @@ TEST_CASE("Scan IN subsumption uses the ordinary IN row-evaluation cutoff", "[op
 	filters.PushFilter(ProjectionIndex(0),
 	                   ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_LESSTHAN, Value::INTEGER(100)));
 	auto original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
-	if (mode == 0 && value_count + 1 < InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
+	if (mode == 0 && value_count + 1 < IN_CLAUSE_REWRITE_THRESHOLD) {
 		REQUIRE(filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr->Equals(*expected));
 	} else {
 		REQUIRE(filters.Equals(*original));
@@ -232,7 +261,7 @@ TEST_CASE("Optional scan IN remains optional without a required bound", "[optimi
 	bound->expr = CreateOptionalFilterExpression(std::move(bound->expr), LogicalType::INTEGER);
 	filters.PushFilter(ProjectionIndex(0), std::move(bound));
 	auto original = filters.Copy();
-	REQUIRE(FilterCombiner::CombineScanFilters(filters) == FilterResult::SUCCESS);
+	REQUIRE(filters.Finalize() == FilterResult::SUCCESS);
 	REQUIRE(filters.Equals(*original));
 }
 
@@ -251,18 +280,18 @@ TEST_CASE("Repeated scan pushdown separates mandatory filters from optional and 
 		                                  static_hint->expr->Copy(), LogicalType::INTEGER, threshold, 8)));
 	}
 	auto dynamic = make_shared_ptr<DynamicFilterData>(ExpressionType::COMPARE_EQUAL, Value::INTEGER(0));
-	vector<const Expression *> runtime_expressions;
+	reference_map_t<const Expression, idx_t> runtime_expressions;
 	for (idx_t i = 0; i < 2; i++) {
 		auto wrapper = CreateOptionalFilterExpression(CreateDynamicFilterExpression(dynamic, LogicalType::INTEGER),
 		                                              LogicalType::INTEGER);
-		runtime_expressions.push_back(wrapper.get());
+		runtime_expressions.emplace(*wrapper, runtime_expressions.size());
 		scan.table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(wrapper)));
 		auto nested = BoundComparisonExpression::Create(
 		    ExpressionType::COMPARE_EQUAL,
 		    CreateOptionalFilterExpression(CreateDynamicFilterExpression(dynamic, LogicalType::INTEGER),
 		                                   LogicalType::INTEGER),
 		    make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
-		runtime_expressions.push_back(nested.get());
+		runtime_expressions.emplace(*nested, runtime_expressions.size());
 		scan.table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(nested)));
 	}
 	scan.table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
@@ -301,16 +330,16 @@ TEST_CASE("Repeated scan pushdown separates mandatory filters from optional and 
 		}
 		REQUIRE(mandatory_count == 1);
 		REQUIRE(runtime_count == 4);
-		vector<const Expression *> surviving_runtime_expressions;
+		idx_t surviving_runtime_count = 0;
 		auto &scan_expr = scan.table_filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>().expr;
 		ExpressionIterator::VisitExpression<BoundFunctionExpression>(
 		    *scan_expr, [&](const BoundFunctionExpression &expr) {
-			    if (std::find(runtime_expressions.begin(), runtime_expressions.end(), &expr) !=
-			        runtime_expressions.end()) {
-				    surviving_runtime_expressions.push_back(&expr);
+			    auto entry = runtime_expressions.find(expr);
+			    if (entry != runtime_expressions.end()) {
+				    REQUIRE(entry->second == surviving_runtime_count++);
 			    }
 		    });
-		REQUIRE(surviving_runtime_expressions == runtime_expressions);
+		REQUIRE(surviving_runtime_count == runtime_expressions.size());
 	}
 	auto &counts = scan.bind_data->Cast<RepeatedPushdownData>().callback_filter_counts;
 	REQUIRE(counts == vector<idx_t> {1, 1, 1});
@@ -447,7 +476,7 @@ TEST_CASE("Repeated scan pushdown preserves admitted generic expressions", "[opt
 	REQUIRE(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &admitted = scan.table_filters.GetFilterByColumnIndex(ProjectionIndex(0)).Cast<ExpressionFilter>();
 	REQUIRE(admitted.expr->GetExpressionType() == ExpressionType::COMPARE_BETWEEN);
-	auto admitted_pointer = admitted.expr.get();
+	reference<const Expression> admitted_expression = *admitted.expr;
 	auto admitted_copy = admitted.expr->Copy();
 
 	scan.table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
@@ -462,7 +491,7 @@ TEST_CASE("Repeated scan pushdown preserves admitted generic expressions", "[opt
 	                        .Cast<ExpressionFilter>()
 	                        .expr->Cast<BoundConjunctionExpression>();
 	REQUIRE(conjunction.GetChildren().size() == 2);
-	REQUIRE(conjunction.GetChildren()[0].get() == admitted_pointer);
+	REQUIRE(ReferenceEquality<const Expression>()(*conjunction.GetChildren()[0], admitted_expression));
 	REQUIRE(conjunction.GetChildren()[0]->Equals(*admitted_copy));
 	auto expected_equality = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value("abc"));
 	REQUIRE(conjunction.GetChildren()[1]->Equals(*expected_equality->expr));
@@ -531,7 +560,7 @@ TEST_CASE("Repeated scan pushdown keeps distinct struct fields", "[optimizer][fi
 	auto type = LogicalType::STRUCT({{"a", LogicalType::INTEGER}, {"b", LogicalType::INTEGER}});
 	auto get = MakeRepeatedPushdownScan(type);
 	auto &scan = *get;
-	auto field = [&](const char *name, unique_ptr<Expression> column) {
+	auto field = [&](const string &name, unique_ptr<Expression> column) {
 		return optimizer.BindScalarFunction("struct_extract", std::move(column),
 		                                    make_uniq<BoundConstantExpression>(Value(name)));
 	};
@@ -542,7 +571,7 @@ TEST_CASE("Repeated scan pushdown keeps distinct struct fields", "[optimizer][fi
 	                                                      make_uniq<BoundConstantExpression>(Value::INTEGER(1)))));
 	auto b_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, std::move(b),
 	                                                  make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
-	auto b_pointer = b_filter.get();
+	reference<const Expression> b_expression = *b_filter;
 	scan.table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(b_filter)));
 	auto plan = PushRepeatedScanFilter(
 	    optimizer, std::move(get),
@@ -554,7 +583,7 @@ TEST_CASE("Repeated scan pushdown keeps distinct struct fields", "[optimizer][fi
 	                     .expr->Cast<BoundConjunctionExpression>()
 	                     .GetChildren();
 	REQUIRE(children.size() == 2);
-	REQUIRE(children[0].get() == b_pointer);
+	REQUIRE(ReferenceEquality<const Expression>()(*children[0], b_expression));
 	auto expected = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, std::move(a),
 	                                                  make_uniq<BoundConstantExpression>(Value::INTEGER(10)));
 	REQUIRE(children[1]->Equals(*expected));
@@ -572,21 +601,22 @@ TEST_CASE("Repeated scan pushdown retains a minimal untouched entry", "[optimize
 	                                                      ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(1)));
 	for (auto comparison : {ExpressionType::COMPARE_GREATERTHANOREQUALTO, ExpressionType::COMPARE_LESSTHANOREQUALTO,
 	                        ExpressionType::COMPARE_NOTEQUAL}) {
-		auto value = comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO ? "a"
-		             : comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO  ? "z"
-		                                                                        : "m";
+		const string value = comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO ? "a"
+		                     : comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO  ? "z"
+		                                                                                : "m";
 		scan.table_filters.PushFilter(ProjectionIndex(1),
 		                              ExpressionFilter::CreateComparisonFilter(comparison, Value(value)));
 	}
-	auto original = scan.table_filters.GetFilterByColumnIndex(ProjectionIndex(1)).Cast<ExpressionFilter>().expr.get();
-	auto copy = original->Copy();
+	reference<const Expression> original =
+	    *scan.table_filters.GetFilterByColumnIndex(ProjectionIndex(1)).Cast<ExpressionFilter>().expr;
+	auto copy = original.get().Copy();
 	auto plan = PushRepeatedScanFilter(
 	    optimizer, std::move(get),
 	    BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, RepeatedPushdownColumn(),
 	                                      make_uniq<BoundConstantExpression>(Value::INTEGER(10))));
 	REQUIRE(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &untouched = scan.table_filters.GetFilterByColumnIndex(ProjectionIndex(1)).Cast<ExpressionFilter>().expr;
-	REQUIRE(untouched.get() == original);
+	REQUIRE(ReferenceEquality<const Expression>()(*untouched, original));
 	REQUIRE(untouched->Equals(*copy));
 }
 

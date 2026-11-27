@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/joinside.hpp"
 
 #include "duckdb/storage/data_table.hpp"
@@ -22,8 +23,6 @@ namespace duckdb {
 class LogicalGet;
 class Optimizer;
 
-enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
-enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
 enum class FilterPushdownResult { NO_PUSHDOWN, PUSHED_DOWN_PARTIALLY, PUSHED_DOWN_FULLY };
 
 //! The FilterCombiner combines several filters and generates a logically equivalent set that is more efficient
@@ -39,10 +38,7 @@ public:
 	ClientContext &context;
 
 public:
-	struct ExpressionValueInformation {
-		Value constant;
-		ExpressionType comparison_type;
-	};
+	using ExpressionValueInformation = ConstantComparison;
 
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Splits on AND and adds each conjunct
@@ -54,9 +50,6 @@ public:
 	static bool ContainsNull(vector<Value> &in_list);
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
-	//! Simplify already-admitted scan predicates, inheriting required evaluation when an optional bound replaces one.
-	//! On contradiction, return UNSATISFIABLE without modifying the offending column's filter.
-	static FilterResult CombineScanFilters(TableFilterSet &table_filters);
 	bool HasFilters();
 	void GenerateEquivalentFilters(const Expression &filter,
 	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
@@ -82,7 +75,6 @@ private:
 	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
-	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
 	FilterPushdownResult TryPushdownConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                               column_t column_id, vector<ExpressionValueInformation> &info_list);
