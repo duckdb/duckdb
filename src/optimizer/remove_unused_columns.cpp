@@ -701,6 +701,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			return;
 		}
 		if (setop.setop_all && !everything_referenced) {
+			if (TryPushdownUnionExtracts(setop)) {
+				return;
+			}
 			// for UNION we can remove unreferenced columns if union all is used
 			// it's possible not all columns are referenced, but unreferenced columns in the union can
 			// still have an affect on the result of the union
@@ -1124,7 +1127,7 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
                                                              const ColumnIndex &path) {
 	auto &struct_type = target->GetReturnType();
-	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT || struct_type.id() == LogicalTypeId::VARIANT);
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
@@ -1181,7 +1184,6 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		auto original_binding = colref.Binding();
 		auto &column_type = expr.GetReturnType();
-		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
 		    entry->second,
@@ -1205,11 +1207,57 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 			    new_bindings.emplace(full_path, new_binding_idx);
 			    return new_binding_idx;
 		    });
-		for (; start < expressions.size(); start++) {
-			VisitExpression(&expressions[start]);
+	}
+	// The child pruner registers these expressions after the final vector is installed. Registering them
+	// here would retain references to reallocating vector slots, or to the temporary UNION projection.
+	proj.expressions = std::move(expressions);
+}
+
+bool RemoveUnusedColumns::TryPushdownUnionExtracts(LogicalSetOperation &setop) {
+	D_ASSERT(setop.setop_all && !everything_referenced && mode == RemoveUnusedColumnsMode::APPLY);
+	setop.ResolveOperatorTypes();
+	auto original_bindings = setop.children[0]->GetColumnBindings();
+	vector<unique_ptr<Expression>> expressions;
+	for (idx_t i = 0; i < setop.column_count; i++) {
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(setop.types[i], original_bindings[i]));
+	}
+	// Build one output layout, then apply the same extracts to every branch.
+	LogicalProjection projection(setop.table_index, std::move(expressions));
+	CheckPushdownExtract(projection);
+	bool has_extracts = false;
+	for (idx_t i = 0; i < setop.column_count; i++) {
+		auto entry = column_references.find(ColumnBinding(setop.table_index, ProjectionIndex(i)));
+		if (entry != column_references.end() &&
+		    entry->second.supports_pushdown_extract == PushdownExtractSupport::ENABLED) {
+			has_extracts = true;
+			break;
 		}
 	}
-	proj.expressions = std::move(expressions);
+	if (!has_extracts) {
+		return false;
+	}
+	ClearUnusedExpressions(projection.expressions, setop.table_index);
+	RewriteExpressions(projection, setop.column_count);
+	ApplySecureViewReplacements();
+	for (auto &child : setop.children) {
+		vector<unique_ptr<Expression>> branch_expressions;
+		for (auto &expression : projection.expressions) {
+			branch_expressions.push_back(expression->Copy());
+		}
+		auto branch = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(branch_expressions));
+		ColumnBindingReplacer replacer;
+		replacer.AddReplacements(original_bindings, child->GetColumnBindings());
+		replacer.VisitOperatorBindings(*branch);
+		if (child->has_estimated_cardinality) {
+			branch->SetEstimatedCardinality(child->estimated_cardinality);
+		}
+		branch->children.push_back(std::move(child));
+		child = std::move(branch);
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperator(child);
+	}
+	setop.column_count = projection.expressions.size();
+	return true;
 }
 
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
@@ -1275,8 +1323,9 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! Not a column reference, can't pull up the extract
 				continue;
 			}
-			if (expr.GetReturnType().id() != LogicalTypeId::STRUCT) {
-				//! Extract pull up only supported for STRUCT currently
+			if (expr.GetReturnType().id() != LogicalTypeId::STRUCT &&
+			    expr.GetReturnType().id() != LogicalTypeId::VARIANT) {
+				//! Only nested column references support extract pushdown
 				continue;
 			}
 			if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {

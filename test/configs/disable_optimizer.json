@@ -27,6 +27,12 @@
       ]
     },
     {
+      "reason": "Checks nested field projection pushdown through UNION ALL in the optimized plan.",
+      "paths": [
+        "test/sql/optimizer/union_extract_pushdown_plan.test"
+      ]
+    },
+    {
       "reason": "Checks the plan of an executed query through the profiler output.",
       "paths": [
         "test/optimizer/partial_aggregate_pushdown_serialized_plan.test"
