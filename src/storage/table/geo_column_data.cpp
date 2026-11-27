@@ -14,6 +14,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

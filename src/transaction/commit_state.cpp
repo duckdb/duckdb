@@ -25,6 +25,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
