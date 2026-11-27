@@ -48,7 +48,7 @@ public:
 
 public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
-	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
+	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path, CopyOverwriteMode overwrite_mode);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	//! Creates or checks the directory a COPY writes several files into
 	static void PrepareOutputDirectory(ClientContext &context, const string &directory,
