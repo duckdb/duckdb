@@ -150,6 +150,17 @@ void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PRO
 	SetCommonProperty(props, key, value);
 }
 
+void SetTableFunctionProperty(FunctionStability &stability, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                              DUCKDB_V2_FUNCTION_PROPERTY_VALUE value) {
+	ValidateValueMatchesKey(key, value);
+	if (key != DUCKDB_V2_FUNCTION_PROPERTY_STABILITY) {
+		throw InvalidInputException("Function property key " + ToHex(AsU32(key)) + " is not valid for table functions");
+	}
+	FunctionProperties props;
+	SetCommonProperty(props, key, value);
+	stability = props.GetStability();
+}
+
 void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
                                   DUCKDB_V2_FUNCTION_PROPERTY_VALUE value) {
 	ValidateValueMatchesKey(key, value);

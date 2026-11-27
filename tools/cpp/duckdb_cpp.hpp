@@ -4752,6 +4752,9 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> TableFunction &;
+	/// How stable the function's results are within and across queries. Defaults to `VOLATILE`; declare
+	/// `CONSISTENT_WITHIN_QUERY` to let the optimizer share identical scans.
+	auto SetStability(FunctionStability value) & -> TableFunction &;
 	/// The documentation of this overload, borrowed for in-place mutation.
 	auto GetDocs() -> FunctionDocs;
 
