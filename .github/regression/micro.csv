@@ -20,13 +20,13 @@ benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark
 benchmark/micro/logger/disabled/logging_disabled_global.benchmark
 benchmark/micro/logger/disabled/logging_disabled_client_context.benchmark
 benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
-benchmark/micro/logger/disabled/logging_disabled_context.benchmark
+benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
 benchmark/micro/logger/enabled/logging_enabled_client_context.benchmark
 benchmark/micro/logger/enabled/logging_enabled_global.benchmark
-benchmark/micro/logger/enabled/logging_enabled_context.benchmark
+benchmark/micro/logger/enabled/logging_enabled_file_opener.benchmark
 benchmark/micro/logger/enabled/logging_enabled_global.benchmark
 benchmark/micro/logger/filtered_out_by_log_type/client_context.benchmark
-benchmark/micro/logger/filtered_out_by_log_type/context.benchmark
+benchmark/micro/logger/filtered_out_by_log_type/file_opener.benchmark
 benchmark/micro/logger/filtered_out_by_log_type/global.benchmark
 benchmark/micro/logger/file_handle_log/csv/file_handle_logging_csv.benchmark
 benchmark/micro/logger/file_handle_log/parquet/file_handle_logging_parquet.benchmark
