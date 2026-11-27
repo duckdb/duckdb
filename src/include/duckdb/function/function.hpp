@@ -595,6 +595,13 @@ public:
 		requires_ordered_execution = value;
 	}
 
+	auto GetAutoVectorized() const -> bool {
+		return autovectorized;
+	}
+	auto SetAutoVectorized(bool value) -> void {
+		autovectorized = value;
+	}
+
 	//! Sets a generic property, e.g. "duckdb.collation.combinable", overwriting any previous value
 	DUCKDB_API void SetProperty(const string &name, Value value);
 	//! Returns the value of a generic property, or nullptr if it is not set
@@ -635,6 +642,9 @@ public:
 	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
+	//! Whether the kernel is a branch-free fixed-width loop that the compiler auto-vectorizes, which makes it
+	//! profitable to evaluate the function densely (e.g. over an entire dictionary) instead of per selected row
+	bool autovectorized = false;
 	//! Generic properties by name, e.g. "duckdb.collation.combinable"
 	unordered_map<string, Value> generic_properties;
 };

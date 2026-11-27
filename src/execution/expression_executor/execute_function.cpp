@@ -1,3 +1,4 @@
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -21,20 +22,24 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
+		dense_autovec_capable = bound_function.Function().GetAutoVectorized() && CpuBenefitsFromAutoVec();
 		auto &children = bound_function.GetChildren();
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
 			if (child.IsFoldable()) {
 				continue; // Constant
 			}
-			if (input_col_idx.IsValid()) {
-				input_col_idx.SetInvalid(); // Found more than 1 non-constant
-				break;
-			}
 			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
+				dictionary_input_indices.clear();
 				break; // FIXME
 			}
-			input_col_idx = child_idx;
+			dictionary_input_indices.push_back(child_idx);
+		}
+		if (dictionary_input_indices.size() > 1 && !dense_autovec_capable) {
+			dictionary_input_indices.clear(); // only the dense path can evaluate several dictionaries
+		}
+		if (!dictionary_input_indices.empty()) {
+			input_col_idx = dictionary_input_indices[0];
 		}
 		break;
 	}
@@ -51,7 +56,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr double CHUNK_FILL_RATIO_THRESHOLD = 0.5;
 
-	if (!input_col_idx.IsValid()) {
+	if (!input_col_idx.IsValid() || dictionary_input_indices.size() != 1) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
 
@@ -118,6 +123,71 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	// Result references the dictionary
 	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input), args.size());
 
+	return true;
+}
+
+//! Chunks below this fill cannot amortize the widened-kernel entry overhead
+static bool AutoVecCountPaysOff(idx_t count) {
+	return count >= STANDARD_VECTOR_SIZE / 4;
+}
+
+//! Evaluate the function once per dictionary entry when every non-constant input indexes the same dictionary.
+//! An auto-vectorized kernel computes the whole (small) dictionary for less than the per-row work it replaces.
+bool ExecuteFunctionState::TryExecuteDenseFunction(const BoundFunctionExpression &expr, DataChunk &args,
+                                                   ExpressionState &state, Vector &result) {
+	if (!dense_autovec_capable || !input_col_idx.IsValid() || !AutoVecCountPaysOff(args.size())) {
+		return false;
+	}
+	const auto &first_input = args.data[input_col_idx.GetIndex()];
+	if (first_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	const auto dictionary_size_opt = DictionaryVector::DictionarySize(first_input);
+	if (!dictionary_size_opt.IsValid()) {
+		return false;
+	}
+	const auto dictionary_size = dictionary_size_opt.GetIndex();
+	if (dictionary_size > STANDARD_VECTOR_SIZE ||
+	    !DenseAutoVecPaysOff(args.size(), dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
+		return false;
+	}
+	auto &input_sel = DictionaryVector::SelVector(first_input);
+	for (idx_t i = 1; i < dictionary_input_indices.size(); i++) { // every input must index the same dictionary
+		const auto &input = args.data[dictionary_input_indices[i]];
+		if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			return false;
+		}
+		const auto size = DictionaryVector::DictionarySize(input);
+		if (!size.IsValid() || size.GetIndex() != dictionary_size ||
+		    !SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
+			return false;
+		}
+	}
+	if (!dense_output_dictionary || dense_output_dictionary->data.size() != dictionary_size) {
+		dense_output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), dictionary_size);
+		dense_output_dictionary->id.clear(); // the contents change per chunk: no stable dictionary id
+	}
+	if (dictionary_input_chunk.data.empty()) {
+		dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // reused across chunks
+	}
+	dense_argument_buffers.clear();
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		dictionary_input_chunk.data[i].Reference(args.data[i]); // constants stay as-is
+		dense_argument_buffers.push_back(args.data[i].GetBufferRef());
+	}
+	for (auto idx : dictionary_input_indices) {
+		dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
+	}
+	dictionary_input_chunk.SetChildCardinality(dictionary_size);
+	expr.Function().Execute(dictionary_input_chunk, state, dense_output_dictionary->data);
+	// the constant arguments share their buffers with args: give them their size back
+	for (auto &buffer : dense_argument_buffers) {
+		if (buffer) {
+			buffer->SetVectorSize(args.size());
+		}
+	}
+	dense_argument_buffers.clear();
+	result.Dictionary(dense_output_dictionary, input_sel, args.size());
 	return true;
 }
 
@@ -265,8 +335,10 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	}
 	arguments.Verify(context.GetDatabase());
 
-	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
-	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+	auto dictionary_executed =
+	    expr.Function().HasFunctionCallback() && !all_constant &&
+	    (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result) ||
+	     execute_function_state.TryExecuteDenseFunction(expr, arguments, *state, result));
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
 			expr.Function().Execute(arguments, *state, result);
@@ -335,9 +407,8 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	}
 	if (expr.Function().HasFunctionCallback()) {
 		Vector result(LogicalType::BOOLEAN);
-		auto dictionary_executed =
-		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
-		if (dictionary_executed) {
+		if (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result) ||
+		    execute_function_state.TryExecuteDenseFunction(expr, arguments, *state, result)) {
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 		}
 	}

@@ -277,6 +277,9 @@ public: // Properties
 	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
 	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
 
+	auto GetAutoVectorized() const -> bool { return properties.autovectorized; }
+	auto SetAutoVectorized(bool value) -> void { properties.autovectorized = value; }
+
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)

@@ -155,6 +155,10 @@ public:
 	idx_t Capacity() const {
 		return capacity;
 	}
+	//! Whether two selections are backed by the same indices, and therefore select identically
+	static bool SameSelection(const SelectionVector &a, const SelectionVector &b) {
+		return a.sel_vector == b.sel_vector && a.capacity == b.capacity;
+	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 

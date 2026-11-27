@@ -47,6 +47,13 @@
 #else
 #define DUCKDB_UNROLL_LOOP
 #endif
+// Executor flat loops: unroll only on aarch64. The x86 avx2 vectorizer already unrolls, and the
+// pragma multiplies the per-instantiation code size of the widest-instantiated templates.
+#if defined(__aarch64__)
+#define DUCKDB_UNROLL_FLAT_LOOP DUCKDB_UNROLL_LOOP
+#else
+#define DUCKDB_UNROLL_FLAT_LOOP
+#endif
 
 namespace duckdb {
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
@@ -98,6 +105,19 @@ inline bool CpuBenefitsFromAutoVec() {
 	static const bool enabled = CpuSupportsAvx2() && !getenv("DUCKDB_DISABLE_AVX2"); // cached
 	return enabled;
 #endif
+}
+//! Whether kernels compiled for the widened ISA may run at all. Only x86 can lack it at runtime (pre-AVX2);
+//! elsewhere the flat loops are plain code and are always reachable.
+inline bool CpuCanRunAutoVecKernels() {
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+	return CpuBenefitsFromAutoVec();
+#else
+	return true;
+#endif
+}
+//! Whether evaluating all `span` rows densely beats evaluating the `selected` rows one by one
+inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width) {
+	return type_width && (selected * (32 / type_width) >= span); // 0-width (nested) payloads => no autovec
 }
 #if DUCKDB_AUTOVEC
 typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));

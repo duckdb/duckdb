@@ -283,6 +283,11 @@ struct DecimalArithmeticBindData : public FunctionData {
 	bool check_overflow;
 };
 
+//! Lanes of at most 8 bytes auto-vectorize; the hugeint and bignum kernels stay scalar
+static bool IsAutoVectorizedWidth(PhysicalType type) {
+	return GetTypeIdSize(type) <= sizeof(int64_t);
+}
+
 template <class OP, class PROPAGATE, class BASEOP>
 unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
@@ -357,14 +362,15 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		if (input.bind_data) {
 			input.bind_data.write().Cast<DecimalArithmeticBindData>().check_overflow = false;
 		}
+		auto &func = expr.FunctionMutable();
+		const auto return_type = expr.GetReturnType().InternalType();
 		if constexpr (HasBignumOperation<BASEOP>::value) {
-			expr.FunctionMutable().SetFunctionCallback(
-			    GetScalarDecimalFunction<BASEOP>(expr.GetReturnType().InternalType()));
+			func.SetFunctionCallback(GetScalarDecimalFunction<BASEOP>(return_type));
 		} else {
-			expr.FunctionMutable().SetFunctionCallback(
-			    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+			func.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(return_type));
 		}
-		expr.FunctionMutable().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		func.SetAutoVectorized(IsAutoVectorizedWidth(return_type));
 	}
 	auto result = BaseStatistics::CreateEmpty(expr.GetReturnType());
 	if (bignum_tier) {
@@ -511,6 +517,7 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		// the result type holds every result of the operation, so it cannot overflow
 		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OP>(result_type.InternalType()));
 		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		bound_function.SetAutoVectorized(IsAutoVectorizedWidth(result_type.InternalType()));
 	}
 	if (IS_SUBTRACT) {
 		bound_function.SetStatisticsCallback(
@@ -540,6 +547,7 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	} else {
 		bound_function.SetFunctionCallback(GetScalarDecimalFunction<OP>(return_type.InternalType()));
 		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		bound_function.SetAutoVectorized(IsAutoVectorizedWidth(return_type.InternalType()));
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
@@ -1337,6 +1345,7 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		// the result type holds every product of the input types, so the operation cannot overflow
 		bound_function.SetFunctionCallback(GetScalarDecimalFunction<MultiplyOperator>(result_type.InternalType()));
 		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		bound_function.SetAutoVectorized(IsAutoVectorizedWidth(result_type.InternalType()));
 	}
 	bound_function.SetStatisticsCallback(
 	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);

@@ -70,8 +70,12 @@ public:
 		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
 
+	//! Evaluate the function over a storage dictionary once and cache the result per dictionary id
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
+	//! Evaluate the function over the dictionary itself when all inputs share one selection (auto-vectorized kernels)
+	bool TryExecuteDenseFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+	                             Vector &result);
 
 	void ResetDictionaryStates() override;
 
@@ -91,6 +95,15 @@ private:
 	buffer_ptr<DictionaryEntry> output_dictionary;
 	//! ID of the input dictionary Vector
 	string current_input_dictionary_id;
+	//! The function's kernel auto-vectorizes, so it may be evaluated densely over a dictionary
+	bool dense_autovec_capable = false;
+	//! Non-constant children; several are only usable when they share one selection (dense evaluation)
+	vector<idx_t> dictionary_input_indices;
+	//! Reused input chunk and result dictionary of the dense evaluation
+	DataChunk dictionary_input_chunk;
+	buffer_ptr<DictionaryEntry> dense_output_dictionary;
+	//! The buffers of the constant arguments, shared with the input and resized for the dense evaluation
+	vector<buffer_ptr<VectorBuffer>> dense_argument_buffers;
 };
 
 struct ExpressionExecutorState {
