@@ -1,0 +1,111 @@
+# name: test/sql/insert/insert_values_literal_target.test
+# description: Preserve literal and explicit-cast semantics when binding typed VALUES
+# group: [insert]
+
+statement ok
+CREATE TABLE literal_target(i INTEGER DEFAULT 7, s VARCHAR DEFAULT 'default', d DOUBLE DEFAULT 0.25);
+
+statement ok
+INSERT INTO literal_target VALUES (1, 'one', 0.1), (NULL, NULL, NULL), (2147483647, 'max', 1.0), ('21', 42, 2.0), (DEFAULT, DEFAULT, DEFAULT);
+
+query ITR
+SELECT * FROM literal_target ORDER BY i NULLS LAST;
+----
+1	one	0.1
+7	default	0.25
+21	42	2.0
+2147483647	max	1.0
+NULL	NULL	NULL
+
+statement ok
+INSERT INTO literal_target(s, i, d) VALUES ('reordered', 9, 3.5), ('', 2, 1.25), ('café', 3, 0);
+
+query III
+SELECT count(*) FILTER (WHERE i = 9 AND s = 'reordered' AND d = 3.5), count(*) FILTER (WHERE i = 2 AND s = ''), count(*) FILTER (WHERE i = 3 AND s = 'café') FROM literal_target;
+----
+1	1	1
+
+query TTT
+SELECT typeof(list_value(1::INTEGER, 2::UBIGINT)), typeof(coalesce(1::INTEGER, 2::UBIGINT)), typeof(greatest(1::INTEGER, 2::UBIGINT));
+----
+HUGEINT[]	HUGEINT	HUGEINT
+
+statement ok
+CREATE TABLE literal_types(observed VARCHAR);
+
+statement ok
+INSERT INTO literal_types VALUES (typeof(list_value(1::INTEGER, 2::UBIGINT))), (typeof(coalesce(1::INTEGER, 2::UBIGINT))), (typeof(greatest(1::INTEGER, 2::UBIGINT)));
+
+query T rowsort
+SELECT * FROM literal_types;
+----
+HUGEINT
+HUGEINT
+HUGEINT[]
+
+query TT
+SELECT typeof(col0), typeof(col1) FROM (VALUES (1::INTEGER, 'a'), (2::UBIGINT, 'b')) v LIMIT 1;
+----
+HUGEINT	VARCHAR
+
+statement ok
+CREATE TABLE literal_nested(n DECIMAL(8, 2), items INTEGER[], rec STRUCT(a INTEGER, b VARCHAR));
+
+statement ok
+INSERT INTO literal_nested VALUES (1.25, [1, NULL, 3], {'a': 5, 'b': 'value'}), (NULL, NULL, NULL);
+
+query IIII
+SELECT n = 1.25, items = [1, NULL, 3], rec.a = 5, rec.b = 'value' FROM literal_nested WHERE n IS NOT NULL;
+----
+1	1	1	1
+
+query I
+SELECT count(*) FROM literal_nested WHERE n IS NULL AND items IS NULL AND rec IS NULL;
+----
+1
+
+statement ok
+CREATE TABLE literal_collated(s VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO literal_collated VALUES ('X');
+
+query I
+SELECT s = 'x' FROM literal_collated;
+----
+1
+
+statement ok
+CREATE TYPE literal_label AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE literal_enum(e literal_label);
+
+statement ok
+INSERT INTO literal_enum VALUES ('a');
+
+query T
+SELECT e::VARCHAR FROM literal_enum;
+----
+a
+
+statement ok
+PREPARE literal_parameter AS INSERT INTO literal_target VALUES ($1, $2, $3);
+
+statement ok
+EXECUTE literal_parameter(8, 'parameter', 2.5);
+
+query TR
+SELECT s, d FROM literal_target WHERE i = 8;
+----
+parameter	2.5
+
+statement error
+INSERT INTO literal_target VALUES ('bad', 'conversion', 0);
+----
+Could not convert string
+
+statement error
+INSERT INTO literal_target VALUES (2147483648, 'overflow', 0);
+----
+out of range
