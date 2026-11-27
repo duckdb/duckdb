@@ -737,6 +737,8 @@ struct MedianFunction {
 		auto fun = can_interpolate ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
 		fun.SetName("median");
 		fun.SetIsHolistic(true);
+		// Only medians without window callbacks reach the trees. Discrete ones such as the sort-key fallback keep them
+		// because naive is quadratic on running frames, and continuous ones stay naive like quantile_cont
 		fun.SetAllowsWindowTrees(!can_interpolate);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
