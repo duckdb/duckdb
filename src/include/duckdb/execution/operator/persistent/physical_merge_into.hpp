@@ -152,7 +152,8 @@ private:
 	//! Set up the operators that the given action pushes data into
 	void PlanAction(PhysicalPlan &physical_plan, MergeActionCondition condition, MergeIntoOperator &action);
 	idx_t GetIndex(MergeActionCondition condition) const;
-	void ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk) const;
+	void ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk,
+	                    const vector<unordered_set<column_t>> &unique_constraints) const;
 
 private:
 	//! The number of actions that have an operator to push data into
