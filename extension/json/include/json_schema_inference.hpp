@@ -9,11 +9,14 @@
 #pragma once
 
 #include "json_common.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/types/type_map.hpp"
 
 namespace duckdb {
 
 struct JSONStructureDescription;
 struct DateFormatMap;
+struct DateFormatNode;
 struct StrpTimeFormat;
 class MutableDateFormatMap;
 
@@ -93,6 +96,9 @@ public:
 	//! Candidate types (if auto-detecting and type == LogicalTypeId::VARCHAR)
 	vector<LogicalTypeId> candidate_types;
 
+	//! Surviving format indices (into DateFormatMap) for DATE and TIMESTAMP candidates
+	type_id_map_t<vector<idx_t>> candidate_formats;
+
 	//! Whether any UBIGINT value exceeds the BIGINT range (i.e., >= 2^63)
 	bool has_large_ubigint = false;
 
@@ -108,6 +114,7 @@ public:
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, idx_t max_depth,
 	                                   double field_appearance_threshold, idx_t map_inference_threshold,
 	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::JSON());
+	static shared_ptr<const DateFormatNode> ExtractDateFormats(const JSONStructureNode &node, const LogicalType &type);
 };
 
 } // namespace duckdb

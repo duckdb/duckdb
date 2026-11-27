@@ -23,6 +23,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
+#include "json_reader_options.hpp"
 #include "json_scan.hpp"
 
 namespace duckdb {
@@ -464,6 +465,26 @@ static bool TransformStringWithFormat(const Vector &string_vector, const StrpTim
 	return success;
 }
 
+struct ScopedFormatNode {
+	ScopedFormatNode(JSONTransformOptions &options_p, optional_ptr<const DateFormatNode> next)
+	    : options(options_p), previous(options_p.format_node) {
+		options.format_node = next;
+	}
+	~ScopedFormatNode() {
+		options.format_node = previous;
+	}
+	JSONTransformOptions &options;
+	optional_ptr<const DateFormatNode> previous;
+};
+
+static bool TransformWithResolvedFormat(const Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+                                        Vector &result, JSONTransformOptions &options) {
+	if (result.GetType().id() == LogicalTypeId::DATE) {
+		return TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options);
+	}
+	return TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options);
+}
+
 static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, const idx_t count,
                                           JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
@@ -479,22 +500,43 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 	const auto &source_validity = FlatVector::Validity(string_vector);
 	auto &target_validity = FlatVector::ValidityMutable(result);
 
-	// Probe first non-null value to find the most-specific matching format for this vector
-	idx_t matched_idx = DConstants::INVALID_INDEX;
-	for (idx_t i = 0; i < count && matched_idx == DConstants::INVALID_INDEX; i++) {
-		if (!source_validity.RowIsValid(i)) {
-			continue;
+	optional_idx resolved_idx;
+	if (formats.size() == 1) {
+		resolved_idx = 0;
+	} else if (options.format_node) {
+		resolved_idx = result_type_id == LogicalTypeId::DATE ? options.format_node->date_format_idx
+		                                                     : options.format_node->timestamp_format_idx;
+	}
+	if (resolved_idx.IsValid() && resolved_idx.GetIndex() < formats.size()) {
+		if (!TransformWithResolvedFormat(string_vector, formats[resolved_idx.GetIndex()], count, result, options)) {
+			success = false;
 		}
+		return success;
+	}
+
+	// Find one format that fits every valid value in this vector before falling back per-row
+	for (idx_t j = formats.size(); j > 0; j--) {
+		bool matched_all = true;
 		string error_message;
-		for (idx_t j = formats.size(); j > 0; j--) {
-			if (TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message)) {
-				matched_idx = j - 1;
+		for (idx_t i = 0; i < count; i++) {
+			if (!source_validity.RowIsValid(i)) {
+				continue;
+			}
+			if (!TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message)) {
+				matched_all = false;
 				break;
 			}
 		}
+		if (matched_all) {
+			for (idx_t i = 0; i < count; i++) {
+				if (!source_validity.RowIsValid(i)) {
+					target_validity.SetInvalid(i);
+				}
+			}
+			return success;
+		}
 	}
 
-	const idx_t parse_limit = (matched_idx != DConstants::INVALID_INDEX) ? matched_idx + 1 : formats.size();
 	for (idx_t i = 0; i < count; i++) {
 		if (!source_validity.RowIsValid(i)) {
 			target_validity.SetInvalid(i);
@@ -502,8 +544,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 		}
 		bool parsed = false;
 		string error_message;
-		// Reverse iter formats, beginning at matched_idx until one parses
-		for (idx_t j = parse_limit; j > 0 && !parsed; j--) {
+		for (idx_t j = formats.size(); j > 0 && !parsed; j--) {
 			parsed = TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message);
 		}
 		if (!parsed) {
@@ -655,7 +696,10 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	                   : AssignObjectValues<json_key_map_t<idx_t>>(objects, alc, count, names, nested_vals, options,
 	                                                               error_unknown_key);
 
+	const auto parent_format_node = options.format_node;
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		ScopedFormatNode scoped_format(options,
+		                               parent_format_node ? parent_format_node->GetChild(names[col_idx]) : nullptr);
 		auto child_column_index = column_indices ? &(*column_indices)[col_idx] : nullptr;
 		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options,
 		                              child_column_index)) {
@@ -782,8 +826,12 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetChildMutable(result), offset, options, nullptr)) {
-		success = false;
+	{
+		ScopedFormatNode scoped_format(options, options.format_node ? options.format_node->GetListChild() : nullptr);
+		if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetChildMutable(result), offset, options,
+		                              nullptr)) {
+			success = false;
+		}
 	}
 
 	if (!options.delay_error && !success) {
@@ -835,9 +883,13 @@ static bool TransformArrayToTuple(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 		}
 	}
 
-	for (idx_t child_i = 0; child_i < child_count; child_i++) {
-		if (!JSONTransform::Transform(nested_vals + child_i * count, alc, child_vs[child_i], count, options, nullptr)) {
-			success = false;
+	{
+		ScopedFormatNode scoped_format(options, nullptr);
+		for (idx_t child_i = 0; child_i < child_count; child_i++) {
+			if (!JSONTransform::Transform(nested_vals + child_i * count, alc, child_vs[child_i], count, options,
+			                              nullptr)) {
+				success = false;
+			}
 		}
 	}
 
@@ -926,9 +978,12 @@ static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetChildMutable(result), child_count, options,
-	                              nullptr)) {
-		success = false;
+	{
+		ScopedFormatNode scoped_format(options, options.format_node ? options.format_node->GetListChild() : nullptr);
+		if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetChildMutable(result), child_count, options,
+		                              nullptr)) {
+			success = false;
+		}
 	}
 
 	if (!options.delay_error && !success) {
@@ -994,14 +1049,19 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	}
 	D_ASSERT(list_offset == list_size);
 
-	// Transform keys
-	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
-		success = false;
+	// Transform keys and values
+	const auto map_format_node = options.format_node;
+	{
+		ScopedFormatNode scoped_keys(options, nullptr);
+		if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
+			success = false;
+		}
 	}
-
-	// Transform values
-	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options, nullptr)) {
-		success = false;
+	{
+		ScopedFormatNode scoped_values(options, map_format_node ? map_format_node->GetListChild() : nullptr);
+		if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options, nullptr)) {
+			success = false;
+		}
 	}
 
 	// objects can have duplicate keys, and keys that fail to transform in non-strict mode are NULL
@@ -1123,8 +1183,11 @@ static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &
 		idx_t actual_tag = tag - names.begin();
 
 		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
-		if (!JSONTransform::Transform(&val, alc, single, 1, options, nullptr)) {
-			success = false;
+		{
+			ScopedFormatNode scoped_union(options, nullptr);
+			if (!JSONTransform::Transform(&val, alc, single, 1, options, nullptr)) {
+				success = false;
+			}
 		}
 
 		result.SetValue(i, Value::UNION(fields, actual_tag, single.GetValue(0)));

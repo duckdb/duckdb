@@ -275,7 +275,8 @@ static unique_ptr<FunctionData> ReadSingleJSONFileCombineSchema(ClientContext &c
 	// the merged structure describes the schema of the scan by itself
 	return_types.clear();
 	names.clear();
-	JSONScan::StructureToColumns(context, result->options, merged, result->feature_columns, return_types, names);
+	JSONScan::StructureToColumns(context, result->options, merged, result->feature_columns, return_types, names,
+	                             result->date_format_map.get());
 
 	// the JSON reader looks columns up by their exact key, so the keys are kept before the column names that are
 	// duplicates for us (e.g. "id" and "Id") are renamed

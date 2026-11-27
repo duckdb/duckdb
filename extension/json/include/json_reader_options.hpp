@@ -9,13 +9,50 @@
 #pragma once
 
 #include "json_common.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "json_enums.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 
 namespace duckdb {
+
+//! Per-field date/timestamp format index resolved by schema auto-detection
+struct DateFormatNode {
+	explicit DateFormatNode(bool case_insensitive_keys_p = false) : case_insensitive_keys(case_insensitive_keys_p) {
+	}
+
+	optional_ptr<const DateFormatNode> GetChild(const string &key) const {
+		if (case_insensitive_keys) {
+			auto it = ci_children.find(key);
+			return it != ci_children.end() ? it->second.get() : nullptr;
+		}
+		auto it = children.find(key);
+		return it != children.end() ? it->second.get() : nullptr;
+	}
+
+	optional_ptr<const DateFormatNode> GetListChild() const {
+		return child.get();
+	}
+
+	void SetChild(const string &key, unique_ptr<DateFormatNode> child_node) {
+		if (case_insensitive_keys) {
+			ci_children.emplace(key, std::move(child_node));
+		} else {
+			children.emplace(key, std::move(child_node));
+		}
+	}
+
+	optional_idx date_format_idx;
+	optional_idx timestamp_format_idx;
+	bool case_insensitive_keys = false;
+	unique_ptr<DateFormatNode> child;
+	unordered_map<string, unique_ptr<DateFormatNode>> children;
+	case_insensitive_map_t<unique_ptr<DateFormatNode>> ci_children;
+};
 
 struct DateFormatMap {
 	friend class MutableDateFormatMap;
@@ -39,6 +76,14 @@ public:
 		return candidate_formats.find(type)->second;
 	}
 
+	void SetDetectedFormats(shared_ptr<const DateFormatNode> detected_formats_p) {
+		detected_formats = std::move(detected_formats_p);
+	}
+
+	optional_ptr<const DateFormatNode> GetDetectedFormats() const {
+		return detected_formats.get();
+	}
+
 public:
 	static void AddFormat(type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type,
 	                      const string &format_string) {
@@ -58,6 +103,7 @@ public:
 
 private:
 	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
+	shared_ptr<const DateFormatNode> detected_formats;
 };
 
 class MutableDateFormatMap {

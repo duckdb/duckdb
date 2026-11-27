@@ -183,7 +183,7 @@ public:
 	//! Derive the columns that are read from a detected JSON structure
 	static void StructureToColumns(ClientContext &context, JSONReaderOptions &options, const JSONStructureNode &node,
 	                               vector<JSONFeatureColumn> &feature_columns, vector<LogicalType> &return_types,
-	                               vector<Identifier> &names);
+	                               vector<Identifier> &names, optional_ptr<DateFormatMap> date_format_map = nullptr);
 
 	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
 	                      const BoundTableFunction &function);

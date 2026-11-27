@@ -1,0 +1,161 @@
+# name: test/sql/json/table/read_json_date_format_order.test
+# description: Read json files - consistent date and timestamp format across rows and chunks
+# group: [table]
+
+require json
+
+require vector_size 2048
+
+# Ambiguous date followed by unambiguous %m-%d-%Y must parse all rows with %m-%d-%Y
+statement ok
+copy (select * from (values ('01-02-2026'), ('11-30-2026')) t(d)) to '{TEMP_DIR}/date_a.json' (format json);
+
+statement ok
+copy (select * from (values ('11-30-2026'), ('01-02-2026')) t(d)) to '{TEMP_DIR}/date_b.json' (format json);
+
+query I
+select d from read_json('{TEMP_DIR}/date_a.json');
+----
+2026-01-02
+2026-11-30
+
+query I
+select d from read_json('{TEMP_DIR}/date_b.json');
+----
+2026-11-30
+2026-01-02
+
+query I
+select d from read_json('{TEMP_DIR}/date_a.json', sample_size=-1);
+----
+2026-01-02
+2026-11-30
+
+# Ambiguous timestamp ('02-01-26' fits both %y-%m-%d and %d-%m-%y) followed by unambiguous %d-%m-%y
+statement ok
+copy (select * from (values ('02-01-26 15:04:05'), ('31-12-99 15:04:05')) t(ts)) to '{TEMP_DIR}/ts_a.json' (format json);
+
+statement ok
+copy (select * from (values ('31-12-99 15:04:05'), ('02-01-26 15:04:05')) t(ts)) to '{TEMP_DIR}/ts_b.json' (format json);
+
+query I
+select ts from read_json('{TEMP_DIR}/ts_a.json');
+----
+2026-01-02 15:04:05
+1999-12-31 15:04:05
+
+query I
+select ts from read_json('{TEMP_DIR}/ts_b.json');
+----
+1999-12-31 15:04:05
+2026-01-02 15:04:05
+
+# Consistency across a 2048-row vector boundary (CHUNK 1 all ambiguous, CHUNK 2 disambiguates)
+statement ok
+copy (
+	select case when i <= 2048 then '01-02-2026' else '11-30-2026' end as d
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/date_vector_boundary.json' (format json);
+
+query II
+select d, count(*) from read_json('{TEMP_DIR}/date_vector_boundary.json') group by d order by d;
+----
+2026-01-02	2048
+2026-11-30	1
+
+statement ok
+copy (
+	select case when i <= 2048 then '02-01-26 15:04:05' else '31-12-99 15:04:05' end as ts
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/ts_vector_boundary.json' (format json);
+
+query II
+select ts, count(*) from read_json('{TEMP_DIR}/ts_vector_boundary.json') group by ts order by ts;
+----
+1999-12-31 15:04:05	1
+2026-01-02 15:04:05	2048
+
+# Separate columns can each converge on their own consistent format
+statement ok
+copy (
+	select * from (values ('01-02-2026', '01-02-2026'), ('11-30-2026', '30-11-2026')) t(d_mdy, d_dmy)
+) to '{TEMP_DIR}/date_two_cols.json' (format json);
+
+query II
+select d_mdy, d_dmy from read_json('{TEMP_DIR}/date_two_cols.json');
+----
+2026-01-02	2026-02-01
+2026-11-30	2026-11-30
+
+# Nested struct and list values converge consistently too
+statement ok
+copy (
+	select * from (values
+		({'d': '01-02-2026'}, ['01-02-2026']),
+		({'d': '11-30-2026'}, ['11-30-2026'])
+	) t(s, arr)
+) to '{TEMP_DIR}/date_nested.json' (format json);
+
+query II
+select s.d, arr from read_json('{TEMP_DIR}/date_nested.json');
+----
+2026-01-02	[2026-01-02]
+2026-11-30	[2026-11-30]
+
+# Incompatible date formats in the same column fall back to VARCHAR (single vector and across vector boundary)
+statement ok
+copy (select * from (values ('30-11-2026'), ('11-30-2026')) t(d)) to '{TEMP_DIR}/date_mixed_single.json' (format json);
+
+query II
+select typeof(d), d from read_json('{TEMP_DIR}/date_mixed_single.json');
+----
+VARCHAR	30-11-2026
+VARCHAR	11-30-2026
+
+statement ok
+copy (
+	select case when i <= 2048 then '30-11-2026' else '11-30-2026' end as d
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/date_mixed_boundary.json' (format json);
+
+query I
+select typeof(d) from read_json('{TEMP_DIR}/date_mixed_boundary.json') limit 1;
+----
+VARCHAR
+
+# Multi-file scan combining schemas narrows to the common format
+statement ok
+copy (select '01-02-2026' as d) to '{TEMP_DIR}/mf_1.json' (format json);
+
+statement ok
+copy (select '11-30-2026' as d) to '{TEMP_DIR}/mf_2.json' (format json);
+
+query I
+select d from read_json(['{TEMP_DIR}/mf_1.json', '{TEMP_DIR}/mf_2.json']) order by d;
+----
+2026-01-02
+2026-11-30
+
+# Explicit columns with explicit dateformat
+query I
+select d from read_json('{TEMP_DIR}/date_a.json', columns={d: 'DATE'}, dateformat='%m-%d-%Y');
+----
+2026-01-02
+2026-11-30
+
+# MAP inference narrows across all map entries and falls back to VARCHAR when incompatible
+statement ok
+copy (select '{"m":{"1":"01-02-2026","2":"11-30-2026"}}') to '{TEMP_DIR}/date_map_ok.json' (format csv, quote '', header 0);
+
+query II
+select typeof(m), m from read_json('{TEMP_DIR}/date_map_ok.json', map_inference_threshold=2);
+----
+MAP(VARCHAR, DATE)	{1=2026-01-02, 2=2026-11-30}
+
+statement ok
+copy (select '{"m":{"1":"30-11-2026","2":"11-30-2026"}}') to '{TEMP_DIR}/date_map_mixed.json' (format csv, quote '', header 0);
+
+query I
+select typeof(m) from read_json('{TEMP_DIR}/date_map_mixed.json', map_inference_threshold=2);
+----
+MAP(VARCHAR, VARCHAR)
