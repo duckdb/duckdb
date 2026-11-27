@@ -119,6 +119,7 @@ void DatabaseFilePathManager::EraseDatabasePath(StoredDatabasePath &stored_path)
 	if (!stored_path.detached) {
 		stored_path.detached = true;
 		entry->second.Detach(stored_path.db_manager, stored_path.name);
+		entry->second.name = stored_path.name;
 	}
 	if (entry->second.reference_count <= 1) {
 		db_paths.erase(entry);
@@ -155,9 +156,6 @@ void DatabaseFilePathManager::RenameDatabasePath(StoredDatabasePath &stored_path
 	if (entry != db_paths.end()) {
 		entry->second.Detach(stored_path.db_manager, stored_path.name);
 		entry->second.Attach(stored_path.db_manager, new_name);
-		if (entry->second.name == stored_path.name) {
-			entry->second.name = new_name;
-		}
 	}
 	stored_path.name = new_name;
 }
