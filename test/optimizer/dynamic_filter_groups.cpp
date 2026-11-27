@@ -352,6 +352,8 @@ TEST_CASE("Runtime bounds combine with static filters separately for each execut
 
 TEST_CASE("Runtime optional IN retains static bounds when bypassing row filtering", "[dynamic_filter_groups]") {
 	const auto adaptive = GENERATE(false, true);
+	// Each batch must advance the optional filter's selectivity state only once.
+	const auto batch_size = MinValue<idx_t>(32, STANDARD_VECTOR_SIZE);
 	FilterGroupTest test;
 	auto &context = *test.con.context;
 	TableFilterSet static_filters;
@@ -378,7 +380,7 @@ TEST_CASE("Runtime optional IN retains static bounds when bypassing row filterin
 		ExpressionFilterState state(context.GetContext(), expr);
 		REQUIRE(state.fast_executor);
 		{
-			Vector input(Value::INTEGER(15), count_t(32));
+			Vector input(Value::INTEGER(15), count_t(batch_size));
 			SelectionVector selected;
 			idx_t count = input.size();
 			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
@@ -386,7 +388,7 @@ TEST_CASE("Runtime optional IN retains static bounds when bypassing row filterin
 		}
 		// After unselective batches, bypass IN while continuing to enforce the static bounds.
 		for (idx_t batch = 0; batch < 20; batch++) {
-			Vector input(Value::INTEGER(key), count_t(32));
+			Vector input(Value::INTEGER(key), count_t(batch_size));
 			SelectionVector selected;
 			idx_t count = input.size();
 			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
@@ -394,7 +396,7 @@ TEST_CASE("Runtime optional IN retains static bounds when bypassing row filterin
 		}
 		for (const auto &value : {Value::INTEGER(5), Value::INTEGER(15), Value::INTEGER(key), Value::INTEGER(key + 1),
 		                          Value::INTEGER(99), Value(LogicalType::INTEGER)}) {
-			Vector input(value, count_t(32));
+			Vector input(value, count_t(batch_size));
 			SelectionVector selected;
 			idx_t count = input.size();
 			ColumnSegment::FilterSelection(selected, input, state, input.size(), count);
