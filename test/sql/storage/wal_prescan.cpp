@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 using namespace duckdb;
 
@@ -196,12 +197,10 @@ TEST_CASE("WAL replay validates DML payloads skipped during prescan", "[storage]
 
 	auto config = GetTestConfig();
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
-	try {
+	auto replay = [&]() {
 		DuckDB db(helper.GetDatabasePath(), config.get());
-		FAIL("Expected WAL replay to fail");
-	} catch (Exception &ex) {
-		ErrorData error(ex);
-		REQUIRE(error.Type() == ExceptionType::SERIALIZATION);
-		REQUIRE(error.RawMessage().find("field id mismatch, expected: 101, got: 0") != string::npos);
-	}
+	};
+	REQUIRE_THROWS_MATCHES(
+	    replay(), std::exception,
+	    ExceptionMatches(ExceptionType::SERIALIZATION, Catch::Contains("field id mismatch, expected: 101, got: 0")));
 }

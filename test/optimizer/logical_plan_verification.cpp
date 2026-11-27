@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/database.hpp"
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 using namespace duckdb;
 
@@ -891,13 +892,9 @@ TEST_CASE("Logical plan verification preserves setting and legacy extension beha
 	auto child_failure = InvalidPassThrough(TableIndex(92), TableIndex(920), "legacy_child_first");
 	auto mixed_failure = ReferenceProjection(TableIndex(93), ColumnBinding(TableIndex(930), ProjectionIndex(0)),
 	                                         LogicalType::INTEGER, std::move(child_failure), "canonical_parent_first");
-	try {
-		LogicalPlanVerifier::Verify(*connection.context, *mixed_failure);
-		FAIL("Expected enabled verification to reject invalid bindings");
-	} catch (InternalException &exception) {
-		REQUIRE(StringUtil::Contains(exception.what(), "legacy_child_first"));
-		REQUIRE_FALSE(StringUtil::Contains(exception.what(), "canonical_parent_first"));
-	}
+	REQUIRE_THROWS_MATCHES(LogicalPlanVerifier::Verify(*connection.context, *mixed_failure), std::exception,
+	                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("legacy_child_first") &&
+	                                                                     !Catch::Contains("canonical_parent_first")));
 #endif
 }
 

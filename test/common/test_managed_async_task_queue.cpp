@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "test_exception_matcher.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/async_task_queue.hpp"
@@ -192,13 +193,8 @@ TEST_CASE("ManagedAsyncTaskQueue rethrows asynchronous task errors", "[async_tas
 	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
 	queue.Register(make_uniq<ThrowingTask>(), 16);
-	try {
-		queue.Close();
-		FAIL("Expected async task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Close(), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 }
 
 TEST_CASE("ManagedAsyncTaskQueue rethrows synchronous task errors", "[async_task_queue]") {
@@ -206,13 +202,8 @@ TEST_CASE("ManagedAsyncTaskQueue rethrows synchronous task errors", "[async_task
 	auto con = TaskQueueConnectionWithoutAsyncThreads(db);
 	ManagedAsyncTaskQueue queue(con->context->GetContext());
 
-	try {
-		queue.Register(make_uniq<ThrowingTask>(), 16);
-		FAIL("Expected synchronous task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Register(make_uniq<ThrowingTask>(), 16), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 	queue.Close();
 }
 
@@ -265,11 +256,6 @@ TEST_CASE("ManagedAsyncTaskQueue closes after failure with pending tasks", "[asy
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	try {
-		queue.Close();
-		FAIL("Expected async task failure");
-	} catch (const Exception &ex) {
-		string error = ex.what();
-		REQUIRE(error.find("Injected async task failure") != string::npos);
-	}
+	REQUIRE_THROWS_MATCHES(queue.Close(), std::exception,
+	                       ExceptionMatches(ExceptionType::IO, Catch::Contains("Injected async task failure")));
 }

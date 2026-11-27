@@ -7,7 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CXX = shutil.which("clang++") or shutil.which("g++")
-DIAGNOSTIC = "Use REQUIRE_THROWS_WITH or CHECK_THROWS_WITH with a stable message for DuckDB exceptions"
+DIAGNOSTIC = "Match std::exception with ExceptionMatches from test_exception_matcher.hpp for DuckDB exceptions"
 MACROS = [
     "REQUIRE_THROWS_AS",
     "CHECK_THROWS_AS",
@@ -20,6 +20,7 @@ MACROS = [
 ]
 PREAMBLE = """
 #include "catch.hpp"
+#include "test_exception_matcher.hpp"
 #include <new>
 
 using ExceptionAlias = duckdb::IOException;
@@ -83,6 +84,8 @@ class CatchExceptionAssertionsTest(unittest.TestCase):
                         f'{prefix}REQUIRE_THROWS_AS(throw StandardExceptionAlias("example"), StandardExceptionAlias);',
                         f'{prefix}REQUIRE_THROWS_WITH(throw duckdb::IOException("example"), Catch::Contains("example"));',
                         f'{prefix}CHECK_THROWS_WITH(throw ExceptionAlias("example"), Catch::Contains("example"));',
+                        f'{prefix}REQUIRE_THROWS_MATCHES(throw duckdb::IOException("example"), std::exception, '
+                        'duckdb::ExceptionMatches(duckdb::ExceptionType::IO, Catch::Contains("example")));',
                     ]
                 )
                 source = PREAMBLE + "void TestAssertions() {\n" + "\n".join(assertions) + "\n}\n"
