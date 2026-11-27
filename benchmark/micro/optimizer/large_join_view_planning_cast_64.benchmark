@@ -1,0 +1,9 @@
+# name: benchmark/micro/optimizer/large_join_view_planning_cast_64.benchmark
+# description: Plan 64 table references with alternating integer casts in self-joined views
+# group: [optimizer]
+
+template benchmark/micro/optimizer/large_join_view_planning.benchmark.in
+BENCHMARK_NAME=Large Join View Planning with Casts (64)
+VIEW=v6
+ODD_KEY=a.k::INTEGER
+EVEN_KEY=a.k::BIGINT

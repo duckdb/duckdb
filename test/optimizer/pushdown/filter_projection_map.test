@@ -1,0 +1,102 @@
+# name: test/optimizer/pushdown/filter_projection_map.test
+# description: Push predicates through filters that restore the output layout after hidden-column pullup
+# group: [pushdown]
+
+statement ok
+CREATE TABLE a AS SELECT i::INTEGER AS k, i::INTEGER AS v FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE b AS SELECT i::INTEGER AS k FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE c AS SELECT i::INTEGER AS v FROM range(1000) t(i);
+
+statement ok
+CREATE VIEW selective_join AS
+SELECT p.v, c.v AS other
+FROM (SELECT a.v FROM a JOIN b ON a.k = b.k) p
+JOIN c ON p.v = c.v + 1
+WHERE p.v = 42;
+
+query II
+FROM selective_join;
+----
+42	41
+
+# The selective predicate reaches the table scan despite the hidden join column.
+query II
+EXPLAIN (FORMAT JSON) FROM selective_join;
+----
+physical_plan	<REGEX>:.*"Table": "[^"]*\.a"[^}]*"Filters": "\(v = 42\)".*
+
+# Preserve projected values, duplicate columns, NULLs, and row multiplicity.
+statement ok
+INSERT INTO a VALUES (42, 42), (42, NULL);
+
+query IIII rowsort
+SELECT p.v, p.k, p.v, c.v
+FROM (SELECT a.v, a.k FROM a JOIN b ON a.k = b.k) p
+JOIN c ON p.k = c.v + 1
+WHERE p.k = 42;
+----
+42	42	42	41
+42	42	42	41
+NULL	42	NULL	41
+
+query II
+SELECT p.v, c.v
+FROM (SELECT a.v FROM a JOIN b ON a.k = b.k) p
+JOIN c ON p.v = c.v + 1
+WHERE p.v = 42 AND c.v = 42;
+----
+
+statement ok
+CREATE TABLE copies(k INTEGER);
+
+statement ok
+INSERT INTO copies VALUES (1), (1);
+
+statement ok
+CREATE TABLE targets(v INTEGER);
+
+statement ok
+INSERT INTO targets VALUES (0), (0);
+
+statement ok
+CREATE SEQUENCE probe_seq;
+
+# Evaluate the volatile predicate after both joins have duplicated the source row.
+query I
+SELECT count(*)
+FROM (SELECT a.v FROM a JOIN copies ON a.k = copies.k) p
+JOIN targets ON p.v = targets.v + 1
+WHERE nextval('probe_seq') <= p.v;
+----
+1
+
+query I
+SELECT currval('probe_seq');
+----
+4
+
+statement ok
+CREATE TABLE fallible(k INTEGER, value VARCHAR);
+
+statement ok
+INSERT INTO fallible VALUES (1, '42'), (2, 'bad');
+
+statement ok
+INSERT INTO targets VALUES (10);
+
+# Isolate filter pushdown from later join reordering and dynamic join filters.
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown,join_order';
+
+query T rowsort
+SELECT p.value
+FROM (SELECT fallible.k, fallible.value FROM fallible JOIN b ON fallible.k = b.k) p
+JOIN targets ON p.k = targets.v + 1
+WHERE p.value::INTEGER = 42;
+----
+42
+42

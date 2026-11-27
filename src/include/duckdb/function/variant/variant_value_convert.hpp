@@ -127,7 +127,8 @@ struct ValueConverter {
 
 	static Value VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                         idx_t depth) {
-		auto object_children = VariantVisitor<ValueConverter>::VisitObjectItems(variant, row, nested_data, depth);
+		auto object_children = VariantVisitor<ValueConverter>::VisitObjectItems(variant, row, nested_data, depth,
+		                                                                        VariantIterationOrder::LEXICOGRAPHIC);
 		if (object_children.size() == 1 && object_children[0].first.empty()) {
 			// an empty key can't be a STRUCT member name (it would become a TUPLE) - use a MAP instead
 			auto &child = object_children[0].second;
@@ -136,8 +137,8 @@ struct ValueConverter {
 		return Value::STRUCT(std::move(object_children));
 	}
 
-	static Value VisitDefault(VariantLogicalType type_id, const_data_ptr_t) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	static Value VisitDefault(const LogicalType &type, const_data_ptr_t) {
+		throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 	}
 };
 

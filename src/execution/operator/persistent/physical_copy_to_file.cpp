@@ -4532,7 +4532,7 @@ void PhysicalCopyToFile::PrepareOutputDirectory(ClientContext &context, const st
                                                 CopyOverwriteMode overwrite_mode,
                                                 CopyOutputLifecycle &output_lifecycle) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	if (!fs.IsRemoteFile(directory)) {
+	if (!FileSystem::IsRemoteFile(directory)) {
 		if (fs.FileExists(directory)) {
 			if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
 				fs.RemoveFile(directory);

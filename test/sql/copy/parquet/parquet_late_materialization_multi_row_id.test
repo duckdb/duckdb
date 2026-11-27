@@ -1,0 +1,76 @@
+# name: test/sql/copy/parquet/parquet_late_materialization_multi_row_id.test
+# description: Project all multi-file row-id columns through a filter projection map (issue #27404)
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT TIMESTAMP '2024-01-01' + INTERVAL (i) MINUTE AS ts, i % 2 AS a, 100 + i % 3 AS b, i AS c
+      FROM range(100) r(i)) TO '{TEST_DIR}/late_mat_multi_row_id.parquet';
+
+# the multi-value IN filter is only pushed into the scan as an optional filter, so a residual filter
+# with a projection map remains between the scan and the Top-N - the semi-join introduced by late
+# materialization must be able to bind both row-id columns of the multi-file reader
+# prefer_range_joins keeps the column lifetime analyzer from regenerating the broken projection map
+statement ok
+SET prefer_range_joins=true;
+
+query II
+SELECT min(ts), max(c) FROM (
+    SELECT ts, c FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+    WHERE a = 1 AND b IN (100, 102)
+    ORDER BY ts DESC
+    LIMIT 2);
+----
+2024-01-01 01:35:00	99
+
+statement ok
+RESET prefer_range_joins;
+
+query II
+SELECT min(ts), max(c) FROM (
+    SELECT ts, c FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+    WHERE a = 1 AND b IN (100, 102)
+    ORDER BY ts DESC
+    LIMIT 2);
+----
+2024-01-01 01:35:00	99
+
+# a filter without a projection map
+query II
+SELECT ts, a FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+WHERE b IN (100, 102)
+ORDER BY ts DESC
+LIMIT 2;
+----
+2024-01-01 01:39:00	1
+2024-01-01 01:38:00	0
+
+# the original issue repro
+query I
+SELECT ts
+FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+WHERE ts >= (
+    SELECT min(ts) FROM (
+        SELECT ts FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+        WHERE a = 1 AND b IN (100, 102)
+        ORDER BY ts DESC
+        LIMIT 2))
+ORDER BY ts DESC
+LIMIT 2;
+----
+2024-01-01 01:39:00
+2024-01-01 01:38:00
+
+# cross-check against the plain Top-N without late materialization
+statement ok
+SET late_materialization_max_rows = 0;
+
+query II
+SELECT min(ts), max(c) FROM (
+    SELECT ts, c FROM '{TEST_DIR}/late_mat_multi_row_id.parquet'
+    WHERE a = 1 AND b IN (100, 102)
+    ORDER BY ts DESC
+    LIMIT 2);
+----
+2024-01-01 01:35:00	99

@@ -65,19 +65,19 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 }
 
 unique_ptr<LogicalOperator> RowNumberRewriter::Optimize(unique_ptr<LogicalOperator> op) {
-	ColumnBindingReplacer replacer;
-	LogicalOperator *root = op.get();
-	op = RewritePlan(std::move(op), replacer);
+	BindingReplacementGraph replacements;
+	op = RewritePlan(std::move(op), replacements);
 
-	if (!replacer.replacement_bindings.empty()) {
-		replacer.VisitOperator(*root);
+	if (!replacements.Empty()) {
+		ColumnBindingReplacer replacer(replacements);
+		replacer.VisitOperator(*op);
 	}
 
 	return op;
 }
 
 unique_ptr<LogicalOperator> RowNumberRewriter::RewriteGet(unique_ptr<LogicalOperator> op,
-                                                          ColumnBindingReplacer &replacer) {
+                                                          BindingReplacementGraph &replacements) {
 	auto &window = op->Cast<LogicalWindow>();
 	auto &child = window.children[0];
 	auto &get = child->Cast<LogicalGet>();
@@ -89,37 +89,21 @@ unique_ptr<LogicalOperator> RowNumberRewriter::RewriteGet(unique_ptr<LogicalOper
 	}
 	get.types.push_back(LogicalType::BIGINT);
 
-	const auto child_bindings = get.GetColumnBindings();
-
-	// Get the old window bindings before we remove the window operator
-	const auto old_window_bindings = window.GetColumnBindings();
-
-	// Map old window bindings to new get bindings
-	for (idx_t i = 0; i < old_window_bindings.size(); i++) {
-		ColumnBinding target_binding;
-		if (i < child_bindings.size() - 1) {
-			// Map existing columns through
-			target_binding = child_bindings[i];
-		} else {
-			// Map the window expression to the virtual ROW_NUMBER column
-			target_binding = child_bindings.back();
-		}
-		replacer.replacement_bindings.emplace_back(old_window_bindings[i], target_binding);
-	}
-
-	replacer.stop_operator = child.get();
+	// Existing scan bindings stay unchanged; only the removed window output needs replacing.
+	replacements.Add(ColumnBinding(window.window_index, ProjectionIndex(0)),
+	                 ColumnBinding(get.table_index, proj_index));
 	return std::move(window.children[0]);
 }
 
 unique_ptr<LogicalOperator> RowNumberRewriter::RewritePlan(unique_ptr<LogicalOperator> op,
-                                                           ColumnBindingReplacer &replacer) {
+                                                           BindingReplacementGraph &replacements) {
 	if (CanOptimize(*op)) {
-		return RewriteGet(std::move(op), replacer);
+		return RewriteGet(std::move(op), replacements);
 	}
 
 	// Recurse into children
 	for (auto &child : op->children) {
-		child = RewritePlan(std::move(child), replacer);
+		child = RewritePlan(std::move(child), replacements);
 	}
 	return op;
 }

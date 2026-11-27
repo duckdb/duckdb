@@ -1,0 +1,20 @@
+# name: benchmark/micro/optimizer/common_subplan_readers_planning.benchmark
+# description: Plan 512 consumers of a shared grouped aggregate with different result filters
+# group: [optimizer]
+
+name Common Subplan Readers Planning
+group micro
+subgroup optimizer
+
+load
+SET max_expression_depth=10000;
+CREATE TABLE t AS SELECT i::INTEGER k, (1000 + i)::BIGINT v FROM range(32) r(i);
+SET VARIABLE common_subplan_sql = (
+	SELECT string_agg(format(
+		'SELECT k, total FROM (SELECT k, sum(v) total FROM t GROUP BY k) s WHERE total >= {}', i),
+		' UNION ALL ' ORDER BY i)
+	FROM range(512) r(i)
+);
+
+run
+PREPARE common_subplan_readers AS FROM query(getvariable('common_subplan_sql'));

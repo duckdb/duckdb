@@ -1,7 +1,7 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 namespace duckdb {
 
@@ -32,9 +32,10 @@ data_ptr_t MemoryMappedFile::GetDataMutable(idx_t location, idx_t nr_bytes) {
 	return data + location;
 }
 
-unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path,
-                                                       FileOpenFlags flags, // NOLINT: signature fixed by virtual API
-                                                       const MMapOptions &options, optional_ptr<FileOpener> opener) {
+unique_ptr<MemoryMappedFile>
+BaseFileSystem::MemoryMapFile(const OpenFileInfo &path,
+                              FileOpenFlags flags, // NOLINT: signature fixed by virtual API
+                              const MMapOptions &options, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("Memory-mapped file access is not supported by this file system (%s) for path \"%s\"",
 	                              GetName(), path.path);
 }

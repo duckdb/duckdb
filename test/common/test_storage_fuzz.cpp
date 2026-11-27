@@ -117,7 +117,7 @@ private:
 	std::unordered_set<FaultInjectionSite> faults;
 };
 
-// This implementation of duckdb::FileSystem will cache writes to the database file in memory until fsync is called.
+// This implementation of duckdb::BaseFileSystem will cache writes to the database file in memory until fsync is called.
 // It expects all read ranges to be perfectly aligned with previous writes.
 class LazyFlushFileSystem : public FaultInjectionFileSystem {
 public:

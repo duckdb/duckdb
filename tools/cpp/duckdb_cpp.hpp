@@ -2230,6 +2230,13 @@ public:
 	/// @param index Child index in [0, GetChildCount()).
 	auto GetChild(idx_t index) const -> Value;
 
+	/// The value that a VARIANT value holds, with the type that it was stored with: a TINYINT, a VARCHAR, a LIST of
+	/// STRUCTs, ... A stored list gives a LIST of its elements, a stored object a STRUCT of its fields; elements that
+	/// were stored with different types stay VARIANT values (a LIST of VARIANT), convert those in turn. A NULL VARIANT
+	/// gives a NULL value. The inverse is `Cast` to the VARIANT type, `factory.ParseType("VARIANT")`.
+	/// @throws InvalidInputException When the value is not a VARIANT.
+	auto VariantToValue() const -> Value;
+
 	/// Shorthand for `GetChild`.
 	auto operator[](idx_t index) const -> Value {
 		return GetChild(index);
@@ -4808,6 +4815,7 @@ private:
 	explicit TableFunction(void *impl);
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
+	auto DataSourceHandle() -> void *;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -4825,6 +4833,8 @@ private:
 	MetricsCallback metrics_callback = nullptr;
 	ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the function scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
@@ -5475,7 +5485,7 @@ public:
 		}
 
 		/// Reports an operator metric of the scan by its profiler name, e.g. "operator.row_groups_scanned" or
-		/// "operator.total_row_groups_to_scan". See `duckdb_v2_table_function_metrics_set` for the accepted names.
+		/// "operator.total_row_groups_to_scan". See `duckdb_v2_data_source_metrics_set` for the accepted names.
 		/// @param name The name of the metric.
 		/// @param value The value since the metrics were last collected ("operator.total_row_groups_to_scan": in all).
 		/// @throws InvalidInputException When the name is not a metric a table function can report.
@@ -5740,6 +5750,8 @@ private:
 	//! Moves what the callbacks need into the C handle, right before it is registered.
 	auto PrepareRegistration() -> void;
 
+	auto DataSourceHandle() -> void *;
+
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
 	CopyToBindCallback copy_to_bind_callback = nullptr;
@@ -5755,6 +5767,8 @@ private:
 	CopyFromExecCallback copy_from_exec_callback = nullptr;
 	CopyFromProgressCallback copy_from_progress_callback = nullptr;
 	detail::UserData user_data;
+	//! The data source the COPY FROM side scans with, which holds the callbacks of the scan
+	std::shared_ptr<void> data_source;
 
 public:
 	/// What the `COPY ... TO` bind callback works with. Borrowed, valid only for the callback duration.

@@ -160,6 +160,14 @@ select variant_type(j, ['a', 'b']) from (values ({'a': {'x': 1}}::VARIANT), (NUL
 [OBJECT, NULL]
 NULL
 
+# list paths mixing the root, duplicate keys, keys out of order and missing keys
+
+query I
+select variant_type(j, ['c', '', 'a', 'missing', 'a', 'b']) from (values ({'a': 1, 'b': 'x', 'c': [1]}::VARIANT), ([1]::VARIANT)) t(j);
+----
+[ARRAY, OBJECT, INT32, NULL, INT32, VARCHAR]
+[NULL, ARRAY, NULL, NULL, NULL, NULL]
+
 # VARIANT_NULL
 
 query I

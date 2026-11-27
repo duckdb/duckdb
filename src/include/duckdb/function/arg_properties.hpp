@@ -22,10 +22,18 @@ enum class Monotonicity : uint8_t {
 	STRICTLY_DECREASING,
 };
 
+//! Exact rounding of an argument to an integer, preserving NaN and infinities.
+enum class IntegerRounding : uint8_t { UNKNOWN = 0, FLOOR, CEIL, TRUNCATE };
+
 //! Per-argument metadata for a scalar function.
 struct ArgProperties {
 	Monotonicity monotonicity = Monotonicity::UNKNOWN;
+	IntegerRounding integer_rounding = IntegerRounding::UNKNOWN;
 
+	ArgProperties &RoundsToInteger(IntegerRounding rounding) {
+		integer_rounding = rounding;
+		return *this;
+	}
 	ArgProperties &StrictlyIncreasing() {
 		monotonicity = Monotonicity::STRICTLY_INCREASING;
 		return *this;

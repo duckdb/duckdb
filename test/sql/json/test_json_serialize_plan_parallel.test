@@ -1,0 +1,26 @@
+# name: test/sql/json/test_json_serialize_plan_parallel.test
+# description: Parallel plan serialization initializes the shared expression rewrite rules safely
+# group: [json]
+
+require json
+
+statement ok unoptimized
+SET debug_disable_optimizer=true;
+
+statement ok unoptimized
+SET threads=4;
+
+statement ok unoptimized
+CREATE MACRO folded_value(q) AS (
+    SELECT json_extract(plan, '$.plans[0].expressions[0].value.value')
+    FROM (SELECT json_serialize_plan(q, optimize := true) AS plan)
+);
+
+# Keep serialization in a separate projection so binding json_extract cannot evaluate it early.
+query IIII unoptimized
+SELECT folded_value('SELECT 1 + 2'),
+       folded_value('SELECT 3 + 4'),
+       folded_value('SELECT 5 + 6'),
+       folded_value('SELECT 7 + 8');
+----
+3	7	11	15

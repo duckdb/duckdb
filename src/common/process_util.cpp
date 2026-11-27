@@ -1,6 +1,5 @@
 #include "duckdb/common/process_util.hpp"
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/os_util.hpp"

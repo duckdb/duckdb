@@ -1,0 +1,200 @@
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
+index 4034fda7..842f0be6 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table.cpp
+@@ -817,9 +817,9 @@ IcebergTableMetadata IcebergTable::CreateMetadataFromLog(ClientContext &context,
+ 		    GetTableKey(), Timestamp::ToString(timestamp));
+ 	}
+ 
+-	auto fs = make_shared_ptr<CachingFileSystemWrapper>(FileSystem::GetFileSystem(context), *context.db);
++	auto &fs = FileSystem::GetFileSystem(context);
+ 	auto &path = log[log_item_index.GetIndex()].metadata_file;
+-	auto parsed_metadata = IcebergTableMetadata::Parse(path, *fs, "");
++	auto parsed_metadata = IcebergTableMetadata::Parse(path, fs, "");
+ 
+ 	return IcebergTableMetadata::FromTableMetadata(parsed_metadata);
+ }
+@@ -915,9 +915,8 @@ void IcebergTable::InitializeFromCatalogResponse(ClientContext &context,
+ 		unique_ptr<const rest_api_objects::TableMetadata> file_metadata;
+ 		try {
+ 			auto &fs = FileSystem::GetFileSystem(context);
+-			auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs, *context.db);
+ 			file_metadata = make_uniq<const rest_api_objects::TableMetadata>(
+-			    IcebergTableMetadata::Parse(metadata_location, *caching_fs, "none"));
++			    IcebergTableMetadata::Parse(metadata_location, fs, "none"));
+ 		} catch (std::exception &ex) {
+ 			DUCKDB_LOG(context, IcebergLogType,
+ 			           "Could not load table metadata from metadata-location '%s': %s - falling back to the "
+diff --git a/src/common/iceberg_utils.cpp b/src/common/iceberg_utils.cpp
+index ef19ac56..0f4f932e 100644
+--- a/src/common/iceberg_utils.cpp
++++ b/src/common/iceberg_utils.cpp
+@@ -90,7 +90,7 @@ idx_t IcebergUtils::CountOccurrences(const string &input, const string &to_find)
+ 	return count;
+ }
+ 
+-string IcebergUtils::FileToString(const string &path, FileSystem &fs) {
++string IcebergUtils::FileToString(const string &path, FileSystem &fs, CachingMode caching_mode) {
+ 	// This function is used to read table metadata files (e.g., metadata.json).
+ 	//
+ 	// We intentionally avoid calling GetFileSize() to pre-allocate the result buffer because
+@@ -103,7 +103,9 @@ string IcebergUtils::FileToString(const string &path, FileSystem &fs) {
+ 	//
+ 	// We read directly into the result string's buffer to avoid an intermediate copy,
+ 	// growing the buffer 2x when space runs out (amortized O(1) per byte).
+-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
++	FileOpenFlags flags(FileFlags::FILE_FLAGS_READ);
++	flags.SetCachingMode(caching_mode);
++	auto handle = fs.OpenFile(path, flags);
+ 	string result;
+ 	idx_t capacity = 32768;
+ 	idx_t size = 0;
+@@ -256,16 +258,15 @@ IcebergResolvedMetadata IcebergUtils::ResolveTableMetadata(ClientContext &contex
+ 
+ 	auto table_location = GetStorageLocation(context, input);
+ 	auto &fs = FileSystem::GetFileSystem(context);
+-	auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs, *context.db);
+ 	auto metadata_path = IcebergTableMetadata::GetMetaDataPath(context, table_location, fs, options);
+-	auto table_metadata = IcebergTableMetadata::Parse(metadata_path, *caching_fs, options.metadata_compression_codec);
++	auto table_metadata = IcebergTableMetadata::Parse(metadata_path, fs, options.metadata_compression_codec);
+ 	return IcebergResolvedMetadata(std::move(table_location), IcebergTableMetadata::FromTableMetadata(table_metadata));
+ }
+ 
+ // Function to decompress a gz file content string
+-string IcebergUtils::GzFileToString(const string &path, FileSystem &fs) {
++string IcebergUtils::GzFileToString(const string &path, FileSystem &fs, CachingMode caching_mode) {
+ 	// Initialize zlib variables
+-	string gzipped_string = FileToString(path, fs);
++	string gzipped_string = FileToString(path, fs, caching_mode);
+ 	return GZipFileSystem::UncompressGZIPString(gzipped_string);
+ }
+ 
+diff --git a/src/core/metadata/iceberg_table_metadata.cpp b/src/core/metadata/iceberg_table_metadata.cpp
+index bc445f4b..b56d81fa 100644
+--- a/src/core/metadata/iceberg_table_metadata.cpp
++++ b/src/core/metadata/iceberg_table_metadata.cpp
+@@ -369,9 +369,9 @@ rest_api_objects::TableMetadata IcebergTableMetadata::Parse(const string &path,
+                                                             const string &metadata_compression_codec) {
+ 	string json_content;
+ 	if (metadata_compression_codec == "gzip" || StringUtil::EndsWith(path, "gz.metadata.json")) {
+-		json_content = IcebergUtils::GzFileToString(path, fs);
++		json_content = IcebergUtils::GzFileToString(path, fs, CachingMode::CACHE_REMOTE_ONLY);
+ 	} else {
+-		json_content = IcebergUtils::FileToString(path, fs);
++		json_content = IcebergUtils::FileToString(path, fs, CachingMode::CACHE_REMOTE_ONLY);
+ 	}
+ 	auto doc = JSONDocument::Parse(json_content.c_str(), json_content.size());
+ 	return rest_api_objects::TableMetadata::FromJSON(doc->GetRoot());
+diff --git a/src/include/common/iceberg_utils.hpp b/src/include/common/iceberg_utils.hpp
+index 444f20dd..4b9218ec 100644
+--- a/src/include/common/iceberg_utils.hpp
++++ b/src/include/common/iceberg_utils.hpp
+@@ -30,9 +30,11 @@ struct IcebergResolvedMetadata {
+ class IcebergUtils {
+ public:
+ 	//! Downloads a file fully into a string
+-	static string FileToString(const string &path, FileSystem &fs);
++	static string FileToString(const string &path, FileSystem &fs,
++	                           CachingMode caching_mode = CachingMode::NO_CACHING);
+ 	//! Downloads a gz file fully into a string
+-	static string GzFileToString(const string &path, FileSystem &fs);
++	static string GzFileToString(const string &path, FileSystem &fs,
++	                             CachingMode caching_mode = CachingMode::NO_CACHING);
+ 	//! Somewhat hacky function that allows relative paths in iceberg tables to be resolved,
+ 	//! used for the allow_moved_paths debug option which allows us to test with iceberg tables that
+ 	//! were moved without their paths updated
+diff --git a/test/native_catalog/CMakeLists.txt b/test/native_catalog/CMakeLists.txt
+index 5dcad26e..f438dd62 100644
+--- a/test/native_catalog/CMakeLists.txt
++++ b/test/native_catalog/CMakeLists.txt
+@@ -8,8 +8,9 @@ build_extension_library(iceberg_mock catalog_json.cpp catalog_model.cpp
+                         catalog_router.cpp catalog_transport.cpp)
+ 
+ add_executable(unittest_iceberg_native test_native_catalog.cpp)
+-target_include_directories(unittest_iceberg_native
+-                           PRIVATE ${CMAKE_SOURCE_DIR}/third_party/catch)
++target_include_directories(
++  unittest_iceberg_native PRIVATE ${CMAKE_SOURCE_DIR}/third_party/catch
++                                  ${CMAKE_SOURCE_DIR}/test/include)
+ set_target_properties(
+   unittest_iceberg_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                      ${CMAKE_BINARY_DIR}/test)
+diff --git a/test/native_catalog/test_native_catalog.cpp b/test/native_catalog/test_native_catalog.cpp
+index 6bdcf77a..1c90e18b 100644
+--- a/test/native_catalog/test_native_catalog.cpp
++++ b/test/native_catalog/test_native_catalog.cpp
+@@ -1,5 +1,6 @@
+ #define CATCH_CONFIG_RUNNER
+ #include "catch.hpp"
++#include "bound_file_system.hpp"
+ #include "catalog_model.hpp"
+ #include "duckdb.hpp"
+ #include "duckdb/common/local_file_system.hpp"
+@@ -10,7 +11,7 @@ using iceberg_test::Json;
+ 
+ namespace {
+ 
+-FileSystem &TestLocalFileSystem() {
++LocalFileSystem &TestLocalFileSystem() {
+ 	static LocalFileSystem fs;
+ 	return fs;
+ }
+@@ -22,7 +23,7 @@ string TestRoot() {
+ }
+ 
+ //! Fail at the filesystem boundary after one metadata file has already been completed.
+-class FailingFileSystem : public FileSystem {
++class FailingFileSystem : public BaseFileSystem {
+ public:
+ 	FailingFileSystem() : local(make_uniq<LocalFileSystem>()) {
+ 	}
+@@ -30,7 +31,7 @@ public:
+ 		return "NativeCatalogFailingFileSystem";
+ 	}
+ 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+-	                                optional_ptr<FileOpener> opener = nullptr) override {
++	                                optional_ptr<FileOpener> opener) override {
+ 		if (flags.OpenForWriting() && StringUtil::EndsWith(path, ".metadata.json")) {
+ 			metadata_writes++;
+ 			if (fail_at && metadata_writes == fail_at) {
+@@ -39,18 +40,18 @@ public:
+ 		}
+ 		return local->OpenFile(path, flags, opener);
+ 	}
+-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override {
++	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override {
+ 		local->CreateDirectoriesRecursive(path, opener);
+ 	}
+ 	void RemoveOwnedRoot(const string &root) {
+-		local->RemoveDirectory(root);
++		local->RemoveDirectory(root, nullptr);
+ 	}
+ 
+ 	idx_t metadata_writes = 0;
+ 	idx_t fail_at = 0;
+ 
+ private:
+-	unique_ptr<FileSystem> local;
++	unique_ptr<LocalFileSystem> local;
+ };
+ 
+ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+@@ -67,7 +68,8 @@ unique_ptr<QueryResult> Query(Connection &connection, const string &sql) {
+ TEST_CASE("Native catalog publishes no table when the second metadata write fails", "[iceberg_native]") {
+ 	FailingFileSystem fs;
+ 	auto root = TestRoot();
+-	iceberg_test::Catalog catalog(fs, root);
++	BoundFileSystem bound_fs(fs, nullptr);
++	iceberg_test::Catalog catalog(bound_fs, root);
+ 	REQUIRE(catalog.Request("POST", "/v1/namespaces", R"({"namespace":["atomic"]})")->status == HTTPStatusCode::OK_200);
+ 	for (auto name : {"a", "b"}) {
+ 		auto body =
+@@ -143,7 +145,7 @@ TEST_CASE("Native catalog state belongs to the database, not its initializing co
+ 		                    "SELECT status FROM iceberg_test_catalog_request('GET', '/v1/namespaces/survives', NULL)");
+ 		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 404);
+ 	}
+-	TestLocalFileSystem().RemoveDirectory(root);
++	TestLocalFileSystem().RemoveDirectory(root, nullptr);
+ }
+ 
+ int main(int argc, char **argv) {

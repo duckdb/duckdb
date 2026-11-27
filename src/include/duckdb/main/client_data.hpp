@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/once_flag.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,7 @@ public:
 
 	//! Owns the default expression rewrite rules, which are stateless and shared by every optimizer run of this client.
 	unique_ptr<ExpressionRewriter> default_expression_rewriter;
+	OnceFlag default_expression_rewriter_once;
 
 	//! The writer used to log queries, if logging is enabled.
 	//! DEPRECATED: Now, queries are written to the generic log.

@@ -21,8 +21,29 @@ public:
 	bool Solve(JoinOrderPlanMap &plans);
 
 private:
+	struct Candidate {
+		idx_t left;
+		idx_t right;
+		JoinPlanCost cost;
+	};
+
+	idx_t AddGroup(JoinRelationSet &set);
+	vector<idx_t> GetConnectedGroups(idx_t group) const;
+	optional_ptr<DPJoinNode> EmitOrientation(JoinOrderPlanMap &plans, idx_t left, idx_t right);
+	void EmitCandidate(JoinOrderPlanMap &plans, idx_t left, idx_t right);
+	void InitializeCandidates(JoinOrderPlanMap &plans);
+	bool TryCrossProduct(JoinOrderPlanMap &plans, idx_t &left, idx_t &right);
+	void MergeGroups(JoinOrderPlanMap &plans, idx_t left, idx_t right);
+
 	QueryGraphManager &query_graph_manager;
 	JoinOrderCandidateEvaluator &evaluator;
+
+	//! Group indexes are allocated in insertion order, preserving the greedy candidate tie order.
+	vector<reference<JoinRelationSet>> groups;
+	vector<idx_t> active_groups;
+	//! The current group containing each original relation, including every member of a hyperedge endpoint.
+	vector<idx_t> group_for_relation;
+	vector<Candidate> candidates;
 };
 
 } // namespace duckdb

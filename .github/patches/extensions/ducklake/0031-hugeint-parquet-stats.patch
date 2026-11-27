@@ -1,0 +1,45 @@
+diff --git a/test/sql/stats/alter_type_stats_reseed.test b/test/sql/stats/alter_type_stats_reseed.test
+index e797e958..673fc88e 100644
+--- a/test/sql/stats/alter_type_stats_reseed.test
++++ b/test/sql/stats/alter_type_stats_reseed.test
+@@ -202,7 +202,7 @@ SELECT count(*) FROM ducklake.t_dec WHERE c < 1500;
+ ----
+ 500
+ 
+-# hugeint files carry no bounds at all
++# hugeint files carry exact bounds (parquet stores them as DECIMAL(39,0))
+ statement ok
+ CREATE TABLE ducklake.t_huge(c INTEGER);
+ 
+@@ -227,7 +227,7 @@ INSERT INTO ducklake.t_huge SELECT range + 6000 FROM range(100);
+ query II
+ SELECT min_value, max_value FROM ducklake_meta.ducklake_table_column_stats s JOIN ducklake_meta.ducklake_table t USING (table_id) WHERE t.table_name = 't_huge' AND t.end_snapshot IS NULL;
+ ----
+-NULL	NULL
++1000	6099
+ 
+ query I
+ SELECT count(*) FROM ducklake.t_huge WHERE c < 1500;
+diff --git a/test/sql/stats/hugeint_stats.test b/test/sql/stats/hugeint_stats.test
+index e1fba60e..3122ab3c 100644
+--- a/test/sql/stats/hugeint_stats.test
++++ b/test/sql/stats/hugeint_stats.test
+@@ -29,15 +29,14 @@ SELECT bitstring_agg(h), bitstring_agg(u) FROM dl.t
+ ----
+ 1000000001	1000000000000000001
+ 
+-# parquet keeps no bounds for these types, so a flushed table has none either
++# parquet stores these types as DECIMAL(39,0) and keeps their exact bounds, so a flushed table has them too
+ statement ok
+ CALL ducklake_flush_inlined_data('dl')
+ 
+ query IIII
+-SELECT (stats(h)).min IS NULL, (stats(h)).max IS NULL, (stats(u)).min IS NULL, (stats(u)).max IS NULL
+-FROM dl.t LIMIT 1
++SELECT (stats(h)).min, (stats(h)).max, (stats(u)).min, (stats(u)).max FROM dl.t LIMIT 1
+ ----
+-true	true	true	true
++1	10	2	20
+ 
+ query I
+ SELECT count(*) FROM dl.t WHERE h > 5 AND u > 10

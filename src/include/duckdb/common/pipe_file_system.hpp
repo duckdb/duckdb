@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 namespace duckdb {
 
-class PipeFileSystem : public FileSystem {
+class PipeFileSystem : public BaseFileSystem {
 public:
 	static unique_ptr<FileHandle> OpenPipe(QueryContext context, unique_ptr<FileHandle> handle);
 
