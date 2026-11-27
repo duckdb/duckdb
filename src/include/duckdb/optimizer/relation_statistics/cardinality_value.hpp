@@ -30,6 +30,13 @@ public:
 		return numerator.significand == 0;
 	}
 
+	//! Rounded numeric equality need not make operands interchangeable in subsequent comparisons.
+	bool HasSameRepresentation(const CardinalityValue &other) const {
+		return numerator.significand == other.numerator.significand && numerator.exponent == other.numerator.exponent &&
+		       denominator == other.denominator &&
+		       std::signbit(numerator.significand) == std::signbit(other.numerator.significand);
+	}
+
 	double GetLog() const {
 		if (IsZero()) {
 			return -std::numeric_limits<double>::infinity();

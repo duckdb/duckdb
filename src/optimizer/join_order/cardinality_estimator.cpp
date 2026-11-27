@@ -1156,7 +1156,9 @@ void CardinalityEstimator::ColumnProjection::ApplyEqualityClass(const JoinEquali
 				break;
 			}
 			current = MinValue(current, input->current_domain.distinct_count);
-			if (reuse_domains) {
+			// Repeating the same operand is idempotent; retain the order of all distinct representations.
+			if (reuse_domains &&
+			    (domains.empty() || !domains.back().HasSameRepresentation(input->current_domain.distinct_count))) {
 				domains.push_back(input->current_domain.distinct_count);
 			}
 		}
