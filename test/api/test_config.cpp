@@ -720,6 +720,11 @@ TEST_CASE("Test extension option defaults are not user settings", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("SET my_option_without_default = true"));
 	REQUIRE_NO_FAIL(con.Query("RESET my_option_without_default"));
 	REQUIRE(!con.context->TryGetCurrentSetting(Identifier("my_option_without_default"), value));
+
+	// current_setting returns NULL of the option's type for it
+	result = con.Query("SELECT current_setting('my_option_without_default')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(result->GetTypes()[0] == LogicalType::BOOLEAN);
 }
 
 TEST_CASE("Test every deprecated setting warns when set", "[api]") {
