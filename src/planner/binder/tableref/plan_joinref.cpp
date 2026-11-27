@@ -239,6 +239,37 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
 	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, expressions, conditions);
 }
 
+void LogicalComparisonJoin::ValidateAsOfConditions(const vector<JoinCondition> &conditions) {
+	// ASOF joins need exactly one inequality that determines the direction of the match,
+	// while all other comparison conditions have to be (null-safe) equalities
+	idx_t asof_idx = conditions.size();
+	for (idx_t c = 0; c < conditions.size(); c++) {
+		auto &cond = conditions[c];
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		switch (cond.GetComparisonType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+			if (asof_idx < conditions.size()) {
+				throw BinderException("Multiple ASOF JOIN inequalities");
+			}
+			asof_idx = c;
+			break;
+		default:
+			throw BinderException("Invalid ASOF JOIN comparison");
+		}
+	}
+	if (asof_idx >= conditions.size()) {
+		throw BinderException("Missing ASOF JOIN inequality");
+	}
+}
+
 //! Create the join operator based on conditions and join type
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, JoinRefType ref_type,
                                                               unique_ptr<LogicalOperator> left_child,
@@ -277,29 +308,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		default:
 			break;
 		}
-		idx_t asof_idx = comparison_conditions.size();
-		for (size_t c = 0; c < comparison_conditions.size(); ++c) {
-			auto &cond = comparison_conditions[c];
-			switch (cond.GetComparisonType()) {
-			case ExpressionType::COMPARE_EQUAL:
-			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-				break;
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			case ExpressionType::COMPARE_GREATERTHAN:
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			case ExpressionType::COMPARE_LESSTHAN:
-				if (asof_idx < comparison_conditions.size()) {
-					throw BinderException("Multiple ASOF JOIN inequalities");
-				}
-				asof_idx = c;
-				break;
-			default:
-				throw BinderException("Invalid ASOF JOIN comparison");
-			}
-		}
-		if (asof_idx >= comparison_conditions.size()) {
-			throw BinderException("Missing ASOF JOIN inequality");
-		}
+		ValidateAsOfConditions(comparison_conditions);
 	}
 
 	// Reconstruct full conditions vector
@@ -445,7 +454,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 			throw NotImplementedException("Unsupported explicit MARK join conditions");
 		}
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-		                                std::move(ref.condition));
+		                                std::move(ref.condition), ref.ref_type);
 		return new_plan;
 	}
 	switch (ref.ref_type) {

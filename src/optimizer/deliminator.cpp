@@ -86,7 +86,8 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 
 		// Change type if there are no more duplicate-eliminated columns
 		if (candidate.joins.size() == candidate.delim_get_count && all_removed) {
-			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			delim_join.type = delim_join.delim_asof ? LogicalOperatorType::LOGICAL_ASOF_JOIN
+			                                        : LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 			delim_join.duplicate_eliminated_columns.clear();
 		}
 

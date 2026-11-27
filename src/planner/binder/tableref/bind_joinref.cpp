@@ -238,6 +238,11 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
+			if (result->ref_type == JoinRefType::POSITIONAL) {
+				// a positional join pairs rows by their physical position, which is not defined
+				// when the right side is evaluated per left row
+				throw BinderException("POSITIONAL JOIN with a LATERAL reference is not supported");
+			}
 		}
 	}
 

@@ -34,6 +34,8 @@ public:
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
 	//! If this is a DelimJoin, whether it has been flipped to de-duplicating the RHS instead
 	bool delim_flipped = false;
+	//! If this is a DelimJoin, whether it represents an ASOF join and must become one once its duplicates are resolved
+	bool delim_asof = false;
 	//! Scans where we should push generated filters into (if any)
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 
@@ -64,6 +66,9 @@ public:
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,
 	                                  unique_ptr<Expression> condition, vector<JoinCondition> &conditions);
+
+	//! Verify that the conditions describe a valid ASOF join (equalities plus exactly one inequality)
+	static void ValidateAsOfConditions(const vector<JoinCondition> &conditions);
 
 	bool HasEquality(idx_t &range_count) const;
 	bool HasArbitraryConditions() const;

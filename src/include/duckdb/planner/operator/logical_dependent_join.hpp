@@ -16,6 +16,7 @@
 #pragma once
 
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
@@ -35,5 +36,7 @@ public:
 	bool perform_delim = true;
 	bool any_join = false;
 	bool propagate_null_values = true;
+	//! The type of join that the dependent join represents (e.g. ASOF), used to restore its semantics after flattening
+	JoinRefType ref_type = JoinRefType::REGULAR;
 };
 } // namespace duckdb

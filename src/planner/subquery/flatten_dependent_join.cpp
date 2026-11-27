@@ -301,12 +301,25 @@ static void FinalizeAnyJoins(unique_ptr<LogicalOperator> &plan) {
 	LogicalAnyJoin::TrySpecialize(plan);
 }
 
+static bool ContainsAsOfDelimJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && op.Cast<LogicalComparisonJoin>().delim_asof) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsAsOfDelimJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
-	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+	// The Deliminator cannot preserve ASOF matching, so ASOF delim joins always take the CTE path
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context) || ContainsAsOfDelimJoin(*plan)) {
 		DelimJoinCTERewriter::Rewrite(binder, plan);
 	}
 	// ANY joins must retain their general shape until enclosing decorrelation and binding rewrites are complete.
@@ -797,16 +810,22 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 			conditions.emplace_back(std::move(BoundComparisonExpression::LeftMutable(comparison)),
 			                        std::move(BoundComparisonExpression::RightMutable(comparison)), comparison_type);
 		} else {
-			LogicalComparisonJoin::ExtractJoinConditions(binder.context, op.join_type, JoinRefType::REGULAR,
-			                                             op.children[0], op.children[1], std::move(op.condition),
-			                                             conditions);
+			LogicalComparisonJoin::ExtractJoinConditions(binder.context, op.join_type, op.ref_type, op.children[0],
+			                                             op.children[1], std::move(op.condition), conditions);
 		}
+	}
+
+	if (op.ref_type == JoinRefType::ASOF) {
+		// ASOF delims are turned into ASOF joins once their domain is de-duplicated, so verify the conditions now:
+		// the physical planner can no longer turn this into a binder error
+		LogicalComparisonJoin::ValidateAsOfConditions(conditions);
 	}
 
 	auto finalized = make_uniq<LogicalComparisonJoin>(op.join_type, LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	finalized->conditions = std::move(conditions);
 	finalized->mark_types = std::move(mark_types);
 	finalized->duplicate_eliminated_columns = std::move(duplicate_eliminated_columns);
+	finalized->delim_asof = op.ref_type == JoinRefType::ASOF;
 	finalized->children = std::move(op.children);
 	LogicalJoin::MoveJoinState(op, *finalized);
 	plan = std::move(finalized);
