@@ -1,117 +1,113 @@
 # name: test/optimizer/joins/independent_equality_factors.test
-# description: Count independent equality connections outside composite-key regions
+# description: Count distinct equality connections in cycles without composite joins
 # group: [joins]
 
 statement ok
 SET explain_output='optimized_only';
 
-# Independent coordinates with identical distinct counts each reduce the join.
-# The row count is outside the statistical composite-key heuristic.
 statement ok
 CREATE TABLE coordinates AS
 SELECT (i % 4)::INTEGER x, ((i // 4) % 4)::INTEGER y, ((i // 16) % 4)::INTEGER z, i v
-FROM range(256) t(i);
+FROM range(64) t(i);
 
 statement ok
 ANALYZE coordinates;
 
+# Each pair joins on one coordinate. Closing the relation cycle adds a distinct equality connection.
 query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y);
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
 ----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4096"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y);
+SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.y=c.y AND c.z=a.z;
+----
+4096
+
+# Reordering the inputs and repeating a reversed condition does not change the factors.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates c JOIN coordinates b ON c.y=b.y
+JOIN coordinates a ON a.z=c.z AND b.x=a.x AND a.x=b.x;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4096"\s*}\s*}\s*\]\s*$
+
+# A transitive equality within one coordinate is redundant, even though it closes a relation cycle.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.x=c.x AND c.x=a.x;
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"16384"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x
+JOIN coordinates c ON b.x=c.x AND c.x=a.x;
+----
+16384
+
+# Multiple coordinates between the same pair retain the existing estimate, even outside the statistical cap.
+statement ok
+CREATE TABLE repeated_coordinates AS
+SELECT (i % 4)::INTEGER x, ((i // 4) % 4)::INTEGER y, ((i // 16) % 4)::INTEGER z, i v
+FROM range(256) t(i);
+
+statement ok
+ANALYZE repeated_coordinates;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y);
+----
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8192"\s*}\s*}\s*\]\s*$
+
+query I
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y);
 ----
 4096
 
 query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y, z);
+EXPLAIN (FORMAT JSON) SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y, z);
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"1024"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8192"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y, z);
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y, z);
 ----
 1024
 
-# Each added relation introduces a new connection for both coordinates.
+# The fallback applies to the whole region, including its two-way subsets.
 query II
 EXPLAIN (FORMAT JSON)
-SELECT a.v FROM coordinates a JOIN coordinates b USING (x, y) JOIN coordinates c USING (x, y);
+SELECT a.v FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y)
+JOIN repeated_coordinates c USING (x, y);
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"65536"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"524288"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM coordinates a JOIN coordinates b USING (x, y) JOIN coordinates c USING (x, y);
+SELECT count(*) FROM repeated_coordinates a JOIN repeated_coordinates b USING (x, y)
+JOIN repeated_coordinates c USING (x, y);
 ----
 65536
 
-# Redundant and reversed conditions do not add independent connections.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT a.v FROM coordinates b JOIN coordinates a ON b.y=a.y AND a.x=b.x
-JOIN coordinates c ON c.x=b.x AND a.y=c.y AND c.x=a.x;
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"65536"\s*}\s*}\s*\]\s*$
-
-# Eight distinct tuples with four values per column are an eligible composite key.
+# Marginal distinct counts cannot distinguish these correlated columns from independent coordinates.
 statement ok
-CREATE TABLE tuples AS
-SELECT (i % 4)::INTEGER x, ((i // 4 + i % 4) % 4)::INTEGER y, i v FROM range(8) t(i);
+CREATE TABLE correlated AS SELECT (i % 4)::INTEGER x, (i % 4)::INTEGER y FROM range(64) t(i);
 
 statement ok
-ANALYZE tuples;
+ANALYZE correlated;
 
 query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN tuples b USING (x, y);
+EXPLAIN (FORMAT JSON) SELECT a.x FROM correlated a JOIN correlated b USING (x, y);
 ----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8"\s*}\s*}\s*\]\s*$
+logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"512"\s*}\s*}\s*\]\s*$
 
 query I
-SELECT count(*) FROM tuples a JOIN tuples b USING (x, y);
+SELECT count(*) FROM correlated a JOIN correlated b USING (x, y);
 ----
-8
-
-# Composite regions keep their existing estimate for every subset.
-query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN tuples b USING (x, y) JOIN tuples c USING (x, y);
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4"\s*}\s*}\s*\]\s*$
-
-query I
-SELECT count(*) FROM tuples a JOIN tuples b USING (x, y) JOIN tuples c USING (x, y);
-----
-8
-
-# A dimension attached to one coordinate does not split the composite tuple.
-statement ok
-CREATE TABLE dimension AS SELECT i::INTEGER x FROM range(4) t(i);
-
-statement ok
-ANALYZE dimension;
-
-query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM tuples a JOIN dimension d USING (x) JOIN tuples b USING (x, y);
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"8"\s*}\s*}\s*\]\s*$
-
-query I
-SELECT count(*) FROM tuples a JOIN dimension d USING (x) JOIN tuples b USING (x, y);
-----
-8
-
-# Mixed comparisons retain the existing fallback.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND a.v<b.v;
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"5461"\s*}\s*}\s*\]\s*$
-
-query I
-SELECT count(*) FROM coordinates a JOIN coordinates b ON a.x=b.x AND a.y=b.y AND a.v<b.v;
-----
-1920
+1024
 
 # Unknown domains retain the existing fallback even without a composite pair.
 query II
@@ -123,41 +119,3 @@ SELECT a.v FROM coordinates a JOIN coordinates b ON a.x=b.x
 JOIN coordinates c ON b.y=c.y AND c.z=a.z;
 ----
 logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"64"\s*}\s*}\s*\]\s*$
-
-# This known key is outside the statistical cap: 48 tuples, four values per column.
-statement ok
-CREATE TABLE unique_triples (x INTEGER, y INTEGER, z INTEGER, PRIMARY KEY(x,y,z));
-
-statement ok
-INSERT INTO unique_triples
-SELECT i%4, (i//4)%4, (i//16)%4 FROM range(64) t(i)
-WHERE (i%4+(i//4)%4+(i//16)%4)%4<>0;
-
-statement ok
-ANALYZE unique_triples;
-
-query II
-EXPLAIN (FORMAT JSON) SELECT a.x FROM unique_triples a JOIN unique_triples b USING(x,y,z);
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"48"\s*}\s*}\s*\]\s*$
-
-# A large domain can reject the full pair's cap while smaller domains still admit it.
-# Keep the existing region policy, including subsets that omit that larger predicate.
-statement ok
-CREATE TABLE mixed_small AS
-SELECT (i%4)::INTEGER x, ((i//4+i%4)%4)::INTEGER y, i v FROM range(8) t(i);
-
-statement ok
-CREATE TABLE mixed_large AS
-SELECT (i%4)::INTEGER x, ((i//4)%4)::INTEGER y, i v FROM range(256) t(i);
-
-statement ok
-ANALYZE mixed_small;
-
-statement ok
-ANALYZE mixed_large;
-
-query II
-EXPLAIN (FORMAT JSON) SELECT a.v FROM mixed_small a JOIN mixed_large b USING(x,y,v);
-----
-logical_opt	<REGEX>:(?s).*"Estimated Cardinality":\s*"4"\s*}\s*}\s*\]\s*$

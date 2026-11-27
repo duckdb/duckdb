@@ -858,17 +858,8 @@ bool CardinalityEstimator::CanUseIndependentEqualities() {
 		if (!pair || !edge.HasReliableDistinctCount()) {
 			return false;
 		}
-		if (!predicate_model.HasDirectCompositeEquality(*pair)) {
-			continue;
-		}
-		if (GetUniqueJoinPairDomain(*pair) > 0) {
-			return false;
-		}
-		auto cap = GetJoinPairCap(*pair);
-		CompositeJoinPairStats stats;
-		stats.RegisterDistinctCount(edge.GetDistinctCount());
-		// Check each edge: a subset can admit the cap even when the full pair's largest domain cannot.
-		if (stats.CanApplyCap(cap) && edge.GetDistinctCount() <= cap) {
+		// Marginal distinct counts do not establish independent matching of composite tuples.
+		if (predicate_model.HasDirectCompositeEquality(*pair)) {
 			return false;
 		}
 	}
