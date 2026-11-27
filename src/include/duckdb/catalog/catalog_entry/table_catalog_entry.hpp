@@ -39,6 +39,7 @@ struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
+enum class AlterForeignKeyType : uint8_t;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 struct SetColumnCommentInfo;
@@ -146,6 +147,8 @@ public:
 	optional_ptr<Constraint> GetPrimaryKey() const;
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
+	//! Returns the alters that add or remove the foreign keys of this table on the tables they reference
+	vector<unique_ptr<AlterForeignKeyInfo>> GetForeignKeyAlters(AlterForeignKeyType type) const;
 
 	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
 	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,

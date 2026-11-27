@@ -686,21 +686,12 @@ vector<unique_ptr<AlterForeignKeyInfo>> DependencyManager::GetForeignKeyReferenc
 	});
 
 	auto &table = entry.Cast<TableCatalogEntry>();
-	for (auto &constraint : table.GetConstraints()) {
-		if (constraint->type != ConstraintType::FOREIGN_KEY) {
-			continue;
+	for (auto &fk_info : table.GetForeignKeyAlters(AlterForeignKeyType::AFT_DELETE)) {
+		auto &referenced_table = fk_info->GetQualifiedName().Name();
+		if (std::find(referenced_tables.begin(), referenced_tables.end(), referenced_table) !=
+		    referenced_tables.end()) {
+			result.push_back(std::move(fk_info));
 		}
-		auto &fk = constraint->Cast<ForeignKeyConstraint>();
-		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			continue;
-		}
-		if (std::find(referenced_tables.begin(), referenced_tables.end(), fk.info.table) == referenced_tables.end()) {
-			continue;
-		}
-		AlterEntryData alter_data(table.schema.GetQualifiedName(fk.info.table), OnEntryNotFound::THROW_EXCEPTION);
-		result.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), table.name, fk.pk_columns, fk.fk_columns,
-		                                                fk.info.pk_keys, fk.info.fk_keys,
-		                                                AlterForeignKeyType::AFT_DELETE));
 	}
 	return result;
 }

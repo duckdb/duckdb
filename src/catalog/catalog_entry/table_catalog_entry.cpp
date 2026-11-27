@@ -10,6 +10,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
@@ -368,6 +369,24 @@ optional_ptr<Constraint> TableCatalogEntry::GetPrimaryKey() const {
 
 bool TableCatalogEntry::HasPrimaryKey() const {
 	return GetPrimaryKey() != nullptr;
+}
+
+vector<unique_ptr<AlterForeignKeyInfo>> TableCatalogEntry::GetForeignKeyAlters(AlterForeignKeyType type) const {
+	vector<unique_ptr<AlterForeignKeyInfo>> result;
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = constraint->Cast<ForeignKeyConstraint>();
+		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			continue;
+		}
+		// the referenced table lives in the same (possibly nested) schema as this table
+		AlterEntryData alter_data(schema.GetQualifiedName(fk.info.table), OnEntryNotFound::THROW_EXCEPTION);
+		result.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns, fk.fk_columns,
+		                                                fk.info.pk_keys, fk.info.fk_keys, type));
+	}
+	return result;
 }
 
 LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &column) const {
