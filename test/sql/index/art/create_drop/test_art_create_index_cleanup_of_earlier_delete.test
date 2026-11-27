@@ -1,0 +1,295 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_cleanup_of_earlier_delete.test
+# description: The cleanup of a delete that committed before an index was created does not touch that index
+# group: [create_drop]
+
+# delete 1 commits while con_h is open, so its cleanup waits for con_h; idx_new is created after it, and delete 2
+# gives idx_new deleted rows of its own
+
+statement ok
+CREATE TABLE orders AS SELECT range AS order_id, range % 100 AS customer_id FROM range(10000);
+
+statement ok
+CREATE INDEX idx_old ON orders(customer_id);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM orders;
+----
+10000
+
+statement ok con_d
+DELETE FROM orders WHERE order_id < 1000;
+
+statement ok
+CREATE INDEX idx_new ON orders(customer_id);
+
+statement ok con_d
+DELETE FROM orders WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query II
+SELECT count(*), count(*) FILTER (WHERE customer_id = 7) FROM orders;
+----
+8000	80
+
+query I
+SELECT count(*) FROM orders WHERE customer_id = 7;
+----
+80
+
+# the delete is kept for cleanup by a catalog change, the table has no index at the delete
+
+statement ok
+CREATE TABLE no_index AS SELECT range AS order_id, range % 100 AS customer_id FROM range(10000);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM no_index;
+----
+10000
+
+statement ok con_d
+BEGIN;
+
+statement ok con_d
+DELETE FROM no_index WHERE order_id < 1000;
+
+statement ok con_d
+CREATE TABLE audit_log (entry INTEGER);
+
+statement ok con_d
+COMMIT;
+
+statement ok
+CREATE INDEX idx_no_index ON no_index(customer_id);
+
+statement ok con_d
+DELETE FROM no_index WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query I
+SELECT count(*) FROM no_index WHERE customer_id = 7;
+----
+80
+
+# an UPDATE of the indexed column gives the new index its deleted rows
+
+statement ok
+CREATE TABLE updated AS SELECT range AS order_id, range % 100 AS customer_id FROM range(10000);
+
+statement ok
+CREATE INDEX idx_updated_old ON updated(customer_id);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM updated;
+----
+10000
+
+statement ok con_d
+DELETE FROM updated WHERE order_id < 1000;
+
+statement ok
+CREATE INDEX idx_updated_new ON updated(customer_id);
+
+statement ok con_d
+UPDATE updated SET customer_id = customer_id + 1000 WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query II
+SELECT count(*), count(*) FILTER (WHERE customer_id = 1007) FROM updated;
+----
+9000	10
+
+query I
+SELECT count(*) FROM updated WHERE customer_id = 1007;
+----
+10
+
+# the old snapshot is the transaction that creates the index
+
+statement ok
+CREATE TABLE creator AS SELECT range AS order_id, range % 100 AS customer_id FROM range(10000);
+
+statement ok
+CREATE INDEX idx_creator_old ON creator(customer_id);
+
+statement ok con_x
+BEGIN;
+
+query I con_x
+SELECT count(*) FROM creator;
+----
+10000
+
+statement ok con_d
+DELETE FROM creator WHERE order_id < 1000;
+
+statement ok con_x
+CREATE INDEX idx_creator_new ON creator(customer_id);
+
+statement ok con_d
+DELETE FROM creator WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_x
+COMMIT;
+
+query I
+SELECT count(*) FROM creator WHERE customer_id = 7;
+----
+80
+
+# the new index is a primary key added by ALTER TABLE
+
+statement ok
+CREATE TABLE primary_key (order_id INTEGER, customer_id INTEGER, ref INTEGER UNIQUE);
+
+statement ok
+INSERT INTO primary_key SELECT range, range % 100, range FROM range(10000);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM primary_key;
+----
+10000
+
+statement ok con_d
+DELETE FROM primary_key WHERE order_id < 1000;
+
+statement ok
+ALTER TABLE primary_key ADD PRIMARY KEY (order_id);
+
+statement ok con_d
+DELETE FROM primary_key WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query I
+SELECT count(*) FROM primary_key;
+----
+8000
+
+statement error
+INSERT INTO primary_key VALUES (7000, 0, 20000);
+----
+<REGEX>:.*Constraint Error.*Duplicate key.*
+
+# the new index is on a column added after the delete: its cleanup does not fetch that column
+
+statement ok
+CREATE TABLE add_column (order_id INTEGER PRIMARY KEY, customer_id INTEGER);
+
+statement ok
+INSERT INTO add_column SELECT range, range % 100 FROM range(10000);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM add_column;
+----
+10000
+
+statement ok con_d
+DELETE FROM add_column WHERE order_id < 1000;
+
+statement ok
+ALTER TABLE add_column ADD COLUMN region INTEGER;
+
+statement ok
+CREATE INDEX idx_region ON add_column(region);
+
+statement ok con_h
+COMMIT;
+
+query I
+SELECT count(*) FROM add_column;
+----
+9000
+
+# the new index is on a column whose type changed after the delete
+
+statement ok
+CREATE TABLE alter_type (order_id INTEGER PRIMARY KEY, customer_id INTEGER, note INTEGER);
+
+statement ok
+INSERT INTO alter_type SELECT range, range % 100, range % 100 FROM range(10000);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM alter_type;
+----
+10000
+
+statement ok con_d
+DELETE FROM alter_type WHERE order_id < 1000;
+
+statement ok
+ALTER TABLE alter_type ALTER COLUMN note TYPE VARCHAR;
+
+statement ok
+CREATE INDEX idx_alter_type ON alter_type(note);
+
+statement ok con_d
+DELETE FROM alter_type WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query I
+SELECT count(*) FROM alter_type WHERE note = '7';
+----
+80
+
+# the new index is on a column that moved to another position after the delete
+
+statement ok
+CREATE TABLE drop_column (order_id INTEGER PRIMARY KEY, amount BIGINT, note VARCHAR);
+
+statement ok
+INSERT INTO drop_column SELECT range, range * 2, 'n' || (range % 100)::VARCHAR FROM range(10000);
+
+statement ok con_h
+BEGIN;
+
+query I con_h
+SELECT count(*) FROM drop_column;
+----
+10000
+
+statement ok con_d
+DELETE FROM drop_column WHERE order_id < 1000;
+
+statement ok
+ALTER TABLE drop_column DROP COLUMN amount;
+
+statement ok
+CREATE INDEX idx_drop_column ON drop_column(note);
+
+statement ok con_d
+DELETE FROM drop_column WHERE order_id >= 5000 AND order_id < 6000;
+
+statement ok con_h
+COMMIT;
+
+query I
+SELECT count(*) FROM drop_column WHERE note = 'n7';
+----
+80

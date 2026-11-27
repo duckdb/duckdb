@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/row_group_order_options.hpp"
 
 namespace duckdb {
+class BoundIndex;
 class DuckTableEntry;
 class TableCatalogEntry;
 
@@ -31,6 +32,9 @@ struct TableScanBindData : public TableFunctionData {
 	bool is_index_scan;
 	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
+	//! An empty copy of the index to build in place (only for indexes with delta support).
+	//! Set during physical planning, after the logical plan is (de)serialized: not serialized or compared.
+	shared_ptr<const BoundIndex> index_template;
 	//! In what order to scan the row groups
 	unique_ptr<RowGroupOrderOptions> order_options;
 	//! Subset of partition indices to scan, if null, scan all
@@ -45,6 +49,7 @@ public:
 		auto bind_data = make_uniq<TableScanBindData>(table);
 		bind_data->is_index_scan = is_index_scan;
 		bind_data->is_create_index = is_create_index;
+		bind_data->index_template = index_template;
 		bind_data->column_ids = column_ids;
 		bind_data->order_options = order_options ? make_uniq<RowGroupOrderOptions>(*order_options) : nullptr;
 		bind_data->partitions_to_scan =

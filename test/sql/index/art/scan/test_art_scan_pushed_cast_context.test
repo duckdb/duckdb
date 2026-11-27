@@ -1,0 +1,42 @@
+# name: test/sql/index/art/scan/test_art_scan_pushed_cast_context.test
+# description: Index-scan row fetches bind a pushed-down field cast with the client context
+# group: [scan]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/New_York';
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY, s STRUCT(ts TIMESTAMPTZ));
+
+statement ok
+INSERT INTO t SELECT r, {'ts': TIMESTAMPTZ '2021-01-01 12:00:00+00'} FROM range(5) t(r);
+
+# the VARCHAR cast of the extracted field is pushed into the scan and runs during the row fetch
+query I
+SELECT s.ts::VARCHAR FROM t WHERE id = 3;
+----
+2021-01-01 07:00:00-05
+
+# the same fetch over transaction-local rows
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t VALUES (7, {'ts': TIMESTAMPTZ '2021-06-01 12:00:00+00'});
+
+query I
+SELECT s.ts::VARCHAR FROM t WHERE id = 7;
+----
+2021-06-01 08:00:00-04
+
+# mixed committed and transaction-local rows
+query I rowsort
+SELECT s.ts::VARCHAR FROM t WHERE id IN (3, 7);
+----
+2021-01-01 07:00:00-05
+2021-06-01 08:00:00-04
+
+statement ok
+COMMIT;

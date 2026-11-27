@@ -85,9 +85,8 @@ void TableFunctionQueryFilter::ReadFilterQuery(ClientContext &context, const str
 		if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 			throw InvalidInputException("The filter query must be a single SELECT statement");
 		}
-		inner.transaction.JoinTransaction(context.transaction);
 		// a failing filter query affects the transaction of the caller as a failing statement of the caller would
-		inner.transaction.SetInvalidationPolicy(context.transaction.GetInvalidationPolicy());
+		inner.transaction.InheritTransaction(context);
 		auto prepared = connection.Prepare(std::move(statements[0]));
 		if (prepared->HasError()) {
 			prepared->GetErrorObject().Throw();

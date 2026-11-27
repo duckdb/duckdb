@@ -859,6 +859,8 @@ jobs:
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Generate coverage report
+      env:
+        TMPDIR: ${{ runner.temp }}
       run: build/codecov/test/run --coverage-report coverage/linux-release-default-tests
 
     - name: Upload coverage report

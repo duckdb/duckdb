@@ -14,6 +14,19 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance, 
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_connection_create_in_transaction(duckdb_v2_context_handle ctx,
+                                                           duckdb_v2_connection_handle *out_conn,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(ctx);
+	DUCKDB_CHECK_ARG(out_conn);
+	*out_conn = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &context = Convert(ctx)->context;
+		auto connection = duckdb::make_uniq<CV2Connection>(duckdb::Connection::CreateInTransaction(context));
+		*out_conn = Convert(connection.release());
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (!conn) {

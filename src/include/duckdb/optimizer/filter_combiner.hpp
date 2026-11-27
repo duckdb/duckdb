@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/constant_filter_combiner.hpp"
 #include "duckdb/planner/joinside.hpp"
 
 #include "duckdb/storage/data_table.hpp"
@@ -22,8 +23,6 @@ namespace duckdb {
 class LogicalGet;
 class Optimizer;
 
-enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
-enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
 enum class FilterPushdownResult { NO_PUSHDOWN, PUSHED_DOWN_PARTIALLY, PUSHED_DOWN_FULLY };
 
 //! The FilterCombiner combines several filters and generates a logically equivalent set that is more efficient
@@ -39,10 +38,7 @@ public:
 	ClientContext &context;
 
 public:
-	struct ExpressionValueInformation {
-		Value constant;
-		ExpressionType comparison_type;
-	};
+	using ExpressionValueInformation = ConstantComparison;
 
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Splits on AND and adds each conjunct
@@ -77,8 +73,9 @@ public:
 	static void GenerateJoinFilters(const vector<JoinCondition> &conditions,
 	                                const vector<reference<const Expression>> &filters, JoinSide target_side,
 	                                const std::function<void(unique_ptr<Expression> filter)> &callback);
-	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
-	                                        vector<FilterPushdownResult> &pushdown_results);
+	//! Append generated filters to the scan's existing filters.
+	void GenerateTableScanFilters(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                              vector<FilterPushdownResult> &pushdown_results);
 
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
@@ -91,7 +88,6 @@ private:
 	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
-	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
 	FilterPushdownResult TryPushdownConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                               column_t column_id, vector<ExpressionValueInformation> &info_list);

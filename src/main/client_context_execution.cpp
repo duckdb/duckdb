@@ -24,6 +24,7 @@
 #include "duckdb/main/result_format.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
@@ -125,6 +126,13 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		if (transaction.HasActiveTransaction()) {
 			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
+				if (success && ValidChecker::IsInvalidated(ActiveTransaction())) {
+					// a connection that inherited the transaction failed a statement in it
+					ErrorData invalidated(ExceptionType::TRANSACTION,
+					                      ValidChecker::InvalidatedMessage(ActiveTransaction()));
+					transaction.Rollback(&invalidated);
+					throw TransactionException("Failed to commit: %s", invalidated.RawMessage());
+				}
 				if (success) {
 					transaction.Commit();
 				} else {

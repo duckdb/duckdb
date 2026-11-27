@@ -220,7 +220,8 @@ static FilterCacheProperties GetCacheProperties(const Expression &expression) {
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional);
+                                                                  bool inside_selectivity_optional,
+                                                                  optional_ptr<idx_t> cost = nullptr);
 
 static void InitializeExecutor(Context &context, const Expression &expression, ExpressionFilterState &state) {
 	state.executor = make_uniq<ExpressionExecutor>(context);
@@ -1125,31 +1126,19 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateComparisonExecutor(const Bo
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateInExecutor(const BoundOperatorExpression &expr) {
-	auto &expressions = expr.GetChildren();
-	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN || expressions.size() < 2 ||
-	    !IsColumnReferenceExpression(*expressions[0])) {
-		return nullptr;
-	}
-	const auto type = expressions[0]->GetReturnType().InternalType();
-	if (!IsSupportedComparisonType(type)) {
+	if (!ExpressionFilter::IsNativeInFilter(expr)) {
 		return nullptr;
 	}
 	vector<Value> constants;
-	for (idx_t i = 1; i < expressions.size(); i++) {
-		if (expressions[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-			return nullptr;
-		}
-		const auto &constant = expressions[i]->Cast<BoundConstantExpression>().GetValue();
-		if (constant.type().InternalType() != type) {
-			return nullptr;
-		}
-		constants.push_back(constant);
+	for (idx_t i = 1; i < expr.GetChildren().size(); i++) {
+		constants.push_back(expr.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue());
 	}
 	return make_uniq<InFilterExecutor>(std::move(constants));
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const BoundFunctionExpression &func,
-                                                                      bool inside_selectivity_optional) {
+                                                                      bool inside_selectivity_optional,
+                                                                      optional_ptr<idx_t> cost) {
 	if (func.GetChildren().size() == 2 && BoundComparisonExpression::IsComparison(func.GetExpressionType())) {
 		return TryCreateComparisonExecutor(func);
 	}
@@ -1166,7 +1155,7 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 		if (!optional_child) {
 			return make_uniq<OptionalFilterExecutor>();
 		}
-		auto child = TryCreateFastExecutor(*optional_child, true);
+		auto child = TryCreateFastExecutor(*optional_child, true, cost);
 		if (!child) {
 			return nullptr;
 		}
@@ -1191,11 +1180,14 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 	return nullptr;
 }
 
-static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional) {
+static unique_ptr<ExpressionFilterExecutor>
+TryCreateFastExecutor(const Expression &expression, bool inside_selectivity_optional, optional_ptr<idx_t> cost) {
+	if (cost) {
+		*cost = ExpressionHeuristics::Cost(expression);
+	}
 	switch (expression.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
-		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional);
+		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional, cost);
 	case ExpressionClass::BOUND_OPERATOR:
 		return TryCreateInExecutor(expression.Cast<BoundOperatorExpression>());
 	case ExpressionClass::BOUND_CONJUNCTION: {
@@ -1210,14 +1202,35 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expressi
 		};
 		vector<FilterCost> filters;
 		const auto is_and = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+		idx_t row_filter_count = 0;
+		idx_t row_filter_index = 0;
 		for (auto &child_expr : conjunction.GetChildren()) {
-			auto child_executor = TryCreateFastExecutor(*child_expr, inside_selectivity_optional);
+			idx_t child_cost = 0;
+			auto child_executor =
+			    TryCreateFastExecutor(*child_expr, inside_selectivity_optional, is_and ? &child_cost : nullptr);
 			if (!child_executor) {
 				return nullptr;
 			}
-			filters.push_back({std::move(child_executor), is_and ? ExpressionHeuristics::Cost(*child_expr) : 0});
+			if (is_and && !ExpressionFilter::IsPruningOnlyExpression(*child_expr)) {
+				row_filter_count++;
+				row_filter_index = filters.size();
+			}
+			filters.push_back({std::move(child_executor), child_cost});
 		}
 		if (is_and) {
+			// Keep pruning hints in the expression, but avoid an AND executor for zero or one row filter.
+			if (row_filter_count == 0) {
+				if (cost) {
+					*cost = 0;
+				}
+				return make_uniq<OptionalFilterExecutor>();
+			}
+			if (row_filter_count == 1) {
+				if (cost) {
+					*cost = filters[row_filter_index].cost;
+				}
+				return std::move(filters[row_filter_index].executor);
+			}
 			std::stable_sort(filters.begin(), filters.end(),
 			                 [](const FilterCost &left, const FilterCost &right) { return left.cost < right.cost; });
 		}

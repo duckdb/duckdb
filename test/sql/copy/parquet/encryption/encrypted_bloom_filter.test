@@ -1,0 +1,55 @@
+# name: test/sql/copy/parquet/encryption/encrypted_bloom_filter.test
+# description: Read AAD-encrypted Parquet files that contain bloom filters (parquet-mr)
+# group: [encryption]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA add_parquet_key('arrow_key_generated_files', '0123456789abcdef')
+
+# generated with parquet-mr 1.16.0: uniform AES_GCM_V1 encryption (footer key only), bloom filters
+# on both columns, 3 row groups, multiple data pages per column chunk, id = i * 10 for i in 0..2047
+query IIII
+SELECT count(*), sum(id), min(id), max(id)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_mr_uniform_encryption_bloom_filter.parquet',
+    encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+2048	20961280	0	20470
+
+# point lookup of a present value: only the row group containing it is scanned
+query II
+SELECT id, name
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_mr_uniform_encryption_bloom_filter.parquet',
+    encryption_config={footer_key: 'arrow_key_generated_files'})
+WHERE id = 20150;
+----
+20150	name_20150
+
+# the decrypted bloom filter excludes a value that is within the min/max of the first row group
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_mr_uniform_encryption_bloom_filter.parquet',
+    encryption_config={footer_key: 'arrow_key_generated_files'})
+WHERE id = 15;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 3.*
+
+# same for the string column (column ordinal 1 in the bloom filter module AAD)
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_mr_uniform_encryption_bloom_filter.parquet',
+    encryption_config={footer_key: 'arrow_key_generated_files'})
+WHERE name = 'name_15';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/parquet_mr_uniform_encryption_bloom_filter.parquet',
+    encryption_config={footer_key: 'arrow_key_generated_files'})
+WHERE name = 'name_20150';
+----
+1

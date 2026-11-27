@@ -20,6 +20,69 @@
 
 using namespace duckdb;
 
+TEST_CASE("Maintained operator types are verified before they can be repaired",
+          "[optimizer][logical_plan_verification]") {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
+	auto projection = make_uniq<LogicalProjection>(TableIndex(1), std::move(expressions));
+	projection->children.push_back(make_uniq<LogicalDummyScan>(TableIndex(2)));
+	projection->ResolveOperatorTypes();
+
+	SECTION("Resolved types pass without changes") {
+		auto types = projection->types;
+		auto child_types = projection->children[0]->types;
+		REQUIRE_NOTHROW(projection->VerifyOperatorTypes());
+		REQUIRE(projection->types == types);
+		REQUIRE(projection->children[0]->types == child_types);
+	}
+	SECTION("An expression replacement can change the type without changing the column count") {
+		projection->expressions[0] = make_uniq<BoundConstantExpression>(Value::BIGINT(42));
+#ifndef DUCKDB_CRASH_ON_ASSERT
+		// InternalException aborts instead of throwing in crash-on-assert builds.
+		REQUIRE_THROWS_MATCHES(projection->VerifyOperatorTypes(), std::exception,
+		                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("Stale output types")));
+		REQUIRE(projection->types == vector<LogicalType> {LogicalType::INTEGER});
+		// Repeated verification must still fail: the first check must not repair the stale metadata.
+		REQUIRE_THROWS_MATCHES(projection->VerifyOperatorTypes(), std::exception,
+		                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("Stale output types")));
+#endif
+		projection->ResolveOperatorTypesFromChildren();
+		REQUIRE_NOTHROW(projection->VerifyOperatorTypes());
+	}
+	SECTION("Collation changes invalidate maintained types") {
+		LogicalType original_type = LogicalType::VARCHAR;
+		auto replacement_type = LogicalType::VARCHAR_COLLATION("nocase");
+		SECTION("Direct string") {
+		}
+		SECTION("Nested string") {
+			original_type = LogicalType::LIST(original_type);
+			replacement_type = LogicalType::LIST(replacement_type);
+		}
+		projection->expressions[0] = make_uniq<BoundConstantExpression>(Value(original_type));
+		projection->ResolveOperatorTypes();
+		projection->expressions[0] = make_uniq<BoundConstantExpression>(Value(replacement_type));
+#ifndef DUCKDB_CRASH_ON_ASSERT
+		REQUIRE_THROWS_MATCHES(projection->VerifyOperatorTypes(), std::exception,
+		                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("Stale output types")));
+		REQUIRE(projection->types[0].EqualsIncludingCollation(original_type));
+		REQUIRE_THROWS_MATCHES(projection->VerifyOperatorTypes(), std::exception,
+		                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("Stale output types")));
+#endif
+		projection->ResolveOperatorTypesFromChildren();
+		REQUIRE_NOTHROW(projection->VerifyOperatorTypes());
+	}
+	SECTION("A replacement child must be resolved even when the parent types do not depend on it") {
+		projection->children[0] = make_uniq<LogicalDummyScan>(TableIndex(3));
+#ifndef DUCKDB_CRASH_ON_ASSERT
+		REQUIRE_THROWS_MATCHES(projection->VerifyOperatorTypes(), std::exception,
+		                       ExceptionMatches(ExceptionType::INTERNAL, Catch::Contains("Stale output types")));
+		REQUIRE(projection->children[0]->types.empty());
+#endif
+		projection->children[0]->ResolveOperatorTypesFromChildren();
+		REQUIRE_NOTHROW(projection->VerifyOperatorTypes());
+	}
+}
+
 class VerificationExtensionOperator : public LogicalExtensionOperator {
 public:
 	VerificationExtensionOperator(string name_p, bool verify_types_p, vector<ColumnBinding> bindings_p,

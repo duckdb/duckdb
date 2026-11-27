@@ -11,6 +11,7 @@ add_library_unity(
   dynamic_filter_groups.cpp
   expression_type_serialization.cpp
   filter_pushdown_alias.cpp
+  filter_pushdown_existing_filters.cpp
   function_invocation_serialization.cpp
   join_filter_optimizer_hooks.cpp
   join_order_conflict_detector.cpp

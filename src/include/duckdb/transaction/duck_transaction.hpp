@@ -32,6 +32,8 @@ struct CommitInfo {
 	optional_ptr<CommitDropState> drop_state;
 	//! WAL offset covering the commit's flush marker (0 if no WAL was written)
 	idx_t wal_sync_offset = 0;
+	//! Whether the commit left deleted rows in deleted_rows_in_use for cleanup
+	bool has_index_deletes = false;
 };
 
 class DuckTransaction : public Transaction {

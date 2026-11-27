@@ -1423,6 +1423,12 @@ auto Factory::ParseType(std::string_view text) const -> LogicalType {
 	return detail::HandleFactory::Make<LogicalType>(type);
 }
 
+auto Context::ConnectInTransaction() const -> Connection {
+	duckdb_v2_connection_handle conn = nullptr;
+	CheckedAPICall(duckdb_v2_connection_create_in_transaction, handle(), &conn);
+	return detail::HandleFactory::Make<Connection>(conn, true);
+}
+
 auto Context::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
 	auto log_type_str = ToStr(log_type);
 	auto message_str = ToStr(message);

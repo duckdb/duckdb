@@ -177,7 +177,7 @@ public:
 
 public:
 	static int8_t GetModuleHeader(const ColumnChunk &chunk, uint16_t page_ordinal);
-	static int8_t GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal);
+	static int8_t GetModule(const ColumnChunk &chunk, PageType::type page_type);
 	static int16_t GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal);
 	static void GenerateAdditionalAuthenticatedData(Allocator &allocator, CryptoMetaData &aad_crypto_metadata);
 	static unique_ptr<ParquetAdditionalAuthenticatedData> GenerateFooterAAD(Allocator &allocator,

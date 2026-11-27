@@ -1,0 +1,198 @@
+# name: test/optimizer/filter_pushdown/existing_scan_filters.test
+# description: Later filter pushdown strengthens scans that already have filters
+# group: [filter_pushdown]
+
+statement ok
+SET explain_output='optimized_only';
+
+statement ok
+CREATE TABLE t AS SELECT i::INTEGER AS x, (99-i)::INTEGER AS y, i::VARCHAR AS s FROM range(100) r(i);
+
+# The second predicate reaches the scan, even on a different column.
+query II
+EXPLAIN (FORMAT JSON) WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10)
+SELECT x, y FROM c WHERE y=42;
+----
+logical_opt	<REGEX>:(?s).*"name": "SEQ_SCAN"[^}]*"Filters":[^}]*\(y = 42\).*
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT x, y FROM c WHERE y=42;
+----
+57	42
+
+# Same-column strengthening and replay leave no redundant producer filter.
+query II
+EXPLAIN (FORMAT JSON) WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10)
+SELECT x FROM c WHERE x>20;
+----
+logical_opt	<REGEX>:(?s).*"name": "SEQ_SCAN"[^}]*"Filters": "\(x > 20\)".*
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT count(*) FROM c WHERE x>20;
+----
+79
+
+query II
+EXPLAIN (FORMAT JSON) WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10)
+SELECT x FROM c WHERE x>10;
+----
+logical_opt	<!REGEX>:(?s).*"name": "FILTER".*"name": "SEQ_SCAN".*
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT count(*) FROM c WHERE x>10;
+----
+89
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT count(*) FROM c WHERE x<20;
+----
+9
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT count(*) FROM c WHERE x<5;
+----
+0
+
+# Reordered output columns and aliases retain the scan's column mapping.
+query II
+WITH c AS MATERIALIZED (SELECT y AS a, x AS b FROM t WHERE x>10)
+SELECT a, b FROM c WHERE a=42;
+----
+42	57
+
+# Nonthrowing generic predicates also deduplicate when replayed.
+query II
+EXPLAIN (FORMAT JSON) WITH c AS MATERIALIZED (SELECT * FROM t WHERE length(s)=2)
+SELECT x FROM c WHERE length(s)=2;
+----
+logical_opt	<!REGEX>:(?s).*"name": "FILTER".*"name": "SEQ_SCAN".*
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x%2=0) SELECT count(*) FROM c WHERE x>90;
+----
+4
+
+# A partial IN hint does not prevent a mandatory filter from reaching the same column.
+query II
+EXPLAIN (FORMAT JSON) WITH c AS MATERIALIZED (SELECT * FROM t WHERE x IN (1,3,5))
+SELECT x FROM c WHERE x>2;
+----
+logical_opt	<REGEX>:(?s).*"name": "SEQ_SCAN"[^}]*"Filters":[^}]*\(x > 2\).*
+
+query I rowsort
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x IN (1,3,5)) SELECT x FROM c WHERE x>2;
+----
+3
+5
+
+# An exact IN can enforce a later range without evaluating both at the scan.
+query I rowsort
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x IN (10,30))
+SELECT x FROM c WHERE x>=5 AND x<=40;
+----
+10
+30
+
+# Predicates on strings and struct fields still use their original types.
+query T
+WITH c AS MATERIALIZED (SELECT s FROM t WHERE s>='10' AND s<'20') SELECT s FROM c WHERE s='15';
+----
+15
+
+statement ok
+CREATE TABLE variants AS SELECT x::VARIANT AS v FROM t;
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM variants WHERE v>10::VARIANT)
+SELECT count(*) FROM c WHERE v<20::VARIANT;
+----
+9
+
+statement ok
+CREATE TABLE nested AS SELECT {'x': i} AS v FROM range(8) r(i);
+
+query I
+WITH c AS MATERIALIZED (SELECT v FROM nested WHERE v.x>1) SELECT v.x FROM c WHERE v.x=4;
+----
+4
+
+statement ok
+CREATE TABLE nullable(x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO nullable VALUES (1,NULL), (1,NULL), (1,4), (2,NULL), (NULL,NULL);
+
+query II rowsort
+WITH c AS MATERIALIZED (SELECT * FROM nullable WHERE x=1) SELECT * FROM c WHERE y IS NULL;
+----
+1	NULL
+1	NULL
+
+# An earlier scan predicate guards a later throwing cast.
+statement ok
+CREATE TABLE guarded(x INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO guarded VALUES (1,'1'), (2,'bad'), (NULL,'bad');
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM guarded WHERE x=1) SELECT count(*) FROM c WHERE s::INTEGER=1;
+----
+1
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM guarded WHERE x=1)
+SELECT count(*) FROM c WHERE __internal_barrier(s::INTEGER=1);
+----
+1
+
+# Parameter values must not reuse restrictions from an earlier execution.
+statement ok
+PREPARE p AS WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10) SELECT count(*) FROM c WHERE y=$1;
+
+query I
+EXECUTE p(42);
+----
+1
+
+query I
+EXECUTE p(95);
+----
+0
+
+query I
+EXECUTE p(NULL);
+----
+0
+
+# A barred parameter also observes each execution's value alongside a native scan restriction.
+statement ok
+PREPARE pb AS SELECT count(*) FROM t WHERE x>10 AND __internal_barrier(y=$1);
+
+query I
+EXECUTE pb(95);
+----
+0
+
+query I
+EXECUTE pb(42);
+----
+1
+
+query I
+EXECUTE pb(NULL);
+----
+0
+
+# Ordinality is assigned before either predicate, and LIMIT remains a pushdown boundary.
+query II
+WITH c AS MATERIALIZED (SELECT * FROM range(10) WITH ORDINALITY AS r(x,n) WHERE x>2)
+SELECT x,n FROM c WHERE x=7;
+----
+7	8
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t WHERE x>10 ORDER BY x LIMIT 5)
+SELECT count(*) FROM c WHERE x>20;
+----
+0

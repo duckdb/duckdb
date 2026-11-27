@@ -1239,6 +1239,10 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 
 void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info) {
 	auto type = info.type;
+	if (transaction.IsInherited()) {
+		throw TransactionException(
+		    "a connection that inherited its transaction cannot start, join, commit or roll back a transaction");
+	}
 	if (type == TransactionType::COMMIT && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		// transaction is invalidated - turn COMMIT into ROLLBACK

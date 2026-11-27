@@ -38,8 +38,9 @@ INSERT INTO secrets VALUES (1, 'top_secret'), (2, '42')
 statement ok
 CREATE TABLE allowed(id INTEGER)
 
+# Keep the hidden row inside the join-key range so static pruning cannot protect the unbarred cast.
 statement ok
-INSERT INTO allowed VALUES (2)
+INSERT INTO allowed VALUES (0), (2)
 
 statement ok
 SET disabled_optimizers='join_filter_pushdown'

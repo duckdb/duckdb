@@ -8,6 +8,17 @@
 
 namespace duckdb {
 
+void ARTBuilder::SetChild(const NodeEntry &entry, const NodePtr node_ptr) {
+	if (!entry.parent_ptr.HasMetadata()) {
+		*root_ptr = node_ptr;
+		return;
+	}
+	NodeHandle handle(art, entry.parent_ptr);
+	auto child_ptr = NodePtr::GetChildMutable(handle, entry.byte, true);
+	D_ASSERT(child_ptr && !child_ptr->HasMetadata());
+	*child_ptr = node_ptr;
+}
+
 ARTConflictType ARTBuilder::Build() {
 	while (!s.empty()) {
 		// Copy the entry so we can pop it.
@@ -37,12 +48,13 @@ ARTConflictType ARTBuilder::Build() {
 			}
 
 			// Create the prefix, if any. The tail stays pinned while we fill its child.
-			reference<NodePtr> node_ptr_ref(entry.node_ptr);
+			NodePtr node_ptr;
+			reference<NodePtr> node_ptr_ref(node_ptr);
 			optional<PrefixHandle> tail;
 			auto count = UnsafeNumericCast<idx_t>(start.len - prefix_depth);
 			if (count != 0) {
 				auto chain = PrefixHandle::New(art, start, prefix_depth, count);
-				entry.node_ptr = chain.root_ptr;
+				node_ptr = chain.root_ptr;
 				tail = std::move(chain.tail);
 				node_ptr_ref = tail->Child(art);
 			}
@@ -50,6 +62,7 @@ ARTConflictType ARTBuilder::Build() {
 			// Inline the row ID.
 			if (row_id_count == 1) {
 				Leaf::New(node_ptr_ref, row_ids[entry.start].GetRowId());
+				SetChild(entry, node_ptr);
 				continue;
 			}
 
@@ -61,16 +74,18 @@ ARTConflictType ARTBuilder::Build() {
 				                    DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 			}
 			node_ptr_ref.get().SetGateStatus(GateStatus::GATE_SET);
+			SetChild(entry, node_ptr);
 			continue;
 		}
 
 		// Create the prefix, if any. The tail stays pinned while we fill its child.
-		reference<NodePtr> node_ptr_ref(entry.node_ptr);
+		NodePtr node_ptr;
+		reference<NodePtr> node_ptr_ref(node_ptr);
 		optional<PrefixHandle> tail;
 		auto prefix_length = entry.depth - prefix_depth;
 		if (prefix_length != 0) {
 			auto chain = PrefixHandle::New(art, start, prefix_depth, prefix_length);
-			entry.node_ptr = chain.root_ptr;
+			node_ptr = chain.root_ptr;
 			tail = std::move(chain.tail);
 			node_ptr_ref = tail->Child(art);
 		}
@@ -88,14 +103,13 @@ ARTConflictType ARTBuilder::Build() {
 		auto start_offset = child_offsets[0];
 		for (idx_t i = 1; i <= child_offsets.size(); i++) {
 			auto child_byte = keys[start_offset].data[entry.depth];
-			// FIXME: Improve performance by either returning a reference to the child directly,
-			// FIXME: or by calling InsertChild after processing the child (at the end of the stack loop).
+			// FIXME: Insert the child after building it, instead of inserting an empty child here.
 			NodePtr::InsertChild(art, node_ptr_ref, child_byte);
-			auto child_ptr_ref = node_ptr_ref.get().NodePtr::GetChildMutableUnsafe(art, child_byte, true);
 			auto end_offset = i != child_offsets.size() ? child_offsets[i] - 1 : entry.end;
-			s.emplace(*child_ptr_ref, start_offset, end_offset, entry.depth + 1);
+			s.emplace(node_ptr_ref.get(), child_byte, start_offset, end_offset, entry.depth + 1);
 			start_offset = end_offset + 1;
 		}
+		SetChild(entry, node_ptr);
 	}
 
 	// We exhausted the stack.
