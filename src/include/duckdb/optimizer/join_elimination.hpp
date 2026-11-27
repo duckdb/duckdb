@@ -12,8 +12,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/optimizer/removed_subtree_effects.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -40,31 +40,6 @@ public:
 		result.ref_table_ids = ref_table_ids;
 		return result;
 	}
-};
-
-//! What a removed subtree would no longer do, beyond returning rows: evaluate a volatile expression (nextval, random),
-//! modify data, or run a table function that declares itself VOLATILE. A reference to a materialized CTE counts with
-//! everything in the definition of that CTE: once the reference is gone, the columns only it read are pruned from the
-//! definition, expressions included.
-class RemovedSubtreeEffects {
-public:
-	//! Registers the CTEs that are defined in the plan
-	explicit RemovedSubtreeEffects(LogicalOperator &plan);
-
-	//! Whether removing the subtree would skip an effect
-	bool HasEffect(LogicalOperator &subtree);
-
-private:
-	void CollectDefinitions(LogicalOperator &op);
-	//! Whether the definition of a materialized CTE has an effect; computed once per CTE
-	bool DefinitionHasEffect(TableIndex cte_index);
-
-	//! The materialized CTEs of the plan (the CTE operators; the definition is their first child)
-	unordered_map<TableIndex, reference<LogicalOperator>> materialized_ctes;
-	//! The recursive CTEs of the plan: a reference to one reads the working table of a recursion that is part of the
-	//! plan around the reference
-	unordered_set<TableIndex> recursive_ctes;
-	unordered_map<TableIndex, bool> definition_has_effect;
 };
 
 class JoinElimination : public LogicalOperatorVisitor {
