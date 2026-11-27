@@ -97,7 +97,7 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 		vector<ColumnBinding> left_columns, right_columns;
 		vector<idx_t> left_indexes, right_indexes;
 		vector<vector<EqualitySupport>> pair_domains;
-		CardinalityValue denominator(1), largest(0), independent(1), strongest(1);
+		CardinalityValue common_combinations(1), largest(0), independent(1), strongest(1);
 		idx_t l = 0, r = 0;
 		while (l < left.size() && r < right.size()) {
 			if (left[l].component < right[r].component) {
@@ -111,8 +111,8 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 			auto axis = left[l].component;
 			auto &lhs = domains[axis][left[l].point];
 			auto &rhs = domains[axis][right[r].point];
-			auto domain = MaxValue(lhs.total, rhs.total);
-			denominator *= domain;
+			auto domain = MinValue(lhs.total, rhs.total);
+			common_combinations *= domain;
 			largest = MaxValue(largest, domain);
 			CardinalityValue factor;
 			Intersect({lhs, rhs}, factor);
@@ -153,13 +153,14 @@ EqualityCardinalityModel::CompositeKeyCorrection(const vector<EqualityComponent>
 			if (population.IsZero() || largest > population || population > CardinalityValue(8) * largest) {
 				continue;
 			}
-			multiplier = MinValue(denominator / MinValue(denominator, population), strongest / independent);
+			multiplier =
+			    MinValue(common_combinations / MinValue(common_combinations, population), strongest / independent);
 			if (multiplier <= CardinalityValue(1)) {
 				continue;
 			}
 		}
-		// Correct only the pair's independent denominator. Existing filter retention and the
-		// scalar contributions of other participants remain in the original estimate.
+		// Correlate the common coordinate populations without removing the reduction for values
+		// outside their overlap. Filter retention and other participants keep their scalar factors.
 		if (multiplier == CardinalityValue(1)) {
 			continue;
 		}

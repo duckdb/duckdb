@@ -101,6 +101,19 @@ TEST_CASE("Composite join cost priors retain producer populations and equality c
 		inputs[1].CapCurrentDomainsToCardinality();
 		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(10000));
 	}
+	SECTION("Unequal marginal populations retain their partial overlap") {
+		inputs[1] = EqualityInput(10000, {500, 2000});
+		sources.at(EqualityBinding(1, 0)).direct.domain = inputs[1].columns[0].total_domain;
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(50000));
+	}
+	SECTION("The larger producer can have more values than the smaller producer has rows") {
+		inputs[0] = EqualityInput(100000, {1000, 20000});
+		inputs[1] = EqualityInput(10000, {1000, 10000});
+		for (idx_t r = 0; r < inputs.size(); r++) {
+			sources.at(EqualityBinding(r, 1)).direct.domain = inputs[r].columns[1].total_domain;
+		}
+		REQUIRE(EqualityRows(inputs, edges, sources) == Approx(50000));
+	}
 	SECTION("Missing or mixed producer origins retain independent factors") {
 		REQUIRE(EqualityRows(inputs, edges) == Approx(500));
 		sources.at(EqualityBinding(1, 1)).direct.binding.table_index = TableIndex(200);
