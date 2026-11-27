@@ -472,4 +472,230 @@ TEST_CASE("V2 data source: null arguments and destroy null-safety", "[capi_v2][d
 	REQUIRE(duckdb_v2_data_source_destroy(&source) == DUCKDB_V2_ERROR_NONE);
 }
 
+namespace {
+
+// ---------------------------------------------------------------------------
+// ds_tasks(n): n rows of one BIGINT column, one row per invocation. Before each row the exec callback blocks the scan
+// on a task, which the next invocation finds has run. The last invocation declares the scan finished.
+// ---------------------------------------------------------------------------
+
+struct DsTaskProbe {
+	std::atomic<int> tasks_run {0};
+	std::atomic<int> task_data_destroyed {0};
+	std::atomic<int> exec_calls {0};
+};
+DsTaskProbe ds_task_probe;
+
+// What the exec callback of ds_misuse does: one way of declaring a result that does not fit the batch
+enum class DsMisuse { HAVE_MORE_OUTPUT_EMPTY, FINISHED_WITH_ROWS, BLOCKED_WITHOUT_TASK, TASK_NOT_BLOCKED, TASK_FAILS };
+std::atomic<DsMisuse> ds_misuse {DsMisuse::HAVE_MORE_OUTPUT_EMPTY};
+
+struct DsTaskGlobal {
+	int64_t position = 0;
+	// Whether the last invocation blocked the scan on a task
+	bool task_ran = false;
+	// How many tasks had run when the scan started
+	int tasks_before = ds_task_probe.tasks_run.load();
+};
+
+void DsDeleteTaskGlobal(void *ptr) {
+	delete static_cast<DsTaskGlobal *>(ptr);
+}
+
+void DsTaskInitGlobalCb(duckdb_v2_data_source_init_global_info_handle info, duckdb_v2_context_handle,
+                        duckdb_v2_error_info_handle *err) {
+	duckdb_v2_opaque global = {new DsTaskGlobal(), DsDeleteTaskGlobal, nullptr};
+	duckdb_v2_data_source_init_global_set_global_state(info, &global, err);
+}
+
+void DsDeleteTaskData(void *ptr) {
+	ds_task_probe.task_data_destroyed++;
+	delete static_cast<std::atomic<bool> *>(ptr);
+}
+
+void DsSetFlagTask(void *data, duckdb_v2_error_info_handle *) {
+	ds_task_probe.tasks_run++;
+	static_cast<std::atomic<bool> *>(data)->store(true);
+}
+
+void DsFailingTask(void *, duckdb_v2_error_info_handle *err) {
+	SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "the task failed");
+}
+
+void DsTaskExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
+                  duckdb_v2_error_info_handle *err) {
+	ds_task_probe.exec_calls++;
+	void *bind_ptr = nullptr;
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	if (duckdb_v2_data_source_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &bind = *static_cast<DsCountBind *>(bind_ptr);
+	auto &global = *static_cast<DsTaskGlobal *>(global_ptr);
+	if (global.position >= bind.count) {
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, err);
+		return;
+	}
+	// every second invocation blocks, so a task runs before every row
+	if (!global.task_ran) {
+		global.task_ran = true;
+		duckdb_v2_opaque opaque = {new std::atomic<bool>(false), DsDeleteTaskData, nullptr};
+		duckdb_v2_data_source_exec_add_task(info, DsSetFlagTask, &opaque, err);
+		return;
+	}
+	global.task_ran = false;
+	// the scan went on only after the task of the last invocation ran
+	if (ds_task_probe.tasks_run.load() - global.tasks_before != global.position + 1) {
+		SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "the scan went on before its task ran");
+		return;
+	}
+	duckdb_v2_vector_handle vec = nullptr;
+	void *raw = nullptr;
+	if (duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	static_cast<int64_t *>(raw)[0] = global.position++;
+	if (duckdb_v2_vector_set_size(vec, 1, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT, err);
+}
+
+void DsMisuseExecCb(duckdb_v2_data_source_exec_info_handle info, duckdb_v2_context_handle,
+                    duckdb_v2_error_info_handle *err) {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	duckdb_v2_vector_handle vec = nullptr;
+	if (duckdb_v2_data_source_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto add_task = [&](duckdb_v2_data_source_task_callback_fn task) {
+		duckdb_v2_opaque opaque = {new std::atomic<bool>(false), DsDeleteTaskData, nullptr};
+		duckdb_v2_data_source_exec_add_task(info, task, &opaque, err);
+	};
+	switch (ds_misuse.load()) {
+	case DsMisuse::HAVE_MORE_OUTPUT_EMPTY:
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_HAVE_MORE_OUTPUT, err);
+		break;
+	case DsMisuse::FINISHED_WITH_ROWS: {
+		void *raw = nullptr;
+		duckdb_v2_vector_get_data_mutable(vec, &raw, err);
+		static_cast<int64_t *>(raw)[0] = 1;
+		duckdb_v2_vector_set_size(vec, 1, err);
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, err);
+		break;
+	}
+	case DsMisuse::BLOCKED_WITHOUT_TASK:
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_BLOCKED, err);
+		break;
+	case DsMisuse::TASK_NOT_BLOCKED:
+		add_task(DsSetFlagTask);
+		duckdb_v2_data_source_exec_set_result(info, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, err);
+		break;
+	case DsMisuse::TASK_FAILS:
+		add_task(DsFailingTask);
+		break;
+	}
+}
+
+void DsRegisterExecSource(EnvFixture &fx, std::string_view name, duckdb_v2_data_source_exec_callback_fn exec_cb) {
+	auto source = DsMakeSource(fx.factory);
+	REQUIRE(duckdb_v2_data_source_set_init_global_callback(source, DsTaskInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_source_set_exec_callback(source, exec_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DsRegisterWithSource(fx, name, DsCountBindCb<1, 1>, source);
+	REQUIRE(duckdb_v2_data_source_destroy(&source) == DUCKDB_V2_ERROR_NONE);
+}
+
+// The message of a failing query, or the empty string when it succeeded
+std::string DsQueryError(duckdb_v2_connection_handle conn, std::string_view sql) {
+	duckdb_v2_result_handle result = nullptr;
+	duckdb_v2_error_info_handle err = nullptr;
+	auto rc = Query(conn, sql, &result, &err);
+	while (rc == DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_data_chunk_handle chunk = nullptr;
+		DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+		rc = duckdb_v2_result_step(result, &chunk, &status, &err);
+		duckdb_v2_data_chunk_destroy(&chunk);
+		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
+		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
+			break;
+		}
+		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
+			rc = duckdb_v2_result_wait(result, &err);
+		}
+	}
+	duckdb_v2_result_destroy(&result);
+	std::string message;
+	if (rc != DUCKDB_V2_ERROR_NONE && err) {
+		const char *text = nullptr;
+		idx_t text_length = 0;
+		duckdb_v2_error_info_get_text(err, &text, &text_length);
+		message = std::string(text, text_length);
+	}
+	duckdb_v2_error_info_destroy(&err);
+	return message;
+}
+
+} // namespace
+
+TEST_CASE("V2 data source: an exec callback blocks its scan on tasks", "[capi_v2][data_source]") {
+	EnvFixture fx;
+	DsRegisterExecSource(fx, "ds_tasks", DsTaskExecCb);
+
+	for (auto strategy : {"DEFAULT", "SYNCHRONOUS"}) {
+		INFO(strategy);
+		ExecSQL(fx.conn, std::string("SET debug_physical_table_scan_execution_strategy=") + strategy);
+		ds_task_probe.tasks_run = 0;
+		ds_task_probe.task_data_destroyed = 0;
+		ds_task_probe.exec_calls = 0;
+		// An empty batch with a task does not end the scan: every row comes after a task ran
+		REQUIRE(DsQueryI64(fx.conn, "SELECT count(*) FROM ds_tasks(5)") == 5);
+		REQUIRE(ds_task_probe.tasks_run == 5);
+		// every task's data was destroyed once it ran
+		REQUIRE(ds_task_probe.task_data_destroyed == 5);
+		// five blocked invocations, five producing a row, and the one declaring the scan finished
+		REQUIRE(ds_task_probe.exec_calls == 11);
+		REQUIRE(DsQueryI64(fx.conn, "SELECT sum(a)::BIGINT FROM ds_tasks(5)") == 10);
+		REQUIRE(DsQueryI64(fx.conn, "SELECT count(*) FROM ds_tasks(0)") == 0);
+	}
+}
+
+TEST_CASE("V2 data source: a result that does not fit the batch fails the query", "[capi_v2][data_source]") {
+	EnvFixture fx;
+	DsRegisterExecSource(fx, "ds_misuse", DsMisuseExecCb);
+
+	ds_misuse = DsMisuse::HAVE_MORE_OUTPUT_EMPTY;
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("has more output"));
+	ds_misuse = DsMisuse::FINISHED_WITH_ROWS;
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("finished, but produced rows"));
+	ds_misuse = DsMisuse::BLOCKED_WITHOUT_TASK;
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("added no task"));
+	ds_task_probe.task_data_destroyed = 0;
+	ds_misuse = DsMisuse::TASK_NOT_BLOCKED;
+	REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("not blocked"));
+	// the task that was not run is destroyed with its data
+	REQUIRE(ds_task_probe.task_data_destroyed == 1);
+	for (auto strategy : {"DEFAULT", "SYNCHRONOUS"}) {
+		INFO(strategy);
+		ExecSQL(fx.conn, std::string("SET debug_physical_table_scan_execution_strategy=") + strategy);
+		ds_misuse = DsMisuse::TASK_FAILS;
+		REQUIRE_THAT(DsQueryError(fx.conn, "SELECT * FROM ds_misuse(1)"), Catch::Contains("the task failed"));
+	}
+}
+
+TEST_CASE("V2 data source: invalid result and task arguments", "[capi_v2][data_source]") {
+	// a null info or task is refused, and the task data is destroyed all the same
+	ds_task_probe.task_data_destroyed = 0;
+	duckdb_v2_opaque opaque = {new std::atomic<bool>(false), DsDeleteTaskData, nullptr};
+	REQUIRE(duckdb_v2_data_source_exec_add_task(nullptr, DsSetFlagTask, &opaque, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ds_task_probe.task_data_destroyed == 1);
+	REQUIRE(duckdb_v2_data_source_exec_set_result(nullptr, DUCKDB_V2_DATA_SOURCE_RESULT_FINISHED, nullptr) !=
+	        DUCKDB_V2_ERROR_NONE);
+}
+
 } // namespace test_capi_v2
