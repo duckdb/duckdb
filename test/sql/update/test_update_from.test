@@ -157,3 +157,18 @@ select * from docs;
 ----
 1	1
 2	3
+
+# a row matched more than once takes all of its columns from the same match
+statement ok
+CREATE TABLE multi (a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO multi VALUES (-1, -1);
+
+statement ok
+UPDATE multi SET a = i, b = CASE WHEN i % 2 = 0 THEN i END FROM range(32) s(i);
+
+query I
+SELECT count(*) FROM multi WHERE a BETWEEN 0 AND 31 AND b IS NOT DISTINCT FROM CASE WHEN a % 2 = 0 THEN a END
+----
+1
