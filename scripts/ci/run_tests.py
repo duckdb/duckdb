@@ -1803,7 +1803,7 @@ def extract_result_skips(result):
 
 
 def coverage_profile_file_pattern(profile_dir: Path):
-    return os.fspath(profile_dir / "duckdb-%p-%m.profraw")
+    return os.fspath(profile_dir / "duckdb-%m.profraw")
 
 
 def lcov_exclude_pattern_to_regex(pattern: str):

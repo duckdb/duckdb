@@ -1,0 +1,81 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_during_failing_commits.test_slow
+# description: Test ART creation and rollback while other commits fail
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS a, range AS b FROM range(200000);
+
+statement ok
+CREATE INDEX idx_a ON t(a);
+
+statement ok
+SET GLOBAL debug_force_commit_failure = true;
+
+# thread 0 creates indexes that roll back, threads 1 and 2 commit inserts and deletes that fail after their undo walk;
+# the inserted keys are new, so they do not conflict with idx_unique_b while it is in the index list
+concurrentloop threadid 0 3
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+BEGIN;
+
+onlyif threadid=0
+statement ok
+CREATE INDEX idx_b ON t(b);
+
+onlyif threadid=0
+statement ok
+ROLLBACK;
+
+onlyif threadid=0
+statement error
+CREATE UNIQUE INDEX idx_unique_b ON t(b);
+----
+Forced commit failure
+
+onlyif threadid=1
+statement error
+INSERT INTO t SELECT range, range FROM range(1000000 + {i} * 100000, 1100000 + {i} * 100000);
+----
+Forced commit failure
+
+onlyif threadid=2
+statement error
+DELETE FROM t WHERE a % 2 = 0;
+----
+Forced commit failure
+
+endloop
+
+endloop
+
+statement ok
+SET GLOBAL debug_force_commit_failure = false;
+
+statement ok
+CREATE UNIQUE INDEX idx_unique_b ON t(b);
+
+query I
+SELECT count(*) FROM t;
+----
+200000
+
+query I
+SELECT count(*) FROM t WHERE a = 4242;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE b = 4243;
+----
+1
+
+statement ok
+DELETE FROM t WHERE a % 2 = 0;
+
+query II
+SELECT (SELECT count(*) FROM t WHERE a = 4242), (SELECT count(*) FROM t WHERE b = 4243);
+----
+0	1

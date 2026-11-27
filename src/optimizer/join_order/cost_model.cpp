@@ -87,7 +87,7 @@ void CostModel::UpdateBuildMemory(DPJoinNode &result, const DPJoinNode &left, co
 	    left_properties.build.correlation_sensitive || right_properties.build.correlation_sensitive;
 	properties.build.repeatable = left_properties.build.repeatable && right_properties.build.repeatable;
 	for (auto &predicate : result.predicates) {
-		properties.build.repeatable &= !predicate.get().GetFilter().filter->IsVolatile();
+		properties.build.repeatable &= !predicate.get().IsVolatile();
 	}
 	if (!recursive_relations) {
 		return;

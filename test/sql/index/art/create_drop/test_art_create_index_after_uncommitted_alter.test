@@ -1,0 +1,28 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_after_uncommitted_alter.test
+# description: Test ART creation on a table that an uncommitted ALTER replaced, while the ALTER commits a delete
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS a, range AS b, range AS c FROM range(10000);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE t DROP COLUMN a;
+
+statement error con2
+CREATE INDEX idx_c ON t(c);
+----
+<REGEX>:.*Transaction conflict.*altered.*
+
+statement ok con1
+DELETE FROM t WHERE b = 1;
+
+statement ok con1
+COMMIT;
+
+query II
+SELECT count(*), count(*) FILTER (WHERE b = 1) FROM t;
+----
+9999	0

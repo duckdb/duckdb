@@ -2094,7 +2094,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
-					        *state.thrift_file_proto, allocator, bloom_reader->Schema(), *hash_strategy)) {
+					        *state.thrift_file_proto, allocator, bloom_reader->Schema(), *hash_strategy, *this,
+					        group.ordinal, bloom_reader->ColumnIndex())) {
 						prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}

@@ -1,0 +1,52 @@
+# name: test/sql/index/art/create_drop/test_art_add_primary_key_during_null_commits.test_slow
+# description: Test ALTER TABLE ADD PRIMARY KEY while another connection commits NULL keys and deletes them again
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS c0 FROM range(1000000);
+
+# thread 0 adds a primary key until it succeeds, thread 1 commits a NULL key and then deletes it;
+# a primary key fails only on a NULL that is still in the table
+concurrentloop threadid 0 2
+
+loop i 0 20
+
+onlyif threadid=0
+statement maybe
+ALTER TABLE t ADD PRIMARY KEY (c0);
+----
+<REGEX>:.*(NOT NULL constraint failed|Transaction conflict|another transaction has altered this table|can have only one primary key).*
+
+onlyif threadid=1
+statement maybe
+INSERT INTO t VALUES (NULL);
+----
+<REGEX>:.*(attempting to insert into table "t" but it has been altered|another transaction has altered this table|NOT NULL constraint failed).*
+
+onlyif threadid=1
+statement maybe
+DELETE FROM t WHERE c0 IS NULL;
+----
+<REGEX>:.*(another transaction has altered this table|Transaction conflict).*
+
+endloop
+
+endloop
+
+statement ok
+DELETE FROM t WHERE c0 IS NULL;
+
+statement maybe
+ALTER TABLE t ADD PRIMARY KEY (c0);
+----
+can have only one primary key
+
+statement error
+INSERT INTO t VALUES (NULL);
+----
+NOT NULL constraint failed
+
+query I
+SELECT count(*) FROM t;
+----
+1000000

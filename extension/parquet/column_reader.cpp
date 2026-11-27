@@ -515,7 +515,7 @@ void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
 }
 
 void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
-	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type);
 	aad_crypto_metadata.page_ordinal =
 	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
 	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);

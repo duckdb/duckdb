@@ -656,7 +656,7 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 	}
 
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
-		// chunk is only null when called from MergeCheckpointDeltas.
+		// chunk is only null when merging a delta.
 		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
@@ -1498,7 +1498,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 }
 
 // FIXME : Make this a more efficient structural tree removal merge
-//		   Right now this is only used in MergeCheckpointDeltas to avoid having to do a table scan.
+//		   Right now this is only used to merge deltas, to avoid having to do a table scan.
 void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 	state.AssertHeld(*this);
 	auto &source = source_index.Cast<ART>();
@@ -1579,16 +1579,15 @@ ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode
 	return InsertMerge(state, source_index, append_mode);
 }
 
-ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta_index) {
+ErrorData ART::MergeDelta(const IndexDeltaType type, BoundIndex &delta_index, const IndexAppendMode append_mode) {
 	switch (type) {
-	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
+	case IndexDeltaType::REMOVED_DATA:
 		RemovalMerge(delta_index);
 		return ErrorData();
-	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
-		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
-		return InsertMerge(delta_index, IndexAppendMode::INSERT_DUPLICATES);
+	case IndexDeltaType::ADDED_DATA:
+		return InsertMerge(delta_index, append_mode);
 	default:
-		throw InternalException("Unsupported ART checkpoint delta type");
+		throw InternalException("Unsupported ART delta type");
 	}
 }
 

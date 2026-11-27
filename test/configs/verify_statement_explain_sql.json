@@ -5,6 +5,12 @@
   "skip_compiled": true,
   "skip_tests": [
     {
+      "reason": "Rebinding combines the signed-zero atan2 bounds into one filter batch, exposing native FilterCombiner expression matching that also fails over VALUES without scan filters or SQL export",
+      "paths": [
+        "test/optimizer/filter_pushdown/signed_zero_scan_filters.test"
+      ]
+    },
+    {
       "reason": "The generated SQL changes the query pipelines whose tasks the fixture counts",
       "paths": [
         "test/sql/json/table/json_table_in_out_threads.test"

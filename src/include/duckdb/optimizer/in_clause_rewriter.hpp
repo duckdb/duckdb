@@ -11,6 +11,7 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/in_clause.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -27,8 +28,6 @@ public:
 	unique_ptr<LogicalOperator> root;
 
 public:
-	// Minimum number of values to use a hash join
-	static constexpr idx_t IN_CLAUSE_REWRITE_THRESHOLD = 6;
 	static bool HasRewritableInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	//! skips error-capture interiors (TRY, has_error) and guarded conjunction/CASE/COALESCE children:

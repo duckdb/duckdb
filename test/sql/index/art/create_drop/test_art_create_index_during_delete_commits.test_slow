@@ -1,0 +1,58 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_during_delete_commits.test_slow
+# description: Test ART creation while commits delete rows from before and during the build in one vector
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t AS SELECT range AS a, range AS b FROM range(1000000);
+
+statement ok
+SET index_scan_max_count = 10000000;
+
+# thread 0 creates and drops idx_unique_a; thread 1 appends ten rows to the last vector, then deletes the last five
+# rows of the previous commit and the first five of its own in one DELETE
+concurrentloop threadid 0 2
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+CREATE UNIQUE INDEX idx_unique_a ON t(a);
+
+onlyif threadid=0
+query I
+SELECT (SELECT count(*) FROM t WHERE a >= 999000) = (SELECT count(*) FILTER (WHERE a >= 999000) FROM t);
+----
+true
+
+onlyif threadid=0
+statement ok
+DROP INDEX idx_unique_a;
+
+loop j 0 50
+
+onlyif threadid=1
+statement ok
+INSERT INTO t SELECT range, range FROM range(1000000 + ({i} * 50 + {j}) * 10, 1000010 + ({i} * 50 + {j}) * 10);
+
+onlyif threadid=1
+statement ok
+DELETE FROM t WHERE a BETWEEN 999995 + ({i} * 50 + {j}) * 10 AND 1000004 + ({i} * 50 + {j}) * 10;
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+CREATE UNIQUE INDEX idx_unique_a ON t(a);
+
+query I
+SELECT (SELECT count(*) FROM t WHERE a >= 999000) = (SELECT count(*) FILTER (WHERE a >= 999000) FROM t);
+----
+true
+
+query I
+SELECT count(*) FROM t WHERE a >= 999990;
+----
+10
