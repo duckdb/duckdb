@@ -1098,6 +1098,31 @@ TEST_CASE("Scaled cardinality sums and complements do not materialize intermedia
 	REQUIRE(adjacent.GetDouble() == std::numeric_limits<double>::epsilon());
 }
 
+TEST_CASE("Cardinality comparisons preserve adjacent values across scaled ranges",
+          "[optimizer][relation_statistics][cardinality_arithmetic]") {
+	vector<double> ordered {0,
+	                        std::numeric_limits<double>::denorm_min(),
+	                        std::numeric_limits<double>::min(),
+	                        std::nextafter(1.0, 0.0),
+	                        1,
+	                        std::nextafter(1.0, 2.0),
+	                        std::numeric_limits<double>::max()};
+	CardinalityValue large(std::ldexp(1.0, 600));
+	CardinalityValue small(std::ldexp(1.0, -600));
+	for (auto scale : {CardinalityValue(1), large * large, small * small}) {
+		for (idx_t i = 0; i < ordered.size(); i++) {
+			for (idx_t j = 0; j < ordered.size(); j++) {
+				auto left = CardinalityValue(ordered[i]) * scale;
+				auto right = CardinalityValue(ordered[j]) * scale;
+				REQUIRE((left > right) == (i > j));
+				REQUIRE((left < right) == (i < j));
+				REQUIRE((left == right) == (i == j));
+			}
+		}
+	}
+	REQUIRE(CardinalityValue(-0.0) == CardinalityValue(0));
+}
+
 TEST_CASE("Row estimate floors never become emptiness proofs",
           "[optimizer][relation_statistics][cardinality_arithmetic]") {
 	RelationStats stats;
