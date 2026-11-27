@@ -40,6 +40,9 @@ struct EncodingFunction {
 	static constexpr const char *SCHEMA = "encodings";
 	//! Integer function property: the maximum number of input bytes that make up one character
 	static constexpr const char *MINIMUM_INPUT_WINDOW_PROPERTY = "duckdb.encodings.minimum_input_window";
+	//! LIST(STRUCT(mark BLOB, encoding VARCHAR)) function property: a stream that starts with a mark is decoded with
+	//! that encoding. The first matching mark wins, an empty mark matches any stream.
+	static constexpr const char *BYTE_ORDER_MARKS_PROPERTY = "duckdb.encodings.byte_order_marks";
 
 	//! The name of the scalar function that decodes the encoding
 	DUCKDB_API static string FunctionName(const string &encoding_name);

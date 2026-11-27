@@ -1,0 +1,56 @@
+# name: test/sql/optimizer/test_common_subplan_signature_children.test
+# description: Common subplan signatures distinguish operator contents and ordered child subplans
+# group: [optimizer]
+
+statement ok
+CREATE TABLE signature_left(k INTEGER);
+
+statement ok
+INSERT INTO signature_left VALUES (1), (2), (NULL);
+
+statement ok
+CREATE TABLE signature_right(k INTEGER);
+
+statement ok
+INSERT INTO signature_right VALUES (2), (3), (NULL);
+
+statement ok
+CREATE VIEW signature_forward AS
+SELECT k FROM signature_left EXCEPT SELECT k FROM signature_right;
+
+statement ok
+CREATE VIEW signature_reverse AS
+SELECT k FROM signature_right EXCEPT SELECT k FROM signature_left;
+
+statement ok
+CREATE VIEW signature_common AS
+SELECT k FROM signature_left INTERSECT SELECT k FROM signature_right;
+
+# Repeated parents share signatures, but reversing the children changes the result.
+query III
+SELECT kind, k, count(*) FROM (
+    SELECT 1 kind, k FROM signature_forward
+    UNION ALL SELECT 1, k FROM signature_forward
+    UNION ALL SELECT 2, k FROM signature_reverse
+    UNION ALL SELECT 2, k FROM signature_reverse
+    UNION ALL SELECT 3, k FROM signature_common
+    UNION ALL SELECT 3, k FROM signature_common
+) GROUP BY kind, k ORDER BY kind, k NULLS LAST;
+----
+1	1	2
+2	3	2
+3	2	2
+3	NULL	2
+
+# Different children with the same operator shape remain distinct inside a shared parent.
+query II
+WITH nested AS (
+    SELECT k FROM signature_forward
+    UNION ALL SELECT k FROM signature_reverse
+)
+SELECT k, count(*) FROM (
+    SELECT k FROM nested UNION ALL SELECT k FROM nested
+) GROUP BY k ORDER BY k;
+----
+1	2
+3	2

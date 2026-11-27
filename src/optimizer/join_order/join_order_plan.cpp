@@ -36,7 +36,7 @@ unique_ptr<CapturedJoinOrderPlan> CapturedJoinOrderPlan::Capture(const JoinOrder
 		if (!node->is_leaf) {
 			auto &left = *result.at(node->left_set);
 			auto &right = *result.at(node->right_set);
-			node->cost = cost_model.ComputeCost(left, right, node->join_operator, node->cardinality.GetDouble());
+			node->cost = cost_model.ComputeCost(left, right, node->join_operator, node->set);
 			cost_model.UpdateBuildMemory(*node, left, right);
 		}
 		result.emplace(node->set, std::move(node));
@@ -54,6 +54,23 @@ const DPJoinNode &CapturedJoinOrderPlan::GetRootNode() const {
 
 const JoinOrderPlanMap &CapturedJoinOrderPlan::GetPlans() const {
 	return plans;
+}
+
+vector<RelationIndex> CapturedJoinOrderPlan::GetLeafOrder() const {
+	vector<RelationIndex> order;
+	vector<reference<JoinRelationSet>> pending {root};
+	while (!pending.empty()) {
+		auto &node = *plans.at(pending.back());
+		pending.pop_back();
+		if (node.is_leaf) {
+			D_ASSERT(node.set.count == 1);
+			order.push_back(node.set.relations[0]);
+		} else {
+			pending.push_back(node.right_set);
+			pending.push_back(node.left_set);
+		}
+	}
+	return order;
 }
 
 JoinOrderPlanMap CapturedJoinOrderPlan::TakePlans() {

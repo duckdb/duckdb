@@ -118,6 +118,16 @@ SELECT (SELECT sum(paid) FROM sales, dim1 WHERE sales.k = dim1.dk AND dim1.dname
 ----
 42481.00	50.0009375	98
 
+# flipped shared comparisons and repeated branch predicates keep the same common and private conjuncts
+query IIII
+SELECT a.v, b.v, c.v, d.v FROM
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) a,
+    (SELECT count(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) b,
+    (SELECT count(*) AS v FROM two_keys, reason WHERE k < r_sk AND k = 1) c,
+    (SELECT sum(k) AS v FROM two_keys, reason WHERE r_sk > k AND k = 2) d
+----
+3	2	3	4
+
 # the merged columns are read by a filter above the cross product, next to a table that is no branch
 query III
 SELECT r_sk, a, b FROM reason, (SELECT count(*) AS a FROM sales WHERE q < 10) x, (SELECT count(*) AS b FROM sales WHERE q > 90) y
@@ -126,6 +136,42 @@ ORDER BY r_sk
 ----
 0	450	500
 1	450	500
+
+# interleaved merge groups keep their leaf positions and bindings across a non-aggregate sibling
+statement ok
+CREATE TABLE merge_left AS SELECT * FROM (VALUES (1), (2), (3), (NULL)) t(i);
+
+statement ok
+CREATE TABLE merge_right AS SELECT * FROM (VALUES (5), (7), (NULL)) t(i);
+
+query IIIII
+SELECT a.v, other.tag, b.v, c.v, d.v
+FROM (SELECT sum(i) AS v FROM merge_left WHERE i < 3) a,
+     (VALUES (10), (20)) other(tag),
+     (SELECT max(i) AS v FROM merge_right) b,
+     (SELECT count(i) AS v FROM merge_left WHERE i > 2) c,
+     (SELECT sum(i) AS v FROM merge_right) d
+ORDER BY other.tag;
+----
+3	10	7	1	12
+3	20	7	1	12
+
+# whole subtrees disappear; surviving left and right children keep their bindings and row multiplicity
+query IIIIIII
+SELECT a.v, b.v, c.v, d.v, other.tag, e.v, f.v
+FROM (((SELECT sum(i) AS v FROM merge_left WHERE i < 3) a
+       CROSS JOIN (SELECT max(i) AS v FROM merge_right) b)
+      CROSS JOIN
+      ((SELECT count(i) AS v FROM merge_left WHERE i > 2) c
+       CROSS JOIN (SELECT sum(i) AS v FROM merge_right) d))
+     CROSS JOIN
+     (((SELECT min(i) AS v FROM merge_left) e
+       CROSS JOIN (SELECT count(i) AS v FROM merge_right) f)
+      CROSS JOIN (VALUES (10), (20)) other(tag))
+ORDER BY other.tag;
+----
+3	7	1	12	10	1	2
+3	7	1	12	20	1	2
 
 # prepared statements: the parameters keep their values through the rewrite
 statement ok

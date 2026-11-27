@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -168,6 +169,31 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
+//! A selected list has an element for each index (list_select) or for each true mask entry (list_where)
+template <bool SELECT_EVERY_ENTRY>
+unique_ptr<BaseStatistics> ListSelectStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &value_stats = input.child_stats[0];
+	auto &selection_stats = input.child_stats[1];
+	auto &return_type = input.expr.GetReturnType();
+	if (value_stats.GetStatsType() != StatisticsType::LIST_STATS ||
+	    selection_stats.GetStatsType() != StatisticsType::LIST_STATS || value_stats.GetType() != return_type) {
+		return nullptr;
+	}
+	auto result = ListStats::CreateUnknown(return_type);
+	result.CopyValidity(value_stats);
+	if (selection_stats.CanHaveNull()) {
+		result.SetHasNull();
+	}
+	// entries that are out of range are NULL
+	auto child_stats = ListStats::GetChildStats(value_stats).Copy();
+	child_stats.SetHasNull();
+	ListStats::SetChildStats(result, child_stats.ToUnique());
+	auto max_length = ListStats::MaxListLength(selection_stats);
+	auto min_length = SELECT_EVERY_ENTRY ? ListStats::MinListLength(selection_stats) : optional_idx(0);
+	ListStats::SetLengthBounds(result, min_length, max_length);
+	return result.ToUnique();
+}
+
 } // namespace
 
 ScalarFunction ListWhereFun::GetFunction() {
@@ -178,6 +204,7 @@ ScalarFunction ListWhereFun::GetFunction() {
 	    .AddParameter("mask_list", LogicalType::LIST(LogicalType::BOOLEAN));
 	// throws if the selection list contains NULL values
 	fun.SetFallible();
+	fun.SetStatisticsCallback(ListSelectStats<false>);
 	return fun;
 }
 
@@ -189,6 +216,7 @@ ScalarFunction ListSelectFun::GetFunction() {
 	    .AddParameter("index_list", LogicalType::LIST(LogicalType::BIGINT));
 	// throws if the selection list contains NULL values
 	fun.SetFallible();
+	fun.SetStatisticsCallback(ListSelectStats<true>);
 	return fun;
 }
 

@@ -339,6 +339,38 @@ inline bool GreaterThan::Operation(const string_t &left, const string_t &right) 
 	return left > right;
 }
 
+//! Branchless string equality, only valid when one side is inlined (e.g. a short constant)
+struct InlinedStringEquals {
+	template <class T>
+	static inline bool Operation(const T &left, const T &right) {
+		return string_t::StringComparisonOperators::InlinedEquals(left, right);
+	}
+};
+struct InlinedStringNotEquals {
+	template <class T>
+	static inline bool Operation(const T &left, const T &right) {
+		return !string_t::StringComparisonOperators::InlinedEquals(left, right);
+	}
+};
+
+//! Maps Equals / NotEquals to the operator to use against an inlined string constant
+template <class OP>
+struct InlinedStringEqualityOperator {
+	static constexpr bool ENABLED = false;
+};
+
+template <>
+struct InlinedStringEqualityOperator<Equals> {
+	static constexpr bool ENABLED = true;
+	using OPERATOR = InlinedStringEquals;
+};
+
+template <>
+struct InlinedStringEqualityOperator<NotEquals> {
+	static constexpr bool ENABLED = true;
+	using OPERATOR = InlinedStringNotEquals;
+};
+
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators
 //===--------------------------------------------------------------------===//

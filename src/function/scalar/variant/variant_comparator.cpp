@@ -45,7 +45,7 @@ constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 constexpr data_t BIT_SORT_KEY_ZERO = 2;
 constexpr data_t BIT_SORT_KEY_ONE = 3;
 
-data_t GetVariantTypeRank(const VariantLogicalType type_id) {
+data_t GetVariantTypeRank(const LogicalTypeId type_id) {
 	return static_cast<data_t>(GetVariantComparisonType(type_id));
 }
 
@@ -154,7 +154,7 @@ bool EncodeVariantNode(const VariantNode &it, SINK &sink, vector<VariantEncodeFr
 		// no payload - the rank fully describes the value
 		break;
 	case VariantComparisonType::BOOLEAN:
-		sink.Write(type_id == VariantLogicalType::BOOL_TRUE ? 1 : 0);
+		sink.Write(it.GetBool() ? 1 : 0);
 		break;
 	// all integers, decimals and bignums fold into the NUMBER rank and compare by numeric value
 	case VariantComparisonType::NUMBER:
@@ -235,6 +235,9 @@ bool EncodeVariantChildren(VariantEncodeFrame &frame, SINK &sink, vector<Variant
 			}
 		}
 		return true;
+	}
+	if (!frame.entries) {
+		throw InternalException("VariantEncodeFrame holds neither an array nor an object");
 	}
 	auto &entries = frame.entries->GetOrderedEntries();
 	while (frame.next_child < entries.size()) {

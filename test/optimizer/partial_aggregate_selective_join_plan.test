@@ -2,6 +2,8 @@
 # description: Only aggregate before a join when enough input rows survive
 # group: [optimizer]
 
+require vector_size 2048
+
 statement ok
 CREATE TABLE facts AS SELECT i % 1000 AS k, i % 13 AS v FROM range(100000) r(i);
 

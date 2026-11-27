@@ -25,7 +25,8 @@
 				"test/sql/copy/parquet/parquet_schema_default_only_struct.test",
 				"test/sql/copy/parquet/parquet_schema_default_only_list.test",
 				"test/sql/copy/parquet/parquet_schema_list_child_name.test",
-				"test/sql/copy/parquet/parquet_schema_list_child_types.test"
+				"test/sql/copy/parquet/parquet_schema_list_child_types.test",
+				"test/sql/storage/read_duckdb/read_duckdb_schema_filter.test"
 			]
 		},
 		{

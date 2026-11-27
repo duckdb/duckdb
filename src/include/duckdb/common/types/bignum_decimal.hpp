@@ -104,6 +104,9 @@ struct DecimalHelper<bignum_t> {
 	                     RoundState &state, bignum_t &result) {
 		return TryRound(value, drop_digits, restore_digits, ROUNDING, width, state, result);
 	}
+	//! Divides a value by a positive divisor and rounds the quotient as requested, the result lives in the heap
+	DUCKDB_API static string_t DivideAndRound(const BignumIntermediate &source, const BignumIntermediate &divisor,
+	                                          DecimalRounding rounding, StringHeap &heap, BignumArithmeticState &state);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero), the result is the BIGNUM blob of the
 	//! rescaled value
 	DUCKDB_API static string Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,

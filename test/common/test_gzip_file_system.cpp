@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "test_helpers.hpp"
@@ -10,7 +10,7 @@ namespace {
 
 class ShortReadFileHandle : public FileHandle {
 public:
-	ShortReadFileHandle(FileSystem &file_system, const string &path)
+	ShortReadFileHandle(BaseFileSystem &file_system, const string &path)
 	    : FileHandle(file_system, path, FileFlags::FILE_FLAGS_READ) {
 	}
 
@@ -20,7 +20,7 @@ public:
 	idx_t position = 0;
 };
 
-class ShortReadFileSystem : public FileSystem {
+class ShortReadFileSystem : public BaseFileSystem {
 public:
 	ShortReadFileSystem(const vector<data_t> &data_p, idx_t max_read_size_p, optional_idx read_boundary_p)
 	    : data(data_p), max_read_size(max_read_size_p), read_boundary(read_boundary_p) {

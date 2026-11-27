@@ -100,39 +100,35 @@ void QueryExpressionIterator::Visit(TableRef &ref) {
 		auto &j_ref = ref.Cast<JoinRef>();
 		Visit(*j_ref.left);
 		Visit(*j_ref.right);
-		if (all_expressions) {
-			for (auto &expr : j_ref.duplicate_eliminated_columns) {
-				expr_callback(expr);
-			}
-			if (j_ref.ranking_expression) {
-				expr_callback(j_ref.ranking_expression);
-			}
-		}
 		if (j_ref.condition) {
 			expr_callback(j_ref.condition);
+		}
+		for (auto &column : j_ref.duplicate_eliminated_columns) {
+			expr_callback(column);
+		}
+		if (j_ref.ranking_expression) {
+			expr_callback(j_ref.ranking_expression);
 		}
 		break;
 	}
 	case TableReferenceType::PIVOT: {
 		auto &p_ref = ref.Cast<PivotRef>();
 		Visit(*p_ref.source);
-		if (all_expressions) {
-			for (auto &pivot : p_ref.pivots) {
-				for (auto &expr : pivot.pivot_expressions) {
-					expr_callback(expr);
-				}
-				for (auto &entry : pivot.entries) {
-					if (entry.expr) {
-						expr_callback(entry.expr);
-					}
-				}
-				if (pivot.subquery) {
-					Visit(*pivot.subquery);
-				}
-			}
-		}
 		for (auto &aggr : p_ref.aggregates) {
 			expr_callback(aggr);
+		}
+		for (auto &pivot : p_ref.pivots) {
+			for (auto &expr : pivot.pivot_expressions) {
+				expr_callback(expr);
+			}
+			for (auto &entry : pivot.entries) {
+				if (entry.expr) {
+					expr_callback(entry.expr);
+				}
+			}
+			if (pivot.subquery) {
+				Visit(*pivot.subquery);
+			}
 		}
 		break;
 	}
@@ -167,11 +163,7 @@ void QueryExpressionIterator::Visit(TableRef &ref) {
 			expr_callback(mr_ref.config->pattern);
 		}
 		if (mr_ref.input) {
-			if (all_expressions) {
-				Visit(*mr_ref.input);
-			} else {
-				ref_callback(*mr_ref.input);
-			}
+			Visit(*mr_ref.input);
 		}
 		break;
 	}
@@ -183,9 +175,9 @@ void QueryExpressionIterator::Visit(TableRef &ref) {
 		break;
 	}
 	case TableReferenceType::BASE_TABLE: {
-		auto &table = ref.Cast<BaseTableRef>();
-		if (all_expressions && table.at_clause) {
-			expr_callback(table.at_clause->ExpressionMutable());
+		auto &base_ref = ref.Cast<BaseTableRef>();
+		if (base_ref.at_clause && base_ref.at_clause->ExpressionMutable()) {
+			expr_callback(base_ref.at_clause->ExpressionMutable());
 		}
 		break;
 	}

@@ -28,7 +28,7 @@ public:
 
 	void CorruptPayload(WALType target_type) {
 		auto target = FindPayload(target_type);
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
@@ -57,7 +57,7 @@ private:
 	};
 
 	vector<Entry> ReadEntries() {
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);

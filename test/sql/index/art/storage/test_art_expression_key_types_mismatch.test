@@ -1,0 +1,175 @@
+# name: test/sql/index/art/storage/test_art_expression_key_types_mismatch.test
+# description: A stored index whose key expression binds to another type than its keys were stored with is skipped by reads and refused by writes, a decimal key that only changed its width is matched
+# group: [storage]
+
+# the storage version is chosen per database below, the configs that force one cannot
+require no_force_storage
+
+# The key expressions call macros of the in-memory catalog: an index depends on the entries of its own catalog only,
+# so the macros can be replaced while the indexes exist, and the stored indexes bind their keys to other types when
+# the database is attached again, the way an engine that resolves another result type for a function would.
+statement ok
+CREATE MACRO key_of(v) AS v
+
+statement ok
+CREATE MACRO key_ts(v) AS v
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d (STORAGE_VERSION 'v2.1.0')
+
+statement ok
+CREATE TABLE d.t (x DECIMAL(18,0), y INTEGER, ts TIMESTAMP)
+
+statement ok
+CREATE UNIQUE INDEX ix ON d.t ((key_of(x)))
+
+statement ok
+CREATE UNIQUE INDEX iy ON d.t (y)
+
+statement ok
+CREATE UNIQUE INDEX its ON d.t ((key_ts(ts)))
+
+statement ok
+INSERT INTO d.t VALUES (11, 1, TIMESTAMP '2020-01-01 00:00:00'), (1234, 2, TIMESTAMP '2021-01-01 00:00:00')
+
+statement ok
+CHECKPOINT d
+
+statement ok
+DETACH d
+
+# the keys of ix were stored as DECIMAL(18,0), the expression binds to DECIMAL(18,1) now: the same physical type
+# (INT64), another encoding (11 is stored as 11, computed as 110)
+statement ok
+CREATE OR REPLACE MACRO key_of(v) AS v::DECIMAL(18,1)
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d
+
+# reads do without the index
+query II
+SELECT x, y FROM d.t WHERE key_of(x) = 1234
+----
+1234	2
+
+query II
+SELECT x, y FROM d.t WHERE y = 1
+----
+11	1
+
+# writes need every index of the table
+statement error
+INSERT INTO d.t VALUES (12, 3, TIMESTAMP '2022-01-01 00:00:00')
+----
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the stored keys of .*x.* have the type DECIMAL\(18,0\), the expression binds to DECIMAL\(18,1\) now.*DROP INDEX "ix" and CREATE it again.*
+
+statement error
+DELETE FROM d.t WHERE y = 1
+----
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t".*
+
+query I
+SELECT count(*) FROM d.t
+----
+2
+
+# the index is created again with the keys this engine computes, and records their types
+statement ok
+DROP INDEX d.ix
+
+statement ok
+CREATE UNIQUE INDEX ix ON d.t ((key_of(x)))
+
+statement error
+INSERT INTO d.t VALUES (1234, 3, TIMESTAMP '2022-01-01 00:00:00')
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+INSERT INTO d.t VALUES (12, 3, TIMESTAMP '2022-01-01 00:00:00')
+
+statement ok
+CHECKPOINT d
+
+statement ok
+DETACH d
+
+# the keys of its were stored as TIMESTAMP, the expression binds to TIMESTAMP_NS now: the same physical type (INT64),
+# another unit
+statement ok
+CREATE OR REPLACE MACRO key_ts(v) AS v::TIMESTAMP_NS
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d
+
+query I
+SELECT y FROM d.t WHERE key_ts(ts) = TIMESTAMP '2021-01-01 00:00:00'
+----
+2
+
+statement error
+INSERT INTO d.t VALUES (13, 4, TIMESTAMP '2023-01-01 00:00:00')
+----
+<REGEX>:Binder Error:.*Cannot bind index "its" on table "t": the stored keys of .*ts.* have the type TIMESTAMP, the expression binds to TIMESTAMP_NS now.*DROP INDEX "its" and CREATE it again.*
+
+statement ok
+DROP INDEX d.its
+
+statement ok
+CREATE UNIQUE INDEX its ON d.t ((key_ts(ts)))
+
+statement error
+INSERT INTO d.t VALUES (13, 4, TIMESTAMP '2022-01-01 00:00:00')
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+INSERT INTO d.t VALUES (13, 4, TIMESTAMP '2023-01-01 00:00:00')
+
+statement ok
+CHECKPOINT d
+
+statement ok
+DETACH d
+
+# a decimal key that only changed its width keeps its encoding: the keys of ix were stored as DECIMAL(18,1), the
+# expression binds to DECIMAL(15,1) now, with the same physical type and scale, so the index is used
+statement ok
+CREATE OR REPLACE MACRO key_of(v) AS v::DECIMAL(15,1)
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d
+
+statement error
+INSERT INTO d.t VALUES (1234, 5, TIMESTAMP '2024-01-01 00:00:00')
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+INSERT INTO d.t VALUES (14, 5, TIMESTAMP '2024-01-01 00:00:00')
+
+query I
+SELECT count(*) FROM d.t
+----
+5
+
+statement ok
+DETACH d
+
+# a decimal key of another width and another physical type does not: DECIMAL(19,1) keys are INT128 (the record names
+# the original DECIMAL(18,1), or DECIMAL(15,1) if a checkpoint rewrote the index after the width-only change)
+statement ok
+CREATE OR REPLACE MACRO key_of(v) AS v::DECIMAL(19,1)
+
+statement ok
+ATTACH '{TEST_DIR}/expression_key_types_mismatch.db' AS d
+
+statement error
+INSERT INTO d.t VALUES (15, 6, TIMESTAMP '2025-01-01 00:00:00')
+----
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the stored keys of .*x.* have the type DECIMAL\((15|18),1\), the expression binds to DECIMAL\(19,1\) now.*
+
+query I
+SELECT count(*) FROM d.t
+----
+5

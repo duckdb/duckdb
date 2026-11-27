@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
@@ -55,10 +56,10 @@ struct LifecycleCopyPreparedData : PreparedBatchData {};
 
 // A remote output sink for the lifecycle COPY function, which does not write payloads.
 // No network service or local backing files are needed to exercise partition path construction.
-class PartitionCopyFileSystem : public FileSystem {
+class PartitionCopyFileSystem : public BaseFileSystem {
 public:
 	struct Handle : FileHandle {
-		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		Handle(BaseFileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
 		}
 		void Close() override {
 		}
@@ -97,10 +98,10 @@ public:
 };
 
 // A remote output sink that counts the existence checks of a COPY, the files it opens and removes, and keeps nothing.
-class ExistenceCountingFileSystem : public FileSystem {
+class ExistenceCountingFileSystem : public BaseFileSystem {
 public:
 	struct Handle : FileHandle {
-		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		Handle(BaseFileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
 		}
 		void Close() override {
 		}
@@ -532,8 +533,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
-	fs.RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	RegisterLifecycleCopyFunction(db, "copy_remote_partitions", info);
 	REQUIRE_NO_FAIL(connection.Query("SET disabled_filesystems='LocalFileSystem'"));
@@ -563,10 +563,9 @@ TEST_CASE("Partitioned COPY to remote storage does not require the local filesys
 TEST_CASE("COPY to remote storage does not check whether each output file exists", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	string format;
 	SECTION("Parquet") {
@@ -590,10 +589,9 @@ TEST_CASE("A failed COPY to remote storage keeps its outputs", "[api][copy]") {
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(connection.Query("SET async_threads=0"));
-	auto &fs = FileSystem::GetFileSystem(*connection.context);
 	auto counting_fs = make_uniq<ExistenceCountingFileSystem>();
 	auto &counting = *counting_fs;
-	fs.RegisterSubSystem(std::move(counting_fs));
+	VirtualFileSystem::Get(*connection.context).RegisterSubSystem(std::move(counting_fs));
 
 	auto info = make_shared_ptr<LifecycleCopyInfo>();
 	info->fail_finalize_after = 1;

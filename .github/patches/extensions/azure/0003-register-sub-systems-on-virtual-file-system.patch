@@ -1,0 +1,13 @@
+diff --git a/src/azure_extension.cpp b/src/azure_extension.cpp
+index 9887334..68c999c 100644
+--- a/src/azure_extension.cpp
++++ b/src/azure_extension.cpp
+@@ -8,7 +8,7 @@ namespace duckdb {
+ static void LoadInternal(ExtensionLoader &loader) {
+ 	// Load filesystem
+ 	auto &instance = loader.GetDatabaseInstance();
+-	auto &fs = instance.GetFileSystem();
++	auto &fs = VirtualFileSystem::Get(instance);
+ 	fs.RegisterSubSystem(make_uniq<AzureBlobStorageFileSystem>());
+ 	fs.RegisterSubSystem(make_uniq<AzureDfsStorageFileSystem>());
+ 

@@ -1,0 +1,57 @@
+# name: test/optimizer/projection_pullup_binding_chain.test
+# description: Resolve batched projection replacements before checking enclosing expressions
+# group: [optimizer]
+
+statement ok
+CREATE TABLE binding_chain(i INTEGER);
+
+statement ok
+INSERT INTO binding_chain VALUES (0), (1), (2), (NULL);
+
+# Removing the alias projections must not hide that the join consumes a computed output.
+query II rowsort
+SELECT p.x, q.i
+FROM (
+	SELECT b AS x, a AS y FROM (
+		SELECT k AS a, v AS b FROM (
+			SELECT i AS k, coalesce(i, 0) AS v FROM binding_chain
+		)
+	)
+) p JOIN binding_chain q ON p.x = q.i;
+----
+0	0
+0	0
+1	1
+2	2
+
+# Pending replacements from the left branch must survive a binding barrier on the right.
+query III rowsort
+SELECT p.x, p.y, q.i
+FROM (
+	SELECT b AS x, a AS y FROM (
+		SELECT i AS a, i AS b FROM binding_chain
+	)
+) p JOIN (
+	SELECT i FROM binding_chain UNION ALL SELECT i FROM binding_chain
+) q ON p.x = q.i;
+----
+0	0	0
+0	0	0
+1	1	1
+1	1	1
+2	2	2
+2	2	2
+
+# A computed output on the nullable side still becomes NULL for unmatched rows.
+query II rowsort
+SELECT q.i, p.x
+FROM binding_chain q LEFT JOIN (
+	SELECT b AS x, a AS y FROM (
+		SELECT i AS a, coalesce(i, 42) AS b FROM binding_chain WHERE i > 0
+	)
+) p ON q.i = p.y;
+----
+0	NULL
+1	1
+2	2
+NULL	NULL

@@ -1,7 +1,7 @@
 #include "duckdb/main/context.hpp"
 
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -19,21 +19,19 @@
 namespace duckdb {
 
 //! The file system of a client: the database file system with the client file opener
-class ClientFileSystem : public OpenerFileSystem {
+class ClientFileSystem : public FileSystem {
 public:
 	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
-	FileSystem &GetFileSystem() const override {
-		auto &config = DBConfig::GetConfig(context);
-		return *config.file_system;
+	VirtualFileSystem &GetFileSystem() const override {
+		return VirtualFileSystem::Get(context);
 	}
 
 	optional_ptr<FileOpener> GetOpener() const override {
 		return context.GetContext().TryGetFileOpener();
 	}
 
-private:
 	ClientContext &context;
 };
 

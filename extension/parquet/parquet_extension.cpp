@@ -1031,9 +1031,10 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
+		// If this is an EXPORT DATABASE statement, HUGEINT / UHUGEINT are cast to VARCHAR. A COPY writes them as
+		// DECIMAL(39,0), which is exact, but DuckDB versions without wide decimals read that back as a lossy DOUBLE
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
-			// Replace all lossy types with VARCHAR
+			// Replace these types with VARCHAR
 			auto new_type = TypeVisitor::VisitReplace(
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
 
@@ -1086,8 +1087,7 @@ static unique_ptr<FunctionData> ParquetCopyFromBind(ClientContext &context, Copy
 
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
-	auto &fs = db_instance.GetFileSystem();
-	fs.RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
+	VirtualFileSystem::Get(db_instance).RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet"));
 	scan_fun.SetName("read_parquet");

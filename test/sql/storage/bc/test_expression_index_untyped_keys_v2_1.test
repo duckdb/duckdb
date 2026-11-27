@@ -1,0 +1,89 @@
+# name: test/sql/storage/bc/test_expression_index_untyped_keys_v2_1.test
+# description: An index stored at storage version v2.1.0 without a record of the types of its keys: keys over plain columns are matched, an expression key cannot be and is refused by writes and skipped by reads
+# group: [bc]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+# data/storage/expression_index_untyped_keys_v2_1_0.db.gz was written by a DuckDB that did not record the physical types
+# of index keys yet (v2.1.0-dev95484, 541ea8aae5), with:
+#   ATTACH 'expression_index_untyped_keys_v2_1_0.db' AS d (STORAGE_VERSION 'v2.1.0');
+#   CREATE TABLE d.t (x DECIMAL(38,0), y INTEGER);
+#   CREATE UNIQUE INDEX ix ON d.t ((round(x, -1)));
+#   CREATE UNIQUE INDEX iy ON d.t (y);
+#   INSERT INTO d.t VALUES (11, 1), (1234, 2);
+#   CHECKPOINT d;
+# Index keys of this storage version are bound without a width limit, so the type of an expression key is whatever the
+# engine that binds it resolves, and the stored keys are encoded from the type the writing engine resolved. Without a
+# record of that type the stored keys of ix cannot be matched: used anyway, a UNIQUE index accepts duplicates and
+# lookups miss rows as soon as an engine resolves another type. The key of iy has the type of its column.
+
+unzip data/storage/expression_index_untyped_keys_v2_1_0.db.gz {TEST_DIR}/expression_index_untyped_keys_v2_1_0.db
+
+statement ok
+ATTACH '{TEST_DIR}/expression_index_untyped_keys_v2_1_0.db' AS old
+
+# reads do without the index
+query II
+SELECT x, y FROM old.t WHERE round(x, -1) = 1230
+----
+1234	2
+
+query II
+SELECT x, y FROM old.t WHERE y = 1
+----
+11	1
+
+# writes need every index of the table
+statement error
+INSERT INTO old.t VALUES (12, 3)
+----
+<REGEX>:Binder Error:.*Cannot bind index "ix" on table "t": the index does not record the types of its stored keys.*round\(x, -1\).*DROP INDEX "ix" and CREATE it again.*
+
+query I
+SELECT count(*) FROM old.t
+----
+2
+
+# the index is created again with the keys this engine computes, and records their types
+statement ok
+DROP INDEX old.ix
+
+statement ok
+CREATE UNIQUE INDEX ix ON old.t ((round(x, -1)))
+
+statement error
+INSERT INTO old.t VALUES (12, 3)
+----
+<REGEX>:.*Duplicate key.*round\(x, -1\).*
+
+# the index over the plain column was usable all along
+statement error
+INSERT INTO old.t VALUES (20, 1)
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+INSERT INTO old.t VALUES (20, 3)
+
+statement ok
+CHECKPOINT old
+
+statement ok
+DETACH old
+
+statement ok
+ATTACH '{TEST_DIR}/expression_index_untyped_keys_v2_1_0.db' AS old
+
+statement error
+INSERT INTO old.t VALUES (1231, 4)
+----
+<REGEX>:.*Duplicate key.*round\(x, -1\).*
+
+statement ok
+INSERT INTO old.t VALUES (30, 4)
+
+query I
+SELECT count(*) FROM old.t
+----
+4

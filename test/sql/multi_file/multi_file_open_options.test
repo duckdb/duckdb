@@ -285,3 +285,21 @@ query II
 SELECT * FROM read_single_csv_file({'filename': '{TEST_DIR}/open_options.csv', 'etag': 'my_etag'})
 ----
 42	hello
+
+# entries with open options are listed as-is, between the files the other entries glob to
+query I
+SELECT parse_filename(filename) FROM read_text([
+	'{TEST_DIR}/open_options_*.parquet'::VARIANT,
+	{'filename': '{TEST_DIR}/open_options.csv', 'etag': 'my_etag'}::VARIANT,
+	'{TEST_DIR}/open_options_2.parquet'::VARIANT])
+----
+open_options_1.parquet
+open_options_2.parquet
+open_options.csv
+open_options_2.parquet
+
+# an entry with open options is never globbed
+statement error
+SELECT * FROM read_text([{'filename': '{TEST_DIR}/open_options_*.parquet', 'etag': 'my_etag'}])
+----
+<REGEX>:IO Error.*open_options_\*\.parquet.*

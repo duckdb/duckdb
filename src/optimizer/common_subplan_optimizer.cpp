@@ -604,96 +604,47 @@ private:
 	vector<unique_ptr<LogicalOperator>> children;
 };
 
-class PlanSignatureCreateState {
-public:
-	explicit PlanSignatureCreateState(ClientContext &context)
-	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
-	      table_index_map(allocator) {
-	}
-
-public:
-public:
-	//! For serializing operators to a binary string
-	MemoryStream stream;
-	BinarySerializer serializer;
-
-	//! For batching allocations together
-	ArenaAllocator allocator;
-
-	//! Manages mappings
-	PlanSignatureTableIndexMap table_index_map;
-};
+class PlanSignatureCreateState;
 
 class PlanSignature {
-public:
+private:
 	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
+	              vector<reference<const PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
 	    : stream(stream_p), offset(offset_p), length(length_p),
-	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
-	      operator_count(operator_count_p) {
+	      signature_hash(ComputeHash(stream_p, offset_p, length_p, child_signatures_p)),
+	      child_signatures(std::move(child_signatures_p)), operator_count(operator_count_p) {
 	}
 
 public:
-	static arena_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
-	                                       vector<reference<PlanSignature>> &&child_signatures,
-	                                       const vector<vector<ColumnBinding>> &positional_inputs = {}) {
-		if (!OperatorIsSupported(op)) {
-			return nullptr;
-		}
+	static optional_ptr<const PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
+	                                                vector<reference<const PlanSignature>> &&child_signatures,
+	                                                const vector<vector<ColumnBinding>> &positional_inputs = {});
 
-		auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
-
-		// Serialize canonical representation of operator
-		const auto offset = state.stream.GetPosition();
-		state.serializer.Begin();
-		state.serializer.WriteProperty(100, "positional_inputs", positional_inputs);
-		state.serializer.End();
-		state.serializer.Begin();
-		try { // Operators will throw if they cannot serialize, so we need to try/catch here
-			op.Serialize(state.serializer);
-		} catch (std::exception &) {
-			can_materialize = false;
-		}
-		state.serializer.End();
-		const auto length = state.stream.GetPosition() - offset;
-
-		// Convert back from canonical
-		state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
-
-		if (!can_materialize) {
-			return nullptr; // Cannot materialize, no point in adding it
-		}
-
-		// Collect some statistics so we can select a good candidate later
-		idx_t operator_count = 1;
-		for (auto &child_signature : child_signatures) {
-			operator_count += child_signature.get().OperatorCount();
-		}
-		return state.allocator.MakePtr<PlanSignature>(state.stream, offset, length, std::move(child_signatures),
-		                                              operator_count);
-	}
+	PlanSignature(PlanSignature &&) = default;
+	PlanSignature(const PlanSignature &) = delete;
 
 	idx_t OperatorCount() const {
 		return operator_count;
 	}
 
 	hash_t HashSignature() const {
-		auto res = signature_hash;
-		for (auto &child : child_signatures) {
-			res = CombineHash(res, child.get().HashSignature());
-		}
-		return res;
+		return signature_hash;
 	}
 
 	bool Equals(const PlanSignature &other) const {
+		D_ASSERT(RefersToSameObject(stream, other.stream));
+		if (RefersToSameObject(*this, other)) {
+			return true;
+		}
 		if (this->GetSignature() != other.GetSignature()) {
 			return false;
 		}
 		if (this->child_signatures.size() != other.child_signatures.size()) {
 			return false;
 		}
+		// Children are interned before their parents, so their identities prove exact subtree equality.
 		for (idx_t child_idx = 0; child_idx < this->child_signatures.size(); ++child_idx) {
-			if (!this->child_signatures[child_idx].get().Equals(other.child_signatures[child_idx].get())) {
+			if (!RefersToSameObject(this->child_signatures[child_idx].get(), other.child_signatures[child_idx].get())) {
 				return false;
 			}
 		}
@@ -701,8 +652,17 @@ public:
 	}
 
 private:
+	static hash_t ComputeHash(const MemoryStream &stream, idx_t offset, idx_t length,
+	                          const vector<reference<const PlanSignature>> &children) {
+		auto result = Hash(stream.GetData() + offset, length);
+		for (auto &child : children) {
+			result = Hash(CombineHash(result, child.get().HashSignature()));
+		}
+		return result;
+	}
+
 	String GetSignature() const {
-		return String(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
+		return String::Reference(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
 	}
 
 	static bool OperatorIsSupported(LogicalOperator &op) {
@@ -775,7 +735,7 @@ private:
 
 	const hash_t signature_hash;
 
-	const vector<reference<PlanSignature>> child_signatures;
+	vector<reference<const PlanSignature>> child_signatures;
 	const idx_t operator_count;
 };
 
@@ -790,6 +750,84 @@ struct PlanSignatureEquality {
 		return a.Equals(b);
 	}
 };
+
+class PlanSignatureCreateState {
+public:
+	explicit PlanSignatureCreateState(ClientContext &context)
+	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
+	      table_index_map(allocator) {
+	}
+
+private:
+	//! For serializing operators to a binary string
+	MemoryStream stream;
+	BinarySerializer serializer;
+
+public:
+	//! For batching allocations together
+	ArenaAllocator allocator;
+
+	//! Manages mappings
+	PlanSignatureTableIndexMap table_index_map;
+
+private:
+	friend class PlanSignature;
+
+	const PlanSignature &Intern(PlanSignature signature) {
+		auto entry = signatures.find(signature);
+		if (entry != signatures.end()) {
+			return entry->first.get();
+		}
+		auto owned = allocator.MakePtr<PlanSignature>(std::move(signature));
+		auto &result = *owned;
+		signatures.emplace(result, std::move(owned));
+		return result;
+	}
+
+private:
+	//! Own canonical signatures for this discovery pass; parent signatures borrow their children.
+	unordered_map<reference<const PlanSignature>, arena_ptr<PlanSignature>, PlanSignatureHash, PlanSignatureEquality>
+	    signatures;
+};
+
+optional_ptr<const PlanSignature> PlanSignature::Create(PlanSignatureCreateState &state, LogicalOperator &op,
+                                                        vector<reference<const PlanSignature>> &&child_signatures,
+                                                        const vector<vector<ColumnBinding>> &positional_inputs) {
+	if (!OperatorIsSupported(op)) {
+		return nullptr;
+	}
+
+	auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
+
+	// Serialize canonical representation of operator
+	const auto offset = state.stream.GetPosition();
+	state.serializer.Begin();
+	state.serializer.WriteProperty(100, "positional_inputs", positional_inputs);
+	state.serializer.End();
+	state.serializer.Begin();
+	try { // Operators will throw if they cannot serialize, so we need to try/catch here
+		op.Serialize(state.serializer);
+	} catch (std::exception &) {
+		can_materialize = false;
+	}
+	state.serializer.End();
+	const auto length = state.stream.GetPosition() - offset;
+
+	// Convert back from canonical
+	state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
+
+	if (!can_materialize) {
+		return nullptr; // Cannot materialize, no point in adding it
+	}
+
+	// Collect some statistics so we can select a good candidate later
+	idx_t operator_count = 1;
+	for (auto &child_signature : child_signatures) {
+		D_ASSERT(RefersToSameObject(state.stream, child_signature.get().stream));
+		operator_count += child_signature.get().OperatorCount();
+	}
+	return state.Intern(PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
+}
 
 struct Subplan {
 	reference<unique_ptr<LogicalOperator>> op;
@@ -808,7 +846,50 @@ struct SubplanInfo {
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
-using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+using subplan_map_t =
+    unordered_map<reference<const PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+
+//! Append generated CTEs in extraction order at each original lowest common ancestor.
+class CommonSubplanCTEPlacement {
+public:
+	void Insert(unique_ptr<LogicalOperator> &ancestor, Identifier name, TableIndex index, idx_t column_count,
+	            unique_ptr<LogicalOperator> producer) {
+		auto entry = insertion_points.emplace(ancestor, ancestor).first;
+		auto &consumer = entry->second.get();
+		auto cte = make_uniq<LogicalMaterializedCTE>(std::move(name), index, column_count, std::move(producer),
+		                                             std::move(consumer), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+		auto &result = *cte;
+		consumer = std::move(cte);
+		entry->second = result.children[1];
+	}
+
+private:
+	//! Earlier CTEs must enclose later ones to preserve pipeline dependencies. The original ancestor slots
+	//! identify insertion sites; their consumer tails move into the newly appended CTEs.
+	//! Subplans are extracted smallest first, so a site's extractions finish before an enclosing subplan can remove it.
+	reference_map_t<unique_ptr<LogicalOperator>, reference<unique_ptr<LogicalOperator>>> insertion_points;
+};
+
+//! Rewrite a consumer scope without revisiting the producers already finalized by this extraction.
+class CommonSubplanBindingRewriter : public ColumnBindingReplacer {
+public:
+	CommonSubplanBindingRewriter(const BindingReplacementGraph &replacements, TableIndex first_cte_index_p)
+	    : ColumnBindingReplacer(replacements), first_cte_index(first_cte_index_p) {
+	}
+
+	void VisitOperator(LogicalOperator &op) override {
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE &&
+		    op.Cast<LogicalMaterializedCTE>().table_index >= first_cte_index) {
+			VisitOperator(*op.children[1]);
+			VisitOperatorBindings(op);
+			return;
+		}
+		ColumnBindingReplacer::VisitOperator(op);
+	}
+
+private:
+	TableIndex first_cte_index;
+};
 
 //===--------------------------------------------------------------------===//
 // CommonSubplanFinder
@@ -825,7 +906,7 @@ private:
 
 		unique_ptr<LogicalOperator> &parent;
 		const idx_t depth;
-		arena_ptr<PlanSignature> signature;
+		optional_ptr<const PlanSignature> signature;
 	};
 
 	struct StackNode {
@@ -846,15 +927,12 @@ private:
 	};
 
 	struct SubplanStats {
-		idx_t base_table_count;
-		idx_t max_base_table_cardinality;
-
-		void Combine(const SubplanStats &other) {
-			this->base_table_count += other.base_table_count;
-			this->max_base_table_cardinality =
-			    MaxValue(this->max_base_table_cardinality, other.max_base_table_cardinality);
-		}
+		idx_t base_table_count = 0;
+		idx_t max_base_table_cardinality = 0;
+		bool ends_in_aggregate_or_distinct = false;
 	};
+
+	using subplan_stats_map_t = reference_map_t<const LogicalOperator, SubplanStats>;
 
 	struct SubplanBindings {
 		struct ExpressionSource {
@@ -924,6 +1002,14 @@ private:
 
 public:
 	void FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+		// Filtering does not change the tree. Discard its statistics before CTE extraction starts.
+		subplan_stats_map_t subplan_stats;
+		CollectCommonSubplans(root, subplan_stats);
+		FilterSubplans(subplan_stats);
+	}
+
+private:
+	void CollectCommonSubplans(reference<unique_ptr<LogicalOperator>> root, subplan_stats_map_t &subplan_stats) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
 			root = root.get()->children[0];
@@ -944,6 +1030,11 @@ public:
 				stack.emplace_back(child);
 				continue;
 			}
+
+			subplan_stats.emplace(
+			    *current.op, GetSubplanStats(*current.op, [&](const LogicalOperator &child) -> const SubplanStats & {
+				    return subplan_stats.at(child);
+			    }));
 
 			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
@@ -992,7 +1083,7 @@ public:
 		}
 	}
 
-	void FilterSubplans() {
+	void FilterSubplans(const subplan_stats_map_t &subplan_stats) {
 		// Filter out redundant or ineligible subplans before returning
 		vector<subplan_map_t::key_type> to_remove;
 		for (auto &entry : subplans) {
@@ -1019,7 +1110,7 @@ public:
 					const auto parent_subplan_count = parent_it->second.subplans.size();
 					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
 					if (parent_subplan_count != 1 && parent_count >= subplan_count &&
-					    ShouldMaterialize(parent_it->second)) {
+					    ShouldMaterialize(parent_it->second, subplan_stats)) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
@@ -1056,8 +1147,12 @@ public:
 		}
 	}
 
+public:
 	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
 		const auto sorted_subplans = GetSortedSubplans();
+		CommonSubplanCTEPlacement placement;
+		BindingReplacementGraph pending_replacements;
+		TableIndex first_cte_index;
 		idx_t index = 1;
 		for (auto &entry : sorted_subplans) {
 			auto &subplan_info = entry.get().second;
@@ -1070,13 +1165,9 @@ public:
 
 			const auto cte_index = optimizer.binder.GenerateTableIndex();
 			const auto cte_name = StringUtil::Format("__common_subplan_%llu", index++);
-			if (!min_cte_idx.IsValid()) {
-				min_cte_idx = cte_index;
+			if (!first_cte_index.IsValid()) {
+				first_cte_index = cte_index;
 			}
-
-			// Resolve types to be used for creating the materialized CTE and refs
-			op->ResolveOperatorTypes();
-
 			const auto &primary_subplan = subplan_info.subplans[0];
 
 			vector<vector<ColumnBinding>> old_bindings(subplan_info.subplans.size());
@@ -1085,6 +1176,8 @@ public:
 			column_binding_set_t required_canonical_binding_set;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				auto &subplan = subplan_info.subplans[subplan_idx];
+				// Earlier extractions can introduce new CTE readers within this subplan.
+				subplan.op.get()->ResolveOperatorTypes();
 				old_bindings[subplan_idx] = subplan.op.get()->GetColumnBindings();
 				old_types[subplan_idx] = subplan.op.get()->types;
 				for (auto &cb : subplan.canonical_bindings) {
@@ -1144,7 +1237,7 @@ public:
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
-			ColumnBindingReplacer replacer;
+			BindingReplacementGraph replacements;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
@@ -1172,7 +1265,7 @@ public:
 				D_ASSERT(old_bindings[subplan_idx].size() == new_bindings.size());
 				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
-					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+					replacements.Add(old_bindings[subplan_idx][i], new_bindings[i]);
 #ifdef D_ASSERT_IS_ENABLED
 					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
 					D_ASSERT(inserted.second);
@@ -1183,10 +1276,8 @@ public:
 			}
 
 			// Create the materialized CTE and replace the common subplans with references to it
-			auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
 			const auto materialized_column_count = types.size();
 			auto materialized_subplan = std::move(primary_subplan.op.get());
-			auto remainder = std::move(lowest_common_ancestor);
 			vector<unique_ptr<Expression>> materialized_select_list;
 			for (idx_t i = 0; i < materialized_output_bindings.size(); i++) {
 				materialized_select_list.emplace_back(
@@ -1195,39 +1286,25 @@ public:
 			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
 			                                                            std::move(materialized_select_list));
 			materialized_projection->children.emplace_back(std::move(materialized_subplan));
-			auto cte = make_uniq<LogicalMaterializedCTE>(Identifier(cte_name), cte_index, materialized_column_count,
-			                                             std::move(materialized_projection), std::move(remainder),
-			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+			// Finish this producer using only earlier extractions. Its own output replacements apply to
+			// its readers, never to the retained definition. Later extractions cannot occur inside it.
+			if (!pending_replacements.Empty()) {
+				CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+				rewriter.VisitOperator(*materialized_projection);
+			}
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				subplan.op.get() = std::move(cte_refs[subplan_idx]);
 			}
-			lowest_common_ancestor = std::move(cte);
-
-			// Replace bindings of subplans with those of the CTE refs
-			replacer.stop_operator = lowest_common_ancestor.get();
-			replacer.VisitOperator(*op);                                  // Replace from the root until CTE
-			replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child
-
-			// We have to be careful with the order in which we place the CTEs created by this optimizer
-			// Pipeline dependencies cannot be set up if CTEs are in the wrong order
-			// This performs "CTE pushdown" until the CTEs are in the correct order
-			reference<unique_ptr<LogicalOperator>> current_op = lowest_common_ancestor;
-			while (true) {
-				auto &rhs_child = current_op.get()->children[1];
-				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-					if (child_table_index >= min_cte_idx && child_table_index < cte_index) {
-						auto tmp = std::move(rhs_child->children[1]);
-						rhs_child->children[1] = std::move(current_op.get());
-						current_op.get() = std::move(rhs_child);
-						rhs_child = std::move(tmp);
-						current_op = current_op.get()->children[1];
-						continue;
-					}
-				}
-				break;
-			}
+			placement.Insert(subplan_info.lowest_common_ancestor, Identifier(cte_name), cte_index,
+			                 materialized_column_count, std::move(materialized_projection));
+			pending_replacements.Merge(replacements);
+		}
+		// Selection reads output bindings and canonical expressions, which do not require rewriting
+		// the remaining consumer expressions after every extraction.
+		if (!pending_replacements.Empty()) {
+			CommonSubplanBindingRewriter rewriter(pending_replacements, first_cte_index);
+			rewriter.VisitOperator(*op);
 		}
 	}
 
@@ -1298,8 +1375,8 @@ private:
 		}
 	}
 
-	arena_ptr<PlanSignature> CreatePlanSignature(unique_ptr<LogicalOperator> &op) {
-		vector<reference<PlanSignature>> child_signatures;
+	optional_ptr<const PlanSignature> CreatePlanSignature(unique_ptr<LogicalOperator> &op) {
+		vector<reference<const PlanSignature>> child_signatures;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
 			D_ASSERT(it != operator_infos.end());
@@ -1499,32 +1576,48 @@ private:
 		        IsSelectiveMultiTablePlan(*subplan, subplan->estimated_cardinality));
 	}
 
+	bool ShouldMaterialize(const SubplanInfo &subplan_info, const subplan_stats_map_t &subplan_stats) const {
+		auto &subplan = *subplan_info.subplans[0].op.get();
+		const auto &stats = subplan_stats.at(subplan);
+		return stats.ends_in_aggregate_or_distinct ||
+		       (subplan.has_estimated_cardinality && IsSelectiveMultiTablePlan(stats, subplan.estimated_cardinality));
+	}
+
 	static bool CanExpandScan(const LogicalGet &get) {
 		return get.children.empty() && !get.has_pushed_projection && !get.extra_info.sample_options &&
 		       !get.dynamic_filters;
 	}
 
-	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+	template <class GET_CHILD_STATS>
+	static SubplanStats GetSubplanStats(const LogicalOperator &op, GET_CHILD_STATS get_child_stats) {
 		SubplanStats subplan_stats;
+		subplan_stats.ends_in_aggregate_or_distinct = CTEInlining::IsAggregateOrWindow(op);
 		if (op.children.empty()) {
 			subplan_stats.base_table_count = 1;
 			subplan_stats.max_base_table_cardinality = op.has_estimated_cardinality ? op.estimated_cardinality : 0;
 		} else {
-			subplan_stats = GetSubplanStats(*op.children[0]);
-			for (idx_t i = 1; i < op.children.size(); i++) {
-				subplan_stats.Combine(GetSubplanStats(*op.children[i]));
+			for (auto &child : op.children) {
+				const auto &child_stats = get_child_stats(*child);
+				subplan_stats.base_table_count += child_stats.base_table_count;
+				subplan_stats.max_base_table_cardinality =
+				    MaxValue(subplan_stats.max_base_table_cardinality, child_stats.max_base_table_cardinality);
+				if (op.children.size() == 1) {
+					subplan_stats.ends_in_aggregate_or_distinct |= child_stats.ends_in_aggregate_or_distinct;
+				}
 			}
 		}
 		return subplan_stats;
 	}
 
-public:
-	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
+	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+		return GetSubplanStats(op, [](const LogicalOperator &child) { return GetSubplanStats(child); });
+	}
+
+	static bool IsSelectiveMultiTablePlan(const SubplanStats &subplan_stats, idx_t cardinality) {
 		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
 
 		// Must select more than 1 base table
-		const auto subplan_stats = GetSubplanStats(op);
 		if (subplan_stats.base_table_count < 2) {
 			return false;
 		}
@@ -1536,6 +1629,11 @@ public:
 
 		// Otherwise, materialize if it is selective enough
 		return cardinality < subplan_stats.max_base_table_cardinality / CARDINALITY_RATIO;
+	}
+
+public:
+	static bool IsSelectiveMultiTablePlan(const LogicalOperator &op, idx_t cardinality) {
+		return IsSelectiveMultiTablePlan(GetSubplanStats(op), cardinality);
 	}
 
 private:
@@ -1565,8 +1663,6 @@ private:
 	column_binding_map_t<ColumnBinding> generated_binding_map;
 	//! Output expressions in canonical input bindings, indexed by canonical output column.
 	unordered_map<TableIndex, vector<unique_ptr<Expression>>> canonical_expressions;
-	//! Minimum CTE index created by this optimizer
-	TableIndex min_cte_idx;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1648,7 +1744,7 @@ private:
 		       op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
 	}
 
-	optional_ptr<PlanSignature> Signature(unique_ptr<LogicalOperator> &op, Candidate &candidate, bool movable) {
+	optional_ptr<const PlanSignature> Signature(unique_ptr<LogicalOperator> &op, Candidate &candidate, bool movable) {
 		const bool traverse = movable && (IsInnerJoin(*op) || op->type == LogicalOperatorType::LOGICAL_FILTER);
 		if (traverse) {
 			bool safe = true;
@@ -1658,7 +1754,7 @@ private:
 				return nullptr;
 			}
 		}
-		vector<reference<PlanSignature>> children;
+		vector<reference<const PlanSignature>> children;
 		for (auto &child : op->children) {
 			auto signature = Signature(child, candidate, traverse);
 			if (!signature) {
@@ -1667,8 +1763,7 @@ private:
 			children.emplace_back(*signature);
 		}
 		auto create = [&]() {
-			signatures.push_back(PlanSignature::Create(state, *op, std::move(children)));
-			return optional_ptr<PlanSignature>(signatures.back().get());
+			return PlanSignature::Create(state, *op, std::move(children));
 		};
 		if (!movable || op->type != LogicalOperatorType::LOGICAL_GET) {
 			return create();
@@ -1802,9 +1897,8 @@ private:
 
 private:
 	PlanSignatureCreateState state;
-	//! Parent signatures and candidate keys reference these objects.
-	vector<arena_ptr<PlanSignature>> signatures;
-	unordered_map<reference<PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality> candidates;
+	unordered_map<reference<const PlanSignature>, vector<Candidate>, PlanSignatureHash, PlanSignatureEquality>
+	    candidates;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1819,7 +1913,6 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	// Bottom-up identification of identical subplans
 	CommonSubplanFinder finder(optimizer.context);
 	finder.FindCommonSubplans(op);
-	finder.FilterSubplans();
 	finder.ConvertSubplansToCTEs(optimizer, op);
 	return op;
 }

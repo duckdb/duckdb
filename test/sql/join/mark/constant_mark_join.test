@@ -150,6 +150,71 @@ SELECT __mark_join_marker FROM (SELECT NULL::INTEGER AS dummy) l JOIN BY(TYPE MA
 ----
 NULL
 
+# A single-row constant MARK join can compute its marker in a projection.
+query II rowsort
+SELECT a, a IN (SELECT NULL::INTEGER) AS marker FROM (VALUES (1), (NULL)) t(a);
+----
+1	NULL
+NULL	NULL
+
+# A NULL-only build must not introduce errors or side effects from the probe operand.
+statement ok
+CREATE TABLE cast_probe(i VARCHAR);
+
+statement ok
+INSERT INTO cast_probe VALUES ('bad');
+
+query I
+SELECT i::INTEGER IN (SELECT NULL::INTEGER) FROM cast_probe;
+----
+NULL
+
+query I
+SELECT error('unexpected probe evaluation') IN (SELECT NULL::INTEGER);
+----
+NULL
+
+statement ok
+CREATE SEQUENCE null_build_probe;
+
+query I
+SELECT nextval('null_build_probe') IN (SELECT NULL::BIGINT) FROM range(3);
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='null_build_probe';
+----
+NULL
+
+query II
+EXPLAIN SELECT random() IN (SELECT NULL::DOUBLE) FROM probe;
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*
+
+# The filter above the MARK join still consumes the computed marker.
+query I
+SELECT a FROM (VALUES (1), (NULL)) t(a) WHERE a NOT IN (SELECT NULL::INTEGER);
+----
+
+query II
+EXPLAIN SELECT * FROM probe WHERE i NOT IN (SELECT NULL::INTEGER);
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT * FROM probe WHERE i NOT IN (SELECT NULL::INTEGER);
+----
+physical_plan	<!REGEX>:.*MARK.*
+
+# Preserve casts and collations in the comparison when projecting the marker.
+query I
+SELECT 'ABC' COLLATE nocase IN (SELECT 'aBc');
+----
+true
+
 query I
 SELECT 'ABC' COLLATE nocase IN(SELECT 'aBc');
 ----
@@ -159,3 +224,195 @@ query I
 SELECT __mark_join_marker FROM (SELECT NULL::INTEGER AS dummy) l JOIN BY(TYPE MARK) (SELECT 'aBc' AS s) r ON 'ABC' COLLATE nocase=r.s;
 ----
 true
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<>r.j;
+----
+1	true
+2	false
+2	false
+NULL	NULL
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<r.j;
+----
+1	true
+2	false
+2	false
+NULL	NULL
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i>r.j;
+----
+1	false
+2	false
+2	false
+NULL	NULL
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<=r.j;
+----
+1	true
+2	true
+2	true
+NULL	NULL
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i>=r.j;
+----
+1	false
+2	true
+2	true
+NULL	NULL
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i IS DISTINCT FROM r.j;
+----
+1	true
+2	false
+2	false
+NULL	true
+
+query II rowsort
+SELECT p.i, __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i IS NOT DISTINCT FROM r.j;
+----
+1	false
+2	true
+2	true
+NULL	false
+
+query II rowsort
+SELECT p.a, __mark_join_marker
+FROM (VALUES (10, 1), (20, 3), (30, NULL::INTEGER)) p(a, b)
+JOIN BY(TYPE MARK) (SELECT 3::INTEGER AS j) r ON p.b<r.j;
+----
+10	true
+20	false
+30	NULL
+
+query II
+EXPLAIN SELECT p.a, __mark_join_marker
+FROM (VALUES (10, 1), (20, 3), (30, NULL::INTEGER)) p(a, b)
+JOIN BY(TYPE MARK) (SELECT 3::INTEGER AS j) r ON p.b<r.j;
+----
+physical_plan	<!REGEX>:.*Join Type: MARK.*
+
+# A volatile build-side operand must stay in the MARK join.
+query II
+EXPLAIN SELECT __mark_join_marker
+FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i=r.j+random();
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*
+
+query II
+EXPLAIN
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<>r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i>r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i<=r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i>=r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i IS DISTINCT FROM r.j
+UNION ALL
+SELECT __mark_join_marker FROM probe p JOIN BY(TYPE MARK) (SELECT 2::INTEGER AS j) r ON p.i IS NOT DISTINCT FROM r.j;
+----
+physical_plan	<!REGEX>:.*Join Type: MARK.*
+
+# Tuple <> has different NULL semantics from a direct comparison, so keep its MARK join.
+query II
+EXPLAIN SELECT __mark_join_marker FROM (VALUES (ROW(1, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v<>r.j;
+----
+physical_plan	<REGEX>:.*Join Type: MARK.*
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v<r.j;
+----
+1	true
+2	false
+3	true
+4	false
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v>r.j;
+----
+1	false
+2	false
+3	false
+4	true
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v<=r.j;
+----
+1	true
+2	true
+3	true
+4	false
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v>=r.j;
+----
+1	false
+2	true
+3	false
+4	true
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v IS DISTINCT FROM r.j;
+----
+1	true
+2	false
+3	true
+4	true
+
+query II rowsort
+SELECT p.id, __mark_join_marker
+FROM (VALUES (1, ROW(1, 2)), (2, ROW(1, NULL::INTEGER)), (3, ROW(1, 3)), (4, ROW(NULL::INTEGER, 2))) p(id, v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v IS NOT DISTINCT FROM r.j;
+----
+1	false
+2	true
+3	false
+4	false
+
+query II
+EXPLAIN
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v<r.j
+UNION ALL
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v>r.j
+UNION ALL
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v<=r.j
+UNION ALL
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v>=r.j
+UNION ALL
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v IS DISTINCT FROM r.j
+UNION ALL
+SELECT __mark_join_marker
+FROM (VALUES (ROW(1, 2)), (ROW(1, NULL::INTEGER)), (ROW(1, 3)), (ROW(NULL::INTEGER, 2))) p(v)
+JOIN BY(TYPE MARK) (SELECT ROW(1, NULL::INTEGER) AS j) r ON p.v IS NOT DISTINCT FROM r.j;
+----
+physical_plan	<!REGEX>:.*Join Type: MARK.*

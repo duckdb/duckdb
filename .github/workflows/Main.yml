@@ -409,21 +409,16 @@ jobs:
         fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
-    - name: Tidy Check (clangd)
-      run: |
-        mkdir -p ~/.config/clangd
-        cat > ~/.config/clangd/config.yaml <<'EOF'
-        Diagnostics:
-          UnusedIncludes: None
-        EOF
-        make tidy-check-clangd
+    - name: Tidy Check (clang-tidy)
+      shell: bash
+      run: python3 scripts/ci/run_clang_tidy_check.py -- make tidy-check TIDY_BINARY=clang-tidy-20
 
-    - name: Upload clangd-tidy logs
+    - name: Upload clang-tidy log
       if: ${{ failure() }}
       uses: actions/upload-artifact@v7
       with:
-        name: clangd-tidy-logs
-        path: build/tidy/clangd-tidy-logs
+        name: clang-tidy-log
+        path: clang-tidy.log
         if-no-files-found: ignore
 
  extensions-build:
@@ -494,16 +489,14 @@ jobs:
         name: Download all extensions
         with:
           pattern: '*-extensions-*'
-          path: ${{ runner.temp }}/repository_generation
-          # When multiple artifacts are matched:
-          # - if true: the downloaded artifacts will be in the same directory
-          #   specified by path.
-          # - if false: the downloaded artifacts will be extracted into
-          #   individual named directories within the specified path.
-          #
-          # Note: When downloading a single artifact (by name or ID), it will
-          # always be extracted directly to the specified path.
-          merge-multiple: true
+          path: ${{ runner.temp }}/extension_artifacts
+          merge-multiple: false
+
+      - name: Assemble extension repository
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_merge_extension_artifacts.py
+          python3 scripts/ci/merge_extension_artifacts.py \
+            "$RUNNER_TEMP/extension_artifacts" "$RUNNER_TEMP/repository_generation"
 
       - name: Print all extensions
         run: |

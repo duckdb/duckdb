@@ -6,7 +6,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/function/aggregate/bignum_aggregates.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/function/function_set.hpp"
@@ -505,12 +505,6 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
-//! The average of the bignum_t tier of decimals: an exact BIGNUM sum, divided once at the end like the hugeint tier
-struct BignumAvgState {
-	uint64_t count;
-	BignumIntermediate value;
-};
-
 //! The sum as a long double: through a hugeint when it fits, so that the same values in a fixed-size and a wide
 //! decimal average to the same result
 static long double BignumSumToLongDouble(const BignumIntermediate &value) {
@@ -522,7 +516,7 @@ static long double BignumSumToLongDouble(const BignumIntermediate &value) {
 			magnitude = (magnitude << 8) | uhugeint_t(value.GetAbsoluteByte(NumericCast<int64_t>(i)));
 		}
 		if (magnitude <= uhugeint_t(NumericLimits<hugeint_t>::Maximum())) {
-			auto sum = hugeint_t(magnitude.upper, magnitude.lower);
+			auto sum = hugeint_t(static_cast<int64_t>(magnitude.upper), magnitude.lower);
 			return Hugeint::Cast<long double>(value.is_negative ? -sum : sum);
 		}
 	}
@@ -567,43 +561,8 @@ static double BignumExactAverage(const BignumIntermediate &sum, uint64_t count, 
 	return result;
 }
 
-struct BignumAverageOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.value = BignumIntermediate();
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		if (state.count == 0) {
-			state.value.Initialize(unary_input.input.allocator);
-		}
-		state.count++;
-		BignumIntermediate rhs(input);
-		state.value.AddInPlace(unary_input.input.allocator, rhs);
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
-		if (source.count == 0) {
-			return;
-		}
-		if (target.count == 0) {
-			target.value.Initialize(input.allocator);
-		}
-		target.count += source.count;
-		target.value.AddInPlace(input.allocator, source.value);
-	}
-
+//! The average of the bignum_t tier of decimals: the exact BIGNUM sum, divided once at the end like the hugeint tier
+struct BignumAverageOperation : BignumAvgOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -621,10 +580,6 @@ struct BignumAverageOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<AverageDecimalBindData>();
 		target = BignumExactAverage(state.value, state.count, bind_data.decimal_scale);
 	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
 };
 
 //! The states are exported as STRUCT(count UBIGINT, value BIGNUM), the value is NULL for an empty state
@@ -639,49 +594,26 @@ AggregateStateLayout BignumAvgStateLayout(AggregateLayoutInput &input) {
 void BignumAvgExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                           idx_t offset) {
 	auto states = state_vector.Values<BignumAvgState *>();
-	auto &entries = StructVector::GetEntries(result);
-	auto count_data = FlatVector::GetDataMutable<uint64_t>(entries[0]);
-	auto value_data = FlatVector::GetDataMutable<string_t>(entries[1]);
-	auto &value_validity = FlatVector::ValidityMutable(entries[1]);
+	auto writer = FlatVector::Writer<VectorStructType<uint64_t, string_t>>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		count_data[offset + i] = state.count;
-		if (state.count == 0) {
-			value_validity.SetInvalid(offset + i);
-			continue;
-		}
-		value_data[offset + i] = BignumAggregates::WriteBignum(state.value, entries[1]);
+		writer.WriteValue([&](auto &count_writer, auto &value_writer) {
+			BignumAggregates::WriteAvgState(*states[i].GetValue(), count_writer, value_writer);
+		});
 	}
 }
 
 void BignumAvgImportState(AggregateImportInputData &input) {
-	auto &input_vec = input.input_vec;
-	auto count = input_vec.size();
-	UnifiedVectorFormat struct_format;
-	input_vec.ToUnifiedFormat(struct_format);
-	auto &entries = StructVector::GetEntries(input_vec);
-	UnifiedVectorFormat count_format;
-	UnifiedVectorFormat value_format;
-	entries[0].ToUnifiedFormat(count_format);
-	entries[1].ToUnifiedFormat(value_format);
-	auto count_data = count_format.GetData<uint64_t>(count_format);
-	auto value_data = value_format.GetData<string_t>(value_format);
-	for (idx_t i = 0; i < count; i++) {
+	auto entries = input.input_vec.Values<VectorStructType<uint64_t, string_t>>();
+	for (idx_t i = 0; i < input.input_vec.size(); i++) {
 		auto &state = *reinterpret_cast<BignumAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
-		BignumAverageOperation::Initialize(state);
-		const auto struct_idx = struct_format.sel->get_index(i);
-		const auto count_idx = count_format.sel->get_index(i);
-		const auto value_idx = value_format.sel->get_index(i);
-		if (!struct_format.validity.RowIsValid(struct_idx) || !count_format.validity.RowIsValid(count_idx) ||
-		    count_data[count_idx] == 0) {
+		BignumAvgOperation::Initialize(state);
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
 			// an empty state, e.g. to_aggregate_state(NULL, ...)
 			continue;
 		}
-		if (!value_format.validity.RowIsValid(value_idx)) {
-			throw InvalidInputException("Invalid avg state - the value cannot be NULL when the count is not 0");
-		}
-		state.count = count_data[count_idx];
-		state.value = BignumAggregates::ImportBignum(value_data[value_idx], input.allocator);
+		BignumAggregates::ImportAvgState(state, entry.GetChildValue<0>(), entry.GetChildValue<1>(), input.allocator,
+		                                 "avg", "value");
 	}
 }
 

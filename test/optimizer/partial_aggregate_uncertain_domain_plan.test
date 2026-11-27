@@ -2,6 +2,8 @@
 # description: Plan partial aggregation from complete input grouping domains
 # group: [optimizer]
 
+require vector_size 2048
+
 require parquet
 
 statement ok

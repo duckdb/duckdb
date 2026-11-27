@@ -289,6 +289,9 @@ bool ColumnReader::TrySkipPagesWithOffsetIndex(idx_t skipped_so_far, idx_t &to_s
 		// no page index, or still inside a page
 		return false;
 	}
+	// this path does not maintain page_ordinal, which is safe only while
+	// the page index is never used for encrypted files
+	D_ASSERT(!reader.parquet_options.encryption_config);
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	auto &locations = offset_index->page_locations;
 	while (trans.GetLocation() < NumericCast<idx_t>(locations[0].offset)) {
@@ -418,6 +421,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
                                   const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
+	page_ordinal = 0;
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
 	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
@@ -496,7 +500,7 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		// the page has been filtered out!
 		// skip forward
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-		trans.Skip(page_hdr.compressed_page_size);
+		trans.Skip(GetOnDiskPageSize(page_hdr));
 		page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
 	}
 
@@ -504,9 +508,9 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 }
 
 void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
-	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, page_ordinal);
 	aad_crypto_metadata.page_ordinal =
-	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, page_ordinal);
 	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
 }
 
@@ -574,7 +578,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		idx_t page_num_values =
 		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
 		if (rows_to_skip >= page_num_values) {
-			trans.Skip(page_hdr.compressed_page_size);
+			trans.Skip(GetOnDiskPageSize(page_hdr));
 			page_is_filtered_out = true;
 			page_rows_available = page_num_values;
 			return;
@@ -710,6 +714,15 @@ uint32_t ColumnReader::GetPageBodySize(const PageHeader &page_hdr) const {
 		}
 	}
 	return page_body_size;
+}
+
+uint32_t ColumnReader::GetOnDiskPageSize(const PageHeader &page_hdr) const {
+	if (!reader.parquet_options.encryption_config) {
+		return NumericCast<uint32_t>(page_hdr.compressed_page_size);
+	}
+	// an encrypted page body is stored as a single crypto module: length + nonce + ciphertext + tag
+	const uint32_t framing = ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+	return GetPageBodySize(page_hdr) + framing;
 }
 
 void ColumnReader::AllocateBlock(idx_t payload_size) {
@@ -978,9 +991,7 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
                                     optional_ptr<TableFilterState> filter_state, idx_t rows_to_skip) {
-	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
-		aad_crypto_metadata.page_ordinal = page_ordinal;
 		PrepareRead(filter, filter_state, rows_to_skip);
 		page_ordinal++;
 	}
@@ -1372,9 +1383,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 		}
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema);
 	case LogicalTypeId::DOUBLE:
-		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
-			return ParquetDecimalUtils::CreateReader(reader, schema);
-		}
 		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(reader, schema);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:

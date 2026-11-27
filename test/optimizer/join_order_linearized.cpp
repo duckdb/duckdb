@@ -4,6 +4,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/join_order/greedy_join_enumerator.hpp"
 #include "duckdb/optimizer/join_order/join_order_linearizer.hpp"
+#include "duckdb/optimizer/join_order/join_order_precedence.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/optimizer/join_order/linearized_plan_enumerator.hpp"
@@ -133,7 +134,7 @@ static void VerifyLinearizedClosure(const DPJoinNode &node,
 	auto &right = *plans.at(node.right_set);
 	VerifyLinearizedClosure(left, plans, costs);
 	VerifyLinearizedClosure(right, plans, costs);
-	REQUIRE(node.cost == Approx(costs.ComputeCost(left, right, node.join_operator, node.cardinality.GetDouble())));
+	REQUIRE(node.cost == Approx(costs.ComputeCost(left, right, node.join_operator, node.set)));
 	auto expected = node;
 	expected.recursive_properties = {};
 	expected.retained_build_size = 0;
@@ -190,9 +191,9 @@ static vector<unique_ptr<DPJoinNode>> ExhaustiveIntervals(QueryGraphManager &gra
 							continue;
 						}
 						auto rows = estimator.EstimateCardinality(set);
-						auto node = make_uniq<DPJoinNode>(
-						    set, edge.join_operator, edge.predicates, edge.generated_cross_product, lhs.set, rhs.set,
-						    costs.ComputeCost(lhs, rhs, edge.join_operator, rows.GetDouble()));
+						auto node = make_uniq<DPJoinNode>(set, edge.join_operator, edge.predicates,
+						                                  edge.generated_cross_product, lhs.set, rhs.set,
+						                                  costs.ComputeCost(lhs, rhs, edge.join_operator, set));
 						node->cardinality = rows;
 						result.push_back(std::move(node));
 					}
@@ -281,7 +282,7 @@ TEST_CASE("Linearized cost bound preserves rounded cardinality ties", "[optimize
 	plans[bc] = std::move(incumbent_right);
 	DPJoinNode incumbent(root, nullptr, {}, false, a, bc, std::numeric_limits<double>::infinity());
 	incumbent.cardinality = CardinalityValue(1);
-	DPJoinNode reversed(root, nullptr, {}, false, c, ab, costs.ComputeCost(*plans.at(c), *plans.at(ab), nullptr, 1));
+	DPJoinNode reversed(root, nullptr, {}, false, c, ab, incumbent.cost);
 	reversed.cardinality = incumbent.cardinality;
 	REQUIRE(evaluator.PreferPlan(reversed, plans, incumbent, plans));
 	REQUIRE(evaluator.CanImprovePair(plans, *plans.at(ab), *plans.at(c), incumbent));
@@ -421,6 +422,53 @@ TEST_CASE("Rooted IKKBZ orders minimize the tree proxy on small trees", "[optimi
 	connection.Rollback();
 }
 
+// Synthetic populations replace the table observations, including independent bounds and key evidence.
+static void ResetLinearizedInputStats(RelationStats &stats) {
+	RelationStats result;
+	result.table_name = stats.table_name;
+	result.stats_initialized = true;
+	for (auto &column : stats.columns) {
+		result.columns.emplace_back(column.binding, column.total_domain, column.current_domain, column.name);
+	}
+	stats = std::move(result);
+}
+
+TEST_CASE("Linearized selectivity ties survive fractional input populations", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT 1 k"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection, "SELECT * FROM a JOIN b USING(k) JOIN c USING(k)");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	auto stats = graph.relation_manager.GetRelationStats();
+	vector<CardinalityValue> rows {135086, 7248868.8, 2967144};
+	REQUIRE(stats.size() == rows.size());
+	for (idx_t i = 0; i < stats.size(); i++) {
+		ResetLinearizedInputStats(stats[i]);
+		stats[i].cardinality = rows[i];
+		for (auto &column : stats[i].columns) {
+			column.total_domain = DistinctCount(2248305, DistinctCountSource::HLL);
+			column.current_domain =
+			    DistinctCount(MinValue(CardinalityValue(2248305), rows[i]), DistinctCountSource::HLL);
+		}
+	}
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.candidate_evaluator.InitLeafPlans(enumerator.plans, stats);
+	JoinOrderLinearizer linearizer(graph, estimator);
+	REQUIRE(linearizer.BuildTree());
+	// Equal pair selectivities form the same ranking tree. Subtracting the three logs
+	// perturbed their ties and incorrectly forced the larger input ahead of the smaller one.
+	vector<RelationIndex> expected {RelationIndex(0), RelationIndex(2), RelationIndex(1)};
+	REQUIRE(linearizer.GetOrder(RelationIndex(0)).relations == expected);
+	connection.Rollback();
+}
+
 TEST_CASE("IKKBZ chooses the cheapest rooted order rather than the smallest input", "[optimizer][join_order]") {
 	DuckDB db;
 	Connection connection(db);
@@ -437,11 +485,13 @@ TEST_CASE("IKKBZ chooses the cheapest rooted order rather than the smallest inpu
 	vector<idx_t> cardinalities {1, 100, 10000, 100};
 	REQUIRE(stats.size() == cardinalities.size());
 	for (idx_t i = 0; i < stats.size(); i++) {
-		stats[i].unique_key.clear();
+		ResetLinearizedInputStats(stats[i]);
 		stats[i].cardinality = cardinalities[i];
 		for (auto &column : stats[i].columns) {
 			auto domain = column.name.EndsWith(".ab") ? 1 : 100000000;
 			column.total_domain = DistinctCount(domain, DistinctCountSource::HLL);
+			column.current_domain =
+			    DistinctCount(MinValue(CardinalityValue(domain), stats[i].cardinality), DistinctCountSource::HLL);
 		}
 	}
 	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
@@ -558,8 +608,8 @@ TEST_CASE("Recursive memory preference can invert above an interval", "[optimize
 	REQUIRE(costs.GetCost(lower_work) < costs.GetCost(lower_memory));
 	auto first_parent = parent;
 	auto second_parent = parent;
-	first_parent.cost = costs.ComputeCost(lower_work, right, parent.join_operator, parent.cardinality.GetDouble());
-	second_parent.cost = costs.ComputeCost(lower_memory, right, parent.join_operator, parent.cardinality.GetDouble());
+	first_parent.cost = costs.ComputeCost(lower_work, right, parent.join_operator, parent.set);
+	second_parent.cost = costs.ComputeCost(lower_memory, right, parent.join_operator, parent.set);
 	costs.UpdateBuildMemory(first_parent, lower_work, right);
 	costs.UpdateBuildMemory(second_parent, lower_memory, right);
 	REQUIRE(costs.GetCost(second_parent) < costs.GetCost(first_parent));
@@ -667,7 +717,7 @@ TEST_CASE("Zero work with recursive memory excess still needs interval search", 
 	auto large_rows = BufferManager::GetBufferManager(*connection.context).GetOperatorMemoryLimit() * 4;
 	for (idx_t i = 0; i < stats.size(); i++) {
 		auto &relation = stats[i];
-		relation.unique_key.clear();
+		ResetLinearizedInputStats(relation);
 		relation.row_retention = 1;
 		if (graph.relation_manager.GetRelation(RelationIndex(i)).recursive_properties.depends_on_recursive_input) {
 			relation.cardinality = 0;
@@ -742,7 +792,7 @@ TEST_CASE("Complete contenders preserve the input plan across recursive memory i
 		auto stats = graph.relation_manager.GetRelationStats();
 		for (idx_t i = 0; i < stats.size(); i++) {
 			auto &relation = stats[i];
-			relation.unique_key.clear();
+			ResetLinearizedInputStats(relation);
 			relation.row_retention = 1;
 			if (graph.relation_manager.GetRelation(RelationIndex(i)).recursive_properties.depends_on_recursive_input) {
 				relation.cardinality = 10000 * scale;
@@ -759,7 +809,8 @@ TEST_CASE("Complete contenders preserve the input plan across recursive memory i
 				              : column.name.EndsWith(".bc") ? 5 * scale
 				                                            : scale;
 				column.total_domain = DistinctCount(domain, DistinctCountSource::HLL);
-				column.current_domain = DistinctCount(MinValue(domain, relation.cardinality), DistinctCountSource::HLL);
+				column.current_domain =
+				    DistinctCount(MinValue(CardinalityValue(domain), relation.cardinality), DistinctCountSource::HLL);
 			}
 		}
 		CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
@@ -814,11 +865,13 @@ TEST_CASE("Interval DP can use a cyclic edge omitted from the ranking tree", "[o
 	REQUIRE(stats.size() == 3);
 	for (idx_t i = 0; i < stats.size(); i++) {
 		REQUIRE(stats[i].table_name == Identifier(i == 0 ? "a" : i == 1 ? "b" : "c"));
-		stats[i].unique_key.clear();
+		ResetLinearizedInputStats(stats[i]);
 		stats[i].cardinality = i == 1 ? 1000000 : 1;
 		for (auto &column : stats[i].columns) {
 			auto domain = column.name.EndsWith(".ab") ? 1000 : column.name.EndsWith(".bc") ? 500 : 1;
 			column.total_domain = DistinctCount(domain, DistinctCountSource::HLL);
+			column.current_domain =
+			    DistinctCount(MinValue(CardinalityValue(domain), stats[i].cardinality), DistinctCountSource::HLL);
 		}
 	}
 	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
@@ -870,5 +923,112 @@ TEST_CASE("Interval trials skip infeasible splits without mutating their inputs"
 		REQUIRE(trial.GetPlans().at(entry.first).get() != entry.second.get());
 	}
 	VerifyLinearizedClosure(*trial.GetPlans().at(root), trial.GetPlans(), costs);
+	connection.Rollback();
+}
+
+TEST_CASE("Generalized schedules retain a legal interval parenthesization", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	idx_t rows = 5;
+	for (auto name : {"a", "b", "c", "d", "e", "f", "x"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i%7 k FROM range(" +
+		                                  to_string(rows) + ") t(i)"));
+		rows *= 2;
+	}
+	connection.BeginTransaction();
+	for (auto query : {"SELECT * FROM (a JOIN b ON a.k=b.k) JOIN (c JOIN d ON c.k=d.k) ON a.k+b.k=c.k+d.k",
+	                   "SELECT * FROM a LEFT JOIN b ON a.k=b.k LEFT JOIN c ON a.k=c.k",
+	                   "SELECT * FROM a SEMI JOIN b ON a.k=b.k ANTI JOIN c ON a.k=c.k",
+	                   "SELECT * FROM a LEFT JOIN (b SEMI JOIN c ON b.k=c.k) ON a.k=b.k",
+	                   "SELECT * FROM (a JOIN b ON a.k=b.k) JOIN "
+	                   "(((c JOIN x ON c.k=x.k) JOIN d ON x.k=d.k) JOIN (e JOIN f ON e.k=f.k) ON x.k=e.k+f.k) "
+	                   "ON a.k+b.k=c.k+d.k"}) {
+		CAPTURE(query);
+		auto plan = PlanLinearizedQuery(connection, query);
+		JoinOrderOptimizer optimizer(*connection.context);
+		QueryGraphManager graph(*connection.context);
+		REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+		CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+		CostModel costs(estimator);
+		LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+		enumerator.InitLeafPlans();
+		LinearizedTestHelper::Input(enumerator);
+		auto &root = LinearizedTotalSet(graph);
+		auto witness = CapturedJoinOrderPlan::Capture(enumerator.plans, root, costs);
+		JoinOrderPrecedence precedence(graph, estimator, enumerator.candidate_evaluator, *witness);
+		auto order = precedence.GetBestOrder();
+		REQUIRE(order.size() == graph.relation_manager.NumRelations());
+		REQUIRE(precedence.GetBestOrder() == order);
+		LinearizedTestHelper::Leaves(enumerator);
+		REQUIRE(LinearizedTestHelper::ForOrder(enumerator, order));
+		if (order.size() <= 4) {
+			auto alternatives = ExhaustiveIntervals(graph, estimator, costs, order, 0, order.size());
+			REQUIRE_FALSE(alternatives.empty());
+			auto best = std::numeric_limits<double>::infinity();
+			for (auto &alternative : alternatives) {
+				best = MinValue(best, alternative->cost);
+			}
+			REQUIRE(enumerator.plans.at(root)->cost == Approx(best));
+		}
+		VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+		auto trial_cost = costs.GetCost(*enumerator.plans.at(root));
+		REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+		REQUIRE_FALSE(trial_cost < costs.GetCost(*enumerator.plans.at(root)));
+		VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Nonseparable hyperedges retain a complete witness through approximate search", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c", "d"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i::INT k FROM range(10) t(i)"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection,
+	                                "SELECT * FROM a JOIN b ON a.k=b.k JOIN c ON a.k+b.k=c.k JOIN d ON a.k+c.k=d.k");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.InitLeafPlans();
+	LinearizedTestHelper::Input(enumerator);
+	auto &root = LinearizedTotalSet(graph);
+	auto witness = CapturedJoinOrderPlan::Capture(enumerator.plans, root, costs);
+	REQUIRE(JoinOrderPrecedence(graph, estimator, enumerator.candidate_evaluator, *witness).GetBestOrder().empty());
+	LinearizedTestHelper::Leaves(enumerator);
+	REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+	REQUIRE_FALSE(costs.GetCost(witness->GetRootNode()) < costs.GetCost(*enumerator.plans.at(root)));
+	VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
+	connection.Interrupt();
+	REQUIRE_THROWS_WITH(JoinOrderPrecedence(graph, estimator, enumerator.candidate_evaluator, *witness).GetBestOrder(),
+	                    Catch::Contains("Interrupted!"));
+	connection.Rollback();
+}
+
+TEST_CASE("Generalized search obtains a witness after required cross-product activation", "[optimizer][join_order]") {
+	DuckDB db;
+	Connection connection(db);
+	for (auto name : {"a", "b", "c"}) {
+		REQUIRE_NO_FAIL(*connection.Query("CREATE TABLE " + string(name) + " AS SELECT i::INT k FROM range(10) t(i)"));
+	}
+	connection.BeginTransaction();
+	auto plan = PlanLinearizedQuery(connection, "SELECT * FROM a,b,c WHERE a.k+b.k=c.k");
+	JoinOrderOptimizer optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(optimizer, LinearizedJoinRoot(*plan)));
+	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
+	CostModel costs(estimator);
+	LinearizedTestContext enumerator(graph, costs, graph.GetQueryGraphEdges());
+	enumerator.InitLeafPlans();
+	LinearizedTestHelper::Input(enumerator);
+	auto &root = LinearizedTotalSet(graph);
+	REQUIRE(enumerator.plans.find(root) == enumerator.plans.end());
+	LinearizedTestHelper::Leaves(enumerator);
+	REQUIRE(LinearizedTestHelper::Approximate(enumerator));
+	VerifyLinearizedClosure(*enumerator.plans.at(root), enumerator.plans, costs);
 	connection.Rollback();
 }
