@@ -42,7 +42,9 @@ functions:
       changes and the context's temporary objects, and what it changes is
       part of that transaction. A statement of the connection that fails
       invalidates the transaction as a failure of the context's own statement
-      would.
+      would. It starts with the context's search path (`USE`, `SET
+      schema`, `SET search_path`), so unqualified names resolve as they do in
+      the context's own statements.
 
       The connection cannot start, commit or roll back a transaction: those
       statements fail with ERROR_DATABASE_TRANSACTION, and like any failing

@@ -43,7 +43,8 @@ public:
 	//! deadline of caller's base client
 	DUCKDB_API static Connection CreateInternal(ClientContext &caller);
 	//! Creates a connection that runs in the transaction active on `context`, e.g. the one a bind callback runs in.
-	//! It sees and can modify everything the transaction can, and follows the interrupts of `context`. It cannot
+	//! It sees and can modify everything the transaction can, starts with the search path of `context` (so unqualified
+	//! names resolve as they do there), and follows the interrupts of `context`. It cannot
 	//! start, commit or roll back a transaction, and the transaction cannot commit while the connection is open: an
 	//! error of one of its statements invalidates the transaction as one of `context` would.
 	DUCKDB_API static Connection CreateInTransaction(ClientContext &context);

@@ -4476,6 +4476,12 @@ auto TableFunction::SetName(const std::string &name) & -> TableFunction & {
 	return *this;
 }
 
+auto TableFunction::SetStability(FunctionStability value) & -> TableFunction & {
+	CheckedAPICall(duckdb_v2_table_function_set_property, handle(), DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	               ToCValue(value));
+	return *this;
+}
+
 auto TableFunction::GetDocs() -> FunctionDocs {
 	duckdb_v2_function_docs_handle docs = nullptr;
 	CheckedAPICall(duckdb_v2_table_function_get_docs, handle(), &docs);

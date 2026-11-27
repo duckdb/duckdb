@@ -18,6 +18,7 @@ namespace duckdb {
 
 class FilterInfo;
 class JoinPredicateModel;
+enum class JoinSelectivityModel;
 struct CardinalityEstimatorState;
 struct FilterInfoWithTotalDomains;
 struct SelectivitySubgraph;
@@ -56,6 +57,7 @@ private:
 	CardinalityValue GetInnerSelectivity(JoinRelationSet &set);
 	CardinalityValue GetJoinSelectivity(JoinRelationSet &set, JoinRelationSet &left, JoinRelationSet &right);
 	CardinalityValue GetSelectivity(JoinRelationSet &set);
+	JoinSelectivityModel ChooseSelectivityModel();
 	void ProcessSelectivityEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
 	                            SelectivityState &state);
 	void CreateSelectivitySubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,

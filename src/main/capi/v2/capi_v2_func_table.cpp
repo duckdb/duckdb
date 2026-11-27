@@ -6,6 +6,7 @@
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/main/capi/capi_function_signature.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -31,6 +32,10 @@ public:
 
 	vector<Identifier> column_names;
 
+	//! For a function with an operator: whether the operator receives its input from a child of the plan, rather than
+	//! once from the constant arguments of the call
+	bool streaming_input = false;
+
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2TableFunctionData>();
 		CopyTo(*copy);
@@ -39,12 +44,17 @@ public:
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
 		copy->column_names = column_names;
+		copy->streaming_input = streaming_input;
 		return std::move(copy);
 	}
 };
 
 class CV2TableBindInfo {
 public:
+	//! The columns of the input of the function's operator
+	optional_ptr<const vector<LogicalType>> in_input_types;
+	optional_ptr<const vector<Identifier>> in_input_names;
+
 	vector<LogicalType> out_column_types;
 	vector<Identifier> out_column_names;
 	idx_t out_cardinality = 0;
@@ -107,6 +117,10 @@ public:
 	CV2ScanOptions scan;
 	//! The data source the function scans with. The bind data of a call refers to it, which the function outlives.
 	CV2DataSourceInfo source;
+	//! The operator producing the rows of a table in-out function
+	shared_ptr<const CV2OperatorInfo> op;
+	//! Whether the operator's input is a table argument, rather than the positional arguments
+	bool table_input = false;
 
 	Identifier name;
 };
@@ -204,6 +218,8 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	                              info.user_data ? info.user_data->GetData() : nullptr, input.inputs,
 	                              input.named_parameters);
 	CV2TableBindInfo args = {};
+	args.in_input_types = &input.input_table_types;
+	args.in_input_names = &input.input_table_names;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -219,6 +235,8 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;
+	// Without a child plan, the scan hands the operator the constant arguments as its only input
+	result->streaming_input = input.input_plan && *input.input_plan;
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -237,6 +255,231 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	return_types = std::move(args.out_column_types);
 	names = std::move(args.out_column_names);
 	return std::move(result);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Operators
+//----------------------------------------------------------------------------------------------------------------------
+class CV2OperatorGlobalState final : public GlobalTableFunctionState {
+public:
+	auto MaxThreads() const -> idx_t override {
+		return max_threads;
+	}
+
+	CV2UserData handle;
+	idx_t max_threads = GlobalTableFunctionState::MAX_THREADS;
+};
+
+class CV2OperatorLocalState final : public LocalTableFunctionState {
+public:
+	CV2UserData handle;
+	//! Whether the operator is done with the constant arguments the scan keeps handing it
+	bool arguments_consumed = false;
+	//! Whether the operator reported that it is finished along with its last rows
+	bool finished = false;
+	//! Written into when the engine requests no columns, as the operator produces its rows through its first column
+	unique_ptr<DataChunk> row_chunk;
+};
+
+static auto CV2OperatorOf(const CV2TableFunctionData &bind_data) -> const CV2OperatorInfo & {
+	D_ASSERT(bind_data.info && bind_data.info->op);
+	return *bind_data.info->op;
+}
+
+static auto CV2OperatorInitGlobal(ClientContext &context, TableFunctionInitInput &input)
+    -> unique_ptr<GlobalTableFunctionState> {
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &op = CV2OperatorOf(bind_data);
+
+	auto result = make_uniq<CV2OperatorGlobalState>();
+	if (!bind_data.streaming_input) {
+		// every thread of the scan would be handed the same arguments
+		result->max_threads = 1;
+	}
+	if (!op.init_global_cb) {
+		return std::move(result);
+	}
+
+	CV2OperatorInitGlobalInfo args = {};
+	args.in_user_data = op.GetUserData();
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context);
+	op.init_global_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (args.out_global_state.ptr) {
+		result->handle =
+		    CV2UserData(args.out_global_state.ptr, args.out_global_state.destroy, args.out_global_state.equals);
+	}
+	if (args.out_max_threads.IsValid() && bind_data.streaming_input) {
+		result->max_threads = args.out_max_threads.GetIndex();
+	}
+
+	// Throw after taking ownership of the state, so that it is destroyed even if we error.
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	return std::move(result);
+}
+
+static auto CV2OperatorInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                 GlobalTableFunctionState *global_state) -> unique_ptr<LocalTableFunctionState> {
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &op = CV2OperatorOf(bind_data);
+
+	auto result = make_uniq<CV2OperatorLocalState>();
+	if (!op.init_local_cb) {
+		return std::move(result);
+	}
+
+	CV2OperatorInitLocalInfo args = {};
+	args.in_user_data = op.GetUserData();
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	if (global_state) {
+		args.in_global_state = global_state->Cast<CV2OperatorGlobalState>().handle.GetData();
+	}
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context.client);
+	op.init_local_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (args.out_local_state.ptr) {
+		result->handle =
+		    CV2UserData(args.out_local_state.ptr, args.out_local_state.destroy, args.out_local_state.equals);
+	}
+
+	// Throw after taking ownership of the state, so that it is destroyed even if we error.
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	return std::move(result);
+}
+
+//! The chunk the operator writes into: the output chunk, or the local row chunk when the engine requests no columns
+static auto CV2OperatorTarget(ClientContext &context, const CV2TableFunctionData &bind_data,
+                              CV2OperatorLocalState &local_state, DataChunk &output) -> DataChunk & {
+	if (output.ColumnCount() > 0) {
+		return output;
+	}
+	if (!local_state.row_chunk) {
+		local_state.row_chunk = make_uniq<DataChunk>();
+		local_state.row_chunk->Initialize(context, {bind_data.column_types[0]});
+	}
+	local_state.row_chunk->Reset();
+	return *local_state.row_chunk;
+}
+
+//! Takes the row count of what the operator wrote from its first vector, as the exec callback does
+static auto CV2OperatorSetCardinality(const CV2TableFunctionData &bind_data, DataChunk &target, DataChunk &output)
+    -> void {
+	auto row_count = target.data[0].size();
+	if (row_count > target.GetCapacity()) {
+		throw InvalidInputException("The operator of table function %s produced %llu rows, more than the %llu rows "
+		                            "an output chunk holds.",
+		                            bind_data.info->name, row_count, target.GetCapacity());
+	}
+	if (output.ColumnCount() == 0) {
+		output.SetCardinalityUnsafe(row_count);
+		return;
+	}
+	output.SetChildCardinality(row_count);
+}
+
+static auto CV2OperatorCallExecute(ExecutionContext &context, TableFunctionInput &data, DataChunk &input,
+                                   DataChunk &output) -> OperatorResultType {
+	const auto &bind_data = data.bind_data->Cast<CV2TableFunctionData>();
+	const auto &op = CV2OperatorOf(bind_data);
+	auto &local_state = data.local_state->Cast<CV2OperatorLocalState>();
+
+	CV2OperatorExecuteInfo args = {};
+	args.in_user_data = op.GetUserData();
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	if (data.global_state) {
+		args.in_global_state = data.global_state->Cast<CV2OperatorGlobalState>().handle.GetData();
+	}
+	args.in_local_state = local_state.handle.GetData();
+	auto &target = CV2OperatorTarget(context.client, bind_data, local_state, output);
+	args.input = &input;
+	args.output = &target;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context.client);
+	op.execute_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	CV2OperatorSetCardinality(bind_data, target, output);
+	return args.out_result;
+}
+
+//! Runs the operator for the in-out function. Called with constant arguments, the table scan hands the operator the
+//! same input chunk until it produces no rows, so the operator only sees it until it is done with it.
+static auto CV2OperatorExecute(ExecutionContext &context, TableFunctionInput &data, DataChunk &input, DataChunk &output)
+    -> OperatorResultType {
+	const auto &bind_data = data.bind_data->Cast<CV2TableFunctionData>();
+	auto &local_state = data.local_state->Cast<CV2OperatorLocalState>();
+	if (bind_data.streaming_input) {
+		if (local_state.finished) {
+			return OperatorResultType::FINISHED;
+		}
+		auto result = CV2OperatorCallExecute(context, data, input, output);
+		if (result == OperatorResultType::FINISHED && output.size() > 0) {
+			// the engine drops the output of an operator that reports it is finished
+			local_state.finished = true;
+			return OperatorResultType::HAVE_MORE_OUTPUT;
+		}
+		return result;
+	}
+	if (input.ColumnCount() == 0) {
+		// a call without arguments is a single row without columns
+		input.SetCardinalityUnsafe(1);
+	}
+	while (!local_state.arguments_consumed) {
+		output.Reset();
+		auto result = CV2OperatorCallExecute(context, data, input, output);
+		if (result != OperatorResultType::HAVE_MORE_OUTPUT) {
+			local_state.arguments_consumed = true;
+		}
+		if (output.size() > 0) {
+			break;
+		}
+		context.client.FastInterruptCheck();
+	}
+	return local_state.arguments_consumed ? OperatorResultType::FINISHED : OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+static auto CV2OperatorFinalize(ExecutionContext &context, TableFunctionInput &data, DataChunk &output)
+    -> OperatorFinalizeResultType {
+	const auto &bind_data = data.bind_data->Cast<CV2TableFunctionData>();
+	const auto &op = CV2OperatorOf(bind_data);
+	auto &local_state = data.local_state->Cast<CV2OperatorLocalState>();
+
+	CV2OperatorFinalizeInfo args = {};
+	args.in_user_data = op.GetUserData();
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	if (data.global_state) {
+		args.in_global_state = data.global_state->Cast<CV2OperatorGlobalState>().handle.GetData();
+	}
+	args.in_local_state = local_state.handle.GetData();
+	auto &target = CV2OperatorTarget(context.client, bind_data, local_state, output);
+	args.output = &target;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context.client);
+	op.finalize_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	CV2OperatorSetCardinality(bind_data, target, output);
+	return args.out_have_more_output ? OperatorFinalizeResultType::HAVE_MORE_OUTPUT
+	                                 : OperatorFinalizeResultType::FINISHED;
 }
 
 //! An exact estimate also pins the maximum; otherwise only the estimate is known.
@@ -410,11 +653,15 @@ public:
 			throw InvalidInputException("A table function signature cannot set a return type.");
 		}
 
-		info.source.Verify();
-		// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
-		if (info.partitioning_cb && !info.source.partition_data_cb) {
-			throw InvalidInputException(
-			    "The data source must have a partition data callback when the partitioning callback is set.");
+		if (info.op) {
+			CheckOperator();
+		} else {
+			info.source.Verify();
+			// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
+			if (info.partitioning_cb && !info.source.partition_data_cb) {
+				throw InvalidInputException(
+				    "The data source must have a partition data callback when the partitioning callback is set.");
+			}
 		}
 		// Virtual columns are told apart from the declared columns by their place among the columns the scan was asked
 		// for
@@ -422,12 +669,21 @@ public:
 			throw InvalidInputException(
 			    "A table function that produces a virtual column requires projection pushdown.");
 		}
-		signature.Verify();
+
+		auto function_signature = BuildSignature();
+		function_signature.Verify();
 
 		// A table function holds a signature of its own, so the declared one is handed over as-is
 		TableFunction function(name, {}, CV2DataSourceExec, CV2TableBind, CV2DataSourceInitGlobal,
 		                       CV2DataSourceInitLocal);
-		function.GetSignature() = signature;
+		if (info.op) {
+			function = TableFunction(name, {}, nullptr, CV2TableBind, CV2OperatorInitGlobal, CV2OperatorInitLocal);
+			function.in_out_function = CV2OperatorExecute;
+			if (info.op->finalize_cb) {
+				function.in_out_function_final = CV2OperatorFinalize;
+			}
+		}
+		function.GetSignature() = std::move(function_signature);
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -442,7 +698,9 @@ public:
 		if (info.to_string_cb) {
 			function.to_string = CV2TableToString;
 		}
-		info.source.ConfigureScan(function);
+		if (!info.op) {
+			info.source.ConfigureScan(function);
+		}
 		if (info.scan.filter_pushdown_cb) {
 			function.pushdown_complex_filter = CV2TableFilterPushdown;
 		}
@@ -470,6 +728,55 @@ public:
 		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 
 		return function;
+	}
+
+private:
+	//! The signature of the registered function: the declared one, preceded by the table input of an operator
+	FunctionSignature BuildSignature() const {
+		if (!info.op || !info.table_input) {
+			return signature;
+		}
+		// the declared parameters are all named, so the table input goes first
+		auto result = signature;
+		CAPIFunctionSignature::AddParameter(result, FunctionParameter(Identifier("input"), LogicalType::TABLE, {},
+		                                                              FunctionParameterKind::POSITIONAL_ONLY));
+		return result;
+	}
+
+	//! A function with an operator transforms an input instead of scanning: the scanning callbacks do not apply
+	void CheckOperator() const {
+		auto reject = [](bool set, const char *what) {
+			if (set) {
+				throw InvalidInputException("A table function with an operator cannot have %s.", what);
+			}
+		};
+		reject(info.source.exec_cb, "an exec callback");
+		reject(info.source.init_global_cb, "an init global callback");
+		reject(info.source.init_local_cb, "an init local callback");
+		reject(info.source.progress_cb, "a progress callback");
+		reject(info.source.metrics_cb, "a metrics callback");
+		reject(info.scan.filter_pushdown_cb, "a filter pushdown callback");
+		reject(info.source.partition_data_cb, "a partition data callback");
+		reject(info.partitioning_cb, "a partitioning callback");
+		reject(info.source.claim_batch_cb, "a claim batch callback");
+		reject(info.scan.projection_pushdown, "projection pushdown");
+		reject(info.file_row_number, "virtual columns");
+		if (!info.op->execute_cb) {
+			throw InvalidInputException("Execute callback must be set for the operator of the function.");
+		}
+		if (info.table_input) {
+			for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
+				auto &parameter = signature.GetParameter(i);
+				if (parameter.AcceptsPosition() || parameter.GetKind() == FunctionParameterKind::VAR_POSITIONAL) {
+					throw InvalidInputException(
+					    "A table function whose operator takes a table input cannot declare positional parameters.");
+				}
+			}
+		} else if (info.op->finalize_cb) {
+			throw InvalidInputException(
+			    "The operator of a table function that takes its input from its arguments cannot have a finalize "
+			    "callback.");
+		}
 	}
 
 public:
@@ -539,6 +846,10 @@ private:
 			                            single_file_function);
 		}
 		for (auto &function : overloads->functions) {
+			if (!function->function) {
+				// an in-out function transforms an input rather than reading a file
+				continue;
+			}
 			auto &signature = function->GetSignature();
 			if (signature.GetRequiredParameterCount() != 1 || !signature.GetParameter(0).AcceptsPosition()) {
 				continue;
@@ -596,6 +907,14 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handl
 	DUCKDB_CHECK_STR_ARG(name, name_length);
 	return WithErrorHandler(
 	    err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name, name_length)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_property(duckdb_v2_table_function_handle function,
+                                                      DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                                                      DUCKDB_V2_FUNCTION_PROPERTY_VALUE value,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { SetTableFunctionProperty(Convert(function)->stability, key, value); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_docs(duckdb_v2_table_function_handle function,
@@ -757,6 +1076,45 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_result_stats(duckdb_v2_table_
 	return WithErrorHandler(err, [&]() { *stats = Convert(&Convert(info)->result_stats); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_input_column_count(duckdb_v2_table_function_bind_info_handle info,
+                                                                     idx_t *count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_input_types->size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_input_column_type(duckdb_v2_table_function_bind_info_handle info,
+                                                                    idx_t index, duckdb_v2_logical_type_handle *type,
+                                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(type);
+	*type = nullptr;
+	return WithErrorHandler(err, [&]() {
+		const auto &types = *Convert(info)->in_input_types;
+		if (index >= types.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_bind_get_input_column_type");
+		}
+		*type = Convert(types[index]);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_input_column_name(duckdb_v2_table_function_bind_info_handle info,
+                                                                    idx_t index, const char **name, idx_t *name_length,
+                                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(name_length);
+	return WithErrorHandler(err, [&]() {
+		const auto &names = *Convert(info)->in_input_names;
+		if (index >= names.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_bind_get_input_column_name");
+		}
+		SetStringOut(name, name_length, names[index]);
+	});
+}
+
 DUCKDB_V2_ERROR
 duckdb_v2_table_function_filter_pushdown_get_user_data(duckdb_v2_table_function_filter_pushdown_info_handle info,
                                                        void **data, duckdb_v2_error_info_handle *err) {
@@ -885,6 +1243,24 @@ duckdb_v2_table_function_partitioning_set_partition_info(duckdb_v2_table_functio
 	                        [&]() { Convert(info)->out_partition_info = CV2ConvertPartitionInfo(partition_info); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_operator(duckdb_v2_table_function_handle function,
+                                                      duckdb_v2_operator_handle op,
+                                                      DUCKDB_V2_TABLE_OPERATOR_INPUT input,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(op);
+	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
+		auto &source = *Convert(op);
+		CheckRegistrationTarget(source.db, self.db, "operator");
+		if (static_cast<uint32_t>(input) > DUCKDB_V2_TABLE_OPERATOR_INPUT_TABLE) {
+			throw duckdb::InvalidInputException("Invalid value in duckdb_v2_table_function_set_operator");
+		}
+		self.info.op = duckdb::make_shared_ptr<CV2OperatorInfo>(source.info);
+		self.info.table_input = input == DUCKDB_V2_TABLE_OPERATOR_INPUT_TABLE;
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_connection_register_table_function(duckdb_v2_connection_handle conn,
                                                              duckdb_v2_table_function_handle function,
                                                              duckdb_v2_error_info_handle *err) {
@@ -894,8 +1270,10 @@ DUCKDB_V2_ERROR duckdb_v2_connection_register_table_function(duckdb_v2_connectio
 		auto &context = *Convert(conn)->context;
 		context.RunFunctionInTransaction([&]() {
 			auto &self = *Convert(function);
-			auto info = duckdb::CreateTableFunctionInfo(self.Build(*context.db));
-			self.docs.AddTo(self.signature, info);
+			auto function = self.Build(*context.db);
+			auto signature = function.GetSignature();
+			auto info = duckdb::CreateTableFunctionInfo(std::move(function));
+			self.docs.AddTo(signature, info);
 			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 			// CreateFunction, unlike CreateTableFunction, adds the overloads to an existing function.
@@ -912,8 +1290,10 @@ DUCKDB_V2_ERROR duckdb_v2_extension_register_table_function(duckdb_v2_extension_
 	return WithErrorHandler(err, [&]() {
 		auto &self = *Convert(function);
 		auto &loader = GetExtensionLoader(extension);
-		duckdb::CreateTableFunctionInfo info(self.Build(loader.GetDatabaseInstance()));
-		self.docs.AddTo(self.signature, info);
+		auto function = self.Build(loader.GetDatabaseInstance());
+		auto signature = function.GetSignature();
+		duckdb::CreateTableFunctionInfo info(std::move(function));
+		self.docs.AddTo(signature, info);
 		info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 		loader.RegisterFunction(std::move(info));
 	});
