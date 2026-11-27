@@ -30,3 +30,49 @@ query I
 SELECT count(*) FROM other_name.t
 ----
 3
+
+# case-insensitive rename must also update the tracked alias
+statement ok
+ATTACH '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
+
+statement ok
+ALTER DATABASE CASE_ORIG SET ALIAS TO case_other
+
+statement ok
+SET max_execution_time=2000
+
+statement error
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_case_repro.db' AS case_orig
+----
+<REGEX>:.*already attached.*case_other.*
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_alias_case_repro.db' AS CASE_OTHER
+
+# multiple read-only aliases to the same file: detaching one must not leave a stale tracked alias
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_init
+
+statement ok
+CREATE TABLE ro_init.t AS SELECT 42 AS i
+
+statement ok
+DETACH ro_init
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_b (READ_ONLY)
+
+statement ok
+DETACH ro_a
+
+statement ok
+ATTACH '{TEST_DIR}/attach_ro_multi.db' AS ro_c (READ_ONLY)
+
+statement ok
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_ro_multi.db' AS ro_a (READ_ONLY)
+
+statement ok
+SET max_execution_time=0
