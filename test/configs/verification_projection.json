@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "Synthetic projections hide direct join scans; result coverage remains in adaptive_redundant_scan_filters.test.",
+      "paths": [
+        "test/optimizer/pushdown/adaptive_redundant_scan_filters_plan.test"
+      ]
+    },
+    {
       "reason": "Synthetic projections change common-subplan matching; result coverage remains in companion tests.",
       "paths": [
         "test/sql/optimizer/test_common_subplan_matching_plan.test"

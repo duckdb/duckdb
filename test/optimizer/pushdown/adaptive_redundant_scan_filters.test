@@ -29,14 +29,6 @@ FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
 ----
 100000	4999951000	5042000
 
-# Only the probe copy is optional.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
-----
-physical_plan	<REGEX>:(?s).*adaptive_probe[^}]*"Filters": "optional: \(k != 7\)"[^}]*.*adaptive_build[^}]*"Filters": "\(k != 7\)".*
-
 query III
 SELECT count(*),sum(p.i),sum(b.v)
 FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<5;
@@ -51,30 +43,6 @@ WHERE b.k<>7 AND p.i<>99908;
 ----
 99998	4999751184	5041893
 
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k
-WHERE b.k<>7 AND p.i<>99908;
-----
-physical_plan	<!REGEX>:(?s).*optional: \(i != 99908\).*
-
-# An additional computed condition cannot admit new evaluation inputs.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k AND p.i+1>b.v WHERE b.k<>7;
-----
-physical_plan	<!REGEX>:(?s).*optional:.*
-
-# The preserved side of a LEFT join needs its exact filter.
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p LEFT JOIN adaptive_build b ON p.k=b.k WHERE p.k<>7;
-----
-physical_plan	<!REGEX>:(?s).*optional:.*
-
 # Keep the existing predicate batch when the scan evaluates a fallible cast.
 statement ok
 CREATE TABLE guarded_probe AS
@@ -86,14 +54,6 @@ FROM guarded_probe p JOIN adaptive_build b ON p.k=b.k
 WHERE p.k<>7 AND CASE WHEN p.s='bad' THEN NULL ELSE p.s::INTEGER END>0;
 ----
 10	137
-
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(b.v)
-FROM guarded_probe p JOIN adaptive_build b ON p.k=b.k
-WHERE p.k<>7 AND CASE WHEN p.s='bad' THEN NULL ELSE p.s::INTEGER END>0;
-----
-physical_plan	<!REGEX>:(?s).*optional:.*
 
 # Binary string equality also preserves the constant predicate.
 statement ok
@@ -109,13 +69,6 @@ SELECT count(*),sum(p.i),sum(b.v)
 FROM string_probe p JOIN string_build b ON p.k=b.k WHERE b.k<>repeat('x',20)||'7';
 ----
 100000	4999951000	5042000
-
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM string_probe p JOIN string_build b ON p.k=b.k WHERE b.k<>repeat('x',20)||'7';
-----
-physical_plan	<REGEX>:(?s).*string_probe[^}]*"Filters": "optional:.*string_build[^}]*"Filters": "\(k !=.*
 
 # Re-execution must preserve duplicate and transaction-local build changes.
 statement ok
@@ -156,13 +109,6 @@ EXECUTE adaptive_join;
 ----
 99000	4949993000	4943000
 
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
-----
-physical_plan	<!REGEX>:(?s).*optional:.*
-
 statement ok
 RESET disabled_optimizers;
 
@@ -185,28 +131,12 @@ JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
 ----
 99000	4949993000	4943000
 
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM read_parquet('{TEST_DIR}/adaptive_probe.parquet') p
-JOIN adaptive_build b ON p.k=b.k WHERE b.k<>7;
-----
-physical_plan	<REGEX>:(?s).*READ_PARQUET[^}]*"Filters": "optional: \(k != 7\)".*
-
 query III
 SELECT count(*),sum(p.i),sum(b.v)
 FROM adaptive_probe p
 JOIN read_parquet('{TEST_DIR}/adaptive_build.parquet') b ON p.k=b.k WHERE b.k<>7;
 ----
 99000	4949993000	4943000
-
-query II
-EXPLAIN (FORMAT JSON)
-SELECT count(*),sum(p.i),sum(b.v)
-FROM adaptive_probe p
-JOIN read_parquet('{TEST_DIR}/adaptive_build.parquet') b ON p.k=b.k WHERE b.k<>7;
-----
-physical_plan	<REGEX>:(?s).*adaptive_probe[^}]*"Filters": "optional: \(k != 7\)".*READ_PARQUET[^}]*"Filters": "\(k != 7\)".*
 
 query III
 SELECT count(*),sum(p.i),sum(b.v)
