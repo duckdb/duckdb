@@ -667,6 +667,12 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	// Parse the extension metadata from the extension binary
 	auto parsed_metadata = ParseExtensionMetaData(*handle);
 
+	// ABI recognition is mandatory. Compatibility overrides must
+	// never permit an extension with an unknown ABI to load.
+	if (parsed_metadata.abi_type == ExtensionABIType::UNKNOWN) {
+		throw InvalidInputException("Failed to load '%s': %s", extension, parsed_metadata.GetInvalidMetadataError());
+	}
+
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty()) {

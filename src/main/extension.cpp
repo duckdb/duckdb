@@ -50,6 +50,12 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 		return "The file is not a DuckDB extension. The metadata at the end of the file is invalid";
 	}
 
+	// An unknown ABI is invalid external metadata.
+	// Do not treat it as an internal engine failure.
+	if (abi_type == ExtensionABIType::UNKNOWN) {
+		return StringUtil::Format("Unknown ABI type for extension: '%s'", PrettyPrintString(extension_abi_metadata));
+	}
+
 	string result;
 
 	// CPP or C_STRUCT_UNSTABLE ABI versioning needs to match the DuckDB version exactly
@@ -92,7 +98,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 			                       duckdb_capi_version, major, max_minor, max_patch);
 		}
 	} else {
-		return StringUtil::Format("Unknown ABI type for extension: '%s'", PrettyPrintString(extension_abi_metadata));
+		throw InternalException("Unexpected ABI enum value: '%d'", static_cast<int>(abi_type)); // defensive
 	}
 
 	if (engine_platform != platform) {
