@@ -1592,8 +1592,10 @@ TEST_CASE("A handle keeps a whole small file it reads off disk when asked to", "
 	EFCTestFileGuard test_file("test_efc_whole_small_file.bin", content);
 	const auto large_content = MakeTestContent(CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE + 1);
 	EFCTestFileGuard large_file("test_efc_whole_large_file.bin", large_content);
-	CachingFileSystem off_disk_cfs(*off_disk_fs, db_instance);
-	CachingFileSystem on_disk_cfs(*on_disk_fs, db_instance);
+	BoundFileSystem off_disk_bound(*off_disk_fs, nullptr);
+	BoundFileSystem on_disk_bound(*on_disk_fs, nullptr);
+	CachingFileSystem off_disk_cfs(off_disk_bound, db_instance);
+	CachingFileSystem on_disk_cfs(on_disk_bound, db_instance);
 	auto open = [&](CachingFileSystem &cfs, const string &path) {
 		return cfs.OpenFile(MakeTestOpenFileInfo(path), FileFlags::FILE_FLAGS_READ);
 	};
