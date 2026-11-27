@@ -355,7 +355,8 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
-	//! Lock for appending entries to the table
+	//! Lock for appending entries to the table. An ALTER that replaces the table holds it from its index check until
+	//! it marks the table ALTERED, and indexes are published under it, so no index is added after that check.
 	mutex append_lock;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
