@@ -20,9 +20,6 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lhs_vec = args.data[0];
 	auto &rhs_vec = args.data[1];
 
-	const auto lhs_count = ListVector::GetListSize(lhs_vec);
-	const auto rhs_count = ListVector::GetListSize(rhs_vec);
-
 	auto &lhs_child = ListVector::GetChildMutable(lhs_vec);
 	auto &rhs_child = ListVector::GetChildMutable(rhs_vec);
 
@@ -32,12 +29,38 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	D_ASSERT(lhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	if (!FlatVector::ValidityMutable(lhs_child).CheckAllValid(lhs_count)) {
-		throw InvalidInputException("%s: left argument can not contain NULL values", SQLIdentifier(func_name));
+	// reject lists whose elements contain NULLs, but only the elements that belong to non-NULL
+	// parent rows: a fully-NULL list occupies no elements and yields a NULL result below. The
+	// previous whole-child-vector check (CheckAllValid over the full element count) wrongly
+	// rejected a NULL list read from Parquet, where the NULL list entry still occupies a child
+	// slot with an invalid validity entry.
+	UnifiedVectorFormat lhs_format;
+	lhs_vec.ToUnifiedFormat(lhs_format);
+	UnifiedVectorFormat rhs_format;
+	rhs_vec.ToUnifiedFormat(rhs_format);
+	UnifiedVectorFormat lhs_child_format;
+	lhs_child.ToUnifiedFormat(lhs_child_format);
+	UnifiedVectorFormat rhs_child_format;
+	rhs_child.ToUnifiedFormat(rhs_child_format);
+	for (idx_t i = 0; i < args.size(); i++) {
+		idx_t li = lhs_format.sel ? lhs_format.sel->get_index(i) : i;
+		if (!lhs_format.validity.RowIsValid(li)) {
+			continue;
+		}
+		auto lhs_entry = reinterpret_cast<const list_entry_t *>(lhs_format.data)[li];
+		if (!lhs_child_format.validity.CheckAllValid(lhs_entry.offset + lhs_entry.length, lhs_entry.offset)) {
+			throw InvalidInputException("%s: left argument can not contain NULL values", SQLIdentifier(func_name));
+		}
 	}
-
-	if (!FlatVector::ValidityMutable(rhs_child).CheckAllValid(rhs_count)) {
-		throw InvalidInputException("%s: right argument can not contain NULL values", SQLIdentifier(func_name));
+	for (idx_t i = 0; i < args.size(); i++) {
+		idx_t ri = rhs_format.sel ? rhs_format.sel->get_index(i) : i;
+		if (!rhs_format.validity.RowIsValid(ri)) {
+			continue;
+		}
+		auto rhs_entry = reinterpret_cast<const list_entry_t *>(rhs_format.data)[ri];
+		if (!rhs_child_format.validity.CheckAllValid(rhs_entry.offset + rhs_entry.length, rhs_entry.offset)) {
+			throw InvalidInputException("%s: right argument can not contain NULL values", SQLIdentifier(func_name));
+		}
 	}
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
