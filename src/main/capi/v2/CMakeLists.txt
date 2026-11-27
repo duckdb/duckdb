@@ -8,11 +8,13 @@ add_library_unity(
   capi_v2_expression.cpp
   capi_v2_catalog.cpp
   capi_v2_column_data_collection.cpp
+  capi_v2_crypto.cpp
   capi_v2_config.cpp
   capi_v2_connection.cpp
   capi_v2_custom_option.cpp
   capi_v2_custom_type.cpp
   capi_v2_data_chunk.cpp
+  capi_v2_data_source.cpp
   capi_v2_environment.cpp
   capi_v2_error.cpp
   capi_v2_extension.cpp
@@ -41,6 +43,7 @@ add_library_unity(
   capi_v2_replacement_scan.cpp
   capi_v2_result.cpp
   capi_v2_schema.cpp
+  capi_v2_secret.cpp
   capi_v2_object_cache.cpp
   capi_v2_statement.cpp
   capi_v2_stats.cpp

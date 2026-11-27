@@ -86,3 +86,14 @@ statement error
 SELECT e'\000';
 ----
 Parser Error: Null character not permitted in escape string literal
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+COMMENT ON COLUMN t.i IS E'a\nb';
+
+query I
+SELECT comment = 'a' || chr(10) || 'b' FROM duckdb_columns() WHERE table_name = 't';
+----
+true

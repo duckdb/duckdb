@@ -265,7 +265,8 @@ void JoinFilterPushdownInfo::DeferRuntimeFilter(DeferredRuntimeFilterType type, 
                                                 const JoinFilterPushdownFilter &info,
                                                 const JoinFilterPushdownColumn &column, ProjectionIndex filter_col_idx,
                                                 idx_t key_idx, JoinFilterGlobalState &gstate) const {
-	gstate.deferred_runtime_filters.push_back({type, &op, info.dynamic_filters, column, filter_col_idx, key_idx});
+	gstate.deferred_runtime_filters.push_back(
+	    {type, &op, info.dynamic_filters, column.Copy(), filter_col_idx, key_idx});
 }
 
 bool JoinFilterPushdownInfo::TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
@@ -470,25 +471,36 @@ static unique_ptr<Expression> CreateJoinFilterComparisonExpression(
 	return RetainRuntimeFilterNulls(std::move(filter_expr), std::move(null_check_input));
 }
 
-static bool CollectInFilterValues(ClientContext &context, Vector &build_vector, const LogicalType &filter_input_type,
-                                  idx_t threshold, bool retain_nulls, vector<Value> &in_list) {
+static bool CollectInFilterValues(ClientContext &context, TupleDataCollection &collection, column_t column_index,
+                                  const LogicalType &filter_input_type, idx_t threshold, bool retain_nulls,
+                                  vector<Value> &in_list) {
+	const auto total_count = collection.Count();
+	if (total_count == 0) {
+		return false;
+	}
+	TupleDataScanState scan_state;
+	collection.InitializeScan(scan_state, {column_index}, TupleDataPinProperties::UNPIN_AFTER_DONE);
+	DataChunk build_keys;
+	collection.InitializeScanChunk(scan_state, build_keys);
 	GroupedAggregateHashTable distinct_keys(context, Allocator::Get(context), {filter_input_type});
 	DataChunk keys;
 	keys.Initialize(context, {filter_input_type});
-	Vector input(build_vector.GetType());
 	Vector addresses(LogicalType::POINTER);
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	CastFunctionSet cast_functions;
 	auto cast_input = GetCastFunctionInput::Default();
-	for (idx_t offset = 0; offset < build_vector.size(); offset += STANDARD_VECTOR_SIZE) {
-		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, build_vector.size() - offset);
+	idx_t scanned_count = 0;
+	// Read one chunk at a time so oversized filters can stop early.
+	while (collection.Scan(scan_state, build_keys)) {
 		keys.Reset();
-		input.Slice(build_vector, offset, offset + count);
+		const auto count = build_keys.size();
+		scanned_count += count;
+		auto &build_vector = build_keys.data[0];
 		if (build_vector.GetType() == filter_input_type) {
-			keys.data[0].Reference(input);
+			keys.data[0].Reference(build_vector);
 		} else {
 			string error;
-			if (!VectorOperations::TryCast(cast_functions, cast_input, input, keys.data[0], count, &error)) {
+			if (!VectorOperations::TryCast(cast_functions, cast_input, build_vector, keys.data[0], count, &error)) {
 				return false;
 			}
 		}
@@ -508,7 +520,7 @@ static bool CollectInFilterValues(ClientContext &context, Vector &build_vector, 
 			}
 		}
 	}
-	return true;
+	return scanned_count == total_count;
 }
 
 bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
@@ -518,12 +530,6 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 	// Generate an IN filter by scanning the build-side key column.
 	auto build_idx = join_condition[filter_idx];
 	const auto &runtime_type = ht.conditions[build_idx].GetLHS().GetReturnType();
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
-	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
-	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
-	if (key_count == 0 || key_count != ht.Count()) {
-		return false;
-	}
 
 	const auto retain_nulls = ht.conditions[build_idx].GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	const auto reconstruct_expression =
@@ -544,8 +550,8 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 
 	const auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
 	vector<Value> in_list;
-	if (!CollectInFilterValues(context, build_vector, filter_input_type, dynamic_or_filter_threshold, retain_nulls,
-	                           in_list)) {
+	if (!CollectInFilterValues(context, ht.GetDataCollection(), build_idx, filter_input_type,
+	                           dynamic_or_filter_threshold, retain_nulls, in_list)) {
 		return false;
 	}
 

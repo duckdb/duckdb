@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/collation_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -64,14 +65,20 @@ public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
 	                           vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr,
-	                           optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr);
+	                           optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr,
+	                           bool arguments_collated_p = false);
 
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
+	//! The collations to push into the arguments: arguments bound before do not get the default collation again
+	CollationType GetCollationType() const {
+		return arguments_collated ? CollationType::EXPLICIT_COLLATIONS : CollationType::ALL_COLLATIONS;
+	}
 
 private:
 	BoundAggregateFunction &bound_function;
+	bool arguments_collated;
 };
 
 class FunctionExpression;
@@ -163,14 +170,15 @@ enum class AggregateRewritePolicy : uint8_t {
 //! dest_buffer (state i at offset i * layout.total_state_size).
 struct AggregateImportInputData {
 	AggregateImportInputData(const AggregateStateLayout &layout, const Vector &input_vec, data_ptr_t dest_buffer,
-	                         ArenaAllocator &allocator)
-	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator) {
+	                         ArenaAllocator &allocator, optional_ptr<const FunctionData> bind_data)
+	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator), bind_data(bind_data) {
 	}
 
 	const AggregateStateLayout &layout;
 	const Vector &input_vec;
 	data_ptr_t dest_buffer;
 	ArenaAllocator &allocator;
+	optional_ptr<const FunctionData> bind_data;
 };
 
 //! The counterpart of export_aggregate_state, for states a static field layout cannot describe (e.g. a hash map).
@@ -358,6 +366,9 @@ public:
 	//! Whether combining can leave the target referencing the source's memory
 	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
 
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	bool can_stream = true;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -411,6 +422,10 @@ public: // Properties
 	//! Whether combining can leave the target referencing the source's memory
 	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
 	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
+
+	//! Whether the streaming window may compute the aggregate, updating one running state with every row
+	auto CanStream() const -> bool { return properties.can_stream; }
+	auto SetCanStream(bool value) -> void { properties.can_stream = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -933,6 +948,10 @@ public:
 	const LogicalType &GetLogicalReturnType() const {
 		return logical_return_type;
 	}
+	//! Whether EXPORT_STATE replaced the return type
+	bool ReturnsExportedState() const {
+		return GetReturnType().IsAggregateState() && GetReturnType() != logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -978,7 +997,7 @@ inline AggregateStateLayout AggregateFunction::StructStateLayout(AggregateLayout
 	using ST = typename STATE::STATE_TYPE;
 	auto &bound = input.function;
 	AggregateStateLayout layout;
-	if (bound.GetReturnType().IsAggregateState()) {
+	if (bound.ReturnsExportedState()) {
 		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
 		// its return type IS the state type already
 		layout.type = bound.GetReturnType();

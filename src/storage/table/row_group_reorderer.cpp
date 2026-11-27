@@ -79,6 +79,8 @@ bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			}
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
+			// The sum may already count the row groups that wait for a later tuple
+			qualify_later = 0;
 			++last_unresolved_entry;
 			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get().GetNode();
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;

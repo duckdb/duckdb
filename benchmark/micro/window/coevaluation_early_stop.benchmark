@@ -1,0 +1,26 @@
+# name: benchmark/micro/window/coevaluation_early_stop.benchmark
+# description: Equivalence 14/7.1 from Lidner+ VLDB 2026
+# group: [window]
+
+name CoEvaluation
+group micro
+subgroup window
+
+argument rows 1_000_000
+argument k 2
+argument partition 2
+argument disabled top_n_window_elimination
+argument threads 1
+
+load
+SET threads=${threads};
+SET disabled_optimizers=${disabled};
+CREATE OR REPLACE TABLE t AS (
+	SELECT i, i // ${partition} AS g
+	FROM range(${rows}) tbl(i)
+);
+
+run
+SELECT i
+FROM t
+QUALIFY row_number() OVER (PARTITION BY g) <= ${k};

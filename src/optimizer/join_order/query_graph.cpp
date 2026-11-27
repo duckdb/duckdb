@@ -18,7 +18,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<RelationIndex> pre
 	string result = "";
 	string source = "[";
 	for (idx_t i = 0; i < prefix.size(); i++) {
-		source += to_string(prefix[i].index) + (i < prefix.size() - 1 ? ", " : "");
+		source += StringUtil::Format("%llu%s", prefix[i].index, i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
 	for (auto &entry : info->neighbors) {
@@ -63,6 +63,7 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
+	info->relations = left;
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
 		if (info->neighbors[i]->neighbor == right && info->neighbors[i]->join_operator == join_operator &&
@@ -80,6 +81,23 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 		n->predicates.push_back(*predicate);
 	}
 	info->neighbors.push_back(std::move(n));
+}
+
+void QueryGraphEdges::EnumerateEdges(const std::function<bool(JoinRelationSet &, NeighborInfo &)> &callback) const {
+	vector<reference<const QueryEdge>> pending {root};
+	while (!pending.empty()) {
+		auto &edge = pending.back().get();
+		pending.pop_back();
+		for (auto &neighbor : edge.neighbors) {
+			D_ASSERT(edge.relations);
+			if (callback(*edge.relations.get_mutable(), *neighbor)) {
+				return;
+			}
+		}
+		for (auto &child : edge.children) {
+			pending.push_back(*child.second);
+		}
+	}
 }
 
 void QueryGraphEdges::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,

@@ -10,16 +10,20 @@
 
 namespace duckdb {
 
-static bool IsVolatile(LogicalProjection &proj, const Expression &expr) {
-	bool is_volatile = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		D_ASSERT(colref.Depth() == 0);
-		auto &proj_expr = proj.GetExpression(colref.Binding());
-		if (proj_expr.IsVolatile()) {
-			is_volatile = true;
-		}
-	});
-	return is_volatile;
+static bool CanPushProjectionFilter(LogicalProjection &proj, const FilterPushdown::Filter &filter) {
+	if (filter.filter->CanThrow() && !filter.has_barrier) {
+		return false;
+	}
+	bool can_push = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    *filter.filter, [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.Depth() == 0);
+		    auto &proj_expr = proj.GetExpression(colref.Binding());
+		    if (proj_expr.IsVolatile()) {
+			    can_push = false;
+		    }
+	    });
+	return can_push;
 }
 
 // A compress expression only holds where it was placed, so a filter must not inline it into a position below
@@ -34,16 +38,20 @@ static bool ReferencesCompressExpression(LogicalProjection &proj, const Expressi
 	return references_compress_expression;
 }
 
-static bool ReferencesComputedExpression(LogicalProjection &proj, const Expression &expr) {
-	bool references_computed_expression = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		D_ASSERT(colref.Depth() == 0);
-		auto &proj_expr = proj.GetExpression(colref.Binding());
-		if (proj_expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			references_computed_expression = true;
-		}
-	});
-	return references_computed_expression;
+static bool NeedsProjectionSplit(LogicalProjection &proj, const FilterPushdown::Filter &filter,
+                                 FilterPushdown::ProjectionMode projection_mode) {
+	bool needs_split = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    *filter.filter, [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.Depth() == 0);
+		    auto &proj_expr = proj.GetExpression(colref.Binding());
+		    if ((!filter.has_barrier && proj_expr.CanThrow()) ||
+		        (projection_mode == FilterPushdown::ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS &&
+		         proj_expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF)) {
+			    needs_split = true;
+		    }
+	    });
+	return needs_split;
 }
 
 static unique_ptr<Expression> CreateColumnReference(const Expression &expr, ColumnBinding binding) {
@@ -168,12 +176,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	vector<unique_ptr<Expression>> remain_expressions;
 	vector<unique_ptr<Expression>> split_expressions;
 	auto stays_on_top = [&](const Filter &f) {
-		return IsVolatile(proj, *f.filter) || ReferencesCompressExpression(proj, *f.filter) ||
-		       (f.filter->CanThrow() && !f.has_barrier);
+		return !CanPushProjectionFilter(proj, f) || ReferencesCompressExpression(proj, *f.filter);
 	};
 	auto splits_off = [&](const Filter &f) {
-		return projection_mode == ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS &&
-		       ReferencesComputedExpression(proj, *f.filter);
+		return NeedsProjectionSplit(proj, f, projection_mode);
 	};
 	// barred expressions may only cross the projection if every other filter does: a filter kept on top of the
 	// projection, or split off below it, would otherwise be evaluated after them
@@ -187,7 +193,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		auto &f = *filter;
 		D_ASSERT(f.bindings.size() <= 1);
 		if (stays_on_top(f) || (f.has_barrier && hold_back_barriers)) {
-			// Volatile and throwing expressions and filters over compressed columns cannot move across the
+			// Volatile inputs, throwing filters and filters over compressed columns cannot move across the
 			// projection. Expressions carrying a barrier are the exception: a projection does not remove any rows,
 			// so pushing them through it does not change which rows they are evaluated on - unless another filter
 			// stays behind, see above.

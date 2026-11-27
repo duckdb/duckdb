@@ -1,0 +1,30 @@
+# name: test/sql/settings/join_order_config_connections.test
+# description: Join enumeration test configuration applies to every connection
+# group: [settings]
+
+statement ok
+CREATE TABLE expected_threshold AS SELECT current_setting('approximate_join_order_threshold') AS threshold;
+
+query I
+SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
+----
+true
+
+query I con1
+SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
+----
+true
+
+query I con2
+SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
+----
+true
+
+concurrentloop i 0 2
+
+query I
+SELECT current_setting('approximate_join_order_threshold') = threshold FROM expected_threshold;
+----
+true
+
+endloop

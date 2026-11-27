@@ -7,6 +7,8 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -69,6 +71,19 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 	}
 }
 
+void LogCacheEvent(QueryContext context, DatabaseInstance &db, const CachingFileHandle &handle, const char *event,
+                   idx_t bytes, idx_t location) {
+	auto client_context = context.GetContext();
+	auto opener = handle.GetOpener();
+	if (client_context) {
+		DUCKDB_LOG(*client_context, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	} else if (opener) {
+		DUCKDB_LOG(*opener, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	} else {
+		DUCKDB_LOG(db, ExternalFileCacheLogType, handle.GetPath(), event, bytes, location);
+	}
+}
+
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -92,7 +107,11 @@ public:
 #ifdef DEBUG
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
+					const idx_t nr_bytes = block->nr_bytes;
 					result_pin = std::move(pin);
+					lk.unlock();
+					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
+					              ExternalFileCacheLogType::HIT_EVENT, nr_bytes, block->location);
 					return;
 				}
 				// Evicted by buffer manager, need to re-fetch
@@ -118,6 +137,8 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
+					LogCacheEvent(context, buffer_manager.GetDatabase(), caching_file_handle,
+					              ExternalFileCacheLogType::MISS_EVENT, to_read, offset);
 					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
 					lk.lock();
@@ -368,7 +389,7 @@ shared_ptr<FileHandle> CachingFileHandle::TryGetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	file_handle = file_system.OpenFile(path, internal_flags, opener);
+	file_handle = file_system.OpenFile(path, internal_flags);
 	if (!file_handle) {
 		return nullptr;
 	}
@@ -432,6 +453,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	if (location >= file_size) {
 		return FileBufferHandleGroup();
 	}
+	LogCacheEvent(context, db, *this, ExternalFileCacheLogType::READ_EVENT, MinValue(nr_bytes, file_size - location),
+	              location);
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(current_cached_file->path);
 	const idx_t min_block_size =
 	    MinValue(external_file_cache.GetCacheMinBlockSize(current_cached_file->path), max_block_size);
@@ -556,6 +579,10 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 
 string CachingFileHandle::GetPath() const {
 	return path.path;
+}
+
+optional_ptr<FileOpener> CachingFileHandle::GetOpener() const {
+	return opener;
 }
 
 idx_t CachingFileHandle::GetFileSize() {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/to_string.hpp"
 
@@ -59,8 +60,13 @@ public:
 		extra_info["status_code"] = to_string(status_code);
 		extra_info["reason"] = reason;
 		extra_info["response_body"] = response_body;
-		for (auto &entry : headers) {
-			extra_info["header_" + entry.first] = entry.second;
+		// Exception metadata stores only the first field line for each header name.
+		case_insensitive_set_t seen;
+		for (const auto &entry : headers) {
+			const bool first_occurrence = seen.insert(entry.first).second;
+			if (first_occurrence) {
+				extra_info.emplace("header_" + entry.first, entry.second);
+			}
 		}
 		return extra_info;
 	}

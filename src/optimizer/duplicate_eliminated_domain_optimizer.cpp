@@ -673,13 +673,12 @@ static double EstimateKeyProductionWork(RelationStatsExtractor &extractor, Logic
 	}
 	if (input.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		// This reader disappears; its shared definition may still be used elsewhere.
-		return static_cast<double>(rows->cardinality) * static_cast<double>(input.GetColumnBindings().size());
+		return rows->cardinality.GetDouble() * static_cast<double>(input.GetColumnBindings().size());
 	}
 	if (input.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		auto child_rows = extractor.Extract(*input.children[0]);
 		if (child_rows) {
-			return EstimateFixedDomainWork(static_cast<double>(child_rows->cardinality),
-			                               static_cast<double>(rows->cardinality)) +
+			return EstimateFixedDomainWork(child_rows->cardinality.GetDouble(), rows->cardinality.GetDouble()) +
 			       EstimateKeyProductionWork(extractor, *input.children[0]);
 		}
 	}
@@ -744,8 +743,8 @@ double DomainCostModel::EstimateReleasedWork(RelationStatsExtractor &extractor, 
 	if (released.source) {
 		auto stats = extractor.Extract(*released.source);
 		if (stats) {
-			source_values = static_cast<double>(stats->cardinality) *
-			                static_cast<double>(released.source->GetColumnBindings().size());
+			source_values =
+			    stats->cardinality.GetDouble() * static_cast<double>(released.source->GetColumnBindings().size());
 		}
 	}
 	return RELEASED_WORK_SCALE * (production_work + source_values);
@@ -770,7 +769,7 @@ double DomainCostModel::EstimateSemiJoinWork(double input_rows, double output_ro
 }
 
 double DomainCostModel::EstimateRecoveryDomainRows(const RelationStats &domain) {
-	idx_t distinct_count = 1;
+	CardinalityValue distinct_count(1);
 	for (auto &column : domain.columns) {
 		// Key independence and range-based estimates can hide repeated tuples.
 		if (column.total_domain.source == DistinctCountSource::HLL ||
@@ -778,7 +777,7 @@ double DomainCostModel::EstimateRecoveryDomainRows(const RelationStats &domain) 
 			distinct_count = MaxValue(distinct_count, column.current_domain.distinct_count);
 		}
 	}
-	return static_cast<double>(MinValue(distinct_count, domain.cardinality));
+	return MinValue(distinct_count, domain.cardinality).GetDouble();
 }
 
 double DomainCostModel::EstimateRecoveryRowWork(double expression_work, idx_t single_row_joins) {
@@ -812,7 +811,7 @@ double DomainCostModel::EstimateAggregateWork(const RelationStats &input,
 		domains.push_back(column->current_domain);
 	}
 	auto group_count = RelationStatisticsHelper::EstimateDistinctCardinality(domains, input.cardinality);
-	return EstimateAggregateWork(static_cast<double>(input.cardinality), static_cast<double>(group_count));
+	return EstimateAggregateWork(input.cardinality.GetDouble(), group_count.GetDouble());
 }
 
 static optional<RelationStats> EstimateRestrictionStats(LogicalComparisonJoin &restriction, const RelationStats &input,
@@ -842,8 +841,7 @@ optional<TupleDomainRestrictionEstimate> DomainCostModel::EstimateRestriction(co
 		}
 		auto groups =
 		    RelationStatisticsHelper::EstimateDistinctCardinality({column->current_domain}, restricted->cardinality);
-		return TupleDomainRestrictionEstimate {static_cast<double>(restricted->cardinality),
-		                                       static_cast<double>(groups)};
+		return TupleDomainRestrictionEstimate {restricted->cardinality.GetDouble(), groups.GetDouble()};
 	}
 	return RelationStatisticsHelper::EstimateTupleDomainRestriction(restriction, input, keys, extractor);
 }
@@ -866,11 +864,11 @@ bool DomainCostModel::IsProfitable(LogicalComparisonJoin &restriction, LogicalOp
 	// The inserted SEMI is the new aggregate input; old input-shape refinements no longer apply.
 	auto group_count =
 	    RelationStatisticsHelper::EstimateDistinctCardinality({column->current_domain}, restricted->cardinality);
-	auto input_rows = static_cast<double>(input->cardinality);
-	auto restricted_rows = static_cast<double>(restricted->cardinality);
-	auto original_groups = static_cast<double>(groups->cardinality);
-	auto restricted_groups = static_cast<double>(group_count);
-	auto distinct_key_rows = static_cast<double>(keys->cardinality);
+	auto input_rows = input->cardinality.GetDouble();
+	auto restricted_rows = restricted->cardinality.GetDouble();
+	auto original_groups = groups->cardinality.GetDouble();
+	auto restricted_groups = group_count.GetDouble();
+	auto distinct_key_rows = keys->cardinality.GetDouble();
 	// Cancel unchanged input/caller work and the consumer's identical output.
 	auto canonical = EstimateAggregateWork(input_rows, original_groups);
 	auto candidate = EstimateAggregateWork(restricted_rows, restricted_groups) +
@@ -892,13 +890,13 @@ RestrictionDecision DomainCostModel::ChooseRestrictionAction(const DomainRestric
 		return {};
 	}
 	auto old_input = EstimateRestriction(existing, *input, *old_keys);
-	auto old_key_rows = static_cast<double>(old_keys->cardinality);
+	auto old_key_rows = old_keys->cardinality.GetDouble();
 	auto old_producer_work = EstimateKeyProductionWork(extractor, *restriction.children[1]);
 	vector<ColumnBinding> group_bindings;
 	for (idx_t key = 0; key < aggregate.groups.size(); key++) {
 		group_bindings.push_back(existing.GetCondition(key).GetLHS().Cast<BoundColumnRefExpression>().Binding());
 	}
-	auto input_rows = static_cast<double>(input->cardinality);
+	auto input_rows = input->cardinality.GetDouble();
 	auto best_work = old_input ? EstimateAggregateWork(old_input->rows, old_input->groups) +
 	                                 EstimateSemiJoinWork(input_rows, old_input->rows, old_key_rows) +
 	                                 old_producer_work + released_work
@@ -920,7 +918,7 @@ RestrictionDecision DomainCostModel::ChooseRestrictionAction(const DomainRestric
 			replacement.conditions.emplace_back(condition.GetLHS().Copy(), DomainKey(*domain),
 			                                    condition.GetComparisonType());
 			auto restricted = EstimateRestrictionStats(replacement, *input, *new_keys);
-			auto distinct_key_rows = static_cast<double>(new_keys->cardinality);
+			auto distinct_key_rows = new_keys->cardinality.GetDouble();
 			auto new_producer_work =
 			    EstimateFixedDomainWork(key_input_rows, distinct_key_rows) + source_read_write_work;
 			auto new_key_work = distinct_key_rows + new_producer_work;
@@ -933,8 +931,7 @@ RestrictionDecision DomainCostModel::ChooseRestrictionAction(const DomainRestric
 			}
 			if (restricted) {
 				consider(EstimateAggregateWork(*restricted, group_bindings) +
-				             EstimateSemiJoinWork(input_rows, static_cast<double>(restricted->cardinality),
-				                                  distinct_key_rows) +
+				             EstimateSemiJoinWork(input_rows, restricted->cardinality.GetDouble(), distinct_key_rows) +
 				             new_producer_work,
 				         RestrictionAction::REPLACE);
 			} else if (!keys_may_expand) {
@@ -968,8 +965,10 @@ static bool HasRuntimeFilterTargets(LogicalAggregate &aggregate) {
 	if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(*aggregate.groups[0], column)) {
 		return false;
 	}
+	vector<JoinFilterPushdownColumn> columns;
+	columns.push_back(std::move(column));
 	vector<PushdownFilterTarget> targets;
-	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*aggregate.children[0], {std::move(column)}, targets,
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*aggregate.children[0], columns, targets,
 	                                                      EqualityPropagation::ENABLED);
 	return !targets.empty();
 }
@@ -1266,10 +1265,10 @@ static void FindScanKeySource(const unique_ptr<LogicalOperator> &input, idx_t ke
                               RelationStatsExtractor &extractor, ClientContext &context, ScanKeySource &source) {
 	if (auto scan = FindClosedScan(*input)) {
 		auto stats = extractor.Extract(*input);
-		if (stats && (!source.input || static_cast<double>(stats->cardinality) < source.rows)) {
+		if (stats && (!source.input || stats->cardinality.GetDouble() < source.rows)) {
 			source.input = input;
 			source.key = key;
-			source.rows = static_cast<double>(stats->cardinality);
+			source.rows = stats->cardinality.GetDouble();
 			source.scan_rows = static_cast<double>(scan->EstimateSourceCardinality(context));
 		}
 		return;
@@ -1749,7 +1748,7 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	auto domain = CreateKeyDomain(optimizer, std::move(key_reference), std::move(key_expression));
 	auto restriction = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
 	restriction->conditions.emplace_back(aggregate.groups[0]->Copy(), DomainKey(*domain), comparison);
-	auto source_rows = static_cast<double>(source_stats->cardinality);
+	auto source_rows = source_stats->cardinality.GetDouble();
 	// CTE readers scan the full row. A new owner also writes it and replaces the consumer with another reader.
 	auto source_read_write_work = (source.owner ? 1 : 3) * source_rows * static_cast<double>(source_types.size());
 	DomainCostModel costs(extractor, aggregate, source_rows, source_read_write_work);
@@ -1855,7 +1854,7 @@ static bool RecoveryIsProfitable(LogicalComparisonJoin &join, const OuterDomainJ
 	if (!outer || !domain) {
 		return false;
 	}
-	auto outer_rows = static_cast<double>(outer->cardinality);
+	auto outer_rows = outer->cardinality.GetDouble();
 	return DomainCostModel::IsRecoveryProfitable(outer_rows, *domain, expression_work, single_row_joins,
 	                                             DomainCostModel::EstimateReleasedWork(extractor, released),
 	                                             restriction_savings);
@@ -1901,7 +1900,7 @@ bool DuplicateEliminatedDomainOptimizer::TryPullUpOuterDomainJoin(unique_ptr<Log
 	                          decision.removal_savings)) {
 		return false;
 	}
-	if (decision.action == RestrictionAction::REMOVE) {
+	if (restriction && decision.action == RestrictionAction::REMOVE) {
 		restriction->Remove();
 	}
 

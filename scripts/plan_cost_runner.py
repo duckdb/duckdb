@@ -23,7 +23,7 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
 RETRIES = 2
-PROFILE_RUNS = 5
+PROFILE_RUNS = 10
 # Overlapping cost samples whose medians differ by more than this are still compared.
 MEDIAN_TOLERANCE = 0.05
 
@@ -98,7 +98,11 @@ class PlanCost:
         return self
 
     def more_output_and_build_work(self, other):
-        return self.total > other.total and self.build_side > other.build_side and self.probe_side >= other.probe_side
+        dominates = (
+            self.total > other.total and self.build_side > other.build_side and self.probe_side >= other.probe_side
+        )
+        # Small work increases still need the hot timing comparison before they count as a regression.
+        return dominates and any(new > old * 1.03 for new, old in zip(cost_components(self), cost_components(other)))
 
     def needs_timing(self, other):
         return (
@@ -115,7 +119,7 @@ class PlanCost:
             return False
         if self.more_output_and_build_work(other):
             return True
-        # Use timings to evaluate tradeoffs between output rows and build/probe work.
+        # Use timings for small work changes and tradeoffs between output rows and build/probe work.
         return self.time > other.time * 1.03
 
     def __lt__(self, other):

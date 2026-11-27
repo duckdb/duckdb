@@ -20,6 +20,7 @@
 #include "duckdb/optimizer/filter_statistics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/group_by_top_key.hpp"
 #include "duckdb/optimizer/grouping_sets_optimizer.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_elimination.hpp"
@@ -229,6 +230,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
+	// Simplify constant-input MARK joins before filter pushdown.
+	RunOptimizer(OptimizerType::MARK_JOIN_SIMPLIFIER, [&]() {
+		MarkJoinSimplifier mark_simplifier(*this);
+		mark_simplifier.OptimizeConstantInput(plan);
+	});
+
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
@@ -259,7 +266,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	CTEFilterPusher::ClearDependencies(*plan);
 
 	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {
-		RegexRangeFilter regex_opt;
+		RegexRangeFilter regex_opt(context);
 		plan = regex_opt.Rewrite(std::move(plan));
 	});
 
@@ -330,10 +337,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// Pull up projection from joins
-	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*this, plan);
-		projection_pullup.Optimize(plan);
-	});
+	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() { ProjectionPullup::Optimize(*this, plan); });
 
 	// Push down joins against windows
 	RunOptimizer(OptimizerType::WINDOW_JOIN_PUSHDOWN, [&]() {
@@ -515,18 +519,18 @@ void Optimizer::RunBuiltInOptimizers() {
 		});
 	}
 
-	// rewrite unique ranking window function + filter on row_number to fused operator
-	RunOptimizer(OptimizerType::WINDOW_FUSION, [&]() {
-		WindowFusion window_fusion(context, &statistics_map);
-		plan = window_fusion.Optimize(std::move(plan));
-	});
-
 	// rewrite row_number window function + filter on row_number to aggregate
 	bool topn_used_late_materialization = false;
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
 		TopNWindowElimination topn_window_elimination(context, *this, &statistics_map);
 		plan = topn_window_elimination.Optimize(std::move(plan));
 		topn_used_late_materialization = topn_window_elimination.UsedLateMaterialization();
+	});
+
+	// rewrite unique ranking window function + filters to a fused operator
+	RunOptimizer(OptimizerType::WINDOW_FUSION, [&]() {
+		WindowFusion window_fusion(context, &statistics_map);
+		plan = window_fusion.Optimize(std::move(plan));
 	});
 
 	// remove duplicate aggregates
@@ -586,6 +590,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::SCALAR_FN_PUSHDOWN, [&] {
 		ScalarFnPushdown fn_pushdown(context);
 		plan = fn_pushdown.Optimize(std::move(plan));
+	});
+
+	// Bounds the input of grouped aggregates whose Top-N orders by the group keys, and turns a LIMIT over a grouped
+	// aggregate into such a Top-N. Runs last: the filter is placed below the finished aggregate.
+	RunOptimizer(OptimizerType::GROUP_BY_TOP_KEY, [&]() {
+		GroupByTopKey group_by_top_key(*this);
+		plan = group_by_top_key.Optimize(std::move(plan));
 	});
 }
 

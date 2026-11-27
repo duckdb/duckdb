@@ -159,7 +159,7 @@ struct ModeString {
 	                        AggregateInputData &aggr_input_data) {
 		if (key.IsInlined()) {
 			if (!mode) {
-				mode = aggr_input_data.allocator.Make<string_t>(nullptr, 0);
+				mode = aggr_input_data.allocator.Make<string_t>();
 			}
 			*mode = key;
 			alloc_size = 0;
@@ -177,7 +177,7 @@ struct ModeString {
 			alloc_size = NextPowerOfTwo(len);
 			ptr = char_ptr_cast(aggr_input_data.allocator.Allocate(alloc_size));
 			if (!mode) {
-				mode = aggr_input_data.allocator.Make<string_t>(nullptr, 0);
+				mode = aggr_input_data.allocator.Make<string_t>();
 			}
 		}
 		memcpy(ptr, key.GetData(), len);

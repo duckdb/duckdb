@@ -13,7 +13,8 @@
     {
       "reason": "The generated SQL is planned differently, which changes how often the volatile expressions the fixture counts are evaluated",
       "paths": [
-        "test/optimizer/join_to_semi_join_volatile.test"
+        "test/optimizer/join_to_semi_join_volatile.test",
+        "test/optimizer/pushdown/filter_projection_map.test"
       ]
     },
     {
@@ -38,6 +39,7 @@
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
         "test/sql/optimizer/statistics/list_length_stats_propagation.test",
+        "test/sql/optimizer/statistics/list_length_stats_functions.test",
         "test/sql/storage/list_length_stats_checkpoint.test",
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
         "test/sql/optimizer/test_rowid_vector_pruning.test"

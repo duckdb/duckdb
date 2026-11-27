@@ -148,3 +148,55 @@ query I
 SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(arg_min(COLUMNS(*), COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
 ----
 true
+
+# arg_min/arg_max(x, y, n) states store n and the heap entries in heap order, per value specialization: fixed, string,
+# and in the NULL-preserving variants, fixed-or-NULL and sort key
+query IIII
+SELECT (arg_max(a, v, 2) EXPORT_STATE)::VARCHAR, (arg_max(v, a, 2) EXPORT_STATE)::VARCHAR,
+	(arg_max_nulls_last(a, v, 2) EXPORT_STATE)::VARCHAR, (arg_max_nulls_last(v, a, 2) EXPORT_STATE)::VARCHAR
+FROM (VALUES ('x', 1), (NULL, 3), ('z', NULL), ('y', 2)) t(a, v);
+----
+{'n': 2, 'entries': [{'arg': x, 'val': 1}, {'arg': y, 'val': 2}]}	{'n': 2, 'entries': [{'arg': 1, 'val': x}, {'arg': 2, 'val': y}]}	{'n': 2, 'entries': [{'arg': y, 'val': 2}, {'arg': NULL, 'val': 3}]}	{'n': 2, 'entries': [{'arg': 2, 'val': y}, {'arg': NULL, 'val': z}]}
+
+statement error
+SELECT finalize(to_aggregate_state({'n': 2, 'entries': [{'arg': 1, 'val': NULL}]}, 'arg_max', ['BIGINT', 'BIGINT', 'BIGINT']));
+----
+Invalid arg_min/arg_max state - the entries cannot be NULL
+
+# imported entries need not be in heap order
+query I
+SELECT finalize(to_aggregate_state({'n': 3, 'entries': [{'arg': 5, 'val': 5}, {'arg': 1, 'val': 1}, {'arg': 3, 'val': 3}]}, 'arg_max', ['BIGINT', 'BIGINT', 'BIGINT']));
+----
+[5, 3, 1]
+
+# the NULL-preserving variants accept NULL fields but not NULL entries
+statement error
+SELECT finalize(to_aggregate_state({'n': 2, 'entries': [NULL::STRUCT(arg BIGINT, val BIGINT)]}, 'arg_max_nulls_last', ['BIGINT', 'BIGINT', 'BIGINT']));
+----
+Invalid arg_min/arg_max state - the entries cannot be NULL
+
+query I
+SELECT finalize(to_aggregate_state({'n': 2, 'entries': [{'arg': NULL, 'val': NULL}, {'arg': 1, 'val': 2}]}, 'arg_max_nulls_last', ['BIGINT', 'BIGINT', 'BIGINT']));
+----
+[1, NULL]
+
+# combine_aggr frees the imported entries of each input row
+statement ok
+SET memory_limit='64MB';
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT to_aggregate_state({'n': 1, 'entries': [{'arg': md5(i::VARCHAR), 'val': i}]}, 'arg_max', ['VARCHAR', 'BIGINT', 'BIGINT']) s FROM range(1000000) r(i));
+----
+[52c69e3a57331081823331c4e69d3f2e]
+
+# states keep the collation they were exported with, not the default collation of the session
+statement ok
+CREATE TABLE saved AS SELECT arg_max(s, [s]::VARCHAR[1]) EXPORT_STATE st FROM (VALUES ('a'), ('B')) t(s) GROUP BY s;
+
+statement ok
+SET default_collation = 'nocase';
+
+query T
+SELECT finalize(combine_aggr(st)) FROM saved;
+----
+a

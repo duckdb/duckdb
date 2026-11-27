@@ -238,27 +238,32 @@ extension duckdb_blob {
 
 extension duckdb_decimal {
   
-  private static let scaleLimit = 38
-  
-  init(_ source: Decimal) throws {    
+  /// The most digits of a decimal that DuckDB stores as a fixed-size integer
+  private static let fixedWidthLimit = 38
+
+  /// Creates the decimal that is equal to the given value
+  ///
+  /// The unscaled value travels as a signed 128-bit integer and the number of
+  /// fractional digits as the scale. A value with more than 38 digits or
+  /// fractional digits becomes a decimal wide enough to hold it. No digit is
+  /// rounded away: a value that cannot be handed over throws
+  /// ``DatabaseError/decimalUnrepresentable``.
+  init(_ source: Decimal) throws {
     let mantissaLimit = source.isSignMinus ? 1 + UIntHuge(IntHuge.max) : UIntHuge(IntHuge.max)
-    var scale: Int
-    var mantissa: UIntHuge
+    var scale = 0
+    var mantissa = source.hugeMantissa
     if source.exponent > 0 {
-      let exponent = UIntHuge(source.exponent)
-      let (out, overflow) = source.hugeMantissa.multipliedReportingOverflow(by: exponent)
-      guard overflow == false else { throw DatabaseError.decimalUnrepresentable }
-      mantissa = out
-      scale = 0
+      for _ in 0..<source.exponent {
+        let (out, overflow) = mantissa.multipliedReportingOverflow(by: UInt64(10))
+        guard overflow == false else { throw DatabaseError.decimalUnrepresentable }
+        mantissa = out
+      }
     }
     else {
       scale = -source.exponent
-      mantissa = source.hugeMantissa
-      while scale > Self.scaleLimit {
-        mantissa /= 10
-        scale -= 1
-      }
-      while scale > 0, mantissa > mantissaLimit {
+      // trailing zeros of the fraction carry no information: drop them where
+      // that keeps the value within a fixed-size decimal
+      while scale > 0, scale > Self.fixedWidthLimit || mantissa > mantissaLimit, mantissa % 10 == 0 {
         mantissa /= 10
         scale -= 1
       }
@@ -272,20 +277,22 @@ extension duckdb_decimal {
     }
     let value = source.isSignMinus
       ? IntHuge.min + IntHuge(mantissaLimit - mantissa) : IntHuge(mantissa)
-    self = duckdb_decimal(width: 38, scale: .init(scale), value: .init(value))
+    let width = Swift.max(Self.fixedWidthLimit, scale, String(mantissa).utf8.count)
+    self = duckdb_decimal(width: .init(width), scale: .init(scale), value: .init(value))
   }
 }
 
 fileprivate extension Decimal {
   
+  /// The significand as an unsigned 128-bit integer
+  ///
+  /// The storage of a `Decimal` is not public API on every platform. The
+  /// significand is an integer of at most 128 bits, so its description is its
+  /// decimal digits, which are read back exactly.
   var hugeMantissa: UIntHuge {
-    let components = [
-      _mantissa.0, _mantissa.1, _mantissa.2, _mantissa.3,
-      _mantissa.4, _mantissa.5, _mantissa.6, _mantissa.7
-    ]
     var mantissa = UIntHuge(0)
-    for i in 0..<Int(_length) {
-      mantissa += UIntHuge(components[i]) << (i * 16)
+    for digit in significand.description.utf8 where digit >= 0x30 && digit <= 0x39 {
+      mantissa = mantissa * 10 + UIntHuge(digit - 0x30)
     }
     return mantissa
   }

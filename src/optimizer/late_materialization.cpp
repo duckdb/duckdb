@@ -65,8 +65,10 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 			auto &filter = op.Cast<LogicalFilter>();
 			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
 			if (filter.HasProjectionMap()) {
-				// if the filter has a projection map, we need to project the new column
-				filter.projection_map.emplace_back(column_count - 1);
+				// if the filter has a projection map, we need to project all of the new row-id columns
+				for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+					filter.projection_map.emplace_back(column_count - row_id_columns.size() + r_idx);
+				}
 				column_count = filter.projection_map.size();
 			}
 			break;

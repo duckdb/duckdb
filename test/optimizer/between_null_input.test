@@ -1,0 +1,64 @@
+# name: test/optimizer/between_null_input.test
+# description: A BETWEEN on a constant NULL input is NULL without evaluating its bounds
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(c INTEGER, v VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (2000000000, 'a'), (1, 'b'), (NULL, NULL);
+
+query I
+SELECT count(*) FROM t WHERE NOT (NULL::INTEGER BETWEEN c * 1000 AND 1);
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE NOT (NULL::INTEGER BETWEEN 1 AND c * 1000);
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE NULL NOT BETWEEN c * 1000 AND c * 1000;
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE NOT NULL BETWEEN NULL AND c * 1000;
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE CAST(NULL AS INTEGER) + 1 NOT BETWEEN NULL AND c * 1000;
+----
+0
+
+query I
+SELECT (NULL BETWEEN c * 1000 AND 1) IS NULL FROM t ORDER BY c NULLS LAST;
+----
+true
+true
+true
+
+query I
+SELECT NULL::VARCHAR BETWEEN v AND repeat(v, 2) FROM t ORDER BY c NULLS LAST;
+----
+NULL
+NULL
+NULL
+
+# a non-NULL constant input still evaluates the bounds
+statement error
+SELECT count(*) FROM t WHERE 5 BETWEEN c * 1000 AND 10;
+----
+Overflow in multiplication of INT32
+
+query I
+SELECT count(*) FROM t WHERE 5 BETWEEN c AND 10;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE 5 NOT BETWEEN c AND 10;
+----
+1

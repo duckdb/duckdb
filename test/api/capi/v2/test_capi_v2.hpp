@@ -12,6 +12,7 @@
 #include <string>
 #include <cstring>
 #include <initializer_list>
+#include <map>
 #include <string_view>
 #include <vector>
 
@@ -40,6 +41,132 @@ inline duckdb_v2_factory_handle FactoryOf(duckdb_v2_connection_handle conn) {
 	duckdb_v2_factory_handle factory = nullptr;
 	REQUIRE(duckdb_v2_connection_get_factory(conn, &factory, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return factory;
+}
+
+//! Tests of table functions that only care about how a function scans share this helper: a table function has no scan
+//! callbacks of its own, so the one a test creates with `TestCreateTable` gets a data source that the test configures
+//! through `TestSourceOf`, and which `TestRegisterTable` hands to the function right before it is registered.
+struct TestTableSources {
+	struct Entry {
+		duckdb_v2_factory_handle factory = nullptr;
+		duckdb_v2_data_source_handle source = nullptr;
+	};
+	static std::map<duckdb_v2_table_function_handle, Entry> &Entries() {
+		static std::map<duckdb_v2_table_function_handle, Entry> entries;
+		return entries;
+	}
+};
+
+inline DUCKDB_V2_ERROR TestCreateTable(duckdb_v2_factory_handle factory, duckdb_v2_table_function_handle *function,
+                                       duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_table_function_create(factory, function, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		TestTableSources::Entries()[*function].factory = factory;
+	}
+	return rc;
+}
+
+//! The data source of the function, created on first use. Null for a null or unknown function.
+inline duckdb_v2_data_source_handle TestSourceOf(duckdb_v2_table_function_handle function) {
+	auto &entries = TestTableSources::Entries();
+	auto entry = entries.find(function);
+	if (entry == entries.end()) {
+		return nullptr;
+	}
+	if (!entry->second.source) {
+		REQUIRE(duckdb_v2_data_source_create(entry->second.factory, &entry->second.source, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
+	return entry->second.source;
+}
+
+//! Hands the data source to the function, as it is now
+inline void TestAttachSource(duckdb_v2_table_function_handle function) {
+	auto source = TestSourceOf(function);
+	if (source) {
+		REQUIRE(duckdb_v2_table_function_set_data_source(function, source, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
+}
+
+inline DUCKDB_V2_ERROR TestRegisterTable(duckdb_v2_connection_handle conn, duckdb_v2_table_function_handle function,
+                                         duckdb_v2_error_info_handle *err) {
+	TestAttachSource(function);
+	return duckdb_v2_connection_register_table_function(conn, function, err);
+}
+
+inline DUCKDB_V2_ERROR TestDestroyTable(duckdb_v2_table_function_handle *function) {
+	if (function && *function) {
+		auto &entries = TestTableSources::Entries();
+		auto entry = entries.find(*function);
+		if (entry != entries.end()) {
+			duckdb_v2_data_source_destroy(&entry->second.source);
+			entries.erase(entry);
+		}
+	}
+	return duckdb_v2_table_function_destroy(function);
+}
+
+//! The COPY FROM side of a copy function scans with a data source as well. The one a test creates with `TestCreateCopy`
+//! gets a data source on first use of `TestCopySourceOf`, which `TestRegisterCopy` hands to the function right before
+//! it is registered. A function whose source was never asked for has no COPY FROM scan.
+struct TestCopySources {
+	struct Entry {
+		duckdb_v2_factory_handle factory = nullptr;
+		duckdb_v2_data_source_handle source = nullptr;
+	};
+	static std::map<duckdb_v2_copy_function_handle, Entry> &Entries() {
+		static std::map<duckdb_v2_copy_function_handle, Entry> entries;
+		return entries;
+	}
+};
+
+inline DUCKDB_V2_ERROR TestCreateCopy(duckdb_v2_factory_handle factory, duckdb_v2_copy_function_handle *function,
+                                      duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_copy_function_create(factory, function, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		TestCopySources::Entries()[*function].factory = factory;
+	}
+	return rc;
+}
+
+//! The data source of the COPY FROM side, created on first use. Null for a null or unknown function.
+inline duckdb_v2_data_source_handle TestCopySourceOf(duckdb_v2_copy_function_handle function) {
+	auto &entries = TestCopySources::Entries();
+	auto entry = entries.find(function);
+	if (entry == entries.end()) {
+		return nullptr;
+	}
+	if (!entry->second.source) {
+		REQUIRE(duckdb_v2_data_source_create(entry->second.factory, &entry->second.source, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
+	return entry->second.source;
+}
+
+inline void TestAttachCopySource(duckdb_v2_copy_function_handle function) {
+	auto &entries = TestCopySources::Entries();
+	auto entry = entries.find(function);
+	if (entry != entries.end() && entry->second.source) {
+		REQUIRE(duckdb_v2_copy_from_set_data_source(function, entry->second.source, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
+}
+
+inline DUCKDB_V2_ERROR TestRegisterCopy(duckdb_v2_connection_handle conn, duckdb_v2_copy_function_handle function,
+                                        duckdb_v2_error_info_handle *err) {
+	TestAttachCopySource(function);
+	return duckdb_v2_connection_register_copy_function(conn, function, err);
+}
+
+inline DUCKDB_V2_ERROR TestDestroyCopy(duckdb_v2_copy_function_handle *function) {
+	if (function && *function) {
+		auto &entries = TestCopySources::Entries();
+		auto entry = entries.find(*function);
+		if (entry != entries.end()) {
+			duckdb_v2_data_source_destroy(&entry->second.source);
+			entries.erase(entry);
+		}
+	}
+	return duckdb_v2_copy_function_destroy(function);
 }
 
 struct EnvFixture {

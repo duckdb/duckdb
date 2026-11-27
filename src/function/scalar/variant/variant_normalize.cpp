@@ -183,8 +183,8 @@ void VariantNormalizer::VisitObject(const UnifiedVariantVectorData &variant, idx
 	}
 }
 
-void VariantNormalizer::VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state) {
-	throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+void VariantNormalizer::VisitDefault(const LogicalType &type, const_data_ptr_t, VariantNormalizerState &state) {
+	throw InternalException("VariantLogicalType(%s) not handled", type.ToString());
 }
 
 void VariantNormalizer::Normalize(const Vector &variant_vec, Vector &result) {

@@ -4,6 +4,10 @@
 
 require json
 
+# results below depend on scan order; small row groups (e.g. STANDARD_VECTOR_SIZE=2) would otherwise scan in parallel
+statement ok
+SET threads=1
+
 statement ok
 create table t1 as select range + 10 n, range v from range(10)
 

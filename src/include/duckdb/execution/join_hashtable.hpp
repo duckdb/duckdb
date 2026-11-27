@@ -21,6 +21,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/perfect_hash_join_table.hpp"
 #include "duckdb/parallel/sharded_counter.hpp"
@@ -299,6 +300,15 @@ public:
 		Vector hashes;
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
+		//! Rows that probe another entry, and rows that found their entry in the current round
+		SelectionVector rows_to_probe_sel;
+		SelectionVector rows_found_sel;
+		//! Loaded ht entry and probe flags per dense row
+		unsafe_unique_array<ht_entry_t> dense_entries;
+		Vector is_match_v;
+		Vector needs_next_v;
+		//! Executes the hash table's hash expression over the probe keys
+		unique_ptr<ExpressionExecutor> hash_executor;
 		unique_ptr<DataChunk> spill_hashes;
 		SelectionVector spill_false_sel;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
@@ -411,10 +421,6 @@ public:
 		D_ASSERT(IsLayoutFinalized());
 		return *data_collection;
 	}
-	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
-	//! Returns the number of tuples found (can be smaller than the vector capacity).
-	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
-
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
@@ -432,6 +438,13 @@ public:
 	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
+	//! "hash(#0, #1, ...)" over the equality keys
+	unique_ptr<Expression> hash_expression;
+	//! "hash(#i)" for every equality key i, for the per-key-column filters
+	vector<unique_ptr<Expression>> key_hash_expressions;
+	//! Executors of the build side, which is thread-local
+	unique_ptr<ExpressionExecutor> build_hash_executor;
+	unique_ptr<ExpressionExecutor> build_key_hash_executor;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
@@ -540,7 +553,8 @@ private:
 
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	//! Hash all rows of the equality keys, creating the executor if it does not exist yet
+	void Hash(DataChunk &keys, unique_ptr<ExpressionExecutor> &executor, Vector &hashes) const;
 
 	bool TryProbePerfectHashTable(ScanStructure &scan_structure, DataChunk &keys);
 	bool CanUsePerfectDictionaryLookup() const;
@@ -703,6 +717,10 @@ public:
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
 	//! Minimum capacity of the pointer table
 	static constexpr idx_t MINIMUM_CAPACITY = 16384;
+	//! Pointer tables above this capacity prefetch the entries the probe reads
+	static constexpr idx_t PREFETCH_MIN_CAPACITY = idx_t(1) << 20;
+	//! Vectors of at most this many rows probe row by row with branches; longer vectors probe branch-free
+	static constexpr idx_t BRANCHING_PROBE_MAX_COUNT = 32;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
@@ -826,6 +844,7 @@ private:
 		explicit KeyFilterBuildScratch(JoinHashTable &ht);
 		DataChunk keys;
 		Vector hashes;
+		ExpressionExecutor key_hash_executor;
 	};
 	//! Gathers one key column of a chunk of materialized rows
 	void GatherKeyColumn(TupleDataChunkState &chunk_state, idx_t count, idx_t key_idx, Vector &result);

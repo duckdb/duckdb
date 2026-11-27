@@ -25,6 +25,7 @@ constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
 constexpr LogLevel ReadAheadBudgetLogType::LEVEL;
+constexpr LogLevel ExternalFileCacheLogType::LEVEL;
 constexpr LogLevel ProgressVerificationLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
@@ -220,7 +221,12 @@ static Value CreateHTTPHeadersValue(const HTTPHeaders &headers, const case_insen
                                     bool redact_http_logs) {
 	vector<Value> keys;
 	vector<Value> values;
+	case_insensitive_set_t seen;
 	for (const auto &header : headers) {
+		const bool first_occurrence = seen.insert(header.first).second;
+		if (!first_occurrence) {
+			continue;
+		}
 		keys.emplace_back(header.first);
 		const bool allow_value = !redact_http_logs || allow_list.find(header.first) != allow_list.end();
 		values.emplace_back(allow_value ? header.second : HTTPLogType::REDACTED_VALUE);
@@ -585,6 +591,32 @@ string ReadAheadBudgetLogType::ConstructLogMessage(idx_t pending_bytes, idx_t bu
 	    {"pending_bytes", Value::UBIGINT(pending_bytes)},
 	    {"budget_bytes", Value::UBIGINT(budget_bytes)},
 	    {"active_jobs", Value::UBIGINT(active_jobs)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ExternalFileCacheLogType
+//===--------------------------------------------------------------------===//
+ExternalFileCacheLogType::ExternalFileCacheLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ExternalFileCacheLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"path", LogicalType::VARCHAR},
+	    {"event", LogicalType::VARCHAR},
+	    {"bytes", LogicalType::BIGINT},
+	    {"pos", LogicalType::BIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ExternalFileCacheLogType::ConstructLogMessage(const string &path, const char *event, idx_t bytes, idx_t pos) {
+	child_list_t<Value> child_list = {
+	    {"path", Value(path)},
+	    {"event", Value(event)},
+	    {"bytes", Value::BIGINT(NumericCast<int64_t>(bytes))},
+	    {"pos", Value::BIGINT(NumericCast<int64_t>(pos))},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

@@ -221,7 +221,13 @@ int32_t ChineseCalendar::NewYear(int32_t gyear) const {
 	}
 
 	const auto solstice_before = WinterSolstice(gyear - 1);
+	if (HasFailedInternal()) {
+		return 0;
+	}
 	const auto solstice_after = WinterSolstice(gyear);
+	if (HasFailedInternal()) {
+		return 0;
+	}
 	const auto new_moon1 = NewMoonNear(solstice_before + 1, true);
 	const auto new_moon2 = NewMoonNear(new_moon1 + SYNODIC_GAP, true);
 	const auto new_moon11 = NewMoonNear(solstice_after + 1, false);
@@ -370,7 +376,10 @@ int64_t ChineseCalendar::ComputeMonthStart(int32_t eyear, int32_t month, bool is
 	}
 
 	const auto new_year = NewYear(eyear);
-	auto new_moon = NewMoonNear(new_year + month * 29, true);
+	if (HasFailedInternal()) {
+		return 0;
+	}
+	auto new_moon = NewMoonNear(double(new_year) + month * 29, true);
 	if (HasFailedInternal()) {
 		return 0;
 	}

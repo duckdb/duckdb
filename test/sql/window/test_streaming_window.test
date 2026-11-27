@@ -45,6 +45,20 @@ SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND C
 ----
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
+query TT
+EXPLAIN
+SELECT j, arg_max(i, j, 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT j, max(j::SMALLINT, 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	[2]
+1	[2, 1]
+2	[2, 2]
+NULL	[2, 2]
+
 # Test each of the streaming window functions
 # row_number() over() is rewritten by the window_rewriter optimizer to use a virtual column
 query TT
@@ -1004,3 +1018,23 @@ SELECT count(*) FROM (
 ) WHERE a != b OR c != d;
 ----
 0
+
+# a per-row n keeps top-n off the streaming window, which would check n only on the first row
+statement error
+SELECT arg_max(i, i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+----
+n value must be > 0
+
+statement error
+SELECT min(i, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+----
+n value must be > 0
+
+# also when a collation rebinds min/max to arg_min/arg_max, and when a view binds it again
+statement ok
+CREATE VIEW per_row_n AS SELECT max(i::VARCHAR COLLATE nocase, CASE WHEN i < 16 THEN 1 ELSE 0 END) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM range(64) t(i);
+
+statement error
+SELECT * FROM per_row_n;
+----
+n value must be > 0

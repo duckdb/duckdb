@@ -11,6 +11,32 @@
 
 namespace duckdb {
 
+bool AggregateStateField::IsFixedSize(const LogicalType &type) const {
+	switch (kind) {
+	case AggregateFieldKind::PRIMITIVE:
+		return TypeIsConstantSize(type.InternalType());
+	case AggregateFieldKind::OPTIONAL_VALUE:
+		return children.size() == 1 && children[0].IsFixedSize(type);
+	case AggregateFieldKind::STRUCT: {
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return false;
+		}
+		const auto &types = StructType::GetChildTypes(type);
+		if (types.size() != children.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < types.size(); i++) {
+			if (!children[i].IsFixedSize(types[i].second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 namespace {
 
 template <class OP, class... ARGS>
@@ -310,12 +336,13 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 } // namespace
 
 void AggregateStateSerialization::DeserializeStates(const BoundAggregateFunction &aggr,
+                                                    optional_ptr<const FunctionData> bind_data,
                                                     const AggregateStateLayout &layout, const Vector &input_vec,
                                                     idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator,
                                                     StateMemoryOwnership ownership) {
 	if (aggr.HasImportAggregateStateCallback()) {
 		// the aggregate explicitly deserializes its own states, copying all variable size data
-		AggregateImportInputData import_input(layout, input_vec, dest_buffer, allocator);
+		AggregateImportInputData import_input(layout, input_vec, dest_buffer, allocator, bind_data);
 		aggr.GetImportAggregateStateCallback()(import_input);
 		return;
 	}

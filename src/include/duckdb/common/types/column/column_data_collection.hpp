@@ -163,6 +163,9 @@ public:
 	//! Materializes every row on each call, so read many values through GetRows instead
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
+	//! Truncates the collection in place. NOP if it is already smaller.
+	void Truncate(idx_t new_count);
+
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.
 	//! If they are not equal, return false and fill in the error message.

@@ -915,7 +915,7 @@ Collator Collator::FromLanguageTag(const string &tag) {
 	// the "u" extension holds attributes, then keywords: a two character key followed by the subtags of its value
 	idx_t pos = locale_end;
 	while (pos < subtags.size()) {
-		auto singleton = subtags[pos++];
+		const auto &singleton = subtags[pos++];
 		if (singleton == "x") {
 			// the rest of the tag is for private use
 			break;
@@ -931,7 +931,7 @@ Collator Collator::FromLanguageTag(const string &tag) {
 			// when a key is repeated, its first value counts
 			vector<string> keys;
 			while (pos < end) {
-				auto key = subtags[pos++];
+				const auto &key = subtags[pos++];
 				string value;
 				while (pos < end && subtags[pos].size() != 2) {
 					value += (value.empty() ? "" : "-") + subtags[pos++];

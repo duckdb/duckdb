@@ -234,7 +234,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
-	const auto limit = CanOptimize(*op);
+	const auto limit = CanOptimize(*op, context);
 	if (!limit.IsValid()) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
@@ -309,6 +309,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	if (!AggregateKeepsZeroSign(window, aggregate_payload, params)) {
+		return op;
+	}
 	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
@@ -356,6 +359,33 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 
 	auto fun = GetBuiltinAggregateFunction(context, Identifier(fun_name), ExtractReturnTypes(aggregate_params));
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
+}
+
+//! Whether the aggregate keeps the sign of a zero it returns: a FLOAT or DOUBLE stored as a sort key does not.
+//! Struct-packed payloads are not checked.
+bool TopNWindowElimination::AggregateKeepsZeroSign(const LogicalWindow &window,
+                                                   const vector<unique_ptr<Expression>> &payload,
+                                                   const TopNWindowEliminationParameters &params) const {
+	if (payload.size() > 1) {
+		return true;
+	}
+	auto &order_key = window.expressions[0]->Cast<BoundWindowExpression>().OrderBy()[0].expression;
+	const auto returned_type = payload.empty() ? order_key->GetReturnType() : payload[0]->GetReturnType();
+	if (returned_type.id() != LogicalTypeId::FLOAT && returned_type.id() != LogicalTypeId::DOUBLE) {
+		return true;
+	}
+
+	vector<unique_ptr<Expression>> aggregate_params;
+	if (!payload.empty()) {
+		aggregate_params.push_back(payload[0]->Copy());
+	}
+	aggregate_params.push_back(order_key->Copy());
+	if (params.limit > 1) {
+		aggregate_params.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(params.limit)));
+	}
+	auto aggregate = CreateAggregateExpression(std::move(aggregate_params), !payload.empty(), params);
+	auto &function = aggregate->Cast<BoundAggregateExpression>().Function();
+	return !function.GetProperties().GetBooleanProperty(BoundAggregateExpression::ARG_STORED_AS_SORT_KEY_PROPERTY);
 }
 
 unique_ptr<LogicalOperator>
@@ -544,7 +574,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
-optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
+optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientContext &client) {
 	const optional_idx cant_optimize;
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return cant_optimize;
@@ -650,11 +680,7 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (child.get().type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return cant_optimize;
 	}
-	const auto &window = child.get().Cast<LogicalWindow>();
-	//	Give up if window fusion has already taking this.
-	if (window.partition_limit.IsValid()) {
-		return cant_optimize;
-	}
+	auto &window = child.get().Cast<LogicalWindow>();
 	if (window.window_index != filter_col_idx) {
 		return cant_optimize;
 	}
@@ -682,11 +708,39 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window_expr.OrderBy().size() != 1) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].type != OrderType::DESCENDING &&
-	    window_expr.OrderBy()[0].type != OrderType::ASCENDING) {
+
+	const auto &order = window_expr.OrderBy()[0];
+	if (order.type != OrderType::DESCENDING && order.type != OrderType::ASCENDING) {
 		return cant_optimize;
 	}
-	if (window_expr.OrderBy()[0].null_order != OrderByNullType::NULLS_LAST) {
+	if (order.null_order != OrderByNullType::NULLS_LAST) {
+		return cant_optimize;
+	}
+
+	// 	Window fusion works better than TopN for certain cases
+
+	//	Fusion does not yet support partitioning
+	if (!window_expr.Partitions().empty()) {
+		return can_optimize;
+	}
+
+	//	Fusion is better for non-numeric keys
+	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
+		return cant_optimize;
+	}
+
+	//	Fusion is better for large ranges
+	if (can_optimize.GetIndex() > 5000) {
+		return cant_optimize;
+	}
+
+	//	TopN is better for k == 1
+	if (can_optimize.GetIndex() == 1) {
+		return can_optimize;
+	}
+
+	//	TopN is better for small cardinalities
+	if (op.EstimateCardinality(client) > 400000) {
 		return cant_optimize;
 	}
 
