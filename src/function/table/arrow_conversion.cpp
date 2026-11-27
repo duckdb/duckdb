@@ -355,30 +355,36 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	auto &child_array = *array.children[0];
 	auto &child_type = array_info.GetChild();
 	bool run_end_encoded = child_type.GetPhysicalType() == ArrowArrayPhysicalType::RUN_END_ENCODED;
-	if (child_count == 0 && child_offset == 0 && !run_end_encoded) {
-		D_ASSERT(!child_array.dictionary);
+	if (child_count == 0 && child_offset == 0 && !child_array.dictionary && !run_end_encoded) {
 		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, child_count,
 		                                             child_type, -1);
 	} else {
-		if (child_array.dictionary) {
-			ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state,
-			                                                       child_count, child_type,
-			                                                       NumericCast<int64_t>(child_offset));
-		} else if (run_end_encoded) {
+		if (run_end_encoded) {
 			ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child_vector, child_array, chunk_offset,
 			                                                          child_state, child_count, child_type,
 			                                                          NumericCast<int64_t>(child_offset));
 			// decoding sets the validity of every child row again
 			broadcast_validity();
 		} else {
-			// a nested list or array sets its validity again, so it takes the broadcast NULLs as its parent mask
+			// Dictionary slicing replaces the child validity, and nested lists and arrays reload it. Preserve the
+			// broadcast NULLs in a separate mask aligned to the child rows in this scan.
 			ValidityMask child_parent_mask;
+			ValidityMask *child_parent_mask_ptr = nullptr;
 			if (array_mask.CanHaveNull()) {
 				child_parent_mask.Copy(FlatVector::Validity(child_vector), child_count);
+				child_parent_mask_ptr = &child_parent_mask;
 			}
-			ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
-			                                             child_count, child_type, NumericCast<int64_t>(child_offset),
-			                                             array_mask.CanHaveNull() ? &child_parent_mask : nullptr);
+			if (child_array.dictionary) {
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(
+				    child_vector, child_array, chunk_offset, child_state, child_count, child_type,
+				    NumericCast<int64_t>(child_offset), child_parent_mask_ptr);
+				// ARRAY operations can access the child as a contiguous vector. Materialize the slice here.
+				child_vector.Flatten();
+			} else {
+				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
+				                                             child_count, child_type, NumericCast<int64_t>(child_offset),
+				                                             child_parent_mask_ptr);
+			}
 		}
 	}
 }
@@ -1406,125 +1412,63 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	}
 }
 
-template <class T>
-static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-	auto indices = reinterpret_cast<T *>(indices_p);
+template <class T, bool MASKED>
+static void SetDictionarySelection(SelectionVector &sel, const ArrowArray &array, idx_t offset, idx_t size,
+                                   idx_t dict_length, const ValidityMask *mask) {
+	if (size == 0) {
+		return;
+	}
+	ArrowAlignedBufferData<T> indices(array, 1, offset, size);
+	// Check before narrowing to sel_t. A negative signed index converted to uint64_t is also out of range.
+	const auto limit = MinValue<uint64_t>(dict_length, uint64_t(NumericLimits<sel_t>::Maximum()) + 1);
 	for (idx_t row = 0; row < size; row++) {
-		sel.set_index(row, UnsafeNumericCast<idx_t>(indices[row]));
+		if (MASKED && !mask->RowIsValid(row)) {
+			sel.set_index(row, dict_length);
+			continue;
+		}
+		const auto raw_index = indices[row];
+		const auto index = static_cast<uint64_t>(raw_index);
+		if (index >= limit) {
+			if (index >= dict_length) {
+				throw InvalidInputException("Arrow dictionary index out of range (index %s, dictionary length %llu)",
+				                            std::to_string(raw_index), dict_length);
+			}
+			throw ConversionException("Arrow dictionary index does not fit in a DuckDB selection vector");
+		}
+		sel.set_index(row, index);
 	}
 }
 
-template <class T>
-static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-	auto indices = reinterpret_cast<T *>(indices_p);
-	for (idx_t row = 0; row < size; row++) {
-		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
-			throw ConversionException("DuckDB only supports indices that fit on an uint32");
-		}
-		sel.set_index(row, NumericCast<idx_t>(indices[row]));
-	}
-}
-
-template <class T>
-static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
-                                         idx_t last_element_pos) {
-	auto indices = reinterpret_cast<T *>(indices_p);
-	for (idx_t row = 0; row < size; row++) {
-		if (mask.RowIsValid(row)) {
-			sel.set_index(row, UnsafeNumericCast<idx_t>(indices[row]));
-		} else {
-			//! Need to point out to last element
-			sel.set_index(row, last_element_pos);
-		}
-	}
-}
-
-static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, const LogicalType &logical_type, idx_t size,
-                               ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
-	sel.Initialize(size);
-
-	if (mask) {
-		switch (logical_type.id()) {
-		case LogicalTypeId::UTINYINT:
-			SetMaskedSelectionVectorLoop<uint8_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::TINYINT:
-			SetMaskedSelectionVectorLoop<int8_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::USMALLINT:
-			SetMaskedSelectionVectorLoop<uint16_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::SMALLINT:
-			SetMaskedSelectionVectorLoop<int16_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::UINTEGER:
-			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw ConversionException("DuckDB only supports indices that fit on an uint32");
-			}
-			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::INTEGER:
-			SetMaskedSelectionVectorLoop<int32_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::UBIGINT:
-			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw ConversionException("DuckDB only supports indices that fit on an uint32");
-			}
-			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-		case LogicalTypeId::BIGINT:
-			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw ConversionException("DuckDB only supports indices that fit on an uint32");
-			}
-			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
-
-		default:
-			throw NotImplementedException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
-		}
-
-	} else {
-		switch (logical_type.id()) {
-		case LogicalTypeId::UTINYINT:
-			SetSelectionVectorLoop<uint8_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::TINYINT:
-			SetSelectionVectorLoop<int8_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::USMALLINT:
-			SetSelectionVectorLoop<uint16_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::SMALLINT:
-			SetSelectionVectorLoop<int16_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::UINTEGER:
-			SetSelectionVectorLoop<uint32_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::INTEGER:
-			SetSelectionVectorLoop<int32_t>(sel, indices_p, size);
-			break;
-		case LogicalTypeId::UBIGINT:
-			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! We need to check if our indexes fit in a uint32_t
-				SetSelectionVectorLoopWithChecks<uint64_t>(sel, indices_p, size);
-			} else {
-				SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
-			}
-			break;
-		case LogicalTypeId::BIGINT:
-			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! We need to check if our indexes fit in a uint32_t
-				SetSelectionVectorLoopWithChecks<int64_t>(sel, indices_p, size);
-			} else {
-				SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
-			}
-			break;
-		default:
-			throw ConversionException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
-		}
+template <bool MASKED>
+static void SetDictionarySelection(SelectionVector &sel, const ArrowArray &array, idx_t offset, idx_t size,
+                                   LogicalTypeId index_type, idx_t dict_length, const ValidityMask *mask) {
+	switch (index_type) {
+	case LogicalTypeId::UTINYINT:
+		SetDictionarySelection<uint8_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::TINYINT:
+		SetDictionarySelection<int8_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::USMALLINT:
+		SetDictionarySelection<uint16_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::SMALLINT:
+		SetDictionarySelection<int16_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::UINTEGER:
+		SetDictionarySelection<uint32_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::INTEGER:
+		SetDictionarySelection<int32_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::UBIGINT:
+		SetDictionarySelection<uint64_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	case LogicalTypeId::BIGINT:
+		SetDictionarySelection<int64_t, MASKED>(sel, array, offset, size, dict_length, mask);
+		break;
+	default:
+		throw ConversionException("(Arrow) Unsupported type for dictionary indices");
 	}
 }
 
@@ -1539,25 +1483,51 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	return parent_mask->CanHaveNull();
 }
 
-// Arrow's null type converts to a constant vector, and FlatVector::SetNull needs flat vectors along its recursion
-// into STRUCT and ARRAY children, which never reaches LIST contents.
-static void FlattenForSetNull(Vector &vector) {
-	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-		vector.Flatten();
-		return;
-	}
-	switch (vector.GetType().InternalType()) {
-	case PhysicalType::STRUCT:
-		for (auto &entry : StructVector::GetEntries(vector)) {
-			FlattenForSetNull(entry);
+// Flattening or verifying an ARRAY selection expands each row into its child positions. Bound those positions
+// before creating the dictionary vector, including its extra NULL slot. STRUCT preserves the row positions.
+static void CheckDictionaryArraySelection(const LogicalType &type, idx_t size) {
+	switch (type.InternalType()) {
+	case PhysicalType::ARRAY: {
+		const auto width = ArrayType::GetSize(type);
+		const auto selection_capacity = uint64_t(NumericLimits<sel_t>::Maximum()) + 1;
+		if (size > selection_capacity / width) {
+			throw ConversionException("Arrow dictionary ARRAY exceeds the DuckDB selection vector range");
 		}
+		CheckDictionaryArraySelection(ArrayType::GetChildType(type), size * width);
 		break;
-	case PhysicalType::ARRAY:
-		FlattenForSetNull(ArrayVector::GetChildMutable(vector));
+	}
+	case PhysicalType::STRUCT:
+		for (const auto &entry : StructType::GetChildTypes(type)) {
+			CheckDictionaryArraySelection(entry.second, size);
+		}
 		break;
 	default:
 		break;
 	}
+}
+
+// SetSize and SetNull recurse into STRUCT and ARRAY, but Reserve can stop at a parent with enough capacity.
+// Reserve each node explicitly: zero-copy conversion can leave children with room for only the original values.
+static void PrepareDictionarySentinel(Vector &vector, idx_t size, idx_t capacity) {
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		// Flatten only the existing values (e.g. a constant NULL or a nested dictionary), not the sentinel.
+		vector.Flatten(*FlatVector::IncrementalSelectionVector(), size);
+	}
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::STRUCT:
+		for (auto &entry : StructVector::GetEntries(vector)) {
+			PrepareDictionarySentinel(entry, size, capacity);
+		}
+		break;
+	case PhysicalType::ARRAY: {
+		auto array_size = ArrayType::GetSize(vector.GetType());
+		PrepareDictionarySentinel(ArrayVector::GetChildMutable(vector), size * array_size, capacity * array_size);
+		break;
+	}
+	default:
+		break;
+	}
+	vector.Reserve(capacity);
 }
 
 void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
@@ -1569,58 +1539,46 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);
+	if (!array.dictionary || array.dictionary->length < 0) {
+		throw InvalidInputException("Arrow dictionary is missing or has an invalid length");
+	}
+	const auto dict_length = NumericCast<idx_t>(array.dictionary->length);
+	if (has_nulls && dict_length > NumericLimits<sel_t>::Maximum()) {
+		throw ConversionException("Arrow dictionary NULL sentinel does not fit in a DuckDB selection vector");
+	}
 	if (array_state.CacheOutdated(array.dictionary)) {
-		//! We need to set the dictionary data for this column
-		//! Allocate one extra entry beyond dictionary length for the NULL sentinel.
-		//! SetMaskedSelectionVectorLoop points NULL indices at last_element_pos (= dictionary->length),
-		//! so the buffer must be large enough and that entry must be marked invalid.
-		auto dict_length = NumericCast<idx_t>(array.dictionary->length);
+		CheckDictionaryArraySelection(vector.GetType(), dict_length + 1);
+		// Reserve an extra slot for NULL indices. An empty dictionary has no value buffers to convert.
 		auto base_vector = make_uniq<Vector>(vector.GetType(), dict_length + 1);
-		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, 0, dict_length, 0, 0, has_nulls);
-		auto &dictionary_type = arrow_type.GetDictionary();
-		auto arrow_physical_type = dictionary_type.GetPhysicalType();
-		;
-		switch (arrow_physical_type) {
-		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-			ColumnArrowToDuckDBDictionary(*base_vector, *array.dictionary, 0, array_state,
-			                              NumericCast<idx_t>(array.dictionary->length), dictionary_type);
-			break;
-		case ArrowArrayPhysicalType::RUN_END_ENCODED:
-			ColumnArrowToDuckDBRunEndEncoded(*base_vector, *array.dictionary, 0, array_state,
-			                                 NumericCast<idx_t>(array.dictionary->length), dictionary_type);
-			break;
-		case ArrowArrayPhysicalType::DEFAULT:
-			ColumnArrowToDuckDB(*base_vector, *array.dictionary, 0, array_state,
-			                    NumericCast<idx_t>(array.dictionary->length), dictionary_type);
-			break;
-		default:
-			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
-		};
-		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot.
-		// the inner ColumnArrowToDuckDB call may have replaced the buffer via FlatVector::SetData
-		// (e.g. DirectConversion's zero-copy path), shrinking capacity from dict_length+1 to
-		// dict_length. Re-extend before sizing so the sentinel slot stays in bounds.
-		base_vector->Reserve(dict_length + 1);
+		if (dict_length > 0) {
+			SetValidityMask(*base_vector, *array.dictionary, 0, dict_length, 0, 0, has_nulls);
+			auto &dictionary_type = arrow_type.GetDictionary();
+			switch (dictionary_type.GetPhysicalType()) {
+			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
+				ColumnArrowToDuckDBDictionary(*base_vector, *array.dictionary, 0, array_state, dict_length,
+				                              dictionary_type);
+				break;
+			case ArrowArrayPhysicalType::RUN_END_ENCODED:
+				ColumnArrowToDuckDBRunEndEncoded(*base_vector, *array.dictionary, 0, array_state, dict_length,
+				                                 dictionary_type);
+				break;
+			case ArrowArrayPhysicalType::DEFAULT:
+				ColumnArrowToDuckDB(*base_vector, *array.dictionary, 0, array_state, dict_length, dictionary_type);
+				break;
+			default:
+				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
+			}
+		}
+		// Prepare the existing values and their children before exposing the extra NULL slot.
+		PrepareDictionarySentinel(*base_vector, dict_length, dict_length + 1);
 		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
-		// nested children of the sentinel slot hold uninitialized data unless they are marked NULL as well
-		FlattenForSetNull(*base_vector);
 		FlatVector::SetNull(*base_vector, dict_length, true);
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
-	auto offset_type = arrow_type.GetDuckType();
-	//! Get Pointer to Indices of Dictionary
-	auto index_size = GetTypeIdSize(offset_type.InternalType());
-	auto indices =
-	    ArrowBufferData<data_t>(array, 1) +
-	    index_size * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	unsafe_unique_array<uint64_t> aligned_indices;
-	if (!IsAligned(indices, index_size)) {
-		aligned_indices = make_unsafe_uniq_array_uninitialized<uint64_t>((index_size * size + 7) / 8);
-		memcpy(aligned_indices.get(), indices, index_size * size);
-		indices = reinterpret_cast<data_ptr_t>(aligned_indices.get());
-	}
-
+	const auto index_type = arrow_type.GetDuckType().id();
+	const auto offset = GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 	SelectionVector sel;
+	sel.Initialize(size);
 	if (has_nulls) {
 		// size may exceed STANDARD_VECTOR_SIZE, so the scratch mask must be sized for it.
 		ValidityMask indices_validity(size);
@@ -1635,10 +1593,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 				}
 			}
 		}
-		SetSelectionVector(sel, indices, offset_type, size, &indices_validity,
-		                   NumericCast<idx_t>(array.dictionary->length));
+		SetDictionarySelection<true>(sel, array, offset, size, index_type, dict_length, &indices_validity);
 	} else {
-		SetSelectionVector(sel, indices, offset_type, size);
+		SetDictionarySelection<false>(sel, array, offset, size, index_type, dict_length, nullptr);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
 	vector.Verify();
