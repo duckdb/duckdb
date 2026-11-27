@@ -39,7 +39,7 @@ class TableIndexList {
 public:
 	~TableIndexList();
 
-	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
+	//! Iterates over shared ownership of stable index entries while holding the entry-list lock in shared mode.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Same as IndexEntries(), skipping the entries of indexes that are being built.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> BuiltIndexEntries() const;
@@ -86,12 +86,12 @@ public:
 	}
 	//! Returns the number of index entries.
 	idx_t Count() const {
-		annotated_lock_guard lock(index_entries_lock);
+		annotated_shared_lock lock(index_entries_lock);
 		return index_entries.size();
 	}
 	//! Returns true, if there are unbound indexes.
 	bool HasUnbound() const {
-		annotated_lock_guard lock(index_entries_lock);
+		annotated_shared_lock lock(index_entries_lock);
 		return unbound_count != 0;
 	}
 	//! Returns true if an unbound index has buffered WAL operations.
@@ -159,8 +159,8 @@ private:
 	template <class>
 	friend class TableIndexIterationHelper;
 
-	//! A lock to prevent any concurrent changes to the index entries.
-	mutable annotated_mutex index_entries_lock;
+	//! A shared lock to prevent concurrent changes to the index entries.
+	mutable annotated_shared_mutex index_entries_lock;
 	//! The index entries of the table.
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 	//! Contains the number of unbound indexes.
@@ -173,7 +173,7 @@ public:
 	TableIndexIterationHelper(const TableIndexList &index_list, bool skip_building_p);
 
 private:
-	annotated_unique_lock<annotated_mutex> lock;
+	annotated_shared_lock<annotated_shared_mutex> lock;
 	const vector<shared_ptr<IndexEntry>> &index_entries;
 	bool skip_building;
 

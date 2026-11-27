@@ -420,7 +420,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
                           bool skip_mismatched_keys) {
 	{
 		// Early-out, if we have no unbound indexes.
-		annotated_lock_guard lock(index_entries_lock);
+		annotated_shared_lock lock(index_entries_lock);
 		if (unbound_count == 0) {
 			return;
 		}
@@ -520,7 +520,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 shared_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
                                                            const ForeignKeyType fk_type) {
-	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		if (entry->IsForeignKeyIndex(fk_keys, fk_type)) {
 			return entry;
