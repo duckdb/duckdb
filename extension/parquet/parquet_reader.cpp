@@ -308,10 +308,11 @@ static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path,
 	}
 }
 
+//! Read the footer; a file of at most [whole_file_max] bytes is read whole by the footer's request
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
-             shared_ptr<EncryptionUtil> &encryption_util, optional_idx footer_size) {
+             shared_ptr<EncryptionUtil> &encryption_util, optional_idx footer_size, idx_t whole_file_max) {
 	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
@@ -336,6 +337,10 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		if (ShouldAndCanPrefetch(context, file_handle)) {
 			prefetch_size = ClampValue(file_size / ESTIMATED_FOOTER_RATIO, MIN_PREFETCH_SIZE, MAX_PREFETCH_SIZE);
 			prefetch_size = MinValue(NextPowerOfTwo(prefetch_size), file_size);
+			if (file_size <= whole_file_max) {
+				// the rest of a file this small costs little more than the footer: read it in the same request
+				prefetch_size = file_size;
+			}
 		}
 
 		ResizeableBuffer buf;
@@ -365,10 +370,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		idx_t total_footer_len = footer_len + 8;
 		auto metadata_pos = file_size - total_footer_len;
 		transport.SetLocation(metadata_pos);
-		transport.Prefetch(metadata_pos, total_footer_len);
+		if (file_size <= whole_file_max && ShouldAndCanPrefetch(context, file_handle)) {
+			// the rest of a file this small costs little more than the footer: read it in the same request
+			transport.Prefetch(0, file_size);
+		} else {
+			transport.Prefetch(metadata_pos, total_footer_len);
+		}
 
 		auto read_head = transport.GetReadHead(metadata_pos);
-		auto data_ptr = read_head->buffer_ptr;
+		auto data_ptr = read_head->buffer_ptr + (metadata_pos - read_head->location);
 
 		idx_t read_footer_len;
 		ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config, read_footer_len,
@@ -1530,7 +1540,8 @@ MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition()
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p,
-                             unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p)
+                             unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p,
+                             bool read_whole_small_file)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), buffer_manager(BufferManager::GetBufferManager(context_p)),
       parquet_options(std::move(parquet_options_p)), projection_expressions(std::move(projection_expressions_p)) {
@@ -1559,18 +1570,22 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	}
 
+	// the footer's request reads a small file whole when its handle keeps the file for the scans, which it does only
+	// for a file off local disk that the external file cache does not serve; not for a reader that needs only the
+	// footer
+	const idx_t whole_file_max = read_whole_small_file ? file_handle->RequestWholeFileRead() : 0;
 	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
 		if (!MetadataCacheEnabled(context_p)) {
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-			                        encryption_util, footer_size);
+			                        encryption_util, footer_size, whole_file_max);
 		} else {
 			metadata = ObjectCache::GetObjectCache(context_p).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-				                        encryption_util, footer_size);
+				                        encryption_util, footer_size, whole_file_max);
 				ObjectCache::GetObjectCache(context_p).PutWithTypePrefix<ParquetFileMetadataCache>(file.path, metadata);
 			}
 		}
@@ -2570,7 +2585,14 @@ void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunction
 }
 
 void ParquetReader::InitializeScanHandle(ClientContext &context) const {
-	CallOnce(scan_handle_initialized, [&] { shared_scan_handle = OpenScanHandle(context); });
+	CallOnce(scan_handle_initialized, [&] {
+		if (file_handle->HoldsWholeFile()) {
+			// the footer's request read the whole file, which its handle serves: the scans read from that handle
+			shared_scan_handle = file_handle;
+		} else {
+			shared_scan_handle = OpenScanHandle(context);
+		}
+	});
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {

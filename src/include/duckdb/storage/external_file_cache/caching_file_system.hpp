@@ -103,6 +103,16 @@ public:
 	DUCKDB_API idx_t GetMaxMemory() const;
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
+	//! The largest file that a handle keeps whole when asked to (RequestWholeFileRead)
+	static constexpr idx_t WHOLE_FILE_READ_MAXIMUM_SIZE = 1ULL << 16;
+	//! Ask the handle to keep a later read of the whole file at location 0, and to serve its later reads from those
+	//! bytes instead of sending a request each. It keeps one only for a seekable file off local disk that the external
+	//! file cache does not serve and whose responses allow reuse, of at most WHOLE_FILE_READ_MAXIMUM_SIZE bytes.
+	//! Returns that size, or 0 if the handle would keep none. The bytes are never shared with another handle, and the
+	//! buffer manager can evict them, after which the handle reads from the file again.
+	DUCKDB_API idx_t RequestWholeFileRead();
+	//! Whether the handle holds the whole file in memory (see RequestWholeFileRead)
+	DUCKDB_API bool HoldsWholeFile();
 
 private:
 	//! Open the file unless cached blocks allow deferring it; returns false if the file system returned no handle
@@ -121,6 +131,11 @@ private:
 	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
+	//! Serve [nr_bytes] at [location] from the whole file if the handle still holds it; an empty group otherwise
+	FileBufferHandleGroup ReadFromWholeFile(idx_t nr_bytes, idx_t location);
+	//! Keep [buffer], the first [nr_bytes] of the file, if the handle was asked to (RequestWholeFileRead) and they are
+	//! the whole file
+	void KeepWholeFileRead(const BufferHandle &buffer, idx_t nr_bytes);
 
 private:
 	QueryContext context;
@@ -154,6 +169,16 @@ private:
 
 	//! Throughput fitted from this handle's own reads, used for local files (remote files measure their own).
 	ReadThroughputEstimator throughput_estimator;
+
+	//! Guards the whole file
+	annotated_mutex whole_file_lock;
+	//! Whether the handle was asked to keep a read of the whole file (RequestWholeFileRead)
+	bool whole_file_requested DUCKDB_GUARDED_BY(whole_file_lock) = false;
+	//! The whole file, kept unpinned from a read of all of it so that the buffer manager can evict it; never shared
+	//! with another handle
+	shared_ptr<BlockHandle> whole_file DUCKDB_GUARDED_BY(whole_file_lock);
+	//! The size of the whole file
+	idx_t whole_file_size DUCKDB_GUARDED_BY(whole_file_lock) = 0;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.

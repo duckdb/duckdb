@@ -117,6 +117,10 @@ public:
 	virtual bool ForceFlush() {
 		return false;
 	}
+	//! Whether the processor reads more of the file than its footer, which a small file then has in memory with it
+	virtual bool ReadsBeyondFooter() const {
+		return false;
+	}
 };
 
 class ParquetMetaDataOperator {
@@ -180,7 +184,9 @@ struct ParquetMetadataLocalState : public LocalTableFunctionState {
 
 	void Initialize(ClientContext &context, OpenFileInfo &file_info, idx_t next_file_idx) {
 		ParquetOptions parquet_options(context);
-		reader = make_uniq<ParquetReader>(context, file_info, parquet_options);
+		reader = make_uniq<ParquetReader>(context, file_info, parquet_options, nullptr,
+		                                  unordered_map<idx_t, ParquetReaderProjectionExpression>(),
+		                                  processor->ReadsBeyondFooter());
 		processor->Initialize(context, *reader);
 		total_rows = processor->TotalRowCount(*reader);
 		row_idx = 0;
@@ -888,6 +894,9 @@ void ParquetFileMetadataProcessor::ReadRow(vector<reference<Vector>> &output, id
 class ParquetBloomProbeProcessor : public ParquetMetadataFileProcessor {
 public:
 	ParquetBloomProbeProcessor(const string &probe_column, const Value &probe_value);
+	bool ReadsBeyondFooter() const override {
+		return true;
+	}
 
 	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
 	idx_t TotalRowCount(ParquetReader &reader) override;
@@ -972,6 +981,9 @@ void ParquetBloomProbeProcessor::ReadRow(vector<reference<Vector>> &output, idx_
 //! One row per data page: the OffsetIndex (location, first row) and ColumnIndex (bounds, null count) entries
 class ParquetPageIndexProcessor : public ParquetMetadataFileProcessor {
 public:
+	bool ReadsBeyondFooter() const override {
+		return true;
+	}
 	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
 	idx_t TotalRowCount(ParquetReader &reader) override;
 	void ReadRow(vector<reference<Vector>> &output, idx_t row_idx, ParquetReader &reader) override;

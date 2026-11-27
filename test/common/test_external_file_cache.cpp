@@ -1559,4 +1559,218 @@ TEST_CASE("Request sizing can make every read cover exactly the requested bytes"
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE + 10, 100}});
 }
 
+//! The tracking file system, with its files off local disk; it can also refuse to seek, and give its responses a
+//! cache deadline
+class OffDiskTrackingFileSystem : public SimpleTrackingFileSystem {
+public:
+	bool OnDiskFile(FileHandle &handle) override {
+		return false;
+	}
+	bool CanSeek() override {
+		return can_seek;
+	}
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = SimpleTrackingFileSystem::Stats(handle);
+		metadata.cache_valid_until = cache_valid_until;
+		return metadata;
+	}
+	optional<timestamp_t> GetCacheValidUntil(FileHandle &handle) override {
+		return cache_valid_until;
+	}
+	bool can_seek = true;
+	timestamp_t cache_valid_until = timestamp_t::infinity();
+};
+
+//! The off-disk tracking file system answering without validators: no ETag, no modification time and no freshness, as
+//! an object store whose listing carries none -- a validated open of one of its files cannot use the cache
+class NoValidatorsTrackingFileSystem : public OffDiskTrackingFileSystem {
+public:
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = OffDiskTrackingFileSystem::Stats(handle);
+		metadata.last_modification_time = timestamp_t(0);
+		metadata.version_tag.clear();
+		metadata.cache_valid_until.reset();
+		return metadata;
+	}
+	optional<timestamp_t> GetCacheValidUntil(FileHandle &handle) override {
+		return optional<timestamp_t>();
+	}
+};
+
+TEST_CASE("A small file the cache handles but cannot validate is kept whole, and one it serves is not",
+          "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	// the cache handles these (off-disk) files as it does remote ones
+	REQUIRE_NO_FAIL(con.Query("SET cache_local_files = true"));
+	// with a remote file's block size, so that a read of a small file is one request as it is for a remote file
+	REQUIRE_NO_FAIL(con.Query("SET external_file_cache_local_max_block_size = 2097152"));
+	auto no_validators_fs = make_uniq<NoValidatorsTrackingFileSystem>();
+	auto validators_fs = make_uniq<OffDiskTrackingFileSystem>();
+	const idx_t FILE_SIZE = 20000;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_whole_no_validators.bin", content);
+	BoundFileSystem no_validators_bound(*no_validators_fs, nullptr);
+	BoundFileSystem validators_bound(*validators_fs, nullptr);
+	CachingFileSystem no_validators_cfs(no_validators_bound, db_instance);
+	CachingFileSystem validators_cfs(validators_bound, db_instance);
+
+	SECTION("a validated open without validators is not served by the cache, and keeps the whole file it reads") {
+		auto handle =
+		    no_validators_cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(!handle->ReadsAreCached());
+		REQUIRE(handle->RequestWholeFileRead() == CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(no_validators_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+		// nothing went into the cache: another open reads the file again
+		auto other =
+		    no_validators_cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(!other->HoldsWholeFile());
+		REQUIRE(ReadFull(*other, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(no_validators_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{5000, 100}});
+	}
+	SECTION("a file the cache serves is not kept by the handle") {
+		auto handle =
+		    validators_cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->ReadsAreCached());
+		REQUIRE(handle->RequestWholeFileRead() == 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+	}
+}
+
+TEST_CASE("A file of exactly the whole-file bound is kept whole", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto off_disk_fs = make_uniq<OffDiskTrackingFileSystem>();
+	const idx_t FILE_SIZE = CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_whole_bound_file.bin", content);
+	BoundFileSystem off_disk_bound(*off_disk_fs, nullptr);
+	CachingFileSystem cfs(off_disk_bound, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(handle->RequestWholeFileRead() == CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE);
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(handle->HoldsWholeFile());
+	REQUIRE(ReadFull(*handle, 100, FILE_SIZE - 100) == content.substr(FILE_SIZE - 100, 100));
+	REQUIRE(off_disk_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
+TEST_CASE("A handle keeps a whole small file it reads off disk when asked to", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	auto off_disk_fs = make_uniq<OffDiskTrackingFileSystem>();
+	auto on_disk_fs = make_uniq<EFCTrackingFileSystem>();
+	const idx_t FILE_SIZE = 20000;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_whole_small_file.bin", content);
+	const auto large_content = MakeTestContent(CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE + 1);
+	EFCTestFileGuard large_file("test_efc_whole_large_file.bin", large_content);
+	BoundFileSystem off_disk_bound(*off_disk_fs, nullptr);
+	BoundFileSystem on_disk_bound(*on_disk_fs, nullptr);
+	CachingFileSystem off_disk_cfs(off_disk_bound, db_instance);
+	CachingFileSystem on_disk_cfs(on_disk_bound, db_instance);
+	auto open = [&](CachingFileSystem &cfs, const string &path) {
+		return cfs.OpenFile(MakeTestOpenFileInfo(path), FileFlags::FILE_FLAGS_READ);
+	};
+	const auto read_and_part = vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}, {5000, 100}};
+
+	SECTION("a read of the whole file is kept when asked for, and the handle's later reads come from it") {
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		// local paths are not cached by default
+		REQUIRE(!handle->ReadsAreCached());
+		REQUIRE(handle->RequestWholeFileRead() == CachingFileHandle::WHOLE_FILE_READ_MAXIMUM_SIZE);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(off_disk_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+		// another handle on the file reads it again
+		auto other = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(!other->HoldsWholeFile());
+		REQUIRE(ReadFull(*other, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{5000, 100}});
+	}
+	SECTION("a read of the whole file is not kept unless asked for") {
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == read_and_part);
+	}
+	SECTION("a read of part of the file is not kept") {
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() > 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE - 1) == content.substr(0, FILE_SIZE - 1));
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE - 1}, {5000, 100}});
+	}
+	SECTION("a file larger than the bound is not kept") {
+		auto handle = open(off_disk_cfs, large_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() > 0);
+		REQUIRE(ReadFull(*handle, large_content.size()) == large_content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == large_content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, large_content.size()}, {5000, 100}});
+	}
+	SECTION("a file on local disk is not kept") {
+		auto handle = open(on_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() == 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(on_disk_fs->TakeReads() == read_and_part);
+	}
+	SECTION("a file that cannot seek is not kept") {
+		off_disk_fs->can_seek = false;
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() == 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == read_and_part);
+	}
+	SECTION("a file whose responses prohibit reuse is not kept") {
+		off_disk_fs->cache_valid_until = timestamp_t::ninfinity();
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() == 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == read_and_part);
+	}
+	SECTION("a read whose own response prohibits reuse is not kept") {
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() > 0);
+		off_disk_fs->cache_valid_until = timestamp_t::ninfinity();
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(!handle->HoldsWholeFile());
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == read_and_part);
+	}
+	SECTION("the buffer manager can evict the kept file, which is then read from the file again") {
+		REQUIRE_NO_FAIL(con.Query("SET memory_limit = '8MB'"));
+		auto handle = open(off_disk_cfs, test_file.GetPath());
+		REQUIRE(handle->RequestWholeFileRead() > 0);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(handle->HoldsWholeFile());
+		// pinned memory up to the limit makes the buffer manager evict the unpinned file; the allocations are small,
+		// so that the one that evicts it fits in what it frees
+		auto &buffer_manager = BufferManager::GetBufferManager(db_instance);
+		vector<BufferHandle> pinned;
+		for (idx_t i = 0; i < 4096 && handle->HoldsWholeFile(); i++) {
+			pinned.push_back(buffer_manager.Allocate(MemoryTag::BASE_TABLE, 4096));
+		}
+		REQUIRE(!handle->HoldsWholeFile());
+		pinned.clear();
+		REQUIRE(ReadFull(*handle, 100, 5000) == content.substr(5000, 100));
+		REQUIRE(off_disk_fs->TakeReads() == read_and_part);
+	}
+}
+
 } // namespace duckdb

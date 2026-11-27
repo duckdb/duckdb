@@ -386,9 +386,12 @@ public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER = UINT64_C(9223372036854775820);
 
 public:
+	//! With [read_whole_small_file], the footer's request reads a small file whole if its handle keeps the file for the
+	//! scans (CachingFileHandle::RequestWholeFileRead). Off for a reader that only needs the footer.
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
-	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {});
+	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {},
+	              bool read_whole_small_file = true);
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -569,7 +572,8 @@ private:
 	void InitializeScanHandle(ClientContext &context) const;
 
 private:
-	unique_ptr<CachingFileHandle> file_handle;
+	//! Shared with the scans when it holds the whole file (CachingFileHandle::HoldsWholeFile)
+	shared_ptr<CachingFileHandle> file_handle;
 	mutable OnceFlag scan_handle_initialized;
 	//! The byte range of the file that holds the page indexes of every row group (0 if there is none), computed once
 	mutable OnceFlag page_index_span_computed;

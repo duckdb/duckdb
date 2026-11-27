@@ -10,6 +10,7 @@ set(TEST_API_OBJECTS
     test_json_execute_serialized_sql.cpp
     test_multi_file_column_mapper.cpp
     test_multi_file_lazy_initialization.cpp
+    test_parquet_whole_small_file_read.cpp
     test_table_function_multi_file_list.cpp
     test_process_util.cpp
     test_random_after_clone.cpp
