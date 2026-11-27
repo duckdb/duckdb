@@ -14,35 +14,35 @@ SET autoinstall_known_extensions = false;
 
 # A type no extension is known to provide.
 statement error
-REGISTER EXTERNAL RESOURCE 'nobody:provides:this' AS r FROM MAP {'id': 'x'};
+REGISTER EXTERNAL RESOURCE 'nobody.provides.this' AS r FROM MAP {'id': 'x'};
 ----
-<REGEX>:.*unknown resource type "nobody:provides:this".*
+<REGEX>:.*unknown resource type "nobody.provides.this".*
 
 statement error
-CREATE EXTERNAL RESOURCE 'nobody:provides:this' AS r;
+CREATE EXTERNAL RESOURCE 'nobody.provides.this' AS r;
 ----
-<REGEX>:.*unknown resource type "nobody:provides:this".*
+<REGEX>:.*unknown resource type "nobody.provides.this".*
 
 # A type an extension is known to provide (extension_entries.hpp): the error says which one.
 statement error
-REGISTER EXTERNAL RESOURCE 'aws:cloudformation:quack-on-ec2' AS r FROM MAP {'id': 'x'};
+REGISTER EXTERNAL RESOURCE 'aws.cloudformation.stack' AS r FROM MAP {'id': 'x'};
 ----
 <REGEX>:.*provided by the aws extension.*INSTALL AND LOAD aws;.*
 
 # Discovery of a type does the same lookup, so a type restriction can load the provider.
 statement error
-SELECT * FROM duckdb_external_resources(discover := true, type := 'nobody:provides:this');
+SELECT * FROM duckdb_external_resources(discover := true, type := 'nobody.provides.this');
 ----
-<REGEX>:.*unknown resource type "nobody:provides:this".*
+<REGEX>:.*unknown resource type "nobody.provides.this".*
 
 statement error
-SELECT * FROM duckdb_external_resources(discover := true, type := 'aws:cloudformation:quack-on-ec2');
+SELECT * FROM duckdb_external_resources(discover := true, type := 'aws.cloudformation.stack');
 ----
 <REGEX>:.*provided by the aws extension.*INSTALL AND LOAD aws;.*
 
 # Listing the registry under a type looks nothing up: nothing is registered under it, so nothing is listed.
 query TTTTTTTT
-SELECT * FROM duckdb_external_resources(type := 'aws:cloudformation:quack-on-ec2');
+SELECT * FROM duckdb_external_resources(type := 'aws.cloudformation.stack');
 ----
 
 # Nothing was registered along the way.
@@ -66,25 +66,25 @@ statement ok
 SET autoinstall_known_extensions = true;
 
 statement error
-REGISTER EXTERNAL RESOURCE 'aws:cloudformation:quack-on-ec2' AS r FROM MAP {'id': 'x'};
+REGISTER EXTERNAL RESOURCE 'aws.cloudformation.stack' AS r FROM MAP {'id': 'x'};
 ----
 <REGEX>:.*Extension Autoloading Error.*automatically install the required extension 'aws.*
 
 statement error
-SELECT * FROM duckdb_external_resources(discover := true, type := 'aws:cloudformation:quack-on-ec2');
+SELECT * FROM duckdb_external_resources(discover := true, type := 'aws.cloudformation.stack');
 ----
 <REGEX>:.*Extension Autoloading Error.*automatically install the required extension 'aws.*
 
 # A type no extension provides does not try to autoload anything.
 statement error
-REGISTER EXTERNAL RESOURCE 'nobody:provides:this' AS r FROM MAP {'id': 'x'};
+REGISTER EXTERNAL RESOURCE 'nobody.provides.this' AS r FROM MAP {'id': 'x'};
 ----
-<REGEX>:.*unknown resource type "nobody:provides:this".*
+<REGEX>:.*unknown resource type "nobody.provides.this".*
 
 statement error
-SELECT * FROM duckdb_external_resources(discover := true, type := 'nobody:provides:this');
+SELECT * FROM duckdb_external_resources(discover := true, type := 'nobody.provides.this');
 ----
-<REGEX>:.*unknown resource type "nobody:provides:this".*
+<REGEX>:.*unknown resource type "nobody.provides.this".*
 
 query I
 SELECT count(*) FROM duckdb_external_resources();
