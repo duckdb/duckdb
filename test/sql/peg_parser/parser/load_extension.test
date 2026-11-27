@@ -46,6 +46,12 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD shellfs FROM community;$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$LOAD 'path/to/h3.duckdb_extension' FROM community;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL 'path/to/h3.duckdb_extension' FROM community;$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD my_package FROM my_repo AS mp;$TEST_PEG_PARSER$);
 
 statement ok

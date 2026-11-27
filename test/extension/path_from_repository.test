@@ -1,0 +1,131 @@
+# name: test/extension/path_from_repository.test
+# description: Test INSTALL and LOAD of an explicit path combined with a FROM repository
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+SET extension_directory = '{TEST_DIR}/path_from_repository'
+
+statement ok
+SET extension_repository_directory = '{TEST_DIR}/path_from_repository_repos'
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM not_a_repo
+----
+<REGEX>:Binder Error: 'not_a_repo' is not a known repository name.*
+
+statement error
+LOAD '{TEST_DIR}/missing.duckdb_extension' FROM community
+----
+<REGEX>:IO Error: Extension .* not found.*
+
+# the test extensions are unsigned, so with signature checks off the FROM only names the origin
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM community
+
+query III
+SELECT installed, install_mode, installed_from LIKE '%loadable_extension_demo.duckdb_extension'
+FROM duckdb_extensions()
+WHERE extension_name = 'loadable_extension_demo'
+----
+true	CUSTOM_PATH	true
+
+# the install recorded community as the origin: a load naming another repository is refused
+statement error
+LOAD loadable_extension_demo FROM core
+----
+IO Error: Extension 'loadable_extension_demo' was not installed from repository 'core'
+
+# installing the same path FROM another repository does not silently keep the recorded origin
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM core
+----
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*with COMMUNITY signing keys.*uses CORE signing keys.*
+
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
+----
+<REGEX>:Invalid Input Error: Installing extension 'loadable_extension_demo' failed. The extension is already installed but the origin is different.*with COMMUNITY signing keys.*uses CORE signing keys.*
+
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM community
+
+# an install by name over the path install stays the no-op it always was
+statement ok
+INSTALL loadable_extension_demo FROM core
+
+statement ok
+LOAD loadable_extension_demo FROM community
+
+query I
+QUACK QUACK
+----
+QUACK
+QUACK
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' FROM community
+
+query I
+SELECT contains(loaded_extensions(), 'loadable_extension_demo_double')
+----
+true
+
+# a path installed FROM a user-provided repository lands in that repository's folder
+statement ok
+SET allow_extension_repositories = 'allowed'
+
+statement ok
+CREATE EXTENSION REPOSITORY my_repo WITH PREFIX 'http://my-repo.example.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/cpp_api_demo.duckdb_extension' FROM my_repo
+
+query II
+SELECT install_mode, replace(install_path, '\', '/') LIKE '%/repositories/my_repo/cpp_api_demo.duckdb_extension'
+FROM duckdb_extensions()
+WHERE extension_name = 'cpp_api_demo'
+----
+CUSTOM_PATH	true
+
+statement ok
+LOAD cpp_api_demo FROM my_repo
+
+# with signature checks on, naming a repository does not make an unsigned file loadable or installable
+statement ok
+SET allow_unsigned_extensions = false
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM community
+----
+<REGEX>:IO Error: Extension .* could not be loaded because its signature is either missing or invalid.*
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM core
+----
+<REGEX>:IO Error: Extension .* could not be loaded because its signature is either missing or invalid.*
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM my_repo
+----
+<REGEX>:IO Error: Extension .* could not be loaded because its signature is either missing or invalid.*
+
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM community
+----
+<REGEX>:IO Error: Attempting to install an extension file that doesn't have a valid signature.*
+
+statement error
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension' FROM my_repo
+----
+<REGEX>:IO Error: Attempting to install an extension file that doesn't have a valid signature.*
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'loadable_grammar_extension_demo' AND installed
+----
+0

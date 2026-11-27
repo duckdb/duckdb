@@ -8,12 +8,6 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-# A repository cannot be combined with a direct file path.
-statement error
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' FROM core
-----
-IO Error: Cannot combine a FROM repository with a file path
-
 # A known but absent extension includes the install suggestion when autoinstall is disabled.
 statement ok
 SET autoinstall_known_extensions = false
