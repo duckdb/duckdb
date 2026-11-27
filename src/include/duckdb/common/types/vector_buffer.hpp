@@ -43,12 +43,20 @@ enum class VectorBufferType : uint8_t {
 
 enum class VectorAppendMode { ALLOW_RESIZE, ERROR_ON_NO_SPACE };
 
+//! Identifies the holders that are looked up again in the auxiliary data of a buffer
+enum class AuxiliaryDataType : uint8_t { GENERIC, VARIANT_WRITER_STATE };
+
 struct AuxiliaryDataHolder {
+	AuxiliaryDataHolder() = default;
+	explicit AuxiliaryDataHolder(AuxiliaryDataType type) : type(type) {
+	}
 	virtual ~AuxiliaryDataHolder() = default;
 
 	virtual idx_t GetAllocationSize() const {
 		return 0;
 	}
+
+	AuxiliaryDataType type = AuxiliaryDataType::GENERIC;
 };
 
 struct AuxiliaryDataSet {

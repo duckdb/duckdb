@@ -7,8 +7,9 @@ namespace duckdb {
 VariantPathKeyIndex::VariantPathKeyIndex(const vector<optional<string_t>> &keys) {
 	string_map_t<vector<idx_t>> positions_by_key;
 	for (idx_t path_idx = 0; path_idx < keys.size(); path_idx++) {
-		if (keys[path_idx]) {
-			positions_by_key[*keys[path_idx]].push_back(path_idx);
+		const auto &key = keys[path_idx];
+		if (key) {
+			positions_by_key[*key].push_back(path_idx);
 		}
 	}
 	//! at most half of the slots are used, so a lookup ends at an unused slot

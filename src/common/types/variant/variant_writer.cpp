@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-VariantWriterState::VariantWriterState(ArenaAllocator &keys_arena) : builder(dictionary, keys_arena) {
+VariantWriterState::VariantWriterState(ArenaAllocator &keys_arena)
+    : AuxiliaryDataHolder(AuxiliaryDataType::VARIANT_WRITER_STATE), builder(dictionary, keys_arena) {
 	builder.dictionary_keys = &dictionary_keys;
 }
 
@@ -54,8 +55,8 @@ void VectorWriter<VectorVariantType>::Initialize() {
 	auto &auxiliary_data = keys_buffer.GetAuxiliaryData();
 	if (auxiliary_data) {
 		for (auto &entry : auxiliary_data->data) {
-			state = dynamic_cast<VariantWriterState *>(entry.get());
-			if (state) {
+			if (entry->type == AuxiliaryDataType::VARIANT_WRITER_STATE) {
+				state = &static_cast<VariantWriterState &>(*entry);
 				break;
 			}
 		}
