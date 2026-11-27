@@ -1129,7 +1129,7 @@ template <typename Char> class float_writer {
       int num_digits = num_digits_;
       if (!specs_.trailing_zeros)
         while (num_digits > 0 && digits_[num_digits - 1] == '0') --num_digits;
-      if (num_zeros != 0 || num_digits != 0) {
+      if (num_zeros != 0 || num_digits != 0 || specs_.trailing_zeros) {
         *it++ = decimal_point_;
         it = std::fill_n(it, num_zeros, static_cast<Char>('0'));
         it = copy_str<Char>(digits_, digits_ + num_digits, it);
