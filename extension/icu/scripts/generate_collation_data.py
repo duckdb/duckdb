@@ -1608,11 +1608,11 @@ HEADER = """//===---------------------------------------------------------------
 """
 
 
-def pack(values, width):
-    """Packs values into little endian bytes of the given width."""
-    formats = {8: "<Q", 4: "<I", 2: "<H", 1: "<B"}
+def pack(values, width, order):
+    """Packs values into bytes of the given width, in the given struct byte order ("<" or ">")."""
+    formats = {8: "Q", 4: "I", 2: "H", 1: "B"}
     mask = (1 << (width * 8)) - 1
-    return b"".join(struct.pack(formats[width], value & mask) for value in values)
+    return b"".join(struct.pack(order + formats[width], value & mask) for value in values)
 
 
 class Unit:
@@ -1628,11 +1628,11 @@ class Unit:
     def add(self, values, width, per_element=1):
         self.arrays.append((list(values), width, per_element))
 
-    def serialize(self):
+    def serialize(self, order):
         counts = [len(values) // per_element for values, _, per_element in self.arrays]
-        header = pack(counts, 4)
+        header = pack(counts, 4, order)
         header += b"\0" * (-len(header) % 8)
-        return header + b"".join(pack(values, width) for values, width, _ in self.arrays)
+        return header + b"".join(pack(values, width, order) for values, width, _ in self.arrays)
 
 
 def compress_units(units, dictionary_size=8192):
@@ -1969,16 +1969,33 @@ def variable_top_primaries(table):
     return tops
 
 
+def write_units(out, units, dictionary, compressed):
+    """Writes the compressed units of one byte order, and the dictionary they are compressed against."""
+    out.append(format_bytes("collation_dictionary", dictionary))
+    out.append("const uint32_t collation_dictionary_size = %d;" % len(dictionary))
+    out.append("")
+    for index, ((name, blob, _), data) in enumerate(zip(units, compressed)):
+        out.append("// %s: %d bytes" % (name, len(blob)))
+        out.append(format_bytes("collation_unit_%d" % index, data))
+    out.append("const CollationUnit collation_units[] = {")
+    for index, ((_, blob, _), data) in enumerate(zip(units, compressed)):
+        out.append("    {collation_unit_%d, %d, %d}," % (index, len(data), len(blob)))
+    out.append("};")
+
+
 def write_collation_data(path, table, builder, stage1, stage2, han_range_list, normalization, tailorings, sources):
     """Writes the compressed tables and the metadata the loader needs to find them."""
     names = sorted(tailorings)
-    units = [
-        ("root", root_unit(table, builder, stage1, stage2, han_range_list).serialize(), False),
-        ("normalization", normalization_unit(normalization).serialize(), False),
+    tables = [
+        ("root", root_unit(table, builder, stage1, stage2, han_range_list), False),
+        ("normalization", normalization_unit(normalization), False),
     ]
     for name in names:
-        units.append((name, tailoring_unit(tailorings[name]).serialize(), True))
-    dictionary, compressed = compress_units(units)
+        tables.append((name, tailoring_unit(tailorings[name]), True))
+    byte_orders = {}
+    for order in ("<", ">"):
+        units = [(name, unit.serialize(order), trainable) for name, unit, trainable in tables]
+        byte_orders[order] = (units,) + compress_units(units)
 
     # the collations that are registered, every one of them points at the locale it takes
     # its rules from
@@ -1992,6 +2009,7 @@ def write_collation_data(path, table, builder, stage1, stage2, han_range_list, n
 
     out = [HEADER % ("collation_data.cpp", CLDR_VERSION, UNICODE_VERSION)]
     out.append('#include "collation_data.hpp"\n')
+    out.append('#include "duckdb/common/bswap.hpp"\n')
     out.append("namespace duckdb {")
     out.append("namespace collation {")
     out.append("")
@@ -1999,18 +2017,13 @@ def write_collation_data(path, table, builder, stage1, stage2, han_range_list, n
     out.append("// a collation can be loaded without loading the others, against a dictionary that is")
     out.append("// trained on all of them so that the small ones stay small.")
     out.append("")
-    out.append(format_bytes("collation_dictionary", dictionary))
-    out.append("const uint32_t collation_dictionary_size = %d;" % len(dictionary))
+    out.append("#if !DUCKDB_IS_BIG_ENDIAN")
+    write_units(out, *byte_orders["<"])
+    out.append("#else")
+    write_units(out, *byte_orders[">"])
+    out.append("#endif")
     out.append("")
-    for index, ((name, blob, _), data) in enumerate(zip(units, compressed)):
-        out.append("// %s: %d bytes" % (name, len(blob)))
-        out.append(format_bytes("collation_unit_%d" % index, data))
-    out.append("const CollationUnit collation_units[] = {")
-    for index, ((_, blob, _), data) in enumerate(zip(units, compressed)):
-        out.append("    {collation_unit_%d, %d, %d}," % (index, len(data), len(blob)))
-    out.append("};")
-    out.append("")
-    out.append("const uint32_t collation_unit_count = %d;" % len(units))
+    out.append("const uint32_t collation_unit_count = %d;" % len(tables))
     out.append("")
 
     out.append("const CollationInfo collation_infos[] = {")
@@ -2045,15 +2058,18 @@ def write_collation_data(path, table, builder, stage1, stage2, han_range_list, n
     out.append("")
     with open(path, "w") as f:
         f.write("\n".join(out))
-    sys.stderr.write(
-        "data: %.1f KB in %d units, compressed to %.1f KB with a %.1f KB dictionary\n"
-        % (
-            sum(len(blob) for _, blob, _ in units) / 1024,
-            len(units),
-            sum(len(data) for data in compressed) / 1024,
-            len(dictionary) / 1024,
+    for order, name in (("<", "little endian"), (">", "big endian")):
+        units, dictionary, compressed = byte_orders[order]
+        sys.stderr.write(
+            "%s data: %.1f KB in %d units, compressed to %.1f KB with a %.1f KB dictionary\n"
+            % (
+                name,
+                sum(len(blob) for _, blob, _ in units) / 1024,
+                len(units),
+                sum(len(data) for data in compressed) / 1024,
+                len(dictionary) / 1024,
+            )
         )
-    )
 
 
 def main():

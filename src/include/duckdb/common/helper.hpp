@@ -242,6 +242,11 @@ void Store(const T &val, data_ptr_t ptr) {
 	memcpy(ptr, (void *)&val, sizeof(val)); // NOLINT
 }
 
+template <typename T>
+void StoreLE(const T &val, data_ptr_t ptr) {
+	Store<T>(BSwapIfBE(val), ptr);
+}
+
 //! This assigns a shared pointer, but ONLY assigns if "target" is not equal to "source"
 //! If this is often the case, this manner of assignment is significantly faster (~20X faster)
 //! Since it avoids the need of an atomic incref/decref at the cost of a single pointer comparison

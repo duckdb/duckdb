@@ -46,9 +46,7 @@ static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input)
 	const auto le = Load<uint8_t>(header);
 
 	auto meta = Load<uint32_t>(header + sizeof(uint8_t));
-	if (!le) {
-		meta = BSwap(meta);
-	}
+	meta = le ? BSwapIfBE(meta) : BSwapIfLE(meta);
 
 	const auto type_id = (meta & 0x0000FFFF) % 1000;
 	const auto flag_id = (meta & 0x0000FFFF) / 1000;
@@ -486,7 +484,7 @@ static auto VertexExtractFunction(DataChunk &input, ExpressionState &state, Vect
 	UnaryExecutor::Execute<string_t, double>(input.data[0], result, [&](const string_t &geom_str) {
 		const auto data = const_data_ptr_cast(geom_str.GetData());
 		const auto size = geom_str.GetSize();
-		const auto meta = Load<uint32_t>(data + sizeof(uint8_t));
+		const auto meta = LoadLE<uint32_t>(data + sizeof(uint8_t));
 
 		const auto type_id = (meta & 0x0000FFFF) % 1000;
 		const auto flag_id = (meta & 0x0000FFFF) / 1000;
@@ -504,13 +502,13 @@ static auto VertexExtractFunction(DataChunk &input, ExpressionState &state, Vect
 			if (size < offset + sizeof(double)) {
 				return optional<double>();
 			}
-			value = Load<double>(data + offset);
+			value = LoadLE<double>(data + offset);
 		} else if (bind_data.vertex_index == 1) { // Y
 			constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(double);
 			if (size < offset + sizeof(double)) {
 				return optional<double>();
 			}
-			value = Load<double>(data + offset);
+			value = LoadLE<double>(data + offset);
 		} else if (bind_data.vertex_index == 2) { // Z
 			if (!has_z) {
 				return optional<double>();
@@ -519,7 +517,7 @@ static auto VertexExtractFunction(DataChunk &input, ExpressionState &state, Vect
 			if (size < offset + sizeof(double)) {
 				return optional<double>();
 			}
-			value = Load<double>(data + offset);
+			value = LoadLE<double>(data + offset);
 		} else if (bind_data.vertex_index == 3) { // M
 			if (!has_m) {
 				return optional<double>();
@@ -528,7 +526,7 @@ static auto VertexExtractFunction(DataChunk &input, ExpressionState &state, Vect
 			if (size < offset + sizeof(double)) {
 				return optional<double>();
 			}
-			value = Load<double>(data + offset);
+			value = LoadLE<double>(data + offset);
 		}
 
 		if (std::isnan(value)) {

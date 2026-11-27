@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -108,8 +109,8 @@ static const uint16_t &HexDigits(uint8_t byte) {
 		for (idx_t value = 0; value < 256; value++) {
 			auto low = static_cast<uint16_t>(digits[value % 16]);
 			auto high = static_cast<uint16_t>(digits[value / 16]);
-			// the pair is stored in the order it is written to memory
-			pairs[value] = static_cast<uint16_t>(high | (low << 8));
+			// the pair is stored so that the high digit is the first byte in memory
+			pairs[value] = BSwapIfBE(static_cast<uint16_t>(high | (low << 8)));
 		}
 		return pairs;
 	}();
