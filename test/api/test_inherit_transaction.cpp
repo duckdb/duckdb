@@ -49,8 +49,8 @@ void SQLInBindScan(ClientContext &, TableFunctionInput &input, DataChunk &output
 		return;
 	}
 	state.done = true;
+	output.data[0].Append(input.bind_data->Cast<SQLInBindData>().value);
 	output.SetChildCardinality(1);
-	output.SetValue(0, 0, input.bind_data->Cast<SQLInBindData>().value);
 }
 
 //! sql_in_scan(sql): runs `sql` in the scan and returns whether it succeeded, swallowing its error
@@ -72,8 +72,8 @@ void SQLInScanScan(ClientContext &context, TableFunctionInput &input, DataChunk 
 	state.done = true;
 	auto con = Connection::CreateInTransaction(context);
 	auto result = con.Query(StringValue::Get(input.bind_data->Cast<SQLInBindData>().value));
+	output.data[0].Append(Value::BOOLEAN(!result->HasError()));
 	output.SetChildCardinality(1);
-	output.SetValue(0, 0, Value::BOOLEAN(!result->HasError()));
 }
 
 void RegisterFunctions(Connection &con) {
