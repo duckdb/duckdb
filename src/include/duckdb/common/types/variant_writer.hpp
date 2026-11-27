@@ -149,8 +149,6 @@ private:
 	DUCKDB_API void RefreshRows();
 	void RefreshValues();
 	void RefreshChildren();
-	//! The capacity to grow a list to: room for the remaining rows, if they are like the rows written so far
-	idx_t GrowthTarget(idx_t start_size, idx_t required) const;
 	DUCKDB_API void ReserveValues(idx_t required);
 	//! Makes room for 'child_count' more children and 'key_count' more keys
 	DUCKDB_API void ReserveChildren(idx_t child_count, idx_t key_count);
@@ -166,11 +164,6 @@ private:
 	optional_ptr<VariantWriterState> state;
 	idx_t count;
 	idx_t current_idx;
-	//! the first row written, and the list sizes at that point
-	idx_t start_idx = 0;
-	idx_t values_start = 0;
-	idx_t children_start = 0;
-	idx_t keys_start = 0;
 
 	//! rows
 	list_entry_t *keys_data = nullptr;

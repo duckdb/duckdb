@@ -12,8 +12,8 @@ namespace {
 
 //! Primitives, objects and arrays, with strings and keys that do not fit in an inlined string_t, and a SQL NULL
 struct VariantSource {
-	explicit VariantSource(Connection &con) {
-		result = con.Query(R"(
+	explicit VariantSource(Connection &con)
+	    : VariantSource(con, R"(
 			SELECT v FROM (VALUES
 				(42::VARIANT),
 				('a string that does not fit in an inlined string_t'::VARIANT),
@@ -24,10 +24,13 @@ struct VariantSource {
 				(DATE '2024-01-01'::VARIANT),
 				(1.25::DECIMAL(5, 2)::VARIANT)
 			) t(v)
-		)");
+		)",
+	                    8) {
+	}
+	VariantSource(Connection &con, const string &query, idx_t row_count) {
+		result = con.Query(query);
 		REQUIRE_NO_FAIL(*result);
-		// the rows arrive in several chunks when STANDARD_VECTOR_SIZE is smaller than 8
-		const idx_t row_count = 8;
+		// the rows arrive in several chunks when STANDARD_VECTOR_SIZE is smaller than the row count
 		chunk = make_uniq<DataChunk>();
 		chunk->Initialize(Allocator::DefaultAllocator(), result->GetTypes(), row_count);
 		while (auto next = result->Fetch()) {
@@ -485,4 +488,53 @@ TEST_CASE("VectorWriter<VectorVariantType> keeps the rows written before an exce
 	for (idx_t row = 0; row < count; row++) {
 		RequireSameValue(input.GetValue(row), result.GetValue(row));
 	}
+}
+
+TEST_CASE("VectorWriter<VectorVariantType> grows the lists to what the rows need", "[variant][variant_writer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const idx_t row_count = 16;
+	const idx_t large_size = 3000;
+	string fields;
+	for (idx_t i = 0; i < large_size; i++) {
+		fields += (i ? ", 'k" : "'k") + to_string(i) + "': " + to_string(i);
+	}
+	// a large array and a large object, with scalars before or after them
+	const string rows = "SELECT i, CASE WHEN i = 0 THEN range(" + to_string(large_size) +
+	                    ")::VARIANT WHEN i = 1 THEN {" + fields + "}::VARIANT ELSE i::VARIANT END v FROM range(" +
+	                    to_string(row_count) + ") t(i)";
+	auto order = GENERATE(string("ORDER BY i"), string("ORDER BY i DESC"));
+	VariantSource source(con, "SELECT v FROM (" + rows + ") " + order, row_count);
+	auto &input = source.Variants();
+	const VectorIterator<VectorVariantType> variants(input);
+
+	Vector result(LogicalType::VARIANT(), row_count);
+	auto &keys = VariantVector::GetKeys(result);
+	auto &children = VariantVector::GetChildren(result);
+	auto &values = VariantVector::GetValues(result);
+	const auto initial_keys = ListVector::GetListCapacity(keys);
+	const auto initial_children = ListVector::GetListCapacity(children);
+	const auto initial_values = ListVector::GetListCapacity(values);
+	{
+		auto writer = FlatVector::Writer<VectorVariantType>(result, row_count);
+		for (idx_t row = 0; row < row_count; row++) {
+			WriteRow(variants, row, writer);
+		}
+	}
+	result.Verify();
+	for (idx_t row = 0; row < row_count; row++) {
+		RequireSameValue(input.GetValue(row), result.GetValue(row));
+	}
+
+	// the lists hold what the rows need, rounded up to a power of two, and nothing for the rows that follow
+	const auto key_count = ListVector::GetListSize(keys);
+	const auto child_count = ListVector::GetListSize(children);
+	const auto value_count = ListVector::GetListSize(values);
+	REQUIRE(key_count == large_size);
+	REQUIRE(child_count == 2 * large_size);
+	REQUIRE(value_count == 2 * large_size + row_count);
+	REQUIRE(child_count > initial_children);
+	REQUIRE(ListVector::GetListCapacity(keys) <= MaxValue<idx_t>(initial_keys, NextPowerOfTwo(key_count)));
+	REQUIRE(ListVector::GetListCapacity(children) <= MaxValue<idx_t>(initial_children, NextPowerOfTwo(child_count)));
+	REQUIRE(ListVector::GetListCapacity(values) <= MaxValue<idx_t>(initial_values, NextPowerOfTwo(value_count)));
 }

@@ -20,14 +20,13 @@ VectorWriter<VectorVariantType>::VectorWriter(Vector &vector, idx_t count, idx_t
 
 VectorWriter<VectorVariantType>::VectorWriter(VectorWriter &&other) noexcept
     : variant(other.variant), state(other.state), count(other.count), current_idx(other.current_idx),
-      start_idx(other.start_idx), values_start(other.values_start), children_start(other.children_start),
-      keys_start(other.keys_start), keys_data(other.keys_data), children_data(other.children_data),
-      values_data(other.values_data), blob_data(other.blob_data), blob_heap(other.blob_heap),
-      type_ids_data(other.type_ids_data), byte_offset_data(other.byte_offset_data), values_size(other.values_size),
-      values_capacity(other.values_capacity), keys_index_data(other.keys_index_data),
-      values_index_data(other.values_index_data), keys_index_validity(other.keys_index_validity),
-      children_size(other.children_size), children_capacity(other.children_capacity),
-      keys_entry_data(other.keys_entry_data), keys_size(other.keys_size), keys_capacity(other.keys_capacity) {
+      keys_data(other.keys_data), children_data(other.children_data), values_data(other.values_data),
+      blob_data(other.blob_data), blob_heap(other.blob_heap), type_ids_data(other.type_ids_data),
+      byte_offset_data(other.byte_offset_data), values_size(other.values_size), values_capacity(other.values_capacity),
+      keys_index_data(other.keys_index_data), values_index_data(other.values_index_data),
+      keys_index_validity(other.keys_index_validity), children_size(other.children_size),
+      children_capacity(other.children_capacity), keys_entry_data(other.keys_entry_data), keys_size(other.keys_size),
+      keys_capacity(other.keys_capacity) {
 	other.state = nullptr;
 	other.count = other.current_idx;
 }
@@ -67,10 +66,9 @@ void VectorWriter<VectorVariantType>::Initialize() {
 		keys_buffer.AddAuxiliaryData(std::move(new_state));
 	}
 
-	start_idx = current_idx;
-	keys_size = keys_start = ListVector::GetListSize(keys);
-	children_size = children_start = ListVector::GetListSize(VariantVector::GetChildren(variant));
-	values_size = values_start = ListVector::GetListSize(VariantVector::GetValues(variant));
+	keys_size = ListVector::GetListSize(keys);
+	children_size = ListVector::GetListSize(VariantVector::GetChildren(variant));
+	values_size = ListVector::GetListSize(VariantVector::GetValues(variant));
 	RefreshRows();
 	RefreshChildren();
 	//! every row has at least one value
@@ -106,26 +104,18 @@ void VectorWriter<VectorVariantType>::RefreshChildren() {
 	keys_entry_data = FlatVector::GetDataMutable<string_t>(ListVector::GetChildMutable(keys));
 }
 
-idx_t VectorWriter<VectorVariantType>::GrowthTarget(idx_t start_size, idx_t required) const {
-	D_ASSERT(current_idx < count && required >= start_size);
-	const auto rows_written = current_idx - start_idx + 1;
-	const auto rows_left = count - current_idx - 1;
-	return required + (required - start_size) / rows_written * rows_left;
-}
-
 void VectorWriter<VectorVariantType>::ReserveValues(idx_t required) {
-	ListVector::Reserve(VariantVector::GetValues(variant), GrowthTarget(values_start, required));
+	ListVector::Reserve(VariantVector::GetValues(variant), required);
 	RefreshValues();
 }
 
 //! Grows the keys first, the lists with the largest entries are copied while the other lists are still small
 void VectorWriter<VectorVariantType>::ReserveChildren(idx_t child_count, idx_t key_count) {
 	if (keys_size + key_count > keys_capacity) {
-		ListVector::Reserve(VariantVector::GetKeys(variant), GrowthTarget(keys_start, keys_size + key_count));
+		ListVector::Reserve(VariantVector::GetKeys(variant), keys_size + key_count);
 	}
 	if (children_size + child_count > children_capacity) {
-		ListVector::Reserve(VariantVector::GetChildren(variant),
-		                    GrowthTarget(children_start, children_size + child_count));
+		ListVector::Reserve(VariantVector::GetChildren(variant), children_size + child_count);
 	}
 	RefreshChildren();
 }
