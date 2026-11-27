@@ -36,14 +36,21 @@ CV2ConstantBindInfo::CV2ConstantBindInfo(const BoundSimpleFunction &function, co
                                          void *user_data, const vector<Value> &positional,
                                          const named_argument_map_t &named)
     : CV2FunctionBindInfo(function, signature, user_data), positional(positional), named(named) {
-	D_ASSERT(function.GetPositionalArgumentCount() == positional.size());
+	// a table in-out function that takes its input from its arguments receives them as input rows, not here
+	D_ASSERT(positional.empty() || function.GetPositionalArgumentCount() == positional.size());
 }
 
 const Value &CV2ConstantBindInfo::GetArg(idx_t index) const {
-	if (index < positional.size()) {
+	const auto positional_count = function.GetPositionalArgumentCount();
+	if (index < positional_count) {
+		if (index >= positional.size()) {
+			throw InvalidInputException(
+			    "Argument %llu of %s is an input row of the function, it has no value when the function is bound",
+			    index, function.GetName().GetIdentifierName());
+		}
 		return positional[index];
 	}
-	const auto &name = function.GetNamedArguments()[index - positional.size()];
+	const auto &name = function.GetNamedArguments()[index - positional_count];
 	auto entry = named.find(name);
 	if (entry == named.end()) {
 		throw InternalException("Named argument %s of a function call has no value", name);
