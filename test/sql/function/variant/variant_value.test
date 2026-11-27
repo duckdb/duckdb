@@ -286,18 +286,22 @@ FROM (SELECT i, variant_value(v, ['a', 'b', 'c']) AS l FROM many);
 4285	4285	715	12855
 
 # every scalar type is returned with its type and value, nested values are NULL
+# stored in a v2.1.0 database so that GEOGRAPHY values can be kept in the VARIANT column
 
 statement ok
-CREATE TABLE all_types AS
+ATTACH '{TEST_DIR}/variant_value_all_types.db' AS att (STORAGE_VERSION 'v2.1.0');
+
+statement ok
+CREATE TABLE att.all_types AS
 UNPIVOT (SELECT COLUMNS(*)::VARIANT FROM test_all_types()) ON COLUMNS(*) INTO NAME name VALUE v;
 
 statement ok
-CREATE TABLE all_types_expected AS
+CREATE TABLE att.all_types_expected AS
 SELECT name, v, CASE WHEN variant_typeof(v) NOT LIKE 'ARRAY%' AND variant_typeof(v) NOT LIKE 'OBJECT%' THEN v END AS expected
-FROM all_types;
+FROM att.all_types;
 
 query II
-SELECT count(expected), count(*) - count(expected) FROM all_types_expected;
+SELECT count(expected), count(*) - count(expected) FROM att.all_types_expected;
 ----
 78	42
 
@@ -306,7 +310,7 @@ CREATE MACRO value_mismatch(actual, expected) AS
 	variant_typeof(actual) IS DISTINCT FROM variant_typeof(expected) OR actual::VARCHAR IS DISTINCT FROM expected::VARCHAR;
 
 query I
-SELECT list(name ORDER BY name) FROM all_types_expected
+SELECT list(name ORDER BY name) FROM att.all_types_expected
 WHERE value_mismatch(variant_value(v, ''), expected)
 	OR value_mismatch(variant_value({'x': v}::VARIANT, 'x'), expected)
 	OR value_mismatch(variant_value([v]::VARIANT, 0), expected)
