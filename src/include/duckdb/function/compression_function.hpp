@@ -171,6 +171,7 @@ typedef void (*compression_select_validity_t)(ColumnSegment &segment, ColumnScan
 //! Function prototype used for reading a subset of the values of a vector indicated by a selection vector
 //! The selected values are written to 'result' starting at 'result_offset'. Emitting a compressed vector (e.g. a
 //! constant vector) is only allowed if 'scan_type' is SCAN_ENTIRE_VECTOR
+//! SCAN_FLAT_VECTOR_PRESERVE_POSITIONS writes to 'result_offset + sel[i]' and initializes unselected positions
 typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                                      const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
                                      ScanVectorType scan_type);
@@ -277,6 +278,8 @@ public:
 	compression_select_validity_t select_validity = nullptr;
 	//! scan a subset of a vector
 	compression_select_t select;
+	//! Whether select can preserve the original row positions
+	bool supports_selective_filtering = false;
 	//! Scan and apply a filter to a vector while scanning
 	compression_filter_t filter;
 	//! Skip forward in the compressed segment

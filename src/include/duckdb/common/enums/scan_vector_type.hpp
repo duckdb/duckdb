@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class ScanVectorType { SCAN_ENTIRE_VECTOR, SCAN_FLAT_VECTOR };
+enum class ScanVectorType { SCAN_ENTIRE_VECTOR, SCAN_FLAT_VECTOR, SCAN_FLAT_VECTOR_PRESERVE_POSITIONS };
 
 } // namespace duckdb

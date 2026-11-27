@@ -96,6 +96,16 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		use_specialized_filter = !state.current->GetNode().GetStats().CanHaveNull();
 	}
 	if (!use_specialized_filter) {
+		// Read surviving strings at their original positions, even when the vector spans segments.
+		if (compression && compression->supports_selective_filtering && count < target_count &&
+		    result.GetType().id() == LogicalTypeId::VARCHAR && !verify_fetch_row && !HasUpdates() &&
+		    !validity->HasUpdates()) {
+			validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count,
+			                     ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			SelectVector(state, result, target_count, sel, count, ScanVectorType::SCAN_FLAT_VECTOR_PRESERVE_POSITIONS);
+			ColumnSegment::FilterSelection(sel, result, filter_state, target_count, count);
+			return;
+		}
 		// Avoid constructing dictionary selections when few rows remain or only validity is tested.
 		if (compression && compression->type == CompressionType::COMPRESSION_RLE && !verify_fetch_row &&
 		    result.GetVectorType() == VectorType::FLAT_VECTOR &&

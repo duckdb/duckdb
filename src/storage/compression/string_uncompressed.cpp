@@ -163,7 +163,12 @@ void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanSta
 //===--------------------------------------------------------------------===//
 void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
                                        Vector &result, const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
-                                       ScanVectorType) {
+                                       ScanVectorType scan_type) {
+	const bool preserve_positions = scan_type == ScanVectorType::SCAN_FLAT_VECTOR_PRESERVE_POSITIONS;
+	if (preserve_positions && sel_count == vector_count) {
+		StringScanPartial(segment, state, vector_count, result, result_offset);
+		return;
+	}
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto layout = StringSegmentLayout::Read(scan_state.handle, segment);
@@ -173,10 +178,14 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	D_ASSERT(sel_count <= vector_count);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
+	if (preserve_positions) {
+		std::fill_n(result_data + result_offset, vector_count, string_t(""));
+	}
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	auto write_entry = [&](idx_t i, const StringDictionaryEntry &entry) {
 		auto str = FetchStringFromEntry(state.context, segment, result, entry);
-		result_data[result_offset + i] =
+		auto output_index = preserve_positions ? sel.get_index(i) : i;
+		result_data[result_offset + output_index] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
 	};
 	// a sparse selection validates its own entries rather than every entry in between
@@ -299,6 +308,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	    UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
 	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
 	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
+	result.supports_selective_filtering = true;
 	result.zero_initialize_segments = false;
 	return result;
 }

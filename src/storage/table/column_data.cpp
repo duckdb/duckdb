@@ -251,6 +251,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
                               idx_t sel_count, ScanVectorType scan_type, idx_t result_offset) {
 	BeginScanVectorInternal(state);
+	const bool preserve_positions = scan_type == ScanVectorType::SCAN_FLAT_VECTOR_PRESERVE_POSITIONS;
 	// scratch space to rebase the selection vector to the start of a segment scan
 	// this owns its data, as compression functions can retain the selection vector (e.g. by slicing the result)
 	SelectionVector rebased_sel;
@@ -274,7 +275,7 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 				segment_sel_count++;
 			}
 		}
-		if (segment_sel_count > 0) {
+		if (segment_sel_count > 0 || preserve_positions) {
 			// the indices must be relative to the start of the segment scan - for the first segment this is
 			// already the case, so we can forward the selection vector of the caller directly
 			reference<const SelectionVector> segment_sel(sel);
@@ -291,7 +292,7 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 				FetchScannedRows(state, segment_sel.get(), segment_sel_count, result, result_offset + sel_offset);
 			} else {
 				current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count,
-				               result_offset + sel_offset, scan_type);
+				               result_offset + (preserve_positions ? scanned_count : sel_offset), scan_type);
 			}
 			segment_internal_index = state.offset_in_column + scan_count;
 		}
@@ -309,9 +310,9 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 			state.segment_checked = false;
 		}
 	}
-	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
+	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// not every compression function sets the size of the result
-		FlatVector::SetSize(result, count_t(result_offset + sel_count));
+		FlatVector::SetSize(result, count_t(result_offset + (preserve_positions ? scanned_count : sel_count)));
 	}
 	state.internal_index = segment_internal_index;
 }
