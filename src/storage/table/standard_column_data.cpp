@@ -327,14 +327,6 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup 
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                        Vector &scan_vector) const {
-	ColumnData::CheckpointScan(segment, state, count, scan_vector);
-
-	idx_t offset_in_row_group = state.offset_in_column;
-	validity->ScanCommittedRange(0, offset_in_row_group, count, scan_vector);
-}
-
 bool StandardColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity->IsPersistent();
 }

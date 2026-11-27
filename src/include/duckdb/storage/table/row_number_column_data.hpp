@@ -24,7 +24,6 @@ public:
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
-	void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -56,9 +55,6 @@ public:
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
 	                                             const BaseStatistics &old_stats) override;
-
-	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-	                    Vector &scan_vector) const override;
 
 	bool IsPersistent() override;
 

@@ -10,8 +10,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 
@@ -91,28 +91,43 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
+static string DescribeColumn(const ColumnData &column) {
+	return StringUtil::Format("column %d (%s) of table %s.%s", column.column_index, column.type,
+	                          column.info.GetSchemaName(), column.info.GetTableName());
+}
+
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &callback) {
-	auto &first_state = checkpoint_states[0];
-	auto &col_data = first_state.get().original_column;
-
-	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
-	for (auto &segment_node : col_data.data.SegmentNodes()) {
-		auto &segment = segment_node.GetNode();
-		ColumnScanState scan_state(nullptr);
-		scan_state.current = segment_node;
-		segment.InitializeScan(scan_state);
-
-		auto &scan_vector = intermediate.data[0];
-		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			intermediate.Reset();
-
-			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
-
-			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
-			scan_vector.BufferMutable().SetVectorSize(count);
-			callback(scan_vector);
+	auto &col_data = checkpoint_states[0].get().original_column;
+	// scan as of the checkpoint's bound, on behalf of no transaction
+	TransactionData transaction(MAX_TRANSACTION_ID, checkpoint_info.GetVisibilityBound());
+	const idx_t row_count = col_data.count;
+	// every checkpointed column (the data and, for a standard column, its validity) scans its own segments
+	vector<ColumnScanState> scan_states;
+	scan_states.reserve(checkpoint_states.size());
+	for (auto &checkpoint_state : checkpoint_states) {
+		scan_states.emplace_back(nullptr);
+		checkpoint_state.get().InitializeSegmentScan(scan_states.back());
+		if (row_count > 0 && !scan_states.back().current) {
+			throw InternalException("ColumnDataCheckpointer::ScanSegments - %s has rows but no segments",
+			                        DescribeColumn(checkpoint_state.get().original_column));
 		}
+	}
+	auto &scan_vector = intermediate.data[0];
+	for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < row_count; vector_index++) {
+		intermediate.Reset();
+		idx_t count = MinValue<idx_t>(row_count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+			auto &checkpoint_state = checkpoint_states[i].get();
+			auto scanned =
+			    checkpoint_state.ScanSegmentVector(transaction, vector_index, scan_states[i], scan_vector, count);
+			if (scanned != count) {
+				throw InternalException(
+				    "ColumnDataCheckpointer::ScanSegments - scanned %llu rows instead of %llu of vector %llu of %s",
+				    scanned, count, vector_index, DescribeColumn(checkpoint_state.original_column));
+			}
+		}
+		scan_vector.BufferMutable().SetVectorSize(count);
+		callback(scan_vector);
 	}
 }
 
@@ -394,12 +409,11 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			extra_info += "\n";
 			extra_info += StringUtil::Format("Start %d, count %d", s.GetRowStart(), s.GetNode().count.load());
 		}
-		throw InternalException(
-		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
-		    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
-		    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-		    row_group.count.load(), current_row, error_segment_start.GetIndex(), col_data.column_index, col_data.type,
-		    col_data.type, col_data.info.GetSchemaName(), col_data.info.GetTableName(), extra_info);
+		throw InternalException("ColumnDataCheckpointer::WritePersistentSegments - the segments of %s are unaligned "
+		                        "with the row group start\nRow group count: %llu\nCurrent row: %llu\nSegment start: "
+		                        "%llu\nAll segments:%s",
+		                        DescribeColumn(col_data), row_group.count.load(), current_row,
+		                        error_segment_start.GetIndex(), extra_info);
 	}
 }
 

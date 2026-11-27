@@ -83,17 +83,12 @@ idx_t RowIdColumnData::Scan(TransactionData transaction, idx_t vector_index, Col
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
-                                         Vector &result) {
-	result.Sequence(UnsafeNumericCast<int64_t>(row_group_start + offset_in_row_group), 1, count);
-}
-
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto row_start = GetRowStart(state);
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
-	ScanCommittedRange(row_start, state.offset_in_column, count, result);
+	result.Sequence(UnsafeNumericCast<int64_t>(row_start + state.offset_in_column), 1, count);
 	state.offset_in_column += count;
 	return count;
 }
@@ -201,11 +196,6 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const R
 
 unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
                                                               const BaseStatistics &old_stats) {
-	throw InternalException("RowIdColumnData cannot be checkpointed");
-}
-
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                     Vector &scan_vector) const {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

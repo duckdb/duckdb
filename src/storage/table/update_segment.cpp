@@ -12,7 +12,6 @@ namespace duckdb {
 
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type);
-static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type);
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
 static UpdateSegment::save_undo_function_t GetSaveUndoFunction(PhysicalType type);
@@ -28,7 +27,6 @@ UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data)
 
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
 	this->fetch_committed_function = GetFetchCommittedFunction(physical_type);
-	this->fetch_committed_range = GetFetchCommittedRangeFunction(physical_type);
 	this->fetch_rows_function = GetFetchRowsFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->save_undo_function = GetSaveUndoFunction(physical_type);
@@ -541,123 +539,6 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	auto pin = node.Pin();
 	fetch_committed_function(UpdateInfo::Get(pin), result);
 	AddStringHeapReference(*lock_handle, vector_index, result);
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch Range
-//===--------------------------------------------------------------------===//
-static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset,
-                                         ValidityMask &result_mask) {
-	auto tuples = current.GetTuples();
-	auto info_data = current.GetData<bool>();
-	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = tuples[i];
-		if (tuple_idx < start) {
-			continue;
-		} else if (tuple_idx >= end) {
-			break;
-		}
-		auto result_idx = result_offset + tuple_idx - start;
-		result_mask.Set(result_idx, info_data[i]);
-	}
-}
-
-static void FetchCommittedRangeValidity(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
-	auto &result_mask = FlatVector::ValidityMutable(result);
-	MergeUpdateInfoRangeValidity(info, start, end, result_offset, result_mask);
-}
-
-template <class T>
-static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset, T *result_data) {
-	auto tuples = current.GetTuples();
-	auto info_data = current.GetData<T>();
-	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = tuples[i];
-		if (tuple_idx < start) {
-			continue;
-		} else if (tuple_idx >= end) {
-			break;
-		}
-		auto result_idx = result_offset + tuple_idx - start;
-		result_data[result_idx] = info_data[i];
-	}
-}
-
-template <class T>
-static void TemplatedFetchCommittedRange(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-                                         Vector &result) {
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data);
-}
-
-static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BIT:
-		return FetchCommittedRangeValidity;
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		return TemplatedFetchCommittedRange<int8_t>;
-	case PhysicalType::INT16:
-		return TemplatedFetchCommittedRange<int16_t>;
-	case PhysicalType::INT32:
-		return TemplatedFetchCommittedRange<int32_t>;
-	case PhysicalType::INT64:
-		return TemplatedFetchCommittedRange<int64_t>;
-	case PhysicalType::UINT8:
-		return TemplatedFetchCommittedRange<uint8_t>;
-	case PhysicalType::UINT16:
-		return TemplatedFetchCommittedRange<uint16_t>;
-	case PhysicalType::UINT32:
-		return TemplatedFetchCommittedRange<uint32_t>;
-	case PhysicalType::UINT64:
-		return TemplatedFetchCommittedRange<uint64_t>;
-	case PhysicalType::INT128:
-		return TemplatedFetchCommittedRange<hugeint_t>;
-	case PhysicalType::UINT128:
-		return TemplatedFetchCommittedRange<uhugeint_t>;
-	case PhysicalType::FLOAT:
-		return TemplatedFetchCommittedRange<float>;
-	case PhysicalType::DOUBLE:
-		return TemplatedFetchCommittedRange<double>;
-	case PhysicalType::INTERVAL:
-		return TemplatedFetchCommittedRange<interval_t>;
-	case PhysicalType::VARCHAR:
-		return TemplatedFetchCommittedRange<string_t>;
-	default:
-		throw NotImplementedException("Unimplemented type for update segment");
-	}
-}
-
-void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
-	D_ASSERT(count > 0);
-	if (!root) {
-		return;
-	}
-	D_ASSERT(start_row <= column_data.count);
-	D_ASSERT(start_row + count <= column_data.count);
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	idx_t end_row = start_row + count;
-	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
-	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
-	D_ASSERT(start_vector <= end_vector);
-
-	auto lock_handle = lock.GetSharedLock();
-	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
-		auto entry = GetUpdateNode(*lock_handle, vector_idx);
-		if (!entry.IsSet()) {
-			continue;
-		}
-		auto pin = entry.Pin();
-		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
-		idx_t end_in_vector =
-		    vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-		D_ASSERT(start_in_vector < end_in_vector);
-		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
-		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
-		fetch_committed_range(UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
-		AddStringHeapReference(*lock_handle, vector_idx, result);
-	}
 }
 
 //===--------------------------------------------------------------------===//

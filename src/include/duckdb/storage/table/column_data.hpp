@@ -58,6 +58,7 @@ public:
 	Context &GetContext();
 	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+	VisibilityBound GetVisibilityBound() const;
 
 private:
 	RowGroupWriteInfo &info;
@@ -152,6 +153,11 @@ public:
 	                                idx_t end_row);
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
+	//! Initialize a scan of this column's own segments only, without its validity or children
+	void InitializeSegmentScan(ColumnScanState &state);
+	//! Scan a flat vector of this column's own segments only, with the updates visible to the transaction
+	idx_t ScanSegmentVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                        idx_t scan_count);
 	//! Initialize a scan starting at the specified offset
 	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
 	//! Scan the next vector from the column
@@ -159,7 +165,6 @@ public:
 	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                   idx_t scan_count);
 
-	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
@@ -216,8 +221,6 @@ public:
 	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
 	                                                     const BaseStatistics &stats);
-
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
