@@ -32,7 +32,9 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
+Executor::Executor(ClientContext &context, bool caller_completes_query)
+    : context(context), executor_tasks(0), caller_completes_query(caller_completes_query),
+      caller_thread(ThreadUtil::GetThreadId()), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -399,6 +401,20 @@ void Executor::UnregisterTask() {
 #else
 	executor_tasks--;
 #endif
+}
+
+void Executor::ScheduleTasks(vector<shared_ptr<Task>> &tasks) {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	// worker threads never take a kept task, so only the caller keeps one, which it runs once its current task is done
+	if (OnCompletingThread()) {
+		scheduler.ScheduleTasksKeepingOne(GetToken(), tasks);
+	} else {
+		scheduler.ScheduleTasks(GetToken(), tasks);
+	}
+}
+
+bool Executor::OnCompletingThread() const {
+	return caller_completes_query && ThreadUtil::GetThreadId() == caller_thread;
 }
 
 void Executor::WaitForTask() {
