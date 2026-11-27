@@ -94,7 +94,7 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseMan
 			}
 			throw ResourceInUseException(
 			    "Unique file handle conflict: Cannot attach %s - the database file \"%s\" is already "
-			    "attached by database \"%s\"",
+			    "attached by database %s",
 			    name, path, existing.GetAttachedName(manager));
 		}
 	}
