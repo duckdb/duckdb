@@ -267,6 +267,31 @@ TEST_CASE("V2 connection state: remove", "[capi_v2][state]") {
 	REQUIRE(duckdb_v2_connection_remove_state(fx.conn, key, std::strlen(key), nullptr) == DUCKDB_V2_ERROR_NONE);
 }
 
+TEST_CASE("V2 connection state: a key held by engine state is refused", "[capi_v2][state]") {
+	EnvFixture fx;
+	// running a query registers state of the C API implementation itself under this key
+	REQUIRE(RunSql(fx.conn, "SELECT 1") == DUCKDB_V2_ERROR_NONE);
+	const char *key = "v2_connection_busy_slot";
+
+	auto recorder = new Recorder();
+	void *data = nullptr;
+	REQUIRE(duckdb_v2_connection_get_or_create_state(fx.conn, key, std::strlen(key), InitRecording, recorder, &data,
+	                                                 nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(recorder->inits == 0);
+	delete recorder;
+	bool found = false;
+	REQUIRE(duckdb_v2_connection_get_state(fx.conn, key, std::strlen(key), &found, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_remove_state(fx.conn, key, std::strlen(key), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	// the connection keeps working, and its other keys are unaffected
+	REQUIRE(RunSql(fx.conn, "SELECT 1") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RegisterRecorder(fx.conn, new Recorder()) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_remove_state(fx.conn, STATE_KEY, std::strlen(STATE_KEY), nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+}
+
 TEST_CASE("V2 connection state: failures", "[capi_v2][state]") {
 	EnvFixture fx;
 	const char *key = STATE_KEY;
