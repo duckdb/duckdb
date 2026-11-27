@@ -1,0 +1,36 @@
+# name: test/sql/copy/parquet/parquet_signed_nan.test
+# description: Preserve the sign of NaNs in Parquet dictionaries
+# group: [parquet]
+
+require parquet
+
+foreach type FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE VIEW signed_nan AS
+SELECT i, (CASE WHEN i % 2 = 0 THEN 'NaN' ELSE '-NaN' END)::{type} AS x,
+          (CASE WHEN i % 2 = 0 THEN '-NaN' ELSE 'NaN' END)::{type} AS y
+FROM range(4096) t(i)
+
+foreach version,dict_limit,encoding V1,16,PLAIN_DICTIONARY V2,16,RLE_DICTIONARY V1,0,PLAIN
+
+statement ok
+COPY (FROM signed_nan ORDER BY i) TO '{TEST_DIR}/signed_nan_{type}_{encoding}.parquet'
+(FORMAT PARQUET, PARQUET_VERSION {version}, DICTIONARY_SIZE_LIMIT {dict_limit})
+
+query III
+SELECT count(*), count_if(signbit(x) = (i % 2 = 1)), count_if(signbit(y) = (i % 2 = 0))
+FROM read_parquet('{TEST_DIR}/signed_nan_{type}_{encoding}.parquet')
+----
+4096	4096	4096
+
+query I
+SELECT count(*) FROM parquet_metadata('{TEST_DIR}/signed_nan_{type}_{encoding}.parquet')
+WHERE path_in_schema IN ('x', 'y') AND encodings = '{encoding}'
+  AND ('{encoding}' = 'PLAIN' OR stats_distinct_count = 2)
+----
+2
+
+endloop
+
+endloop

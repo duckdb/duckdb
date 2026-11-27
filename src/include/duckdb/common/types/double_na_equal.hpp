@@ -25,10 +25,7 @@ struct double_na_equal {
 	}
 
 	bool operator==(const double &right) const {
-		if (std::isnan(val) && std::isnan(right)) {
-			return true;
-		}
-		return val == right && std::signbit(val) == std::signbit(right);
+		return std::signbit(val) == std::signbit(right) && (val == right || (std::isnan(val) && std::isnan(right)));
 	}
 
 	bool operator!=(const double &right) const {
@@ -49,10 +46,7 @@ struct float_na_equal {
 	}
 
 	bool operator==(const float &right) const {
-		if (std::isnan(val) && std::isnan(right)) {
-			return true;
-		}
-		return val == right && std::signbit(val) == std::signbit(right);
+		return std::signbit(val) == std::signbit(right) && (val == right || (std::isnan(val) && std::isnan(right)));
 	}
 
 	bool operator!=(const float &right) const {
