@@ -34,15 +34,25 @@ bool SimpleCaseCheck::Equals(const SimpleCaseCheck &other) const {
 namespace {
 
 // Nested expressions use the same name-rendering convention as the enclosing SELECT item.
-static thread_local bool rendering_column_name = false;
-
-struct ColumnNameRenderingScope {
-	ColumnNameRenderingScope() : previous(rendering_column_name) {
-		rendering_column_name = true;
+class ColumnNameRenderingScope {
+public:
+	ColumnNameRenderingScope() : previous(ActiveFlag()) {
+		ActiveFlag() = true;
 	}
 	~ColumnNameRenderingScope() {
-		rendering_column_name = previous;
+		ActiveFlag() = previous;
 	}
+
+	static bool IsActive() {
+		return ActiveFlag();
+	}
+
+private:
+	static bool &ActiveFlag() {
+		static thread_local bool active = false;
+		return active;
+	}
+
 	bool previous;
 };
 
@@ -60,6 +70,7 @@ Identifier ParsedExpression::GetName() const {
 
 string CaseExpression::ToString() const {
 	string result;
+	const bool rendering_column_name = ColumnNameRenderingScope::IsActive();
 	if (single_comparison && !rendering_column_name) {
 		auto &check = case_checks[0];
 		auto &test = check.when_expr->Cast<ComparisonExpression>();
