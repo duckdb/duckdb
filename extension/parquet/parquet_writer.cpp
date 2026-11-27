@@ -31,6 +31,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/datetime.hpp"
@@ -526,6 +527,8 @@ struct ColumnStatsUnifier {
 	string variant_type;
 	idx_t null_count = 0;
 	idx_t num_values = 0;
+	//! For nested leaves, the entries in both counts produced by a NULL or empty ancestor.
+	optional<idx_t> parent_null_count;
 	bool all_min_max_set = true;
 	bool all_nulls_set = true;
 	bool min_is_set = false;
@@ -1351,6 +1354,9 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, ParquetStatsAccum
 	if (children.empty()) {
 		auto unifier = GetBaseStatsUnifier(schema.type);
 		unifier->column_name = std::move(base_name);
+		if (column_writer.schema_path.size() > 1) {
+			unifier->parent_null_count = 0;
+		}
 
 		if (IsVariantMetadataField(column_writer)) {
 			//! Stamp the 'metadata' field of the VARIANT with the internal layout of the VARIANT
@@ -1380,13 +1386,16 @@ void ParquetWriter::FlushNestedColumnStats(idx_t schema_idx, idx_t null_count, i
 }
 
 void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
-                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
+                                     optional_ptr<ColumnWriterStatistics> writer_stats, idx_t parent_null_count) {
 	if (!written_stats) {
 		return;
 	}
 
 	// push the stats of this column into the unifier
 	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
+	if (stats_unifier->parent_null_count) {
+		*stats_unifier->parent_null_count += parent_null_count;
+	}
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
 		stats_unifier->nan_count += writer_stats->GetNaNCount();
@@ -1454,6 +1463,9 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->all_nulls_set) {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
+		}
+		if (stats_unifier->parent_null_count) {
+			column_stats["parent_null_count"] = Value::UBIGINT(*stats_unifier->parent_null_count);
 		}
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->nan_count != 0);

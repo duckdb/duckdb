@@ -566,7 +566,7 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
 	}
 	// finalize the stats
-	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get());
+	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get(), state.parent_null_count);
 }
 
 void PrimitiveColumnWriter::AddPageToPageIndex(PrimitiveColumnWriterState &state,

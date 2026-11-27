@@ -40,6 +40,19 @@ FROM stats;
 1	{null_count=0, num_values=1}	1	{null_count=0, num_values=1}	1	{null_count=0, num_values=1}	1	{null_count=0, num_values=1}	2
 2	{null_count=0, num_values=1}	1	{null_count=0, num_values=1}	0	{null_count=0, num_values=1}	1	{null_count=0, num_values=1}	0
 
+# NULL and [] each produce one placeholder at the leaf. [NULL] has one actual element.
+query IIII rowsort
+WITH stats AS (
+    COPY containers TO '{TEST_DIR}/list_element_counts'
+    (FORMAT PARQUET, PARTITION_BY(kind), RETURN_STATS)
+)
+SELECT partition_keys['kind'], leaf['num_values'], leaf['null_count'], leaf['parent_null_count']
+FROM (SELECT partition_keys, column_statistics['"l"."element"'] AS leaf FROM stats);
+----
+0	1	1	1
+1	1	1	0
+2	1	1	1
+
 # No entry is created for the synthetic, repeated key_value struct of a map.
 query I rowsort
 WITH stats AS (
