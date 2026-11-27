@@ -81,6 +81,29 @@ SELECT finalize(s) FROM manual;
 ----
 3
 
+# an aggregate without a state type callback cannot have its state type constructed
+statement error
+CREATE TABLE no_callback(s AGGREGATE_STATE('histogram', ['INTEGER']));
+----
+does not have a state type callback
+
+# the same guard covers the ordered (five-argument) form
+statement error
+CREATE TABLE no_callback(s AGGREGATE_STATE('histogram', ['INTEGER'], [NULL], [{'column': 0, 'order': 'ASC NULLS LAST'}], 'STRUCT(v0 INTEGER)'));
+----
+does not have a state type callback
+
+# errors from the shared signature/order parsing name the type, not to_aggregate_state
+statement error
+CREATE TABLE null_sig(s AGGREGATE_STATE('sum', [NULL]));
+----
+AGGREGATE_STATE: the signature cannot contain NULL values
+
+statement error
+CREATE TABLE bad_order(s AGGREGATE_STATE('min', ['INTEGER'], [NULL], [{'column': 9, 'order': 'ASC'}], 'STRUCT(v0 INTEGER)'));
+----
+AGGREGATE_STATE: ORDER BY column 9 is out of range
+
 require parquet
 
 # IMPORT recreates every exported table, so clear the tables the CSV roundtrip left behind

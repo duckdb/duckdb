@@ -351,8 +351,10 @@ void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument
 	}
 }
 
-// parses an ORDER BY spec (a list of {column, order} structs) - shared by the re-bind path and to_aggregate_state
-void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders);
+// parses an ORDER BY spec (a list of {column, order} structs) - shared by the re-bind path, to_aggregate_state and
+// the AGGREGATE_STATE type constructor; caller prefixes the error messages
+void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders,
+                   const char *caller);
 
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(FunctionBinder &function_binder,
                                                                BoundSimpleFunction &function,
@@ -394,7 +396,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(FunctionBinder &f
 	const auto buffer_struct = ListType::GetChildType(arg_return_type);
 	const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
 	vector<SortedAggregateStateOrder> orders;
-	ParseOrderBys(order_entry->second, column_count, orders);
+	ParseOrderBys(order_entry->second, column_count, orders, "to_aggregate_state");
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
 	if (argument_count == 0) {
@@ -665,9 +667,10 @@ LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_f
 
 // parses a single entry of the to_aggregate_state signature list - either a TYPE value (e.g. make_type('VARCHAR'))
 // or a string naming a type (e.g. 'VARCHAR'), bound within the decimal width limit of the bind
-LogicalType ParseSignatureType(ClientContext &context, const Value &arg, const DecimalWidthLimit &decimal_width_limit) {
+LogicalType ParseSignatureType(ClientContext &context, const Value &arg, const DecimalWidthLimit &decimal_width_limit,
+                               const char *caller) {
 	if (arg.IsNull()) {
-		throw BinderException("to_aggregate_state: the signature cannot contain NULL values");
+		throw BinderException("%s: the signature cannot contain NULL values", caller);
 	}
 	if (arg.type().id() == LogicalTypeId::TYPE) {
 		return TypeValue::GetType(arg);
@@ -680,7 +683,7 @@ LogicalType ParseSignatureType(ClientContext &context, const Value &arg, const D
 		}
 		return TransformStringToLogicalType(name, context, &decimal_width_limit);
 	}
-	throw BinderException("to_aggregate_state: the signature must be a list of types");
+	throw BinderException("%s: the signature must be a list of types", caller);
 }
 
 // parses the optional fourth argument of to_aggregate_state: the constant values for arguments that must be bound to
@@ -713,18 +716,19 @@ void ParseConstantParameters(const Value &constants, idx_t argument_count, map<i
 // parses the optional fifth argument of to_aggregate_state: the ORDER BY specification of an ordered aggregate, as a
 // list of {column, order} structs, e.g. [{'column': 1, 'order': 'DESC NULLS LAST'}]. 'column' is the buffered struct
 // column the key sorts on, 'order' is the modifier string (parsed with the same rules as create_sort_key).
-void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders) {
+void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders,
+                   const char *caller) {
 	if (order_value.IsNull()) {
 		return;
 	}
 	if (order_value.type().id() != LogicalTypeId::LIST) {
-		throw BinderException(
-		    "to_aggregate_state: the ORDER BY argument must be a list of {column, order} structs, e.g. "
-		    "[{'column': 1, 'order': 'DESC NULLS LAST'}]");
+		throw BinderException("%s: the ORDER BY argument must be a list of {column, order} structs, e.g. "
+		                      "[{'column': 1, 'order': 'DESC NULLS LAST'}]",
+		                      caller);
 	}
 	for (auto &entry : ListValue::GetChildren(order_value)) {
 		if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT) {
-			throw BinderException("to_aggregate_state: each ORDER BY entry must be a {column, order} struct");
+			throw BinderException("%s: each ORDER BY entry must be a {column, order} struct", caller);
 		}
 		auto &field_types = StructType::GetChildTypes(entry.type());
 		auto &field_values = StructValue::GetChildren(entry);
@@ -737,18 +741,17 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 			}
 		}
 		if (column.IsNull() || order.IsNull()) {
-			throw BinderException("to_aggregate_state: each ORDER BY entry must have a non-NULL 'column' and 'order'");
+			throw BinderException("%s: each ORDER BY entry must have a non-NULL 'column' and 'order'", caller);
 		}
 		if (order.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("to_aggregate_state: the 'order' of an ORDER BY entry must be a string, e.g. "
-			                      "'DESC NULLS LAST'");
+			throw BinderException("%s: the 'order' of an ORDER BY entry must be a string, e.g. 'DESC NULLS LAST'",
+			                      caller);
 		}
 		SortedAggregateStateOrder state_order;
 		state_order.column = column.GetValue<uint32_t>();
 		if (state_order.column >= column_count) {
-			throw BinderException(
-			    "to_aggregate_state: ORDER BY column %llu is out of range (the state has %llu columns)",
-			    (uint64_t)state_order.column, (uint64_t)column_count);
+			throw BinderException("%s: ORDER BY column %llu is out of range (the state has %llu columns)", caller,
+			                      (uint64_t)state_order.column, (uint64_t)column_count);
 		}
 		auto modifiers = OrderModifiers::Parse(StringValue::Get(order));
 		state_order.order_type = modifiers.order_type;
@@ -784,7 +787,7 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	const auto decimal_width_limit = input.GetDecimalWidthLimit();
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
-		argument_types.push_back(ParseSignatureType(context, arg, decimal_width_limit));
+		argument_types.push_back(ParseSignatureType(context, arg, decimal_width_limit, "to_aggregate_state"));
 	}
 
 	// constant_parameters holds the values of arguments that must be re-bound with a specific constant rather than a
@@ -840,7 +843,7 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 		}
 		vector<SortedAggregateStateOrder> orders;
 		auto order_value = input.GetConstant(4);
-		ParseOrderBys(order_value, column_count, orders);
+		ParseOrderBys(order_value, column_count, orders, "to_aggregate_state");
 		if (orders.empty()) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
 		}
@@ -887,23 +890,23 @@ LogicalType ExportAggregateFunction::BindAggregateStateType(BindLogicalTypeInput
 			throw BinderException(input.GetLocation(i), "AGGREGATE_STATE type parameters must be positional");
 		}
 	}
-	// the aggregate's name
-	if (!args[0].IsNotNull() || args[0].GetType().id() != LogicalTypeId::VARCHAR) {
+	// the aggregate's name (the framework rejects NULL modifiers before the bind is called)
+	if (args[0].GetType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException(input.GetLocation(0), "The name of an AGGREGATE_STATE's aggregate must be a string");
 	}
 	auto &function_name = StringValue::Get(args[0].GetValue());
 	// the signature: the aggregate's argument types
-	if (!args[1].IsNotNull() || args[1].GetType().id() != LogicalTypeId::LIST) {
+	if (args[1].GetType().id() != LogicalTypeId::LIST) {
 		throw BinderException(input.GetLocation(1), "The signature of an AGGREGATE_STATE must be a list of types");
 	}
 	const auto decimal_width_limit = input.GetDecimalWidthLimit();
 	vector<LogicalType> argument_types;
 	for (auto &sig_entry : ListValue::GetChildren(args[1].GetValue())) {
-		argument_types.push_back(ParseSignatureType(context, sig_entry, decimal_width_limit));
+		argument_types.push_back(ParseSignatureType(context, sig_entry, decimal_width_limit, "AGGREGATE_STATE"));
 	}
 	// the optional constant parameters: one entry per argument, NULL for arguments not bound to a constant
 	map<idx_t, Value> constant_parameters;
-	if (args.size() > 2 && args[2].IsNotNull()) {
+	if (args.size() > 2) {
 		if (args[2].GetType().id() != LogicalTypeId::LIST) {
 			throw BinderException(input.GetLocation(2),
 			                      "The constant parameters of an AGGREGATE_STATE must be a list with one entry per "
@@ -931,30 +934,31 @@ LogicalType ExportAggregateFunction::BindAggregateStateType(BindLogicalTypeInput
 	}
 	FunctionBinder function_binder(context, &decimal_width_limit);
 	auto inner = BindExportedAggregate(function_binder, function_name, argument_types, constant_parameters);
+	if (!inner->aggr.HasGetStateTypeCallback()) {
+		throw BinderException(
+		    input.query_location,
+		    "Aggregate function \"%s\" does not have a state type callback defined - cannot convert to its state",
+		    function_name);
+	}
 
-	const bool has_orders = args.size() > 3 && args[3].IsNotNull();
-	if (!has_orders) {
-		if (args.size() > 4 && args[4].IsNotNull()) {
-			throw BinderException(input.GetLocation(4),
-			                      "An AGGREGATE_STATE can only have a buffer layout when it has an ORDER BY");
-		}
+	if (args.size() <= 3) {
 		return CreateAggregateStateType(inner->aggr, inner->bind_data.get());
 	}
 	// an ordered aggregate state: the state is the buffer of values (LIST of the buffer layout struct)
-	if (args.size() < 5 || !args[4].IsNotNull()) {
+	if (args.size() < 5) {
 		throw BinderException(input.query_location,
 		                      "An ordered AGGREGATE_STATE requires its buffer layout, e.g. "
-		                      "AGGREGATE_STATE('min', ['INTEGER'], NULL, [{'column': 1, 'order': 'ASC NULLS LAST'}], "
+		                      "AGGREGATE_STATE('min', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC NULLS LAST'}], "
 		                      "'STRUCT(v0 INTEGER, v1 VARCHAR)')");
 	}
-	auto buffer_struct = ParseSignatureType(context, args[4].GetValue(), decimal_width_limit);
+	auto buffer_struct = ParseSignatureType(context, args[4].GetValue(), decimal_width_limit, "AGGREGATE_STATE");
 	if (buffer_struct.id() != LogicalTypeId::STRUCT) {
 		throw BinderException(input.GetLocation(4),
 		                      "The buffer layout of an ordered AGGREGATE_STATE must be a STRUCT type");
 	}
 	auto &buffer_columns = StructType::GetChildTypes(buffer_struct);
 	vector<SortedAggregateStateOrder> orders;
-	ParseOrderBys(args[3].GetValue(), buffer_columns.size(), orders);
+	ParseOrderBys(args[3].GetValue(), buffer_columns.size(), orders, "AGGREGATE_STATE");
 	if (orders.empty()) {
 		throw BinderException(input.GetLocation(3), "An ordered AGGREGATE_STATE must have at least one ORDER BY key");
 	}
@@ -1049,7 +1053,7 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
 	}
 	auto &buffer_struct = ListType::GetChildType(state_type);
-	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
+	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders, "to_aggregate_state");
 }
 
 unique_ptr<AggregateStateSerializer>
