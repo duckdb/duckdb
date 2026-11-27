@@ -161,7 +161,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.children.size() == 1);
 	auto &get = op.children[0]->Cast<LogicalGet>();
 	get.bind_data.write().Cast<TableScanBindData>().index_template = CreateIndexTemplate(context, op, *index_type);
-	auto &scan = CreatePlan(*op.children[0]);
+	auto &scan = CreatePlanRecursive(*op.children[0]);
 
 	// Index has a plan replacement function
 	if (index_type->create_plan) {

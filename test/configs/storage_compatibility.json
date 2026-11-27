@@ -57,6 +57,13 @@
       ]
     },
     {
+      "reason": "Views over read_duckdb cannot be bound by older versions, which do not have the function.",
+      "paths": [
+        "test/sql/storage/read_duckdb/read_duckdb_filter_mixed_types.test",
+        "test/sql/storage/read_duckdb/read_duckdb_converted_filter_scan.test"
+      ]
+    },
+    {
       "reason": "Stringification too slow",
       "paths": [
         "test/sql/types/bignum/test_bignum_sum.test"

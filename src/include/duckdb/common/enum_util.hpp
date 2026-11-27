@@ -334,6 +334,8 @@ enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
+enum class IntegerRounding : uint8_t;
+
 enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
@@ -1181,6 +1183,9 @@ const char* EnumUtil::ToChars<IndexDeltaType>(IndexDeltaType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
+
+template<>
+const char* EnumUtil::ToChars<IntegerRounding>(IntegerRounding value);
 
 template<>
 const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
@@ -2226,6 +2231,9 @@ IndexDeltaType EnumUtil::FromString<IndexDeltaType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);
+
+template<>
+IntegerRounding EnumUtil::FromString<IntegerRounding>(const char *value);
 
 template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);

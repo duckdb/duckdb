@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "test_helpers.hpp"
+#include "test_exception_matcher.hpp"
 
 using namespace duckdb;
 
@@ -28,7 +29,7 @@ public:
 
 	void CorruptPayload(WALType target_type) {
 		auto target = FindPayload(target_type);
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
@@ -57,7 +58,7 @@ private:
 	};
 
 	vector<Entry> ReadEntries() {
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ, nullptr);
 		auto wal_size = handle->GetFileSize();
 		auto wal_contents = make_uniq_array<data_t>(wal_size);
 		handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
@@ -196,12 +197,10 @@ TEST_CASE("WAL replay validates DML payloads skipped during prescan", "[storage]
 
 	auto config = GetTestConfig();
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
-	try {
+	auto replay = [&]() {
 		DuckDB db(helper.GetDatabasePath(), config.get());
-		FAIL("Expected WAL replay to fail");
-	} catch (Exception &ex) {
-		ErrorData error(ex);
-		REQUIRE(error.Type() == ExceptionType::SERIALIZATION);
-		REQUIRE(error.RawMessage().find("field id mismatch, expected: 101, got: 0") != string::npos);
-	}
+	};
+	REQUIRE_THROWS_MATCHES(
+	    replay(), std::exception,
+	    ExceptionMatches(ExceptionType::SERIALIZATION, Catch::Contains("field id mismatch, expected: 101, got: 0")));
 }

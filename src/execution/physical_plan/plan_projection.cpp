@@ -7,7 +7,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {

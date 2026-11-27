@@ -7,12 +7,9 @@ namespace duckdb {
 
 namespace {
 
-//! Whether the selected value is returned, OBJECT, ARRAY and VARIANT_NULL values are not
-bool IsScalarValue(const VariantNode &node) {
-	if (node.IsNull() || node.IsMissing()) {
-		return false;
-	}
-	switch (node.GetTypeId()) {
+//! Whether a value of this type is returned, OBJECT, ARRAY and VARIANT_NULL values are not
+bool IsScalarType(LogicalTypeId type) {
+	switch (type) {
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::LIST:
@@ -22,8 +19,22 @@ bool IsScalarValue(const VariantNode &node) {
 	}
 }
 
+//! Writes the selected value, or a NULL if it is missing or not a scalar
+void WriteValueResult(const optional<VariantNode> &node, VectorWriter<VectorVariantType> &value_writer) {
+	if (!node || node->IsNull() || node->IsMissing()) {
+		value_writer.WriteNull();
+		return;
+	}
+	const auto type = node->GetTypeId();
+	if (!IsScalarType(type)) {
+		value_writer.WriteNull();
+		return;
+	}
+	value_writer.WriteValue(*node, type);
+}
+
 void VariantValueFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	VariantPathFunction::ExecuteVariant(input, state, result, IsScalarValue);
+	VariantPathFunction::Execute<VectorVariantType>(input, state, result, WriteValueResult);
 }
 
 } // namespace

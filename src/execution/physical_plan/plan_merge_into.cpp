@@ -336,7 +336,7 @@ PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGen
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMergeInto &op) {
 	// planning the child consumes its logical operators - estimate the cardinality beforehand
 	op.estimated_cardinality = op.EstimateCardinality(context);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 	D_ASSERT(op.children.size() == 1);
 	dependencies.AddDependency(op.table);
 	return op.table.catalog.PlanMergeInto(context, *this, op, plan);

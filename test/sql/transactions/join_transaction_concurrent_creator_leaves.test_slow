@@ -1,0 +1,103 @@
+# name: test/sql/transactions/join_transaction_concurrent_creator_leaves.test_slow
+# description: The connection that started a shared transaction leaves while other connections keep using its temporary tables
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl(thread INTEGER, i INTEGER);
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE TEMPORARY TABLE tmp(thread INTEGER, i INTEGER)
+
+statement ok con1
+CREATE TEMPORARY TABLE tmp_big AS SELECT i, 'row' || i AS s FROM range(100000) t(i)
+
+statement ok con1
+INSERT INTO tbl VALUES (-1, -1)
+
+statement ok con1
+SET VARIABLE txid = share_transaction()
+
+set variable txid <variable:con1:txid>
+
+# con2 keeps the transaction alive
+statement ok con2
+JOIN TRANSACTION '{txid}'
+
+# the creator leaves, the transaction continues in the other connections
+statement ok con1
+COMMIT
+
+statement ok con1
+CREATE TEMPORARY TABLE tmp_other(i INTEGER)
+
+statement ok con1
+INSERT INTO tmp_other VALUES (1)
+
+concurrentloop threadid 0 12
+
+statement ok
+JOIN TRANSACTION '{txid}'
+
+loop r 0 20
+
+statement ok
+INSERT INTO tmp SELECT {threadid}, range FROM range(100)
+
+statement ok
+INSERT INTO tbl SELECT {threadid}, count(*) FROM tmp_big WHERE i % 12 = {threadid}
+
+query I
+SELECT count(*) BETWEEN 8333 AND 8334 FROM tmp_big WHERE i % 12 = {threadid}
+----
+true
+
+# the temporary tables of the creator that existed when the transaction started are visible, no others
+query I
+SELECT count(*) FROM duckdb_tables() WHERE temporary
+----
+2
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+# the creator's temporary objects are still there for the last participant
+query III con2
+SELECT count(*), count(DISTINCT thread), sum(i) FROM tmp
+----
+24000	12	1188000
+
+query II con2
+SELECT count(*), count(*) FILTER (thread = -1) FROM tbl
+----
+241	1
+
+query I con2
+SELECT count(*) FROM tmp_big
+----
+100000
+
+statement ok con2
+COMMIT
+
+# the temporary tables were those of the creator, they are still there for it
+query I con1
+SELECT count(*) FROM tmp
+----
+24000
+
+query II
+SELECT count(*), count(DISTINCT thread) FROM tbl
+----
+241	13
+
+query I con1
+SELECT count(*) FROM tmp_other
+----
+1

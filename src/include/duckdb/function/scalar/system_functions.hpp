@@ -75,6 +75,16 @@ struct CurrentTransactionId {
 	static ScalarFunction GetFunction();
 };
 
+struct ShareTransaction {
+	static constexpr const char *Name = "share_transaction";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Share the current transaction so that other connections can join it using JOIN TRANSACTION";
+	static constexpr const char *Example = "share_transaction()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";

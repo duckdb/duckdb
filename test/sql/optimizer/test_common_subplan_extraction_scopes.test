@@ -1,0 +1,63 @@
+# name: test/sql/optimizer/test_common_subplan_extraction_scopes.test
+# description: Nested common subplans preserve producer bindings and CTE dependency order
+# group: [optimizer]
+
+statement ok
+CREATE TABLE extraction_input(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO extraction_input VALUES (0, 1), (0, 2), (1, 4), (1, NULL), (2, NULL);
+
+statement ok
+CREATE VIEW extraction_grouped AS
+SELECT k, sum(v)::BIGINT total FROM extraction_input GROUP BY k;
+
+statement ok
+CREATE VIEW extraction_total AS SELECT sum(total)::BIGINT total FROM extraction_grouped;
+
+# Extra consumers keep the inner aggregate useful alongside its shared parent.
+statement ok
+CREATE VIEW extraction_mixed AS
+SELECT total FROM extraction_total
+UNION ALL SELECT total FROM extraction_total
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped
+UNION ALL SELECT total FROM extraction_grouped;
+
+query II
+SELECT total, count(*) FROM extraction_mixed GROUP BY total ORDER BY total NULLS LAST;
+----
+3	8
+4	8
+7	2
+NULL	8
+
+# Existing materialized CTE producers still need their inner consumer bindings repaired.
+query II
+WITH existing AS MATERIALIZED (SELECT total FROM extraction_mixed)
+SELECT total, count(*) FROM existing GROUP BY total ORDER BY total NULLS LAST;
+----
+3	8
+4	8
+7	2
+NULL	8
+
+# Independent extraction groups use the same insertion site.
+statement ok
+CREATE VIEW extraction_filtered AS
+SELECT k, sum(v)::BIGINT total FROM extraction_input WHERE k > 0 GROUP BY k;
+
+query I
+SELECT sum(total) FROM (
+    SELECT total FROM extraction_grouped
+    UNION ALL SELECT total FROM extraction_grouped
+    UNION ALL SELECT total FROM extraction_filtered
+    UNION ALL SELECT total FROM extraction_filtered
+);
+----
+22

@@ -1,0 +1,19 @@
+# name: benchmark/micro/join/hashjoin_same_slot_collisions.benchmark
+# description: Hash join probe where 256 build keys share one hash table slot and one salt, so every probe row compares its key against a long run of entries
+# group: [join]
+
+name Hash Join Same Slot Collisions
+group join
+
+load
+CREATE MACRO fold32(x) AS xor(x, x >> 32);
+CREATE MACRO mulmod64(a, b) AS (((a & 4294967295)::UHUGEINT * b::UHUGEINT + (((a >> 32)::UHUGEINT * b::UHUGEINT) % 4294967296) * 4294967296) % 18446744073709551616)::UBIGINT;
+CREATE MACRO unmurmur(h) AS fold32(mulmod64(fold32(mulmod64(fold32(h), 14982988110149298331)), 14982988110149298331));
+CREATE TABLE build AS SELECT unmurmur((4096::UBIGINT << 48) | (370085::UBIGINT << 28) | (m::UBIGINT << 20) | 246723::UBIGINT) AS k FROM range(256) t(m);
+CREATE TABLE probe AS SELECT k FROM range(8000) t(copy), build;
+
+run
+SELECT count(*) FROM probe JOIN build ON probe.k = build.k;
+
+result I
+2048000

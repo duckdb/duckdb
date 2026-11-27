@@ -10,13 +10,11 @@
 
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
+#include "duckdb/common/types/variant_writer.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
-//! Whether a VARIANT value selected by a path is returned
-typedef bool (*variant_node_filter_t)(const VariantNode &node);
 
 struct VariantPathFunction {
 	//! Provides unified construction of path based processing functions.
@@ -25,7 +23,7 @@ struct VariantPathFunction {
 	                                           init_local_state_t init_state = nullptr);
 
 	//! Executes scalar VARIANT functions that accept an optional constant path argument.
-	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR) or f(VARIANT, VARCHAR[]).
+	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR), f(VARIANT, VARCHAR[]) or f(VARIANT, BIGINT).
 	//! The callback `write_fn` writes the result for one row.
 	template <class RESULT_TYPE, class WRITE_FUNCTION>
 	static void Execute(DataChunk &input, const ExpressionState &state, Vector &result,
@@ -52,22 +50,13 @@ struct VariantPathFunction {
 		D_ASSERT(n_columns == 2);
 		const auto &path_type_id = input.data[1].GetType().id();
 
-		if (path_type_id == LogicalTypeId::VARCHAR) {
-			ExecuteUnary<RESULT_TYPE>(variant_vec, info.paths[0], result, count, write_fn);
-			return;
-		}
 		if (path_type_id == LogicalTypeId::LIST) {
 			ExecuteMany<RESULT_TYPE>(variant_vec, info.paths, result, count, write_fn);
 			return;
 		}
+		D_ASSERT(path_type_id == LogicalTypeId::VARCHAR || path_type_id == LogicalTypeId::BIGINT);
+		ExecuteUnary<RESULT_TYPE>(variant_vec, info.paths[0], result, count, write_fn);
 	}
-
-	//! Executes scalar VARIANT functions that return the VARIANT value selected by an optional constant path argument.
-	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR), f(VARIANT, VARCHAR[]) or f(VARIANT, BIGINT), and
-	//! returns VARIANT, or VARIANT[] for a list of paths. Missing values, and values for which `keep` returns false,
-	//! are written as NULL.
-	static void ExecuteVariant(DataChunk &input, const ExpressionState &state, Vector &result,
-	                           variant_node_filter_t keep);
 
 private:
 	//! Executes a single path and writes RESULT_TYPE per input row.
@@ -94,33 +83,34 @@ private:
 	static void ExecuteMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths, Vector &result,
 	                        const idx_t count, const WRITE_FUNCTION &write_fn) {
 		const VectorIterator<VectorVariantType> variants(input);
+		const auto keys = GetSingleKeys(paths);
 
 		result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 		auto result_writer = FlatVector::Writer<VectorListType<RESULT_TYPE>>(result, count);
 
+		//! The value of the current row at each of the paths
+		vector<optional<VariantNode>> selected(paths.size());
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!variants.RowIsValid(row_idx)) {
 				result_writer.WriteNull();
 				continue;
 			}
 
-			auto row_writer = result_writer.WriteList(paths.size());
-			const auto variant = variants[row_idx];
+			ResolvePaths(variants[row_idx], paths, keys, selected);
 
 			idx_t path_idx = 0;
-			for (auto &path_writer : row_writer) {
-				write_fn(ResolvePath(variant, paths[path_idx]), path_writer);
+			for (auto &path_writer : result_writer.WriteList(paths.size())) {
+				write_fn(selected[path_idx], path_writer);
 				path_idx++;
 			}
 		}
 	}
 
-	//! Executes a single path and writes the selected VARIANT value per input row.
-	static void ExecuteVariantUnary(const Vector &input, const vector<VariantPathComponent> &path, Vector &result,
-	                                idx_t count, variant_node_filter_t keep);
-	//! Executes a list of paths and writes LIST<VARIANT> of the selected values per input row.
-	static void ExecuteVariantMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths,
-	                               Vector &result, idx_t count, variant_node_filter_t keep);
+	//! Returns the key of each path that is a single key lookup, and an empty optional for the other paths
+	static vector<optional<string_t>> GetSingleKeys(const vector<vector<VariantPathComponent>> &paths);
+	//! Resolves every path for 'root' into 'selected', the single key paths in one pass over the children of the object
+	static void ResolvePaths(const VariantNode &root, const vector<vector<VariantPathComponent>> &paths,
+	                         const vector<optional<string_t>> &keys, vector<optional<VariantNode>> &selected);
 
 	//! Returns the element at a 0-based index of an ARRAY, negative indexes count from the end. Returns nullopt if the
 	//! node is not an ARRAY or the index is out of range.

@@ -8,7 +8,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExpressionGet &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlanRecursive(*op.children[0]);
 
 	auto &expr_scan = Make<PhysicalExpressionScan>(op.types, std::move(op.expressions), op.estimated_cardinality);
 	expr_scan.children.push_back(plan);

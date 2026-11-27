@@ -1,0 +1,88 @@
+# name: test/sql/transactions/join_transaction.test
+# description: JOIN TRANSACTION and share_transaction() outside of a shared transaction
+# group: [transactions]
+
+# there is nothing to join
+statement error
+JOIN TRANSACTION 'unknown'
+----
+<REGEX>:.*invalid transaction identifier.*
+
+statement error
+join transaction ''
+----
+<REGEX>:.*invalid transaction identifier.*
+
+# a transaction can only be shared from within a transaction block
+statement error
+SELECT share_transaction()
+----
+<REGEX>:.*can only be shared from within a BEGIN TRANSACTION block.*
+
+statement ok
+BEGIN TRANSACTION
+
+query I
+SELECT length(share_transaction()) > 0
+----
+true
+
+# sharing again returns the same identifier
+query I
+SELECT share_transaction() = share_transaction()
+----
+true
+
+query I
+SELECT count(DISTINCT share_transaction()) FROM range(10)
+----
+1
+
+# a connection that is in a transaction cannot join another one
+statement error
+JOIN TRANSACTION 'unknown'
+----
+<REGEX>:.*cannot join a transaction within a transaction.*
+
+statement ok
+ROLLBACK
+
+# the identifier has to be a string literal
+statement error
+JOIN TRANSACTION (SELECT 'abc')
+----
+<REGEX>:.*Parser Error.*
+
+# syntax errors
+statement error
+JOIN TRANSACTION
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+JOIN TRANSACTION 5
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+JOIN 'abc'
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+JOIN TRANSACTION 'a' 'b'
+----
+<REGEX>:.*Parser Error.*
+
+# the previous statements did not leave the connection in a transaction
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ROLLBACK
+
+# the identifier is a string literal, it can be dollar quoted
+statement error
+JOIN TRANSACTION $$unknown$$
+----
+<REGEX>:.*invalid transaction identifier.*

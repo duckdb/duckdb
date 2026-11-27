@@ -197,7 +197,7 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWi
 	}
 	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
-		if (wexpr.AggregateFunction()->HasStateDestructorCallback()) {
+		if (wexpr.AggregateFunction()->HasStateDestructorCallback() || !wexpr.AggregateFunction()->CanStream()) {
 			return false;
 		}
 		// We can stream aggregates if they are "running totals"

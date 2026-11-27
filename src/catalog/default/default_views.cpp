@@ -40,8 +40,10 @@ static const DefaultView internal_views[] = {
     {"pg_catalog", "pg_attribute",
      "SELECT table_oid attrelid, column_name attname, "
      "coalesce(map_type_id_to_pg_oid(data_type_id), data_type_id + 16384) atttypid, 0 attstattarget, NULL attlen, "
-     "column_index attnum, 0 attndims, -1 attcacheoff, case when data_type ilike '%decimal%' then "
-     "numeric_precision*1000+numeric_scale else -1 end atttypmod, false attbyval, NULL attstorage, NULL attalign, NOT "
+     "column_index attnum, 0 attndims, -1 attcacheoff, coalesce(case when data_type ilike '%decimal%' and "
+     "numeric_scale <= 999 then try_cast(numeric_precision*1000+numeric_scale as integer) end, -1) atttypmod, "
+     "false attbyval, NULL attstorage, "
+     "NULL attalign, NOT "
      "is_nullable attnotnull, column_default IS NOT NULL atthasdef, false atthasmissing, '' attidentity, '' "
      "attgenerated, false attisdropped, true attislocal, 0 attinhcount, 0 attcollation, NULL attcompression, NULL "
      "attacl, NULL attoptions, NULL attfdwoptions, NULL attmissingval FROM duckdb_columns()"},

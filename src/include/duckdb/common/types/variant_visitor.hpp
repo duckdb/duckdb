@@ -254,10 +254,12 @@ public:
 		}
 	}
 
+	//! Visits the children of an object. The key order of an object is not significant, so converters that produce
+	//! output the user sees (text, JSON, values) ask for LEXICOGRAPHIC order to be independent of the stored order
 	template <typename... Args>
 	static child_list_t<ReturnType> VisitObjectItems(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                 const VariantNestedData &object_data, idx_t depth,
-	                                                 Args &&...args) {
+	                                                 VariantIterationOrder order, Args &&...args) {
 		child_list_t<ReturnType> object_items;
 		for (idx_t i = 0; i < object_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, object_data.children_idx + i);
@@ -268,11 +270,13 @@ public:
 
 			object_items.emplace_back(key.GetString(), std::move(val));
 		}
-		std::stable_sort(
-		    object_items.begin(), object_items.end(),
-		    [](const std::pair<Identifier, ReturnType> &lhs, const std::pair<Identifier, ReturnType> &rhs) {
-			    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
-		    });
+		if (order == VariantIterationOrder::LEXICOGRAPHIC) {
+			std::stable_sort(
+			    object_items.begin(), object_items.end(),
+			    [](const std::pair<Identifier, ReturnType> &lhs, const std::pair<Identifier, ReturnType> &rhs) {
+				    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
+			    });
+		}
 		return object_items;
 	}
 

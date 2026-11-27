@@ -48,52 +48,71 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// We optimize the children of any non-reorderable operations we come across.
 	bool reorderable = query_graph_manager.Build(*this, op);
 
-	// get relation_stats here since the reconstruction process will move all relations.
-	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 	unique_ptr<LogicalOperator> new_logical_plan = nullptr;
 	RelationStats output_stats;
 
-	if (reorderable) {
-		// query graph now has filters and relations
+	auto &relation_manager = query_graph_manager.relation_manager;
+	if (reorderable || (relation_manager.NumRelations() > 1 && relation_manager.HasCompleteStats())) {
+		// A retained join order still has an estimable region when all inputs were captured.
 		auto cardinality_estimator =
 		    CardinalityEstimator(query_graph_manager.set_manager, query_graph_manager.GetPredicateModel());
-		auto cost_model = CostModel(cardinality_estimator);
-		bool inner_region = true;
-		for (auto &join : query_graph_manager.GetJoinOperators()) {
-			inner_region &=
-			    join->type == JoinOrderOperatorType::INNER || join->type == JoinOrderOperatorType::CROSS_PRODUCT;
-		}
-		if (inner_region) {
-			cost_model.InitializeRecursiveMemory(context, query_graph_manager.relation_manager);
-		}
+		if (reorderable) {
+			auto cost_model = CostModel(cardinality_estimator);
+			bool inner_region = true;
+			for (auto &join : query_graph_manager.GetJoinOperators()) {
+				inner_region &=
+				    join->type == JoinOrderOperatorType::INNER || join->type == JoinOrderOperatorType::CROSS_PRODUCT;
+			}
+			if (inner_region) {
+				cost_model.InitializeRecursiveMemory(context, relation_manager);
+			}
 
-		// Initialize a plan enumerator.
-		auto plan_enumerator =
-		    PlanEnumerator(query_graph_manager, cost_model, query_graph_manager.GetQueryGraphEdges());
+			// Initialize a plan enumerator.
+			auto plan_enumerator =
+			    PlanEnumerator(query_graph_manager, cost_model, query_graph_manager.GetQueryGraphEdges());
 
-		// Initialize the leaf/single node plans
-		plan_enumerator.InitLeafPlans();
-		if (plan_enumerator.SolveJoinOrder()) {
-			// now reconstruct a logical plan from the query graph plan
-			query_graph_manager.plans = plan_enumerator.GetPlans();
-			auto reconstructed = query_graph_manager.Reconstruct(std::move(plan), relation_stats);
-			new_logical_plan = std::move(reconstructed.op);
-			output_stats = std::move(reconstructed.stats);
+			// Initialize the leaf/single node plans
+			plan_enumerator.InitLeafPlans();
+			if (plan_enumerator.SolveJoinOrder()) {
+				// now reconstruct a logical plan from the query graph plan
+				query_graph_manager.plans = plan_enumerator.GetPlans();
+				auto reconstructed = query_graph_manager.Reconstruct(std::move(plan), cardinality_estimator);
+				new_logical_plan = std::move(reconstructed.op);
+				output_stats = std::move(reconstructed.stats);
+			}
+		} else {
+			cardinality_estimator.Initialize(relation_manager.GetRelationStats(),
+			                                 query_graph_manager.GetJoinOperators(),
+			                                 relation_manager.GetColumnSources());
+		}
+		if (!new_logical_plan) {
+			unordered_set<RelationIndex> relations;
+			for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
+				relations.insert(RelationIndex(i));
+			}
+			auto &set = query_graph_manager.set_manager.GetJoinRelation(relations);
+			auto projected =
+			    query_graph_manager.ProjectRetainedStats(cardinality_estimator, set, op, PlanEstimateUpdate::UPDATE);
+			if (projected) {
+				output_stats = std::move(*projected);
+			}
 		}
 	}
 	if (!new_logical_plan) {
 		// Keep the original tree when there is nothing to reorder or enumeration cannot complete.
 		new_logical_plan = std::move(plan); // NOLINT: plan is only moved when reconstruction succeeded
-		if (!reorderable && relation_stats.size() == 1) {
-			new_logical_plan->estimated_cardinality = relation_stats.at(0).cardinality;
-			new_logical_plan->has_estimated_cardinality = true;
-		}
-		if (stats && query_graph_manager.relation_manager.HasCompleteStats()) {
-			auto combined = query_graph_manager.CombineRelationStats(
-			    new_logical_plan->GetColumnBindings(), relation_stats, new_logical_plan->EstimateCardinality(context));
-			if (combined) {
-				output_stats = std::move(*combined);
+		if (!reorderable && relation_manager.NumRelations() == 1) {
+			auto &relation_stats = relation_manager.GetRelation(RelationIndex(0)).stats;
+			new_logical_plan->SetEstimatedCardinality(relation_stats.GetCardinalityForPlan());
+			if (relation_manager.HasCompleteStats()) {
+				auto combined = RelationStatisticsHelper::ProjectOutputStats(relation_stats, *new_logical_plan);
+				if (combined) {
+					output_stats = std::move(*combined);
+				}
 			}
+		}
+		if (output_stats.stats_initialized) {
+			new_logical_plan->SetEstimatedCardinality(output_stats.GetCardinalityForPlan());
 		}
 	}
 

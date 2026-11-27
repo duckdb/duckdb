@@ -1,0 +1,34 @@
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index d82f316..62e232f 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -3,6 +3,7 @@
+ #include "functions/delta_scan/delta_multi_file_reader.hpp"
+ #include "storage/delta_catalog.hpp"
+ 
++#include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/local_file_system.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/common/operator/cast_operators.hpp"
+@@ -621,7 +622,7 @@ string DeltaMultiFileList::ToDeltaPath(const string &raw_path) {
+ 	string path;
+ 	if (StringUtil::StartsWith(raw_path, "./")) {
+ 		LocalFileSystem fs;
+-		path = fs.JoinPath(fs.GetWorkingDirectory(), raw_path.substr(2));
++		path = fs.JoinPath(FileSystem::GetWorkingDirectory(), raw_path.substr(2));
+ 		path = "file://" + path;
+ 	} else {
+ 		path = raw_path;
+diff --git a/src/functions/util_functions.cpp b/src/functions/util_functions.cpp
+index c08f7cf..c03d3c5 100644
+--- a/src/functions/util_functions.cpp
++++ b/src/functions/util_functions.cpp
+@@ -5,7 +5,7 @@
+ 
+ #include "delta_utils.hpp"
+ #include "delta_functions.hpp"
+-#include "duckdb/common/local_file_system.hpp"
++#include "duckdb/common/file_system.hpp"
+ 
+ namespace duckdb {
+ 

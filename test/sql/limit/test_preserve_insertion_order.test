@@ -62,3 +62,24 @@ SELECT * FROM integers LIMIT 5 OFFSET 500000
 1
 1
 1
+
+# no worker threads: the client thread runs the 4 tasks of each pipeline one after another
+statement ok
+SET threads=4
+
+statement ok
+SET external_threads=4
+
+# a LIMIT expression is evaluated once, not once per thread
+statement ok
+CREATE SEQUENCE seq
+
+query I
+SELECT count(*) FROM (SELECT i FROM integers2 LIMIT (CASE WHEN nextval('seq') = 1 THEN 5 ELSE 0 END));
+----
+5
+
+query I
+SELECT currval('seq')
+----
+1

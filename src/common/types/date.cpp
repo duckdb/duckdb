@@ -428,7 +428,8 @@ bool Date::IsValid(int32_t year, int32_t month, int32_t day) {
 			return false;
 		} else if (year == DATE_MIN_YEAR) {
 			if (month < DATE_MIN_MONTH || (month == DATE_MIN_MONTH && day < DATE_MIN_DAY)) {
-				return false;
+				// the smallest date is two days below DATE_MIN_DAY (date_t::ninfinity() sits in between)
+				return month == DATE_MIN_MONTH && day == DATE_MIN_DAY - 2;
 			}
 		}
 	}

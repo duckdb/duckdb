@@ -4,6 +4,7 @@
 #include "duckdb/common/string.hpp"
 #include <stdint.h>
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/uint128_arithmetic.hpp"
 
 namespace duckdb {
 
@@ -134,65 +135,6 @@ constexpr hugeint_t HugeintNegate(hugeint_t n) {
 	return hugeint_t(static_cast<int64_t>(~static_cast<uint64_t>(n.upper) + (n.lower == 0)), 0 - n.lower);
 }
 
-constexpr int HugeintSign(hugeint_t n) {
-	// the sign is not decided by upper alone: upper == 0 with a non-zero lower is positive
-	return int(HugeintGreaterThan(n, hugeint_t(0))) - int(HugeintLessThan(n, hugeint_t(0)));
-}
-
-constexpr hugeint_t HugeintAbs(hugeint_t n) {
-	return n.upper < 0 ? HugeintNegate(n) : n;
-}
-
-constexpr hugeint_t HugeintAddOne(hugeint_t n) {
-	const uint64_t carry = (n.lower == UINT64_MAX) ? 1 : 0;
-	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) + carry), n.lower + 1);
-}
-
-constexpr hugeint_t HugeintSubtractOne(hugeint_t n) {
-	// lower wraps to UINT64_MAX, so a borrow is taken out of upper
-	const uint64_t borrow = (n.lower == 0) ? 1 : 0;
-	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) - borrow), n.lower - 1);
-}
-
-//! Helpers for the bit-at-a-time division, from the same uint128_t reference the
-//! runtime implementation uses
-constexpr uint8_t HugeintHighestBit(hugeint_t bits) {
-	uint8_t out = 0;
-	if (bits.upper) {
-		// bit index 64 is the lowest bit of upper
-		out = 64;
-		uint64_t up = static_cast<uint64_t>(bits.upper);
-		while (up) {
-			up >>= 1;
-			out++;
-		}
-	} else {
-		uint64_t low = bits.lower;
-		while (low) {
-			low >>= 1;
-			out++;
-		}
-	}
-	return out;
-}
-
-constexpr bool HugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
-	if (bit_position < 64) {
-		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
-	}
-	return static_cast<uint64_t>(lhs.upper) & (uint64_t(1) << uint64_t(bit_position - 64));
-}
-
-//! Shift left by 1..63 bits. Called by the division loop below with amount == 1.
-//! Takes no D_ASSERT: in assertion builds that macro is an unconditional function call, which
-//! would make this function unusable in a constant expression.
-constexpr hugeint_t HugeintLeftShift(hugeint_t lhs, uint32_t amount) {
-	hugeint_t result {0, 0};
-	result.lower = lhs.lower << amount;
-	result.upper = static_cast<int64_t>((static_cast<uint64_t>(lhs.upper) << amount) + (lhs.lower >> (64 - amount)));
-	return result;
-}
-
 constexpr hugeint_t HugeintMultiplyUnchecked(hugeint_t lhs, hugeint_t rhs) {
 	// Unchecked multiplication uses the low 128 bits, including for negative operands.
 #if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
@@ -258,84 +200,22 @@ struct HugeintDivModResult {
 	hugeint_t remainder;
 };
 
-constexpr HugeintDivModResult HugeintDivMod(hugeint_t lhs, hugeint_t rhs);
-
-//! Precondition: lhs or rhs equals HugeintMinimum(). Only reached through HugeintDivMod.
-//! Takes no D_ASSERT for the same reason as HugeintLeftShift.
-constexpr HugeintDivModResult HugeintDivModMinimum(hugeint_t lhs, hugeint_t rhs) {
-	// rhs == MINIMUM: the quotient is 1 with remainder 0 only when lhs == MINIMUM;
-	// every other lhs has |lhs| < |MINIMUM|, so the quotient is 0 and the remainder is lhs
-	if (rhs.upper == INT64_MIN && rhs.lower == 0) {
-		if (lhs.upper == INT64_MIN && lhs.lower == 0) {
-			return HugeintDivModResult {hugeint_t(1), hugeint_t(0)};
-		}
-		return HugeintDivModResult {hugeint_t(0), lhs};
-	}
-
-	auto shifted = HugeintDivMod(HugeintAddOne(lhs), rhs);
-	auto quotient = shifted.quotient;
-	auto remainder = shifted.remainder;
-
-	// If the 1 mattered we need to adjust the result, otherwise the remainder
-	if (HugeintEquals(HugeintAddOne(HugeintAbs(remainder)), HugeintAbs(rhs))) {
-		quotient = HugeintSign(rhs) > 0 ? HugeintSubtractOne(quotient) : HugeintAddOne(quotient);
-		remainder = hugeint_t(0);
-	} else {
-		remainder = HugeintSubtractOne(remainder);
-	}
-	return HugeintDivModResult {quotient, remainder};
-}
-
-//! Bit-at-a-time 128-bit division, adapted from
-//! https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
+//! Signed 128-bit division truncating toward zero. Dividing by zero yields a zero quotient with lhs as the
+//! remainder, and MINIMUM / -1 wraps to MINIMUM.
 constexpr HugeintDivModResult HugeintDivMod(hugeint_t lhs, hugeint_t rhs) {
 	if (HugeintEquals(rhs, hugeint_t(0))) {
 		return HugeintDivModResult {hugeint_t(0), lhs};
 	}
-
-	// MINIMUM cannot be negated, so it has to be handled before any sign is stripped
-	if (HugeintEquals(lhs, HugeintMinimum()) || HugeintEquals(rhs, HugeintMinimum())) {
-		return HugeintDivModMinimum(lhs, rhs);
-	}
-
-	bool lhs_negative = lhs.upper < 0;
-	bool rhs_negative = rhs.upper < 0;
-	if (lhs_negative) {
-		lhs = HugeintNegate(lhs);
-	}
-	if (rhs_negative) {
-		rhs = HugeintNegate(rhs);
-	}
-
-	hugeint_t quotient {0, 0};
-	hugeint_t remainder {0, 0};
-
-	const uint8_t highest_bit_set = HugeintHighestBit(lhs);
-	for (uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current quotient and remainder by 1
-		quotient = HugeintLeftShift(quotient, 1);
-		remainder = HugeintLeftShift(remainder, 1);
-
-		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (HugeintIsBitSet(lhs, x - 1)) {
-			remainder.lower += 1;
-			if (remainder.lower == 0) {
-				remainder.upper += 1;
-			}
-		}
-		if (HugeintGreaterThanEquals(remainder, rhs)) {
-			// the remainder has passed the division multiplier: subtract the divisor,
-			// carrying a borrow out of lower, and add one to the quotient
-			const int64_t borrow = remainder.lower < rhs.lower ? 1 : 0;
-			remainder.lower -= rhs.lower;
-			remainder.upper -= rhs.upper + borrow;
-			quotient.lower += 1;
-			if (quotient.lower == 0) {
-				quotient.upper += 1;
-			}
-		}
-	}
-	if (lhs_negative ^ rhs_negative) {
+	const bool lhs_negative = lhs.upper < 0;
+	const bool rhs_negative = rhs.upper < 0;
+	// MINIMUM negates to itself, and its bits read as unsigned are its magnitude 2^127
+	const hugeint_t lhs_abs = lhs_negative ? HugeintNegate(lhs) : lhs;
+	const hugeint_t rhs_abs = rhs_negative ? HugeintNegate(rhs) : rhs;
+	const auto result = Uint128DivMod(static_cast<uint64_t>(lhs_abs.upper), lhs_abs.lower,
+	                                  static_cast<uint64_t>(rhs_abs.upper), rhs_abs.lower);
+	hugeint_t quotient(static_cast<int64_t>(result.quotient_upper), result.quotient_lower);
+	hugeint_t remainder(static_cast<int64_t>(result.remainder_upper), result.remainder_lower);
+	if (lhs_negative != rhs_negative) {
 		quotient = HugeintNegate(quotient);
 	}
 	if (lhs_negative) {

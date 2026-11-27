@@ -1,0 +1,335 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_schema_filter.test
+# description: Filters on columns that read_duckdb maps through an explicit schema see the mapped values
+# group: [read_duckdb]
+
+require parquet
+
+require json
+
+statement ok
+CREATE TABLE src AS SELECT * FROM (VALUES
+	(1::BIGINT, 5::INTEGER, {'a': 1::BIGINT, 'b': 2::BIGINT}, [1::INTEGER, 2], MAP {'k': 10::INTEGER}, [{'a': 1::BIGINT, 'b': 2::BIGINT}]),
+	(2, 6, {'a': 3, 'b': 4}, [3], MAP {'k': 20, 'j': 30}, [{'a': 3, 'b': 4}, {'a': 5, 'b': 6}]),
+	(3, NULL, NULL, NULL, NULL, NULL),
+	(4, 7, {'a': NULL, 'b': 8}, [], MAP {}, []),
+	(5, 5, {'a': 2, 'b': 1}, [NULL, 2], MAP {'k': NULL}, [{'a': NULL, 'b': 1}, NULL])
+) t(id, x, s, li, mi, l)
+
+statement ok
+ATTACH '{TEST_DIR}/rd_schema_filter.db' AS rdsf
+
+statement ok
+CREATE TABLE rdsf.t AS FROM src
+
+statement ok
+DETACH rdsf
+
+statement ok
+COPY src TO '{TEST_DIR}/rd_schema_filter.parquet'
+
+statement ok
+COPY src TO '{TEST_DIR}/rd_schema_filter.json'
+
+statement ok
+CREATE MACRO scan_duckdb(sch) AS TABLE FROM read_duckdb('{TEST_DIR}/rd_schema_filter.db', schema = sch)
+
+statement ok
+CREATE MACRO scan_parquet(sch) AS TABLE FROM read_parquet('{TEST_DIR}/rd_schema_filter.parquet', schema = sch)
+
+statement ok
+CREATE MACRO scan_json(sch) AS TABLE FROM read_json('{TEST_DIR}/rd_schema_filter.json', schema = sch, columns = {
+	id: 'BIGINT', x: 'INTEGER', s: 'STRUCT(a BIGINT, b BIGINT)', li: 'INTEGER[]', mi: 'MAP(VARCHAR, INTEGER)',
+	l: 'STRUCT(a BIGINT, b BIGINT)[]'
+})
+
+# the fields of s are crossed: the field stored as b is read as a, the field stored as a is read as b
+statement ok
+SET VARIABLE crossed = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	's': {name: 's', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+		'b': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+		'a': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}
+	}}
+}
+
+# s has a field the file lacks, with a default value
+statement ok
+SET VARIABLE extra_field = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	's': {name: 's', type: 'STRUCT(a BIGINT, b BIGINT, c BIGINT)', default_value: NULL, children: MAP {
+		'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+		'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL},
+		'c': {name: 'c', type: 'BIGINT', default_value: 7, children: NULL}
+	}}
+}
+
+# every column but id is read as a type other than the stored one
+statement ok
+SET VARIABLE widened = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL},
+	's': {name: 's', type: 'STRUCT(a VARCHAR, b BIGINT)', default_value: NULL, children: MAP {
+		'a': {name: 'a', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}
+	}},
+	'li': {name: 'li', type: 'BIGINT[]', default_value: NULL, children: NULL},
+	'mi': {name: 'mi', type: 'MAP(VARCHAR, BIGINT)', default_value: NULL, children: NULL},
+	'l': {name: 'l', type: 'STRUCT(b BIGINT, a BIGINT)[]', default_value: NULL, children: NULL}
+}
+
+statement ok
+SET VARIABLE as_varchar = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'x': {name: 'x', type: 'VARCHAR', default_value: NULL, children: NULL}
+}
+
+foreach reader duckdb parquet json
+
+# crossed fields: the mapped value matches, the stored value matches the other row
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) ORDER BY id
+----
+1	{'a': 2, 'b': 1}
+2	{'a': 4, 'b': 3}
+3	NULL
+4	{'a': 8, 'b': NULL}
+5	{'a': 1, 'b': 2}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s = {'a': 2, 'b': 1}
+----
+1	{'a': 2, 'b': 1}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s = {'a': 1, 'b': 2}
+----
+5	{'a': 1, 'b': 2}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s.a = 2
+----
+1	{'a': 2, 'b': 1}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s.b = 2
+----
+5	{'a': 1, 'b': 2}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s IS NULL
+----
+3	NULL
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s.b IS NULL ORDER BY id
+----
+3	NULL
+4	{'a': 8, 'b': NULL}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s.a IS NULL
+----
+3	NULL
+
+# a filter on the mapped column beside a filter on a column that is read as stored
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s.a > 1 AND id < 5 ORDER BY id
+----
+1	{'a': 2, 'b': 1}
+2	{'a': 4, 'b': 3}
+4	{'a': 8, 'b': NULL}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE s > {'a': 2, 'b': 1} AND id IN (1, 2, 5)
+----
+2	{'a': 4, 'b': 3}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('crossed')) WHERE id = 5
+----
+5	{'a': 1, 'b': 2}
+
+query I
+SELECT id FROM scan_{reader}(getvariable('crossed')) WHERE s = {'a': 4, 'b': 3}
+----
+2
+
+# a field the file lacks
+query II
+SELECT * FROM scan_{reader}(getvariable('extra_field')) WHERE s.c = 7 ORDER BY id
+----
+1	{'a': 1, 'b': 2, 'c': 7}
+2	{'a': 3, 'b': 4, 'c': 7}
+4	{'a': NULL, 'b': 8, 'c': 7}
+5	{'a': 2, 'b': 1, 'c': 7}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('extra_field')) WHERE s.c = 7 AND s.a = 3
+----
+2	{'a': 3, 'b': 4, 'c': 7}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('extra_field')) WHERE s = {'a': 1, 'b': 2, 'c': 7}
+----
+1	{'a': 1, 'b': 2, 'c': 7}
+
+query II
+SELECT * FROM scan_{reader}(getvariable('extra_field')) WHERE s.c IS NULL
+----
+3	NULL
+
+query II
+SELECT * FROM scan_{reader}(getvariable('extra_field')) WHERE s.c <> 7
+----
+
+# INTEGER read as BIGINT
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x = 5 ORDER BY id
+----
+1	5
+5	5
+
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x > 5 ORDER BY id
+----
+2	6
+4	7
+
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x IS NULL
+----
+3	NULL
+
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x IN (5, 7) ORDER BY id
+----
+1	5
+4	7
+5	5
+
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x = 5 AND id > 1
+----
+5	5
+
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x = 4294967296
+----
+
+query I
+SELECT typeof(x) FROM scan_{reader}(getvariable('widened')) WHERE x = 6
+----
+BIGINT
+
+# filters on several mapped columns
+query II
+SELECT id, x FROM scan_{reader}(getvariable('widened')) WHERE x = 5 AND s.a = '2' AND li[2] = 2
+----
+5	5
+
+query I
+SELECT id FROM scan_{reader}(getvariable('widened')) WHERE x >= 5 AND len(li) = 2 AND id <> 1
+----
+5
+
+# a field of a struct read as another type
+query II
+SELECT id, s FROM scan_{reader}(getvariable('widened')) WHERE s.a = '1'
+----
+1	{'a': 1, 'b': 2}
+
+query II
+SELECT id, s FROM scan_{reader}(getvariable('widened')) WHERE s = {'a': '3', 'b': 4}
+----
+2	{'a': 3, 'b': 4}
+
+query II
+SELECT id, s FROM scan_{reader}(getvariable('widened')) WHERE s.a IS NULL ORDER BY id
+----
+3	NULL
+4	{'a': NULL, 'b': 8}
+
+# lists
+query II
+SELECT id, li FROM scan_{reader}(getvariable('widened')) WHERE li = [1, 2]
+----
+1	[1, 2]
+
+query II
+SELECT id, li FROM scan_{reader}(getvariable('widened')) WHERE li[1] = 3
+----
+2	[3]
+
+query II
+SELECT id, li FROM scan_{reader}(getvariable('widened')) WHERE len(li) = 2 ORDER BY id
+----
+1	[1, 2]
+5	[NULL, 2]
+
+query II
+SELECT id, li FROM scan_{reader}(getvariable('widened')) WHERE li IS NULL
+----
+3	NULL
+
+# lists of structs whose fields are declared in another order
+query II
+SELECT id, l FROM scan_{reader}(getvariable('widened')) WHERE l = [{'b': 2, 'a': 1}]
+----
+1	[{'b': 2, 'a': 1}]
+
+query II
+SELECT id, l FROM scan_{reader}(getvariable('widened')) WHERE l[1].a = 3
+----
+2	[{'b': 4, 'a': 3}, {'b': 6, 'a': 5}]
+
+query II
+SELECT id, l FROM scan_{reader}(getvariable('widened')) WHERE l[1].b = 1
+----
+5	[{'b': 1, 'a': NULL}, NULL]
+
+# maps
+query II
+SELECT id, mi FROM scan_{reader}(getvariable('widened')) WHERE mi = MAP {'k': 10}
+----
+1	{k=10}
+
+query II
+SELECT id, mi FROM scan_{reader}(getvariable('widened')) WHERE mi['k'] = 20
+----
+2	{k=20, j=30}
+
+query II
+SELECT id, mi FROM scan_{reader}(getvariable('widened')) WHERE cardinality(mi) = 0
+----
+4	{}
+
+query II
+SELECT id, mi FROM scan_{reader}(getvariable('widened')) WHERE mi IS NULL
+----
+3	NULL
+
+# INTEGER read as VARCHAR
+query II
+SELECT * FROM scan_{reader}(getvariable('as_varchar')) WHERE x = '5' ORDER BY id
+----
+1	5
+5	5
+
+query II
+SELECT * FROM scan_{reader}(getvariable('as_varchar')) WHERE x LIKE '5%' ORDER BY id
+----
+1	5
+5	5
+
+query II
+SELECT * FROM scan_{reader}(getvariable('as_varchar')) WHERE x > '5' ORDER BY id
+----
+2	6
+4	7
+
+query II
+SELECT * FROM scan_{reader}(getvariable('as_varchar')) WHERE x IS NULL
+----
+3	NULL
+
+endloop

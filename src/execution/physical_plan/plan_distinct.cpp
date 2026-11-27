@@ -14,7 +14,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 	D_ASSERT(op.children.size() == 1);
-	reference<PhysicalOperator> child = CreatePlan(*op.children[0]);
+	reference<PhysicalOperator> child = CreatePlanRecursive(*op.children[0]);
 	auto &distinct_targets = op.distinct_targets;
 	D_ASSERT(!distinct_targets.empty());
 

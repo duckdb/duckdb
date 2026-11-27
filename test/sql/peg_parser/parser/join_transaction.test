@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/parser/join_transaction.test
+# description: Test the JOIN TRANSACTION statement in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$JOIN TRANSACTION 'a1b2c3d4';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$join transaction 'a1b2c3d4';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$JOIN TRANSACTION '';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$JOIN TRANSACTION $$a1b2c3d4$$;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$JOIN TRANSACTION 'it''s';$TEST_PEG_PARSER$);

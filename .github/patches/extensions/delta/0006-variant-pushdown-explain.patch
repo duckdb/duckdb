@@ -1,0 +1,22 @@
+diff --git a/test/sql/inlined/variant/pushdown.test b/test/sql/inlined/variant/pushdown.test
+index d609563..df81f0a 100644
+--- a/test/sql/inlined/variant/pushdown.test
++++ b/test/sql/inlined/variant/pushdown.test
+@@ -16,7 +16,7 @@ PRAGMA explain_output = PHYSICAL_ONLY;
+ query II
+ EXPLAIN SELECT id FROM read_parquet('./data/inlined/variant/spark_shredded_object/delta_lake/*.parquet') WHERE v.b::VARCHAR = 'x';
+ ----
+-physical_plan	<REGEX>:.*READ_PARQUET.*Filters:.*v\.b = 'x'.*
++physical_plan	<REGEX>:.*READ_PARQUET.*Filters:.*CAST\(v\.b AS VARCHAR\) = 'x'.*
+ 
+ query II
+ EXPLAIN SELECT v.a FROM read_parquet('./data/inlined/variant/spark_shredded_object/delta_lake/*.parquet');
+@@ -35,7 +35,7 @@ SELECT list(id ORDER BY id) FROM delta_scan('./data/inlined/variant/spark_shredd
+ query II
+ EXPLAIN SELECT id FROM delta_scan('./data/inlined/variant/spark_shredded_object/delta_lake') WHERE v.b::VARCHAR = 'x';
+ ----
+-physical_plan	<REGEX>:.*Filters:.*v\.b = 'x'.*
++physical_plan	<REGEX>:.*Filters:.*CAST\(v\.b AS VARCHAR\) = 'x'.*
+ 
+ query II
+ EXPLAIN SELECT v.a FROM delta_scan('./data/inlined/variant/spark_shredded_object/delta_lake');

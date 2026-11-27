@@ -18,6 +18,7 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_monotone_preimage.cpp
     test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
@@ -25,6 +26,9 @@ set(TEST_API_OBJECTS
     test_aggregate_state_bind_data.cpp
     test_config.cpp
     test_context.cpp
+    test_shared_transaction.cpp
+    test_shared_transaction_chaos.cpp
+    test_shared_transaction_concurrency.cpp
     test_connect_prepare.cpp
     test_nested_schema_capability.cpp
     test_remote_pushdown_macro_arguments.cpp
