@@ -1,0 +1,2766 @@
+# name: test/sql/cast/string_to_decimal.test
+# description: Casting strings to DECIMAL: every branch of DecimalCastOperation at every storage tier
+# group: [cast]
+
+# Conventions
+#  * One assertion per statement, grouped into categories. Each category starts with a comment that explains what it covers.
+#  * DECIMAL is stored as int16 (width 1-4), int32 (5-9), int64 (10-18) or int128 (19-38); each category uses types from
+#    several tiers, and the 'Range limits' / 'Limits of the physical storage types' categories sit on the tier boundaries.
+#  * The expected values are the exact mathematical results (round half away from zero, error if |value| >= 10^(width-scale)),
+#    not the output of any implementation. Note that DECIMAL(w,w) prints without a leading zero.
+#  * Some assertions fail on implementations that mishandle scientific notation: negative exponents when the mantissa has more
+#    integer digits than 'width - scale' (issue #29189), and positive exponents when the storage type fills up before the
+#    exponent is read. Those categories say so.
+
+# Coverage (measured with gcov, per template instantiation: function x storage tier x sign)
+#  Every line and every condition outcome of DecimalCastOperation is exercised for each of int16 / int32 / int64 / int128 and for
+#  positive and negative values, except for code that cannot be reached:
+#   - the MinimumDiv10 / MaximumDiv10 overflow checks in HandleDigit: the digit count is limited to 'width - scale' first
+#   - 'return false' after TruncateExcessiveDecimals in Finalize: that function always succeeds
+#   - the ALLOW_EXPONENT == false branch of HandleDecimal and the D_ASSERTs: decimal casts always allow exponents
+#   - HandleHexDigit / HandleBinaryDigit for negative values: a '-' prefix never takes the 0x / 0b path
+
+# ==================================================================================================
+# Plain integers: signs, leading zeros and surrounding whitespace
+# HandleDigit with and without a sign (positive and negative accumulation), the leading-zero shortcut
+# (zeros do not count as digits, even when there are more of them than the type has digits),
+# and whitespace that TryIntegerCast skips before the value starts and after it ends.
+# ==================================================================================================
+
+query I
+SELECT CAST('0' AS DECIMAL(1,0));
+----
+0
+
+query I
+SELECT CAST('1' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('-9' AS DECIMAL(1,0));
+----
+-9
+
+query I
+SELECT CAST('+1' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('-0' AS DECIMAL(1,0));
+----
+0
+
+query I
+SELECT CAST('0' AS DECIMAL(5,0));
+----
+0
+
+query I
+SELECT CAST('42' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST('-42' AS DECIMAL(5,0));
+----
+-42
+
+query I
+SELECT CAST('007' AS DECIMAL(5,0));
+----
+7
+
+query I
+SELECT CAST('42' AS DECIMAL(10,0));
+----
+42
+
+query I
+SELECT CAST('42' AS DECIMAL(19,0));
+----
+42
+
+query I
+SELECT CAST('42' AS DECIMAL(38,0));
+----
+42
+
+query I
+SELECT CAST('-42' AS DECIMAL(38,0));
+----
+-42
+
+query I
+SELECT CAST('  42' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST('42  ' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST('  42  ' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST(E'\t42' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST(E'42\n' AS DECIMAL(5,0));
+----
+42
+
+query I
+SELECT CAST('00000000000000000000000000000000000000000000000000000000000012' AS DECIMAL(2,0));
+----
+12
+
+query I
+SELECT CAST('-00000000000000000000000000000000000000000000000000000000000012' AS DECIMAL(2,0));
+----
+-12
+
+query I
+SELECT CAST('000000000000000000000000000000000000000000000000000000000000' AS DECIMAL(2,0));
+----
+0
+
+query I
+SELECT CAST('-000000000000000000000000000000000000000000000000000000000000' AS DECIMAL(2,0));
+----
+0
+
+# ==================================================================================================
+# Decimal point placement and zero padding up to the scale
+# A decimal point with digits before, after, or on one side only; fewer decimals than the scale are padded
+# by the multiplication loop in Finalize; exactly 'scale' decimals need no padding. One type per storage tier.
+# ==================================================================================================
+
+query I
+SELECT CAST('1.5' AS DECIMAL(5,2));
+----
+1.50
+
+query I
+SELECT CAST('.5' AS DECIMAL(5,2));
+----
+0.50
+
+query I
+SELECT CAST('5.' AS DECIMAL(5,2));
+----
+5.00
+
+query I
+SELECT CAST('-.5' AS DECIMAL(5,2));
+----
+-0.50
+
+query I
+SELECT CAST('+.5' AS DECIMAL(5,2));
+----
+0.50
+
+query I
+SELECT CAST('0.0' AS DECIMAL(5,2));
+----
+0.00
+
+query I
+SELECT CAST('12.34' AS DECIMAL(5,2));
+----
+12.34
+
+query I
+SELECT CAST('-12.34' AS DECIMAL(5,2));
+----
+-12.34
+
+query I
+SELECT CAST('1' AS DECIMAL(5,2));
+----
+1.00
+
+query I
+SELECT CAST('123' AS DECIMAL(5,2));
+----
+123.00
+
+query I
+SELECT CAST('99.5' AS DECIMAL(4,2));
+----
+99.50
+
+query I
+SELECT CAST('12345.6789' AS DECIMAL(9,4));
+----
+12345.6789
+
+statement error
+SELECT CAST('123456.789012' AS DECIMAL(10,6));
+----
+Conversion Error: Could not convert string "123456.789012" to DECIMAL(10,6)
+
+query I
+SELECT CAST('123456789.123456789' AS DECIMAL(18,9));
+----
+123456789.123456789
+
+query I
+SELECT CAST('1234567890123.123456' AS DECIMAL(19,6));
+----
+1234567890123.123456
+
+query I
+SELECT CAST('0.5' AS DECIMAL(19,6));
+----
+0.500000
+
+query I
+SELECT CAST('1234567890123456789012345678.1234567890' AS DECIMAL(38,10));
+----
+1234567890123456789012345678.1234567890
+
+query I
+SELECT CAST('-1234567890123456789012345678.1234567890' AS DECIMAL(38,10));
+----
+-1234567890123456789012345678.1234567890
+
+query I
+SELECT CAST('1.5' AS DECIMAL(38,10));
+----
+1.5000000000
+
+query I
+SELECT CAST('1.5' AS DECIMAL(38,37));
+----
+1.5000000000000000000000000000000000000
+
+# ==================================================================================================
+# Rounding of surplus decimals
+# More decimals than the scale: the first surplus digit decides (>= 5 rounds away from zero), later digits
+# are ignored. Covers RoundUpResult for positive and negative values, and a round-up that carries into
+# the integer part or out of range.
+# ==================================================================================================
+
+query I
+SELECT CAST('0.4' AS DECIMAL(1,0));
+----
+0
+
+query I
+SELECT CAST('0.5' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('-0.4' AS DECIMAL(1,0));
+----
+0
+
+query I
+SELECT CAST('-0.5' AS DECIMAL(1,0));
+----
+-1
+
+statement error
+SELECT CAST('9.5' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "9.5" to DECIMAL(1,0)
+
+statement error
+SELECT CAST('-9.5' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "-9.5" to DECIMAL(1,0)
+
+query I
+SELECT CAST('0.14999' AS DECIMAL(2,1));
+----
+0.1
+
+query I
+SELECT CAST('0.15' AS DECIMAL(2,1));
+----
+0.2
+
+query I
+SELECT CAST('0.25' AS DECIMAL(2,1));
+----
+0.3
+
+query I
+SELECT CAST('-0.15' AS DECIMAL(2,1));
+----
+-0.2
+
+query I
+SELECT CAST('9.94' AS DECIMAL(2,1));
+----
+9.9
+
+statement error
+SELECT CAST('9.95' AS DECIMAL(2,1));
+----
+Conversion Error: Could not convert string "9.95" to DECIMAL(2,1)
+
+query I
+SELECT CAST('1.005' AS DECIMAL(4,2));
+----
+1.01
+
+query I
+SELECT CAST('-1.005' AS DECIMAL(4,2));
+----
+-1.01
+
+query I
+SELECT CAST('99.994' AS DECIMAL(4,2));
+----
+99.99
+
+statement error
+SELECT CAST('99.995' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "99.995" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('-99.995' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "-99.995" to DECIMAL(4,2)
+
+query I
+SELECT CAST('1.995' AS DECIMAL(4,2));
+----
+2.00
+
+query I
+SELECT CAST('12345.00005' AS DECIMAL(9,4));
+----
+12345.0001
+
+query I
+SELECT CAST('99999.99994' AS DECIMAL(9,4));
+----
+99999.9999
+
+statement error
+SELECT CAST('99999.99995' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "99999.99995" to DECIMAL(9,4)
+
+query I
+SELECT CAST('123456789.0000000005' AS DECIMAL(18,9));
+----
+123456789.000000001
+
+query I
+SELECT CAST('1.00000000005' AS DECIMAL(19,10));
+----
+1.0000000001
+
+query I
+SELECT CAST('1.00000000004' AS DECIMAL(19,10));
+----
+1.0000000000
+
+query I
+SELECT CAST('1.00000000005' AS DECIMAL(38,10));
+----
+1.0000000001
+
+query I
+SELECT CAST('-1.00000000005' AS DECIMAL(38,10));
+----
+-1.0000000001
+
+# ==================================================================================================
+# Scale equal to the width (no integer digits) and scale zero
+# DECIMAL(w,w) only holds values in (-1, 1), so any non-zero integer digit is out of range, and rounding
+# can push the value to +-1.0. DECIMAL(w,0) is the opposite extreme. Tested at every tier boundary.
+# ==================================================================================================
+
+query I
+SELECT CAST('0.1' AS DECIMAL(1,1));
+----
+.1
+
+query I
+SELECT CAST('-.9' AS DECIMAL(1,1));
+----
+-.9
+
+query I
+SELECT CAST('0.1' AS DECIMAL(1,1));
+----
+.1
+
+statement error
+SELECT CAST('1' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "1" to DECIMAL(1,1)
+
+statement error
+SELECT CAST('0.95' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "0.95" to DECIMAL(1,1)
+
+query I
+SELECT CAST('0.1111' AS DECIMAL(4,4));
+----
+.1111
+
+query I
+SELECT CAST('0.0001' AS DECIMAL(4,4));
+----
+.0001
+
+statement error
+SELECT CAST('1' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "1" to DECIMAL(4,4)
+
+statement error
+SELECT CAST('0.99995' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "0.99995" to DECIMAL(4,4)
+
+query I
+SELECT CAST('0.11111' AS DECIMAL(5,5));
+----
+.11111
+
+query I
+SELECT CAST('-.99999' AS DECIMAL(5,5));
+----
+-.99999
+
+query I
+SELECT CAST('0.00001' AS DECIMAL(5,5));
+----
+.00001
+
+statement error
+SELECT CAST('0.999995' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "0.999995" to DECIMAL(5,5)
+
+query I
+SELECT CAST('0.111111111' AS DECIMAL(9,9));
+----
+.111111111
+
+query I
+SELECT CAST('-.999999999' AS DECIMAL(9,9));
+----
+-.999999999
+
+query I
+SELECT CAST('0.000000001' AS DECIMAL(9,9));
+----
+.000000001
+
+statement error
+SELECT CAST('1' AS DECIMAL(9,9));
+----
+Conversion Error: Could not convert string "1" to DECIMAL(9,9)
+
+statement error
+SELECT CAST('0.9999999995' AS DECIMAL(9,9));
+----
+Conversion Error: Could not convert string "0.9999999995" to DECIMAL(9,9)
+
+query I
+SELECT CAST('0.1111111111' AS DECIMAL(10,10));
+----
+.1111111111
+
+query I
+SELECT CAST('0.0000000001' AS DECIMAL(10,10));
+----
+.0000000001
+
+statement error
+SELECT CAST('0.99999999995' AS DECIMAL(10,10));
+----
+Conversion Error: Could not convert string "0.99999999995" to DECIMAL(10,10)
+
+query I
+SELECT CAST('0.111111111111111111' AS DECIMAL(18,18));
+----
+.111111111111111111
+
+query I
+SELECT CAST('-.999999999999999999' AS DECIMAL(18,18));
+----
+-.999999999999999999
+
+query I
+SELECT CAST('0.000000000000000001' AS DECIMAL(18,18));
+----
+.000000000000000001
+
+statement error
+SELECT CAST('1' AS DECIMAL(18,18));
+----
+Conversion Error: Could not convert string "1" to DECIMAL(18,18)
+
+statement error
+SELECT CAST('0.9999999999999999995' AS DECIMAL(18,18));
+----
+Conversion Error: Could not convert string "0.9999999999999999995" to DECIMAL(18,18)
+
+query I
+SELECT CAST('0.1111111111111111111' AS DECIMAL(19,19));
+----
+.1111111111111111111
+
+query I
+SELECT CAST('-.9999999999999999999' AS DECIMAL(19,19));
+----
+-.9999999999999999999
+
+query I
+SELECT CAST('0.0000000000000000001' AS DECIMAL(19,19));
+----
+.0000000000000000001
+
+statement error
+SELECT CAST('0.99999999999999999995' AS DECIMAL(19,19));
+----
+Conversion Error: Could not convert string "0.99999999999999999995" to DECIMAL(19,19)
+
+query I
+SELECT CAST('0.11111111111111111111111111111111111111' AS DECIMAL(38,38));
+----
+.11111111111111111111111111111111111111
+
+query I
+SELECT CAST('-.99999999999999999999999999999999999999' AS DECIMAL(38,38));
+----
+-.99999999999999999999999999999999999999
+
+query I
+SELECT CAST('0.00000000000000000000000000000000000001' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000001
+
+statement error
+SELECT CAST('1' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "1" to DECIMAL(38,38)
+
+statement error
+SELECT CAST('0.999999999999999999999999999999999999995' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "0.999999999999999999999999999999999999995" to DECIMAL(38,38)
+
+query I
+SELECT CAST('12345' AS DECIMAL(5,0));
+----
+12345
+
+query I
+SELECT CAST('12345.5' AS DECIMAL(5,0));
+----
+12346
+
+query I
+SELECT CAST('0.5' AS DECIMAL(5,0));
+----
+1
+
+statement error
+SELECT CAST('99999.5' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "99999.5" to DECIMAL(5,0)
+
+# ==================================================================================================
+# Range limits at every width
+# For each width at the tier boundaries (1, 2, 4 | 5, 9 | 10, 18 | 19, 38) and for scale 0, scale w/2 and
+# scale w: the largest and smallest representable value, and the first value beyond each (10^(w-scale)).
+# ==================================================================================================
+
+query I
+SELECT CAST('9' AS DECIMAL(1,0));
+----
+9
+
+query I
+SELECT CAST('-9' AS DECIMAL(1,0));
+----
+-9
+
+statement error
+SELECT CAST('10' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "10" to DECIMAL(1,0)
+
+statement error
+SELECT CAST('-10' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "-10" to DECIMAL(1,0)
+
+query I
+SELECT CAST('0.9' AS DECIMAL(1,1));
+----
+.9
+
+query I
+SELECT CAST('-0.9' AS DECIMAL(1,1));
+----
+-.9
+
+statement error
+SELECT CAST('1.0' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "1.0" to DECIMAL(1,1)
+
+statement error
+SELECT CAST('-1.0' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "-1.0" to DECIMAL(1,1)
+
+query I
+SELECT CAST('9999' AS DECIMAL(4,0));
+----
+9999
+
+query I
+SELECT CAST('-9999' AS DECIMAL(4,0));
+----
+-9999
+
+statement error
+SELECT CAST('10000' AS DECIMAL(4,0));
+----
+Conversion Error: Could not convert string "10000" to DECIMAL(4,0)
+
+statement error
+SELECT CAST('-10000' AS DECIMAL(4,0));
+----
+Conversion Error: Could not convert string "-10000" to DECIMAL(4,0)
+
+query I
+SELECT CAST('99.99' AS DECIMAL(4,2));
+----
+99.99
+
+query I
+SELECT CAST('-99.99' AS DECIMAL(4,2));
+----
+-99.99
+
+statement error
+SELECT CAST('100.00' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "100.00" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('-100.00' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "-100.00" to DECIMAL(4,2)
+
+query I
+SELECT CAST('0.9999' AS DECIMAL(4,4));
+----
+.9999
+
+query I
+SELECT CAST('-0.9999' AS DECIMAL(4,4));
+----
+-.9999
+
+statement error
+SELECT CAST('1.0000' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "1.0000" to DECIMAL(4,4)
+
+statement error
+SELECT CAST('-1.0000' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "-1.0000" to DECIMAL(4,4)
+
+query I
+SELECT CAST('99999' AS DECIMAL(5,0));
+----
+99999
+
+query I
+SELECT CAST('-99999' AS DECIMAL(5,0));
+----
+-99999
+
+statement error
+SELECT CAST('100000' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "100000" to DECIMAL(5,0)
+
+statement error
+SELECT CAST('-100000' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "-100000" to DECIMAL(5,0)
+
+query I
+SELECT CAST('0.99999' AS DECIMAL(5,5));
+----
+.99999
+
+query I
+SELECT CAST('-0.99999' AS DECIMAL(5,5));
+----
+-.99999
+
+statement error
+SELECT CAST('1.00000' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "1.00000" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('-1.00000' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "-1.00000" to DECIMAL(5,5)
+
+query I
+SELECT CAST('999999999' AS DECIMAL(9,0));
+----
+999999999
+
+query I
+SELECT CAST('-999999999' AS DECIMAL(9,0));
+----
+-999999999
+
+statement error
+SELECT CAST('1000000000' AS DECIMAL(9,0));
+----
+Conversion Error: Could not convert string "1000000000" to DECIMAL(9,0)
+
+statement error
+SELECT CAST('-1000000000' AS DECIMAL(9,0));
+----
+Conversion Error: Could not convert string "-1000000000" to DECIMAL(9,0)
+
+query I
+SELECT CAST('0.999999999' AS DECIMAL(9,9));
+----
+.999999999
+
+query I
+SELECT CAST('-0.999999999' AS DECIMAL(9,9));
+----
+-.999999999
+
+statement error
+SELECT CAST('1.000000000' AS DECIMAL(9,9));
+----
+Conversion Error: Could not convert string "1.000000000" to DECIMAL(9,9)
+
+statement error
+SELECT CAST('-1.000000000' AS DECIMAL(9,9));
+----
+Conversion Error: Could not convert string "-1.000000000" to DECIMAL(9,9)
+
+query I
+SELECT CAST('9999999999' AS DECIMAL(10,0));
+----
+9999999999
+
+query I
+SELECT CAST('-9999999999' AS DECIMAL(10,0));
+----
+-9999999999
+
+statement error
+SELECT CAST('10000000000' AS DECIMAL(10,0));
+----
+Conversion Error: Could not convert string "10000000000" to DECIMAL(10,0)
+
+statement error
+SELECT CAST('-10000000000' AS DECIMAL(10,0));
+----
+Conversion Error: Could not convert string "-10000000000" to DECIMAL(10,0)
+
+query I
+SELECT CAST('0.9999999999' AS DECIMAL(10,10));
+----
+.9999999999
+
+query I
+SELECT CAST('-0.9999999999' AS DECIMAL(10,10));
+----
+-.9999999999
+
+statement error
+SELECT CAST('1.0000000000' AS DECIMAL(10,10));
+----
+Conversion Error: Could not convert string "1.0000000000" to DECIMAL(10,10)
+
+statement error
+SELECT CAST('-1.0000000000' AS DECIMAL(10,10));
+----
+Conversion Error: Could not convert string "-1.0000000000" to DECIMAL(10,10)
+
+query I
+SELECT CAST('999999999999999999' AS DECIMAL(18,0));
+----
+999999999999999999
+
+query I
+SELECT CAST('-999999999999999999' AS DECIMAL(18,0));
+----
+-999999999999999999
+
+statement error
+SELECT CAST('1000000000000000000' AS DECIMAL(18,0));
+----
+Conversion Error: Could not convert string "1000000000000000000" to DECIMAL(18,0)
+
+statement error
+SELECT CAST('-1000000000000000000' AS DECIMAL(18,0));
+----
+Conversion Error: Could not convert string "-1000000000000000000" to DECIMAL(18,0)
+
+query I
+SELECT CAST('0.999999999999999999' AS DECIMAL(18,18));
+----
+.999999999999999999
+
+query I
+SELECT CAST('-0.999999999999999999' AS DECIMAL(18,18));
+----
+-.999999999999999999
+
+statement error
+SELECT CAST('1.000000000000000000' AS DECIMAL(18,18));
+----
+Conversion Error: Could not convert string "1.000000000000000000" to DECIMAL(18,18)
+
+statement error
+SELECT CAST('-1.000000000000000000' AS DECIMAL(18,18));
+----
+Conversion Error: Could not convert string "-1.000000000000000000" to DECIMAL(18,18)
+
+query I
+SELECT CAST('9999999999999999999' AS DECIMAL(19,0));
+----
+9999999999999999999
+
+query I
+SELECT CAST('-9999999999999999999' AS DECIMAL(19,0));
+----
+-9999999999999999999
+
+statement error
+SELECT CAST('10000000000000000000' AS DECIMAL(19,0));
+----
+Conversion Error: Could not convert string "10000000000000000000" to DECIMAL(19,0)
+
+statement error
+SELECT CAST('-10000000000000000000' AS DECIMAL(19,0));
+----
+Conversion Error: Could not convert string "-10000000000000000000" to DECIMAL(19,0)
+
+query I
+SELECT CAST('0.9999999999999999999' AS DECIMAL(19,19));
+----
+.9999999999999999999
+
+query I
+SELECT CAST('-0.9999999999999999999' AS DECIMAL(19,19));
+----
+-.9999999999999999999
+
+statement error
+SELECT CAST('1.0000000000000000000' AS DECIMAL(19,19));
+----
+Conversion Error: Could not convert string "1.0000000000000000000" to DECIMAL(19,19)
+
+statement error
+SELECT CAST('-1.0000000000000000000' AS DECIMAL(19,19));
+----
+Conversion Error: Could not convert string "-1.0000000000000000000" to DECIMAL(19,19)
+
+query I
+SELECT CAST('99999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+99999999999999999999999999999999999999
+
+query I
+SELECT CAST('-99999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+-99999999999999999999999999999999999999
+
+statement error
+SELECT CAST('100000000000000000000000000000000000000' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "100000000000000000000000000000000000000" to DECIMAL(38,0)
+
+statement error
+SELECT CAST('-100000000000000000000000000000000000000' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "-100000000000000000000000000000000000000" to DECIMAL(38,0)
+
+query I
+SELECT CAST('9999999999999999999.9999999999999999999' AS DECIMAL(38,19));
+----
+9999999999999999999.9999999999999999999
+
+query I
+SELECT CAST('-9999999999999999999.9999999999999999999' AS DECIMAL(38,19));
+----
+-9999999999999999999.9999999999999999999
+
+statement error
+SELECT CAST('10000000000000000000.0000000000000000000' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "10000000000000000000.0000000000000000000" to DECIMAL(38,19)
+
+statement error
+SELECT CAST('-10000000000000000000.0000000000000000000' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "-10000000000000000000.0000000000000000000" to DECIMAL(38,19)
+
+query I
+SELECT CAST('0.99999999999999999999999999999999999999' AS DECIMAL(38,38));
+----
+.99999999999999999999999999999999999999
+
+query I
+SELECT CAST('-0.99999999999999999999999999999999999999' AS DECIMAL(38,38));
+----
+-.99999999999999999999999999999999999999
+
+statement error
+SELECT CAST('1.00000000000000000000000000000000000000' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "1.00000000000000000000000000000000000000" to DECIMAL(38,38)
+
+statement error
+SELECT CAST('-1.00000000000000000000000000000000000000' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "-1.00000000000000000000000000000000000000" to DECIMAL(38,38)
+
+# ==================================================================================================
+# Limits of the physical storage types
+# DECIMAL is stored as int16 (width 1-4), int32 (5-9), int64 (10-18) or int128 (19-38). Values just around the
+# maximum of each storage type, and digit strings that are longer than the type can hold, must be
+# accepted exactly when they fit the declared width.
+# ==================================================================================================
+
+query I
+SELECT CAST('9999' AS DECIMAL(4,0));
+----
+9999
+
+query I
+SELECT CAST('-9999' AS DECIMAL(4,0));
+----
+-9999
+
+statement error
+SELECT CAST('10000' AS DECIMAL(4,0));
+----
+Conversion Error: Could not convert string "10000" to DECIMAL(4,0)
+
+statement error
+SELECT CAST('32767' AS DECIMAL(4,0));
+----
+Conversion Error: Could not convert string "32767" to DECIMAL(4,0)
+
+statement error
+SELECT CAST('32768' AS DECIMAL(4,0));
+----
+Conversion Error: Could not convert string "32768" to DECIMAL(4,0)
+
+query I
+SELECT CAST('99999' AS DECIMAL(5,0));
+----
+99999
+
+statement error
+SELECT CAST('100000' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "100000" to DECIMAL(5,0)
+
+query I
+SELECT CAST('999999999' AS DECIMAL(9,0));
+----
+999999999
+
+query I
+SELECT CAST('-999999999' AS DECIMAL(9,0));
+----
+-999999999
+
+statement error
+SELECT CAST('1000000000' AS DECIMAL(9,0));
+----
+Conversion Error: Could not convert string "1000000000" to DECIMAL(9,0)
+
+statement error
+SELECT CAST('2147483647' AS DECIMAL(9,0));
+----
+Conversion Error: Could not convert string "2147483647" to DECIMAL(9,0)
+
+statement error
+SELECT CAST('2147483648' AS DECIMAL(9,0));
+----
+Conversion Error: Could not convert string "2147483648" to DECIMAL(9,0)
+
+query I
+SELECT CAST('2147483647' AS DECIMAL(10,0));
+----
+2147483647
+
+query I
+SELECT CAST('2147483648' AS DECIMAL(10,0));
+----
+2147483648
+
+statement error
+SELECT CAST('10000000000' AS DECIMAL(10,0));
+----
+Conversion Error: Could not convert string "10000000000" to DECIMAL(10,0)
+
+query I
+SELECT CAST('999999999999999999' AS DECIMAL(18,0));
+----
+999999999999999999
+
+statement error
+SELECT CAST('1000000000000000000' AS DECIMAL(18,0));
+----
+Conversion Error: Could not convert string "1000000000000000000" to DECIMAL(18,0)
+
+statement error
+SELECT CAST('9223372036854775807' AS DECIMAL(18,0));
+----
+Conversion Error: Could not convert string "9223372036854775807" to DECIMAL(18,0)
+
+query I
+SELECT CAST('9223372036854775807' AS DECIMAL(19,0));
+----
+9223372036854775807
+
+query I
+SELECT CAST('9223372036854775808' AS DECIMAL(19,0));
+----
+9223372036854775808
+
+query I
+SELECT CAST('-9223372036854775808' AS DECIMAL(19,0));
+----
+-9223372036854775808
+
+query I
+SELECT CAST('9999999999999999999' AS DECIMAL(19,0));
+----
+9999999999999999999
+
+statement error
+SELECT CAST('10000000000000000000' AS DECIMAL(19,0));
+----
+Conversion Error: Could not convert string "10000000000000000000" to DECIMAL(19,0)
+
+query I
+SELECT CAST('99999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+99999999999999999999999999999999999999
+
+query I
+SELECT CAST('-99999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+-99999999999999999999999999999999999999
+
+statement error
+SELECT CAST('100000000000000000000000000000000000000' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "100000000000000000000000000000000000000" to DECIMAL(38,0)
+
+statement error
+SELECT CAST('170141183460469231731687303715884105727' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "170141183460469231731687303715884105727" to DECIMAL(38,0)
+
+statement error
+SELECT CAST('170141183460469231731687303715884105728' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "170141183460469231731687303715884105728" to DECIMAL(38,0)
+
+statement error
+SELECT CAST('999999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "999999999999999999999999999999999999999" to DECIMAL(38,0)
+
+statement error
+SELECT CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999" to DECIMAL(38,0)
+
+query I
+SELECT CAST('0000000000000000000000000000000000000000000001' AS DECIMAL(38,0));
+----
+1
+
+query I
+SELECT CAST('-0000000000000000000000000000000000000000000001' AS DECIMAL(38,0));
+----
+-1
+
+query I
+SELECT CAST('10000000000000000000000000000000000000' AS DECIMAL(38,0));
+----
+10000000000000000000000000000000000000
+
+statement error
+SELECT CAST('10000000000000000000000000000000000000' AS DECIMAL(38,1));
+----
+Conversion Error: Could not convert string "10000000000000000000000000000000000000" to DECIMAL(38,1)
+
+# ==================================================================================================
+# More decimals than the storage type can hold
+# HandleDecimal stops storing digits once the physical type is full (digit_count + decimal_count reaches the
+# maximum digits of int16/int32/int64/int128), but the first surplus digit must still decide the rounding.
+# One block per tier, with surplus digits that round down, round up, and round out of range.
+# ==================================================================================================
+
+query I
+SELECT CAST('0.12344' AS DECIMAL(4,4));
+----
+.1234
+
+query I
+SELECT CAST('0.12345' AS DECIMAL(4,4));
+----
+.1235
+
+query I
+SELECT CAST('0.123456789' AS DECIMAL(4,4));
+----
+.1235
+
+statement error
+SELECT CAST('0.99995' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "0.99995" to DECIMAL(4,4)
+
+query I
+SELECT CAST('12.3456' AS DECIMAL(4,2));
+----
+12.35
+
+query I
+SELECT CAST('99.9949999' AS DECIMAL(4,2));
+----
+99.99
+
+query I
+SELECT CAST('1.99999999999999999999999999999999999999999999999999' AS DECIMAL(4,2));
+----
+2.00
+
+query I
+SELECT CAST('0.1234567894' AS DECIMAL(9,9));
+----
+.123456789
+
+query I
+SELECT CAST('0.1234567895' AS DECIMAL(9,9));
+----
+.123456790
+
+query I
+SELECT CAST('12345.6789012345' AS DECIMAL(9,4));
+----
+12345.6789
+
+query I
+SELECT CAST('12345.67895' AS DECIMAL(9,4));
+----
+12345.6790
+
+query I
+SELECT CAST('0.1234567890123456784' AS DECIMAL(18,18));
+----
+.123456789012345678
+
+query I
+SELECT CAST('0.1234567890123456785' AS DECIMAL(18,18));
+----
+.123456789012345679
+
+query I
+SELECT CAST('0.00000000000000000000000000000000000001' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000001
+
+query I
+SELECT CAST('0.000000000000000000000000000000000000004' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000000
+
+query I
+SELECT CAST('0.000000000000000000000000000000000000005' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000001
+
+query I
+SELECT CAST('0.99999999999999999999999999999999999999' AS DECIMAL(38,38));
+----
+.99999999999999999999999999999999999999
+
+query I
+SELECT CAST('0.999999999999999999999999999999999999994' AS DECIMAL(38,38));
+----
+.99999999999999999999999999999999999999
+
+statement error
+SELECT CAST('0.999999999999999999999999999999999999995' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "0.999999999999999999999999999999999999995" to DECIMAL(38,38)
+
+statement error
+SELECT CAST('0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999" to DECIMAL(38,38)
+
+query I
+SELECT CAST('1234567890123456789012345678.12345678904' AS DECIMAL(38,10));
+----
+1234567890123456789012345678.1234567890
+
+query I
+SELECT CAST('1234567890123456789012345678.12345678905' AS DECIMAL(38,10));
+----
+1234567890123456789012345678.1234567891
+
+# ==================================================================================================
+# Exponent: zero and positive exponents
+# HandleExponent with exponent 0 (rounding is then done by Finalize) and exponent > 0 (trailing zeros are
+# appended, so the width check applies). e/E, optional '+', leading zeros in the exponent, a zero mantissa,
+# and results that overflow the width.
+# ==================================================================================================
+
+query I
+SELECT CAST('1e0' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('1e1' AS DECIMAL(2,0));
+----
+10
+
+statement error
+SELECT CAST('1e1' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "1e1" to DECIMAL(1,0)
+
+query I
+SELECT CAST('9e0' AS DECIMAL(1,0));
+----
+9
+
+query I
+SELECT CAST('1.5e0' AS DECIMAL(2,0));
+----
+2
+
+query I
+SELECT CAST('1.4e0' AS DECIMAL(2,0));
+----
+1
+
+query I
+SELECT CAST('-1.5e0' AS DECIMAL(2,0));
+----
+-2
+
+query I
+SELECT CAST('1e5' AS DECIMAL(6,0));
+----
+100000
+
+statement error
+SELECT CAST('1e5' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "1e5" to DECIMAL(5,0)
+
+query I
+SELECT CAST('1e4' AS DECIMAL(5,0));
+----
+10000
+
+query I
+SELECT CAST('9.9999e4' AS DECIMAL(5,0));
+----
+99999
+
+query I
+SELECT CAST('1.5e2' AS DECIMAL(5,0));
+----
+150
+
+query I
+SELECT CAST('1.5e2' AS DECIMAL(5,2));
+----
+150.00
+
+query I
+SELECT CAST('-1.5e2' AS DECIMAL(5,2));
+----
+-150.00
+
+query I
+SELECT CAST('+1.5e+2' AS DECIMAL(5,2));
+----
+150.00
+
+query I
+SELECT CAST('1.5e002' AS DECIMAL(5,2));
+----
+150.00
+
+query I
+SELECT CAST('0e5' AS DECIMAL(5,2));
+----
+0.00
+
+query I
+SELECT CAST('1.e1' AS DECIMAL(2,0));
+----
+10
+
+query I
+SELECT CAST('12.5e1' AS DECIMAL(5,1));
+----
+125.0
+
+query I
+SELECT CAST('1e9' AS DECIMAL(10,0));
+----
+1000000000
+
+query I
+SELECT CAST('1e17' AS DECIMAL(18,0));
+----
+100000000000000000
+
+query I
+SELECT CAST('1e37' AS DECIMAL(38,0));
+----
+10000000000000000000000000000000000000
+
+statement error
+SELECT CAST('1e38' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "1e38" to DECIMAL(38,0)
+
+query I
+SELECT CAST('9.9e37' AS DECIMAL(38,0));
+----
+99000000000000000000000000000000000000
+
+# ==================================================================================================
+# Exponent: surplus decimals versus the exponent
+# When the mantissa has more decimals than the scale, a positive exponent consumes them first. HandleExponent
+# then either truncates the remaining surplus (and rounds on the last removed digit), or - if the exponent is
+# larger - appends zeros. Scale 2 throughout, one type per storage tier.
+# ==================================================================================================
+
+query I
+SELECT CAST('1.2345e1' AS DECIMAL(4,2));
+----
+12.35
+
+query I
+SELECT CAST('1.2344e1' AS DECIMAL(4,2));
+----
+12.34
+
+query I
+SELECT CAST('-1.2345e1' AS DECIMAL(4,2));
+----
+-12.35
+
+query I
+SELECT CAST('0.12345e1' AS DECIMAL(4,2));
+----
+1.23
+
+query I
+SELECT CAST('0.1235e1' AS DECIMAL(4,2));
+----
+1.24
+
+query I
+SELECT CAST('-0.1235e1' AS DECIMAL(4,2));
+----
+-1.24
+
+query I
+SELECT CAST('1.2345e1' AS DECIMAL(9,2));
+----
+12.35
+
+query I
+SELECT CAST('1.2344e1' AS DECIMAL(9,2));
+----
+12.34
+
+query I
+SELECT CAST('-1.2345e1' AS DECIMAL(9,2));
+----
+-12.35
+
+query I
+SELECT CAST('1.2345e2' AS DECIMAL(9,2));
+----
+123.45
+
+query I
+SELECT CAST('1.23456e2' AS DECIMAL(9,2));
+----
+123.46
+
+query I
+SELECT CAST('1.2345e3' AS DECIMAL(9,2));
+----
+1234.50
+
+query I
+SELECT CAST('0.12345e1' AS DECIMAL(9,2));
+----
+1.23
+
+query I
+SELECT CAST('1.2345e1' AS DECIMAL(18,2));
+----
+12.35
+
+query I
+SELECT CAST('-1.2345e1' AS DECIMAL(18,2));
+----
+-12.35
+
+query I
+SELECT CAST('1.2345e2' AS DECIMAL(18,2));
+----
+123.45
+
+query I
+SELECT CAST('1.2345e1' AS DECIMAL(38,2));
+----
+12.35
+
+query I
+SELECT CAST('-1.2345e1' AS DECIMAL(38,2));
+----
+-12.35
+
+query I
+SELECT CAST('1.2345e2' AS DECIMAL(38,2));
+----
+123.45
+
+# ==================================================================================================
+# Exponent: positive exponent when the storage type is full
+# Decimals that do not fit the storage type are dropped while the digits are read, before the exponent is known.
+# A positive exponent moves digits across the decimal point, so dropped digits can end up inside the result or
+# decide how it is rounded. These are values that look like the above but have so many digits that the type fills up.
+# ==================================================================================================
+
+query I
+SELECT CAST('5.9999999999E1' AS DECIMAL(4,2));
+----
+60.00
+
+query I
+SELECT CAST('-5.9999999999E1' AS DECIMAL(4,2));
+----
+-60.00
+
+query I
+SELECT CAST('5.9999999999999999999E1' AS DECIMAL(4,2));
+----
+60.00
+
+query I
+SELECT CAST('.816287434942066662e2' AS DECIMAL(4,2));
+----
+81.63
+
+query I
+SELECT CAST('+00001.5555e1' AS DECIMAL(4,2));
+----
+15.56
+
+query I
+SELECT CAST('+.499999999e2' AS DECIMAL(4,2));
+----
+50.00
+
+statement error
+SELECT CAST('+.9999999999e2' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "+.9999999999e2" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('+.999999999e2' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "+.999999999e2" to DECIMAL(4,2)
+
+query I
+SELECT CAST('-.06739e1' AS DECIMAL(4,4));
+----
+-.6739
+
+query I
+SELECT CAST('-.015960971292389820381305025737921266345e3' AS DECIMAL(4,2));
+----
+-15.96
+
+query I
+SELECT CAST('+.0000001e5' AS DECIMAL(4,2));
+----
+0.01
+
+query I
+SELECT CAST('.00001E5' AS DECIMAL(1,0));
+----
+1
+
+statement error
+SELECT CAST('.0000000001e19' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string ".0000000001e19" to DECIMAL(1,0)
+
+query I
+SELECT CAST('.0000000001e10' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('0.0000000000001e13' AS DECIMAL(5,0));
+----
+1
+
+query I
+SELECT CAST('0.12345678901e5' AS DECIMAL(9,2));
+----
+12345.68
+
+query I
+SELECT CAST('0.123456789e1' AS DECIMAL(9,8));
+----
+1.23456789
+
+query I
+SELECT CAST('12345.678901e2' AS DECIMAL(9,2));
+----
+1234567.89
+
+query I
+SELECT CAST('1234567.5e1' AS DECIMAL(9,0));
+----
+12345675
+
+query I
+SELECT CAST('0.00000000000000000000000000000000000001e38' AS DECIMAL(38,0));
+----
+1
+
+query I
+SELECT CAST('0.00000000000000000000000000000000000001e39' AS DECIMAL(38,0));
+----
+10
+
+# ==================================================================================================
+# Exponent: negative exponents whose mantissa fits the width
+# A negative exponent divides the value again. These all have a mantissa that fits in 'width - scale' integer
+# digits: division with and without rounding (positive and negative values), and the early exit once the
+# result is zero.
+# ==================================================================================================
+
+query I
+SELECT CAST('1e-1' AS DECIMAL(5,2));
+----
+0.10
+
+query I
+SELECT CAST('15e-1' AS DECIMAL(5,2));
+----
+1.50
+
+query I
+SELECT CAST('123e-2' AS DECIMAL(5,2));
+----
+1.23
+
+query I
+SELECT CAST('123e-4' AS DECIMAL(5,2));
+----
+0.01
+
+query I
+SELECT CAST('999e-4' AS DECIMAL(5,2));
+----
+0.10
+
+query I
+SELECT CAST('-999e-4' AS DECIMAL(5,2));
+----
+-0.10
+
+query I
+SELECT CAST('1e-3' AS DECIMAL(5,2));
+----
+0.00
+
+query I
+SELECT CAST('5e-3' AS DECIMAL(5,2));
+----
+0.01
+
+query I
+SELECT CAST('-5e-3' AS DECIMAL(5,2));
+----
+-0.01
+
+query I
+SELECT CAST('1.55e-1' AS DECIMAL(5,2));
+----
+0.16
+
+query I
+SELECT CAST('12.345e-1' AS DECIMAL(5,2));
+----
+1.23
+
+query I
+SELECT CAST('1.5e-5' AS DECIMAL(6,5));
+----
+0.00002
+
+query I
+SELECT CAST('5e-6' AS DECIMAL(6,5));
+----
+0.00001
+
+query I
+SELECT CAST('4e-6' AS DECIMAL(6,5));
+----
+0.00000
+
+query I
+SELECT CAST('1e-9' AS DECIMAL(18,9));
+----
+0.000000001
+
+query I
+SELECT CAST('123456789e-9' AS DECIMAL(18,9));
+----
+0.123456789
+
+query I
+SELECT CAST('1e-10' AS DECIMAL(19,10));
+----
+0.0000000001
+
+query I
+SELECT CAST('1e-19' AS DECIMAL(38,19));
+----
+0.0000000000000000001
+
+query I
+SELECT CAST('123456789e-9' AS DECIMAL(38,10));
+----
+0.1234567890
+
+query I
+SELECT CAST('99999999e-1' AS DECIMAL(9,1));
+----
+9999999.9
+
+# ==================================================================================================
+# Negative exponent with scale equal to the width (issue #29189)
+# The reported bug: CAST('1e-5' AS DECIMAL(5,5)). DECIMAL(w,w) has no room for an integer digit, so the mantissa
+# digit is rejected before the exponent is known. Every tier boundary, both signs, and values that round to one
+# unit in the last place or to zero.
+# ==================================================================================================
+
+query I
+SELECT CAST('1e-1' AS DECIMAL(1,1));
+----
+.1
+
+query I
+SELECT CAST('-1e-1' AS DECIMAL(1,1));
+----
+-.1
+
+query I
+SELECT CAST('5e-2' AS DECIMAL(1,1));
+----
+.1
+
+query I
+SELECT CAST('1e-4' AS DECIMAL(4,4));
+----
+.0001
+
+query I
+SELECT CAST('-1e-4' AS DECIMAL(4,4));
+----
+-.0001
+
+query I
+SELECT CAST('5e-5' AS DECIMAL(4,4));
+----
+.0001
+
+query I
+SELECT CAST('1e-5' AS DECIMAL(5,5));
+----
+.00001
+
+query I
+SELECT CAST('-1e-5' AS DECIMAL(5,5));
+----
+-.00001
+
+query I
+SELECT CAST('5e-6' AS DECIMAL(5,5));
+----
+.00001
+
+query I
+SELECT CAST('4e-6' AS DECIMAL(5,5));
+----
+.00000
+
+query I
+SELECT CAST('1e-9' AS DECIMAL(9,9));
+----
+.000000001
+
+query I
+SELECT CAST('-1e-9' AS DECIMAL(9,9));
+----
+-.000000001
+
+query I
+SELECT CAST('5e-10' AS DECIMAL(9,9));
+----
+.000000001
+
+query I
+SELECT CAST('1e-10' AS DECIMAL(10,10));
+----
+.0000000001
+
+query I
+SELECT CAST('-1e-10' AS DECIMAL(10,10));
+----
+-.0000000001
+
+query I
+SELECT CAST('5e-11' AS DECIMAL(10,10));
+----
+.0000000001
+
+query I
+SELECT CAST('1e-18' AS DECIMAL(18,18));
+----
+.000000000000000001
+
+query I
+SELECT CAST('-1e-18' AS DECIMAL(18,18));
+----
+-.000000000000000001
+
+query I
+SELECT CAST('5e-19' AS DECIMAL(18,18));
+----
+.000000000000000001
+
+query I
+SELECT CAST('4e-19' AS DECIMAL(18,18));
+----
+.000000000000000000
+
+query I
+SELECT CAST('1e-19' AS DECIMAL(19,19));
+----
+.0000000000000000001
+
+query I
+SELECT CAST('-1e-19' AS DECIMAL(19,19));
+----
+-.0000000000000000001
+
+query I
+SELECT CAST('5e-20' AS DECIMAL(19,19));
+----
+.0000000000000000001
+
+query I
+SELECT CAST('1e-38' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000001
+
+query I
+SELECT CAST('-1e-38' AS DECIMAL(38,38));
+----
+-.00000000000000000000000000000000000001
+
+query I
+SELECT CAST('5e-39' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000001
+
+query I
+SELECT CAST('4e-39' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000000
+
+# ==================================================================================================
+# Negative exponent with a mantissa wider than width - scale
+# The mantissa has more integer digits than the type has room for, but the exponent moves them behind the decimal
+# point (and the surplus is rounded).
+# ==================================================================================================
+
+query I
+SELECT CAST('10e-6' AS DECIMAL(5,5));
+----
+.00001
+
+query I
+SELECT CAST('12e-5' AS DECIMAL(5,4));
+----
+0.0001
+
+query I
+SELECT CAST('15e-5' AS DECIMAL(5,4));
+----
+0.0002
+
+query I
+SELECT CAST('-15e-5' AS DECIMAL(5,4));
+----
+-0.0002
+
+query I
+SELECT CAST('1234e-4' AS DECIMAL(4,2));
+----
+0.12
+
+query I
+SELECT CAST('1234e-3' AS DECIMAL(4,2));
+----
+1.23
+
+query I
+SELECT CAST('12345678e-4' AS DECIMAL(9,4));
+----
+1234.5678
+
+query I
+SELECT CAST('12345678e-12' AS DECIMAL(9,9));
+----
+.000012346
+
+query I
+SELECT CAST('12345678901234567e-9' AS DECIMAL(18,9));
+----
+12345678.901234567
+
+query I
+SELECT CAST('12345678901234567e-17' AS DECIMAL(18,18));
+----
+.123456789012345670
+
+query I
+SELECT CAST('1234567890123456789e-10' AS DECIMAL(19,10));
+----
+123456789.0123456789
+
+query I
+SELECT CAST('1234567890123456789012345678901234567e-19' AS DECIMAL(38,19));
+----
+123456789012345678.9012345678901234567
+
+query I
+SELECT CAST('1234567890123456789012345678901234567e-38' AS DECIMAL(38,38));
+----
+.01234567890123456789012345678901234567
+
+query I
+SELECT CAST('-1234567890123456789012345678901234567e-38' AS DECIMAL(38,38));
+----
+-.01234567890123456789012345678901234567
+
+# ==================================================================================================
+# Negative exponent: rounding and zero results
+# The same rounding rules as for plain decimals (half away from zero on the first dropped digit), applied when the
+# exponent drops digits of a mantissa that does not fit before. Includes results that round to zero, and exponents
+# so negative that the whole mantissa disappears.
+# ==================================================================================================
+
+query I
+SELECT CAST('4e-6' AS DECIMAL(5,5));
+----
+.00000
+
+query I
+SELECT CAST('5e-6' AS DECIMAL(5,5));
+----
+.00001
+
+query I
+SELECT CAST('-5e-6' AS DECIMAL(5,5));
+----
+-.00001
+
+query I
+SELECT CAST('1.5e-5' AS DECIMAL(5,5));
+----
+.00002
+
+query I
+SELECT CAST('1.4e-5' AS DECIMAL(5,5));
+----
+.00001
+
+query I
+SELECT CAST('1e-100' AS DECIMAL(5,5));
+----
+.00000
+
+query I
+SELECT CAST('-1e-100' AS DECIMAL(5,5));
+----
+.00000
+
+query I
+SELECT CAST('1e-32767' AS DECIMAL(5,5));
+----
+.00000
+
+query I
+SELECT CAST('123456e-6' AS DECIMAL(5,5));
+----
+.12346
+
+query I
+SELECT CAST('-123455e-6' AS DECIMAL(5,5));
+----
+-.12346
+
+query I
+SELECT CAST('999994e-6' AS DECIMAL(5,5));
+----
+.99999
+
+query I
+SELECT CAST('14e-1' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('15e-1' AS DECIMAL(1,0));
+----
+2
+
+query I
+SELECT CAST('-15e-1' AS DECIMAL(1,0));
+----
+-2
+
+query I
+SELECT CAST('94e-1' AS DECIMAL(1,0));
+----
+9
+
+query I
+SELECT CAST('1e-100' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000000
+
+# ==================================================================================================
+# Negative exponent: the scaled intermediate would overflow the storage type
+# A parser that scales the mantissa up to the target scale and then divides by the exponent needs an intermediate
+# (e.g. 99999 * 10^5) that does not fit the physical type even though the result does.
+# ==================================================================================================
+
+query I
+SELECT CAST('999e-4' AS DECIMAL(4,4));
+----
+.0999
+
+query I
+SELECT CAST('99999e-5' AS DECIMAL(5,5));
+----
+.99999
+
+query I
+SELECT CAST('-99999e-5' AS DECIMAL(5,5));
+----
+-.99999
+
+query I
+SELECT CAST('99999e-6' AS DECIMAL(7,7));
+----
+.0999990
+
+query I
+SELECT CAST('9e-1' AS DECIMAL(9,9));
+----
+.900000000
+
+query I
+SELECT CAST('99999999999e-10' AS DECIMAL(18,10));
+----
+9.9999999999
+
+query I
+SELECT CAST('999999999999999e-18' AS DECIMAL(18,18));
+----
+.000999999999999999
+
+query I
+SELECT CAST('9e-1' AS DECIMAL(18,18));
+----
+.900000000000000000
+
+query I
+SELECT CAST('9999999999999999999e-19' AS DECIMAL(19,19));
+----
+.9999999999999999999
+
+query I
+SELECT CAST('999999999999999999999999999999e-30' AS DECIMAL(38,30));
+----
+0.999999999999999999999999999999
+
+query I
+SELECT CAST('9e-1' AS DECIMAL(38,38));
+----
+.90000000000000000000000000000000000000
+
+query I
+SELECT CAST('2e-38' AS DECIMAL(38,38));
+----
+.00000000000000000000000000000000000002
+
+# ==================================================================================================
+# Negative exponent when the mantissa fills the whole storage type
+# The mantissa uses every digit that the physical type can hold (4 / 9 / 18 / 38 digits). Digits that are dropped
+# because the type is full can no longer decide the rounding, so these are the hardest negative-exponent inputs;
+# the last block has a surplus decimal that rounds up or down on a digit the type could not store.
+# ==================================================================================================
+
+query I
+SELECT CAST('1234e-2' AS DECIMAL(4,2));
+----
+12.34
+
+query I
+SELECT CAST('-1234e-2' AS DECIMAL(4,2));
+----
+-12.34
+
+query I
+SELECT CAST('123456789e-4' AS DECIMAL(9,4));
+----
+12345.6789
+
+query I
+SELECT CAST('123456789e-9' AS DECIMAL(9,9));
+----
+.123456789
+
+query I
+SELECT CAST('123456789e-12' AS DECIMAL(9,9));
+----
+.000123457
+
+query I
+SELECT CAST('-123456789e-9' AS DECIMAL(9,9));
+----
+-.123456789
+
+query I
+SELECT CAST('123456789012345678e-9' AS DECIMAL(18,9));
+----
+123456789.012345678
+
+query I
+SELECT CAST('123456789012345678e-18' AS DECIMAL(18,18));
+----
+.123456789012345678
+
+query I
+SELECT CAST('12345678901234567890123456789012345678e-19' AS DECIMAL(38,19));
+----
+1234567890123456789.0123456789012345678
+
+query I
+SELECT CAST('12345678901234567890123456789012345678e-38' AS DECIMAL(38,38));
+----
+.12345678901234567890123456789012345678
+
+query I
+SELECT CAST('-12345678901234567890123456789012345678e-38' AS DECIMAL(38,38));
+----
+-.12345678901234567890123456789012345678
+
+query I
+SELECT CAST('999999999e-9' AS DECIMAL(9,9));
+----
+.999999999
+
+query I
+SELECT CAST('-999999999e-9' AS DECIMAL(9,9));
+----
+-.999999999
+
+query I
+SELECT CAST('999999999999999999e-18' AS DECIMAL(18,18));
+----
+.999999999999999999
+
+query I
+SELECT CAST('99999999999999999999999999999999999999e-38' AS DECIMAL(38,38));
+----
+.99999999999999999999999999999999999999
+
+query I
+SELECT CAST('-99999999999999999999999999999999999999e-38' AS DECIMAL(38,38));
+----
+-.99999999999999999999999999999999999999
+
+query I
+SELECT CAST('999.5e-1' AS DECIMAL(4,2));
+----
+99.95
+
+query I
+SELECT CAST('500.4999e-1' AS DECIMAL(4,2));
+----
+50.05
+
+query I
+SELECT CAST('-500.4999e-1' AS DECIMAL(4,2));
+----
+-50.05
+
+query I
+SELECT CAST('100.5555555555555555555e-1' AS DECIMAL(4,2));
+----
+10.06
+
+query I
+SELECT CAST('12345.67895e-1' AS DECIMAL(9,5));
+----
+1234.56790
+
+query I
+SELECT CAST('12345.67894e-1' AS DECIMAL(9,5));
+----
+1234.56789
+
+query I
+SELECT CAST('1234567890123456789012345678.12345678905e-1' AS DECIMAL(38,11));
+----
+123456789012345678901234567.81234567891
+
+# ==================================================================================================
+# Every storage tier with both signs
+# DecimalCastOperation is a template: each of int16, int32, int64 and int128 storage, for positive and for negative
+# values, is a separate instantiation with its own overflow limits. The same 12 input shapes (padding, rounding, surplus
+# decimals beyond the storage type, exponent 0 / positive / negative, overflow after scaling or by exponent) are run for
+# DECIMAL(4,2), (9,4), (18,9) and (38,19) - the widest type of each tier, so the storage type is exactly full - with and
+# without a minus sign, so that no tier or sign is left out for any branch.
+# ==================================================================================================
+
+query I
+SELECT CAST('11.22345' AS DECIMAL(4,2));
+----
+11.22
+
+query I
+SELECT CAST('-11.22345' AS DECIMAL(4,2));
+----
+-11.22
+
+query I
+SELECT CAST('1.005e0' AS DECIMAL(4,2));
+----
+1.01
+
+query I
+SELECT CAST('-1.005e0' AS DECIMAL(4,2));
+----
+-1.01
+
+query I
+SELECT CAST('0.1155e1' AS DECIMAL(4,2));
+----
+1.16
+
+query I
+SELECT CAST('-0.1155e1' AS DECIMAL(4,2));
+----
+-1.16
+
+query I
+SELECT CAST('0.1154e1' AS DECIMAL(4,2));
+----
+1.15
+
+query I
+SELECT CAST('-0.1154e1' AS DECIMAL(4,2));
+----
+-1.15
+
+statement error
+SELECT CAST('1e2' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "1e2" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('-1e2' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "-1e2" to DECIMAL(4,2)
+
+query I
+SELECT CAST('15e-3' AS DECIMAL(4,2));
+----
+0.02
+
+query I
+SELECT CAST('-15e-3' AS DECIMAL(4,2));
+----
+-0.02
+
+query I
+SELECT CAST('1e-7' AS DECIMAL(4,2));
+----
+0.00
+
+query I
+SELECT CAST('-1e-7' AS DECIMAL(4,2));
+----
+0.00
+
+query I
+SELECT CAST('11.27e-1' AS DECIMAL(4,2));
+----
+1.13
+
+query I
+SELECT CAST('-11.27e-1' AS DECIMAL(4,2));
+----
+-1.13
+
+statement error
+SELECT CAST('99.995e0' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "99.995e0" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('-99.995e0' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "-99.995e0" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('9.9995e1' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "9.9995e1" to DECIMAL(4,2)
+
+statement error
+SELECT CAST('-9.9995e1' AS DECIMAL(4,2));
+----
+Conversion Error: Could not convert string "-9.9995e1" to DECIMAL(4,2)
+
+query I
+SELECT CAST('11111.2222345' AS DECIMAL(9,4));
+----
+11111.2222
+
+query I
+SELECT CAST('-11111.2222345' AS DECIMAL(9,4));
+----
+-11111.2222
+
+query I
+SELECT CAST('1.00005e0' AS DECIMAL(9,4));
+----
+1.0001
+
+query I
+SELECT CAST('-1.00005e0' AS DECIMAL(9,4));
+----
+-1.0001
+
+query I
+SELECT CAST('0.111155e1' AS DECIMAL(9,4));
+----
+1.1116
+
+query I
+SELECT CAST('-0.111155e1' AS DECIMAL(9,4));
+----
+-1.1116
+
+query I
+SELECT CAST('0.111154e1' AS DECIMAL(9,4));
+----
+1.1115
+
+query I
+SELECT CAST('-0.111154e1' AS DECIMAL(9,4));
+----
+-1.1115
+
+statement error
+SELECT CAST('1e5' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "1e5" to DECIMAL(9,4)
+
+statement error
+SELECT CAST('-1e5' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "-1e5" to DECIMAL(9,4)
+
+query I
+SELECT CAST('15e-5' AS DECIMAL(9,4));
+----
+0.0002
+
+query I
+SELECT CAST('-15e-5' AS DECIMAL(9,4));
+----
+-0.0002
+
+query I
+SELECT CAST('1e-9' AS DECIMAL(9,4));
+----
+0.0000
+
+query I
+SELECT CAST('-1e-9' AS DECIMAL(9,4));
+----
+0.0000
+
+query I
+SELECT CAST('11111.2227e-1' AS DECIMAL(9,4));
+----
+1111.1223
+
+query I
+SELECT CAST('-11111.2227e-1' AS DECIMAL(9,4));
+----
+-1111.1223
+
+statement error
+SELECT CAST('99999.99995e0' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "99999.99995e0" to DECIMAL(9,4)
+
+statement error
+SELECT CAST('-99999.99995e0' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "-99999.99995e0" to DECIMAL(9,4)
+
+statement error
+SELECT CAST('9999.999995e1' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "9999.999995e1" to DECIMAL(9,4)
+
+statement error
+SELECT CAST('-9999.999995e1' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "-9999.999995e1" to DECIMAL(9,4)
+
+query I
+SELECT CAST('111111111.222222222345' AS DECIMAL(18,9));
+----
+111111111.222222222
+
+query I
+SELECT CAST('-111111111.222222222345' AS DECIMAL(18,9));
+----
+-111111111.222222222
+
+query I
+SELECT CAST('1.0000000005e0' AS DECIMAL(18,9));
+----
+1.000000001
+
+query I
+SELECT CAST('-1.0000000005e0' AS DECIMAL(18,9));
+----
+-1.000000001
+
+query I
+SELECT CAST('0.11111111155e1' AS DECIMAL(18,9));
+----
+1.111111116
+
+query I
+SELECT CAST('-0.11111111155e1' AS DECIMAL(18,9));
+----
+-1.111111116
+
+query I
+SELECT CAST('0.11111111154e1' AS DECIMAL(18,9));
+----
+1.111111115
+
+query I
+SELECT CAST('-0.11111111154e1' AS DECIMAL(18,9));
+----
+-1.111111115
+
+statement error
+SELECT CAST('1e9' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "1e9" to DECIMAL(18,9)
+
+statement error
+SELECT CAST('-1e9' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "-1e9" to DECIMAL(18,9)
+
+query I
+SELECT CAST('15e-10' AS DECIMAL(18,9));
+----
+0.000000002
+
+query I
+SELECT CAST('-15e-10' AS DECIMAL(18,9));
+----
+-0.000000002
+
+query I
+SELECT CAST('1e-14' AS DECIMAL(18,9));
+----
+0.000000000
+
+query I
+SELECT CAST('-1e-14' AS DECIMAL(18,9));
+----
+0.000000000
+
+query I
+SELECT CAST('111111111.222222227e-1' AS DECIMAL(18,9));
+----
+11111111.122222223
+
+query I
+SELECT CAST('-111111111.222222227e-1' AS DECIMAL(18,9));
+----
+-11111111.122222223
+
+statement error
+SELECT CAST('999999999.9999999995e0' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "999999999.9999999995e0" to DECIMAL(18,9)
+
+statement error
+SELECT CAST('-999999999.9999999995e0' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "-999999999.9999999995e0" to DECIMAL(18,9)
+
+statement error
+SELECT CAST('99999999.99999999995e1' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "99999999.99999999995e1" to DECIMAL(18,9)
+
+statement error
+SELECT CAST('-99999999.99999999995e1' AS DECIMAL(18,9));
+----
+Conversion Error: Could not convert string "-99999999.99999999995e1" to DECIMAL(18,9)
+
+query I
+SELECT CAST('1111111111111111111.2222222222222222222345' AS DECIMAL(38,19));
+----
+1111111111111111111.2222222222222222222
+
+query I
+SELECT CAST('-1111111111111111111.2222222222222222222345' AS DECIMAL(38,19));
+----
+-1111111111111111111.2222222222222222222
+
+query I
+SELECT CAST('1.00000000000000000005e0' AS DECIMAL(38,19));
+----
+1.0000000000000000001
+
+query I
+SELECT CAST('-1.00000000000000000005e0' AS DECIMAL(38,19));
+----
+-1.0000000000000000001
+
+query I
+SELECT CAST('0.111111111111111111155e1' AS DECIMAL(38,19));
+----
+1.1111111111111111116
+
+query I
+SELECT CAST('-0.111111111111111111155e1' AS DECIMAL(38,19));
+----
+-1.1111111111111111116
+
+query I
+SELECT CAST('0.111111111111111111154e1' AS DECIMAL(38,19));
+----
+1.1111111111111111115
+
+query I
+SELECT CAST('-0.111111111111111111154e1' AS DECIMAL(38,19));
+----
+-1.1111111111111111115
+
+statement error
+SELECT CAST('1e19' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "1e19" to DECIMAL(38,19)
+
+statement error
+SELECT CAST('-1e19' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "-1e19" to DECIMAL(38,19)
+
+query I
+SELECT CAST('15e-20' AS DECIMAL(38,19));
+----
+0.0000000000000000002
+
+query I
+SELECT CAST('-15e-20' AS DECIMAL(38,19));
+----
+-0.0000000000000000002
+
+query I
+SELECT CAST('1e-24' AS DECIMAL(38,19));
+----
+0.0000000000000000000
+
+query I
+SELECT CAST('-1e-24' AS DECIMAL(38,19));
+----
+0.0000000000000000000
+
+query I
+SELECT CAST('1111111111111111111.2222222222222222227e-1' AS DECIMAL(38,19));
+----
+111111111111111111.1222222222222222223
+
+query I
+SELECT CAST('-1111111111111111111.2222222222222222227e-1' AS DECIMAL(38,19));
+----
+-111111111111111111.1222222222222222223
+
+statement error
+SELECT CAST('9999999999999999999.99999999999999999995e0' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "9999999999999999999.99999999999999999995e0" to DECIMAL(38,19)
+
+statement error
+SELECT CAST('-9999999999999999999.99999999999999999995e0' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "-9999999999999999999.99999999999999999995e0" to DECIMAL(38,19)
+
+statement error
+SELECT CAST('999999999999999999.999999999999999999995e1' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "999999999999999999.999999999999999999995e1" to DECIMAL(38,19)
+
+statement error
+SELECT CAST('-999999999999999999.999999999999999999995e1' AS DECIMAL(38,19));
+----
+Conversion Error: Could not convert string "-999999999999999999.999999999999999999995e1" to DECIMAL(38,19)
+
+# ==================================================================================================
+# Exponent: extreme exponent values
+# The exponent is parsed as an int16, so +-32767 are the largest usable magnitudes and anything beyond is a
+# parse error. Huge negative exponents give zero (the division loop exits early), huge positive ones overflow
+# unless the mantissa is zero.
+# ==================================================================================================
+
+query I
+SELECT CAST('1e-100' AS DECIMAL(6,5));
+----
+0.00000
+
+query I
+SELECT CAST('1e-32767' AS DECIMAL(6,5));
+----
+0.00000
+
+query I
+SELECT CAST('1e-32768' AS DECIMAL(6,5));
+----
+0.00000
+
+statement error
+SELECT CAST('1e-32769' AS DECIMAL(6,5));
+----
+Conversion Error: Could not convert string "1e-32769" to DECIMAL(6,5)
+
+statement error
+SELECT CAST('1e32767' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "1e32767" to DECIMAL(5,0)
+
+statement error
+SELECT CAST('1e32768' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "1e32768" to DECIMAL(5,0)
+
+query I
+SELECT CAST('0e32767' AS DECIMAL(5,0));
+----
+0
+
+query I
+SELECT CAST('0e-32767' AS DECIMAL(5,0));
+----
+0
+
+statement error
+SELECT CAST('9e99999999999' AS DECIMAL(5,0));
+----
+Conversion Error: Could not convert string "9e99999999999" to DECIMAL(5,0)
+
+statement error
+SELECT CAST('1e-99999999999' AS DECIMAL(6,5));
+----
+Conversion Error: Could not convert string "1e-99999999999" to DECIMAL(6,5)
+
+query I
+SELECT CAST('123e-100' AS DECIMAL(10,2));
+----
+0.00
+
+query I
+SELECT CAST('-0e0' AS DECIMAL(5,2));
+----
+0.00
+
+statement error
+SELECT CAST('1e100' AS DECIMAL(38,0));
+----
+Conversion Error: Could not convert string "1e100" to DECIMAL(38,0)
+
+# ==================================================================================================
+# Exponent: values that are out of range once the exponent is applied
+# The width check has to happen after the exponent is applied, and it must still reject values that do not
+# fit. This includes a round-up that carries to +-1.0, and inputs that fill the physical type completely
+# (the digit that decides the rounding cannot be stored, so these must not be accepted).
+# ==================================================================================================
+
+statement error
+SELECT CAST('1e0' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "1e0" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('1e1' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "1e1" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('10e-1' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "10e-1" to DECIMAL(1,1)
+
+statement error
+SELECT CAST('99999e-4' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "99999e-4" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('999995e-6' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "999995e-6" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('100000e-5' AS DECIMAL(5,5));
+----
+Conversion Error: Could not convert string "100000e-5" to DECIMAL(5,5)
+
+statement error
+SELECT CAST('20e-1' AS DECIMAL(1,1));
+----
+Conversion Error: Could not convert string "20e-1" to DECIMAL(1,1)
+
+statement error
+SELECT CAST('9999.5e-1' AS DECIMAL(4,4));
+----
+Conversion Error: Could not convert string "9999.5e-1" to DECIMAL(4,4)
+
+statement error
+SELECT CAST('99999999.5e-1' AS DECIMAL(9,9));
+----
+Conversion Error: Could not convert string "99999999.5e-1" to DECIMAL(9,9)
+
+statement error
+SELECT CAST('99999999999999999.5e-1' AS DECIMAL(18,18));
+----
+Conversion Error: Could not convert string "99999999999999999.5e-1" to DECIMAL(18,18)
+
+statement error
+SELECT CAST('9999999999999999999999999999999999999.5e-1' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "9999999999999999999999999999999999999.5e-1" to DECIMAL(38,38)
+
+statement error
+SELECT CAST('999999999e-1' AS DECIMAL(9,4));
+----
+Conversion Error: Could not convert string "999999999e-1" to DECIMAL(9,4)
+
+statement error
+SELECT CAST('99999999999999999999e-1' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "99999999999999999999e-1" to DECIMAL(38,38)
+
+statement error
+SELECT CAST('95e-1' AS DECIMAL(1,0));
+----
+Conversion Error: Could not convert string "95e-1" to DECIMAL(1,0)
+
+statement error
+SELECT CAST('99999e-3' AS DECIMAL(38,38));
+----
+Conversion Error: Could not convert string "99999e-3" to DECIMAL(38,38)
+
+query I
+SELECT CAST('1000E-3' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('-1000E-3' AS DECIMAL(1,0));
+----
+-1
+
+query I
+SELECT CAST('1234567890E-9' AS DECIMAL(1,0));
+----
+1
+
+query I
+SELECT CAST('1534567890E-9' AS DECIMAL(1,0));
+----
+2
